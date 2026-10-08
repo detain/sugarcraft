@@ -123,13 +123,19 @@ final class ToolCatalogTest extends TestCase
     /**
      * The classes the gate's hand-kept lists held before the catalog: a new
      * tool may join a class, but none of these may silently change class.
+     *
+     * `Skill` moved Ask -> Read on the skills QA pass, IN THE OPEN: a Level-2
+     * load is one escaped text file into context, exactly what `Read` does
+     * unasked, and the Ask class made it modal under `default` and denied
+     * under `dont-ask` — inverting the progressive-disclosure design. See
+     * PermissionGate::isReadOnlyTool()'s doc-block for the full ruling.
      */
     public function testThePermissionClassesKeepTheGatesHistoricalMembers(): void
     {
         $historical = [
-            'read' => ['Read', 'Glob', 'Grep', 'Lsp'],
+            'read' => ['Read', 'Glob', 'Grep', 'Lsp', 'Skill'],
             'write' => ['Bash', 'Edit', 'Write', 'Task'],
-            'ask' => ['WebFetch', 'WebSearch', 'doctor', 'Skill'],
+            'ask' => ['WebFetch', 'WebSearch', 'doctor'],
         ];
         foreach ($historical as $class => $names) {
             foreach ($names as $name) {

@@ -205,7 +205,11 @@ final class ReinjectionPlanTest extends TestCase
         $this->assertNotNull($plan);
 
         $text = $plan->render($this->root, [new SkillTool($registry)]);
-        $this->assertStringContainsString("<skill name=\"deploy\">\n" . SkillTool::RESULT_PREFIX . "deploy\n\nDo the thing with staging.", $text);
+        $this->assertStringContainsString(
+            "<skill name=\"deploy\">\n" . SkillTool::RESULT_PREFIX . "deploy\n\n"
+                . SkillTool::RESULT_BASE_DIR_PREFIX . $this->root . "\n\nDo the thing with staging.",
+            $text,
+        );
         $this->assertStringNotContainsString('user only', $text, 'a skill that is not model-invocable is not re-injected');
         $this->assertStringNotContainsString('<skill', $plan->render($this->root, []), 'no Skill tool, no bodies');
     }

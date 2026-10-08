@@ -91,8 +91,12 @@ final class SkillPromptLine
             ));
         }
 
+        // The DISPLAY name, not the registry key: a bundle skill's uuid path is
+        // identity the model must use to call it, but noise on the line it
+        // decides by — see Skill::displayName(). {@see SkillTool} resolves the
+        // leaf back to the key.
         $badge = $withOrigin ? '[' . $skill->origin->badge($skill->source) . '] ' : '';
-        $line = '- ' . $badge . self::field($skill->name) . ': ' . self::field($skill->description);
+        $line = '- ' . $badge . self::field($skill->displayName()) . ': ' . self::field($skill->description);
         if (strlen($line) <= $maxBytes) {
             return $line;
         }

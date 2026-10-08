@@ -70,7 +70,7 @@ final class PostCompactionReinjectionTest extends TestCase
         $this->assertNotNull($row);
         $this->assertStringContainsString(ReinjectionPlan::MARKER . ' (cycle ', $row);
         $this->assertStringContainsString("<file path=\"src/app.php\">\n<?php\n// THE CURRENT APP SOURCE", $row);
-        $this->assertStringContainsString("<skill name=\"deploy\">\n" . SkillTool::RESULT_PREFIX . "deploy\n\nDEPLOY STEPS for", $row);
+        $this->assertStringContainsString("<skill name=\"deploy\">\n" . SkillTool::RESULT_PREFIX . "deploy\n\n" . SkillTool::RESULT_BASE_DIR_PREFIX . $this->root . "\n\nDEPLOY STEPS for", $row);
         $this->assertStringContainsString(TurnContextBlock::SKILLS_LINE . 'deploy', $row, 'the roster rides on');
 
         // The row rides the transcript back; the next turn owes nothing.

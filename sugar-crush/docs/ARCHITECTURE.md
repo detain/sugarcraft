@@ -651,7 +651,7 @@ names it:
 10. explicitly enabled skills' full bodies;
 11. `SkillMatcher::listForPrompt()` — name + description for every discovered
     auto-invocable skill, each line badged with its tier (`[built-in]`,
-    `[user]`, `[project]`), fenced `<available-skills>` behind its preamble;
+    `[user]`, `[project]`), fenced `<available-skills>` behind its preamble and mandate line;
 12. `PlanModeSection` — the plan-mode contract, a `<system-reminder>` present
     only while the turn's gate is in `plan` mode (roadmap 5.7-1): what runs,
     what the gate refuses, and that the one write is a Markdown plan in

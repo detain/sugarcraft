@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillPromptLine;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -29,8 +30,18 @@ use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
  * Live since W3.S8: {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} appends
  * this tool to every engine tool list, over the same SkillRegistry it hands
  * EngineBackend, so a real bin/sugarcrush session can invoke it.
+ *
+ * PERMISSION CLASS: Read. Loading a skill body is one escaped, fenced text
+ * file landing in the conversation — no more dangerous than `Read`, and
+ * Claude Code and opencode both treat skill loading as un-asked (a modal per
+ * load made the progressive-disclosure design self-defeating: under
+ * `dont-ask` it was denied outright, so the model could never reach a Level-2
+ * body at all). The body's own content remains untrusted BY CLASSIFICATION,
+ * not by permission: it arrives inside the tool result, and the listing's
+ * authority preamble says the skill author's text carries no precedence over
+ * the harness layers.
  */
-#[BuiltInTool(name: 'Skill', permission: ToolPermissionClass::Ask, position: 10, gloss: 'level 2 of the progressive-disclosure design below')]
+#[BuiltInTool(name: 'Skill', permission: ToolPermissionClass::Read, position: 10, gloss: 'level 2 of the progressive-disclosure design below')]
 final readonly class SkillTool implements Tool, BuildsFromCatalog
 {
     /**
@@ -40,8 +51,15 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
      */
     public const ARGUMENTS_PLACEHOLDER = '$ARGUMENTS';
 
-    /** The first bytes of every body this tool returns, before the skill's name. */
+    /** The first bytes of every body this tool returns, before the skill's display name. */
     public const RESULT_PREFIX = '## Skill: ';
+
+    /**
+     * Opens the second header line: the directory the skill's SKILL.md lives
+     * in, so a body's relative references (`scripts/foo.php`, `docs/x.md`)
+     * resolve to a real path instead of guessing against the session CWD.
+     */
+    public const RESULT_BASE_DIR_PREFIX = '> Base directory for this skill: ';
 
     public function __construct(
         private SkillRegistry $registry,
@@ -66,12 +84,17 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
             . '"Available skills" section of the system prompt; this tool looks up exactly '
             . 'one of them by name and does not itself list, search, or run skills, so do '
             . 'not call it to discover what exists or for a task no listed skill covers. '
-            . 'The result is the instruction body of that skill prefixed with a '
-            . '"## Skill: name" marker, or an error when the name is empty, is not '
-            . 'model-invocable, or its file cannot be read. Pass `args` to hand the skill '
-            . 'its input: each $ARGUMENTS in the body is replaced by it, and a body that '
-            . 'names no $ARGUMENTS gets it appended on a final "ARGUMENTS:" line. Do not '
-            . 'call this tool again for a skill whose body is already in the conversation.';
+            . 'Pass the name as the listing shows it; an exact registry key always '
+            . 'resolves, and a display name that several bundled skills share comes back '
+            . 'as an error listing their keys to retry with. The result is the instruction '
+            . 'body of that skill under a "## Skill: name" marker and a line giving the '
+            . 'skill\'s base directory — resolve the body\'s relative file references '
+            . '(scripts, docs) against that directory, not the session one — or an error '
+            . 'when the name is empty, is not model-invocable, or its file cannot be read. '
+            . 'Pass `args` to hand the skill its input: each $ARGUMENTS in the body is '
+            . 'replaced by it, and a body that names no $ARGUMENTS gets it appended on a '
+            . 'final "ARGUMENTS:" line. Do not call this tool again for a skill whose body '
+            . 'is already in the conversation.';
     }
 
     public function inputSchema(): array
@@ -79,7 +102,7 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         return [
             'type' => 'object',
             'properties' => [
-                'name' => ['type' => 'string', 'description' => 'Skill name to invoke'],
+                'name' => ['type' => 'string', 'description' => 'Skill name to invoke, exactly as the listing shows it (an exact registry key also resolves)'],
                 'args' => [
                     'type' => 'string',
                     'description' => 'Optional input for the skill. Replaces each $ARGUMENTS in its '
@@ -119,7 +142,35 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
             );
         }
 
-        $skill = $this->registry->get($name);
+        // Exact registry key first — the listing's keys always resolve, and
+        // resolving them first means a display-name collision can never
+        // shadow the canonical route.
+        $key = $name;
+        $skill = $this->registry->get($key);
+
+        if ($skill === null) {
+            // The listing shows Skill::displayName(), the leaf of nested keys
+            // like `synced/<bundle>/<name>`; the model naturally calls the
+            // name it saw. Accept it when exactly one model-invocable skill
+            // displays under it, and when several do, say so with the keys —
+            // an ambiguous retry beats a coin-flipped load of one bundle's
+            // file over another's.
+            $resolved = $this->resolveDisplayName($name);
+            if (count($resolved) > 1) {
+                sort($resolved);
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: "Error: {$name} is ambiguous, several skills display under it: "
+                        . implode(', ', $resolved)
+                        . '. Invoke by one of those exact keys.',
+                    isError: true,
+                );
+            }
+            if ($resolved !== []) {
+                $key = $resolved[0];
+                $skill = $this->registry->get($key);
+            }
+        }
 
         // isAutoInvocable() re-checked here (not just registry->get()'s own
         // disabled-skill filtering) so a skill marked
@@ -127,7 +178,7 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         // even if some other caller adds it to the registry directly —
         // matches SkillRegistry::findForPrompt()'s own rationale for
         // routing through isAutoInvocable() rather than re-inlining the check.
-        if ($skill === null || !$this->registry->isAutoInvocable($name)) {
+        if ($skill === null || !$this->registry->isAutoInvocable($key)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: "Skill not found or not model-invocable: {$name}",
@@ -150,11 +201,44 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
 
         $body = self::substituteArguments($body, $skillArgs);
 
+        // Two header lines, then the body: the display name the model called
+        // (never the uuid path it cannot use), and the directory the SKILL.md
+        // was read from — skill bodies reference `scripts/…` and `docs/…`
+        // relative to their own folder, which is unresolvable without this
+        // line (crush skills QA, inv1 §7). Both values are repository text:
+        // a directory name is arbitrary bytes (audit 15d-08), so the path
+        // rides through SkillPromptLine::field() like every other repo value
+        // that reaches a model-facing string. A manifest skill with no on-disk
+        // source gets no base line — dirname('') would be a lie about '.'.
+        $baseDir = $skill->sourcePath === ''
+            ? ''
+            : self::RESULT_BASE_DIR_PREFIX . SkillPromptLine::field(dirname($skill->sourcePath)) . "\n\n";
+
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: self::RESULT_PREFIX . "{$skill->name}\n\n{$body}",
+            content: self::RESULT_PREFIX . SkillPromptLine::field($skill->displayName())
+                . "\n\n{$baseDir}{$body}",
             isError: false,
         );
+    }
+
+    /**
+     * The exact keys of every model-invocable skill displaying under $name.
+     *
+     * @return list<string> empty when nothing displays under it; one entry when
+     *         the call is unambiguous; more when the caller must pick a key.
+     */
+    private function resolveDisplayName(string $name): array
+    {
+        $matches = [];
+        foreach ($this->registry->all() as $key => $candidate) {
+            $key = (string) $key;
+            if ($candidate->displayName() === $name && $this->registry->isAutoInvocable($key)) {
+                $matches[] = $key;
+            }
+        }
+
+        return $matches;
     }
 
     /**

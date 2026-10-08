@@ -115,6 +115,29 @@ final readonly class Skill
     }
 
     /**
+     * The skill's name as a human and the model should READ it: the last
+     * '/'-separated segment of the registry key.
+     *
+     * Bundle walkers key nested skills by their discovery path — a synced
+     * import lands as `synced/<uuid>_<uuid>/docx` — and that full key is the
+     * skill's identity in the registry (lookup, shadowing, disable), which is
+     * why the key itself cannot shrink. What can shrink is what the listing
+     * shows: the uuid pair carries no information a reader can use, and the
+     * byte budget it eats is budget taken from the description. Display, and
+     * display only, uses the leaf.
+     *
+     * Names without a '/' are returned unchanged, so every flat skill — every
+     * built-in and every directly-installed one — is display-identical to its
+     * key and resolves the same way through {@see \SugarCraft\Crush\Tools\BuiltIn\SkillTool}.
+     */
+    public function displayName(): string
+    {
+        $slash = strrpos($this->name, '/');
+
+        return $slash === false ? $this->name : substr($this->name, $slash + 1);
+    }
+
+    /**
      * Unanchored substring probe over the description: any token longer than
      * three bytes that appears anywhere in the prompt is a match.
      *

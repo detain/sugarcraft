@@ -142,7 +142,10 @@ final class SkillToolTest extends TestCase
         $tool = new SkillTool($registry);
         $result = $tool->execute(['id' => 'call_6', 'name' => 'formatted']);
 
-        $this->assertSame("## Skill: formatted\n\nSome instructions here.", $result->content());
+        $this->assertSame(
+            "## Skill: formatted\n\n> Base directory for this skill: " . dirname($path) . "\n\nSome instructions here.",
+            $result->content(),
+        );
     }
 
     public function testExecutePassesThroughOptionalArgs(): void

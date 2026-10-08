@@ -113,7 +113,19 @@ it, plus the foreign format when there is one:
 
 The listing itself is fenced `<available-skills>`, under a preamble that says
 the list is assembled by the harness but every name and description is its
-skill author's text, and explains the badge (audit 15d-02). A skill registered
+skill author's text, and explains the badge (audit 15d-02). Directly beneath
+the preamble rides a one-line proactive-use mandate — when a listed skill's
+description covers the task, the model must load and follow it through the
+`Skill` tool before starting — balanced by the preamble's statement that the
+listing is advisory metadata, not an instruction that outranks the harness.
+The fence is assembled by `SkillListingSection`, which owns both lines.
+Each line names a skill by its display name — the last `/`-separated
+segment of the registry key — and exact-duplicate lines (same display name and
+description, the shape synced bundles produce) collapse to the stronger-tier
+entry, so the model sees one line per distinct offer. The lines are grouped by
+tier — built-in, then project, then user, the reading order
+`SkillOrigin::precedence()` states — and alphabetical by display name within a
+tier. A skill registered
 by some other route, with no tier stated, is badged `project` — the least
 trusted tier, so an unknown origin is never presented as the operator's or
 the harness's. The path nudge's lines (`SkillPathNudge`) carry no badge; its
@@ -214,7 +226,7 @@ os: [linux, darwin]       # the platform must be listed
 
 | Key | Default | Read by | Effect today |
 |---|---|---|---|
-| `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. It is repository text, so `SkillPromptLine` renders it — and the skill's name — collapsed to one line, `PromptFence::escape()`d and clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02): a multi-line description cannot start a line of its own, and a fence tag in it arrives as inert `&lt;` text. The line sits inside the `<available-skills>` fence behind its tier badge — see [The listing badges every skill with its tier](#the-listing-badges-every-skill-with-its-tier). |
+| `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. It is repository text, so `SkillPromptLine` renders it — and the skill's display name, the last `/`-separated segment of the registry key — collapsed to one line, `PromptFence::escape()`d and clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02): a multi-line description cannot start a line of its own, and a fence tag in it arrives as inert `&lt;` text. The line sits inside the `<available-skills>` fence behind its tier badge — see [The listing badges every skill with its tier](#the-listing-badges-every-skill-with-its-tier). |
 | `user-invocable` | `true` | `SkillRegistry::isUserInvocable()` → `App::userInvocableSkills()` | Live on the App shell's skill picker. `false` hides the skill from the picker while leaving it model-invocable. |
 | `disable-model-invocation` | `false` | `SkillRegistry::isAutoInvocable()` | Live. `true` keeps the skill out of the prompt listing **and** makes `SkillTool` refuse it by name — the check is re-done in the tool so a skill added to a registry by some other route still cannot be reached. |
 | `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded (E66): at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total, a ceiling: the page `Read` returns is itself at most `maxBytes`, and 50 KiB by default, while the eighth is still figured from `maxBytes`); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge (E72), because telling the model to open a skill it may not invoke is a dead instruction. |
@@ -477,9 +489,20 @@ the system prompt is the separate, much smaller per-skill budget.
 
 The model calls the built-in `Skill` tool
 (`src/Tools/BuiltIn/SkillTool.php`), which takes `name` and an optional
-`args` string, and returns the on-disk body. It refuses with an error — not an
-empty success — when the name is unknown or not model-invocable, or when `name`
-or `args` is not a string.
+`args` string, and returns the on-disk body. `name` resolves against the exact
+registry key first; failing that, a unique display name — the last
+`/`-separated segment the listing shows — resolves to its skill, and a display
+name several skills share refuses with an error naming every colliding full key
+so the model can retry by one of them. It also refuses with an error — not an
+empty success — when the name matches nothing, is not model-invocable, or when
+`name` or `args` is not a string. The result opens with `## Skill: <display
+name>`, then a `> Base directory for this skill: <dir>` line (the directory of
+the skill's `SKILL.md`, fence-escaped), so a body that references
+`scripts/helper.php` relative to itself has the anchor to resolve it against,
+then the body. `Skill` is classified read-only by the permission gate — loading
+a text file into context is the same risk class as `Read` — so no mode prompts
+or denies for the call itself; what the loaded body then tempts the model to
+*do* still passes every later call's own gate.
 
 `args` reaches the body the way Claude Code's skills receive theirs
 (`SkillTool::substituteArguments()`): every `$ARGUMENTS` in the body is replaced
