@@ -27,7 +27,13 @@ References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-refer
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight at handoff (UNCOMMITTED in the working tree)
-(see below — updated as P-B..P-E launch)
+Launched 2026-10-08 in parallel (shared brief: `prompt_kit/briefs/candy-top-panel-phase-common.md`):
+- **P-B cpu+mem** (implementer running) — leaves seams for P-D disks section (mem box) + battery badge (cpu border).
+- **P-C net** (implementer running).
+- **P-E proc** (implementer running) — signal popup deferred to P-F overlay seam.
+- **P-D disks+battery** waits for P-B commit (shares mem/cpu boxes).
+Each agent reports an exact file list; commit only that list (lang/en.php, Panels.php, CALIBER_LEARNINGS.md
+are shared → stage partially). Chrome goldens use frozen `Panels::placeholders()` (`4186902f5`, `c1613c6aa`).
 
 ## Next
 - After P-A commits: launch **P-B (cpu+mem), P-C (net), P-D (disk+battery), P-E (proc)** in parallel, each a
