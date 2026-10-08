@@ -196,8 +196,10 @@ final class ForeignSkillWiringTest extends TestCase
      * THE CROSS-TOOL PAIR, measured rather than inferred.
      *
      * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} states that among
-     * the foreign trees "the fixed order spec < claude < opencode decides" and
-     * that the pair has no principled winner, so what is being
+     * the foreign trees "the fixed order spec < claude < opencode decides" — a
+     * determinism convention, not a principled ranking: the src note concedes
+     * that even the original two-convention pair never had a principled winner,
+     * and the third convention did not mint one. So what is being
      * guaranteed is determinism. That sentence was written from the call order and
      * from `SkillRegistry::register()`'s last-write-wins loop; this pins it, which
      * matters because the sibling registry for AGENTS resolves the same pair the
@@ -214,6 +216,30 @@ final class ForeignSkillWiringTest extends TestCase
         $this->assertNotNull($skill);
         $this->assertSame('OPENCODE COPY', $skill->description);
         $this->assertSame(SkillSource::Opencode, $skill->source);
+    }
+
+    /**
+     * THE SPEC-VERSUS-CLAUDE PAIR, pinned on a TWO-TREE fixture.
+     *
+     * The three-way ordering is behavioural chain, not just call order: with all
+     * three conventions present, opencode registers last either way, so swapping
+     * the spec and claude slots inside `loadAll()`'s per-tier loop changes nothing
+     * observable and only the DocFigure arm's source-position pin would notice.
+     * Under last-write-wins the winner of a PAIR is whichever of the two registers
+     * second, so to discriminate spec from claude the fixture must contain ONLY
+     * those two trees — nothing else may out-register either member of the pair.
+     * This is the arm the order swap must redden behaviourally.
+     */
+    public function testClaudeBeatsTheSpecTreeWhenNoOpencodeTreeIsPresent(): void
+    {
+        $this->writeSkill($this->repo . '/.agents/skills', 'pair-only', 'SPEC COPY');
+        $this->writeSkill($this->repo . '/.claude/skills', 'pair-only', 'CLAUDE COPY');
+
+        $skill = $this->engineSkillRegistry()->get('pair-only');
+
+        $this->assertNotNull($skill);
+        $this->assertSame('CLAUDE COPY', $skill->description, 'claude registers after spec, so claude holds the name');
+        $this->assertSame(SkillSource::Claude, $skill->source);
     }
 
     /**
