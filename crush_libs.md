@@ -339,6 +339,54 @@ injection path found from untrusted `inputSchema`), `McpRouter` deny-before-allo
 live-process child teardown (`BoundedShutdown` TERM→KILL→reap, group-aware) all checked out.
 `tools/check-child-lifetimes.php` was **not run** (Bash denied) — treat as blocked, not clean.
 
+## RE-VERIFY 2026-10-08 (campaign rerun) — lane A2
+
+- **P1 ✅ McpMessage twin folded into the library — (449298e62, this lane).** The probe verdict that
+  crush's copy was the *original with more machinery* held: the D12 wire-id superset
+  (`parsePreservingId`/`withWireId`/`MAX_DEPTH`) plus the mixed-typed `error()` data carrier migrated
+  into `sugar-mcp/src/McpMessage.php` with every library wire law preserved (`params:[]`→`stdClass`,
+  encode failures wrapped in `InvalidArgumentException` naming the method), crush's 424-line twin and
+  its canonical unit suite deleted per the façade rule — the moved pins (id-preserving round-trips,
+  the 13-type result matrix, wire-shape census, widened malformed-member loops re-fed as raw JSON
+  literals because `json_encode` on this host collapses `-32601.0` to int text) now live with the
+  canonical class; crush keeps only consumer-level e2e rows. Library suite 184T/668A → 226T/899A.
+- **P2 ✅ McpRouter law folded, product adapter kept — (bdc13dea0, this lane).** The library absorbs
+  crush's `serverDenied` static verbatim (instance path delegates, so the raw-key, string-pattern,
+  non-empty doctrine is the only spelling that exists) and crush's fail-loud allowlist wording;
+  `sugar-crush/src/MCP/McpRouter.php` survives as a 16/82 thin adapter mapping `AgentPreset` →
+  allowList (product policy: preset scoping, crush-`McpServer` tool merge, names-list shape). The
+  numeric-pattern-key behavior flip (int keys no longer match through the routed view) is crush's
+  canonical doctrine, pinned both ways in the library tests. Law-duplicate crush rows retired
+  (McpRouterTest 14T→4T adapter pins); the PathGlob census docblock moved in-step 291,596→289,440.
+- **P3 ✅ Stdio twins recorded already-folded — (a9228639c, this lane).** No code change: the probe
+  confirmed crush's `StdioMcpServer` is the intentional PHASE-2a product adapter over the library
+  transport, and its header now states the two product seams that justify the surviving file —
+  `spawnPlanner`/`clientInfo` wiring, the per-call `DEFAULT_TOOL_TIMEOUT_SECONDS = 120.0` ceiling
+  (no library counterpart; `toolTimeout` tunes, never disables), and the secret-scrub spawn policy.
+- **P4 ⏭ LspExchangeLock fold skipped with rationale — (4ea791720, this lane).** Diverged by
+  reason: crush's lock is a 3-file state/frame/notes-journal model for LSP exchange recovery, the
+  library's `ExchangeLock` a single-file phase-byte claim; merging would force a general file-set
+  abstraction onto the library for zero user benefit. The disposition is recorded in the class
+  docblock, shared laws restated there rather than factored into a base — dual maintenance of those
+  sentences is the accepted cost. `ReadPathCensus` rows untouched, as the skip implies no move.
+- **W-1 ✅ HttpMcpServerTest dot-sidecar leak closed — (47c91f1f3, this lane).** The probe-time
+  finding (4 warnings, exit 1 under `--filter Mcp`) was the test unlinks only `auth.json.lock` while
+  candy-core's `AtomicJsonFile` keeps its lock in the dot-sidecar `.auth.json.lock`, and its outer
+  gate skipped cleanup entirely when the payload file was absent. tearDown now tolerates each
+  leftover independently; post-fix a fresh run plants zero `/tmp/e695_http_*` residue (305
+  historical leaks before), and the crush Mcp filter closes at 1056T/5168A/**0 warnings**/exit 0.
+- **D-1 ✅ README timeout wording matches shipped reality — (4bdb94192, this lane).** README:2071
+  still advertised `tools/call` as unbounded-by-default long after 1b06c1c27 shipped the 120 s
+  default; the clause now cites `StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS` semantics (unset or
+  non-positive → 120.0, per-entry `toolTimeout` raises, never disables), pointing at docs/MCP.md
+  which already carried the truth. No documentation-drift guard pinned the stale sentence (grepped
+  before editing; the DocFigure timeout arm cites `Chat::PARALLEL_TOOL_TIMEOUT_SECONDS`, a
+  different constant, untouched).
+
+**Suite-figure seam (lane A2):** the crush Mcp-filter folds moved test *runs* across lib boundaries
+without touching `sugar-crush/tests/Config/Support/suite-figure.json` — the campaign's final re-pin
+commits carry that, alongside the known-red ReadmeSuiteFigureDrift staleness pair (pinned 21,196).
+
 # sugar-toast
 
 sugar-crush imports nothing from this library and names every symbol by inline FQN. The complete
