@@ -28,6 +28,22 @@ use SugarCraft\Mosaic\Renderer\Renderer;
  */
 final class AnimationDriver implements Model
 {
+    /**
+     * Lower bound, in milliseconds, on the delay between frame ticks.
+     *
+     * GIF/APNG parity (lane p2, N4): a 0 in an animation header is a
+     * SENTINEL, not a duration — the netscape loop extension reads 0 as
+     * "loop forever", and decoders read a 0-delay frame as "show as fast as
+     * your host allows", which every browser floors to roughly one frame.
+     * ApngDecoder::delayMs() returns an honest 0 for `fcTL num=0`; feeding
+     * that straight to Cmd::tick(0.0) re-arms the timer on the very next
+     * loop iteration, so a crafted animation redraws unthrottled forever —
+     * CPU pin plus a terminal byte flood (MAX_FRAMES caps allocation, not
+     * the loop rate). The floor keeps the product decision honest per
+     * frame: frames with real delays pass through untouched.
+     */
+    public const MIN_TICK_MS = 10;
+
     public function __construct(
         public readonly Animation $animation,
         public readonly Renderer $renderer,
@@ -50,7 +66,7 @@ final class AnimationDriver implements Model
         }
 
         return Cmd::tick(
-            $this->animation->delaysMs[$this->index] / 1000.0,
+            max($this->animation->delaysMs[$this->index], self::MIN_TICK_MS) / 1000.0,
             static fn(): Msg => new FrameTickMsg(),
         );
     }
@@ -79,7 +95,7 @@ final class AnimationDriver implements Model
         return [
             $this->withIndex($nextIndex),
             Cmd::tick(
-                $this->animation->delaysMs[$nextIndex] / 1000.0,
+                max($this->animation->delaysMs[$nextIndex], self::MIN_TICK_MS) / 1000.0,
                 static fn(): Msg => new FrameTickMsg(),
             ),
         ];

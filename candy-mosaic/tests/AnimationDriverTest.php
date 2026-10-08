@@ -123,6 +123,49 @@ final class AnimationDriverTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    public function testZeroDelayFramesAreFlooredToTheMinimumTick(): void
+    {
+        // ApngDecoder::delayMs() hands the driver an honest 0 for
+        // `fcTL num=0`; Cmd::tick(0.0) re-fires on the very next loop
+        // iteration — a busy-loop redraw with a terminal byte flood
+        // (lane p2, N4).
+        $zero   = new Animation($this->frames, array_fill(0, 5, 0));
+        $driver = new AnimationDriver($zero, $this->renderer, 4, 2);
+
+        $init = $driver->init();
+        $this->assertNotNull($init);
+        $tick = $init();
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tick);
+        $this->assertGreaterThanOrEqual(AnimationDriver::MIN_TICK_MS / 1000.0, $tick->seconds);
+
+        [, $cmd] = $driver->update(new FrameTickMsg());
+        $this->assertNotNull($cmd);
+        $nextTick = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $nextTick);
+        $this->assertGreaterThanOrEqual(AnimationDriver::MIN_TICK_MS / 1000.0, $nextTick->seconds);
+    }
+
+    public function testNegativeDelayIsFlooredToo(): void
+    {
+        $negative = new Animation($this->frames, [-100, 0, 0, 0, 0]);
+        $driver   = new AnimationDriver($negative, $this->renderer, 4, 2);
+
+        $init = $driver->init();
+        $this->assertNotNull($init);
+        $this->assertSame(AnimationDriver::MIN_TICK_MS / 1000.0, $init()->seconds);
+    }
+
+    public function testHonestDelaysPassThroughTheFloorUnchanged(): void
+    {
+        // The setUp fixture is 100 ms per frame — comfortably above the
+        // floor, and it must NOT be rewritten by the clamp.
+        $driver = new AnimationDriver($this->animation, $this->renderer, 4, 2);
+
+        $init = $driver->init();
+        $this->assertNotNull($init);
+        $this->assertSame(0.1, $init()->seconds);
+    }
+
     public function testUpdateIgnoresUnknownMessage(): void
     {
         $driver = new AnimationDriver(

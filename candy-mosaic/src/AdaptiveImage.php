@@ -23,15 +23,28 @@ final class AdaptiveImage
     /** @var list<string>  LRU ordering (front = most recent) */
     private array $lru = [];
 
+    /** Effective cache capacity, normalised at the boundary (>= 1). */
+    private readonly int $maxCache;
+
     public function __construct(
         private readonly ImageSource $image,
         private readonly Mosaic $mosaic,
-        private readonly int $maxCache = 4,
+        int $maxCache = 4,
         private readonly ?AsyncRenderer $asyncRenderer = null,
-    ) {}
+    ) {
+        // A capacity below 1 evicts every entry the moment render() stores
+        // it — the memo silently re-encodes forever (lane p2, N3). Clamp
+        // rather than throw: 1 is the smallest honest cache and the
+        // degenerate values (0, negative) carry no intent it would violate.
+        $this->maxCache = max(1, $maxCache);
+    }
 
     /**
-     * Return a version of this AdaptiveImage that uses async rendering.
+     * Return an async-rendering twin of this AdaptiveImage.
+     *
+     * The twin is a fresh instance: entries cached by render() on THIS one
+     * do not carry over — the twin's first render at each size re-encodes
+     * (lane p2, N3 truth-flip: the old wording implied continuity).
      *
      * The async renderer is used only for renderAsync(); the normal render()
      * method is always synchronous.

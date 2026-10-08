@@ -180,6 +180,40 @@ final class ScaleTest extends TestCase
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
+    public function testFillExtremeAspectNeverEmitsZeroSidedSourceRect(): void
+    {
+        // src 100×1 → dst 1×1000: factor = max(1/100, 1000/1) = 1000, so the
+        // naive round(dstW/factor) lands on 0 in the width leg; the mirrored
+        // call degenerates in the height leg (lane p2, N2 — a 0-sided SOURCE
+        // rect reaches imagecrop and GD fails there; only dst was clamped).
+        foreach ([[100, 1, 1, 1000], [1, 100, 1000, 1]] as [$sw, $sh, $dw, $dh]) {
+            $r = Scale::Fill->computeDimensions($sw, $sh, $dw, $dh);
+
+            $this->assertGreaterThanOrEqual(1, $r['srcW'], "srcW floored at 1 ({$sw}x{$sh} -> {$dw}x{$dh})");
+            $this->assertGreaterThanOrEqual(1, $r['srcH'], "srcH floored at 1 ({$sw}x{$sh} -> {$dw}x{$dh})");
+            $this->assertGreaterThanOrEqual(0, $r['srcX']);
+            $this->assertGreaterThanOrEqual(0, $r['srcY']);
+            $this->assertLessThanOrEqual($sw, $r['srcX'] + $r['srcW'], 'rect stays inside the source (width)');
+            $this->assertLessThanOrEqual($sh, $r['srcY'] + $r['srcH'], 'rect stays inside the source (height)');
+        }
+    }
+
+    public function testCropExtremeAspectNeverEmitsZeroSidedSourceRect(): void
+    {
+        // The same degeneracy through Crop's cancelled-factor math (lane p2,
+        // N2): the upper cap existed, the lower floor did not.
+        foreach ([[100, 1, 1, 1000], [1, 100, 1000, 1]] as [$sw, $sh, $dw, $dh]) {
+            $r = Scale::Crop->computeDimensions($sw, $sh, $dw, $dh);
+
+            $this->assertGreaterThanOrEqual(1, $r['srcW'], "srcW floored at 1 ({$sw}x{$sh} -> {$dw}x{$dh})");
+            $this->assertGreaterThanOrEqual(1, $r['srcH'], "srcH floored at 1 ({$sw}x{$sh} -> {$dw}x{$dh})");
+            $this->assertGreaterThanOrEqual(0, $r['srcX']);
+            $this->assertGreaterThanOrEqual(0, $r['srcY']);
+            $this->assertLessThanOrEqual($sw, $r['srcX'] + $r['srcW'], 'rect stays inside the source (width)');
+            $this->assertLessThanOrEqual($sh, $r['srcY'] + $r['srcH'], 'rect stays inside the source (height)');
+        }
+    }
+
     public function testZeroOrNegativeDimensionsReturnsSafeDefaults(): void
     {
         $r = Scale::Fit->computeDimensions(0, 0, 0, 0);

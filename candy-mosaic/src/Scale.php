@@ -55,7 +55,8 @@ enum Scale
      * @param int $dstH  Target height in cells or pixels (renderer-dependent)
      * @return array{srcX:int, srcY:int, srcW:int, srcH:int, dstW:int, dstH:int}
      *                  Source crop rect and the destination size to pass to the
-     *                  renderer.  dstW/dstH are > 0.
+     *                  renderer.  dstW/dstH are > 0; srcW/srcH are >= 1 so the
+     *                  rect is always a legal crop source (lane p2, N2).
      */
     public function computeDimensions(int $srcW, int $srcH, int $dstW, int $dstH): array
     {
@@ -103,9 +104,13 @@ enum Scale
         $scaleW = $srcW * $factor;
         $scaleH = $srcH * $factor;
 
-        // Crop from the centre to get the dst dimensions.
-        $srcCropW = (int) round($dstW / $factor);
-        $srcCropH = (int) round($dstH / $factor);
+        // Crop from the centre to get the dst dimensions. Under extreme
+        // aspect mismatch dst/factor rounds below 1 (lane p2, N2): a
+        // zero-sided SOURCE rect reaches imagecrop downstream and GD fails
+        // there, so floor both dims at one pixel before centring — the src
+        // mirror of the dst clamp in computeDimensions().
+        $srcCropW = max(1, (int) round($dstW / $factor));
+        $srcCropH = max(1, (int) round($dstH / $factor));
         $srcX = (int) (($srcW - $srcCropW) / 2);
         $srcY = (int) (($srcH - $srcCropH) / 2);
 
@@ -132,6 +137,11 @@ enum Scale
         // If source is smaller than the computed crop region, use full source.
         if ($srcCropW > $srcW) { $srcCropW = $srcW; }
         if ($srcCropH > $srcH) { $srcCropH = $srcH; }
+        // The opposite edge: extreme aspect makes the round land on 0, and a
+        // zero-sided source rect is what breaks imagecrop (lane p2, N2) —
+        // floor before the centring math, mirroring fill().
+        if ($srcCropW < 1) { $srcCropW = 1; }
+        if ($srcCropH < 1) { $srcCropH = 1; }
 
         $srcX = (int) (($srcW - $srcCropW) / 2);
         $srcY = (int) (($srcH - $srcCropH) / 2);
