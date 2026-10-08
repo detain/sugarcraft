@@ -12,6 +12,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolEventPumpMsg;
 use SugarCraft\Crush\ToolResult;
@@ -101,6 +102,30 @@ final class SkillLoadedNoticeTest extends TestCase
                 "a {$result->name} row (id {$result->id}) grew a notice it should not have",
             );
         }
+    }
+
+    public function testADeniedSkillResultPrintsNoNotice(): void
+    {
+        // The isDeniedResult leg, pinned apart from the error leg above: the
+        // structural denial (audit F-P8) rides independently of the text, and
+        // the rehydration paths (Message::fromArray, Chat's checkpoint read)
+        // rebuild `denial` from the stored string on their own — so a row that
+        // carries a refusal kind without an error string is a live shape, not
+        // a contradiction. Review r-review lane B, MINOR-2.
+        $chat = new Chat(
+            history: [Message::toolRunning(new ToolCall('Skill', ['name' => 'review'], 'c7'))],
+            backend: new EchoBackend(),
+        );
+        [$next] = $chat->update(new ToolResultsMsg(Message::assistant(''), [
+            new ToolResult('Skill', 'body', null, 'c7', arguments: ['name' => 'review'], denial: DenialKind::Refused),
+        ]));
+
+        $this->assertNotNull($this->resultIndex($next, 'c7'), 'precondition: the refused row settled');
+        $this->assertSame(
+            $this->historyWithoutNotice($next),
+            $next->history,
+            'a refused skill load announced itself anyway',
+        );
     }
 
     /** The batch path's own replacement, minus anything matching the notice shape. */

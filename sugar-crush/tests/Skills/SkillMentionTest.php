@@ -163,12 +163,6 @@ final class SkillMentionTest extends TestCase
         self::assertSame(['Body.'], array_map(static fn ($a) => $a->data, $message->attachments));
     }
 
-    // ── helpers ────────────────────────────────────────────────────────
-
-    /**
-     * @param array<string, string> $bodies
-     * @param array<string, bool> $userInvocable
-     */
     // ── lane B (skills-qa F1/F2): the skill names itself ───────────────
 
     public function testAMentionedSkillCarriesItsNameOnTheAttachment(): void
@@ -212,8 +206,11 @@ final class SkillMentionTest extends TestCase
         ), 'a 121-char blob is not a skill name worth printing');
     }
 
+    // ── helpers ────────────────────────────────────────────────────────
+
     /**
-     * @return array<string, mixed>
+     * @param array<string, string> $bodies
+     * @param array<string, bool> $userInvocable
      */
     private function registry(array $bodies, array $userInvocable = []): SkillRegistry
     {

@@ -275,8 +275,11 @@ final class SkillMentions
             return null;
         }
 
-        // One inert line, like every other model-chosen string the transcript
-        // prints; a name carrying control characters is not a name we recognise.
+        // Fold-and-print, the disclosed lane B choice (review MINOR-3): control
+        // characters are collapsed to spaces so the printed name stays one inert
+        // line like every other model-chosen string the transcript shows — a
+        // exotic-spelling name still yields a label, never a refusal. Only what
+        // folds to nothing (or to a blob past MAX_NAME_CHARS) is refused.
         $name = trim(preg_replace('/[\p{C}\s]+/u', ' ', $name) ?? '');
         if ($name === '' || \strlen($name) > self::MAX_NAME_CHARS) {
             return null;
