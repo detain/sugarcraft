@@ -36,7 +36,7 @@ namespace SugarCraft\Top\Collect;
  *
  * Stateless.
  */
-final class Freq
+final class Freq implements TunableFreq
 {
     private function __construct(
         private readonly Paths $paths,

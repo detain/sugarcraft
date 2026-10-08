@@ -1,0 +1,6 @@
+  PID COMM                FD T V FLAGS    REF  OFFSET PRO NAME
+34179 bash              text v r r-------   -       - -   /usr/local/bin/bash
+34179 bash              ctty v c rw------   -       - -   /dev/pts/82
+34179 bash               cwd v d r-------   -       - -   /usr/home/detain
+34179 bash              root v d r-------   -       - -   /
+34179 bash                 0 v c rw------   8   23853 -   /dev/pts/82

@@ -64,7 +64,7 @@ namespace SugarCraft\Top\Collect;
  *    "kvm", ContainerRef::$vm), from the same cgroup read plus the cmdline
  *    already read — no extra file per process.
  */
-final class ProcList
+final class ProcList implements TunableProcList
 {
     // P-E opt-ins (withPerCore / withFilterKernel / withDetail): the proc
     // panel re-applies proc_per_core, proc_filter_kernel and the detailed
