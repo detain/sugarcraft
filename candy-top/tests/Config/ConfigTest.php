@@ -132,6 +132,79 @@ final class ConfigTest extends TestCase
         $this->assertSame('default', $config->string('graph_symbol_net'));
     }
 
+    public function testWithPresetAppliesProcWidthOrResetsItToDefault(): void
+    {
+        $presets = Presets::parse('cpu:0:default,proc:0:default:80 proc:1:tty:default net:0:default proc:0:default:300');
+        $nudged = Config::new()->withProcBoxWidthPercent(30);
+
+        $this->assertSame(80, $nudged->withPreset($presets->at(1))->procBoxWidthPercent());
+        $this->assertSame(55, $nudged->withPreset($presets->at(2))->procBoxWidthPercent(), '`default` W');
+        $this->assertSame(30, $nudged->withPreset($presets->at(3))->procBoxWidthPercent(), 'no proc box → untouched');
+        $this->assertSame(100, $nudged->withPreset($presets->at(4))->procBoxWidthPercent(), 'W clamped like btop');
+        $this->assertSame(55, $nudged->withPreset($presets->at(0))->procBoxWidthPercent(), '3-field proc → default, as btop PR #1476');
+    }
+
+    public function testWithProcBoxWidthPercentClampsLikeTheShiftArrowKeys(): void
+    {
+        $this->assertSame(55, Config::new()->procBoxWidthPercent());
+        $this->assertSame(0, Config::new()->withProcBoxWidthPercent(-10)->procBoxWidthPercent());
+        $this->assertSame(100, Config::new()->withProcBoxWidthPercent(110)->procBoxWidthPercent());
+        $this->assertSame(65, Config::new()->withProcBoxWidthPercent(65)->procBoxWidthPercent());
+    }
+
+    public function testWithProcBoxWidthPercentOutOfRangeViaWithThrows(): void
+    {
+        $this->expectException(InvalidOptionValue::class);
+        Config::new()->with('proc_box_width_percent', 101);
+    }
+
+    public function testShowCoreFreqAccessor(): void
+    {
+        $this->assertSame('off', Config::new()->showCoreFreq());
+        $this->assertSame('graph', Config::new()->with('show_core_freq', 'graph')->showCoreFreq());
+        $this->expectException(InvalidOptionValue::class);
+        Config::new()->with('show_core_freq', 'on');
+    }
+
+    public function testMemSelectedAccessor(): void
+    {
+        $this->assertSame('default', Config::new()->memSelected());
+        $this->assertSame('swap_used', Config::new()->withParsed('mem_selected', 'swap_used')->memSelected());
+        $this->expectException(InvalidOptionValue::class);
+        Config::new()->with('mem_selected', 'swap');
+    }
+
+    public function testDisksOrderParsesWhitespaceListAndDropsDuplicates(): void
+    {
+        $this->assertSame([], Config::new()->disksOrder());
+        $config = Config::new()->with('disks_order', "  / swap\t/home  / /mnt/data ");
+        $this->assertSame(['/', 'swap', '/home', '/mnt/data'], $config->disksOrder());
+    }
+
+    public function testWaveUBoolDefaults(): void
+    {
+        $config = Config::new();
+        $this->assertTrue($config->bool('show_zswap'));
+        $this->assertFalse($config->bool('net_hide_ip'));
+        $this->assertFalse($config->bool('proc_command_basename'));
+        $this->assertFalse($config->bool('proc_filter_containers'));
+        $this->assertTrue($config->flipped('proc_filter_containers')->bool('proc_filter_containers'), 'O key toggles it');
+    }
+
+    public function testBlock2GraphSymbolResolvesButTtyModeStillForcesTty(): void
+    {
+        $config = Config::new()->with('graph_symbol', 'block2')->with('graph_symbol_net', 'block2');
+        $this->assertSame('block2', $config->graphSymbol());
+        $this->assertSame('block2', $config->graphSymbolFor('cpu'));
+        $this->assertSame('block2', $config->graphSymbolFor('net'));
+        $tty = $config->with('tty_mode', true);
+        foreach (['cpu', 'mem', 'net', 'proc', 'gpu0'] as $box) {
+            $this->assertSame('tty', $tty->graphSymbolFor($box), $box);
+        }
+        $forced = $config->with('force_tty', true)->withTtyModeResolved(null, false);
+        $this->assertSame('tty', $forced->graphSymbolFor('net'), 'force_tty → tty_mode → tty');
+    }
+
     public function testGraphSymbolForResolvesDefaultAndOverrides(): void
     {
         $config = Config::new()->with('graph_symbol', 'block')->with('graph_symbol_net', 'tty');
