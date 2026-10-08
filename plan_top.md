@@ -43,7 +43,7 @@ candy-input, candy-sprinkles, sugar-charts, sugar-dash), phpunit.xml, `src/Top.p
   Used/Free meters), proc (sorter, filter, distance-fade, dual-gradient colors, vi keys, scrollbar click/drag),
   plus clock/uptime/buttons chrome. Menu set: main menu, options, help, signal popup, msgboxes (draw §5).
 - **Theme engine**: btop's 43 semantic keys + 9 gradient families ×(start,mid,end) → 101-stop caches + derived
-  `proc`/`proc_color` + TTY 16-color variant (draw §6). The upstream `themes/*.theme` files — **41**, disk-verified
+  `proc`/`proc_color` + TTY 16-color variant (draw §6). The upstream `themes/*.theme` files — **41** (+ mellow #1683 = 42 shipped), disk-verified
   2026-10-08 (`ls /home/sites/btop/themes/*.theme | wc -l`; draw §6 correct, env §4's "43" false — §8) — are
   **data to port** into `candy-top/docs/_data`-style fixtures or a themes/ dir; no
   SugarCraft lib ships them today (see §8 L-note — the brief's "sugar-dash's 43 ported btop themes" is false on
@@ -430,7 +430,7 @@ candy-top/
     MemView.php NetView.php DiskView.php ProcView.php  # mirror draw §3.3/§3.4/§3.5; proc via L6 ProcRowComposer
     Overlays.php           # menus/help/signals/msgboxes (draw §5) — veil-styled dim = SGR-strip + inactive_fg
                            #   (draw §1 overlay law, sugar-veil backdrop, draw §10 row 36)
-  src/Theme/               # ✅ 672c64680 (+ themes/ 41 files, btop oracle)
+  src/Theme/               # ✅ 672c64680 (+ themes/ 41 files, btop oracle; mellow = 42nd)
     ThemeConfig.php        # 43 semantic keys + 9 families (hexes: draw §6 verbatim Default table);
                            #   .theme ini parser `theme[key]="#hex"` (+ # comments, 'r g b', #GG gray forms)
                            #   → dash GradientStore (L7) ramps; pseudo-derivations proc/proc_color injected

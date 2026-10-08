@@ -13,9 +13,9 @@ use SugarCraft\Top\Theme\ThemeRegistry;
 /** Every bundled upstream theme parses cleanly and resolves every key. */
 final class ShippedThemesTest extends TestCase
 {
-    public function testExactly41ThemesShipped(): void
+    public function testExactly42ThemesShipped(): void
     {
-        self::assertCount(41, glob(ThemeRegistry::bundledDir() . '/*.theme') ?: []);
+        self::assertCount(42, glob(ThemeRegistry::bundledDir() . '/*.theme') ?: []);
     }
 
     /** @return iterable<string, array{string}> */
