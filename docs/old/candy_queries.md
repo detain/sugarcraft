@@ -6,7 +6,7 @@
 
 Two bodies of work are requested:
 1. **Multi-driver support** — MySQL + PostgreSQL drivers (with MariaDB/Percona handled as MySQL *flavors* via `@@version` detection), promoting the SQLite-only browser to genuinely multi-engine.
-2. **A MySQL-Workbench-style admin/observability layer** — Dashboard, Server Status, Status/System Variables, Client Connections, Performance Reports, and Performance Schema Setup — reverse-engineered in exhaustive detail in `docs/mysql_workbench_dash.md`. Admin sections target **MySQL first** behind a clean `AdminProvider` interface so Postgres equivalents (`pg_stat_*`) can land later.
+2. **A MySQL-Workbench-style admin/observability layer** — Dashboard, Server Status, Status/System Variables, Client Connections, Performance Reports, and Performance Schema Setup — reverse-engineered in exhaustive detail in `docs/research/mysql_workbench_dash.md`. Admin sections target **MySQL first** behind a clean `AdminProvider` interface so Postgres equivalents (`pg_stat_*`) can land later.
 
 This change matters because it turns a single-file SQLite viewer into a portable, low-privilege DBA cockpit — the flagship Dashboard works on a near-`USAGE` MySQL account using only `SHOW GLOBAL STATUS`/`SHOW VARIABLES`.
 
