@@ -27,24 +27,18 @@ References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-refer
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight (post-plan "better than btop" round, user-requested 2026-10-08)
-- (A) Shared non-blocking GPU feed: one accelerator feed per App for cpu/gpu/proc boxes, nvidia-smi as async
-  children (no loop stalls). Owns Collect/Gpu/**, CpuPanel, GpuPanel, Panel/Gpu/**, ProcPanel, ProcGpuColumns,
-  GpuUsage, Panels.php.
-- (B) ctr: libvirt/KVM VMs listed in the ctr box (machine-qemu scopes, domain names, cgroup stats) + container
-  engine detection for the `x ctr` title. Owns Collect/Containers*, Cgroup/ContainerRef, CtrPanel, Panel/Ctr/**,
-  FakeContainers, FrameBuilder ctr button, ProcFilter.
-- (C) NEXT, after (A) lands (reuse its async child runner): new `ipmi` box — BMC sensors via ipmitool (sensor list
-  with thresholds, dcmi power, PSU in/out, fans RPM/%, temps, voltages, chassis status, SEL, mc/fru/lan once),
-  radial/gauge visuals. Reference captures (sanitized) + timings: `prompt_kit/findings/ipmi-reference/`.
-- (D) Pastel default theme (bright pastels) + optional border gradients (theme keys; flat themes byte-identical).
-- (E) NEXT, after (B) lands: VM dashboard — toggleable `vms` view of per-VM cards (cpu/ram/net/disk gauges+graphs),
-  hides other boxes to make room. Data sources (no subprocess): `prompt_kit/findings/kvm-reference.md` "Per-VM data".
+Committed: ctr libvirt VMs + engine detection `865af4587` · pastel default theme + border flows `da83521d1` ·
+shared non-blocking GPU feed `2b58f32f5`.
+- VM dashboard (`v` view of per-VM cards; new Collect/Vm*, FakeVms, View/VmsMode…) — implementer running.
+- IPMI box — implementer running PHASE 1 only (collector/parser/async runner/panel/view/fake/tests, no layout
+  wiring); PHASE 2 wiring (key, placement, Schema, Panels, README) after the VM dashboard commits — message it.
+  Reference captures: `prompt_kit/findings/ipmi-reference/`.
+Shared-file staging helper: `python3 $JOB_TMP/hunks.py list|stage FILE idx,…` (applies selected -U0 hunks to the
+HEAD blob by old line numbers; recreate from this description if the job tmp is gone).
 Each: implementer → reviewer → fix → commit → note here.
 
 ## Remaining (blocked / optional)
 - Blocked: FreeBSD live ps/iostat/ifconfig/netstat -W captures (tech.trouble-free.net ssh down).
-- Optional follow-ups: share one accelerator feed between cpu/gpu/proc boxes (up to 3 samplers; pmon ~0.25 s
-  on the loop thread every 5 s on NVIDIA, measured skynet2); container-engine title detection for the `x ctr` button.
 - Live test hosts: skynet2 (4× NVIDIA, docker) and kvm521 (`ssh -i ~/.ssh/id_ed25519_new root@kvm521`, libvirt,
   cgroup v2); both keep a ~/sugarcraft clone (`git pull --all && cd candy-top && COMPOSER_ALLOW_SUPERUSER=1
   composer update -o -W --no-dev`). Smoke runs always use `--config <tmp>`.
