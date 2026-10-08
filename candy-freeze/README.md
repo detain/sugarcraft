@@ -13,8 +13,7 @@
 
 ![demo](.vhs/screenshot.gif)
 
-PHP port of [charmbracelet/freeze](https://github.com/charmbracelet/freeze) —
-turn code or terminal output into an SVG screenshot. **No `ext-gd` /
+candy-freeze — turn code or terminal output into an SVG screenshot, for PHP 8.3+. **No `ext-gd` /
 Imagick required**; the output is plain text suitable for git diffs and
 CI artifacts.
 
@@ -133,3 +132,7 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 ```sh
 cd candy-freeze && composer install && vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

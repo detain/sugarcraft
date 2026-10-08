@@ -10,7 +10,7 @@
 
 # CandyLister
 
-PHP port of [treilik/bubblelister](https://github.com/treilik/bubblelister) — a tree-list view component for terminal UIs. Renders items with custom prefix/suffix hooks, line wrapping, and cursor-aware styling.
+candy-lister — a tree-list view component for terminal UIs, for PHP 8.3+. Renders items with custom prefix/suffix hooks, line wrapping, and cursor-aware styling.
 
 ## Features
 
@@ -191,3 +191,9 @@ behaviour is always correct.
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: [treilik/bubblelister](https://github.com/treilik/bubblelister).

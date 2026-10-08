@@ -16,10 +16,9 @@
 composer require sugarcraft/candy-kit
 ```
 
-PHP port of [charmbracelet/fang](https://github.com/charmbracelet/fang) —
-opinionated **CLI presentation helpers** that turn ordinary command-
-line output into something that matches the rest of the SugarCraft
-stack. CandyKit is library-only — drop it into any Composer project,
+candy-kit — opinionated **CLI presentation helpers** that turn ordinary
+command-line output into something that matches the rest of the
+SugarCraft stack, for PHP 8.3+. CandyKit is library-only — drop it into any Composer project,
 no Symfony Console requirement.
 
 ```php
@@ -44,7 +43,7 @@ echo StatusLine::error('connection refused'), "\n";
   can show, via candy-core's `ColorProfile::detect()`: no escape bytes at
   all when STDOUT is not a tty (`myapp --help | less`), colour dropped but
   bold kept under `NO_COLOR` on a terminal, full colour forced by
-  `CLICOLOR_FORCE` / `FORCE_COLOR`. As in upstream `colorprofile`, tty-ness
+  `CLICOLOR_FORCE` / `FORCE_COLOR`. As in the `colorprofile` design, tty-ness
   is checked before `NO_COLOR`, so a pipe gets plain text whether or not
   `NO_COLOR` is set. **Every presenter called without a theme uses
   `Theme::detect()`**; an explicitly passed theme is rendered as given —
@@ -77,7 +76,7 @@ echo StatusLine::error('connection refused'), "\n";
   ->withStatus($bar)->render($body, $cols, $rows)`), with a centred title
   bar, dividers, and a status bar. Normalises the body to a constant line
   count and pads ANSI-width-aware so it never overflows the terminal —
-  safe for a TEA program whose frame-diff renderer owns the screen.
+  safe for a SugarCraft app whose frame-diff renderer owns the screen.
 
 ## Demos
 
@@ -97,3 +96,7 @@ Presenter output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
 snapshots. Any change to the ANSI slide output must be intentional — re-record
 the fixtures with `UPDATE_GOLDENS=1 vendor/bin/phpunit` to accept a new
 canonical render.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

@@ -13,7 +13,6 @@
 In-memory virtual terminal emulator — parses an ANSI byte stream into a
 cell grid with cursor, mode, SGR style, and hyperlink state.
 
-Mirrors [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt).
 Used as the terminal emulator behind
 [candy-vcr](../candy-vcr/)'s `render-tape` pipeline — every frame produced
 for a GIF is a `Snapshot::of($terminal, $time)` after the renderer feeds
@@ -246,9 +245,8 @@ implements the superset.
 used by `SugarCraft\Vt\Terminal\Terminal`. The renderer path
 (`SugarCraft\Vt\Terminal`) implements the rows with an explicit
 `Method` column — the rest of the CSI sequences are ignored when the
-renderer encounters them (they're already simplified-away by upstream
-applications writing rendered output). Since the parity pass the
-renderer honours the same DECAWM/DECTCEM private modes, IL/DL and SGR
+renderer encounters them (applications writing rendered output have already
+simplified them away). The renderer honours the same DECAWM/DECTCEM private modes, IL/DL and SGR
 set as the emulator (`Parser\CsiHandlerImpl`).
 
 The `printable` and `execute` paths also route through the same
@@ -295,7 +293,7 @@ adds palette query/set (`OSC 4`, `OSC 10`, `OSC 11`), clipboard get/set
 | `48;5;<n>` / `48;2;<r>;<g>;<b>` | 256-color / truecolor background. |
 | `39` / `49` | Reset fg / bg to default. |
 
-Attribute bitfield mirrored on `Cell::ATTR_*` constants:
+Attribute bitfield exposed as `Cell::ATTR_*` constants:
 `ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_INVERSE`,
 `ATTR_STRIKETHROUGH`.
 
@@ -347,8 +345,7 @@ var_dump($mode->autoWrap);  // bool
 $wrapped = $mode->withAutoWrap(true);
 ```
 
-When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS —
-see #1417 and the renderer parity pass), a graphic landing in the
+When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS), a graphic landing in the
 rightmost column parks the cursor there arming a deferred (phantom)
 wrap; the next graphic consumes it, moving to column 0 of the next row
 before writing — and if that row is within a scroll region the region
@@ -665,4 +662,8 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
   GIF renderer. Uses this lib's root `Terminal` + `Snapshot` to drive
   every rendered frame.
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Upstream: [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt)
+- Originally inspired by [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

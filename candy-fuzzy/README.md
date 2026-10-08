@@ -14,7 +14,7 @@ Extracts the canonical Smith-Waterman fuzzy matcher from `candy-forms` and adds 
 
 Provides two algorithms:
 - **SmithWatermanMatcher** — Smith-Waterman local alignment with adjacency bonus. Bit-equivalent to the original `candy-forms` implementation.
-- **SahilmMatcher** — Ports the `sahilm/fuzzy` algorithm used by `charmbracelet/gum` filter. Includes separator bonus, camelCase bonus, exact-prefix bonus.
+- **SahilmMatcher** — Implements the `sahilm/fuzzy` scoring algorithm. Includes separator bonus, camelCase bonus, exact-prefix bonus.
 
 ## Quickstart
 
@@ -213,6 +213,11 @@ The highlighter is presentation-neutral and forwards unmatched haystack segments
 
 - [Smith-Waterman algorithm](https://en.wikipedia.org/wiki/Smith%E2%80%93Waterman_algorithm)
 - [sahilm/fuzzy (Go)](https://github.com/sahilm/fuzzy)
-- [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea)
 
 [![codecov](https://codecov.io/gh/sugarcraft/candy-fuzzy/branch/master/graph/badge.svg?flag=candy-fuzzy)](https://codecov.io/gh/sugarcraft/candy-fuzzy)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: the `sahilm/fuzzy` Go matcher (see Links).

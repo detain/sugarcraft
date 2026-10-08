@@ -7,8 +7,8 @@ Shared async utilities for SugarCraft — cancellation tokens, subscriptions, an
 `candy-async` provides the foundational async vocabulary used across the SugarCraft TUI ecosystem:
 
 - **Cancellation tokens** — `CancellationSource` / `CancellationToken` / `Cancellable` for coordinated cancellation across async operations
-- **Subscriptions** — `Subscription` interface and `Subscriptions::compose()` for managing TEA-style subscription lifecycles
-- **Suspension** — `Suspended` value-object for TEA commands paused across update cycles
+- **Subscriptions** — `Subscription` interface and `Subscriptions::compose()` for managing subscription lifecycles in Model–Update–View apps
+- **Suspension** — `Suspended` value-object for commands paused across update cycles
 - **AsyncOps** — static helpers for `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `debounce`, and `throttle` operations
 - **AsyncCache** — promise-library-only async cache-aside: TTL, in-flight loader coalescing, optional serve-stale-on-error
 
@@ -76,7 +76,7 @@ $composite->unsubscribe(); // disposes all three
 
 ### Suspension
 
-`Suspended` represents a paused TEA command as data: it carries a `resume`
+`Suspended` represents a paused command as data: it carries a `resume`
 callable and an optional opaque `state`. The runtime stores the `Suspended` and
 calls `resume()` later — when the subscription fires or the model decides to
 continue — so effects that span multiple update cycles (animations, debounced
@@ -119,3 +119,7 @@ Both failure modes surface as `RuntimeException` subclasses — `TimeoutExceptio
 ## License
 
 MIT
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

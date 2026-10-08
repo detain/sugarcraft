@@ -13,8 +13,8 @@
 
 ![demo](.vhs/dashboard.gif)
 
-PHP port of [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) —
-declarative styling and layout for terminal UIs.
+candy-sprinkles — declarative styling and layout for terminal UIs,
+for PHP 8.3+.
 
 ```sh
 composer require sugarcraft/candy-sprinkles
@@ -35,7 +35,7 @@ echo Style::new()
 ```
 
 `fg` / `bg` / `on` / `pad` / `mg` / `of` are short-form ergonomic aliases.
-The upstream-mirroring full names (`foreground` / `background` / `padding`
+The full-length names (`foreground` / `background` / `padding`
 / `margin` / `setString`) work identically — pick whichever reads better at
 the call site:
 
@@ -98,7 +98,7 @@ $cols = Layout::horizontal([
 ])->split($rows[1]);
 ```
 
-Available constraints mirror ratatui:
+Available constraints:
 
 | Constraint | Behaviour |
 |---|---|
@@ -152,7 +152,7 @@ echo Tree::new()
 
 ## Public API
 
-- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` default to `primary`/`secondary` in the `dark()`/`light()`/`ansi()` themes, but are set to distinct colour values in the richer named themes (dracula, tokyoNight, oneDark, githubDark, solarizedDark/Light); consumers must NOT assume `$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
+- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` default to `primary`/`secondary` in the `dark()`/`light()`/`ansi()` themes, but are set to distinct colour values in the richer named themes (dracula, tokyoNight, oneDark, githubDark, solarizedDark/Light); consumers must NOT assume `$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs.
 - **`Style`** — every lipgloss prop (~40 `with*()` methods): fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   rapidBlink/reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
@@ -232,8 +232,8 @@ just a convenience wrapper. `Renderer::fromEnvironment()` calls
 `ColorProfile::detect()` for you (consults `NO_COLOR`,
 `CLICOLOR_FORCE`, `TERM_PROGRAM`, etc.).
 
-PHP's stream model is coarser than Go's, so the writer-binding
-`NewRenderer(out)` shape is *not* mirrored. Pair with
+Output is returned as strings rather than written to a bound writer, so
+there is no writer-carrying renderer constructor. Pair with
 `Output::fprint($stream, ...)` when you need to write to a
 specific stream.
 
@@ -320,7 +320,7 @@ lipgloss v2's "explicit wins" rule.
 ## Theme — canonical colour palette
 
 `Theme` is the single source of truth for terminal colour schemes
-across SugarCraft consumer libs. Port of `charmbracelet/lipgloss.Theme`.
+across SugarCraft consumer libs.
 
 ```php
 use SugarCraft\Sprinkles\Theme;
@@ -407,8 +407,7 @@ verticals; row separators off.
 
 A `Style` carries a `ColorProfile` (TrueColor / Ansi256 / Ansi /
 Ascii / NoTty). `render()` downsamples every colour to that tier before
-emit, matching what charmbracelet/colorprofile's `Writer` does to
-lipgloss output:
+emit, matching the degradation a color-profile writer applies:
 
 ```
 TrueColor  → SGR 38;2;R;G;B  (24-bit)
@@ -420,7 +419,7 @@ NoTty      → no escape sequence at all (clean text, layout kept)
 
 `Ascii` (what `NO_COLOR` selects) forbids colour, not emphasis, so text
 attributes and hyperlinks survive. `NoTty` means the output is not a
-terminal: like upstream's `ansi.Strip` pass, the whole render — including
+terminal: the whole render — including
 escapes carried in by pre-styled content, a `transform()` callback or a
 border title — is stripped, while padding, borders and alignment stay.
 
@@ -469,3 +468,6 @@ cd candy-sprinkles && composer install && vendor/bin/phpunit
 
 ![tree](.vhs/tree.gif)
 
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

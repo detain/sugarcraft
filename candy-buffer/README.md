@@ -131,10 +131,12 @@ sharing one `Style` object across the three `B` cells yields the identical bytes
 The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` renders
 byte-identically to `$curr` via `toAnsi()`.
 
-## Upstream
-
-Mirrors the Buffer/Cell data model from [charmbracelet/vte](https://github.com/charmbracelet/vte) and the terminal cell representation in [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss).
-
 ## License
 
 MIT
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+The Buffer/Cell data model follows the design of [charmbracelet/vte](https://github.com/charmbracelet/vte) and the terminal cell representation in [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss).

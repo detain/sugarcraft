@@ -11,7 +11,8 @@
 <!-- BADGES:END -->
 
 
-PHP port of [`charmbracelet/wish`](https://github.com/charmbracelet/wish) — an SSH server middleware framework that lets you build TUIs anyone can `ssh user@host` to run.
+candy-wish — an SSH server middleware framework for PHP 8.3+ that lets you
+build TUIs anyone can `ssh user@host` to run.
 ```sh
 composer require sugarcraft/candy-wish
 ```
@@ -453,10 +454,14 @@ extracts the name and dispatches.
 
 ## Status
 
-Phase 9+ — with Context propagation + ChannelHandler dispatch. Seven middleware classes, ChannelHandler/ChannelMsg + 7 message classes, 217 tests / 536 assertions, ready for v0 deployment.
+🟢 Context propagation + ChannelHandler dispatch are complete, alongside the middleware suite (logging, auth suite, keepalive, rate limit, spawn, subsystem, async bridge, BubbleTea) and the ChannelHandler/ChannelMsg + 7 message classes.
 
 Runnable examples:
 - [`examples/hello-server.php`](examples/hello-server.php) — banner-only stack you can ForceCommand against.
 - [`examples/showcase.php`](examples/showcase.php) — middleware-stack tour.
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — interactive bash through `Spawn`.
 - [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
