@@ -476,25 +476,26 @@ from P-A.
 | P-E | PROC list: ProcList, sorter incl cpu-lazy rotation (draw §3.5: pull >30% or >max-of-top-6 hogs forward, btop_shared.cpp:132-150), filter `f`/`!` regex, distance fade + metric blend (L6), vi/arrows/page keys, scrollbar click/drag, detailed view, kill/signal popup | full scroll+filter+sort loop; `k` signal grid 5-col 16-skip | +~30 |
 | P-F | Config menu + keybindings overlay: options screen via L8 OptionRow/TextEdit, presets load-only (draw §4 triples), `ctrl_r` hot-reload | edit `update_ms` live via `+/-` persisted | +~15 |
 | P-G | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
+| P-H | **Documentation of every feature** (user-requested 2026-10-08). candy-top: full `README.md` (install, run, every panel, every key binding, mouse, config keys table generated/derived from `Config\Schema`, presets, themes list + adding user themes, TTY mode, collectors + data sources + permissions, adopted upstream-PR features from Wave U), `docs/_data/candy-top.{json,body.html}` refresh then `php tools/gen-docs.php`, `CALIBER_LEARNINGS.md`, examples/. Sibling libs — document each lane API in that lib's README + `docs/_data/<slug>.body.html` (+ gen-docs): sugar-charts (withSeriesColorFn, withBarColor), sugar-dash (BrailleCanvas gradient, Gradient101, DualSampleGraph, Meter position mode, NetAutoScale, GradientStore, DistanceFade, ProcRow*), candy-sprinkles (withEmbeddedTitle, embedJunctions, seam), sugar-bits (TextEdit, OptionRow, Progress width arg). Refresh stale "scaffold" wording in root README/docs/index.html; MATCHUPS 🟡→🟢 at v1. Add a docs drift test where cheap (e.g. README key-binding / config-key tables re-derived from source, like sugar-crush's drift guards). | README/doc pages cover every shipped feature; drift tests green | +~5 (drift guards) |
 
 ## 5. Monorepo integration checklist (still-open add-a-lib items)
 
 Scaffold (composer.json/phpunit.xml/src/Top.php/tests/README/CALIBER_LEARNINGS) already landed @ `31e4dd8ff`.
 Remaining per AGENTS.md "Adding a lib — checklist":
-- root `composer.json`: require `sugarcraft/candy-top: "@dev"` + `repositories[]` entry (root manifest keeps its
+- ✅ `03d5ef164` root `composer.json`: require `sugarcraft/candy-top: "@dev"` + `repositories[]` entry (root manifest keeps its
   own — lib manifests never get one, path-repo-closure law)
-- `MATCHUPS.md`: row `aristocratos/btop → SugarTop/CandyTop → candy-top/ → SugarCraft\Top\ → 🔴` (no btop row
+- ✅ `03d5ef164` `MATCHUPS.md`: row `aristocratos/btop → SugarTop/CandyTop → candy-top/ → SugarCraft\Top\ → 🔴` (no btop row
   exists yet — verified on disk in `docs/MATCHUPS.md` directly; the charting report has no MATCHUPS section)
   + note the user naming ruling (§8)
-- `PROJECT_NAMES.md`: record `candy-top` under a naming-exception note (heuristic says system/app → `sugar-`;
+- ✅ `03d5ef164` `PROJECT_NAMES.md`: record `candy-top` under a naming-exception note (heuristic says system/app → `sugar-`;
   owner explicitly chose `candy-top`, §8)
-- root `README.md` lib table row
-- `docs/_data/candy-top.json` + `docs/_data/candy-top.body.html`, then `php tools/gen-docs.php` (never hand-edit
+- ✅ `03d5ef164` root `README.md` lib table row
+- ✅ `03d5ef164` `docs/_data/candy-top.json` + `docs/_data/candy-top.body.html`, then `php tools/gen-docs.php` (never hand-edit
   `docs/lib/candy-top.html`)
-- `media/icons/candy-top.png`
+- ✅ `03d5ef164` `media/icons/candy-top.png`
 - `.github/workflows/vhs.yml`: `all=(… candy-top …)` array entry + the P-G tape
-- `codecov.yml`: flag + component for candy-top
-- `scripts/affected-libs.php` — verify auto-discovery already lists candy-top (it maps monorepo→split dirs
+- ✅ `03d5ef164` `codecov.yml`: flag + component for candy-top
+- ✅ `03d5ef164` `scripts/affected-libs.php` — verify auto-discovery already lists candy-top (it maps monorepo→split dirs
   dynamically; current state per brief: already picks it up)
 - packagist: owner-side entry pending (`github.com/sugarcraft/candy-top` synced @ `01bab2d8`) — note only
 - candy-top `composer.json` deps review after lanes: candy-flip/candy-vt/mosaic stay OUT (tea §6 minimal set);
