@@ -11,6 +11,7 @@ use SugarCraft\Crush\Host\WorkspaceContext;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Skills\SkillMentions;
 use SugarCraft\Crush\Skills\SkillRegistry;
 
@@ -167,6 +168,52 @@ final class SkillMentionTest extends TestCase
     /**
      * @param array<string, string> $bodies
      * @param array<string, bool> $userInvocable
+     */
+    // ── lane B (skills-qa F1/F2): the skill names itself ───────────────
+
+    public function testAMentionedSkillCarriesItsNameOnTheAttachment(): void
+    {
+        $registry = $this->registry(['review' => 'Check every changed line.', 'audit' => 'x']);
+
+        $attachments = SkillMentions::new($registry)->resolve('$review then $audit')['attachments'];
+
+        self::assertSame('review', $attachments[0]->skill, 'the chip says WHICH SKILL.md this is');
+        self::assertSame('audit', $attachments[1]->skill);
+    }
+
+    public function testTheInvokedSkillNameReadsOnlyUsableSkillResults(): void
+    {
+        self::assertSame('review', SkillMentions::invokedSkillName(
+            new ToolResult('Skill', 'body', arguments: ['name' => 'review']),
+        ));
+        self::assertNull(SkillMentions::invokedSkillName(
+            new ToolResult('Read', 'body', arguments: ['name' => 'review']),
+        ), 'only the Skill tool names a skill');
+        self::assertNull(SkillMentions::invokedSkillName(
+            new ToolResult('Skill', 'body'),
+        ), 'arguments without a name say nothing');
+        self::assertNull(SkillMentions::invokedSkillName(
+            new ToolResult('Skill', 'body', arguments: ['name' => '   ']),
+        ), 'blank is not a name');
+        self::assertNull(SkillMentions::invokedSkillName(
+            new ToolResult('Skill', 'body', arguments: ['name' => 7]),
+        ), 'a non-string name is not a name');
+    }
+
+    public function testTheInvokedSkillNameIsFoldedToOneInertLine(): void
+    {
+        $name = SkillMentions::invokedSkillName(
+            new ToolResult('Skill', 'body', arguments: ['name' => "re\x1bv\ti\new"]),
+        );
+
+        self::assertSame('re v i ew', $name, 'control characters collapse to spaces');
+        self::assertNull(SkillMentions::invokedSkillName(
+            new ToolResult('Skill', 'body', arguments: ['name' => str_repeat('x', 121)]),
+        ), 'a 121-char blob is not a skill name worth printing');
+    }
+
+    /**
+     * @return array<string, mixed>
      */
     private function registry(array $bodies, array $userInvocable = []): SkillRegistry
     {

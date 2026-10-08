@@ -19,6 +19,13 @@ namespace SugarCraft\Crush;
  * `$data` is null on an attachment built from a bare path (the pre-15b-15
  * shape, and a transcript row persisted before it); the encoders say so on the
  * wire rather than dropping it ({@see Messages\UserMessage::wireText()}).
+ *
+ * `$skill` (lane B, skills-qa F2) names the skill a `$name` mention attached:
+ * every skill file is named SKILL.md, so the basename chip was identical for
+ * ALL skills and said nothing. The transcript chip shows `skill: <name>`
+ * instead of the basename while the wire text keeps sending the body unchanged
+ * - the label is display-only metadata, absent on every non-skill attachment
+ * (and on snapshots persisted before it).
  */
 final readonly class Attachment
 {
@@ -35,6 +42,12 @@ final readonly class Attachment
          * a file, and for an image whose bytes were not captured.
          */
         public ?string $mimeType = null,
+        /**
+         * The skill name a `$name` mention attached ({@see Skills\SkillMentions}),
+         * or null for every other attachment. Display-only: the chip reads it,
+         * the wire never sees it.
+         */
+        public ?string $skill = null,
     ) {}
 
     /** The last path segment - what the transcript chip and notices show. */
