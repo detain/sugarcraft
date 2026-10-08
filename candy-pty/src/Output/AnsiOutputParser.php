@@ -52,7 +52,11 @@ final class AnsiOutputParser
      * consuming the bytes. The {@see SgrHandler} tracks state transitions
      * across calls, so this is safe to call repeatedly with streaming chunks.
      *
-     * @return string  Raw text content (without ANSI escape sequences).
+     * @return string  Raw bytes exactly as read from the master, ANSI escape
+     *                 sequences included — this method does NOT strip them.
+     *                 SGR state is tracked in the handler (drain transitions
+     *                 via {@see SgrHandler::drainTransitions()} or use
+     *                 {@see readChunkWithTransitions()}).
      */
     public function readChunk(float $timeout = 0.05): string
     {
@@ -105,10 +109,13 @@ final class AnsiOutputParser
     }
 
     /**
-     * Reset the parser state to ground (clears SGR state).
+     * Reset to ground state: clears the VT parser, the tracked SGR state,
+     * and the pending transition log — after this call the parser behaves
+     * as if it had never consumed any bytes.
      */
     public function reset(): void
     {
         $this->parser->reset();
+        $this->handler->reset();
     }
 }
