@@ -76,3 +76,16 @@ Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.
   Up/Down KeyMsgs — answering it too would double-step). Keyboard arms untouched: the MouseMsg arm sits
   BEFORE the door (ItemList E736 5.14 shape). Readonly refusal lives in the handler's own `isReadonly()`
   gate — MouseMsg stays unclassified in `HasReadonly::isReadonlyMutatingMsg` by design.
+
+- **[pattern:int-lattice-exact:numberfield]** crush_media W3.3 added `Field\NumberField` (draft-string +
+  committed-value over TextInput) and `Field\RadioPills`. The int64 law: when min/max/step AND the raw are
+  all int and the span fits int, coercion runs an overflow-free intdiv lattice walk (clamp + half-up tie,
+  ties away from min — same rule as Slider's EPS law); anything floatish DELEGATES to
+  `Slider::withValue()` so Slider's normalise() stays the library's ONE float clamp/snap site. Never let a
+  seed cross `(float)` — `99999999999999999` must round-trip digit-exact (pin); beyond-int64 drafts are
+  REFUSED with a Lang message, and thousands separators are refused, never guessed. Empty draft is not a
+  commit (never-set sentinel `hasValue()`, empty != 0); commits land on Enter/blur/revalidate; consumes()
+  claims only Up/Down (Date/Color precedent, Enter stays Form submit). RadioPills is a VALUE EDITOR in the
+  E736 5.10 split (the highlight IS the value): readonly freezes arrows + mouse, unlike picker navigation.
+  Adding either class means bumping the TraitStateCarryFamilyTest adopter census (12 after W3.3) — that
+  fail-closed count is the roster, re-judge it in the same commit.

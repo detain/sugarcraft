@@ -202,9 +202,10 @@ final class TraitStateCarryFamilyTest extends TestCase
                 basename($file) . ' adopts the label traits but rebuilds without a carrier (E741)',
             );
         }
-        // 10 = the original seven + the r88-x4 Phase-5 widgets (Date,
-        // Slider, Color), each adopting the traits AND the shared carrier.
-        $this->assertSame(10, $adopters, 'label-trait adopter roster changed — re-judge the carrier census');
+        // 12 = the original seven + the r88-x4 Phase-5 widgets (Date,
+        // Slider, Color), each adopting the traits AND the shared carrier,
+        // + the crush_media W3.3 pair (NumberField, RadioPills).
+        $this->assertSame(12, $adopters, 'label-trait adopter roster changed — re-judge the carrier census');
     }
 
     /**
