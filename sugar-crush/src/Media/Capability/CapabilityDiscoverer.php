@@ -28,7 +28,7 @@ use Throwable;
  * mediaKinds list is a human error worth surfacing, not a server condition.)
  *
  * DISCOVERY_TIMEOUT_SECONDS governs the GETs below only; generation POSTs are
- * long by nature and carry their own E646 idle-bound ceilings in W1.4+ — the
+ * long by nature and carry their own E646 idle-bound ceilings in W1.3 — the
  * precedent and its exemption wording mirror SglangServerInfo (chat-side
  * discovery, src/Providers).
  */
