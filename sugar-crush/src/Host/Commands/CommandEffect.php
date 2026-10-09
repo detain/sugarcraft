@@ -69,6 +69,23 @@ final class CommandEffect
     }
 
     /**
+     * Open the media form modal (crush-media W3.1), optionally seeded with a
+     * draft request; the TUI turns this into an OpenMediaFormMsg.
+     */
+    public static function openMediaForm(?\SugarCraft\Crush\Media\MediaRequest $request = null): self
+    {
+        return new self(CommandEffectKind::OpenMediaForm, ['request' => $request]);
+    }
+
+    /** The draft seed carried by {@see self::openMediaForm()}, if any. */
+    public function mediaRequest(): ?\SugarCraft\Crush\Media\MediaRequest
+    {
+        $request = $this->data['request'] ?? null;
+
+        return $request instanceof \SugarCraft\Crush\Media\MediaRequest ? $request : null;
+    }
+
+    /**
      * Off-turn work. $run starts it and resolves with whatever the TUI routes
      * (a `Msg`, or null for nothing to show); $describe turns that value into
      * the row a headless driver appends, or null for none.

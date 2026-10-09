@@ -61,6 +61,12 @@ use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\PaneDragController;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
+use SugarCraft\Crush\Media\MediaRequest;
+use SugarCraft\Crush\Tui\MediaForm\GenerateFromMediaFormMsg;
+use SugarCraft\Crush\Tui\MediaForm\MediaForm;
+use SugarCraft\Crush\Tui\MediaForm\MediaFormAction;
+use SugarCraft\Crush\Tui\MediaForm\MediaFormActionKind;
+use SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg;
 use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
 use SugarCraft\Crush\Tui\Settings\SettingsFileEditedMsg;
@@ -340,6 +346,14 @@ final class App implements Model
          * none) means the view can stage and preview but every save is refused.
          */
         public readonly ?SettingsWriter $settingsWriter = null,
+        /**
+         * The media generation form (crush-media W3.1, Shape A) while it is
+         * open, null otherwise. Shell state exactly like the settings view:
+         * it writes no history and dials nothing itself — its Generate action
+         * hands the collected draft back to the /generate command pipeline —
+         * so it may open while a turn runs.
+         */
+        public readonly ?MediaForm $mediaForm = null,
         /**
          * The reasoning effort every request built off this App asks for
          * (roadmap 4.1-1) — a delegated sub-agent's preset `effort:`, carried
@@ -1215,6 +1229,12 @@ final class App implements Model
         return $this->mutate(settingsEditor: $v);
     }
 
+    /** Replace the open media form's state (null closes it). */
+    public function withMediaForm(?MediaForm $v): self
+    {
+        return $this->mutate(mediaForm: $v);
+    }
+
     public function withSettingsWriter(?SettingsWriter $v): self
     {
         return $this->mutate(settingsWriter: $v);
@@ -1378,6 +1398,59 @@ final class App implements Model
     public function closeSettings(): self
     {
         return $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: null);
+    }
+
+    /**
+     * Open the media generation form (crush-media W3.1), optionally seeded
+     * with a draft. Pure state: the sections were built at open, the form
+     * dials nothing — the Generate action comes back through
+     * {@see applyMediaFormAction()}.
+     */
+    public function openMediaForm(?MediaRequest $request = null): self
+    {
+        MenuBar::closeMenu();
+
+        return $this->mutate(mediaForm: MediaForm::open($request));
+    }
+
+    public function closeMediaForm(): self
+    {
+        return $this->mediaForm === null ? $this : $this->mutate(mediaForm: null);
+    }
+
+    /**
+     * Act on what the open form decided. Generate closes the modal and feeds
+     * the collected draft to the chat's GenerateFromMediaFormMsg arm — the
+     * same {@see \SugarCraft\Crush\Host\Commands\GenerateHostCommand}
+     * execution path the typed command uses, one dispatch, never a fork.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function applyMediaFormAction(MediaFormAction $action): array
+    {
+        return match ($action->kind) {
+            MediaFormActionKind::Cancel => [$this->closeMediaForm(), null],
+            MediaFormActionKind::Generate => $this->generateFromMediaForm($action->request),
+            // W3.7/W4.2 give these their bindings; no W3.1 key emits them,
+            // so this arm is unreachable today — and an action silently
+            // swallowed must never be possible.
+            MediaFormActionKind::SavePreset,
+            MediaFormActionKind::ImportPng => throw new \LogicException(
+                'media form action ' . $action->kind->name . ' is not wired yet',
+            ),
+        };
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function generateFromMediaForm(?MediaRequest $request): array
+    {
+        if ($request === null) {
+            throw new \LogicException('a Generate action must carry the collected request');
+        }
+
+        return $this->closeMediaForm()->delegateToChat(new GenerateFromMediaFormMsg($request));
     }
 
     /**
@@ -2179,6 +2252,7 @@ final class App implements Model
             $msg instanceof SettingsSavedMsg => $this->settingsSaved($msg),
             $msg instanceof SettingsFileEditedMsg => $this->settingsFileEdited($msg),
             $msg instanceof SettingsProfileMsg => [$this->settingsProfileDone($msg), null],
+            $msg instanceof OpenMediaFormMsg => [$this->openMediaForm($msg->request), null],
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof DockPaneMsg,
@@ -2358,6 +2432,18 @@ final class App implements Model
             return [$notch === 0 ? $this : $this->mutate(settingsEditor: $this->settingsEditor->wheel($notch)), null];
         }
 
+        // The media form covers the band the same way (W3.1): its rows take
+        // the wheel while it is up.
+        if ($this->mediaForm !== null && $msg instanceof MouseWheelMsg) {
+            $notch = match ($msg->button) {
+                MouseButton::WheelDown => 1,
+                MouseButton::WheelUp => -1,
+                default => 0,
+            };
+
+            return [$notch === 0 ? $this : $this->mutate(mediaForm: $this->mediaForm->wheel($notch)), null];
+        }
+
         // The wheel scrolls whatever scrollable surface is under the pointer —
         // a docked pane, or the live-agent column — and only there; anywhere
         // else it stays the transcript's, as it always was. Down shows more
@@ -2402,7 +2488,7 @@ final class App implements Model
         $click = self::chromeClickTracker()->track($event, $zone);
 
         if ($click === null) {
-            return $zone === null && $this->settingsEditor === null ? $this->delegateToChat($msg) : [$this, null];
+            return $zone === null && $this->settingsEditor === null && $this->mediaForm === null ? $this->delegateToChat($msg) : [$this, null];
         }
 
         return $this->dispatchChromeClick($click->zone->id);
@@ -2807,6 +2893,13 @@ final class App implements Model
             ];
         }
 
+        if (str_starts_with($zoneId, MediaForm::ZONE_PREFIX)) {
+            return [
+                $this->mediaForm === null ? $this : $this->mutate(mediaForm: $this->mediaForm->click($zoneId)),
+                null,
+            ];
+        }
+
         $titles = MenuBar::MENU_TITLE_ZONE_PREFIX;
         if (str_starts_with($zoneId, $titles)) {
             MenuBar::openMenu((int) substr($zoneId, strlen($titles)));
@@ -2958,6 +3051,19 @@ final class App implements Model
             $next = $this->settingsEditor->update($msg);
 
             return [$next === null ? $this->closeSettings() : $this->mutate(settingsEditor: $next), null];
+        }
+
+        // The media form is MODAL on the same law (crush-media W3.1,
+        // mystage §6.2): every key except the gate exceptions below is its
+        // own, and what it decides leaves as a MediaFormAction.
+        if ($this->mediaForm !== null && !self::mediaFormYields($msg)) {
+            [$next, $action] = $this->mediaForm->update($msg);
+
+            if ($action !== null) {
+                return $this->applyMediaFormAction($action);
+            }
+
+            return [$next === null ? $this->closeMediaForm() : $this->mutate(mediaForm: $next), null];
         }
 
         $handled = $this->dispatchKey($msg);
@@ -3241,6 +3347,16 @@ final class App implements Model
         return MenuBar::getActiveMenu() > 0
             || $msg->type === KeyType::F10
             || ($msg->type === KeyType::Char && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c')));
+    }
+
+    /**
+     * Whether a key goes past the open media form: the exact settings-view
+     * exception list (quit chord, menu key, live menu) — one law for every
+     * full-band modal, so no shell ever invents its own escape hatch.
+     */
+    private static function mediaFormYields(KeyMsg $msg): bool
+    {
+        return self::settingsEditorYields($msg);
     }
 
     /**
@@ -3887,6 +4003,7 @@ final class App implements Model
             settingsEditor: array_key_exists('settingsEditor', $changes) ? $changes['settingsEditor'] : $this->settingsEditor,
             settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
             settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
+            mediaForm: array_key_exists('mediaForm', $changes) ? $changes['mediaForm'] : $this->mediaForm,
             reasoningEffort: array_key_exists('reasoningEffort', $changes) ? $changes['reasoningEffort'] : $this->reasoningEffort,
             agentViewTarget: array_key_exists('agentViewTarget', $changes) ? $changes['agentViewTarget'] : $this->agentViewTarget,
             agentViewTail: array_key_exists('agentViewTail', $changes) ? $changes['agentViewTail'] : $this->agentViewTail,

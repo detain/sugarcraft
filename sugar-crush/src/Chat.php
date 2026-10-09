@@ -2261,6 +2261,20 @@ final class Chat implements Model
             return [$this->lastEscapeAt === null ? $this : $this->mutate(['lastEscapeAt' => null]), null];
         }
 
+        // crush-media W3.1: the media form's collected Generate action, handed
+        // back by the shell. It runs through the SAME /generate tool pipeline
+        // the typed command uses — one dispatch path, and the form itself
+        // dials nothing (its Submit echo row is the bare command word).
+        if ($msg instanceof \SugarCraft\Crush\Tui\MediaForm\GenerateFromMediaFormMsg) {
+            return $this->applyCommandResult(
+                (new \SugarCraft\Crush\Host\Commands\GenerateHostCommand())->runRequest(
+                    $this->commandContext(),
+                    '/generate',
+                    $msg->request->toArray(),
+                ),
+            );
+        }
+
         // Roadmap 5.7-1: `Alt+M`, or any other door, switching the mode.
         if ($msg instanceof PermissionModeToggledMsg) {
             return $this->togglePermissionMode($msg);
@@ -12645,6 +12659,13 @@ final class Chat implements Model
                     $openTitleEditor = true;
                     break;
 
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::OpenMediaForm:
+                    // crush-media W3.1: the form is shell state (like the
+                    // settings view), so the command only asks the shell to
+                    // raise it; the seed draft rides the message.
+                    $cmds[] = Cmd::send(new \SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg($effect->mediaRequest()));
+                    break;
+
                 case \SugarCraft\Crush\Host\Commands\CommandEffectKind::Async:
                     $cmds[] = Cmd::promise($effect->run());
                     break;
@@ -16974,6 +16995,8 @@ final class Chat implements Model
             PaletteAction::Exit => [$this->mutate(['palette' => null]), Cmd::quit()],
             // N-P1: the settings view only reads, and it is shell state, so a
             // running turn has nothing it could corrupt.
+            // W3.10 (lane f): the palette's media-form action lands beside
+            // this arm — PaletteAction::OpenMediaForm => mutate(…)->openMediaFormView().
             PaletteAction::OpenSettings => $this->mutate(['palette' => null])->openSettingsView(),
             default => $this->refuseInFlightAction($label),
         };

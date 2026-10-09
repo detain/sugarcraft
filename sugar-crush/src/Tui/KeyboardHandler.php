@@ -392,7 +392,8 @@ final class KeyboardHandler
         return MenuBar::getActiveMenu() > 0
             || $app->pane === Pane::Agents
             || ($app->pane === Pane::Skills && $app->skillPickerOptions !== [])
-            || $app->settingsEditor !== null;
+            || $app->settingsEditor !== null
+            || $app->mediaForm !== null;
     }
 
     /**
@@ -759,7 +760,7 @@ final class KeyboardHandler
     private static function agentStripKey(KeyMsg $msg, App $app): ?string
     {
         $chat = $app->chat;
-        if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || MenuBar::getActiveMenu() > 0
+        if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::getActiveMenu() > 0
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
             || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null) {
             return null;
@@ -852,7 +853,7 @@ final class KeyboardHandler
     {
         $chat = $app->chat;
         if ($app->agentViewTarget === null || $app->pane !== Pane::Chat || $chat === null
-            || $app->agentStripFocus !== null || $app->settingsEditor !== null || MenuBar::getActiveMenu() > 0
+            || $app->agentStripFocus !== null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::getActiveMenu() > 0
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
             || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null || $chat->titleEditor() !== null) {
             return null;

@@ -30,6 +30,13 @@ enum CommandEffectKind: string
     /** A screen-only follow-up (the inline title editor): a headless driver cannot honour it. */
     case OpenTitleEditor = 'open-title-editor';
 
+    /**
+     * A screen-only follow-up (the media form modal, crush-media W3.1): like
+     * the title editor, a headless driver cannot honour it and answers
+     * client-only. Carries an optional draft seed.
+     */
+    case OpenMediaForm = 'open-media-form';
+
     /** Off-turn work whose answer lands later as a row; the session stays free. */
     case Async = 'async';
 

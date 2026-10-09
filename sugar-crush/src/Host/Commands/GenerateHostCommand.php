@@ -50,9 +50,11 @@ final class GenerateHostCommand implements HostCommand
         $tokens = $parsed?->args ?? [];
 
         if ($tokens === []) {
-            // W3.1 flip-site: the bare command opens the interactive form in
-            // Wave 3; today it answers with the usage line and dials nothing.
-            return CommandResult::reply($text, GenerateCommand::usage());
+            // W3.1 flip-site (landed): the bare command opens the interactive
+            // media form — a screen-only follow-up like OpenTitleEditor, so a
+            // headless driver answers client-only instead of hanging. Typed
+            // arguments still generate directly, exactly as before.
+            return CommandResult::echo($text)->withEffect(CommandEffect::openMediaForm());
         }
 
         $plan = GenerateCommand::parse($tokens);
@@ -65,7 +67,21 @@ final class GenerateHostCommand implements HostCommand
             return CommandResult::failure($text, $plan['error'], 1);
         }
 
-        $result = $this->tool($context)->execute($plan['args']);
+        return $this->runRequest($context, $text, $plan['args']);
+    }
+
+    /**
+     * The ONE execution path, shared by the typed command and the form's
+     * `Generate` action ({@see \SugarCraft\Crush\Chat}'s
+     * GenerateFromMediaFormMsg arm): `$args` are inputSchema/wire names, the
+     * same map {@see GenerateCommand::parse()} builds. A form submit echoes
+     * the bare command word as its user row; nothing dials twice.
+     *
+     * @param array<string, mixed> $args
+     */
+    public function runRequest(CommandContext $context, string $text, array $args): CommandResult
+    {
+        $result = $this->tool($context)->execute($args);
 
         if ($result->isError()) {
             return CommandResult::failure($text, $result->content(), 1);

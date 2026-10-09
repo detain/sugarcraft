@@ -567,6 +567,12 @@ final class Renderer
             return self::renderSettingsEditor($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
+        // The media generation form (crush-media W3.1, Shape A) takes the
+        // band on the same modal law, right beside the settings view.
+        if ($a->mediaForm !== null) {
+            return self::renderMediaForm($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         if ($a->pane === Pane::Agents) {
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
@@ -830,6 +836,67 @@ final class Renderer
             false,
             $zoneRows,
         );
+
+        return new View($frame);
+    }
+
+    /**
+     * The media-form frame (crush-media W3.1): the settings band's shape
+     * applied to the full-band {@see \SugarCraft\Crush\Tui\MediaForm\MediaForm}
+     * — held to `$rows`/`$cols`, its `media:` tab/row zones recorded in the
+     * chrome registry, the menu dropdown painted over it. Deliberately NOT a
+     * Veil overlay: the chat's composite chain (src/Renderer.php's
+     * painted==routed band) stays untouched while this modal is up.
+     */
+    private static function renderMediaForm(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $form = $a->mediaForm;
+        \assert($form !== null);
+        $theme = $a->theme();
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $form->view($theme, $cols, $paneRows);
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $byRow = [];
+        foreach ($form->zones($theme, $cols, $paneRows) as [$row, $from, $to, $id]) {
+            $to = min($to, $cols);
+            if ($to <= $from) {
+                continue;
+            }
+
+            $byRow[$bandTop + $row][] = [$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))];
+        }
+
+        $zoneRows = [];
+        foreach ($byRow as $absRow => $spans) {
+            usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
+            $zoneRows[$absRow] = self::scratchRow($cols, $spans);
+        }
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
 
         return new View($frame);
     }
