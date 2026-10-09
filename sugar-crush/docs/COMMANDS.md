@@ -355,6 +355,7 @@ edit it by hand.
 | `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |
 | `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
 | `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
+| `/generate` | ✓ | | `crush.cmd.generate.hint` | crush.cmd.generate.description |
 <!-- commands:table:end -->
 
 **S** is blank on `new-picker`, `session-pin`, `session-delete`, `docs`,

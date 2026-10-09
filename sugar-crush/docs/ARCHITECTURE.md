@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              28 built-ins + MCP bridges
+                                         ├─ Tools\*              29 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -152,7 +152,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 44
+palette, session tabs, the permission prompt, and the dispatch arms for 45
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -815,16 +815,46 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **twenty-eight** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `Glob`, `Grep`, `InterruptAgentTool`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SendMessageTool`, `SkillTool`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships twenty-six of them —
+`src/Tools/BuiltIn/` holds **twenty-nine** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `Glob`, `Grep`, `InterruptAgentTool`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SendMessageTool`, `SkillTool`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships twenty-seven of them —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool. The other two, `BoardReadTool` and
 `BoardPostTool`, are on no launch: `TaskTool` hands them, bound to the batch's
 shared board, to the runs of a parallel `Task` batch's members.
 
-Domain matters here: **twenty-eight is the count of *wired* tools, not of *usable*
+Domain matters here: **twenty-nine is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
 language server configured" error until the user lists a server under the `lsp`
-setting. A figure saying "twenty-eight working tools" would be the wrong claim.
+setting. A figure saying "twenty-nine working tools" would be the wrong claim.
+`GenerateImage` follows the same door for a different service: it is reachable
+on every launch and useful only once `sd.baseUrl` (or its
+`SUGARCRUSH_SD_BASE_URL` env binding) names a server — with none configured it
+refuses **before dialing**, no connection attempted.
+
+**`GenerateImage` is the tip of a subsystem, not a lone tool.** Its server side
+lives in `src/Media/`: the wire DTOs the tool speaks (`MediaRequest`,
+`GenerationParams`, `MediaResponse`, `MediaArtifact`) and the job ledger
+(`MediaJob`, `MediaJobStatus`) in the root, the Stable-Diffusion-WebUI client
+under `Sd\` — `SdTransport` behind an interface, `GuzzleTransport` on the wire,
+`NullTransport` for tests, and `UrlGuard`, which pins every media egress to the
+configured origin (it deliberately is *not* a WebFetch-style blocklist: an SD
+server legitimately lives on the LAN, and configuring `sd.baseUrl` already was
+the trust decision — the guard only stops a request drifting off that origin) —
+and the capability story under `Capability\`: `EndpointFamily` names the
+families a media server might speak, and `isImplemented()` is the single honest
+door — only `sdapi` is speakable today, so families like `sglang-diffusion` are
+DETECTABLE by `CapabilityDiscoverer`'s fail-open ladder of cheap GETs and
+deliberately unimplemented until a later wave ships their transport. Artifacts
+land in `Support\MediaStore` under `~/.sugar-crush/media/<session>/` — session
+directories `0700`, files `0600`, written temp-then-renamed, with filenames
+built from the server's own parameter tokens (`sd.savePattern`) and never from
+prompt text. Live preview frames (`PreviewSlots`, `PreviewPaint`) ride
+display-only progress events: they replace in place, clear when the job
+settles, and are never written into the transcript or the session store. The
+render mode itself is resolved once at launch by
+`Bootstrap::applyMediaRenderMode()` — `SUGARCRUSH_MEDIA_RENDER_MODE`, else the
+merged `ui.imageRenderMode` setting, else `auto`, which asks the terminal; image
+`auto` prefers kitty, then iterm2, sixel, chafa, halfblock, and video prefers a
+different order on purpose, so the two ladders are deliberately not shared.
 
 Those servers are started once, at launch, by `LSP\LspLauncher` through
 `Bootstrap::lspClient()` (memoised per process and root, stopped at exit like
@@ -1217,7 +1247,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Twenty-eight tools" means wired built-ins.
+4. **A count carries its domain.** "Twenty-nine tools" means wired built-ins.
    "Eight skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are

@@ -444,7 +444,7 @@ session that started it; its mailbox is under its daemon's session.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **`Task` delegates.** sugar-crush ships twenty-eight
+- **`Task` delegates.** sugar-crush ships twenty-nine
   built-in tools and one of them — `Task` — is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session
