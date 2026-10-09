@@ -742,6 +742,23 @@ final class ReadPathCensusTest extends TestCase
                 . 'no content is read, and only an old regular file this uid owns whose name has '
                 . 'save()\'s exact shape is unlinked',
         ],
+        'Support/MediaStore.php|fopen' => [
+            'SELF_LOCATED — the `.partial` this call publishes, opened `xb` (exclusive) under a '
+                . '0077 umask inside the PrivateDir-verified 0700 session directory; the name is '
+                . 'built from savePattern tokens, never taken from disk, and nothing is read back '
+                . 'through this handle',
+        ],
+        'Support/MediaStore.php|file_get_contents' => [
+            'OWNED_HOME — read() of one published artifact whose name came from this store\'s own '
+                . 'scandir, resolved through the pathFor() separator/containment door, under the '
+                . '~/.sugar-crush/media root HomeDirectory::owned() establishes (tests hand a '
+                . 'temp root to the forSession() seam)',
+        ],
+        'Support/MediaStore.php|scandir' => [
+            'NAMES_ONLY — list() enumerates this store\'s own session directory; no content is '
+                . 'read, `.partial` residue and non-regular entries are skipped, and the gate is '
+                . 'on the later read through pathFor()',
+        ],
         'Support/PrivateRetainedDir.php|scandir' => [
             'NAMES_ONLY — sweep() lists a retained store\'s own owner-only directory (and its one level of '
                 . 'session sub-directories) after re-verifying it; no content is read, and only a regular '
