@@ -452,14 +452,16 @@ final class Runtime
      *    FILE. It is the nearest neighbour of the OTHER hand-maintained roster
      *    this classifier acquired, the read-only list in
      *    {@see \SugarCraft\Crush\Tests\RuntimeTest::readOnlyBuiltInToolNames()},
-     *    and the two DISAGREE: `WebFetch`, `WebSearch` and `doctor`
+     *    and the two DISAGREE: `WebFetch`, `WebSearch`, `doctor` and
+     *    `GenerateImage`
      *    are read-only to this classifier and absent from the gate's list
      *    (`Skill` joined the gate's read class once loading a text body into
      *    the prompt was judged no more dangerous than `Read`),
      *    which otherwise contains a strict subset of ours (`WebFetch` left the
-     *    gate's list with audit F-P6). THEY MUST NOT BE RECONCILED. The
+     *    gate's list with audit F-P6, `GenerateImage` joined ours with media
+     *    plan W2.1). THEY MUST NOT BE RECONCILED. The
      *    gate's own doc-block says so in terms — "A DECISION, NOT A CENSUS OF
-     *    `src/Tools/BuiltIn/`" — and gives the reason: each of those three
+     *    `src/Tools/BuiltIn/`" — and gives the reason: each of these
      *    reaches something outside the process, so leaving them to Ask costs a
      *    prompt while listing them would spend a judgement that class cannot
      *    make. "Did the working tree move" and "may this call be denied

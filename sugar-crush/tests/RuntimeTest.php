@@ -3915,8 +3915,13 @@ DOC;
         // team store, `AskUser` and `PlanExit` only put a question to the
         // user, the messaging three write the sub-agent mailboxes and run
         // cards, and `BoardPost` appends to its batch's board file).
+        // `GenerateImage` joined the outbound side of the divergence at media
+        // plan W2.1: it moves no file in the checkout — saved renders land in
+        // the session media directory — so it is read-only HERE, but a render
+        // spends real GPU time on a host outside the process, so the gate
+        // keeps it ask-bound.
         $this->assertSame(
-            ['AskUser', 'BoardPost', 'Compress', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['AskUser', 'BoardPost', 'Compress', 'GenerateImage', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4126,8 +4131,11 @@ DOC;
         // continuing a FINISHED sub-agent runs the session's `Task`, and only
         // where the gate would allow that `Task` call outright. `BoardRead`
         // and `BoardPost` (roadmap 4.5) touch only the batch's board file
-        // under the per-uid runtime directory, never the checkout.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost'];
+        // under the per-uid runtime directory, never the checkout. `GenerateImage`
+        // (media plan W2.1) writes only saved artifacts under the session media
+        // directory (Support/MediaStore) — harness state, never a byte in the
+        // checkout, so it does not re-arm the turn's env-block diff.
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage'];
     }
 
     /**
