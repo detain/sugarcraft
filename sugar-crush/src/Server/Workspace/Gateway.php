@@ -587,7 +587,9 @@ final class Gateway implements MessageHandler
                 continue;
             }
             $text = JsonRpc::encode(EventEnvelope::server(EventType::SERVER_OVERFLOW, [
-                'sessionId' => $sessionId,
+                // PHP casts all-decimal session ids to int array keys; the
+                // wire contract is the string the client subscribed with.
+                'sessionId' => (string) $sessionId,
                 'dropped' => 0,
                 'action' => 'resubscribe',
             ])->notification());
