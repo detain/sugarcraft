@@ -47,6 +47,7 @@ final class SettingsSchema
         Definitions\ContextSettings::class,
         Definitions\PermissionSettings::class,
         Definitions\ToolSettings::class,
+        Definitions\MediaSettings::class,
         Definitions\MemoryRuleSettings::class,
         Definitions\SkillSettings::class,
         Definitions\SubagentSettings::class,

@@ -111,6 +111,7 @@ final class RegistryTranslationTest extends TestCase
             'context' => 'Context & Compaction',
             'permissions' => 'Permissions',
             'tools' => 'Tools',
+            'media' => 'Media',
             'memory' => 'Memory & Rules',
             'skills' => 'Skills',
             'subagents' => 'Sub-agents',

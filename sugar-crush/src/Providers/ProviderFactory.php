@@ -101,7 +101,7 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision', 'fallbackModels'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
         ],
         'bedrock' => [
             'required' => ['region'],
@@ -113,7 +113,7 @@ final readonly class ProviderFactory
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
-            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels'],
+            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
         ],
     ];
 
@@ -207,6 +207,37 @@ final readonly class ProviderFactory
         }
 
         return array_keys($models);
+    }
+
+    /**
+     * The `mediaKinds` provider-block key (plan_crush_media W1.8 step 2):
+     * which media this endpoint generates — a subset of `image` and `video`.
+     * A single string is a one-kind list. Unknown words are dropped and
+     * duplicates collapse in input order — the tolerant posture of
+     * {@see self::configuredFallbackModels()}, because a provider that throws
+     * while being built degrades the whole launch to `echo`. Public as the
+     * seam the media router (W1.9+) reads kinds through; `create()` itself
+     * does not consume the key yet.
+     *
+     * @return list<'image'|'video'>
+     */
+    public static function configuredMediaKinds(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = [$value];
+        }
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $kinds = [];
+        foreach ($value as $kind) {
+            if (is_string($kind) && \in_array($kind, ['image', 'video'], true) && !\in_array($kind, $kinds, true)) {
+                $kinds[] = $kind;
+            }
+        }
+
+        return $kinds;
     }
 
     /**

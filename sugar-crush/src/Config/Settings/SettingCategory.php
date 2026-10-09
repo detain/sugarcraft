@@ -26,6 +26,7 @@ enum SettingCategory: string
     case Context = 'context';
     case Permissions = 'permissions';
     case Tools = 'tools';
+    case Media = 'media';
     case MemoryRules = 'memory';
     case Skills = 'skills';
     case Subagents = 'subagents';
@@ -46,6 +47,7 @@ enum SettingCategory: string
             self::Context => Lang::t('settings.category.context'),
             self::Permissions => Lang::t('settings.category.permissions'),
             self::Tools => Lang::t('settings.category.tools'),
+            self::Media => Lang::t('settings.category.media'),
             self::MemoryRules => Lang::t('settings.category.memory'),
             self::Skills => Lang::t('settings.category.skills'),
             self::Subagents => Lang::t('settings.category.subagents'),

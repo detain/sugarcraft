@@ -1186,3 +1186,4 @@ sugar-crush/tests/Media/MediaRequestTest.php	0.02	118
 sugar-crush/tests/Media/GenerationParamsTest.php	0.05	184
 sugar-crush/tests/Media/CapabilityDiscovererTest.php	0.02	109
 sugar-crush/tests/Media/MediaJobTest.php	0.02	93
+sugar-crush/tests/Config/Settings/MediaSettingsTest.php	0.035	192
