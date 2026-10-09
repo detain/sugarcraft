@@ -110,10 +110,13 @@ final class GenerateImageTest extends TestCase
         $files = glob($this->mediaRoot . '/*/*.png');
         self::assertIsArray($files);
         self::assertCount(3, $files);
-        // The FIRST SAMPLE headlines the result (seed 11), not the grid.
+        // The FIRST SAMPLE headlines the result (seed 11), not the grid. The
+        // needle is position-anchored after the fixed-width [date]-[time]
+        // prefix: a bare '-11-' substring false-matches the zero-padded hour
+        // in every batch filename during 11:00-11:59.
         $headline = array_values(array_filter(
             $files,
-            static fn (string $f): bool => str_contains(basename($f), '-11-'),
+            static fn (string $f): bool => preg_match('/^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-11-\d+\.png$/', basename($f)) === 1,
         ));
         self::assertCount(1, $headline);
         self::assertSame($result->imagePath(), $headline[0]);
