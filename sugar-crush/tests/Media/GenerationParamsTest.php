@@ -74,6 +74,25 @@ final class GenerationParamsTest extends TestCase
         }
     }
 
+    public function testGuardRefusalsNameTheOffendingValue(): void
+    {
+        // R1 MINOR-3: the messages once interpolated the literal ".$value"
+        // (single-quote concat bug); a refusal must name the real offender.
+        $attempts = [
+            [static fn () => GenerationParams::new()->withBatchSize(0), 'given 0'],
+            [static fn () => GenerationParams::new()->withNIter(-1), 'given -1'],
+            [static fn () => GenerationParams::new()->withSubseedStrength(2.0), 'given 2'],
+        ];
+        foreach ($attempts as [$attempt, $fragment]) {
+            try {
+                $attempt();
+                self::fail("expected a refusal mentioning '{$fragment}'");
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString($fragment, $e->getMessage());
+            }
+        }
+    }
+
     public function testUntouchedKnobsAcceptAnythingTyped(): void
     {
         // No coercion anywhere (plan W1.1): Wave-3 sliders clamp, not this layer.

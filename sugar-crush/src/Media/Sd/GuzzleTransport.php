@@ -19,7 +19,10 @@ use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
  * legitimately runs minutes past any flat ceiling, so killing by total time
  * would abort real work rather than hangs. Liveness during such a render is
  * the caller loop's job: W2.1's tool beats EngineBackend's IDLE ceiling
- * through W1.5's ProgressLoop, not through a Guzzle option.
+ * through W1.5's ProgressLoop, not through a Guzzle option. The one carve-out
+ * is caller-SUPPLIED: request()/requestWithHeaders() accept an explicit
+ * per-request total budget, used solely by the discovery GET ladder (R1
+ * MAJOR-2 — wiring DISCOVERY_TIMEOUT_SECONDS honestly, never self-imposed).
  *
  * Redirects are not followed by Guzzle (`allow_redirects => false`) because an
  * automatic follow could land off the configured origin before anyone looked;
@@ -56,9 +59,9 @@ final class GuzzleTransport implements HeaderAwareSdTransport
         ]);
     }
 
-    public function request(string $method, string $path, array $json = [], array $query = []): SdTransportResult
+    public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult
     {
-        return $this->requestWithHeaders($method, $path, $json, $query);
+        return $this->requestWithHeaders($method, $path, $json, $query, [], $totalTimeoutSeconds);
     }
 
     public function requestWithHeaders(
@@ -67,6 +70,7 @@ final class GuzzleTransport implements HeaderAwareSdTransport
         array $json = [],
         array $query = [],
         array $headers = [],
+        ?float $totalTimeoutSeconds = null,
     ): SdTransportResult {
         $url = $this->guard->absolute($path);
         $method = strtoupper($method);
@@ -85,6 +89,16 @@ final class GuzzleTransport implements HeaderAwareSdTransport
 
             if ($headers !== []) {
                 $options['headers'] = $headers;
+            }
+
+            // The ONLY total-timeout door in this class, and it opens on an
+            // explicit caller-supplied budget: discovery GETs pass the 3.0 s
+            // ladder ceiling (SglangServerInfo-sanctioned E646 exception —
+            // a probe must never hang startup on a deaf LAN host). Callers
+            // that pass null — every generation POST — keep the connect-bound
+            // only shape above; nothing here sets a total on its own initiative.
+            if ($totalTimeoutSeconds !== null) {
+                $options['timeout'] = $totalTimeoutSeconds;
             }
 
             try {

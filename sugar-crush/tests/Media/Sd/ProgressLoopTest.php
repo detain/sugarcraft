@@ -303,14 +303,14 @@ final class ProgressLoopTest extends TestCase
 
             public ?array $seenHeaders = null;
 
-            public function request(string $method, string $path, array $json = [], array $query = []): SdTransportResult
+            public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult
             {
                 $this->calls[] = [$method, $path, $json, $query];
 
                 return SdTransportResult::new(200, '{}', 'application/json');
             }
 
-            public function requestWithHeaders(string $method, string $path, array $json = [], array $query = [], array $headers = []): SdTransportResult
+            public function requestWithHeaders(string $method, string $path, array $json = [], array $query = [], array $headers = [], ?float $totalTimeoutSeconds = null): SdTransportResult
             {
                 $this->calls[] = [$method, $path, $json, $query];
                 $this->seenHeaders = $headers;

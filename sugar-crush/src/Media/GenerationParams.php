@@ -663,7 +663,7 @@ final readonly class GenerationParams
     public function withSubseedStrength(?float $value): self
     {
             if ($value < 0.0 || $value > 1.0) {
-                throw new \InvalidArgumentException(__METHOD__ . '(): "subseed_strength must be within 0..1, given ".$value . " — refusal, not coercion: Wave-3 form owns clamping (plan W1.1)');
+                throw new \InvalidArgumentException(__METHOD__ . '(): "subseed_strength must be within 0..1, given ' . $value . ' — refusal, not coercion: Wave-3 form owns clamping (plan W1.1)"');
             }
 
         return $this->mutate(['subseedStrength' => $value, 'subseedStrengthSet' => true]);
@@ -695,7 +695,7 @@ final readonly class GenerationParams
     public function withBatchSize(?int $value): self
     {
             if ($value < 1) {
-                throw new \InvalidArgumentException(__METHOD__ . '(): "batch_size must be >= 1, given ".$value . " — refusal, not coercion: Wave-3 form owns clamping (plan W1.1)');
+                throw new \InvalidArgumentException(__METHOD__ . '(): "batch_size must be >= 1, given ' . $value . ' — refusal, not coercion: Wave-3 form owns clamping (plan W1.1)"');
             }
 
         return $this->mutate(['batchSize' => $value, 'batchSizeSet' => true]);
@@ -705,7 +705,7 @@ final readonly class GenerationParams
     public function withNIter(?int $value): self
     {
             if ($value < 1) {
-                throw new \InvalidArgumentException(__METHOD__ . '(): "n_iter must be >= 1, given ".$value . " — refusal, not coercion: Wave-3 form owns clamping (plan W1.1)');
+                throw new \InvalidArgumentException(__METHOD__ . '(): "n_iter must be >= 1, given ' . $value . ' — refusal, not coercion: Wave-3 form owns clamping (plan W1.1)"');
             }
 
         return $this->mutate(['nIter' => $value, 'nIterSet' => true]);

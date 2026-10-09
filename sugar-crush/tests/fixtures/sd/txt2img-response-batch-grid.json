@@ -16,5 +16,5 @@
   "save_images": false,
   "send_images": true
  },
- "info": "{\"index_of_first_image\": 1, \"all_seeds\": [101, 102, 103, 104, 105, 106], \"all_subseeds\": [-1, -1, -1, -1, -1, -1], \"infotexts\": [\"p0\\nNegative prompt: n0\\n\\nSteps: 10, Seed: 101\", \"p1\\nNegative prompt: n1\\n\\nSteps: 10, Seed: 102\", \"p2\\nNegative prompt: n2\\n\\nSteps: 10, Seed: 103\", \"p3\\nNegative prompt: n3\\n\\nSteps: 10, Seed: 104\", \"p4\\nNegative prompt: n4\\n\\nSteps: 10, Seed: 105\", \"p5\\nNegative prompt: n5\\n\\nSteps: 10, Seed: 106\"], \"batch_size\": 6}"
+  "info": "{\"index_of_first_image\": 1, \"all_seeds\": [101, 102, 103, 104, 105, 106], \"all_subseeds\": [-1, -1, -1, -1, -1, -1], \"infotexts\": [\"grid of p0..p5\\nNegative prompt: n0\\n\\nSteps: 10, Seed: -1\", \"p0\\nNegative prompt: n0\\n\\nSteps: 10, Seed: 101\", \"p1\\nNegative prompt: n1\\n\\nSteps: 10, Seed: 102\", \"p2\\nNegative prompt: n2\\n\\nSteps: 10, Seed: 103\", \"p3\\nNegative prompt: n3\\n\\nSteps: 10, Seed: 104\", \"p4\\nNegative prompt: n4\\n\\nSteps: 10, Seed: 105\", \"p5\\nNegative prompt: n5\\n\\nSteps: 10, Seed: 106\"], \"batch_size\": 6}"
 }

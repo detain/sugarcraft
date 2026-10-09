@@ -94,6 +94,25 @@ final class MediaRequestTest extends TestCase
         $attempt();
     }
 
+    public function testGuardRefusalsNameTheOffendingValue(): void
+    {
+        // R1 MINOR-3 twin pin: the request-level guards must carry the real
+        // offending value, not the literal ".$value" of the old concat bug.
+        $attempts = [
+            [static fn () => MediaRequest::new()->withBatchSize(-3), 'given -3'],
+            [static fn () => MediaRequest::new()->withSubseedStrength(1.5), 'given 1.5'],
+            [static fn () => MediaRequest::new()->withSubseedStrength(-0.25), 'given -0.25'],
+        ];
+        foreach ($attempts as [$attempt, $fragment]) {
+            try {
+                $attempt();
+                self::fail("expected a refusal mentioning '{$fragment}'");
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString($fragment, $e->getMessage());
+            }
+        }
+    }
+
     public function testGuardBoundariesAreInclusive(): void
     {
         $request = MediaRequest::new()->withBatchSize(1)->withNIter(1)->withSubseedStrength(1.0);

@@ -27,10 +27,13 @@ use Throwable;
  * Throwable. (Invalid DECLARED config is different and does throw: a typo'd
  * mediaKinds list is a human error worth surfacing, not a server condition.)
  *
- * DISCOVERY_TIMEOUT_SECONDS governs the GETs below only; generation POSTs are
- * long by nature and carry their own E646 idle-bound ceilings in W1.3 — the
- * precedent and its exemption wording mirror SglangServerInfo (chat-side
- * discovery, src/Providers).
+ * DISCOVERY_TIMEOUT_SECONDS governs the GETs below only, and it is THREADED,
+ * not decorative: every ladder and diagnose dial passes it as the transport's
+ * per-request total-timeout argument (R1 MAJOR-2). Generation POSTs never
+ * pass it — they keep the E646 connect-bounded-only shape (no wall-clock
+ * total; long renders stay alive via W1.5's ProgressLoop against the tool's
+ * idle ceiling). The precedent and its GET exemption mirror
+ * SglangServerInfo (chat-side discovery, src/Providers).
  */
 final readonly class CapabilityDiscoverer
 {
@@ -133,7 +136,7 @@ final readonly class CapabilityDiscoverer
     public function probe(SdTransport $transport): ?MediaCapability
     {
         try {
-            $sdapi = $transport->request('GET', self::ROUTES['sdapi']);
+            $sdapi = $transport->request('GET', self::ROUTES['sdapi'], [], [], self::DISCOVERY_TIMEOUT_SECONDS);
             if ($sdapi->is2xx() && $sdapi->decodedJson() !== null) {
                 return $this->sdapiCapability();
             }
@@ -142,7 +145,7 @@ final readonly class CapabilityDiscoverer
         }
 
         try {
-            $comfy = $transport->request('GET', self::ROUTES['comfyui']);
+            $comfy = $transport->request('GET', self::ROUTES['comfyui'], [], [], self::DISCOVERY_TIMEOUT_SECONDS);
             if ($comfy->is2xx() && is_array($comfy->decodedJson())) {
                 return MediaCapability::new(EndpointFamily::ComfyUi)
                     ->withKinds([MediaKind::Image])
@@ -152,7 +155,7 @@ final readonly class CapabilityDiscoverer
         }
 
         try {
-            $sglang = $transport->request('GET', self::ROUTES['sglang-diffusion']);
+            $sglang = $transport->request('GET', self::ROUTES['sglang-diffusion'], [], [], self::DISCOVERY_TIMEOUT_SECONDS);
             $models = $sglang->is2xx() ? $sglang->decodedJson() : null;
             if (is_array($models) && $models !== []) {
                 return $this->sglangCapability($models);
@@ -161,7 +164,7 @@ final readonly class CapabilityDiscoverer
         }
 
         try {
-            $openai = $transport->request('GET', self::ROUTES['openai-images']);
+            $openai = $transport->request('GET', self::ROUTES['openai-images'], [], [], self::DISCOVERY_TIMEOUT_SECONDS);
             if ($openai->is2xx() && is_array($openai->decodedJson())) {
                 return MediaCapability::new(EndpointFamily::OpenAiImages)
                     ->withKinds([MediaKind::Image])
@@ -200,7 +203,7 @@ final readonly class CapabilityDiscoverer
         }
         foreach (self::ROUTES as $name => $path) {
             try {
-                $result = $transport->request('GET', $path);
+                $result = $transport->request('GET', $path, [], [], self::DISCOVERY_TIMEOUT_SECONDS);
                 $verdicts[$name] = ($result->is2xx() && $result->decodedJson() !== null) ? 'ok' : 'absent';
             } catch (Throwable) {
                 $verdicts[$name] = 'error';

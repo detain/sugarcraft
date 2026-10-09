@@ -22,10 +22,14 @@ use SugarCraft\Crush\Media\MediaResponse;
  * the index key is missing or 0, NO grid is assumed (all images are samples)
  * — the parse never invents a grid it cannot see evidence for.
  *
- * Per-sample companions (info.infotexts[], info.all_seeds, info.all_subseeds)
- * are per-REAL-IMAGE lists: they align to the sample slot, never to the grid,
- * and a length mismatch leaves the companion unset rather than shifting rows
- * off by one (map, never guess).
+ * THE INFOTEXT SHIFT LAW (plan W1.4, upstream ui.js infotexts.unshift): the
+ * companions do NOT share one alignment. info.all_seeds / info.all_subseeds
+ * are per-REAL-IMAGE lists that align to the sample slot; but when the grid
+ * is prepended the server also prepends the GRID's infotext at infotexts[0],
+ * mirroring images[0] = grid — so sample s's parameters live at
+ * infotexts[s + 1]. Reading infotexts[s] unshifted mislabels every batch
+ * (R1 review MAJOR-1). A length mismatch leaves the companion unset rather
+ * than shifting rows off by one (map, never guess).
  */
 final class Response
 {
@@ -95,8 +99,12 @@ final class Response
         }
 
         foreach ($samples as $slot => $artifact) {
-            if (isset($infotexts[$slot]) && is_string($infotexts[$slot])) {
-                $artifact = $artifact->withInfotext(Infotext::parse($infotexts[$slot]));
+            // The grid prepends its own infotext row (infotexts[0] = grid),
+            // so sample companions sit one index higher whenever a grid was
+            // extracted. seeds/subseeds below stay per-sample (no shift).
+            $infoSlot = $grid !== null ? $slot + 1 : $slot;
+            if (isset($infotexts[$infoSlot]) && is_string($infotexts[$infoSlot])) {
+                $artifact = $artifact->withInfotext(Infotext::parse($infotexts[$infoSlot]));
             }
             // Filename-token carriers (plan W4.5): per-sample seed rides the
             // tokenValues bag; only attached when the list lines up with the

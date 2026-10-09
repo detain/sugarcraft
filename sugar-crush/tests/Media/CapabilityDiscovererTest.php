@@ -18,8 +18,8 @@ use SugarCraft\Crush\Media\Sd\SdTransportResult;
 
 /**
  * Plan W1.2 gates: the discovery ladder on canned transports only — no
- * sockets, no timers (the 3.0s ceiling is the transport's contract, asserted
- * here as a constant, never exercised as wall-clock). Fail-open and
+ * sockets, no timers (the 3.0s ceiling is asserted here as a THREADED
+ * per-request argument, never exercised as wall-clock). Fail-open and
  * config-authority are the two laws this file exists to keep honest.
  */
 final class CapabilityDiscovererTest extends TestCase
@@ -55,6 +55,47 @@ final class CapabilityDiscovererTest extends TestCase
         return new CallableSdTransport(static function (): never {
             throw new RuntimeException('connection refused');
         });
+    }
+
+    /**
+     * R1 MAJOR-2: DISCOVERY_TIMEOUT_SECONDS is not decorative — every probe
+     * rung and every diagnose dial carries it as the transport's per-request
+     * total-timeout argument. Drop any single rung's argument and that rung's
+     * row goes red.
+     */
+    public function testEveryDiscoveryDialCarriesTheBudgetAsTotalTimeout(): void
+    {
+        $seen = [];
+        $phase = 'probe:';
+        $transport = new CallableSdTransport(
+            static function (string $method, string $path, array $json, array $query, ?float $totalTimeoutSeconds = null) use (&$seen, &$phase): SdTransportResult {
+                // Keyed per phase so the diagnose leg can never mask a probe
+                // rung that dropped its budget (last-write-wins hole).
+                $seen[$phase . $path] = $totalTimeoutSeconds;
+
+                return self::answerResult(['status' => 404, 'body' => 'nope', 'contentType' => 'text/plain']);
+            },
+        );
+
+        $discoverer = new CapabilityDiscoverer();
+        self::assertNull($discoverer->probe($transport), 'all rungs absent → null, but every rung was dialed');
+        $phase = 'diagnose:';
+        $discoverer->diagnose([], $transport);
+
+        foreach (CapabilityDiscoverer::ROUTES as $name => $path) {
+            self::assertArrayHasKey('probe:' . $path, $seen, "probe rung {$name} was dialed");
+            self::assertSame(
+                CapabilityDiscoverer::DISCOVERY_TIMEOUT_SECONDS,
+                $seen['probe:' . $path],
+                "probe rung {$name} must carry the GET-scoped total budget",
+            );
+            self::assertArrayHasKey('diagnose:' . $path, $seen, "diagnose rung {$name} was dialed");
+            self::assertSame(
+                CapabilityDiscoverer::DISCOVERY_TIMEOUT_SECONDS,
+                $seen['diagnose:' . $path],
+                "diagnose rung {$name} must carry the GET-scoped total budget",
+            );
+        }
     }
 
     public function testProbeIdentifiesSdapiFromCmdFlags(): void

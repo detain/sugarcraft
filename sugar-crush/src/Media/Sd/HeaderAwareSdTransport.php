@@ -19,6 +19,9 @@ interface HeaderAwareSdTransport extends SdTransport
      * @param array<string, mixed>   $json    request body (JSON-encoded by the implementation)
      * @param array<string, scalar>  $query   query-string parameters
      * @param array<string, string>  $headers extra request headers
+     * @param ?float                 $totalTimeoutSeconds per-request total bound,
+     *      NULL for generation POSTs — see {@see SdTransport::request()} for the
+     *      E646 law this parameter exists to carve its discovery-GET exception through.
      */
     public function requestWithHeaders(
         string $method,
@@ -26,5 +29,6 @@ interface HeaderAwareSdTransport extends SdTransport
         array $json = [],
         array $query = [],
         array $headers = [],
+        ?float $totalTimeoutSeconds = null,
     ): SdTransportResult;
 }

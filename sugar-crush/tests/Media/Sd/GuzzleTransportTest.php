@@ -165,13 +165,36 @@ final class GuzzleTransportTest extends TestCase
         self::assertStringContainsString('application/json', $request->getHeaderLine('Content-Type'));
     }
 
-    public function testNoTotalRequestTimeoutOptionIsEverSet(): void
+    public function testNoTotalRequestTimeoutIsEverSelfInitiated(): void
     {
-        // E646 / §10.1-2: only the connect bound may appear. A bare 'timeout'
-        // option here would be a wall-clock kill on long renders.
+        // E646 / §10.1-2 as narrowed by R1 MAJOR-2: the default dial stays
+        // connect-bounded; the ONE total-timeout door opens only on an
+        // explicit caller-supplied budget (the discovery GET ladder).
+        // A hardcoded numeric timeout anywhere in this class would be a
+        // wall-clock kill on long renders — the source may mention the
+        // option ONLY inside the null-guarded conditional.
         $source = (string) file_get_contents(__DIR__ . '/../../../src/Media/Sd/GuzzleTransport.php');
-        self::assertStringNotContainsString("'timeout'", $source);
-        self::assertStringNotContainsString('"timeout"', $source);
+        self::assertMatchesRegularExpression(
+            '/if \(\$totalTimeoutSeconds !== null\) \{\s*\$options\[\'timeout\'\] = \$totalTimeoutSeconds;/',
+            $source,
+            "the only 'timeout' write must sit behind the caller-budget guard",
+        );
+        self::assertStringNotContainsString("'timeout' =>", $source);
         self::assertStringNotContainsString('usleep', $source);
+    }
+
+    public function testBudgetFlowsIntoGuzzleOptionsOnlyWhenSupplied(): void
+    {
+        // Functional polarity pair of the structural pin above: a default
+        // generation-shape dial carries no total in the per-request options,
+        // while an explicitly budgeted discovery-shape GET carries exactly it.
+        $plain = $this->transportWithHistory([new Response(200, [], '{}')]);
+        $plain->request('POST', '/sdapi/v1/txt2img', ['prompt' => 'x']);
+        self::assertArrayNotHasKey('timeout', $this->history[0]['options'], 'generation POSTs keep E646 connect-bound-only semantics');
+
+        $this->history = [];
+        $budgeted = $this->transportWithHistory([new Response(200, [], '{}')]);
+        $budgeted->request('GET', '/sdapi/v1/cmd-flags', [], [], 3.0);
+        self::assertSame(3.0, $this->history[0]['options']['timeout'], 'a caller-supplied budget must reach Guzzle as the total timeout');
     }
 }

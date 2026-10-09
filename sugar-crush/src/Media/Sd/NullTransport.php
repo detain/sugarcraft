@@ -17,7 +17,7 @@ use RuntimeException;
  */
 final readonly class NullTransport implements SdTransport
 {
-    public function request(string $method, string $path, array $json = [], array $query = []): SdTransportResult
+    public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult
     {
         throw new RuntimeException("NullTransport: no SD endpoint wired (refused {$method} {$path})");
     }

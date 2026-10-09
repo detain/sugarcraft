@@ -22,7 +22,7 @@ use SugarCraft\Crush\Media\Sd\SdTransportResult;
  */
 final class ClientTest extends TestCase
 {
-    /** @var list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, scalar>}> */
+    /** @var list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, scalar>, 4: ?float}> */
     private array $calls = [];
 
     protected function tearDown(): void
@@ -40,8 +40,8 @@ final class ClientTest extends TestCase
     private function clientRespondingWith(callable $responder): Client
     {
         $transport = new CallableSdTransport(
-            function (string $method, string $path, array $json, array $query) use ($responder): array {
-                $this->calls[] = [$method, $path, $json, $query];
+            function (string $method, string $path, array $json, array $query, ?float $totalTimeoutSeconds = null) use ($responder): array {
+                $this->calls[] = [$method, $path, $json, $query, $totalTimeoutSeconds];
 
                 return $responder($method, $path, $json, $query);
             },
@@ -198,12 +198,12 @@ final class ClientTest extends TestCase
             /** @var list<array<string, string>> rows recorded by the header-aware path ONLY */
             public array $seenHeaders = [];
 
-            public function request(string $method, string $path, array $json = [], array $query = []): SdTransportResult
+            public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult
             {
                 return SdTransportResult::new(200, '{}', 'application/json');
             }
 
-            public function requestWithHeaders(string $method, string $path, array $json = [], array $query = [], array $headers = []): SdTransportResult
+            public function requestWithHeaders(string $method, string $path, array $json = [], array $query = [], array $headers = [], ?float $totalTimeoutSeconds = null): SdTransportResult
             {
                 $this->seenHeaders[] = $headers;
 
@@ -224,6 +224,28 @@ final class ClientTest extends TestCase
         $this->expectException(SdException::class);
         $this->expectExceptionMessage('header-capable transport');
         $plainClient->interrupt(true);
+    }
+
+    /**
+     * R1 MAJOR-2 polarity #2: the total-timeout door exists for the discovery
+     * ladder ONLY. Nothing dialed through Client — generation POSTs included —
+     * ever supplies a budget; the E646 connect-bound-only law stays whole.
+     */
+    public function testEgressFromThisClientNeverCarriesATotalTimeoutBudget(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+
+        $client->txt2img(['prompt' => 'x']);
+        $client->img2img(['prompt' => 'x']);
+        $client->progress();
+        $client->interrupt();
+        $client->skip();
+        $client->options();
+
+        self::assertCount(6, $this->calls);
+        foreach ($this->calls as $row) {
+            self::assertNull($row[4], "Client egress {$row[1]} must not carry a wall-clock total (E646)");
+        }
     }
 
     // ------------------------------------------------------------- base chain

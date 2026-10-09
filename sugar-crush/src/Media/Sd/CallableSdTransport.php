@@ -23,9 +23,12 @@ final readonly class CallableSdTransport implements SdTransport
         $this->responder = $responder(...);
     }
 
-    public function request(string $method, string $path, array $json = [], array $query = []): SdTransportResult
+    public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult
     {
-        $result = ($this->responder)($method, $path, $json, $query);
+        // The responder receives the budget as a 5th argument so discovery
+        // pins can assert it; PHP closures narrower than 5 params (every
+        // existing fake) ignore it silently.
+        $result = ($this->responder)($method, $path, $json, $query, $totalTimeoutSeconds);
 
         if ($result instanceof SdTransportResult) {
             return $result;

@@ -14,9 +14,10 @@ use SugarCraft\Crush\Media\Sd\SdTransportResult;
 /**
  * THE GRID-PREPEND LAW under fixture: index_of_first_image === 1 means
  * images[0] is the batch grid, not a sample — artifacts and grid must land in
- * separate slots; missing index means NO grid is assumed; the per-sample
- * companions (infotexts / all_seeds / all_subseeds) align to samples and
- * never shift onto the grid.
+ * separate slots; missing index means NO grid is assumed. The companions do
+ * NOT share one alignment (R1 MAJOR-1): all_seeds / all_subseeds are
+ * per-sample, but the server prepends the GRID's infotext at infotexts[0],
+ * so sample s reads infotexts[s + 1] whenever a grid was extracted.
  */
 final class ResponseTest extends TestCase
 {
@@ -64,13 +65,29 @@ final class ResponseTest extends TestCase
         self::assertInstanceOf(MediaArtifact::class, $grid);
         self::assertSame(base64_decode(self::GRID_B64, true), $grid->bytes());
 
-        // Per-sample companions align to SAMPLES: p0 is the first real image,
-        // never the grid; seeds ride 101..106 in order.
+        // THE INFOTEXT SHIFT: the fixture carries the shape upstream actually
+        // emits — seven infotext rows for seven images, infotexts[0] being the
+        // GRID's own text. Sample companions therefore live at infotexts[s+1]:
+        // p0 is the FIRST SAMPLE's text (read from index 1), never the grid row.
         self::assertSame('p0', $parsed->artifacts()[0]->infotext()[Infotext::PROMPT_KEY]);
         self::assertSame('p5', $parsed->artifacts()[5]->infotext()[Infotext::PROMPT_KEY]);
+        self::assertNull($parsed->grid()->infotext(), 'the parser never attaches infotext to the grid slot');
+        // Seeds are per-sample lists — they do NOT shift with the infotexts.
         self::assertSame(101, $parsed->artifacts()[0]->tokenValues()['seed']);
         self::assertSame(106, $parsed->artifacts()[5]->tokenValues()['seed']);
         self::assertSame(1, $parsed->indexOfFirstImage);
+    }
+
+    public function testTheGridInfotextRowIsSkippedSoSamplesLandOneIndexHigher(): void
+    {
+        $parsed = Response::generation($this->envelope(
+            [self::GRID_B64, self::PNG_B64],
+            ['index_of_first_image' => 1, 'infotexts' => ["grid of one\nNegative prompt:\n\nSeed: -1", "p-a\nNegative prompt: n-a"]],
+        ));
+
+        self::assertNotNull($parsed->grid());
+        self::assertCount(1, $parsed->artifacts());
+        self::assertSame('p-a', $parsed->artifacts()[0]->infotext()[Infotext::PROMPT_KEY], 'sample 0 reads infotexts[1] — the grid row at [0] is skipped');
     }
 
     public function testAMissingIndexKeyAssumesNoGridEvenForSeveralImages(): void
@@ -80,6 +97,8 @@ final class ResponseTest extends TestCase
         self::assertNull($parsed->grid());
         self::assertCount(3, $parsed->artifacts());
         self::assertNull($parsed->indexOfFirstImage);
+        // Absent index → unshifted companions: sample 0 reads infotexts[0].
+        self::assertSame('x', $parsed->artifacts()[0]->infotext()[Infotext::PROMPT_KEY]);
     }
 
     public function testIndexOneWithASingleEntryLeavesOnlyTheGrid(): void

@@ -29,6 +29,13 @@ interface SdTransport
     /**
      * @param  array<string, mixed>  $json  request body (JSON-encoded by the implementation)
      * @param  array<string, scalar>  $query  query-string parameters
+     * @param  ?float  $totalTimeoutSeconds  WALL-CLOCK TOTAL bound for THIS
+     *      request only, honoured by implementations that can bound (the
+     *      discovery GET ladder passes CapabilityDiscoverer's budget). NULL —
+     *      the generation-POST shape — keeps the E646 law intact: connect-
+     *      bounded egress, never a total ceiling, because a loaded GPU
+     *      legitimately renders minutes past any flat timeout (mirrors the
+     *      sanctioned SglangServerInfo discovery-GET exception, src/Providers).
      */
-    public function request(string $method, string $path, array $json = [], array $query = []): SdTransportResult;
+    public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult;
 }
