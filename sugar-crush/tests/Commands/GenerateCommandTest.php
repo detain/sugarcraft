@@ -13,9 +13,11 @@ use SugarCraft\Crush\Commands\GenerateCommand;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Commands\Specs\CommandArguments;
 use SugarCraft\Crush\Host\Commands\CommandContext;
+use SugarCraft\Crush\Host\Commands\CommandEffectKind;
 use SugarCraft\Crush\Host\Commands\GenerateHostCommand;
 use SugarCraft\Crush\Media\Sd\Client;
 use SugarCraft\Crush\Media\Sd\CallableSdTransport;
+use SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Support\ToolCancelRequests;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
@@ -292,16 +294,22 @@ final class GenerateCommandTest extends TestCase
         self::assertStringContainsString('no SD base URL configured', $result->rows[1]->content);
     }
 
-    public function testTheBareCommandAnswersUsageAndDialsNothing(): void
+    public function testTheBareCommandOpensTheMediaFormAndDialsNothing(): void
     {
+        // W3.1 flip: bare /generate no longer answers with usage — it opens
+        // the media form and dials nothing itself. --help still speaks for
+        // the flags.
         $host = new GenerateHostCommand(static function (CommandContext $context): never {
             self::fail('the bare command must not reach the tool at all');
         });
 
         $result = $host->run(CommandContext::new(), '/generate');
 
-        self::assertStringContainsString(GenerateCommand::USAGE, $result->rows[1]->content);
-        self::assertStringContainsString('--help', $result->rows[1]->content);
+        self::assertCount(1, $result->rows, 'only the echoed user row rides a screen-only effect');
+        self::assertSame('/generate', $result->rows[0]->content);
+        self::assertCount(1, $result->effects);
+        self::assertSame(CommandEffectKind::OpenMediaForm, $result->effects[0]->kind);
+        self::assertNull($result->effects[0]->mediaRequest(), 'a bare command carries no seed');
     }
 
     // ---- dispatch level: a submitted draft routes into the pipeline ---------------
@@ -321,14 +329,19 @@ final class GenerateCommandTest extends TestCase
         self::assertStringContainsString('no SD base URL configured', $rows[count($rows) - 1]->content);
     }
 
-    public function testABareSubmittedGenerateAnswersWithUsage(): void
+    public function testABareSubmittedGenerateSendsTheOpenMediaFormMsg(): void
     {
-        $next = $this->sendDraft('/generate');
+        // W3.1 flip: the chat answers the bare draft with a screen-only
+        // effect — Cmd::send(OpenMediaFormMsg) for the App shell to open.
+        [$next, $cmd] = $this->window('/generate')->update(new KeyMsg(KeyType::Enter));
 
         self::assertFalse($next->inFlight);
         $rows = $this->rowsAfter($next);
         self::assertNotCount(0, $rows);
-        self::assertStringContainsString(GenerateCommand::USAGE, $rows[count($rows) - 1]->content);
+        self::assertStringNotContainsString('usage', $rows[count($rows) - 1]->content);
+        self::assertInstanceOf(\Closure::class, $cmd);
+        self::assertInstanceOf(OpenMediaFormMsg::class, $cmd());
+        self::assertNull($cmd()->request);
     }
 
     // ---- fixtures -----------------------------------------------------------------
