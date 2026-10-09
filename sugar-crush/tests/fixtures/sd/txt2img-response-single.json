@@ -1,0 +1,14 @@
+{
+ "images": [
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+ ],
+ "parameters": {
+  "prompt": "a cat",
+  "steps": 20,
+  "seed": 12345,
+  "batch_size": 1,
+  "save_images": false,
+  "send_images": true
+ },
+ "info": "{\"index_of_first_image\": 0, \"all_seeds\": [12345], \"all_subseeds\": [-1], \"infotexts\": [\"a cat\\nNegative prompt: bad\\n\\nSteps: 20, Sampler: Euler a, Seed: 12345\"], \"job_timestamp\": \"20261009120000\", \"sd_model_name\": \"flux.2.safetensors\"}"
+}

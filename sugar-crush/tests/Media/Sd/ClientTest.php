@@ -7,8 +7,10 @@ namespace SugarCraft\Crush\Tests\Media\Sd;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Media\Sd\CallableSdTransport;
+use SugarCraft\Crush\Media\Sd\Endpoints;
 use SugarCraft\Crush\Media\Sd\Client;
 use SugarCraft\Crush\Media\Sd\HeaderAwareSdTransport;
+use SugarCraft\Crush\Media\Sd\Response;
 use SugarCraft\Crush\Media\Sd\SdException;
 use SugarCraft\Crush\Media\Sd\SdTransport;
 use SugarCraft\Crush\Media\Sd\SdTransportResult;
@@ -309,6 +311,28 @@ final class ClientTest extends TestCase
         $this->expectException(SdException::class);
         $this->expectExceptionMessage('expected a JSON array payload');
         $client->samplers();
+    }
+
+    public function testAGenerationCallFeedsTheResponseBuilderEndToEnd(): void
+    {
+        $body = file_get_contents(__DIR__ . '/../../fixtures/sd/txt2img-response-single.json');
+        self::assertNotFalse($body);
+        $client = $this->clientReturning(['status' => 200, 'body' => $body, 'contentType' => 'application/json']);
+
+        $parsed = Response::generation($client->txt2img(['prompt' => 'a cat']));
+
+        self::assertCount(1, $parsed->artifacts());
+        self::assertNull($parsed->grid());
+        self::assertSame(12345, $parsed->artifacts()[0]->tokenValues()['seed']);
+    }
+
+    public function testTheEndpointRegistryIsWiredInTheClientPathFunnel(): void
+    {
+        // The client dials only registry members; an unregistered spelling
+        // dies in resolve() before the transport is touched (calls stays 0).
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('never guesses');
+        Endpoints::resolve('/sdapi/v1/nope');
     }
 
     public function testHeaderAwareSeamExtendsTheFrozenGenericSeam(): void

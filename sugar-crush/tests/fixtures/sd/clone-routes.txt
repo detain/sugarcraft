@@ -1,0 +1,43 @@
+# A1111 sdapi v1 route registration snapshot — CI drift oracle for Endpoints.
+# PROVENANCE: derived from plan_crush_media.md Appendix F section 1.2
+# ("Endpoint table (verified against this tree)", clone @82a973c), NOT from a
+# live read of /home/sites/sdg-assets/stable-diffusion-webui/modules/api/api.py:
+# that clone was ABSENT from disk when this lane ran W1.4 (2026-10-09).
+# Re-derive from the clone on the next machine that has it.
+# Format: one path per line; '#' lines are comments. Methods in parentheses
+# are informational suffixes stripped by the parser.
+/sdapi/v1/txt2img (POST)
+/sdapi/v1/img2img (POST)
+/sdapi/v1/extra-single-image (POST)
+/sdapi/v1/extra-batch-images (POST)
+/sdapi/v1/png-info (POST)
+/sdapi/v1/progress (GET)
+/sdapi/v1/interrogate (POST)
+/sdapi/v1/interrupt (POST)
+/sdapi/v1/skip (POST)
+/sdapi/v1/options (GET,POST)
+/sdapi/v1/cmd-flags (GET)
+/sdapi/v1/samplers (GET)
+/sdapi/v1/schedulers (GET)
+/sdapi/v1/upscalers (GET)
+/sdapi/v1/latent-upscale-modes (GET)
+/sdapi/v1/sd-models (GET)
+/sdapi/v1/sd-vae (GET)
+/sdapi/v1/hypernetworks (GET)
+/sdapi/v1/face-restorers (GET)
+/sdapi/v1/realesrgan-models (GET)
+/sdapi/v1/prompt-styles (GET)
+/sdapi/v1/embeddings (GET)
+/sdapi/v1/refresh-checkpoints (POST)
+/sdapi/v1/refresh-vae (POST)
+/sdapi/v1/refresh-embeddings (POST)
+/sdapi/v1/memory (GET)
+/sdapi/v1/unload-checkpoint (POST)
+/sdapi/v1/reload-checkpoint (POST)
+/sdapi/v1/scripts (GET)
+/sdapi/v1/script-info (GET)
+/sdapi/v1/extensions (GET)
+/sdapi/v1/server-kill (POST)
+/sdapi/v1/server-restart (POST)
+/sdapi/v1/server-stop (POST)
+/internal/ping (GET)

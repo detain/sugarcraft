@@ -1,0 +1,16 @@
+{
+ "images": [
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+ ],
+ "parameters": {
+  "prompt": "a cat",
+  "steps": 20,
+  "seed": 12345,
+  "batch_size": 3,
+  "save_images": false,
+  "send_images": true
+ },
+ "info": "{\"all_seeds\": [7, 8, 9], \"infotexts\": [\"x\", \"\", \"\"]}"
+}

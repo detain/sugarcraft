@@ -1192,3 +1192,5 @@ sugar-crush/tests/Support/MediaStoreTest.php	8.5	83
 sugar-crush/tests/Media/Sd/UrlGuardTest.php	0.05	17
 sugar-crush/tests/Media/Sd/GuzzleTransportTest.php	0.05	9
 sugar-crush/tests/Media/Sd/ClientTest.php	0.05	16
+sugar-crush/tests/Media/Sd/EndpointsTest.php	0.05	18
+sugar-crush/tests/Media/Sd/ResponseTest.php	0.05	10

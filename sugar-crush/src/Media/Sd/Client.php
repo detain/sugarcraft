@@ -150,31 +150,31 @@ final class Client
     /** @param MediaRequest|array<string, mixed> $request */
     public function txt2img(MediaRequest|array $request): SdTransportResult
     {
-        return $this->post('/sdapi/v1/txt2img', $this->generationBody($request), 'txt2img');
+        return $this->post(Endpoints::TXT2IMG, $this->generationBody($request), 'txt2img');
     }
 
     /** @param MediaRequest|array<string, mixed> $request */
     public function img2img(MediaRequest|array $request): SdTransportResult
     {
-        return $this->post('/sdapi/v1/img2img', $this->generationBody($request), 'img2img');
+        return $this->post(Endpoints::IMG2IMG, $this->generationBody($request), 'img2img');
     }
 
     /** @param array<string, mixed> $request */
     public function extraSingleImage(array $request): SdTransportResult
     {
-        return $this->post('/sdapi/v1/extra-single-image', $request, 'extras-single');
+        return $this->post(Endpoints::EXTRA_SINGLE_IMAGE, $request, 'extras-single');
     }
 
     /** @param array<string, mixed> $request */
     public function extraBatchImages(array $request): SdTransportResult
     {
-        return $this->post('/sdapi/v1/extra-batch-images', $request, 'extras-batch');
+        return $this->post(Endpoints::EXTRA_BATCH_IMAGES, $request, 'extras-batch');
     }
 
     /** Bare b64 or data-URI both accepted; returns `{info, items, parameters}`. */
     public function pngInfo(string $imageBase64): SdTransportResult
     {
-        return $this->post('/sdapi/v1/png-info', ['image' => self::stripDataUri($imageBase64)], 'png-info');
+        return $this->post(Endpoints::PNG_INFO, ['image' => self::stripDataUri($imageBase64)], 'png-info');
     }
 
     /** @param array<string, mixed> $request  {image: b64, model: 'clip'|'deepbooru'} */
@@ -184,7 +184,7 @@ final class Client
             $request['image'] = self::stripDataUri($request['image']);
         }
 
-        return $this->post('/sdapi/v1/interrogate', $request, 'interrogate');
+        return $this->post(Endpoints::INTERROGATE, $request, 'interrogate');
     }
 
     // ----------------------------------------------------------------- control
@@ -199,7 +199,7 @@ final class Client
     public function progress(bool $withPreview = false): array
     {
         return $this->decodedArray(
-            $this->get('/sdapi/v1/progress', ['skip_current_image' => $withPreview ? 'false' : 'true'], 'progress'),
+            $this->get(Endpoints::PROGRESS, ['skip_current_image' => $withPreview ? 'false' : 'true'], 'progress'),
             'progress',
         );
     }
@@ -212,7 +212,7 @@ final class Client
     public function interrupt(bool $afterCurrent = false): SdTransportResult
     {
         if (!$afterCurrent) {
-            return $this->post('/sdapi/v1/interrupt', [], 'interrupt');
+            return $this->post(Endpoints::INTERRUPT, [], 'interrupt');
         }
 
         if (!$this->transport instanceof HeaderAwareSdTransport) {
@@ -226,7 +226,7 @@ final class Client
             $this->ask(
                 fn (): SdTransportResult => $this->transport->requestWithHeaders(
                     'POST',
-                    $this->resolve('/sdapi/v1/interrupt'),
+                    $this->resolve(Endpoints::INTERRUPT),
                     [],
                     [],
                     ['interrupt_after_current' => 'true'],
@@ -239,7 +239,7 @@ final class Client
 
     public function skip(): SdTransportResult
     {
-        return $this->post('/sdapi/v1/skip', [], 'skip');
+        return $this->post(Endpoints::SKIP, [], 'skip');
     }
 
     // ----------------------------------------------------------------- readout
@@ -247,44 +247,44 @@ final class Client
     /** @return array<string, mixed> */
     public function options(): array
     {
-        return $this->decodedArray($this->get('/sdapi/v1/options', [], 'options'), 'options');
+        return $this->decodedArray($this->get(Endpoints::OPTIONS, [], 'options'), 'options');
     }
 
     /** @param array<string, mixed> $settings */
     public function setOptions(array $settings): SdTransportResult
     {
-        return $this->post('/sdapi/v1/options', $settings, 'options-set');
+        return $this->post(Endpoints::OPTIONS, $settings, 'options-set');
     }
 
     /** @return array<string, mixed> */
     public function cmdFlags(): array
     {
-        return $this->decodedArray($this->get('/sdapi/v1/cmd-flags', [], 'cmd-flags'), 'cmd-flags');
+        return $this->decodedArray($this->get(Endpoints::CMD_FLAGS, [], 'cmd-flags'), 'cmd-flags');
     }
 
     /** @return list<array<string, mixed>> */
     public function samplers(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/samplers', [], 'samplers'), 'samplers'));
+        return array_values($this->decodedList($this->get(Endpoints::SAMPLERS, [], 'samplers'), 'samplers'));
     }
 
     /** @return list<array<string, mixed>> */
     public function schedulers(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/schedulers', [], 'schedulers'), 'schedulers'));
+        return array_values($this->decodedList($this->get(Endpoints::SCHEDULERS, [], 'schedulers'), 'schedulers'));
     }
 
     /** @return list<array<string, mixed>> */
     public function upscalers(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/upscalers', [], 'upscalers'), 'upscalers'));
+        return array_values($this->decodedList($this->get(Endpoints::UPSCALERS, [], 'upscalers'), 'upscalers'));
     }
 
     /** @return list<array<string, mixed>> */
     public function latentUpscaleModes(): array
     {
         return array_values($this->decodedList(
-            $this->get('/sdapi/v1/latent-upscale-modes', [], 'latent-upscale-modes'),
+            $this->get(Endpoints::LATENT_UPSCALE_MODES, [], 'latent-upscale-modes'),
             'latent-upscale-modes',
         ));
     }
@@ -292,37 +292,47 @@ final class Client
     /** @return list<array<string, mixed>> */
     public function sdModels(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/sd-models', [], 'sd-models'), 'sd-models'));
+        return array_values($this->decodedList($this->get(Endpoints::SD_MODELS, [], 'sd-models'), 'sd-models'));
     }
 
     /** @return list<array<string, mixed>> */
     public function sdVae(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/sd-vae', [], 'sd-vae'), 'sd-vae'));
+        return array_values($this->decodedList($this->get(Endpoints::SD_VAE, [], 'sd-vae'), 'sd-vae'));
     }
 
     /** @return list<array<string, mixed>> */
     public function promptStyles(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/prompt-styles', [], 'prompt-styles'), 'prompt-styles'));
+        return array_values($this->decodedList($this->get(Endpoints::PROMPT_STYLES, [], 'prompt-styles'), 'prompt-styles'));
     }
 
     /** @return array<string, mixed> */
     public function scripts(): array
     {
-        return $this->decodedArray($this->get('/sdapi/v1/scripts', [], 'scripts'), 'scripts');
+        return $this->decodedArray($this->get(Endpoints::SCRIPTS, [], 'scripts'), 'scripts');
     }
 
     /** @return list<array<string, mixed>> */
     public function scriptInfo(): array
     {
-        return array_values($this->decodedList($this->get('/sdapi/v1/script-info', [], 'script-info'), 'script-info'));
+        return array_values($this->decodedList($this->get(Endpoints::SCRIPT_INFO, [], 'script-info'), 'script-info'));
     }
 
     /** @return array<string, mixed> */
     public function memory(): array
     {
-        return $this->decodedArray($this->get('/sdapi/v1/memory', [], 'memory'), 'memory');
+        return $this->decodedArray($this->get(Endpoints::MEMORY, [], 'memory'), 'memory');
+    }
+
+    /**
+     * Liveness probe ({@see Endpoints::INTERNAL_PING}); returns the raw
+     * server reply — an empty object on a healthy stock server. Also the
+     * live target of the legacy `/tick` heartbeat name.
+     */
+    public function ping(): array
+    {
+        return $this->decodedArray($this->get(Endpoints::INTERNAL_PING, [], 'ping'), 'ping');
     }
 
     /** The origin every request from this client is pinned to. */
@@ -405,13 +415,14 @@ final class Client
     }
 
     /**
-     * W1.4 lands Endpoints::resolve(); until then every path is already
-     * canonical, so resolution is identity — kept as ONE seam so W1.4 wires
-     * the legacy map through a single method.
+     * Every dialled path funnels through the endpoint registry: canonical
+     * names pass through, the twelve legacy clauses rewrite or refuse, and
+     * nothing unregistered ever reaches the transport (the client maps,
+     * never guesses — plan W1.4).
      */
     private function resolve(string $path): string
     {
-        return $path;
+        return Endpoints::resolve($path);
     }
 
     private function get(string $path, array $query, string $context): SdTransportResult
