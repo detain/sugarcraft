@@ -1130,7 +1130,15 @@ either block off only removes text, and a trusted project *may* do that);
 `webSearchEndpoint`, because it decides which host
 receives every WebSearch query, and those queries routinely quote the
 repository's code, file names and error text — the `provider` argument applied
-to search; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
+to search; `sd.baseUrl` and `sd.apiKey`, because they decide which host and
+credential every generation request is sent to — the `provider` and
+`webSearchEndpoint` arguments applied to the diffusion server; `sd.defaultModel`
+and `sd.presets`, because they choose which model burns the operator's GPU time
+and under which preset; `sd.timeoutSeconds`, because it bounds that same
+generation; `sd.savePattern`, because it names where artifacts land on the
+operator's disk; `ui.imageRenderMode` and `ui.mediaDisplayOverrides`, the
+display half of the same surface, held user-tier so the media settings cannot
+be split across tiers by a checkout; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
 and `subagentMaxActive`, because each multiplies the provider calls one turn
 may fan out through delegated runs — the `maxToolSteps` argument applied to
 sub-agents;
@@ -2145,7 +2153,7 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**21,198 tests / 406,450 assertions, 0 failures, 1 skipped** — the whole of
+**21,516 tests / 406,450 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 40m56s. Measured 2026-10-08, at the end of an internal twelve-wave feature roadmap —
