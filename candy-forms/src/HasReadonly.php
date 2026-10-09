@@ -95,9 +95,12 @@ trait HasReadonly
      * \SugarCraft\Forms\Field\Select} refuses that arm while read-only itself
      * (round-90 review follow-up) rather than through this classifier.
      *
-     * MouseMsg is intentionally NOT classified here: within this lib the only
-     * consumer is ItemList, and there it places the picker cursor — the
-     * navigation the read-only ruling explicitly sanctions for pickers.
+     * MouseMsg is intentionally NOT classified here: ItemList consumes it
+     * before this door and there it places the picker cursor — the navigation
+     * the read-only ruling explicitly sanctions for pickers — while the
+     * value-writing mouse widgets each refuse it with their own explicit
+     * `isReadonly()` gate in the mouse handler (Slider's zone drag,
+     * crush_media W3.2, is the first of that family).
      */
     public static function isReadonlyMutatingMsg(Msg $msg): bool
     {

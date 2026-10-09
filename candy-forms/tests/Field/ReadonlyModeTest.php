@@ -281,10 +281,12 @@ final class ReadonlyModeTest extends TestCase
     }
 
     /**
-     * Audit answer for "mouse?": the only widget in this lib consuming
-     * MouseMsg is ItemList, where it places the picker cursor — sanctioned
-     * NAVIGATION under the 5.10 ruling (a picker's value IS the highlighted
-     * entry, so motion drifts the reported value by accepted design). A
+     * Audit answer for "mouse?": the widgets consuming MouseMsg are ItemList,
+     * where it places the picker cursor — sanctioned NAVIGATION under the
+     * 5.10 ruling (a picker's value IS the highlighted entry, so motion
+     * drifts the reported value by accepted design) — and Slider, whose
+     * crush_media W3.2 zone drag writes a value and therefore refuses the
+     * message itself behind an explicit isReadonly() gate. A
      * read-only Text has no mouse path at all: its buffer stays frozen.
      */
     public function testMouseIsInertOnTextAndSanctionedAsNavigationOnSelect(): void

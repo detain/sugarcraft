@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
@@ -41,6 +44,13 @@ use SugarCraft\Forms\Validator\Validator;
  * Keys while focused:
  *   <- / h     one step down        Home   first step (min)
  *   -> / l     one step up          End    top step (last lattice point <= max)
+ *
+ * Mouse while focused (crush_media W3.2): a left-button Press, Motion or
+ * Release landing on the track line drags the handle to that column — the
+ * TEA channel answers the widget-relative form in {@see update()}, and
+ * hosts that own the hit-test geometry call the public zone form
+ * {@see handleZoneMouse()} directly. Both funnel the number through
+ * {@see withValue()}, so the single clamp/snap site stays untouched.
  *
  * Up/Down/PageUp/PageDown/Enter/Tab stay with the Form — the slider moves
  * on its own axis only, so it consumes nothing.
@@ -195,6 +205,12 @@ final class Slider implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
+        // crush_media W3.2: mouse arrives BEFORE the keyboard guard so the
+        // KeyMsg arms below stay byte-identical (the ItemList E736 5.14
+        // shape); unfocused stays deaf, and a non-track row is inert.
+        if ($msg instanceof MouseMsg) {
+            return $this->handleTrackMouse($msg);
+        }
         if (!$msg instanceof KeyMsg || !$this->focused || $this->isReadonly()) {
             return [$this, null];
         }
@@ -209,6 +225,53 @@ final class Slider implements \SugarCraft\Forms\Field
             default => null,
         };
         return [$next ?? $this, null];
+    }
+
+    /**
+     * Host-callable zone drag (crush_media W3.2, plan :417-431). This is the
+     * Shape-A-vs-B of widget mouse support and the ruling lands on B-plus-A:
+     * Slider stays dependency-free — it types candy-core's own `MouseMsg`
+     * (already a required sibling, zero new composer requires), so a host on
+     * the TEA channel just forwards messages to {@see update()}, while a
+     * host that owns the layout geometry (sugar-crush runs candy-mouse and
+     * knows the track's absolute screen rect) hit-tests itself and calls
+     * THIS method with the zone it computed.
+     *
+     * The mapping is endpoint-inclusive and monotonic: the quotient
+     * `($msg->x - $zoneLeft) / span` over `span = $zoneWidth - 1` (floored at
+     * one cell so a degenerate zone never divides by zero) scales
+     * `min + ratio * (max - min)` — and the number ALWAYS routes through
+     * {@see withValue()}, never a local clamp or snap: out-of-zone x
+     * saturates into range via the single-site normalise(), and the lattice
+     * snap reuses the documented EPS tie rule there (the r1-q16 single-site
+     * law stays intact; SliderTest counts the clamp-call tokens
+     * structurally). x exactly at `$zoneLeft` yields the min end; x at
+     * `$zoneLeft + $zoneWidth - 1` yields the top lattice point.
+     *
+     * Press, Motion and Release are handled identically in v1 — the widget
+     * keeps no drag state, so a host may fire on any action. Wheel messages
+     * and non-left buttons answer null (not the widget's to take): noted
+     * divergence — sugar-crush's Viewport routes the wheel as Up/Down
+     * KeyMsgs today, so also answering WheelDown here would double-step.
+     *
+     * @param int $zoneLeft   1-based column of the zone's first draggable cell
+     * @param int $zoneWidth  width of the zone in cells (handle band)
+     *
+     * @return ?self the dragged-to state, or null when this message is not
+     *               the widget's to answer (readonly, wheel, non-left button)
+     */
+    public function handleZoneMouse(MouseMsg $msg, int $zoneLeft, int $zoneWidth): ?self
+    {
+        if ($this->isReadonly() || $msg instanceof MouseWheelMsg || $msg->button !== MouseButton::Left) {
+            return null;
+        }
+        $span = $zoneWidth - 1;
+        if ($span < 1) {
+            $span = 1;
+        }
+        $ratio = ($msg->x - $zoneLeft) / $span;
+
+        return $this->withValue($this->min + $ratio * ($this->max - $this->min));
     }
 
     /**
@@ -314,6 +377,38 @@ final class Slider implements \SugarCraft\Forms\Field
             $k = $top;
         }
         return $this->mutate(value: $this->min + $k * $this->step, valueSet: true);
+    }
+
+    /**
+     * Widget-relative mouse dispatch (crush_media W3.2): the track is always
+     * the LAST line of {@see view()}, so a message answering through the TEA
+     * channel must land on {@see trackLine()} to count as a grab; the handle
+     * band starts at column 2 (the '[' bracket owns column 1) and spans the
+     * track width in cells. Everything else — focus, readonly, button,
+     * wheel — is judged by {@see handleZoneMouse()}.
+     */
+    private function handleTrackMouse(MouseMsg $msg): array
+    {
+        if (!$this->focused || $msg->y !== $this->trackLine()) {
+            return [$this, null];
+        }
+        $next = $this->handleZoneMouse($msg, 2, $this->width);
+
+        return [$next ?? $this, null];
+    }
+
+    /** 1-based line, within this widget's own view(), on which the track renders. */
+    private function trackLine(): int
+    {
+        $line = 1;
+        if ($this->resolveTitle($this->title) !== '') {
+            ++$line;
+        }
+        if ($this->resolveDescription($this->description) !== '') {
+            ++$line;
+        }
+
+        return $line;
     }
 
     /**
