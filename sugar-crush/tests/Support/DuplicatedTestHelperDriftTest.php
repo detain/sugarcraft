@@ -2628,6 +2628,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'ONE_M_WINDOW' => 'The absolute-cap breaker suite and the live compaction-settings suite both size the 1M-token context window roadmap 2.9 is about; the figure is the model class under test, so the copies must move together.',
         'OK_BODY' => 'The SGLang request-shape suites (Q5 system-row merge, 0.1 reasoning replay) answer every request with the same minimal completion body; neither asserts on it, it only lets the request be captured.',
         'OVERSIZED_BYTES' => 'The oversized-write bound several stdio families test is shared verbatim.',
+        'PNG_B64' => 'The sdapi media suites - the W1 response reader, the W2.1 GenerateImage tool, the W2.3 /generate command - each wrap the same 1x1 PNG in their transport fake; no suite asserts on the bytes, they only let the pipeline decode an image. A re-roll to a different PNG flips the pair to the drift polity, which is the human decision this row defers.',
         'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',
         'README' => 'The documentation-census suites point at the same repository file path.',
         'SAFE_BYTES' => 'The under-capacity byte count the drain and wedge families share.',
