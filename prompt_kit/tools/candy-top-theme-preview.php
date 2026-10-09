@@ -49,8 +49,8 @@ $config = Config::new()->with('color_theme', $theme)
 if (getenv('CANDY_TOP_SHOWN_BOXES')) {
     $config = $config->with('shown_boxes', (string) getenv('CANDY_TOP_SHOWN_BOXES'));
 }
-// The fake fleet's host runs VMs: the cpu title offers the `vms` button.
-$host = Harness::host()->withVmHost(true);
+// The fake fleet's host runs VMs: the cpu title offers the `vms` button,
+$host = Harness::host()->withVmHost(true)->withBmcHost(true); // and has a (fake) BMC: the `IPMI` button
 $panels = Panels::standard($host, $config, true);
 $palette = ThemeRegistry::new(null, [])->load($config->colorTheme(), $config->bool('theme_background'), false);
 $app = App::start(

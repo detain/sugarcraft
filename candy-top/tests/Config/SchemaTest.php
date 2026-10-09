@@ -53,6 +53,7 @@ final class SchemaTest extends TestCase
             ['proc_filter_containers', false], // #1873
             ['ctr_show_vms', true], // candy-top: VMs in the ctr box
             ['vms_sorting', 'cpu'], // candy-top: the VM dashboard's card order
+            ['ipmi_update_ms', 10000], ['ipmi_show_serials', false], // candy-top: the ipmi box
             ['proc_follow_detailed', true],
             ['proc_aggregate', false], ['proc_tree_auto_collapse', 0], ['keep_dead_proc_usage', false],
             ['cpu_graph_upper', 'Auto'], ['cpu_graph_lower', 'Auto'], ['show_gpu_info', 'Auto'],
@@ -233,6 +234,8 @@ final class SchemaTest extends TestCase
         $this->assertSame('proc_filter_kernel', $after('proc_filter_containers'));
         $this->assertSame('proc_filter_containers', $after('ctr_show_vms'));
         $this->assertSame('ctr_show_vms', $after('vms_sorting'));
+        $this->assertSame('vms_sorting', $after('ipmi_update_ms'));
+        $this->assertSame('ipmi_update_ms', $after('ipmi_show_serials'));
         $this->assertSame('freq_mode', $after('show_core_freq'));
         $this->assertSame('disks_filter', $after('disks_order'));
         $this->assertSame('mem_graphs', $after('mem_selected'));

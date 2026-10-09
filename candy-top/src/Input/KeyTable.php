@@ -48,6 +48,8 @@ final class KeyTable
             // candy-top's VM dashboard: `v` toggles it, `s`/`S` cycle its card order (arrows/Enter as listed below).
             new KeyRow('v', 'help.toggle_vms', ['v']),
             new KeyRow('s, S', 'help.vms_sort', ['s', 'S']),
+            // candy-top's BMC box (`i` is io_mode, so shift).
+            new KeyRow('shift + i', 'help.toggle_ipmi', ['I']),
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),

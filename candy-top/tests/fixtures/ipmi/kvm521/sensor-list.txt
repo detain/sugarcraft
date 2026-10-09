@@ -1,0 +1,71 @@
+UID              | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Sys Health LED   | 0x1        | discrete   | 0x0180| na        | na        | na        | na        | na        | na        
+01-Inlet Ambient | 17.000     | degrees C  | ok    | na        | na        | na        | na        | 42.000    | 46.000    
+02-CPU 1         | 40.000     | degrees C  | ok    | na        | na        | na        | na        | 70.000    | na        
+03-CPU 2         | 40.000     | degrees C  | ok    | na        | na        | na        | na        | 70.000    | na        
+04-P1 DIMM 1-6   | 36.000     | degrees C  | ok    | na        | na        | na        | na        | 89.000    | na        
+05-P1 DIMM 7-12  | 36.000     | degrees C  | ok    | na        | na        | na        | na        | 89.000    | na        
+06-P2 DIMM 1-6   | 37.000     | degrees C  | ok    | na        | na        | na        | na        | 89.000    | na        
+07-P2 DIMM 7-12  | 39.000     | degrees C  | ok    | na        | na        | na        | na        | 89.000    | na        
+08-HD Max        | na         |            | na    | na        | na        | na        | na        | 60.000    | na        
+09-Exp Bay Drive | na         |            | na    | na        | na        | na        | na        | 75.000    | na        
+10-Chipset       | 39.000     | degrees C  | ok    | na        | na        | na        | na        | 105.000   | na        
+11-PS 1 Inlet    | 29.000     | degrees C  | ok    | na        | na        | na        | na        | na        | na        
+12-PS 2 Inlet    | na         |            | na    | na        | na        | na        | na        | na        | na        
+13-VR P1         | 40.000     | degrees C  | ok    | na        | na        | na        | na        | 115.000   | 120.000   
+14-VR P2         | 44.000     | degrees C  | ok    | na        | na        | na        | na        | 115.000   | 120.000   
+15-VR P1 Mem     | 27.000     | degrees C  | ok    | na        | na        | na        | na        | 115.000   | 120.000   
+16-VR P1 Mem     | 29.000     | degrees C  | ok    | na        | na        | na        | na        | 115.000   | 120.000   
+17-VR P2 Mem     | 31.000     | degrees C  | ok    | na        | na        | na        | na        | 115.000   | 120.000   
+18-VR P2 Mem     | 30.000     | degrees C  | ok    | na        | na        | na        | na        | 115.000   | 120.000   
+19-PS 1 Internal | 42.000     | degrees C  | ok    | na        | na        | na        | na        | na        | na        
+20-PS 2 Internal | na         |            | na    | na        | na        | na        | na        | na        | na        
+21-PCI 1         | na         |            | na    | na        | na        | na        | na        | 100.000   | na        
+22-PCI 2         | na         |            | na    | na        | na        | na        | na        | 100.000   | na        
+23-PCI 3         | na         |            | na    | na        | na        | na        | na        | 100.000   | na        
+24-HD Controller | na         |            | na    | na        | na        | na        | na        | 100.000   | na        
+25-LOM Card      | na         |            | na    | na        | na        | na        | na        | 100.000   | na        
+26-LOM           | na         |            | na    | na        | na        | na        | na        | 100.000   | na        
+27-Front Ambient | 20.000     | degrees C  | ok    | na        | na        | na        | na        | 65.000    | na        
+28-P/S 2 Zone    | 35.000     | degrees C  | ok    | na        | na        | na        | na        | 75.000    | na        
+29-Battery Zone  | 27.000     | degrees C  | ok    | na        | na        | na        | na        | 75.000    | 80.000    
+30-iLO Zone      | 34.000     | degrees C  | ok    | na        | na        | na        | na        | 90.000    | 95.000    
+31-PCI 1 Zone    | 35.000     | degrees C  | ok    | na        | na        | na        | na        | 70.000    | 75.000    
+32-PCI 2 Zone    | 40.000     | degrees C  | ok    | na        | na        | na        | na        | 70.000    | 75.000    
+33-PCI 3 Zone    | na         |            | na    | na        | na        | na        | na        | 70.000    | 75.000    
+34-HD Cntlr Zone | na         |            | na    | na        | na        | na        | na        | 70.000    | 75.000    
+35-I/O Zone      | 29.000     | degrees C  | ok    | na        | na        | na        | na        | 75.000    | 80.000    
+36-Storage Batt  | na         |            | na    | na        | na        | na        | na        | 60.000    | na        
+37-Fuse          | 33.000     | degrees C  | ok    | na        | na        | na        | na        | 100.000   | na        
+Fan 1            | 19.600     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 1 DutyCycle  | 19.600     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 1 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 2            | 28.224     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 2 DutyCycle  | 28.224     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 2 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 3            | 28.224     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 3 DutyCycle  | 28.224     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 3 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 4            | 35.280     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 4 DutyCycle  | 35.280     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 4 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 5            | 35.280     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 5 DutyCycle  | 35.280     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 5 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 6            | 35.280     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 6 DutyCycle  | 35.280     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 6 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 7            | 28.224     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 7 DutyCycle  | 28.224     | percent    | ok    | na        | na        | na        | na        | na        | na        
+Fan 7 Presence   | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Power Supply 1   | 225        | Watts      | ok    | na        | na        | na        | na        | na        | na        
+PS 1 Output      | 225.000    | Watts      | ok    | na        | na        | na        | na        | na        | na        
+PS 1 Presence    | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Power Supply 2   | na         | discrete   | na    | na        | na        | na        | na        | na        | na        
+PS 2 Output      | na         |            | na    | na        | na        | na        | na        | na        | na        
+PS 2 Presence    | 0x1        | discrete   | 0x0180| na        | na        | na        | na        | na        | na        
+Power Meter      | 220        | Watts      | ok    | na        | na        | na        | na        | na        | na        
+PwrMeter Output  | 220.000    | Watts      | ok    | na        | na        | na        | na        | na        | na        
+Fans             | 0x1        | discrete   | 0x0180| na        | na        | na        | na        | na        | na        
+Megacell Status  | na         | discrete   | na    | na        | na        | na        | na        | na        | na        
+Memory Status    | 0x40       | discrete   | 0x4080| na        | na        | na        | na        | na        | na        

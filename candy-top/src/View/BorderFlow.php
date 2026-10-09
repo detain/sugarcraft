@@ -78,7 +78,8 @@ final class BorderFlow
     /**
      * Which `<family>_box` colour a layout box is outlined in: gpu boxes use
      * cpu_box and ctr uses proc_box, as btop/candy-top draw them; the VM
-     * dashboard and every card in it use {@see FrameBuilder::VMS_FAMILY}.
+     * dashboard and every card in it use {@see FrameBuilder::VMS_FAMILY},
+     * the ipmi band {@see FrameBuilder::IPMI_FAMILY}.
      */
     public static function family(string $box, Layout $layout): string
     {
@@ -86,6 +87,7 @@ final class BorderFlow
             $layout->gpuBox($box) !== null => 'cpu',
             $box === 'ctr' => 'proc',
             $box === VmsMode::BOX => FrameBuilder::VMS_FAMILY,
+            $box === 'ipmi' => FrameBuilder::IPMI_FAMILY,
             default => $box,
         };
     }

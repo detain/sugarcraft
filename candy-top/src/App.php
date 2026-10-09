@@ -150,6 +150,13 @@ final class App implements Model
      */
     public const VMS_KEY = 'v';
 
+    /**
+     * candy-top's ipmi box toggle — a framed global like `x` / `v` (`I`:
+     * IPMI; `i` is mem's io_mode), with the cpu title's `IPMI` button on a
+     * host with a BMC device.
+     */
+    public const IPMI_KEY = 'I';
+
     /** update_ms step per `+`/`-` press. */
     public const UPDATE_STEP_MS = 100;
 
@@ -605,6 +612,15 @@ final class App implements Model
             ...(($ctr = FrameBuilder::ctrZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()))) !== null ? ['x' => $ctr] : []),
             // The VM dashboard's `vms` button, right after `x ctr` (VM hosts, or while shown).
             ...(($vms = FrameBuilder::vmsZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()), $this->host->vmHost || VmsMode::active($this->config->shownBoxes()))) !== null ? ['v' => $vms] : []),
+            // The ipmi box's `IPMI` button, after `vms` (hosts with a BMC device, or while shown).
+            ...(($ipmi = FrameBuilder::ipmiZone(
+                $cpu,
+                $y,
+                $this->host->containerEngine,
+                FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()),
+                $this->host->vmHost || VmsMode::active($this->config->shownBoxes()),
+                $this->host->bmcHost || \in_array('ipmi', $this->config->shownBoxes(), true),
+            )) !== null ? [self::IPMI_KEY => $ipmi] : []),
             '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
             '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
         ];
@@ -972,7 +988,7 @@ final class App implements Model
     {
         $key = KeyName::mapped($msg, $this->chromeButtons());
 
-        return in_array($key, ['m', 'p', 'x', 'v', '-', '+'], true) ? $key : null;
+        return in_array($key, ['m', 'p', 'x', 'v', self::IPMI_KEY, '-', '+'], true) ? $key : null;
     }
 
     /** The first visible panel (layout order) that owns all input, or null. Caller checks framed(). */
@@ -1012,7 +1028,7 @@ final class App implements Model
             || in_array($name, $this->menuKeys(), true)
             || in_array($name, ['p', 'P', ...KeyName::MODIFIED_ARROWS], true)
             || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt
-                && (isset(self::BOX_KEYS[$key->rune]) || $key->rune === self::CTR_KEY || $key->rune === self::VMS_KEY || GpuPanels::slotFromKey($key->rune) !== null));
+                && (isset(self::BOX_KEYS[$key->rune]) || $key->rune === self::CTR_KEY || $key->rune === self::VMS_KEY || $key->rune === self::IPMI_KEY || GpuPanels::slotFromKey($key->rune) !== null));
     }
 
     /**
@@ -1107,6 +1123,9 @@ final class App implements Model
         }
         if ($key->rune === self::VMS_KEY) {
             return $this->toggleBox(VmsMode::BOX, true);
+        }
+        if ($key->rune === self::IPMI_KEY) {
+            return $this->toggleBox('ipmi', true);
         }
         $slot = GpuPanels::slotFromKey($key->rune);
         if ($slot !== null) {

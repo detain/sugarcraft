@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│        F2, o       Shows options.                                          │─╮
-│      F1, ?, h      Shows this window.                                      │%│
-│      ctrl + r      Reloads config file from disk.                          │8│
-│     q, ctrl + c    Quits program.                                          │0│
-│       +, -, =      Add/Subtract 100ms to/from update timer.                │6│
-│      Up, Down      Select in process list.                                 │5│
-│        Enter       Show detailed information for selected process.         │9│
-│      Spacebar      Expand/collapse the selected process in tree view.      │2│
+│          d         Toggle disks view in MEM box.                           │─╮
+│        F2, o       Shows options.                                          │%│
+│      F1, ?, h      Shows this window.                                      │8│
+│      ctrl + r      Reloads config file from disk.                          │0│
+│     q, ctrl + c    Quits program.                                          │6│
+│       +, -, =      Add/Subtract 100ms to/from update timer.                │5│
+│      Up, Down      Select in process list.                                 │9│
+│        Enter       Show detailed information for selected process.         │2│
+│      Spacebar      Expand/collapse the selected process in tree view.      │6│
 │          C         Expand/collapse the selected process' children.         │6│
-│   Pg Up, Pg Down   Jump 1 page in process list.                            │6│
+│   Pg Up, Pg Down   Jump 1 page in process list.                            │ │
 │      Home, End     Jump to first or last page in process list.             │ │
 │     Left, Right    Select previous/next sorting column.                    │ │
 │        b, n        Select previous/next network device.                    │ │
 │          i         Toggle disks io mode with big graphs.                   │ │
-│          z         Toggle totals reset for current network device          │ │
 ╰─┘↑ page 2/4 ↓└─────────────────────────────────────────────────────────────╯─╯

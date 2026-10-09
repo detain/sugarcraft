@@ -18,9 +18,10 @@ final class Layout
     /**
      * btop's draw order (`Config::current_boxes` walk in Runner::_runner; PR
      * #1873 draws ctr before proc), then candy-top's VM dashboard, which is
-     * never laid out beside mem/net/ctr/proc ({@see VmsMode}).
+     * never laid out beside mem/net/ctr/proc ({@see VmsMode}); the ipmi
+     * band follows the cpu box and the gpu grid, as it is laid out.
      */
-    public const BOXES = ['cpu', 'mem', 'net', 'ctr', 'proc', 'vms'];
+    public const BOXES = ['cpu', 'ipmi', 'mem', 'net', 'ctr', 'proc', 'vms'];
 
     /**
      * @param array<string, Rect>   $boxes    shown boxes keyed by name (gpu boxes included)

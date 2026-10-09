@@ -11,13 +11,13 @@
 │                   │                             │                                              │────────────────────╯│
 │                   │         Color theme         │ Available values are "cpu mem net proc"      │                     │
 ╰───────────────────│           Default           │ and "ctr" for the containers box,            │─────────────────────╯
-╭─┐²mem┌────────────│       Theme background      │ "vms" for the VM dashboard.                  │─────────────────────╮
-│ Total: 16.0 GiB   │             True            │ Or "gpuN" for GPU index N.                   │           MemB  Cpu%│
-│ Used: 10.2 GiB    │          Truecolor          │ Up to 6 GPU boxes can be shown at once.      │        198 MiB  27.8│
-│ Available: 5.80 Gi│             True            │ Separate values with whitespace.             │       90.0 MiB  25.0│
-│ Cached: 3.20 GiB  │  Terminal and input         │                                              │es      244 MiB  13.6│
-│ Free: 2.60 GiB    │                             │ Toggle between presets with key "p".         │        398 MiB  11.5│
-│                   │          Force tty          │                                              │        502 MiB   7.9│
+╭─┐²mem┌────────────│       Theme background      │ "vms" for the VM dashboard,                  │─────────────────────╮
+│ Total: 16.0 GiB   │             True            │ "ipmi" for the BMC box.                      │           MemB  Cpu%│
+│ Used: 10.2 GiB    │          Truecolor          │ Or "gpuN" for GPU index N.                   │        198 MiB  27.8│
+│ Available: 5.80 Gi│             True            │ Up to 6 GPU boxes can be shown at once.      │       90.0 MiB  25.0│
+│ Cached: 3.20 GiB  │  Terminal and input         │ Separate values with whitespace.             │es      244 MiB  13.6│
+│ Free: 2.60 GiB    │                             │                                              │        398 MiB  11.5│
+│                   │          Force tty          │ Toggle between presets with key "p".         │        502 MiB   7.9│
 │ Swap: 205 MiB / 2.│            False            │                                              │ta      305 MiB   7.2│
 │                   │           Vim keys          │                                              │        612 MiB   6.6│
 │                   │            False            │                                              │        360 MiB   2.6│

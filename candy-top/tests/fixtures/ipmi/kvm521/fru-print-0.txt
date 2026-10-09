@@ -1,0 +1,12 @@
+ Chassis Type          : Rack Mount Chassis
+ Chassis Serial        : SN0000000000
+ Board Mfg Date        : Sun 17 Dec 2006 12:00:00 AM UTC UTC
+ Board Mfg             : HP
+ Board Product         : ProLiant DL360 Gen9
+ Board Serial          : SN0000000000
+ Board Part Number     : PN-000000
+ Product Manufacturer  : HP
+ Product Name          : ProLiant DL360 Gen9
+ Product Part Number   : PN-000000
+ Product Serial        : SN0000000000
+ Product Asset Tag     : 000000

@@ -56,7 +56,24 @@ final class FrameBuilder
         'ctr' => [44, 6],
         // The VM dashboard (candy-top's own): one card row in a framed box.
         'vms' => [36, 8],
+        // The BMC box (candy-top's own): its tiny level (power, a few temperatures, faults).
+        'ipmi' => [40, 6],
     ];
+
+    /**
+     * The ipmi band's share of the terminal height, and its own floor and
+     * ceiling: tall enough for the four-column strip at 120×40 (11 rows),
+     * never more than 16 — the band reports, the boxes below work.
+     */
+    public const IPMI_BAND = [28, 6, 16];
+
+    /**
+     * The box family the ipmi band is outlined in: `net_box` and its flow.
+     * The band sits between the cpu box (cpu family) and mem / proc / the
+     * VM dashboard (mem, proc, mem), so net is the one family no neighbour
+     * uses; its sky → lavender → pink sweep in pastel reads as cool air.
+     */
+    public const IPMI_FAMILY = 'net';
 
     /** btop PR #1873: the cpu title's `x ctr` button needs a cpu box this wide. */
     public const CTR_BUTTON_MIN_WIDTH = 76;
@@ -91,6 +108,7 @@ final class FrameBuilder
         $net = in_array('net', $boxes, true);
         $proc = in_array('proc', $boxes, true);
         $ctr = in_array('ctr', $boxes, true);
+        $ipmi = in_array('ipmi', $boxes, true);
         $roster ??= GpuRoster::none();
         $gpus = array_values(array_filter(
             GpuPanels::targets($boxes),
@@ -103,9 +121,10 @@ final class FrameBuilder
             $width = self::MINIMUMS['cpu'][0];
         }
         $width = max($width, GpuGrid::minWidth(count($gpus), $termWidth, $gpuColumns));
-        $width = max($width, $vms ? self::MINIMUMS['vms'][0] : 0);
+        $width = max($width, $vms ? self::MINIMUMS['vms'][0] : 0, $ipmi ? self::MINIMUMS['ipmi'][0] : 0);
         $height = $cpu ? self::MINIMUMS['cpu'][1] : 0;
         $height += $vms ? self::MINIMUMS['vms'][1] : 0;
+        $height += $ipmi ? self::MINIMUMS['ipmi'][1] : 0;
         if ($vms && $cpu) {
             $boxed = count(array_unique(array_filter(GpuPanels::targets($boxes), static fn (int $i): bool => $i < $roster->gpuCount())));
             $height += match ($gpuInfo) {
@@ -168,6 +187,8 @@ final class FrameBuilder
         $hasNet = in_array('net', $shown, true);
         $hasProc = in_array('proc', $shown, true);
         $hasCtr = in_array('ctr', $shown, true);
+        // candy-top's BMC box: a full-width band under the cpu box and the gpu grid.
+        $hasIpmi = in_array('ipmi', $shown, true);
         // btop PR #1873 calcSizes: the ctr box shares the proc column, so
         // every "is the proc box shown" test of the side boxes asks this.
         $procColumn = $hasProc || $hasCtr;
@@ -179,7 +200,7 @@ final class FrameBuilder
         $cpuCores = null;
         $bColumns = 0;
         $bColumnSize = 0;
-        $others = $hasMem || $hasNet || $procColumn || $hasVms;
+        $others = $hasMem || $hasNet || $procColumn || $hasVms || $hasIpmi;
         if ($hasCpu) {
             $w = (int) round($cols * self::RATIOS['cpu'][0] / 100);
             $onlyCpu = $shown === ['cpu'];
@@ -248,6 +269,20 @@ final class FrameBuilder
         }
         $gpuWithCpu = $gpuBoxes !== [] && $hasCpu;
 
+        // The ipmi band takes its rows below the cpu box and the gpu grid,
+        // and everything further down treats it as part of that top stack
+        // ($gpuHeight is the grid alone, $topHeight the grid + the band).
+        $ipmiH = 0;
+        if ($hasIpmi) {
+            $left = max(0, $rows - $cpuH - $gpuHeight);
+            $rest = self::restMinHeight($hasVms, $hasMem, $hasNet, $hasProc, $hasCtr);
+            [$share, $floor, $ceiling] = self::IPMI_BAND;
+            $band = self::clamp((int) round($rows * $share / 100), $floor, $ceiling);
+            $ipmiH = $rest === 0 ? $left : min($left, min($band, max($floor, $left - $rest)));
+            $boxes['ipmi'] = Rect::new(0, (($cpuBottom && $hasCpu) ? 0 : $cpuH) + $gpuHeight, $cols, $ipmiH);
+        }
+        $topHeight = $gpuHeight + $ipmiH;
+
         $memH = 0;
         $memW = 0;
         $memWidth = 0;
@@ -258,10 +293,20 @@ final class FrameBuilder
             // GPU build: Net::height_p * shown * 4 / ((gpu and cpu shown) + 4).
             $netShare = intdiv(self::RATIOS['net'][1] * ($hasNet ? 1 : 0) * 4, ($gpuWithCpu ? 1 : 0) + 4);
             $memH = (int) floor($rows * (100 - $netShare) / 100) - $cpuH - $gpuHeight;
+            if ($ipmiH > 0) {
+                // Under the ipmi band mem and net share what is left in btop's proportion.
+                $avail = max(1, $rows - $cpuH - $gpuHeight);
+                $left = $avail - $ipmiH;
+                $memH = (int) round($memH * $left / $avail);
+                if ($hasNet) {
+                    $memH = min(max($memH, min(self::MINIMUMS['mem'][1], $left - self::MINIMUMS['net'][1])), $left - self::MINIMUMS['net'][1]);
+                }
+                $memH = max(0, min($memH, $left));
+            }
             $x = ($procLeft && $procColumn) ? $cols - $memW + 1 : 1;
             $y = ($memBelowNet && $hasNet)
                 ? $rows - $memH + 1 - ($cpuBottom ? $cpuH : 0)
-                : ($cpuBottom ? 1 : $cpuH + 1) + $gpuHeight;
+                : ($cpuBottom ? 1 : $cpuH + 1) + $topHeight;
             $boxes['mem'] = Rect::new($x - 1, $y - 1, $memW, $memH);
             if ($showDisks) {
                 $memWidth = (int) ceil(($memW - 3) / 2);
@@ -277,10 +322,10 @@ final class FrameBuilder
         $netStats = null;
         if ($hasNet) {
             $netW = self::sideWidth($cols, $procColumn, $config->procBoxWidthPercent(), self::MINIMUMS['net'][0]);
-            $netH = $rows - $cpuH - $gpuHeight - $memH;
+            $netH = $rows - $cpuH - $topHeight - $memH;
             $x = ($procLeft && $procColumn) ? $cols - $netW + 1 : 1;
             $y = ($memBelowNet && $hasMem)
-                ? ($cpuBottom ? 1 : $cpuH + 1) + $gpuHeight
+                ? ($cpuBottom ? 1 : $cpuH + 1) + $topHeight
                 : $rows - $netH + 1 - ($cpuBottom ? $cpuH : 0);
             $boxes['net'] = Rect::new($x - 1, $y - 1, $netW, $netH);
             $bWidth = $netW > 45 ? 27 : 19;
@@ -293,9 +338,9 @@ final class FrameBuilder
         $selectMax = 0;
         if ($procColumn) {
             $procW = $cols - ($hasMem ? $memW : ($hasNet ? $netW : 0));
-            $procH = $rows - $cpuH - $gpuHeight;
+            $procH = $rows - $cpuH - $topHeight;
             $x = $procLeft ? 1 : $cols - $procW + 1;
-            $y = (($cpuBottom && $hasCpu) ? 1 : $cpuH + 1) + $gpuHeight;
+            $y = (($cpuBottom && $hasCpu) ? 1 : $cpuH + 1) + $topHeight;
             // btop PR #1873: the ctr box takes the top of the column — a
             // third of it beside a proc box (at least 6 rows, leaving proc
             // its 16), the whole column alone.
@@ -314,8 +359,8 @@ final class FrameBuilder
 
         // The VM dashboard: everything below the cpu box and the gpu grid.
         if ($hasVms) {
-            $vmsY = (($cpuBottom && $hasCpu) ? 0 : $cpuH) + $gpuHeight;
-            $boxes['vms'] = Rect::new(0, $vmsY, $cols, max(0, $rows - $cpuH - $gpuHeight));
+            $vmsY = (($cpuBottom && $hasCpu) ? 0 : $cpuH) + $topHeight;
+            $boxes['vms'] = Rect::new(0, $vmsY, $cols, max(0, $rows - $cpuH - $topHeight));
         }
 
         return new Layout(
@@ -400,6 +445,11 @@ final class FrameBuilder
 
                 continue;
             }
+            if ($name === 'ipmi') {
+                self::paintIpmiChrome($surface, $rect, $ink, $border, $tty);
+
+                continue;
+            }
             $title = Lang::t('box.' . $name);
             $bottomTitle = $name === 'cpu' && $layout->cpuBottom;
             BoxChrome::paint(
@@ -424,6 +474,7 @@ final class FrameBuilder
             BoxChrome::paint($surface, $layout->cpuCores, $ink->fg('div_line'), $ink, $border, fill: false, title: $name, tty: $tty);
             self::paintCpuButtons($surface, $layout, $ink, $config, $border, $preset, $host->containerEngine, $clockWidth);
             self::paintVmsButton($surface, $layout, $ink, $config, $border, $host, $clockWidth);
+            self::paintIpmiButton($surface, $layout, $ink, $config, $border, $host, $clockWidth);
         }
 
         $mem = $layout->box('mem');
@@ -546,6 +597,91 @@ final class FrameBuilder
         if ($rect->width >= 2 && $rect->height >= 2) {
             BoxChrome::embed($surface, $rect->x + 2, $rect->y, self::vmsTitle($ink, $tty), $line, $border, false, $rect);
         }
+    }
+
+    /**
+     * The fewest rows the boxes laid out under the ipmi band need (their
+     * {@see MINIMUMS}): the VM dashboard alone, or the proc column, or the
+     * mem + net stack — the band never squeezes them below that.
+     */
+    private static function restMinHeight(bool $vms, bool $mem, bool $net, bool $proc, bool $ctr): int
+    {
+        if ($vms) {
+            return self::MINIMUMS['vms'][1];
+        }
+        $side = ($mem ? self::MINIMUMS['mem'][1] : 0) + ($net ? self::MINIMUMS['net'][1] : 0);
+        $column = ($proc ? self::MINIMUMS['proc'][1] : 0) + ($ctr ? self::MINIMUMS['ctr'][1] : 0);
+
+        return max($side, $column);
+    }
+
+    /**
+     * The ipmi band's static chrome: the outline in the {@see IPMI_FAMILY}
+     * colour and its `ᴵipmi` title (`I` in tty mode), the superscript
+     * naming the toggle key as for ctr / vms.
+     */
+    private static function paintIpmiChrome(Surface $surface, Rect $rect, Ink $ink, Border $border, bool $tty): void
+    {
+        $line = $ink->fg(self::IPMI_FAMILY . '_box');
+        BoxChrome::paint($surface, $rect, $line, $ink, $border, fill: true, tty: $tty);
+        if ($rect->width >= 2 && $rect->height >= 2) {
+            BoxChrome::embed(
+                $surface,
+                $rect->x + 2,
+                $rect->y,
+                Symbols::BOLD . $ink->fg('hi_fg') . ($tty ? 'I' : 'ᴵ') . $ink->fg('title') . Lang::t('box.ipmi'),
+                $line,
+                $border,
+                false,
+                $rect,
+            );
+        }
+    }
+
+    /**
+     * The cpu title's `I` mouse zone (0-based [x, y, w, h]) or null — the
+     * `IPMI` button after the `vms` button (or after `x ctr` / the engine
+     * label when there is none), drawn on a host with a BMC device
+     * ({@see HostInfo::$bmcHost}) or while the box is shown, and only
+     * while it clears the clock's left junction.
+     *
+     * @return array{0: int, 1: int, 2: int, 3: int}|null
+     */
+    public static function ipmiZone(Rect $cpu, int $y, string $engine, int $clockWidth, bool $vmsButton, bool $show): ?array
+    {
+        if (!$show) {
+            return null;
+        }
+        $before = self::vmsZone($cpu, $y, $engine, $clockWidth, $vmsButton) ?? self::ctrZone($cpu, $y, $engine, $clockWidth);
+        if ($before === null) {
+            return null;
+        }
+        $at = $before[0] + $before[2] + 2;
+        $label = Lang::t('button.ipmi');
+        $width = Width::string($label) + (mb_strpos($label, 'I') === false ? 2 : 0);
+        $limit = $clockWidth > 0 ? $cpu->x + intdiv($cpu->width, 2) - intdiv($clockWidth, 2) : $cpu->x + $cpu->width - 18;
+
+        return $at + $width < $limit ? [$at, $y, $width, 1] : null;
+    }
+
+    /** The `IPMI` title button ({@see ipmiZone()}), its `I` lit. */
+    private static function paintIpmiButton(Surface $surface, Layout $layout, Ink $ink, Config $config, Border $border, HostInfo $host, int $clockWidth): void
+    {
+        $cpu = $layout->box('cpu');
+        if ($cpu === null) {
+            return;
+        }
+        $y = $layout->cpuBottom ? $cpu->bottom() - 1 : $cpu->y;
+        $shown = $config->shownBoxes();
+        $zone = self::ipmiZone($cpu, $y, $host->containerEngine, $clockWidth, $host->vmHost || VmsMode::active($shown), $host->bmcHost || in_array('ipmi', $shown, true));
+        if ($zone === null) {
+            return;
+        }
+        $label = Lang::t('button.ipmi');
+        $inner = mb_strpos($label, 'I') === false
+            ? $ink->fg('hi_fg') . 'I' . $ink->fg('title') . ' ' . $label
+            : $ink->fg('title') . mb_substr($label, 0, (int) mb_strpos($label, 'I')) . $ink->fg('hi_fg') . 'I' . $ink->fg('title') . mb_substr($label, (int) mb_strpos($label, 'I') + 1);
+        BoxChrome::embed($surface, $zone[0] - 1, $y, Symbols::BOLD . $inner, $ink->fg('cpu_box'), $border, $layout->cpuBottom, $cpu);
     }
 
     /**

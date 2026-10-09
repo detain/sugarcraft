@@ -47,6 +47,9 @@ final class HostDetect
             $temps->sensors !== [],
             Sysctl::int($v, 'dev.cpu.0.freq') !== null,
             Sysctl::int($v, 'security.jail.jailed') === 1 ? ContainerEngine::JAIL : '',
+            false,
+            // ipmi(4) exposes the same /dev/ipmi0 ipmitool opens on Linux.
+            HostInfo::bmcPresent(),
         );
     }
 }

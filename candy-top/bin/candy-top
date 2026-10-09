@@ -96,6 +96,8 @@ $config = $loaded->config->withTtyModeResolved(null, str_starts_with($tty, '/dev
 // btop picks its collector per OS at compile time; candy-top per PHP_OS here.
 $platform = Platform::detect();
 $host = $platform->hostInfo();
+// --fake shows a fake BMC (FakeIpmi), so it offers the ipmi box's title button too.
+$host = $fake ? $host->withBmcHost(true) : $host;
 // btop Shared::init → Gpu::init: the accelerators are known before shown_boxes
 // is settled (a gpuN beyond them resets the list) and before the first frame,
 // so the gpu slot keys 5-0 work at once. One bounded sample, outside the loop.

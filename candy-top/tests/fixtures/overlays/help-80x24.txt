@@ -20,5 +20,5 @@
 │        [, ]        Select previous/next container in CTR box.              │ │
 │          v         Toggle the VM dashboard (hides mem, net, proc, ctr).    │ │
 │        s, S        Next/previous VM card order (VM dashboard).             │ │
-│          d         Toggle disks view in MEM box.                           │ │
+│      shift + i     Toggle the ipmi box (BMC power, fans, temps; root).     │ │
 ╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯

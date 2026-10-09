@@ -81,6 +81,8 @@ final class Panels
             'ctr' => CtrPanel::standard($host->coreCount, $fake, $platform),
             // candy-top's VM dashboard (`v`): samples only while `vms` is shown.
             'vms' => VmsPanel::standard($fake, $platform),
+            // candy-top's BMC box (`I`): ipmitool on the loop, one child at a time, only while shown.
+            'ipmi' => IpmiPanel::standard($fake),
         ];
     }
 

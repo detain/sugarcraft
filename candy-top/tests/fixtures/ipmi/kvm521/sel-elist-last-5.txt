@@ -1,0 +1,5 @@
+  f9 | 04/23/2026 | 12:29:41 AM UTC | System ACPI Power State ACPI | S0/G0: working | Asserted
+  fa | 04/23/2026 | 02:30:49 AM UTC | System ACPI Power State ACPI | S0/G0: working | Asserted
+  fb | 07/09/2026 | 01:35:46 AM UTC | Power Unit SYS_PWR_FAULT | Failure detected | Asserted
+  fc |  Pre-Init  |0000000086| System ACPI Power State ACPI | S0/G0: working | Asserted
+  fd |  Pre-Init  |0000000103| System ACPI Power State ACPI | S0/G0: working | Asserted

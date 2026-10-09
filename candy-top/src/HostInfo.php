@@ -6,6 +6,7 @@ namespace SugarCraft\Top;
 
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\Collect\ContainerEngine;
+use SugarCraft\Top\Collect\Ipmi\Ipmi;
 use SugarCraft\Top\Collect\Paths;
 use SugarCraft\Top\Collect\Temp;
 use SugarCraft\Top\Collect\VmFleet;
@@ -19,7 +20,8 @@ use SugarCraft\Top\Collect\VmFleet;
  * `Cpu::container_engine`; '' on a host), shown on the cpu title in place
  * of the `x ctr` button, and whether it runs libvirt/KVM guests
  * (`vmHost`, {@see VmFleet::present()}), which shows the VM dashboard's
- * `vms` title button.
+ * `vms` title button, and whether it has a BMC device node (`bmcHost`,
+ * {@see bmcPresent()}), which shows the ipmi box's `IPMI` button.
  *
  * {@see detect()} does the one-time reads; the launcher calls it so the
  * Model itself never touches the filesystem.
@@ -38,6 +40,7 @@ final class HostInfo
         public readonly bool $hasCpuHz,
         public readonly string $containerEngine = '',
         public readonly bool $vmHost = false,
+        public readonly bool $bmcHost = false,
     ) {
     }
 
@@ -51,6 +54,7 @@ final class HostInfo
         bool $hasCpuHz = false,
         string $containerEngine = '',
         bool $vmHost = false,
+        bool $bmcHost = false,
     ): self {
         return new self(
             self::clean($cpuName),
@@ -61,6 +65,7 @@ final class HostInfo
             $hasCpuHz,
             $containerEngine === '' ? '' : ContainerEngine::name($containerEngine),
             $vmHost,
+            $bmcHost,
         );
     }
 
@@ -71,7 +76,34 @@ final class HostInfo
      */
     public function withVmHost(bool $vmHost): self
     {
-        return new self($this->cpuName, $this->coreCount, $this->user, $this->host, $this->hasSensors, $this->hasCpuHz, $this->containerEngine, $vmHost);
+        return new self($this->cpuName, $this->coreCount, $this->user, $this->host, $this->hasSensors, $this->hasCpuHz, $this->containerEngine, $vmHost, $this->bmcHost);
+    }
+
+    /**
+     * Copy saying whether this host has a BMC device node — the cpu title
+     * then offers the ipmi box's `IPMI` button (`--fake` sets it for its
+     * fake BMC).
+     */
+    public function withBmcHost(bool $bmcHost): self
+    {
+        return new self($this->cpuName, $this->coreCount, $this->user, $this->host, $this->hasSensors, $this->hasCpuHz, $this->containerEngine, $this->vmHost, $bmcHost);
+    }
+
+    /**
+     * Whether an IPMI device node exists under `$root` ('' = the real /dev)
+     * — the in-band BMC interface ipmitool opens. Existence only: a node
+     * this user cannot open still shows the button, and the box then says
+     * why ({@see \SugarCraft\Top\Collect\Ipmi\IpmiState::NoAccess}).
+     */
+    public static function bmcPresent(string $root = ''): bool
+    {
+        foreach (Ipmi::DEVICES as $device) {
+            if (file_exists($root . $device)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Read the live host (or a fixture tree via `$paths`). Never throws. */
@@ -103,6 +135,7 @@ final class HostInfo
             // A fixture tree stands in for the whole host, so it gets an empty environment too.
             ContainerEngine::detect($paths, $paths->root === '' ? null : []),
             VmFleet::present($paths),
+            self::bmcPresent($paths->root),
         );
     }
 

@@ -67,9 +67,10 @@ final class Schema
 
     /**
      * btop Config::valid_boxes (GPU build), plus btop PR #1873's containers
-     * box and candy-top's VM dashboard (`vms`, {@see \SugarCraft\Top\View\VmsMode}).
+     * box, candy-top's VM dashboard (`vms`, {@see \SugarCraft\Top\View\VmsMode})
+     * and candy-top's BMC box (`ipmi`, {@see \SugarCraft\Top\Panel\IpmiPanel}).
      */
-    public const BOXES = ['cpu', 'mem', 'net', 'proc', 'ctr', 'vms'];
+    public const BOXES = ['cpu', 'mem', 'net', 'proc', 'ctr', 'vms', 'ipmi'];
 
     /**
      * The VM dashboard's card orders (candy-top's own): busiest first for
@@ -251,6 +252,9 @@ final class Schema
             Option::bool('ctr_show_vms', true),
             // candy-top's VM dashboard (`vms` box): the card order.
             Option::string('vms_sorting', 'cpu', self::VMS_SORTING),
+            // candy-top's BMC box (`ipmi`): the cadence of its expensive reads, and FRU serials.
+            Option::int('ipmi_update_ms', 10000, 1000, self::ONE_DAY_MILLIS),
+            Option::bool('ipmi_show_serials', false),
             Option::bool('proc_follow_detailed', true),
             Option::bool('proc_aggregate', false),
             Option::int('proc_tree_auto_collapse', 0, 0, 10000),
