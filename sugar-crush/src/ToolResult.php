@@ -46,14 +46,19 @@ use SugarCraft\Mosaic\Mosaic;
 final class ToolResult
 {
     /**
-     * Process-lifetime cache of the terminal's image-rendering capability.
+     * Process-lifetime cache of the terminal's image-rendering capability,
+     * keyed by the configured render mode (W2.2).
      *
      * Mirrors candy-mosaic's own {@see Mosaic::auto()} contract: probe the
      * terminal once (DA1 + XTWINOPS, ~100ms) and reuse the answer for every
      * subsequent image-bearing tool result instead of re-querying the TTY
-     * per call.
+     * per call. W2.2 makes that memo MODE-AWARE: one entry per render-mode
+     * word, so switching {@see setRenderMode()} re-derives instead of
+     * handing back the stale probe of whichever mode was asked for first.
+     * Within a process the detection answer itself is stable, which is why
+     * the mode string alone is the key.
      *
-     * W1.G2/E2 fix (reviewer-reported): this cache is now the single
+     * W1.G2/E2 fix (reviewer-reported): this cache is the single
      * shared probe-once instance exposed via {@see mosaic()} and threaded
      * into {@see \SugarCraft\Crush\Chat}'s constructor as its `mosaic:`
      * parameter by {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} -- the
@@ -62,8 +67,23 @@ final class ToolResult
      * renderer (E3, not part of this step) reads the same instance off
      * `Chat::mosaic()` instead of re-probing or reaching into this class's
      * private state.
+     *
+     * @var array<string, Mosaic>
      */
-    private static ?Mosaic $mosaic = null;
+    private static array $mosaics = [];
+
+    /**
+     * The launch's resolved `ui.imageRenderMode` word ('auto' until
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::applyMediaRenderMode()} runs).
+     *
+     * THE LADDER, for the record (crush_media §8.2, candy-mosaic
+     * `Detect.php:17` precedence): the `auto` image ladder is
+     * kitty > iterm2 > sixel > chafa > halfblock. sugar-reel's VIDEO
+     * ladder is deliberately different (sixel-first, crush_media §8.3) --
+     * do not "harmonize" them. Grid layouts force cell renderers
+     * regardless of mode (crush_media W2.4/W5.6).
+     */
+    private static string $renderMode = 'auto';
 
     /**
      * @param string $name The name of the tool that was called
@@ -421,13 +441,47 @@ final class ToolResult
 
     /**
      * Probe-once capture point for candy-mosaic's terminal capability
-     * detection (crush_feat.md section 9, E2). Memoizes {@see Mosaic::auto()}
-     * for the lifetime of the process so repeated {@see okWithImage()}/
-     * {@see withImage()} calls don't each re-probe the TTY.
+     * detection (crush_feat.md section 9, E2), mode-aware since W2.2
+     * (crush_media §8.7 gap-1): memoized per render-mode word, so a mode
+     * switch derives a fresh Mosaic instead of returning another mode's
+     * cached probe. `'auto'` keeps the original detect-based behaviour --
+     * probe the terminal, never throw.
+     *
+     * An unknown word fails SOFT to `auto` (the settings Enum validator is
+     * the upstream gate; this hop stays silent, no error_log, so the
+     * StderrEmitterCensus gains no site).
      */
     private static function probeMosaic(): Mosaic
     {
-        return self::$mosaic ??= Mosaic::auto();
+        $mode = self::$renderMode;
+
+        // fromModeString() answers 'auto' with Mosaic::auto() itself and
+        // null only for words mosaic has never heard of -- one hop covers
+        // the forced modes and the fail-soft fallback.
+        return self::$mosaics[$mode] ??= Mosaic::fromModeString($mode) ?? Mosaic::auto();
+    }
+
+    /**
+     * Set the render mode {@see probeMosaic()} derives from (W2.2). Called
+     * once per launch by {@see \SugarCraft\Crush\Cli\Bootstrap::applyMediaRenderMode()}
+     * with the resolved `ui.imageRenderMode` value; empty or whitespace-only
+     * input normalizes to `'auto'`, asking the terminal. The word is stored
+     * normalized (trimmed, lower-cased) because mosaic's own vocabulary
+     * comparator is, and the memo key must not fork on spelling noise.
+     */
+    public static function setRenderMode(string $mode): void
+    {
+        $normalized = strtolower(trim($mode));
+
+        self::$renderMode = $normalized === '' ? 'auto' : $normalized;
+    }
+
+    /**
+     * The currently configured render-mode word (see {@see setRenderMode()}).
+     */
+    public static function renderMode(): string
+    {
+        return self::$renderMode;
     }
 
     /**

@@ -1306,6 +1306,34 @@ final class Bootstrap
     private static bool $mcpShutdownRegistered = false;
 
     /**
+     * Resolve the launch's image render mode and hand it to
+     * {@see \SugarCraft\Crush\ToolResult::setRenderMode()} (W2.2).
+     *
+     * Precedence mirrors the settings layers the row declares: the
+     * `SUGARCRUSH_MEDIA_RENDER_MODE` env binding wins over the merged
+     * `ui.imageRenderMode` value, which wins over `auto`. The env hop is a
+     * literal `getenv` because the launch does not resolve through
+     * {@see \SugarCraft\Crush\Config\Settings\SettingsResolver} (advisory
+     * only) — same shape as {@see \SugarCraft\Crush\Media\Sd\Client::resolveBaseUrl()}
+     * for its own env row. An empty value is absence, as every SUGARCRUSH_*
+     * reader treats it; a junk word is ToolResult's problem to fail soft on
+     * (=> auto), never a throw on the launch path.
+     *
+     * @param array<string, mixed> $userConfig the merged layered view
+     */
+    public static function applyMediaRenderMode(array $userConfig): void
+    {
+        $env = getenv('SUGARCRUSH_MEDIA_RENDER_MODE');
+        $config = $userConfig['ui.imageRenderMode'] ?? null;
+
+        ToolResult::setRenderMode(
+            (\is_string($env) && \trim($env) !== '')
+                ? $env
+                : (\is_string($config) && \trim($config) !== '' ? $config : 'auto'),
+        );
+    }
+
+    /**
      * Build the fully-wired Chat model the CLI binary hands to Program.
      *
      * $root defaults to getcwd() — the directory the CLI was invoked from —
@@ -1349,6 +1377,15 @@ final class Bootstrap
         // repository the session was launched against. `--root <lib>` in a
         // monorepo is exactly the case where the two differ.
         StatusLineCommand::configure($userConfig, $root);
+
+        // W2.2 (crush_media §8.7 gap-1): the resolved `ui.imageRenderMode`
+        // becomes a process decision BEFORE the first image-bearing probe,
+        // because the same statement chain below threads `ToolResult::mosaic()`
+        // into Chat and ToolResult memoizes per mode from then on. Same
+        // always-called, clear-as-well-as-set shape as the statusLine line
+        // above it: a second launch in one process must not keep painting
+        // with the first one's mode.
+        self::applyMediaRenderMode($userConfig);
 
         // The session this window runs in, opened on the workspace's ONE store:
         // seedSession() is what makes /sessions, the tab strip, /branch and the
