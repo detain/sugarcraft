@@ -995,7 +995,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these one hundred and ten keys are layered — `provider`, `models`,
+Only these one hundred and eighteen keys are layered — `provider`, `models`,
 `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
 `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1017,7 +1017,9 @@ Only these one hundred and ten keys are layered — `provider`, `models`,
 `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
 `webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
 `webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
-`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `skills.pathNudges`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `sd.baseUrl`, `sd.apiKey`,
+`sd.timeoutSeconds`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
+`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
 `instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
 `enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
@@ -1065,7 +1067,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, fifty-five keys are **never** taken from a project file:
+Even for a trusted project, sixty-three keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
