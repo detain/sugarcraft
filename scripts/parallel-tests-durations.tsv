@@ -1198,3 +1198,4 @@ sugar-crush/tests/Media/Sd/ProgressLoopTest.php	0.10	14
 sugar-crush/tests/Media/PngTest.php	1.8	118
 sugar-crush/tests/ToolResultRenderModeTest.php	10.2	20
 sugar-crush/tests/Tools/BuiltIn/GenerateImageTest.php	9.4	16
+sugar-crush/tests/Commands/GenerateCommandTest.php	0.14	23

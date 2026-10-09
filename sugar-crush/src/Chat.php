@@ -11521,6 +11521,9 @@ final class Chat implements Model
      * it). `/diff` only reads the checkpoints and the files, so it is in.
      * `/workflow list|status` read only, and are let through by
      * {@see isReadOnlySafeCommand()}.
+     * `/generate` (crush-media W2.3) stays OUT: egress alone is not the test —
+     * `/websearch` is admitted — but a dial-out that spends money and writes
+     * image artifacts is not a read.
      */
     private const READ_ONLY_COMMANDS = [
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
@@ -13529,6 +13532,17 @@ final class Chat implements Model
     private function handleWebSearchCommand(string $inputBuf): array
     {
         return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\WebSearchHostCommand(), $inputBuf);
+    }
+
+    /**
+     * Handle /generate — {@see \SugarCraft\Crush\Host\Commands\GenerateHostCommand},
+     * the console door onto the same GenerateImage tool the model dials.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleGenerateCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\GenerateHostCommand(), $inputBuf);
     }
 
     /**
