@@ -35,6 +35,9 @@ Shared-file staging helper used this round: python that applies selected `git di
 line numbers, then `git hash-object -w` + `git update-index --cacheinfo` (git apply --unidiff-zero misplaces pure inserts).
 Follow-ups noted by reviewers: split Panel/Ipmi/IpmiView.php (~1200 lines) by section.
 
+## NEXT (user-requested, not started): skinny (≤40-col) variants of the 20 ANSI logos — full brief in
+`prompt_kit/briefs/candy-top-skinny-logos.md` (2 agents, 10 logos each; logos dir is untracked, never commit it).
+
 ## Remaining (blocked / optional)
 - Blocked: FreeBSD live ps/iostat/ifconfig/netstat -W captures (tech.trouble-free.net ssh down).
 - Live test hosts: skynet2 (4× NVIDIA, docker) and kvm521 (`ssh -i ~/.ssh/id_ed25519_new root@kvm521`, libvirt,
