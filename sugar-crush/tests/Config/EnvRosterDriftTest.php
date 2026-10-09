@@ -28,7 +28,7 @@ use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
  * `SUGARCRUSH_DEBUG_SKILLS` was; the second is what a rename leaves behind.
  *
  * THE ORACLE IS A TOKEN SCAN, NOT A `grep`, and that distinction is the whole
- * reason it is trustworthy — see {@see EnvReadScanner} for the four call shapes
+ * reason it is trustworthy — see {@see EnvReadScanner} for the five call shapes
  * it understands, the four string shapes it reads them in, and for its refusal
  * to drop what it cannot place (a refusal that was itself false for three
  * string shapes until round 44, and is now pinned by fixtures for each). Two things
@@ -204,6 +204,13 @@ final class EnvRosterDriftTest extends TestCase
             'SUGAR_CRUSH_LEGACY',
             'S1-direct',
         ];
+
+        yield 'S5 — a fluent withEnvVar() schema marker is placed' => [
+            '<?php class D { function f() { return $this->def()->withEnvVar("SUGARCRUSH_S5"); }
+                private function def() { return new D(); } }',
+            'SUGARCRUSH_S5',
+            'S5-schema:withEnvVar',
+        ];
     }
 
     /** @dataProvider shapesTheScannerUnderstands */
@@ -221,6 +228,39 @@ final class EnvRosterDriftTest extends TestCase
             implode(' ', $scanner->reads()[$expectedName]),
             'the scanner resolved the read through a different shape than the one this fixture is for',
         );
+    }
+
+    /**
+     * S5 is the `withEnvVar` channel and nothing else.
+     *
+     * The shape is placed BY CHANNEL, not by any getter-following, so the
+     * boundary of that claim must be pinned: a different fluent setter
+     * carrying the same string is NOT a schema binding, and a same-named
+     * STATIC call is not the instance channel either. Both stay unplaced and
+     * are reported — the census may learn a channel, it may not learn to
+     * trust a word.
+     */
+    public function testASetterThatIsNotTheWithEnvVarChannelIsStillUnplaced(): void
+    {
+        $scanner = new EnvReadScanner([
+            'fixture.php' => <<<'PHP'
+                <?php
+                class A {
+                    function f(): void {
+                        $this->def()->withLabel('SUGARCRUSH_NOT_A_BINDING');
+                        self::withEnvVar('SUGARCRUSH_STATIC_IMPOSTOR');
+                    }
+                    private function def(): A { return $this; }
+                    private static function withEnvVar(string $x): void {}
+                }
+                PHP,
+        ]);
+
+        $this->assertSame([], $scanner->reads(), 'a non-channel setter was placed as a schema binding');
+        $this->assertCount(2, $scanner->unresolved(), 'both impostor shapes must be reported');
+        $joined = implode("\n", $scanner->unresolved());
+        $this->assertStringContainsString('SUGARCRUSH_NOT_A_BINDING', $joined);
+        $this->assertStringContainsString('SUGARCRUSH_STATIC_IMPOSTOR', $joined);
     }
 
     /**
@@ -323,7 +363,7 @@ final class EnvRosterDriftTest extends TestCase
     /**
      * AN OCCURRENCE THE SCANNER CANNOT PLACE MUST GO RED, NOT VANISH.
      *
-     * `$_ENV[…]` is deliberately NOT one of the four understood shapes: no
+     * `$_ENV[…]` is deliberately NOT one of the five understood shapes: no
      * production path uses it today, and a scanner that quietly ignored it
      * would have a hole shaped exactly like the day someone does. This fixture
      * is that day, and it must fail.
@@ -331,12 +371,12 @@ final class EnvRosterDriftTest extends TestCase
     public function testAnOccurrenceMatchingNoUnderstoodShapeIsReportedRatherThanDropped(): void
     {
         $scanner = new EnvReadScanner([
-            'fixture.php' => '<?php class A { function f() { return $_ENV["SUGARCRUSH_FIFTH_SHAPE"] ?? null; } }',
+            'fixture.php' => '<?php class A { function f() { return $_ENV["SUGARCRUSH_UNPLACED_SHAPE"] ?? null; } }',
         ]);
 
         $this->assertSame([], $scanner->reads());
         $this->assertCount(1, $scanner->unresolved());
-        $this->assertStringContainsString('SUGARCRUSH_FIFTH_SHAPE', $scanner->unresolved()[0]);
+        $this->assertStringContainsString('SUGARCRUSH_UNPLACED_SHAPE', $scanner->unresolved()[0]);
     }
 
     /**

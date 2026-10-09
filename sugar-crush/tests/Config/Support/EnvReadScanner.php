@@ -15,7 +15,7 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  * their own tokens, so prose drops out before any matching happens, and what
  * is left is a string LITERAL whose syntactic position can be classified.
  *
- * FOUR CALL SHAPES ARE UNDERSTOOD, in any of the four STRING shapes PHP can
+ * FIVE CALL SHAPES ARE UNDERSTOOD, in any of the four STRING shapes PHP can
  * spell a literal with (single- or double-quoted, heredoc, nowdoc), and each
  * one is verified rather than assumed — the scanner never trusts a naming
  * convention, it follows the value:
@@ -41,6 +41,19 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  *   passed to `getenv()` is reported as unresolved rather than counted.
  *   `TerminalBackground::ENV_OVERRIDE` is the case that forced this: it is
  *   never a direct `getenv()` argument, it is an element of an S4 array.
+ * - **S5 schema-binding** — the literal is argument #1 of a `->withEnvVar(…)`
+ *   fluent call (the `SettingDefinition` declaration channel). This shape is
+ *   PLACED, not followed: `withEnvVar()` stores its argument instead of
+ *   reading it, so the record names the channel for what it is — the schema's
+ *   declaration that this variable backs this setting — and the honesty of
+ *   that declaration is policed by the doc census downstream, which demands
+ *   an `docs/ENVIRONMENT.md` row and a help-screen entry for every name
+ *   placed here. The S2 dead-const polarity stays: a name declared and placed
+ *   NOWHERE (no getenv path, no schema binding) is still reported.
+ *   `SUGARCRUSH_MEDIA_RENDER_MODE` (crush-media W1.8) forced this shape: the
+ *   settings schema may declare an env fallback one wave before its reader
+ *   lands (W2.2 wires the painter), and the census must place the occurrence
+ *   without pretending a getenv ran.
  *
  * ANYTHING ELSE IS AN ERROR, NOT A SKIP — AND THAT CLAIM WAS FALSE FOR ONE
  * ROUND. A prefixed occurrence the scanner cannot place, and whose name no
@@ -558,7 +571,16 @@ final class EnvReadScanner
 
         $call = $this->enclosingCall($sig, $i);
         if ($call !== null) {
-            [$callee, $argIndex] = $call;
+            [$callee, $argIndex, $operator] = $call;
+            if ($operator === '->' && $callee === 'withEnvVar' && $argIndex === 0) {
+                // S5 — the settings-schema declaration channel (see class
+                // doc-block): placed as a DECLARED binding, not followed as a
+                // getenv read. The doc census turns the placement into an
+                // obligation (ENVIRONMENT.md row + help-screen entry), so the
+                // marker cannot hide an undocumented variable — W1.8's
+                // SUGARCRUSH_MEDIA_RENDER_MODE is exactly that case.
+                return 'S5-schema:withEnvVar';
+            }
             $method = $this->methodSignature($sig, $n, $callee, $i);
             if ($method !== null && isset($method['params'][$argIndex])) {
                 $reached = $this->reachesGetenv(
@@ -680,7 +702,13 @@ final class EnvReadScanner
         return str_starts_with($var, '$') ? $var : null;
     }
 
-    /** @return array{0: string, 1: int}|null the callee's bare name and this argument's index */
+    /**
+     * @return array{0: string, 1: int, 2: string}|null the callee's bare name,
+     *         this argument's index, and the operator that reached the callee
+     *         (`'->'` or `'::'`) — the operator distinguishes the instance
+     *         fluent `withEnvVar()` schema channel (S5) from a static call
+     *         wearing the same name, which is not that channel.
+     */
     private function enclosingCall(array $sig, int $i): ?array
     {
         $depth = 0;
@@ -729,7 +757,7 @@ final class EnvReadScanner
             return null;
         }
 
-        return [$name, $commas];
+        return [$name, $commas, $operator];
     }
 
     /**

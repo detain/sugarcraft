@@ -491,6 +491,14 @@ Environment variables:
                           server starts. Unset, 0 or any other value keeps
                           MCP enabled — unlike the flag-style variables,
                           only these three words count.
+   SUGARCRUSH_SD_BASE_URL Base URL of the A1111-style (sdapi) Stable
+                          Diffusion server the media transport dials.
+                          Precedence: an explicit code override, then this
+                          variable, then the sd.baseUrl setting.
+   SUGARCRUSH_MEDIA_RENDER_MODE
+                          How generated images are painted in the terminal
+                          (the ui.imageRenderMode setting's env layer; see
+                          docs/ENVIRONMENT.md for the accepted words).
 
    docs/ENVIRONMENT.md tabulates every variable this build reads, with its
    full contract.
