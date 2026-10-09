@@ -147,7 +147,7 @@ namespace SugarCraft\Crush\Support;
  *     (2 — audit GIT-1: the model-supplied per-call `path` against the
  *     configured repository root, and a new worktree's parent directory
  *     against the directory holding that root).
- *   - EIGHT spellings remain by hand, in FOUR files, and they are a DIFFERENT
+ *   - NINE spellings remain by hand, in FIVE files, and they are a DIFFERENT
  *     CONTRACT rather than copies waiting to be swept up:
  *
  *     {@see \SugarCraft\Crush\Tools\PathJail} (5). TWO of them —
@@ -187,6 +187,15 @@ namespace SugarCraft\Crush\Support;
  *     refuses a path it cannot resolve, and a file about to be created does not
  *     resolve. Conclusion unchanged, mechanism corrected — and the mechanism is
  *     what made the entry read as a security argument.
+ *
+ *     {@see \SugarCraft\Crush\Support\MediaStore}'s `contained()` (1, crush-media
+ *     W1.9) is the same verdict spelled privately: a `str_starts_with` against a
+ *     `realpath`'d session directory plus a separator, called on paths the store
+ *     just created under its own anchored root. It admits and refuses, so it is a
+ *     hand spelling in THIS count — routed here it would add a syscall to
+ *     re-derive the containment the caller's `realpath()` already answered, and
+ *     the store keeps its gate local so the artifact surface has no dependency on
+ *     the settings-side class.
  *
  *     {@see \SugarCraft\Crush\Agents\WorktreeManager}'s two prefix compares are
  *     NOT in this count and not omitted by oversight: they match relative paths

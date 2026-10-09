@@ -340,6 +340,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Skills/ProposedSkills.php|.sugar-crush/skills-proposed' => self::USER,
         'Config/Settings/Definitions/MemoryRuleSettings.php|.sugar-crush/skills-proposed' => self::USER,
         'Skills/ForeignSkillDiscovery.php|.config/opencode' => self::USER,
+        // crush-media W1.9: the artifact store, `~/.sugar-crush/media/<session>`,
+        // under HomeDirectory::owned() — created 0700 and refused when loose or
+        // linked, so a checkout cannot place it. The DISTINCT path
+        // `.sugar-crush/media` itself was already repository-chosen through
+        // `ProjectMemoryWriter`; this occurrence adds no new path to the census.
+        'Support/MediaStore.php|.sugar-crush/media' => self::USER,
 
         // PACKAGE-RELATIVE — the tier the old two-value map had no name for, and
         // the one the ninth read path lived in. Resolved from `__DIR__`, so the
@@ -391,8 +397,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-EIGHT occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-THREE distinct paths. TWENTY of those
+     * APPEARS IN. On this tree that is FORTY-NINE occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-FOUR distinct paths. TWENTY of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are SIXTEEN distinct paths — which is the figure
@@ -564,7 +570,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(33, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(34, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(16, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -573,7 +579,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('SIXTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY-THREE distinct', $enumeration);
+        self::assertStringContainsString('THIRTY-FOUR distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.

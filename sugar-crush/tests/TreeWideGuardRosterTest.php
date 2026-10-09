@@ -635,6 +635,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // sys_get_temp_dir fixture dir — bounded, test-made.
         'Support/AtomicFileWriterTest.php' => ['scandir($this->dir)'],
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
+        // crush-media W1.9: partialEntries() lists the session directory the test
+        // built itself under a temp storeRoot; `scandir($dir)` is that walk.
+        'Support/MediaStoreTest.php' => ['scandir($dir)'],
         // Names the package root only to hand its driver script the vendor
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).

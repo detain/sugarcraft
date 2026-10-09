@@ -173,12 +173,15 @@ final class MediaStoreTest extends TestCase
     public function testTraversalShapesInSessionIdAreRefusedNotStripped(): void
     {
         foreach (['../evil', 'a/b', 'a\\b', "a\0b", '..x'] as $poison) {
+            $caught = null;
             try {
                 MediaStore::forSession($poison, $this->storeRoot);
-                $this->fail('session id door should refuse ' . var_export($poison, true));
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString('session id', $e->getMessage());
+                $caught = $e;
             }
+
+            $this->assertNotNull($caught, 'session id door should refuse ' . var_export($poison, true));
+            $this->assertStringContainsString('session id', $caught->getMessage());
         }
     }
 
@@ -218,12 +221,15 @@ final class MediaStoreTest extends TestCase
             },
         );
 
+        $caught = null;
         try {
             $store->put('x', 'png', ['seed' => 1]);
-            $this->fail('the injected writer must surface');
         } catch (\RuntimeException $e) {
-            $this->assertSame('injected mid-write failure', $e->getMessage());
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'the injected writer must surface');
+        $this->assertSame('injected mid-write failure', $caught->getMessage());
 
         $this->assertSame([], $this->partialEntries($store->directoryPath()));
         $this->assertSame([], $store->list());
