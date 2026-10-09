@@ -356,11 +356,13 @@ edit it by hand.
 | `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
 | `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
 | `/generate` | ✓ | | `<prompt> [--steps N] [--size WxH] [--seed N] [--save]` | Generate an image on the configured SD server |
+| `/generate-form` | | | — | Open the interactive image generation form |
 <!-- commands:table:end -->
 
 **S** is blank on `new-picker`, `session-pin`, `session-delete`, `docs`,
-`pane-dock-left` and `pane-dock-right` alone: they are palette-only
-(`slashVisible: false`), reachable from Ctrl+P and from no "/" popup. All six
+`pane-dock-left`, `pane-dock-right` and `generate-form` alone: they are
+palette-only (`slashVisible: false`), reachable from Ctrl+P and from no "/"
+popup. All seven
 share the typed-name asymmetry —
 their spec files name no handler, so `Chat::dispatchCommand()` dispatches
 nothing for the pseudo-names and a typed

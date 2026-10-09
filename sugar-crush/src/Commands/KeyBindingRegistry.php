@@ -80,6 +80,8 @@ final class KeyBindingRegistry
     public const CONTEXT_SKILLS = 'Skill picker';
     /** Keys the full-band settings view (`/settings`) answers while it is open. */
     public const CONTEXT_SETTINGS = 'Settings view';
+    /** Keys of the image-generation form frame — its launch chord and its own keys. */
+    public const CONTEXT_MEDIA = 'Media form';
     /** Keys the F10 menu bar answers while it is open. */
     public const CONTEXT_MENU = 'Menu bar';
     /** Mouse gestures, when the terminal reports them. */
@@ -105,6 +107,7 @@ final class KeyBindingRegistry
             ...self::agentTranscript(),
             ...self::skills(),
             ...self::settings(),
+            ...self::media(),
             ...self::menu(),
             ...self::mouse(),
         ];
@@ -171,6 +174,7 @@ final class KeyBindingRegistry
             self::CONTEXT_AGENT_TRANSCRIPT => Lang::t('keys.context.agent-transcript'),
             self::CONTEXT_SKILLS => Lang::t('keys.context.skills'),
             self::CONTEXT_SETTINGS => Lang::t('keys.context.settings'),
+            self::CONTEXT_MEDIA => Lang::t('keys.context.media'),
             self::CONTEXT_MENU => Lang::t('keys.context.menu'),
             self::CONTEXT_MOUSE => Lang::t('keys.context.mouse'),
             default => $context,
@@ -834,6 +838,28 @@ final class KeyBindingRegistry
             KeyBinding::new('settings.export', 'x', Lang::t('keys.settings.export'), $c),
             KeyBinding::new('settings.import', 'p', Lang::t('keys.settings.import'), $c),
             KeyBinding::new('settings.profile-go', 'Enter', Lang::t('keys.settings.profile-go'), $c),
+        ];
+    }
+
+    /**
+     * The image-generation form frame (crush-media W3.10). The launch chord lives
+     * HERE rather than in the chat group on purpose: `chatCtrlRunes()` is pinned
+     * verbatim by ReadmeRosterDriftTest's "always belong to the chat content
+     * model" sentence, so a chat-context row would force a README edit this wave
+     * forbids — and Ctrl+D is not a shell claim either, so KeyboardHandler lets it
+     * fall through to Chat, which answers it whenever no modal holds the keyboard.
+     * While the settings editor or the palette is up the chord is dead by
+     * construction: App::handleKey consumes keys at the modal branch before Chat
+     * ever sees them, and Chat routes to handlePaletteKey before its ctrl arms.
+     *
+     * @return list<KeyBinding>
+     */
+    private static function media(): array
+    {
+        $c = self::CONTEXT_MEDIA;
+
+        return [
+            KeyBinding::new('media.open_form', 'Ctrl+D', Lang::t('keys.media.open_form'), $c),
         ];
     }
 

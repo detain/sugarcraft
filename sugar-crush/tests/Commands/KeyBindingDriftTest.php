@@ -46,6 +46,7 @@ use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Tui\KeyboardHandler;
+use SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\Zone;
@@ -2045,6 +2046,17 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame(1, $down->settingsEditor?->previewOffset, 'down scrolls the preview, not the list');
                 [$up] = $down->update($k[0]);
                 $this->assertSame(0, $up->settingsEditor?->previewOffset);
+            },
+
+            // ── Media generation form (crush-media W3.10) ────────────────
+            // Chat answers the chord (the shell deliberately claims nothing
+            // here — see KeyBindingRegistry::media()'s docblock), so the row
+            // is driven like the chat.* rows: the observation asserts the
+            // very message every door to the form must raise.
+            'media.open_form' => function (array $k): void {
+                [, $cmd] = $this->chat()->update($k[0]);
+                $this->assertInstanceOf(\Closure::class, $cmd, 'Ctrl+D must answer with the form-opening Cmd');
+                $this->assertInstanceOf(OpenMediaFormMsg::class, $cmd(), 'the Cmd carries OpenMediaFormMsg');
             },
 
             // ── Menu bar ─────────────────────────────────────────────────

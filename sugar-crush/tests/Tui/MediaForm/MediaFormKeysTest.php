@@ -21,6 +21,7 @@ use SugarCraft\Crush\Tui\MediaForm\MediaFormState;
 use SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg;
 use SugarCraft\Crush\Tui\MediaForm\ParamsSection;
 use SugarCraft\Crush\Tui\MediaForm\Section;
+use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
 
 /**
  * The media form's keys driven through the shell (crush-media W3.1): the
@@ -143,6 +144,77 @@ final class MediaFormKeysTest extends TestCase
         $this->assertNotCount(0, $rows);
         $this->assertSame('/generate', $rows[0]->content, 'the draft arrives as one command row');
         $this->assertStringContainsString('no SD base URL configured', $rows[1]->content);
+    }
+
+    // ---- launch chord (crush-media W3.10) ------------------------------------------
+
+    public function testTheLaunchChordOpensTheFormFromTheOrdinaryChatPane(): void
+    {
+        // The full App->KeyboardHandler->Chat loop, same shape as the
+        // settings editor's Ctrl+, pins: registry row 'media.open_form'
+        // declares Ctrl+D, the shell claims nothing, Chat's ctrl arm answers
+        // with the OpenMediaFormMsg Cmd the shell then runs into its slot.
+        $app = $this->pressChord($this->app(), self::ctrlD());
+        $this->assertNotNull($app->mediaForm, 'Ctrl+D opens the generation form');
+        $this->assertSame('', $app->chat?->inputBuf, 'the chord never types a d into the composer');
+
+        // While the form is up the chord belongs to the modal gate, which
+        // ignores it - no re-open, no duplicate slot.
+        $again = $this->pressChord($app, self::ctrlD());
+        $this->assertSame($app->mediaForm, $again->mediaForm, 'Ctrl+D is inert under the form itself');
+    }
+
+    public function testTheLaunchChordIsDeadWhileTheSettingsModalIsUp(): void
+    {
+        [$settings] = $this->app()->update(new OpenSettingsMsg(''));
+        $this->assertNotNull($settings->settingsEditor, 'fixture: settings modal up');
+
+        $after = $this->pressChord($settings, self::ctrlD());
+        $this->assertNull($after->mediaForm, 'the chord no-ops under settings - Ctrl+D is not on the yields list');
+        $this->assertNotNull($after->settingsEditor, 'and it never closes the settings modal either');
+    }
+
+    public function testTheLaunchChordIsDeadWhileThePaletteIsUp(): void
+    {
+        $paletteUp = $this->press($this->app(), new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($paletteUp->chat?->palette(), 'fixture: palette up via its own chord');
+
+        $after = $this->pressChord($paletteUp, self::ctrlD());
+        $this->assertNull($after->mediaForm, 'keys while the palette is up belong to the palette');
+        $this->assertNotNull($after->chat?->palette(), 'the palette stays up');
+    }
+
+    public function testThePaletteRowRunsTheSameOpenerAsTheChord(): void
+    {
+        // crush-media W3.10 law: palette door, chord, and bare /generate all
+        // raise one OpenMediaFormMsg - asserted on the message the Cmd emits.
+        [$next, $cmd] = (new Chat())->runPaletteAction('Generate image');
+        $this->assertNull($next->palette(), 'the row closes the palette on the way out');
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertInstanceOf(OpenMediaFormMsg::class, $cmd());
+    }
+
+    private static function ctrlD(): KeyMsg
+    {
+        return new KeyMsg(KeyType::Char, 'd', ctrl: true);
+    }
+
+    /**
+     * Press keys through the shell AND run the Cmd each key emits back into
+     * App::update - the production pump, so a chord whose answer is
+     * Cmd::send(OpenMediaFormMsg) actually lands in the slot.
+     */
+    private function pressChord(App $app, KeyMsg ...$keys): App
+    {
+        foreach ($keys as $key) {
+            [$app, $cmd] = $app->update($key);
+
+            if ($cmd instanceof \Closure) {
+                [$app] = $app->update($cmd());
+            }
+        }
+
+        return $app;
     }
 
     // ---- fixtures -----------------------------------------------------------------

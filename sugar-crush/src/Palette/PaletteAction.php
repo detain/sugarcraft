@@ -36,6 +36,8 @@ enum PaletteAction: string
     case DockPaneRight = 'dock_pane_right';
     case LayoutReset = 'layout_reset';
     case OpenSettings = 'open_settings';
+    /** Opens the image generation form (crush-media W3.10, {@see \SugarCraft\Crush\App\App::$mediaForm}). */
+    case OpenMediaForm = 'open_media_form';
     // P-A4: the session row actions, reachable without opening the list.
     case RenameSession = 'rename_session';
     case PinSession = 'pin_session';

@@ -30,6 +30,25 @@ final class MediaFormRenderTest extends TestCase
         $this->assertGolden('form-100x40.txt', self::plain($this->form()->view(Theme::default(), 100, 40)));
     }
 
+    public function testNoRawLangKeyLeaksIntoAFrame(): void
+    {
+        // crush-media W3.10 vicious pin: every label the frame paints rides
+        // Lang::t. A key added to src without its en.php entry (or a typo in
+        // either side) leaks the raw 'tui.genform.…' text into the band -
+        // this reddens on the spot instead of shipping a frame of dotted
+        // breadcrumbs. Covers the initial frame and a seeded one.
+        $frames = [
+            self::plain($this->form()->view(Theme::default(), 100, 40)),
+            self::plain(MediaForm::open(
+                MediaRequest::new()->fromArray(['prompt' => 'a cat', 'steps' => 21]),
+            )->view(Theme::default(), 100, 40)),
+        ];
+
+        foreach ($frames as $frame) {
+            $this->assertStringNotContainsString('tui.', $frame, 'a raw lang key leaked into a rendered frame');
+        }
+    }
+
     public function testASeedPrintsItsValuesIntoTheSummaryRows(): void
     {
         $frame = self::plain($this->form()->view(

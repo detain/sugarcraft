@@ -3284,6 +3284,16 @@ final class Chat implements Model
             // into the input buffer instead - same reasoning as Ctrl+P above.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
                 => $this->toggleLatestToolOutput(),
+            // Ctrl+D opens the image-generation form (crush-media W3.10). The
+            // rune is free of every claim set - not a shell chord, not in
+            // chatCtrlRunes(), and the session picker's own `ctrl+d` delete is
+            // unreachable from here because handleSessionPickerKey() routes
+            // above this match while the picker is up. Checked before the
+            // generic Char arm for the same reason as Ctrl+P above; the form
+            // is screen-only until its generate row fires, so this paints, it
+            // never spends.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'd'
+                => $this->openMediaFormView(),
             // Ctrl+V attaches the clipboard's IMAGE (audit 15b-15). A terminal
             // pastes text only - Ctrl+Shift+V / Cmd+V already arrive as one
             // bracketed PasteMsg - so the one thing this chord can add is the
@@ -11802,6 +11812,7 @@ final class Chat implements Model
             return match ($action) {
                 PaletteAction::Exit => [$opened->mutate(['palette' => null]), Cmd::quit()],
                 PaletteAction::OpenSettings => $opened->mutate(['palette' => null])->openSettingsView(),
+                PaletteAction::OpenMediaForm => $opened->mutate(['palette' => null])->openMediaFormView(),
                 default => $opened->refuseInFlightAction($label),
             };
         }
@@ -12799,6 +12810,20 @@ final class Chat implements Model
     private function openSettingsView(string $query = ''): array
     {
         return [$this, Cmd::send(new \SugarCraft\Crush\Tui\Settings\OpenSettingsMsg($query))];
+    }
+
+    /**
+     * The generation-form mirror of {@see self::openSettingsView()} — the
+     * `Ctrl+D` chord and the palette arm both hand the shell an
+     * OpenMediaFormMsg, so every door to the frame runs the same opener as
+     * bare `/generate` (crush-media W3.10). The msg travels the existing
+     * App slot route (App::openMediaForm); no state is painted here.
+     *
+     * @return array{0: self, 1: \SugarCraft\Core\Cmd|null}
+     */
+    private function openMediaFormView(): array
+    {
+        return [$this, Cmd::send(new \SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg())];
     }
 
     /**
@@ -16998,6 +17023,7 @@ final class Chat implements Model
             // W3.10 (lane f): the palette's media-form action lands beside
             // this arm — PaletteAction::OpenMediaForm => mutate(…)->openMediaFormView().
             PaletteAction::OpenSettings => $this->mutate(['palette' => null])->openSettingsView(),
+            PaletteAction::OpenMediaForm => $this->mutate(['palette' => null])->openMediaFormView(),
             default => $this->refuseInFlightAction($label),
         };
     }
@@ -17236,6 +17262,9 @@ final class Chat implements Model
             PaletteAction::LayoutReset => $closed->handleLayoutCommand('/layout reset'),
             // N-P1: the settings view is the shell's; this only asks for it.
             PaletteAction::OpenSettings => $closed->openSettingsView(),
+            // W3.10: same story for the generation form — it paints a modal
+            // and writes no turn state until Generate is pressed.
+            PaletteAction::OpenMediaForm => $closed->openMediaFormView(),
             // P-A4: the session actions. Rename opens the inline editor through
             // the slash handler, refused in a read-only window as `/rename` is.
             PaletteAction::RenameSession => $closed->readOnlyRefusal('/rename') ?? $closed->handleRenameCommand('/rename'),

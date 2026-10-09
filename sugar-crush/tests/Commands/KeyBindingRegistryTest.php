@@ -54,6 +54,7 @@ final class KeyBindingRegistryTest extends TestCase
             KeyBindingRegistry::CONTEXT_AGENT_TRANSCRIPT,
             KeyBindingRegistry::CONTEXT_SKILLS,
             KeyBindingRegistry::CONTEXT_SETTINGS,
+            KeyBindingRegistry::CONTEXT_MEDIA,
             KeyBindingRegistry::CONTEXT_MENU,
             KeyBindingRegistry::CONTEXT_MOUSE,
         ];
@@ -330,13 +331,18 @@ final class KeyBindingRegistryTest extends TestCase
      * 133 -> 142 live (142 all), 12 -> 13 groups, with `/new`'s folder
      * picker: `dirpicker.move`, `.enter`, `.open`, `.up`, `.parent`,
      * `.hidden`, `.path`, `.start` and `.close`.
+     *
+     * 142 -> 143 live (143 all), 13 -> 14 groups, with the generation form's
+     * launch chord (crush-media W3.10): `media.open_form` (`Ctrl+D`) — the
+     * first row of the `Media form` context; the frame's own keys are painted
+     * help, not registry rows, until W3.4 gives it more chords.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(142, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(142, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(143, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(143, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
-        $this->assertCount(13, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
+        $this->assertCount(14, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**
