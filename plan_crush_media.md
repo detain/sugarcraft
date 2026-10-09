@@ -1075,13 +1075,31 @@ Legend: **B=behavior/client field, F=form step, C=covered-by step, D=deferred/de
 
 | # | Question | Ruled at | Decision |
 |---|---|---|---|
-| C-1 | Dialect strategy (sdapi-first vs OpenAI-first vs capability-detected) | W0.3 | _pending — recommendation pre-committed: capability-detected, sdapi-implemented-first, config-authority + fail-open probe_ |
-| C-2 | Mask editor scope (Q-5): upload-only v1 vs TUI brush | W4.6 / operator | _pending — plan defaults upload-only; sketch lane W4.6 exists for a YES_ |
-| C-3 | Auto-save location (Q-4): `~/.sugar-crush/media/` vs workspace `.sugar-crush/media/` | W1.9 / operator | _pending — plan defaults HOME; workspace opt-in revisit + save_txt sidecar territory_ |
-| C-4 | Audio (video playback): silent v1 vs ffplay child | W5.8 | _pending — plan recommends silent v1, costed probe first_ |
-| C-5 | Form chord policy / the Ctrl+Enter placeholder myth (⚖️C-2 source-side) | W3.4/W3.10 | _pending — plan default: bind only what works; neutral placeholders (W3.4 step 5 references this as "C-4" pre-renumber; this table is authoritative)_ |
-| C-6 | Video metadata carrier (Q-11): JSON sidecar vs mkv comment | W5.3 | _pending — plan default: JSON sidecar, mkv-comment stretch_ |
-| C-7 | Web media transport: tool.finished-ref field + RPC sliced fetch vs new event vs HTTP route | W6 intro | _pending — plan default as written in Wave 6 header_ |
+| C-1 | Dialect strategy (sdapi-first vs OpenAI-first vs capability-detected) | W0.3 | **RULED 2026-10-09: capability-detected, A1111-sdapi-implemented-first; config-authority + fail-open probe — pre-committed recommendation STANDS.** Detail + derived `sglang-diffusion` requirement below. |
+| C-2 | Mask editor scope (Q-5): upload-only v1 vs TUI brush | W4.6 / operator | **RULED: DESCOPED for v1** — upload-only path (default ruling); sketch brush editor revisited ONLY on explicit operator YES before Wave 4; W4.6 remains the YES-slot lane. |
+| C-3 | Auto-save location (Q-4): `~/.sugar-crush/media/` vs workspace `.sugar-crush/media/` | W1.9 / operator | **RULED: HOME store `~/.sugar-crush/media/<session>/`** (plan default kept; 0700/0600 + `.partial`→rename per W1.9). Workspace opt-in revisit + save_txt sidecar stay Wave-7 territory. |
+| C-4 | Audio (video playback): silent v1 vs ffplay child | W5.8 | **RULED: silent v1** (option A, plan recommendation); decision formally closes at W5.8; if (B) later — Wave-7 backlog line. |
+| C-5 | Form chord policy / the Ctrl+Enter placeholder myth (⚖️C-2 source-side) | W3.4/W3.10 | **RULED: bind only chords verified free/working; neutral placeholder rows otherwise.** Ctrl+G verification at W3.10. (W3.4 step 5's "C-4" reference pre-dates renumber; this table is authoritative.) |
+| C-6 | Video metadata carrier (Q-11): JSON sidecar vs mkv comment | W5.3 | **RULED: JSON sidecar next to saved media** (plan default); mkv-comment remains stretch only. |
+| C-7 | Web media transport: tool.finished-ref field + RPC sliced fetch vs new event vs HTTP route | W6 intro | **RULED: `tool.finished` gains `media: list<MediaRef>` field — NOT a new event kind** (plan Wave-6 header stands: refs ride the event, bytes via RPC `media.fetch` offset/limit slicing). |
+
+### C-1 evidence & derived requirements (W0.1 probe, `/tmp/opencode/plan-crush-media/w0/skynet/REPORT.md`)
+- **Server positively identified:** skynet2:30001 = **SGLang-Diffusion serving Wan2.2-T2V — video-only** (FastAPI, `owned_by:"sglang"`, `is_image_gen:false`, task [T2V], output [VIDEO]). NO `/sdapi/v1/*` (live-404 proofs), NO ComfyUI routes, no auth challenge. Host truth: `skynet2.interserver.net` = 173.225.108.102; the prior brief's my-web-2 mention conflated hostnames with this devbox.
+- **OpenAI-shape `/v1/images/*` PRESENT in schema but runtime-untested** (POST banned in probe; T2V model → route likely 4xx until an image model is swapped in).
+- **Video async contract read off the live spec** (validates W5.2's submit/status/fetch shape): `POST /v1/videos` (multipart) → `VideoResponse {id,status,progress,url,file_path,seconds,fps,num_frames,error}`; `GET /v1/videos[/{id}][/{id}/content]`; `DELETE`.
+- **EndpointFamily v1 requirement (binding on W1.2):** add an `sglang-diffusion` case — **DETECTABLE but UNIMPLEMENTED in v1**: probing it yields no implemented image/video capabilities, so tools fail with a clear unsupported-dialect message NAMING the detected family. Implementing sglang-diffusion video is the natural second dialect if the operator wants live video smoke (schema-feasible per W0.1; one sanctioned POST at W7.7).
+- **Q-10 RESOLVED:** sdapi `cfg_scale` vs sglang `guidance_scale`/`true_cfg_scale` (+video `guidance_scale_2`) are **distinct per-dialect names**; steps = `num_inference_steps` on sglang; `negative_prompt` shared. MediaRequest keeps sdapi wire names; `Endpoints.php` glossary records the mapping.
+- **Image live-smoke: BLOCKED-EXTERNAL** — operator must load an image-task model on 30001 (or point config at an sdapi server).
+
+## W0 EXECUTION FINDINGS (2026-10-09) — binding amendments for Wave-1+ briefs
+
+From `/tmp/opencode/plan-crush-media/w0/drift/REPORT.md` (146 anchors: 140 OK, 2 DRIFT, 1 MISSING-path, 1 CONTRADICTED):
+
+- **⚠1 Command pattern superseded:** slash commands now ship via `sugar-crush/builtin-commands/NNNN-name.php` spec → `withHandler('handleXCommand')` → thin `Chat::handleX` (pattern :12965-12968) → `Host/Commands/XHostCommand` body. `/generate` takes slot **4000** (max live 3600-handoff). Chat dispatch is generic (`forSpelling`+match :12481-12492) — W0.2 step 4's / the plan's "copy the NoticesCommand trio" path is SUPERSEDED; `src/Commands/NoticesCommand.php` survives as a pure report class.
+- **⚠2 Test bootstrap shape:** `sugar-crush/tests/bootstrap.php` pins `Loop::set(new StreamSelectLoop())` at :80 — **no LoopPin call exists to copy**; stdin repair `!stream_isatty` guard :613-619 (fd-0→/dev/null); `SuiteSkipRoster::install()` :44 runs first. Media tests inherit this shape; serial plain-pipe law unchanged.
+- **⚠3 SSRF law location:** the LAN/loopback blocklist lives at `src/Tools/BuiltIn/WebFetch.php:21-49` + `BLOCKED_HOSTNAMES` :98 — `Permissions/FetchTarget.php` is only the permission-rule parser. SD-server clients must NEVER reuse the WebFetch dialer (mystage (c) holds, at the corrected file).
+- **⚠4 Settings/positions:** definitions live in `src/Config/Settings/Definitions/` (13 siblings; W1.8 extends these — `src/Providers/Definitions/` does NOT exist); `SettingCategory` enum `src/Config/Settings/SettingCategory.php:22`; provider wire schemas at `ProviderFactory::TYPE_SCHEMAS` :89; `READ_ONLY_COMMANDS` const at `Chat.php:11525` (not CommandRegistry); LayeredSettings generated block live at **:474-587** (not :474-504). Tool positions re-verified: occupied 1-22,30,31,32 → **33/34 FREE** for GenerateImage/GenerateVideo.
+- **Baseline floor (W0.4, `/tmp/opencode/plan-crush-media/w0/baseline/baseline.md`):** sugar-crush serial **21,198T/406,469A/0F/0E/1S exit0** @ HEAD `fdd4b40cc` (clean tree; linked 22/22; pipe-shaped keystone green); `scripts/parallel-tests-durations.tsv` 1,184 rows; siblings candy-forms 2,272T / candy-mosaic 661T / sugar-reel 552T / candy-core 1,246T all exit0; `check-path-repos` + `check-child-lifetimes` rc=0; `sugar-crush-web` is a **monorepo subdir** (same git repo, no nested `.git`, node_modules absent).
 
 # Appendix D — Source-report paths (backing detail; cite, never copy wholesale)
 
