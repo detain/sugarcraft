@@ -1182,3 +1182,5 @@ sugar-crush/tests/Support/SessionRelaunchTest.php	0.001	3
 sugar-crush/tests/Memory/UnreadableNotesTest.php	0.001	3
 sugar-crush/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.php	0.001	2
 sugar-crush/tests/AssistantMsgTest.php	0.001	2
+sugar-crush/tests/Media/MediaRequestTest.php	0.02	118
+sugar-crush/tests/Media/GenerationParamsTest.php	0.05	184
