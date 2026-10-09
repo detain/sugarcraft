@@ -919,7 +919,9 @@ TXT,
     'cmd.fork.description' => 'Clone this conversation into a background session',
     'cmd.fork.hint' => '<prompt>',
     'cmd.generate.description' => 'Generate an image on the configured SD server',
-    'cmd.generate.hint' => '<prompt> [--negative ...] [--steps N] [--cfg N] [--size WxH] [--seed N] [--sampler S] [--scheduler S] [--batch N] [--n-iter N] [--save]',
+    // Kept inside the /help spill-row budget (KeyHelpTest pins the hint as one
+    // unbroken row; GenerateCommand::USAGE carries the full flag list).
+    'cmd.generate.hint' => '<prompt> [--steps N] [--size WxH] [--seed N] [--save]',
     'cmd.goal.description' => 'Work until a condition is met, judged by the title model after every turn',
     'cmd.goal.hint' => '[<condition>|clear]',
     'cmd.grind.description' => 'Like /goal, with a much longer budget of follow-up rounds',
