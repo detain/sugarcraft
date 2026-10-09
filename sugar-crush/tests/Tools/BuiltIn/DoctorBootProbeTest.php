@@ -24,7 +24,10 @@ use SugarCraft\Mosaic\Mosaic;
  * filled — a tripwire alone would then pass against the bug. Seeding the boot
  * cache with quarter-block, a renderer `Mosaic::auto()` never selects, makes
  * the protocol assertion fail against any implementation that answers from a
- * probe of its own, whatever ran first.
+ * probe of its own, whatever ran first. Since W2.2 the cache is ToolResult's
+ * mode-keyed `$mosaics` memo, so the seed fills the `'auto'` slot — the mode
+ * this test pins — and the whole memo (plus the mode word) is snapshotted and
+ * restored so a foreign render mode from an earlier test never leaks in.
  *
  * @see Doctor
  */
@@ -33,15 +36,20 @@ final class DoctorBootProbeTest extends TestCase
     /** Bytes a probe would consume: a sixel-capable DA1 reply. */
     private const PRELOADED = "\x1b[?62;4;0c";
 
-    private ?Mosaic $savedBootProbe = null;
+    /** @var array<string, Mosaic>|null */
+    private ?array $savedMosaics = null;
+
+    private ?string $savedRenderMode = null;
 
     /** @var array{0: resource, 1: resource}|null */
     private ?array $pair = null;
 
     protected function setUp(): void
     {
-        $this->savedBootProbe = $this->bootCache()->getValue();
-        $this->bootCache()->setValue(null, Mosaic::quarterBlock());
+        $this->savedMosaics = $this->bootCache()->getValue();
+        $this->savedRenderMode = BootProbe::renderMode();
+        BootProbe::setRenderMode('auto');
+        $this->bootCache()->setValue(null, ['auto' => Mosaic::quarterBlock()]);
         Detect::reset();
 
         $pair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
@@ -55,7 +63,8 @@ final class DoctorBootProbeTest extends TestCase
     {
         Detect::setProbeStdin(null);
         Detect::reset();
-        $this->bootCache()->setValue(null, $this->savedBootProbe);
+        $this->bootCache()->setValue(null, $this->savedMosaics);
+        BootProbe::setRenderMode((string) $this->savedRenderMode);
         foreach ($this->pair ?? [] as $end) {
             fclose($end);
         }
@@ -93,6 +102,6 @@ final class DoctorBootProbeTest extends TestCase
 
     private function bootCache(): \ReflectionProperty
     {
-        return new \ReflectionProperty(BootProbe::class, 'mosaic');
+        return new \ReflectionProperty(BootProbe::class, 'mosaics');
     }
 }
