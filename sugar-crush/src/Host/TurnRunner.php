@@ -448,7 +448,7 @@ final class TurnRunner
             // The permission events (1.C-2) share the inbox: a question has to
             // reach the screen in the turn's own event order, between the tool
             // events around it.
-            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|PermissionAsked|PermissionResolved|\SugarCraft\Crush\Events\ContextLedgerChanged $event) use ($inbox, $generation, $runner, $cancellation): void {
+            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Crush\Events\MediaProgress|SubAgentActivity|PermissionAsked|PermissionResolved|\SugarCraft\Crush\Events\ContextLedgerChanged $event) use ($inbox, $generation, $runner, $cancellation): void {
                 if ($event instanceof SpendCapBreached) {
                     $runner->markSpendCapped($cancellation);
                 }

@@ -8,12 +8,14 @@ use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Media\Capability\EndpointFamily;
+use SugarCraft\Crush\Events\MediaProgress;
 use SugarCraft\Crush\Media\Infotext;
 use SugarCraft\Crush\Media\MediaArtifact;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Media\Png;
 use SugarCraft\Crush\Media\Sd\Client;
 use SugarCraft\Crush\Media\Sd\ProgressLoop;
+use SugarCraft\Crush\Media\Sd\ProgressState;
 use SugarCraft\Crush\Media\Sd\Response;
 use SugarCraft\Crush\Media\Sd\SdException;
 use SugarCraft\Crush\Media\Sd\SdTransport;
@@ -64,15 +66,17 @@ use SugarCraft\Crush\Tools\ToolResult;
  * done-sentinel's first pass: one poll beats, the render, one poll beats,
  * done. Honest residual: a render LONGER than the idle ceiling still starves
  * between the pre-render and post-render beats; `n_iter`/`batch_size` narrow
- * the window per iteration, and the preview-frame wiring owed by W2.4 (which
- * re-enters this loop with `$onPreviewFrame`) is the designed follow-up that
- * beats mid-render on multi-step jobs.
+ * the window per iteration. W2.4 landed the preview/beat PIPELINE (the loop's
+ * `$onPreviewFrame` now emits MediaProgress frames to the turn's event
+ * channel), but on THIS synchronous wire no poll can run while the single
+ * POST blocks — mid-render beats and frames need the async/queue transport
+ * mode, which is W5 surface.
  *
  * CANCELLATION. The done-sentinel checks {@see ToolCancelRequests} (the turn
  * child's latched view of the user's Esc) BEFORE issuing the POST, so a call
  * cancelled while queued never dials. Once the render itself is in flight the
  * synchronous wire cannot be interrupted from this process; the server-side
- * `POST /sdapi/v1/interrupt` passthrough is W2.4/W5 surface.
+ * `POST /sdapi/v1/interrupt` passthrough is W5 surface.
  *
  * PERMISSION CLASS: ask. This renders pixels on a machine the model does not
  * own, costs real GPU time, and dials an external host — the user approves
@@ -106,6 +110,10 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
         private ?string $mediaRoot = null,
         private ?float $pollIntervalSeconds = null,
         private ?\Closure $pollSleeper = null,
+        // Production wiring, not a test seam: the turn's tool-event channel
+        // (withEngine's emitter), used to push live MediaProgress preview
+        // frames to the parent while the render is in flight (W2.4).
+        private ?\Closure $eventEmitter = null,
     ) {
     }
 
@@ -129,6 +137,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $this->mediaRoot,
             $this->pollIntervalSeconds,
             $this->pollSleeper,
+            $subAgentEmitter,
         );
     }
 
@@ -143,6 +152,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $this->mediaRoot,
             $this->pollIntervalSeconds,
             $this->pollSleeper,
+            $this->eventEmitter,
         );
     }
 
@@ -157,6 +167,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $root,
             $this->pollIntervalSeconds,
             $this->pollSleeper,
+            $this->eventEmitter,
         );
     }
 
@@ -171,6 +182,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $this->mediaRoot,
             $intervalSeconds,
             $sleeper,
+            $this->eventEmitter,
         );
     }
 
@@ -370,13 +382,35 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             return new ToolResult($callId, ToolCancelRequests::CANCELLED, true);
         }
         try {
+            // W2.4 live preview: when the turn handed us its event channel,
+            // each poll's current_image becomes a MediaProgress frame for the
+            // parent's running row. Progress/eta ride the SAME poll's state —
+            // onFrame fires before onPreviewFrame inside the loop, so reading
+            // the captured state here is the fresh one, never a stale beat.
+            $latest = null;
+            $onFrame = $this->eventEmitter !== null && $callId !== ''
+                ? static function (ProgressState $state) use (&$latest): void {
+                    $latest = $state;
+                }
+                : null;
+            $onPreviewFrame = $onFrame === null
+                ? null
+                : function (string $frameB64) use (&$latest, $callId): void {
+                    ($this->eventEmitter)(new MediaProgress(
+                        $callId,
+                        $frameB64,
+                        $latest?->progress,
+                        $latest?->etaRelative,
+                    ));
+                };
             ProgressLoop::run(
                 $client,
                 $beat,
                 $sentinel,
-                null,
+                $onPreviewFrame,
                 $this->pollIntervalSeconds ?? ProgressLoop::DEFAULT_INTERVAL_SECONDS,
                 $this->pollSleeper,
+                $onFrame,
             );
         } catch (SdException $e) {
             if (!$awaited instanceof SdTransportResult) {

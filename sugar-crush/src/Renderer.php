@@ -11,6 +11,8 @@ use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Token;
 use SugarCraft\Crush\Config\StatusLineCommand;
+use SugarCraft\Crush\Media\PreviewPaint;
+use SugarCraft\Crush\Media\PreviewSlots;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Mosaic\ImageLayer;
@@ -4145,7 +4147,7 @@ final class Renderer
                 continue;
             }
             if ($msg->pendingToolCallId !== null) {
-                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded, $width, $agents);
+                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded, $width, $agents, $images, $mosaic, $imageRows);
 
                 continue;
             }
@@ -5316,13 +5318,14 @@ final class Renderer
      *
      * @param int $width the pane's usable columns; the live lines are fitted to it
      */
-    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = [], int $width = 0, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null): string
+    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = [], int $width = 0, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null, ?ImageLayer $images = null, ?Mosaic $mosaic = null, int $imageRows = 0): string
     {
         $runs = $agents === null ? [] : $agents->forCall((string) $msg->pendingToolCallId);
         $queued = $runs !== [] && array_filter($runs, static fn ($run): bool => !$run->isQueued()) === [];
         $spinner = Style::new()->foreground($theme->assistantLabel)->render($queued ? '◌' : '⠴');
         $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
         $running .= self::agentLines($runs, $theme, $width, $agents);
+        $running .= self::previewLines((string) $msg->pendingToolCallId, $theme, $width, $images, $mosaic, $imageRows);
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $running;
@@ -5331,6 +5334,62 @@ final class Renderer
         // Same key the finished row will compute (thoughtKey() reads the
         // text only), so a thought opened while the call runs stays open.
         return self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning)) . "\n\n" . $running;
+    }
+
+    /**
+     * The live-render preview block under a running image call (W2.4): a dim
+     * percent/eta caption plus the newest diffusion frame, painted inside the
+     * PreviewPaint quarter-pane budget so a thumbnail never outshouts the
+     * chat. '' - leaving the row byte-identical to a no-preview render - when
+     * no slot exists, no display protocol resolved, or the frame cannot be
+     * drawn. Blob frames ride the sanctioned ImageLayer path (marker block in
+     * the frame, bytes out-of-band), exactly like {@see renderToolImage()}.
+     */
+    private static function previewLines(string $callId, Theme $theme, int $width, ?ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    {
+        if ($callId === '' || $images === null || $mosaic === null || $width <= 0) {
+            return '';
+        }
+
+        $slot = PreviewSlots::peek($callId);
+        if ($slot === null) {
+            return '';
+        }
+
+        $block = '';
+        $caption = self::previewCaption($slot['progress'], $slot['eta']);
+        if ($caption !== '') {
+            $block .= "\n" . self::dim($theme)->render(Width::truncate($caption, $width));
+        }
+
+        if ($slot['frameB64'] !== null) {
+            $painted = PreviewPaint::paint($slot['frameB64'], $mosaic, $width, $imageRows);
+            if ($painted !== null) {
+                $block .= "\n" . ($mosaic->isInline()
+                    ? $painted['body']
+                    : $images->place($painted['body'], $painted['cols'], $painted['rows']));
+            }
+        }
+
+        return $block;
+    }
+
+    /**
+     * "  42% · eta 8s" for whatever the server reported; '' when it reported
+     * neither. Progress arrives 0..1 upstream (A1111 /progress), clamped here
+     * against a co-tenant's out-of-range readout, never against the frame.
+     */
+    private static function previewCaption(?float $progress, ?float $eta): string
+    {
+        $parts = [];
+        if ($progress !== null) {
+            $parts[] = (string) max(0, min(100, (int) round($progress * 100))) . '%';
+        }
+        if ($eta !== null && $eta >= 0) {
+            $parts[] = 'eta ' . (string) (int) round($eta) . 's';
+        }
+
+        return $parts === [] ? '' : '  ' . implode(' · ', $parts);
     }
 
     /**

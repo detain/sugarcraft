@@ -1199,3 +1199,9 @@ sugar-crush/tests/Media/PngTest.php	1.8	118
 sugar-crush/tests/ToolResultRenderModeTest.php	10.2	20
 sugar-crush/tests/Tools/BuiltIn/GenerateImageTest.php	9.4	16
 sugar-crush/tests/Commands/GenerateCommandTest.php	0.14	23
+sugar-crush/tests/Events/MediaProgressFrameCodecTest.php	0.3	7
+sugar-crush/tests/Preview/PreviewSlotsTest.php	0.3	7
+sugar-crush/tests/Preview/PreviewPaintTest.php	1.2	5
+sugar-crush/tests/Preview/RunningRowPreviewTest.php	2.1	8
+sugar-crush/tests/Chat/MediaProgressFoldTest.php	0.8	6
+sugar-crush/tests/Tools/BuiltIn/GenerateImagePreviewEmitTest.php	1.4	4

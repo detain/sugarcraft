@@ -42,9 +42,11 @@ use SugarCraft\Crush\Support\ClipboardImage;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\QueueMode;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Events\MediaProgress;
 use SugarCraft\Crush\Events\ReasoningDelta;
 use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Media\PreviewSlots;
 use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -198,7 +200,7 @@ final class Chat implements Model
      * and {@see \SugarCraft\Crush\Events\UsageUpdated} ride it too, for the
      * status bar; they never reach a {@see BackendToolEventsMsg}.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta|\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated}>
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|TokenDelta|ReasoningDelta|\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -906,7 +908,7 @@ final class Chat implements Model
          * allocating here) keeps every existing embedder/test constructor
          * call working unchanged.
          *
-         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
         /**
@@ -5225,6 +5227,17 @@ final class Chat implements Model
             return [$this, $this->foldHop($rest, $msg->replay)];
         }
 
+        if ($event instanceof MediaProgress) {
+            // W2.4 settled-queue twin of the pump arm: the slot write is the
+            // whole event, deliberately NOT recordEvent'd (preview bytes are
+            // display-only and must never enter the session's durable turn
+            // record) and not a transcript row. The chain continues in order
+            // so the settled ToolFinished that follows still clears the slot.
+            PreviewSlots::set($event->toolCallId, $event->frameB64, $event->progress, $event->eta);
+
+            return [$this, $this->foldHop($rest, $msg->replay)];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event, '', $msg->turn)
             : $this->replaceToolRunningPlaceholder($event, $msg->turn);
@@ -5350,8 +5363,11 @@ final class Chat implements Model
             // the per-call ground: a delegation beat belongs to a run
             // BEHIND a Task call, not to the pairing of any tool row itself,
             // and consumers of this accessor pair starts with finishes.
+            // MediaProgress (W2.4) shares both grounds: display-only frames
+            // that belong to a running call's SLOT, never to a pairing.
             if ($event instanceof TokenDelta || $event instanceof ReasoningDelta
-                || $event instanceof SpendCapBreached || $event instanceof SubAgentActivity) {
+                || $event instanceof SpendCapBreached || $event instanceof SubAgentActivity
+                || $event instanceof MediaProgress) {
                 continue;
             }
             $events[] = $event;
@@ -5709,6 +5725,18 @@ final class Chat implements Model
             return [$this, $more];
         }
 
+        if ($event instanceof MediaProgress) {
+            // W2.4: the preview frame writes only the display slot. No
+            // recordEvent, no transcript row, no model state - preview bytes
+            // must never reach the session store (crush_media §8.6-5), and a
+            // stale-generation frame was already dropped by the guard above.
+            // The running row reads the slot at paint time; the live pump's
+            // repaint cadence (same as the agent lines above) shows it.
+            PreviewSlots::set($event->toolCallId, $event->frameB64, $event->progress, $event->eta);
+
+            return [$this, $more];
+        }
+
         $next = $event instanceof ToolStarted
             // The step's thinking is parked on the placeholder rather than
             // dropped with the reset below: it is what led to this call, and
@@ -5814,6 +5842,9 @@ final class Chat implements Model
      */
     private function replaceToolRunningPlaceholder(ToolFinished $event, ?CancellationToken $turn = null): self
     {
+        // W2.4 leak law: the render settled, so its live-preview slot dies
+        // here - the settled row owns the final image through ToolResult.
+        PreviewSlots::clear($event->toolCallId);
         $runner = $this->turnRunner();
         [$history, $row, $replaced] = $runner->projector()->finish($this->history, $event);
         // Lane B (skills-qa F3): the engine path lands its row through the

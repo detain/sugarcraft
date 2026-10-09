@@ -20,6 +20,7 @@ use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Context\SessionPromptMemo;
 use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Events\ContextLedgerChanged;
+use SugarCraft\Crush\Events\MediaProgress;
 use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Events\ToolFinished;
@@ -3013,7 +3014,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $subAgentEmitter = null;
         if ($onEvent !== null) {
             $pid = getmypid();
-            $subAgentEmitter = static function (SubAgentActivity $activity) use ($pid, $onEvent): void {
+            $subAgentEmitter = static function (SubAgentActivity|MediaProgress $activity) use ($pid, $onEvent): void {
                 if (getmypid() !== $pid) {
                     return;
                 }
@@ -4699,7 +4700,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 static function (string $delta) use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'token', 'text' => $delta]);
                 },
-                static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|ContextLedgerChanged $event) use ($childSocket): void {
+                static function (ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|ContextLedgerChanged $event) use ($childSocket): void {
                     self::writeFrame($childSocket, self::encodeEvent($event));
                 },
                 // E456. The child's third sink, and the one that exists for the
@@ -5054,7 +5055,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @return array<string, mixed>
      */
-    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|ContextLedgerChanged $event): array
+    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|ContextLedgerChanged $event): array
     {
         if ($event instanceof ContextLedgerChanged) {
             // Roadmap 3.B-3: the live `ledger` frame — what a Prune (or an
@@ -5070,6 +5071,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 'calls' => $event->completedCalls,
                 'spent' => $event->spentUsd,
                 'cap' => $event->capUsd,
+            ];
+        }
+
+        if ($event instanceof MediaProgress) {
+            // W2.4: display-only preview frame. It crosses the socket because
+            // the render loop runs in the turn child; it never becomes a
+            // Message, so this arm is its whole durable surface: none.
+            return [
+                'kind' => 'media_progress',
+                'id' => $event->toolCallId,
+                'frame' => $event->frameB64,
+                'progress' => $event->progress,
+                'eta' => $event->eta,
             ];
         }
 
@@ -5132,7 +5146,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @param array<string, mixed> $encoded
      */
-    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|ContextLedgerChanged|null
+    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|ContextLedgerChanged|null
     {
         // THE KIND IS READ BEFORE THE IDENTITY, and the order is the fix, not
         // a style choice: a spend_cap frame carries no toolCallId/name pair at
@@ -5150,6 +5164,32 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             }
 
             return new SpendCapBreached($calls, (float) $spent, (float) $cap);
+        }
+
+        if ($kind === 'media_progress') {
+            // W2.4, same kind-before-identity law as spend_cap: the frame
+            // carries an id but no tool name. A frame whose payload is out of
+            // shape costs one repaint - dropped, never fatal, never stored.
+            $callId = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;
+            $frame = $encoded['frame'] ?? null;
+            $progress = $encoded['progress'] ?? null;
+            $eta = $encoded['eta'] ?? null;
+            if ($callId === null || $callId === '' || ($frame !== null && !is_string($frame))) {
+                return null;
+            }
+            if ($progress !== null && !(is_float($progress) || is_int($progress))) {
+                return null;
+            }
+            if ($eta !== null && !(is_float($eta) || is_int($eta))) {
+                return null;
+            }
+
+            return new MediaProgress(
+                $callId,
+                is_string($frame) ? $frame : null,
+                $progress !== null ? (float) $progress : null,
+                $eta !== null ? (float) $eta : null,
+            );
         }
 
         if ($kind === 'ledger') {

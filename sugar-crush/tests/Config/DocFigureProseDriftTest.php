@@ -4167,7 +4167,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $backendSource = self::sourceOf('Backend.php');
         $engineSource = self::sourceOf('Backend/EngineBackend.php');
-        $wordNumbers = ['five' => 5];
+        $wordNumbers = ['five' => 5, 'six' => 6];
 
         self::assertSame(
             1,
@@ -4177,9 +4177,9 @@ final class DocFigureProseDriftTest extends TestCase
         $section = (string) preg_replace('/^.*\*\*Turn-lifecycle events:\*\*/s', '', $backendSource);
         $section = explode(\chr(42) . \chr(42) . 'Reasoning:' . \chr(42) . \chr(42), $section)[0];
         preg_match_all('/\{\@see Events\\\\([A-Za-z]+)\}/', $section, $cited);
-        self::assertCount(5, $cited[1], 'the doc-block section stopped naming exactly five event classes');
+        self::assertCount(6, $cited[1], 'the doc-block section stopped naming exactly six event classes');
         self::assertSame(
-            ['ToolStarted', 'ToolFinished', 'SpendCapBreached', 'SubAgentActivity', 'ContextLedgerChanged'],
+            ['ToolStarted', 'ToolFinished', 'SpendCapBreached', 'SubAgentActivity', 'ContextLedgerChanged', 'MediaProgress'],
             array_values(array_unique($cited[1])),
             'the prose quartet in the class doc-block drifted — the encoder union below is the authority the page itself names',
         );
@@ -4189,12 +4189,12 @@ final class DocFigureProseDriftTest extends TestCase
         $param = (string) explode('public function complete(', $param)[0];
         self::assertSame(
             1,
-            preg_match('/`function\(Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+) \$event\): void`/', $param, $union),
-            'complete()\'s @param no longer states a five-class union inline — the page promise this arm guards is that union',
+            preg_match('/`function\(Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+) \$event\): void`/', $param, $union),
+            'complete()\'s @param no longer states a six-class union inline — the page promise this arm guards is that union',
         );
-        $documentedUnion = [$union[1], $union[2], $union[3], $union[4], $union[5]];
-        self::assertStringContainsString('type-matches these five covers the channel', self::markdownProse($section), 'the "these five" count word left the section — flip it with the roster, census-trio law');
-        self::assertCount($wordNumbers['five'], $documentedUnion);
+        $documentedUnion = [$union[1], $union[2], $union[3], $union[4], $union[5], $union[6]];
+        self::assertStringContainsString('type-matches these six covers the channel', self::markdownProse($section), 'the "these six" count word left the section — flip it with the roster, census-trio law');
+        self::assertCount($wordNumbers['six'], $documentedUnion);
 
         $encode = null;
         $decode = null;
