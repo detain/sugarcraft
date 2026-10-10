@@ -256,6 +256,11 @@ final class ReadPathCensusTest extends TestCase
         'Agents/WorktreeManager.php|new RecursiveDirectoryIterator' => [
             'NAMES_ONLY — recursive pattern expansion, gated at the copy like the glob above',
         ],
+        'App/App.php|file_get_contents' => [
+            'SELF_LOCATED — the W4.2 Ctrl+V paste landing: the volatile temp file was written by '
+                . 'Support\\ClipboardImage::save() into a 0700 directory it created itself, and the '
+                . 'bytes enter the app only through ImageIngress\'s validation door',
+        ],
         'Attachments/FileMentions.php|fopen' => [
             'USER_TYPED — resolve() snapshots an `@path` mention from the prompt the user submitted '
                 . '(bounded: 20 files, 256 KiB of text, 5 MiB per image)',

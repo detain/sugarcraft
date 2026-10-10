@@ -2614,6 +2614,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      */
     private const ACCEPTED_CONST_DUPLICATION = [
         'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
+        'CHUNKED' => 'The crush-media W4.4 pair (the /sendto host command and the PNG-info importer) point at the one chunked-payload fixture; both files sit two levels under the package, so the identical relative path is a single statement about the fixture tree, not a value to diverge.',
         'DEEPSEEK_V4' => 'The SGLang suites that pin DeepSeek-V4 behaviour (DSML hold-back, server limits, the truncation guard and its warning rate limit) name the same deployment id, spelled out since audit A26 moved SglangProvider::DEFAULT_MODEL to Qwen3.8; it is a request label those suites send, and the served-model suite names its own V4.5 id under a different constant.',
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
         'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the shutdown pair each pin one lifetime; the odd values are the drift polity.',
@@ -2628,6 +2629,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'ONE_M_WINDOW' => 'The absolute-cap breaker suite and the live compaction-settings suite both size the 1M-token context window roadmap 2.9 is about; the figure is the model class under test, so the copies must move together.',
         'OK_BODY' => 'The SGLang request-shape suites (Q5 system-row merge, 0.1 reasoning replay) answer every request with the same minimal completion body; neither asserts on it, it only lets the request be captured.',
         'OVERSIZED_BYTES' => 'The oversized-write bound several stdio families test is shared verbatim.',
+        'PLAIN' => 'The crush-media W4.4 pair share the one plain-PNG fixture pointer for the negative polarity (no parameters chunk to fold); identical by the same depth argument as CHUNKED, and a re-roll of the fixture moves the pair together.',
         'PNG_B64' => 'The sdapi media suites - the W1 response reader, the W2.1 GenerateImage tool, the W2.3 /generate command - each wrap the same 1x1 PNG in their transport fake; no suite asserts on the bytes, they only let the pipeline decode an image. A re-roll to a different PNG flips the pair to the drift polity, which is the human decision this row defers.',
         'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',
         'README' => 'The documentation-census suites point at the same repository file path.',
@@ -2665,6 +2667,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'BOUND_SECONDS' => 'Per-suite waits: a reap test and a shutdown test legitimately bound differently. THE SEMANTIC DIFFERENCES LIVE HERE, which is why this map is per-polity and not a widening of the other.',
         'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'The census documents a different budget than the suites enforce; that difference is the claim being tested.',
         'COLS' => 'Per-fixture terminal geometry from unrelated suites that named one constant the same.',
+        'CORRUPT' => 'The crush-media mask-ingress and image-ingress suites point at the one corrupt-PNG fixture; the single-token difference is each file\'s directory depth under tests/ — the LANG_DIR shape, not drift.',
         'DESCRIPTION_SENTINEL' => 'Each containment suite plants its own description sentinel; same word, different payloads.',
         'FIXTURE_LIFETIME_SECONDS' => 'Per-suite lifetimes against each other; the identical pairs live on the duplication map.',
         'FLAG' => 'A file-mode literal against a flag emoji — pure name collision.',

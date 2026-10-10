@@ -573,6 +573,9 @@ final class TreeWideGuardRosterTest extends TestCase
         'Agents/AgentPresetRegistryTest.php' => ['scandir($dir)'],
         'Agents/WorktreeConfigTest.php' => ['scandir($dir)'],
         'Agents/WorktreeManagerConfigOriginTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        // W4.2: tearDown() lists the clipboard-paste PNGs the test itself landed
+        // under its sandboxed awHomeDir to assert the paste persisted them.
+        'App/MediaFormWiringTest.php' => ["glob(\$this->awHomeDir.'/home/.sugar-crush/media/clipboard/'.\\chr(42).'.png')"],
         'ClaudeCodeMcpClientStdinWedgeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Cli/AgentManagerWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() removes the sys_get_temp_dir() tree setUp() made;

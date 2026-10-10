@@ -4350,8 +4350,13 @@ final class DocFigureProseDriftTest extends TestCase
         // judged carrier MOVED: the alias table left McpClient for
         // McpForeignTranslate, the shared vocabulary the importer reads
         // through. Same carrier count, same unrelated vocabulary, new file.
+        // W4 gate (crush-media) is the third carrier the message warned of,
+        // judged IN rather than the claim re-argued: ImportPng::VIA_LOCAL is
+        // a PNG-parameters import CHANNEL label ('local' chunk vs the gated
+        // server png-info helper) — a third unrelated vocabulary, neither
+        // memory nor transport. The page's memory-scoped claim still holds.
         self::assertSame(
-            ['src/Agents/MemoryScope.php', 'src/MCP/McpForeignTranslate.php'],
+            ['src/Agents/MemoryScope.php', 'src/MCP/McpForeignTranslate.php', 'src/Tui/MediaForm/ImportPng.php'],
             array_keys($sites),
             sprintf('the page enumerates every live `%s` carrier by name — a new one appeared, or a judged one moved', $needle),
         );
