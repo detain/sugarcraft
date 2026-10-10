@@ -175,7 +175,13 @@ final class BootstrapMcpTrustPinsTest extends TestCase
         }
 
         self::assertNotNull($notice, 'the stripped-credential notice reaches the launch notices');
-        self::assertMatchesRegularExpression('/\bbare \([^)]*\bGITHUB_TOKEN\b/', $notice);
+        // Same joiner law as the `declared` leg below (R13-m4, mirroring the
+        // W5 gate's absence-leg fix): on a long roster the clip can cut inside
+        // the `bare (` group, and the tail window repeats GITHUB_TOKEN inside
+        // the guidance sentence — a [^)]-only span would let that far
+        // occurrence satisfy the naming claim. Requiring contiguity up to the
+        // joiner keeps this a real accusation of the head-window text.
+        self::assertMatchesRegularExpression('/\bbare \([^)…]*\bGITHUB_TOKEN\b/', $notice);
         // The developer's own shell may hold other credentials, so `declared`
         // can still be named for those; it must not be named for the one it
         // declared. The span must not cross the both-ends clip's joiner (W5
