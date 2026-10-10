@@ -1629,6 +1629,225 @@
                 "additionalProperties": false
             }
         },
+        "generate.status": {
+            "description": "A generation job's state, progress and artifact refs, from its ledger.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "jobId": {
+                        "type": "string",
+                        "maxLength": 64
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "jobId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "state": {
+                        "enum": [
+                            "queued",
+                            "running",
+                            "done",
+                            "failed",
+                            "cancelled"
+                        ]
+                    },
+                    "progress01": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "etaSeconds": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "error": {
+                        "type": "string",
+                        "maxLength": 2048
+                    },
+                    "artifacts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/MediaRef"
+                        },
+                        "maxItems": 32
+                    }
+                },
+                "required": [
+                    "state",
+                    "progress01"
+                ]
+            }
+        },
+        "generate.submit": {
+            "description": "Start an image generation; answers with its job id.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "What to render, self-contained: style, subject, framing. Required, non-empty"
+                    },
+                    "negative_prompt": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "description": "What to steer away from, in the same comma-clause style"
+                    },
+                    "width": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Image width in pixels (server default applies)"
+                    },
+                    "height": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Image height in pixels (server default applies)"
+                    },
+                    "steps": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Sampling steps — more is slower, past a point indistinguishable"
+                    },
+                    "cfg_scale": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Prompt adherence; high values burn in artefacts"
+                    },
+                    "seed": {
+                        "type": "integer",
+                        "minimum": -1,
+                        "maximum": 4294967295,
+                        "description": "Exact seed to reproduce a prior image, or -1 for a fresh draw"
+                    },
+                    "sampler_name": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "description": "Sampler as the server names it (Euler a, DPM++ 2M Karras, ...)"
+                    },
+                    "scheduler": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "description": "Scheduler as the server names it"
+                    },
+                    "batch_size": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Images per request"
+                    },
+                    "n_iter": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Repeat requests; narrows the watchdog window on long renders"
+                    },
+                    "save_to_disk": {
+                        "type": "boolean",
+                        "description": "Also ask the server to write its own copy into its output directory; the tool always saves its copy regardless"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "prompt"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "jobId": {
+                        "type": "string",
+                        "maxLength": 64
+                    }
+                },
+                "required": [
+                    "jobId"
+                ]
+            }
+        },
+        "media.fetch": {
+            "description": "A stored media artifact's bytes, in base64 slices.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "artifactId": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "path": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 4194304
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "artifactId": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "bytes": {
+                        "type": "string"
+                    },
+                    "totalBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "eof": {
+                        "type": "boolean"
+                    },
+                    "mime": {
+                        "type": "string",
+                        "maxLength": 128
+                    }
+                },
+                "required": [
+                    "artifactId",
+                    "offset",
+                    "bytes",
+                    "totalBytes",
+                    "eof"
+                ]
+            }
+        },
         "memory.add": {
             "description": "Add a note.",
             "scope": "write",

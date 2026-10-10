@@ -21,6 +21,7 @@ use SugarCraft\Crush\Media\Sd\Response;
 use SugarCraft\Crush\Media\Sd\SdException;
 use SugarCraft\Crush\Media\Sd\SdTransport;
 use SugarCraft\Crush\Media\Sd\SdTransportResult;
+use SugarCraft\Crush\Protocol\Schema\Schema;
 use SugarCraft\Crush\Support\MediaStore;
 use SugarCraft\Crush\Support\ToolCancelRequests;
 use SugarCraft\Crush\ToolResult as BootProbe;
@@ -122,6 +123,11 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
         // (withEngine's emitter), used to push live MediaProgress preview
         // frames to the parent while the render is in flight (W2.4).
         private ?\Closure $eventEmitter = null,
+        // Production wiring for callers without an engine to bind: the serve
+        // RPC's `generate.submit` runs this tool outside any turn, so the
+        // session whose media folder receives the artifacts arrives here
+        // instead of through `withEngine` (plan W6.2).
+        private ?string $storeSession = null,
     ) {
     }
 
@@ -146,6 +152,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $this->pollIntervalSeconds,
             $this->pollSleeper,
             $subAgentEmitter,
+            $this->storeSession,
         );
     }
 
@@ -161,6 +168,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $this->pollIntervalSeconds,
             $this->pollSleeper,
             $this->eventEmitter,
+            $this->storeSession,
         );
     }
 
@@ -176,6 +184,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $this->pollIntervalSeconds,
             $this->pollSleeper,
             $this->eventEmitter,
+            $this->storeSession,
         );
     }
 
@@ -191,6 +200,27 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $intervalSeconds,
             $sleeper,
             $this->eventEmitter,
+            $this->storeSession,
+        );
+    }
+
+    /**
+     * The same tool saving artifacts into $session's media folder with no
+     * engine bound — the serve RPC's `generate.submit` channel (plan W6.2),
+     * where the render answers an out-of-turn request, not a model turn.
+     */
+    public function withStoreSession(?string $session): self
+    {
+        return new self(
+            $this->engine,
+            $this->transport,
+            $this->baseUrl,
+            $this->settings,
+            $this->mediaRoot,
+            $this->pollIntervalSeconds,
+            $this->pollSleeper,
+            $this->eventEmitter,
+            $session,
         );
     }
 
@@ -213,39 +243,17 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
     }
 
     /**
+     * The model-facing view of the shared v1 submit vocabulary —
+     * {@see MediaRequest::paramSchema()} rendered, not a second hand-written
+     * copy (plan W6.2: one map, two doors, no drift). The serve RPC's
+     * `generate.submit` params embed the same map, so anything the model may
+     * ask for here is exactly what the RPC door accepts there.
+     *
      * @return array<string, mixed>
      */
     public function inputSchema(): array
     {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'prompt' => [
-                    'type' => 'string',
-                    'description' => 'What to render, self-contained: style, subject, framing. Required,'
-                        . ' non-empty',
-                ],
-                'negative_prompt' => [
-                    'type' => 'string',
-                    'description' => 'What to steer away from, in the same comma-clause style',
-                ],
-                'width' => ['type' => 'integer', 'description' => 'Image width in pixels (server default applies)'],
-                'height' => ['type' => 'integer', 'description' => 'Image height in pixels (server default applies)'],
-                'steps' => ['type' => 'integer', 'description' => 'Sampling steps — more is slower, past a point indistinguishable'],
-                'cfg_scale' => ['type' => 'number', 'description' => 'Prompt adherence; high values burn in artefacts'],
-                'seed' => ['type' => 'integer', 'description' => 'Exact seed to reproduce a prior image, or -1 for a fresh draw'],
-                'sampler_name' => ['type' => 'string', 'description' => 'Sampler as the server names it (Euler a, DPM++ 2M Karras, ...)'],
-                'scheduler' => ['type' => 'string', 'description' => 'Scheduler as the server names it'],
-                'batch_size' => ['type' => 'integer', 'description' => 'Images per request'],
-                'n_iter' => ['type' => 'integer', 'description' => 'Repeat requests; narrows the watchdog window on long renders'],
-                'save_to_disk' => [
-                    'type' => 'boolean',
-                    'description' => 'Also ask the server to write its own copy into its output directory;'
-                        . ' the tool always saves its copy regardless',
-                ],
-            ],
-            'required' => ['prompt'],
-        ];
+        return Schema::object(MediaRequest::paramSchema(), ['prompt'])->toArray();
     }
 
     public function execute(array $args): ToolResult
@@ -481,7 +489,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
         $pattern = \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
             ? $settings['sd.savePattern']
             : null;
-        $session = $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
+        $session = $this->storeSession ?? $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
         $store = MediaStore::forSession($session, $this->mediaRoot, $pattern);
 
         /** @var list<string> $lines */

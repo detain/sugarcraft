@@ -511,6 +511,49 @@ final class MethodSchemas
                 ], ['toolCallId', 'offset', 'content', 'total', 'isError', 'more']),
             ],
             'todo.get' => [$sessionOnly, Schema::object(['items' => Schema::arrayOf(Schema::object(['content' => Schema::string(), 'status' => Schema::enum(\SugarCraft\Crush\Todo\TodoStatus::values())], ['content', 'status']))], ['items'])],
+
+            // Plan W6.2. The submit params embed MediaRequest's own v1
+            // vocabulary map — the same static the GenerateImage tool schema
+            // renders — so the model door and the RPC door cannot drift;
+            // MediaMethodsTest pins that equality.
+            'generate.submit' => [
+                Schema::object([
+                    ...$sid,
+                    ...\SugarCraft\Crush\Media\MediaRequest::paramSchema(),
+                    'idempotencyKey' => Schema::string(64),
+                ], ['sessionId', 'prompt']),
+                Schema::object(['jobId' => Schema::string(64)], ['jobId']),
+            ],
+            'generate.status' => [
+                Schema::object([...$sid, 'jobId' => Schema::string(64)], ['sessionId', 'jobId']),
+                Schema::object([
+                    'state' => Schema::enum(\array_map(
+                        static fn (\SugarCraft\Crush\Media\MediaJobStatus $status): string => $status->value,
+                        \SugarCraft\Crush\Media\MediaJobStatus::cases(),
+                    )),
+                    'progress01' => Schema::number(0),
+                    'etaSeconds' => Schema::number(0),
+                    'error' => Schema::string(2048),
+                    'artifacts' => Schema::arrayOf(Schema::ref(D::MEDIA_REF), 32),
+                ], ['state', 'progress01']),
+            ],
+            'media.fetch' => [
+                Schema::object([
+                    ...$sid,
+                    'artifactId' => Schema::string(128),
+                    'path' => Schema::string(4096),
+                    'offset' => Schema::integer(0),
+                    'limit' => Schema::integer(1, \SugarCraft\Crush\Protocol\Methods\MediaMethods::FETCH_MAX_BYTES),
+                ], ['sessionId']),
+                Schema::object([
+                    'artifactId' => Schema::string(128),
+                    'offset' => Schema::integer(0),
+                    'bytes' => Schema::string(),
+                    'totalBytes' => Schema::integer(0),
+                    'eof' => Schema::boolean(),
+                    'mime' => Schema::string(128),
+                ], ['artifactId', 'offset', 'bytes', 'totalBytes', 'eof']),
+            ],
         ];
         \ksort($schemas);
 

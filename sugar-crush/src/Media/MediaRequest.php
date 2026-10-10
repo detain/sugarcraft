@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Media;
 
 use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\Crush\Protocol\Schema\Schema;
 
 /**
  *  * One sdapi generation request — the full txt2img (§4.2) plus img2img (§4.3)
@@ -491,6 +492,46 @@ final readonly class MediaRequest
     private static function reject(string $key, string $wanted, mixed $given): never
     {
         throw new \InvalidArgumentException("MediaRequest::fromArray(): field '{$key}' expects {$wanted}, got " . get_debug_type($given));
+    }
+
+    /**
+     * The v1 submit-surface vocabulary (plan W6.2): the tool-arg names a
+     * generation request accepts, each with its schema, as ONE shared map —
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\GenerateImage::inputSchema()}
+     * renders its model-facing JSON from it, and
+     * {@see \SugarCraft\Crush\Protocol\Schema\MethodSchemas} embeds it in the
+     * `generate.submit` params, so the tool door and the RPC door cannot drift
+     * apart (a `ProtocolSchemaDriftTest`-pinned law; the media-methods test
+     * pins the tool side).
+     *
+     * Keys are the TOOL arg spellings — `save_to_disk`, not the wire's
+     * `save_images` — because both consumers speak to callers in arg names,
+     * and {@see \SugarCraft\Crush\Tools\BuiltIn\GenerateImage}'s
+     * `ARG_WIRE_ALIASES` keeps the one remap single-owned. Bounds here are the
+     * sane-speaking range, not a server contract: the DTO itself stays
+     * coercion-free (class docblock), and the A1111 server keeps deciding what
+     * it will actually render.
+     *
+     * @return array<string, Schema>
+     */
+    public static function paramSchema(): array
+    {
+        return [
+            'prompt' => Schema::string(4096)->describe('What to render, self-contained: style, subject, framing. Required,'
+                . ' non-empty'),
+            'negative_prompt' => Schema::string(2048)->describe('What to steer away from, in the same comma-clause style'),
+            'width' => Schema::integer(0)->describe('Image width in pixels (server default applies)'),
+            'height' => Schema::integer(0)->describe('Image height in pixels (server default applies)'),
+            'steps' => Schema::integer(0)->describe('Sampling steps — more is slower, past a point indistinguishable'),
+            'cfg_scale' => Schema::number(0)->describe('Prompt adherence; high values burn in artefacts'),
+            'seed' => Schema::integer(-1, 4_294_967_295)->describe('Exact seed to reproduce a prior image, or -1 for a fresh draw'),
+            'sampler_name' => Schema::string(128)->describe('Sampler as the server names it (Euler a, DPM++ 2M Karras, ...)'),
+            'scheduler' => Schema::string(128)->describe('Scheduler as the server names it'),
+            'batch_size' => Schema::integer(1)->describe('Images per request'),
+            'n_iter' => Schema::integer(1)->describe('Repeat requests; narrows the watchdog window on long renders'),
+            'save_to_disk' => Schema::boolean()->describe('Also ask the server to write its own copy into its output directory;'
+                . ' the tool always saves its copy regardless'),
+        ];
     }
 
     // ——— value accessors ———

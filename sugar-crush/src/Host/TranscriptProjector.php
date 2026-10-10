@@ -340,11 +340,14 @@ final class TranscriptProjector
      * One artifact ref: identity and path only (C-7). `artifactId` follows
      * MediaStore's own id rule so a client can fetch by the id `list()`
      * would report; `infotextDigest` rides only when the delivered bytes
-     * parse as a PNG carrying infotext.
+     * parse as a PNG carrying infotext. Public because the serve RPC reads
+     * the same single formatter: `generate.status` builds its artifact list
+     * and `media.fetch` its mime/kind row from here, never a re-derivation
+     * (plan W6.2).
      *
      * @return array<string, mixed>
      */
-    private static function mediaRef(string $path, ?string $bytes): array
+    public static function mediaRef(string $path, ?string $bytes): array
     {
         $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
 

@@ -20,6 +20,7 @@ use SugarCraft\Crush\Protocol\Methods\SettingsMethods;
 use SugarCraft\Crush\Protocol\Methods\TodoMethods;
 use SugarCraft\Crush\Protocol\Methods\WorkflowMethods;
 use SugarCraft\Crush\Protocol\Methods\WorkspaceMethods;
+use SugarCraft\Crush\Protocol\Methods\MediaMethods;
 use SugarCraft\Crush\Protocol\Methods\ToolMethods;
 use SugarCraft\Crush\Protocol\Methods\TurnMethods;
 use SugarCraft\Crush\Protocol\Schema\ProtocolSchema;
@@ -136,6 +137,7 @@ final class Dispatcher implements MessageHandler
         FilesMethods::register($registry);
         FsMethods::register($registry);
         ToolMethods::register($registry);
+        MediaMethods::register($registry);
         TodoMethods::register($registry);
         WorkspaceMethods::register($registry);
         WorkflowMethods::register($registry);

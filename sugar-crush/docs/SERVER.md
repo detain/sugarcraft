@@ -406,6 +406,9 @@ it and the two tables below are generated from the code
 | `files.diff` | read |  | — | The workspace's uncommitted changes to tracked files, as a unified diff. |
 | `files.read` | read |  | `path` | A file under the project root, read-only and size-capped. |
 | `fs.listDirs` | read |  | — | The child directories (names only, never files) of a directory under the browse root; needs serve --allow-dir-browse. |
+| `generate.status` | read |  | `sessionId`, `jobId` | A generation job's state, progress and artifact refs, from its ledger. |
+| `generate.submit` | write | yes | `sessionId`, `prompt` | Start an image generation; answers with its job id. |
+| `media.fetch` | read |  | `sessionId` | A stored media artifact's bytes, in base64 slices. |
 | `memory.add` | write | yes | `content` | Add a note. |
 | `memory.delete` | write | yes | `id` | Delete a note. |
 | `memory.edit` | write | yes | `id`, `content` | Replace a note's text. |
