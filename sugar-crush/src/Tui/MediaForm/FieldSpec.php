@@ -190,6 +190,34 @@ final readonly class FieldSpec
     }
 
     /**
+     * A copy with display-override props folded in (crush-media W3.9, the
+     * ui-config analog): `minimum`/`maximum`/`step` move the widget range
+     * and `value` re-seeds the row's default — the pre-fill a fresh form
+     * opens on. Typing and widget-sense belong to {@see DisplayOverrides},
+     * the parse boundary; this door trusts what it was handed.
+     *
+     * @param array<string, int|float|string|bool> $props keyed by the DisplayOverrides PROP_ constants
+     */
+    public function withDisplayProps(array $props): self
+    {
+        return new self(
+            key: $this->key,
+            labelKey: $this->labelKey,
+            widget: $this->widget,
+            min: \array_key_exists(DisplayOverrides::PROP_MINIMUM, $props) ? $props[DisplayOverrides::PROP_MINIMUM] : $this->min,
+            max: \array_key_exists(DisplayOverrides::PROP_MAXIMUM, $props) ? $props[DisplayOverrides::PROP_MAXIMUM] : $this->max,
+            step: \array_key_exists(DisplayOverrides::PROP_STEP, $props) ? $props[DisplayOverrides::PROP_STEP] : $this->step,
+            default: \array_key_exists(DisplayOverrides::PROP_VALUE, $props) ? $props[DisplayOverrides::PROP_VALUE] : $this->default,
+            section: $this->section,
+            infotextLabel: $this->infotextLabel,
+            options: $this->options,
+            choices: $this->choices,
+            defaultList: $this->defaultList,
+            rows: $this->rows,
+        );
+    }
+
+    /**
      * The option labels for this row: the runtime feed wins, the row's
      * fixed options are next, the registry default is last.
      *

@@ -65,6 +65,10 @@ final class MediaForm
         private readonly MediaFormState $state,
         private readonly ?Field $editing = null,
         private readonly ?string $status = null,
+        /** Parsed `sd.presets` store, null when the map refused to parse. */
+        private readonly ?MediaPresets $presets = null,
+        /** Door that hands the full replaced map to the settings writer. */
+        private readonly ?\Closure $persistPresets = null,
     ) {
     }
 
@@ -80,10 +84,24 @@ final class MediaForm
      * @param array<string, list<string>>|null $runtimeChoices
      * @param list<mixed>|null $scriptDescriptors
      * @param array<string, mixed>|null $optionsMap
+     * @param array<string, mixed>|null $presets raw `sd.presets` map; a
+     *        malformed entry opens the form on the loud-refusal status
+     * @param ?\Closure(array<string,mixed>):void $persistPresets settings-write door
+     * @param array<string, mixed>|null $displayOverrides raw `ui.mediaDisplayOverrides` map
      */
-    public static function open(?MediaRequest $request = null, ?array $runtimeChoices = null, ?array $scriptDescriptors = null, ?array $optionsMap = null): self
+    public static function open(?MediaRequest $request = null, ?array $runtimeChoices = null, ?array $scriptDescriptors = null, ?array $optionsMap = null, ?array $presets = null, ?\Closure $persistPresets = null, ?array $displayOverrides = null, ?string $savePattern = null): self
     {
         $draft = $request ?? MediaRequest::new();
+        $store = null;
+        $refusal = null;
+        if ($presets !== null) {
+            try {
+                $store = MediaPresets::fromStored($presets);
+            } catch (\InvalidArgumentException $error) {
+                $refusal = $error->getMessage();
+            }
+        }
+
         $sections = [
             Sections\PromptSection::forDraft($draft),
             Sections\ParamsSection::forDraft($draft, $runtimeChoices),
@@ -102,9 +120,30 @@ final class MediaForm
             // map only suggests keys). Lane d appends the Presets/Output
             // rows after these lines.
             Sections\AdvancedSection::forDraft($draft, $optionsMap),
+            // W3.9 presets tab (named FieldSpec bundles over `sd.presets`)
+            // and the read-only output tab (effective `sd.savePattern` plus
+            // the token-palette help line).
+            Sections\PresetsSection::forDraft($store),
+            Sections\OutputSection::forDraft($savePattern),
         ];
 
-        return new self($sections, $draft, MediaFormState::forSection(0, \count($sections[0]->rows())));
+        if ($displayOverrides !== null && $displayOverrides !== []) {
+            $sections = array_map(
+                static fn (Section $s): Section => $s instanceof Sections\RegistrySection
+                    ? $s->withDisplayOverrides($displayOverrides)
+                    : $s,
+                $sections,
+            );
+        }
+
+        return new self(
+            $sections,
+            $draft,
+            MediaFormState::forSection(0, \count($sections[0]->rows())),
+            presets: $store,
+            persistPresets: $persistPresets,
+            status: $refusal === null ? null : '! ' . $refusal,
+        );
     }
 
     /**
@@ -114,14 +153,20 @@ final class MediaForm
      *
      * @param list<Section> $sections
      */
-    public static function fromSections(array $sections, ?MediaRequest $request = null): self
+    public static function fromSections(array $sections, ?MediaRequest $request = null, ?MediaPresets $presets = null, ?\Closure $persistPresets = null): self
     {
         $draft = $request ?? MediaRequest::new();
         if ($sections === []) {
             $sections = [ParamsSection::forDraft($draft)];
         }
 
-        return new self($sections, $draft, MediaFormState::forSection(0, \count($sections[0]->rows())));
+        return new self(
+            $sections,
+            $draft,
+            MediaFormState::forSection(0, \count($sections[0]->rows())),
+            presets: $presets,
+            persistPresets: $persistPresets,
+        );
     }
 
     /** The registered sections, tab order (the wiring seam for later lanes). */
@@ -360,6 +405,11 @@ final class MediaForm
         }
 
         $replacement = $section->withField($field);
+        $command = $replacement instanceof Sections\PresetsSection ? $replacement->pendingCommand() : null;
+        if ($command !== null) {
+            $replacement = $replacement->cleared();
+        }
+
         foreach ($sections as $i => $candidate) {
             if ($candidate === $section) {
                 $sections[$i] = $replacement;
@@ -368,12 +418,88 @@ final class MediaForm
 
         // The draft stays the single wire truth: committing a field folds its
         // section's collect() into it right away, not only at Generate.
-        return $this->mutate([
+        $form = $this->mutate([
             'sections' => $sections,
             'draft' => $replacement->collect($this->draft),
             'editing' => null,
             'state' => $this->state->withEditing(false),
         ]);
+
+        return $command === null ? $form : $form->runPresetCommand($command);
+    }
+
+    /**
+     * Execute a preset command the Presets tab just pressed (crush-media
+     * W3.9). Save bundles `collectValues()` under the typed name — secret-
+     * shaped keys are dropped by {@see MediaPresets::save()} — and the whole
+     * replaced map rides the injected persist door; apply pushes the stored
+     * bundle through {@see hydrateFields()}; delete retires the checked
+     * names. A refusal lands as a '!' status and leaves the store untouched
+     * (SettingsWriter's own refusals fire before anything is written, so a
+     * rejected save never half-lands).
+     *
+     * @param array{0: string, 1: mixed} $command
+     */
+    private function runPresetCommand(array $command): self
+    {
+        [$kind, $payload] = $command;
+        if ($this->presets === null) {
+            return $this->mutate(['status' => '! ' . MediaPresets::STORE_UNAVAILABLE]);
+        }
+
+        try {
+            $next = $this->presets;
+            $persist = $this->persistPresets;
+            switch ($kind) {
+                case 'save':
+                    $next = $next->save((string) $payload, $this->collectValues());
+                    $status = Lang::t(GenFormKeys::PRESET_SAVE) . ' — ' . (string) $payload;
+                    break;
+                case 'apply':
+                    $form = $this->hydrateFields($next->apply((string) $payload));
+
+                    return $form->mutate(['status' => Lang::t(GenFormKeys::PRESET_APPLY) . ' — ' . (string) $payload]);
+                case 'delete':
+                    foreach ((array) $payload as $name) {
+                        $next = $next->delete((string) $name);
+                    }
+
+                    $status = Lang::t(GenFormKeys::PRESET_DELETE) . ' — ' . implode(', ', array_map(strval(...), (array) $payload));
+                    break;
+                default:
+                    return $this;
+            }
+
+            // Inside the try: a door that refuses (SettingsWriter throws its
+            // refusals before anything is written) must land as a status,
+            // never a crash — and the store the form shows stays the old one.
+            if ($persist !== null) {
+                $persist($next->toStored());
+            }
+        } catch (\InvalidArgumentException|\RuntimeException $error) {
+            return $this->mutate(['status' => '! ' . $error->getMessage()]);
+        }
+
+        return $this->mutate([
+            'sections' => $this->replacedStore($next),
+            'presets' => $next,
+            'status' => $status,
+        ]);
+    }
+
+    /**
+     * Re-mint every Presets tab over the new store so its name list refreshes.
+     *
+     * @return list<Section>
+     */
+    private function replacedStore(MediaPresets $store): array
+    {
+        return array_map(
+            static fn (Section $s): Section => $s instanceof Sections\PresetsSection
+                ? Sections\PresetsSection::forDraft($store)
+                : $s,
+            $this->sections,
+        );
     }
 
     /** Abandon what was typed: the section keeps the field it already held. */
@@ -660,6 +786,8 @@ final class MediaForm
             'state' => $this->state,
             'editing' => null,
             'status' => $this->status,
+            'presets' => $this->presets,
+            'persistPresets' => $this->persistPresets,
         ]));
     }
 }

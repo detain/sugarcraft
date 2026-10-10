@@ -143,4 +143,9 @@ final class InpaintSection extends RegistrySection
     {
         return new self($this->specs, [...$this->fields, ...$changes], $this->rowKeys, $this->enabled);
     }
+
+    protected function rebuildLattice(array $specs, array $fields, array $rowKeys): static
+    {
+        return new self($specs, $fields, $rowKeys, $this->enabled);
+    }
 }

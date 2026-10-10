@@ -140,6 +140,86 @@ abstract class RegistrySection implements Section, FieldValuedSection
     }
 
     /**
+     * Fold the `ui.mediaDisplayOverrides` map into this section's lattice
+     * (crush-media W3.9): accepted range/value props rebuild the row's spec
+     * and reshape its widget (carrying an already-touched value through the
+     * new range, clamping via the widget's own coercion), and a
+     * `visible: false` row is cut from specs, fields, AND rowKeys — so it
+     * renders nowhere and collects nothing, the W3.5 hidden-row law applied
+     * at build time. Unresolvable ids are silently ignored (§5.5 tolerance);
+     * a section with no registry specs (Scripts, Advanced, Presets) has
+     * nothing to override and returns itself.
+     *
+     * One disclosed shape: a reshaped option-row loses a runtime choice feed
+     * it received through its constructor (the rebuilt widget falls back to
+     * the registry's static option list) — overrides moving a Select row's
+     * default while a live /samplers feed is up are rare, and a wrong-feed
+     * drop clamps through withSelected's own refusal rather than forging one.
+     *
+     * @param array<string, mixed> $overrides
+     */
+    public function withDisplayOverrides(array $overrides): static
+    {
+        if ($overrides === [] || $this->specs === []) {
+            return $this;
+        }
+
+        [$specs, $changed] = \SugarCraft\Crush\Tui\MediaForm\DisplayOverrides::apply($this->specs, $overrides);
+        $hidden = array_diff_key($this->specs, $specs);
+        if ($changed === [] && $hidden === []) {
+            return $this;
+        }
+
+        $fields = $this->fields;
+        $rowKeys = [];
+        foreach ($this->rowKeys as $key) {
+            if (isset($hidden[$key])) {
+                unset($fields[$key]);
+                continue;
+            }
+
+            $rowKeys[] = $key;
+            if (isset($changed[$key])) {
+                $fields[$key] = $this->reshapeField($this->specs[$key], $specs[$key]);
+            }
+        }
+
+        return $this->rebuildLattice($specs, $fields, $rowKeys);
+    }
+
+    /**
+     * Rebuild over a transformed lattice; subclasses thread their extra
+     * constructor state through this door exactly as {@see rebuild()} does.
+     *
+     * @param array<string, FieldSpec> $specs
+     * @param array<string, Field> $fields
+     * @param list<string> $rowKeys
+     */
+    protected function rebuildLattice(array $specs, array $fields, array $rowKeys): static
+    {
+        return new static($specs, $fields, $rowKeys);
+    }
+
+    /**
+     * The reshaped widget for a row whose props moved: fresh bounds from the
+     * new spec, the row's label, and — the part that matters — the operator's
+     * value survives whenever it differed from the OLD default (untouched
+     * rows adopt the NEW default, which is precisely what "pre-fill" means).
+     */
+    private function reshapeField(FieldSpec $old, FieldSpec $new): Field
+    {
+        $fresh = $new->createField($new->key)->withTitle(Lang::t($new->labelKey));
+        $existing = $this->fields[$old->key] ?? null;
+        $current = $existing?->value();
+        $baseline = $old->widget === FieldSpec::WIDGET_MULTI ? $old->defaultList : $old->default;
+        $effective = $current !== null && $current != $baseline
+            ? $current
+            : ($new->widget === FieldSpec::WIDGET_MULTI ? ($new->defaultList ?? []) : $new->default);
+
+        return $effective === null ? $fresh : ($this->inject($new, $fresh, $effective) ?? $fresh);
+    }
+
+    /**
      * The row keys currently on screen — every row by default; a disclosure
      * subclass filters this to its gate state so a collapsed group is not
      * even a row (W3.5: the index math MediaForm consumes is positional over

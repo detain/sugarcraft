@@ -151,6 +151,11 @@ final class ParamsSection extends RegistrySection
         return new self($this->specs, [...$this->fields, ...$changes], $this->rowKeys, $this->lastSeed);
     }
 
+    protected function rebuildLattice(array $specs, array $fields, array $rowKeys): static
+    {
+        return new self($specs, $fields, $rowKeys, $this->lastSeed);
+    }
+
     protected function extraLabel(string $key): string
     {
         return match ($key) {

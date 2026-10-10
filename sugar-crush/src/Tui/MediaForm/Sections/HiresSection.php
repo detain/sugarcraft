@@ -353,4 +353,9 @@ final class HiresSection extends RegistrySection implements DraftContextSection
             $this->runtimeChoices,
         );
     }
+
+    protected function rebuildLattice(array $specs, array $fields, array $rowKeys): static
+    {
+        return new self($specs, $fields, $rowKeys, $this->context, $this->runtimeChoices);
+    }
 }
