@@ -7264,7 +7264,8 @@ final class Bootstrap
                 - 3 // the ' … ' joiner between the kept ends
                 - self::LAUNCH_NOTICE_TAIL_CHARS;
             if ($headChars < 1) {
-                // Config bug, unreachable today (400 - 28 - 3 - 96 = 273): the
+                // Config bug, unreachable today (400 - 32 - 3 - 96 = 269, the
+                // suffix counting its leading ellipsis as one UTF-8 char): the
                 // bounds no longer compose to a row that fits. Loud, because a
                 // silently negative mb_substr length would clip to the empty
                 // head and advertise text the row does not contain.
