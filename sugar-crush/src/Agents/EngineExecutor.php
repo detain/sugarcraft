@@ -244,6 +244,11 @@ final class EngineExecutor implements ExecutorInterface
             );
         }
 
+        // R4-m1 disclosure: delegation tools (DelegatesToEngine — Task, and
+        // every *Section drive-through) are excluded from the sub-agent
+        // toolset. Their body is itself a delegated turn, and inside this
+        // child the parent's emitter is a pid-bound no-op — a nested
+        // delegation here would report progress nowhere.
         $tools = array_values(array_filter(
             $request->tools ?? $this->engine->tools(),
             static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,

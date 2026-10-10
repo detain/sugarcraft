@@ -463,9 +463,10 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
      * Decode (grid law), fan out the batch pairing through BatchResults,
      * re-embed each artifact's OWN infotext, save every artifact through
      * MediaStore (the grid under the pattern plus its `-grid` marker),
-     * report. imageBytes/imagePath ride the first SAMPLE (the grid is listed,
-     * never headlined — grids cheaply exceed the display ceilings, §8.6-4),
-     * matching the display contract.
+     * report. imageBytes/imagePath ride the first SAMPLE — the grid heads the
+     * pair only as the degenerate carry when the batch yielded no samples at
+     * all (grids cheaply exceed the display ceilings, §8.6-4), matching the
+     * display contract.
      *
      * @param array<array-key, mixed> $settings
      */

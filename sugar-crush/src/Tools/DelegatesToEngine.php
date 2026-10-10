@@ -27,7 +27,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
  * would interleave with the parent's own.
  *
  * The sub-agent emitter is the delegation's OWN visibility channel: a
- * `Closure(\SugarCraft\Crush\Events\SubAgentActivity): void` that hands each
+ * `Closure(\SugarCraft\Crush\Events\SubAgentActivity|\SugarCraft\Crush\Events\MediaProgress): void` that hands each
  * beat of the delegated run to the turn's `$onEvent`, which puts it on the same
  * frame socket (or, on a sync caller, the same callback) the turn's tool events
  * ride. Without it a sub-agent runs entirely inside the forked child and the
@@ -36,12 +36,15 @@ use SugarCraft\Crush\Backend\EngineBackend;
  * grandchild, whose beats would corrupt a socket its parent does not own, so
  * outside the binding process the emitter is a no-op and the run's frames are
  * simply never sent (the ToolFinished pair still reports the final text).
+ * Because of that pid-binding, EngineExecutor excludes every tool implementing
+ * this interface from a sub-agent's own toolset: a nested delegation would run
+ * dark inside the child, its emitter a no-op on the grandchild's socket.
  */
 interface DelegatesToEngine
 {
     /**
      * @param \Closure(): void|null $heartbeat
-     * @param \Closure(\SugarCraft\Crush\Events\SubAgentActivity): void|null $subAgentEmitter
+     * @param \Closure(\SugarCraft\Crush\Events\SubAgentActivity|\SugarCraft\Crush\Events\MediaProgress): void|null $subAgentEmitter
      */
     public function withEngine(
         EngineBackend $engine,
