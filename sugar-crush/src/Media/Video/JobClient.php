@@ -48,6 +48,14 @@ final class JobClient
     /** The one extension this client writes; artifact typing is the store's business from here on. */
     public const ARTIFACT_EXTENSION = 'mp4';
 
+    /**
+     * The family assumed when the launch declares none: the one contract
+     * recorded off a live server (W0.1). The GenerateVideo tool resolves the
+     * effective family through this same constant, so the ladder and the
+     * transport never disagree about who gets dialed.
+     */
+    public const DEFAULT_FAMILY = EndpointFamily::SglangDiffusion;
+
     private function __construct(
         private readonly UrlGuard $guard,
         private readonly SdTransport $transport,
@@ -103,7 +111,7 @@ final class JobClient
         return new self(
             $guard,
             $transport,
-            $family ?? EndpointFamily::SglangDiffusion,
+            $family ?? self::DEFAULT_FAMILY,
             Client::withBase($base, $transport),
         );
     }
@@ -267,7 +275,22 @@ final class JobClient
      */
     private function routes(): ?array
     {
-        return match ($this->family) {
+        return self::videoContract($this->family);
+    }
+
+    /**
+     * The closed route table per dialect — the map-never-guess registry the
+     * capability door reads BEFORE any client exists (plan W5.3: a family
+     * without a video job contract is refused by name, zero dials). The
+     * image-era `EndpointFamily::isImplemented()` stays the IMAGE authority;
+     * for video the truthful surface is whether a job contract is recorded
+     * here at all (ruling disclosed in the W5.3 lane report).
+     *
+     * @return null|array{submit: string, job: string, content: string}
+     */
+    public static function videoContract(EndpointFamily $family): ?array
+    {
+        return match ($family) {
             EndpointFamily::SglangDiffusion => [
                 'submit' => '/v1/videos',
                 'job' => '/v1/videos',

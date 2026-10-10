@@ -31,9 +31,9 @@ use SugarCraft\Crush\Support\MediaStore;
  */
 final class JobClientTest extends TestCase
 {
-    private const BASE = 'http://sd.test:7860';
+    private const W5V_BASE = 'http://sd.test:7860';
 
-    private const MP4_STUB_B64 = 'AAAAIGZ0eXBpc29tAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    private const W5V_MP4_STUB_B64 = 'AAAAIGZ0eXBpc29tAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
     private string $mediaRoot;
 
@@ -265,10 +265,10 @@ final class JobClientTest extends TestCase
         // Premise pin: PHP's STRICT decode SKIPS trailing whitespace, so the
         // refusal must be an explicit gate — without it the plan's coercion
         // would silently pass. This assert is the gate's reason to exist.
-        self::assertNotFalse(base64_decode(self::MP4_STUB_B64 . "\n", true));
+        self::assertNotFalse(base64_decode(self::W5V_MP4_STUB_B64 . "\n", true));
 
         $client = $this->w5vClient([]);
-        $snapshot = JobSnapshot::fromArray(['status' => 'completed', 'b64' => self::MP4_STUB_B64 . "\n"]);
+        $snapshot = JobSnapshot::fromArray(['status' => 'completed', 'b64' => self::W5V_MP4_STUB_B64 . "\n"]);
 
         $this->expectException(SdException::class);
         $this->expectExceptionMessage('not strict base64');
@@ -464,7 +464,7 @@ final class JobClientTest extends TestCase
             },
         );
 
-        return JobClient::withBase(self::BASE, $transport, null, $family);
+        return JobClient::withBase(self::W5V_BASE, $transport, null, $family);
     }
 
     /**

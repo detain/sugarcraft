@@ -636,6 +636,11 @@ final class TreeWideGuardRosterTest extends TestCase
         // AtomicFileWriterTest names the package root (its mode-before-payload
         // pin reads the class source via __DIR__) and scans only its own
         // sys_get_temp_dir fixture dir — bounded, test-made.
+        // W5.2/W5.3: tearDown rrmdir() walks the sys_get_temp_dir() media sandbox
+        // setUp() made; the GenerateVideoTest globs list only the mp4/json artifacts
+        // that test's own happy/cancel/failed paths landed there (chr(42) spelling per
+        // the MediaFormWiringTest precedent - a glued '*' literal drifts the PathGlob corpus).
+        'Media/Video/JobClientTest.php' => ['scandir($dir)'],
         'Support/AtomicFileWriterTest.php' => ['scandir($this->dir)'],
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
         // crush-media W1.9: partialEntries() lists the session directory the test
@@ -645,6 +650,7 @@ final class TreeWideGuardRosterTest extends TestCase
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).
         'Support/ProcessTreeKillAsyncTest.php' => ['glob($this->dir.\'/*\')'],
+        'Tools/GenerateVideoTest.php' => ["glob(\$this->mediaRoot.'/main/'.\\chr(42).'.mp4')", "glob(\$this->mediaRoot.'/main/'.\\chr(42).'.json')", "glob(\$quietRoot.'/'.\\chr(42).'/'.\\chr(42).'.json')", "glob(\$this->mediaRoot.'/'.\\chr(42).'/'.\\chr(42))", 'scandir($dir)'],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
