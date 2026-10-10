@@ -131,4 +131,32 @@ final class ImageIngressTest extends TestCase
 
         self::assertSame(ImageSource::MAX_BYTES, $parameters[1]->getDefaultValue());
     }
+
+    public function testTheByteCeilingIsSettledBeforeTheFullReadInBothEntryShapes(): void
+    {
+        // R10-m1 structural pin (house pattern: MediaStoreTest's chmod-before-
+        // rename slice): the whole point of the ceiling is that no unbounded
+        // read happens first. fromPath must stat before fromFile slurps the
+        // disk, fromBytes must measure before fromString decodes — a future
+        // reorder keeps every functional test green, so the ORDER is pinned.
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Media/ImageIngress.php');
+
+        $fromPath = strpos($src, 'public static function fromPath');
+        $fromBytes = strpos($src, 'public static function fromBytes');
+        self::assertIsInt($fromPath, 'ImageIngress no longer declares fromPath() — update this pin, do not delete it.');
+        self::assertIsInt($fromBytes, 'ImageIngress no longer declares fromBytes() — update this pin, do not delete it.');
+
+        $stat = strpos($src, '@filesize($candidate)', $fromPath);
+        $slurp = strpos($src, 'ImageSource::fromFile($candidate)', $fromPath);
+        self::assertIsInt($stat, 'fromPath() no longer pre-sizes via @filesize($candidate)');
+        self::assertIsInt($slurp, 'fromPath() no longer reads via ImageSource::fromFile($candidate)');
+        self::assertLessThan($slurp, $stat, 'the size ceiling must land BEFORE the whole-file read');
+        self::assertLessThan($fromBytes, $slurp, 'the fromPath read drifted out of its own method');
+
+        $measure = strpos($src, '\strlen($bytes) > $maxBytes', $fromBytes);
+        $decode = strpos($src, 'ImageSource::fromString($bytes)', $fromBytes);
+        self::assertIsInt($measure, 'fromBytes() no longer guards via strlen($bytes) > $maxBytes');
+        self::assertIsInt($decode, 'fromBytes() no longer decodes via ImageSource::fromString($bytes)');
+        self::assertLessThan($decode, $measure, 'the byte ceiling must land BEFORE the decode');
+    }
 }
