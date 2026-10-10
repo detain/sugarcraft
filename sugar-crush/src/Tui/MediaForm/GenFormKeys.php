@@ -137,6 +137,24 @@ final class GenFormKeys
     public const string HIRES_NEGATIVE_PROMPT = 'tui.genform.hires.negative_prompt';
     public const string HIRES_FINAL_RESOLUTION = 'tui.genform.hires.final_resolution';
 
+    // -- W3.5 reveal checkboxes + computed row (labels verbatim from A1111
+    //    ui.py's hires_fix_show_* checkboxes; the output-size label heads the
+    //    txtimg_hr_finalres preview whose value is HIRES_FINAL_RESOLUTION) --
+    public const string HIRES_SHOW_CHECKPOINT = 'tui.genform.hires.show_checkpoint';
+    public const string HIRES_SHOW_SAMPLER = 'tui.genform.hires.show_sampler';
+    public const string HIRES_SHOW_PROMPTS = 'tui.genform.hires.show_prompts';
+    public const string HIRES_OUTPUT_SIZE = 'tui.genform.hires.output_size';
+
+    // -- shared option/vocabulary atoms (W3.5): the dropdown "None" entry,
+    //    the nouns that fill HIRES_USE_SAME's {field} token, and the on/off
+    //    cells every Confirm-toggled row shows in the list --
+    public const string OPTION_NONE = 'tui.genform.option.none';
+    public const string NOUN_CHECKPOINT = 'tui.genform.noun.checkpoint';
+    public const string NOUN_SAMPLER = 'tui.genform.noun.sampler';
+    public const string NOUN_SCHEDULER = 'tui.genform.noun.scheduler';
+    public const string STATE_ON = 'tui.genform.state.on';
+    public const string STATE_OFF = 'tui.genform.state.off';
+
     // -- upscaler option labels (six latent modes, verbatim) -----------------------------
     public const string UPSCALER_LATENT = 'tui.genform.upscaler.latent';
     public const string UPSCALER_LATENT_ANTIALIASED = 'tui.genform.upscaler.latent_antialiased';

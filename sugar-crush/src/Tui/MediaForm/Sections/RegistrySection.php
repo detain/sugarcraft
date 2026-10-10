@@ -12,6 +12,7 @@ use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormState;
 use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
+use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\NumberField;
 use SugarCraft\Forms\Field\Select;
@@ -56,12 +57,12 @@ abstract class RegistrySection implements Section, FieldValuedSection
     /** @return list<string> */
     public function rows(): array
     {
-        return array_map($this->rowLabel(...), $this->rowKeys);
+        return array_map($this->rowLabel(...), $this->visibleRowKeys());
     }
 
     public function fieldAt(int $row): ?Field
     {
-        $key = $this->rowKeys[$row] ?? null;
+        $key = $this->visibleRowKeys()[$row] ?? null;
 
         return $key === null ? null : ($this->fields[$key] ?? null);
     }
@@ -76,7 +77,7 @@ abstract class RegistrySection implements Section, FieldValuedSection
 
     public function valueAt(int $row): string
     {
-        return $this->display($this->rowKeys[$row] ?? '');
+        return $this->display($this->visibleRowKeys()[$row] ?? '');
     }
 
     /** Fold every editable registry row into the draft, registry order. */
@@ -137,6 +138,44 @@ abstract class RegistrySection implements Section, FieldValuedSection
         return $this->specs;
     }
 
+    /**
+     * The row keys currently on screen — every row by default; a disclosure
+     * subclass filters this to its gate state so a collapsed group is not
+     * even a row (W3.5: the index math MediaForm consumes is positional over
+     * exactly what renders).
+     *
+     * @return list<string>
+     */
+    protected function visibleRowKeys(): array
+    {
+        return array_values($this->rowKeys);
+    }
+
+    /**
+     * The stale-clearance fold (W3.5 disclosure law): a registered row that
+     * {@see editableSpecs()} currently drops never rides the wire on a
+     * previous value — if the draft already carries the key it folds to
+     * null (the DTO's set-to-default, guarded server-side per field), and a
+     * group never touched stays absent.
+     */
+    protected function clearGatedOff(MediaRequest $draft): MediaRequest
+    {
+        $editable = $this->editableSpecs();
+        foreach ($this->specs as $key => $spec) {
+            if (!isset($editable[$key]) && $draft->isSet($key)) {
+                $draft = $spec->applyTo($draft, null);
+            }
+        }
+
+        return $draft;
+    }
+
+    /** The list cell for a boolean row — Confirm widgets have no cast text. */
+    protected static function boolCell(bool $on): string
+    {
+        return Lang::t($on ? GenFormKeys::STATE_ON : GenFormKeys::STATE_OFF);
+    }
+
     /** Where a committed field lands; subclasses intercept action rows here. */
     protected function accept(string $key, Field $field): static
     {
@@ -168,7 +207,14 @@ abstract class RegistrySection implements Section, FieldValuedSection
     {
         $spec = $this->specs[$key] ?? null;
         $field = $this->fields[$key] ?? null;
-        if ($spec === null || $field === null) {
+        if ($spec === null) {
+            // Section-local rows carry their own widgets; a Confirm toggle
+            // (the W3.5 disclosure gates) reads as its on/off cell.
+            return $field instanceof Confirm
+                ? self::boolCell((bool) $field->value())
+                : Lang::t(GenFormKeys::NOT_SET);
+        }
+        if ($field === null) {
             return Lang::t(GenFormKeys::NOT_SET);
         }
 
@@ -181,6 +227,7 @@ abstract class RegistrySection implements Section, FieldValuedSection
             FieldSpec::WIDGET_MULTI => !is_array($value) || $value === []
                 ? Lang::t(GenFormKeys::NOT_SET)
                 : implode(', ', array_map(strval(...), $value)),
+            FieldSpec::WIDGET_CONFIRM => self::boolCell((bool) $value),
             default => (string) $value,
         };
     }
@@ -203,6 +250,11 @@ abstract class RegistrySection implements Section, FieldValuedSection
                 ? $field
                     ->withOptions(...array_values(array_unique([...($spec->options ?? []), ...array_map(strval(...), $value)])))
                     ->withValue(array_map(strval(...), $value))
+                : null,
+            // Confirm has no value setter — hydration rebuilds the widget at
+            // the imported bool, keeping its title (the row's own label).
+            FieldSpec::WIDGET_CONFIRM => $field instanceof Confirm && is_bool($value)
+                ? Confirm::new($field->key(), $value)->withTitle($field->getTitle())
                 : null,
             default => null,
         };

@@ -53,6 +53,17 @@ final class ChoiceFeed
             $choices = array_filter([
                 FieldSpec::CHOICES_SAMPLERS => self::namesFrom($client->samplers()),
                 FieldSpec::CHOICES_SCHEDULERS => self::namesFrom($client->schedulers()),
+                // §2.8: the six latent modes are the static floor (every
+                // A1111 answers them without being asked); the server's own
+                // names merge on top. /latent-upscale-modes is deliberately
+                // not fetched — it re-lists those same six (W3.5 ruling).
+                FieldSpec::CHOICES_UPSCALERS => array_values(array_unique([
+                    ...FieldSpec::latentUpscalers(),
+                    ...self::namesFrom(self::attempt(static fn (): array => $client->upscalers())),
+                ])),
+                // Checkpoint titles for the hires/refiner dropdowns; empty
+                // is fine — those rows keep their neutral sentinel alone.
+                FieldSpec::CHOICES_MODELS => self::titlesFrom(self::attempt(static fn (): array => $client->sdModels())),
             ], static fn (array $names): bool => $names !== []);
         } catch (\Throwable) {
             return null;
@@ -85,6 +96,43 @@ final class ChoiceFeed
         }
 
         return $names;
+    }
+
+    /**
+     * One optional hop: a host without /upscalers or /sdapi/v1/sd-models
+     * must not cost the rows that did answer (W3.5 widening — the W3.4 pair
+     * stays all-or-nothing because the params selects need both).
+     *
+     * @param callable(): list<array<string, mixed>> $fetch
+     * @return list<array<string, mixed>>
+     */
+    private static function attempt(callable $fetch): array
+    {
+        try {
+            return $fetch();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * The `title` column of an sd-models listing (A1111 shows titles), with
+     * `name` as the defensive fallback for forks that answer differently.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<string>
+     */
+    public static function titlesFrom(array $rows): array
+    {
+        $titles = [];
+        foreach ($rows as $row) {
+            $title = $row['title'] ?? $row['name'] ?? null;
+            if (is_string($title) && $title !== '') {
+                $titles[] = $title;
+            }
+        }
+
+        return $titles;
     }
 
     /** Forget the cached set (test seam; production caches per process). */

@@ -1,0 +1,24 @@
+╭─ 🎨 Generate image ──────────────────────────────────────╮
+│  Prompt │ Generation params │ Extra │ Hires. fix ›       │
+│ ──────────────────────────────────────────────────────── │
+│ ▸ Hires. fix    on                                       │
+│   Upscaler      Latent                                   │
+│   Hires steps   0                                        │
+│   Denoising strength 0.7                                 │
+│   Upscale by    2                                        │
+│   Resize width to 0                                      │
+│   Resize height to 0                                     │
+│   Show extra checkpoint off                              │
+│   Show extra sampling method off                         │
+│   Show extra prompts off                                 │
+│   Output size   from 512x512 to 1024x1024                │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│ ──────────────────────────────────────────────────────── │
+│ g generate · Enter edit · ↑↓ move · Esc close            │
+╰──────────────────────────────────────────────────────────╯

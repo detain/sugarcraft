@@ -82,6 +82,11 @@ final class MediaForm
         $sections = [
             Sections\PromptSection::forDraft($draft),
             Sections\ParamsSection::forDraft($draft, $runtimeChoices),
+            // W3.5 disclosure groups; lanes c/d append the Scripts/Advanced
+            // and Presets/Output registration rows after these lines.
+            Sections\SeedSection::forDraft($draft),
+            Sections\HiresSection::forDraft($draft, $runtimeChoices),
+            Sections\RefinerSection::forDraft($draft, $runtimeChoices),
         ];
 
         return new self($sections, $draft, MediaFormState::forSection(0, \count($sections[0]->rows())));
@@ -487,6 +492,12 @@ final class MediaForm
         $section = $this->focusedSection();
         if ($section === null) {
             return array_fill(0, $rows, '');
+        }
+
+        // Preview rows that recompute from the live draft (§2.4 final size)
+        // read it here, so what renders is exactly what collect() would fold.
+        if ($section instanceof DraftContextSection) {
+            $section = $section->withDraftContext($this->draft);
         }
 
         $labels = $section->rows();

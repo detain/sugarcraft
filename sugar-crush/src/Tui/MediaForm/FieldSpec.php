@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\MediaForm;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\Enum\Schedulers;
 use SugarCraft\Crush\Tui\MediaForm\Enum\Samplers;
@@ -178,6 +179,7 @@ final readonly class FieldSpec
                 ->withHeight($this->rows),
             self::WIDGET_SLIDER => Slider::new($key, $this->min, $this->max, $this->step, $this->default),
             self::WIDGET_NUMBER => NumberField::new($key, $this->min, $this->max, $this->step, $this->default),
+            self::WIDGET_CONFIRM => \SugarCraft\Forms\Field\Confirm::new($key, (bool) $this->default),
             self::WIDGET_MULTI => \SugarCraft\Forms\Field\MultiSelect::new($key)
                 ->withOptions(...($this->options ?? [])),
             self::WIDGET_SELECT => \SugarCraft\Forms\Field\Select::new($key)
@@ -202,8 +204,160 @@ final readonly class FieldSpec
         return $this->options ?? match ($this->choices) {
             self::CHOICES_SAMPLERS => Samplers::names(),
             self::CHOICES_SCHEDULERS => Schedulers::names(),
+            // The six latent modes are the complete offline truth (§2.8);
+            // a live /upscalers set arrives through the runtime choice feed.
+            self::CHOICES_UPSCALERS => self::latentUpscalers(),
+            // Checkpoint names are unknowable without a client — the honest
+            // static shape is the neutral entry the sections prepend to.
+            self::CHOICES_MODELS => [self::noneLabel()],
             default => throw new \InvalidArgumentException('select row ' . $this->key . ' has no option source'),
         };
+    }
+
+    /**
+     * §2.8's six latent upscale modes, verbatim. Like sampler names these are
+     * wire identifiers displayed as-is (data, not UI copy); the server's own
+     * /upscalers names join them through {@see ChoiceFeed} when a client is
+     * configured.
+     *
+     * @return list<string>
+     */
+    public static function latentUpscalers(): array
+    {
+        return [
+            'Latent',
+            'Latent (antialiased)',
+            'Latent (bicubic)',
+            'Latent (bicubic antialiased)',
+            'Latent (nearest)',
+            'Latent (nearest-exact)',
+        ];
+    }
+
+    /** The dropdown's neutral "off" entry (refiner checkpoint, W3.5). */
+    public static function noneLabel(): string
+    {
+        return Lang::t(GenFormKeys::OPTION_NONE);
+    }
+
+    /** The hires dropdowns' "Use same …" sentinel label for one noun row. */
+    public static function useSameLabel(string $nounKey): string
+    {
+        return Lang::t(GenFormKeys::HIRES_USE_SAME, ['field' => Lang::t($nounKey)]);
+    }
+
+    /**
+     * The W3.5 disclosure groups (§2.1/§2.3): the Extra variation-seed rows,
+     * the whole Hires. fix accordion, and the Refiner pair. Every range,
+     * step and default below is the §2-table number verbatim.
+     *
+     * CONTEXT-DEPENDENT DEFAULT (§2.2 non-conflict note): `denoising_strength`
+     * is ONE wire field whose UI default depends on the owning context —
+     * 0.7 here (hires), 0.75 in the W3.7 img2img group. While W3.7's group
+     * ships gated (zero collects) the hires row is its single owner; when
+     * the gate lifts, tab order decides the fold (documented in HiresSection).
+     *
+     * @return list<self>
+     */
+    public static function disclosureRows(): array
+    {
+        return [
+            new self(
+                key: 'subseed', labelKey: GenFormKeys::FIELD_SUBSEED, widget: self::WIDGET_NUMBER,
+                min: -1, max: PHP_INT_MAX - 1, step: 1, default: -1,
+                section: 'extra', infotextLabel: 'Variation seed',
+            ),
+            new self(
+                key: 'subseed_strength', labelKey: GenFormKeys::FIELD_SUBSEED_STRENGTH, widget: self::WIDGET_SLIDER,
+                min: 0.0, max: 1.0, step: 0.01, default: 0.0,
+                section: 'extra', infotextLabel: 'Variation strength',
+            ),
+            new self(
+                key: 'seed_resize_from_w', labelKey: GenFormKeys::FIELD_SEED_RESIZE_FROM_W, widget: self::WIDGET_SLIDER,
+                min: 0, max: 2048, step: 8, default: 0,
+                section: 'extra', infotextLabel: 'Seed resize from',
+            ),
+            new self(
+                key: 'seed_resize_from_h', labelKey: GenFormKeys::FIELD_SEED_RESIZE_FROM_H, widget: self::WIDGET_SLIDER,
+                min: 0, max: 2048, step: 8, default: 0,
+                section: 'extra', infotextLabel: 'Seed resize from',
+            ),
+            new self(
+                key: 'enable_hr', labelKey: GenFormKeys::SECTION_HIRES, widget: self::WIDGET_CONFIRM,
+                min: null, max: null, step: null, default: false,
+                section: 'hires', infotextLabel: 'Hires fix',
+            ),
+            new self(
+                key: 'hr_upscaler', labelKey: GenFormKeys::HIRES_UPSCALER, widget: self::WIDGET_SELECT,
+                min: null, max: null, step: null, default: 'Latent',
+                section: 'hires', infotextLabel: 'Hires upscaler',
+                choices: self::CHOICES_UPSCALERS,
+            ),
+            new self(
+                key: 'hr_second_pass_steps', labelKey: GenFormKeys::HIRES_STEPS, widget: self::WIDGET_SLIDER,
+                min: 0, max: 150, step: 1, default: 0,
+                section: 'hires', infotextLabel: 'Hires steps',
+            ),
+            new self(
+                key: 'denoising_strength', labelKey: GenFormKeys::FIELD_DENOISING_STRENGTH, widget: self::WIDGET_SLIDER,
+                min: 0.0, max: 1.0, step: 0.01, default: 0.7,
+                section: 'hires', infotextLabel: 'Denoising strength',
+            ),
+            new self(
+                key: 'hr_scale', labelKey: GenFormKeys::HIRES_UPSCALE_BY, widget: self::WIDGET_SLIDER,
+                min: 1.0, max: 4.0, step: 0.05, default: 2.0,
+                section: 'hires', infotextLabel: 'Hires upscale',
+            ),
+            new self(
+                key: 'hr_resize_x', labelKey: GenFormKeys::HIRES_RESIZE_WIDTH, widget: self::WIDGET_SLIDER,
+                min: 0, max: 2048, step: 8, default: 0,
+                section: 'hires', infotextLabel: 'Hires resize-X',
+            ),
+            new self(
+                key: 'hr_resize_y', labelKey: GenFormKeys::HIRES_RESIZE_HEIGHT, widget: self::WIDGET_SLIDER,
+                min: 0, max: 2048, step: 8, default: 0,
+                section: 'hires', infotextLabel: 'Hires resize-Y',
+            ),
+            new self(
+                key: 'hr_checkpoint_name', labelKey: GenFormKeys::HIRES_CHECKPOINT, widget: self::WIDGET_SELECT,
+                min: null, max: null, step: null, default: null,
+                section: 'hires', infotextLabel: 'Hires checkpoint',
+                choices: self::CHOICES_MODELS,
+            ),
+            new self(
+                key: 'hr_sampler_name', labelKey: GenFormKeys::HIRES_SAMPLING_METHOD, widget: self::WIDGET_SELECT,
+                min: null, max: null, step: null, default: null,
+                section: 'hires', infotextLabel: 'Hires sampler',
+                choices: self::CHOICES_SAMPLERS,
+            ),
+            new self(
+                key: 'hr_scheduler', labelKey: GenFormKeys::HIRES_SAMPLING_SCHEDULE, widget: self::WIDGET_SELECT,
+                min: null, max: null, step: null, default: null,
+                section: 'hires', infotextLabel: 'Hires scheduler',
+                choices: self::CHOICES_SCHEDULERS,
+            ),
+            new self(
+                key: 'hr_prompt', labelKey: GenFormKeys::HIRES_PROMPT, widget: self::WIDGET_TEXT,
+                min: null, max: null, step: null, default: '',
+                section: 'hires', infotextLabel: 'Hires prompt',
+            ),
+            new self(
+                key: 'hr_negative_prompt', labelKey: GenFormKeys::HIRES_NEGATIVE_PROMPT, widget: self::WIDGET_TEXT,
+                min: null, max: null, step: null, default: '',
+                section: 'hires', infotextLabel: 'Hires negative prompt',
+            ),
+            new self(
+                key: 'refiner_checkpoint', labelKey: GenFormKeys::REFINER_CHECKPOINT, widget: self::WIDGET_SELECT,
+                min: null, max: null, step: null, default: null,
+                section: 'refiner', infotextLabel: 'Refiner',
+                choices: self::CHOICES_MODELS,
+            ),
+            new self(
+                key: 'refiner_switch_at', labelKey: GenFormKeys::REFINER_SWITCH_AT, widget: self::WIDGET_SLIDER,
+                min: 0.01, max: 1.0, step: 0.01, default: 0.8,
+                section: 'refiner', infotextLabel: 'Refiner switch at',
+            ),
+        ];
     }
 
     /** Does this row's section still want it visible given the draft state? (W3.5 owns conditionals.) */
@@ -228,6 +382,24 @@ final readonly class FieldSpec
             'sampler_name' => $draft->samplerName(),
             'scheduler' => $draft->scheduler(),
             'seed' => $draft->seed(),
+            'subseed' => $draft->subseed(),
+            'subseed_strength' => $draft->subseedStrength(),
+            'seed_resize_from_w' => $draft->seedResizeFromW(),
+            'seed_resize_from_h' => $draft->seedResizeFromH(),
+            'enable_hr' => $draft->enableHr(),
+            'hr_upscaler' => $draft->hrUpscaler(),
+            'hr_second_pass_steps' => $draft->hrSecondPassSteps(),
+            'denoising_strength' => $draft->denoisingStrength(),
+            'hr_scale' => $draft->hrScale(),
+            'hr_resize_x' => $draft->hrResizeX(),
+            'hr_resize_y' => $draft->hrResizeY(),
+            'hr_checkpoint_name' => $draft->hrCheckpointName(),
+            'hr_sampler_name' => $draft->hrSamplerName(),
+            'hr_scheduler' => $draft->hrScheduler(),
+            'hr_prompt' => $draft->hrPrompt(),
+            'hr_negative_prompt' => $draft->hrNegativePrompt(),
+            'refiner_checkpoint' => $draft->refinerCheckpoint(),
+            'refiner_switch_at' => $draft->refinerSwitchAt(),
             default => null,
         };
 
@@ -250,6 +422,28 @@ final readonly class FieldSpec
             'sampler_name' => $draft->withSamplerName((string) $value),
             'scheduler' => $draft->withScheduler((string) $value),
             'seed' => $draft->withSeed((int) $value),
+            // Every W3.5 arm is null-tolerant: a closed disclosure folds its
+            // row to null (the DTO's set-to-default, guarded server-side per
+            // field), never a stale user value — see the disclosure law in
+            // Sections/SeedSection.php.
+            'subseed' => $draft->withSubseed(self::intOrNull($value)),
+            'subseed_strength' => $draft->withSubseedStrength(self::floatOrNull($value)),
+            'seed_resize_from_w' => $draft->withSeedResizeFromW(self::intOrNull($value)),
+            'seed_resize_from_h' => $draft->withSeedResizeFromH(self::intOrNull($value)),
+            'enable_hr' => $draft->withEnableHr($value === null ? null : (bool) $value),
+            'hr_upscaler' => $draft->withHrUpscaler(self::stringOrNull($value)),
+            'hr_second_pass_steps' => $draft->withHrSecondPassSteps(self::intOrNull($value)),
+            'denoising_strength' => $draft->withDenoisingStrength(self::floatOrNull($value)),
+            'hr_scale' => $draft->withHrScale(self::floatOrNull($value)),
+            'hr_resize_x' => $draft->withHrResizeX(self::intOrNull($value)),
+            'hr_resize_y' => $draft->withHrResizeY(self::intOrNull($value)),
+            'hr_checkpoint_name' => $draft->withHrCheckpointName(self::sentinelWire($value, self::useSameLabel(GenFormKeys::NOUN_CHECKPOINT))),
+            'hr_sampler_name' => $draft->withHrSamplerName(self::sentinelWire($value, self::useSameLabel(GenFormKeys::NOUN_SAMPLER))),
+            'hr_scheduler' => $draft->withHrScheduler(self::sentinelWire($value, self::useSameLabel(GenFormKeys::NOUN_SCHEDULER))),
+            'hr_prompt' => $draft->withHrPrompt(trim((string) $value) === '' ? null : (string) $value),
+            'hr_negative_prompt' => $draft->withHrNegativePrompt(trim((string) $value) === '' ? null : (string) $value),
+            'refiner_checkpoint' => $draft->withRefinerCheckpoint(self::sentinelWire($value, self::noneLabel())),
+            'refiner_switch_at' => $draft->withRefinerSwitchAt(self::floatOrNull($value)),
             default => $draft->withUnknown($this->key, $value),
         };
     }
@@ -261,5 +455,34 @@ final readonly class FieldSpec
     public static function isDefaultStyles(mixed $styles): bool
     {
         return !is_array($styles) || $styles === [] || $styles === ['Default'];
+    }
+
+    /** Null stays null (the DTO's set-to-default); anything else snaps to int. */
+    private static function intOrNull(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
+    }
+
+    /** Null stays null; anything else snaps to float. */
+    private static function floatOrNull(mixed $value): ?float
+    {
+        return $value === null ? null : (float) $value;
+    }
+
+    /** Null and the empty string both fold to null (absent == default). */
+    private static function stringOrNull(mixed $value): ?string
+    {
+        return $value === null || (string) $value === '' ? null : (string) $value;
+    }
+
+    /**
+     * A dropdown's neutral sentinel ("Use same checkpoint", "None") selects
+     * the server default, so it rides the wire as null — never the label.
+     */
+    private static function sentinelWire(mixed $value, string $sentinel): ?string
+    {
+        return $value === null || (string) $value === '' || (string) $value === $sentinel
+            ? null
+            : (string) $value;
     }
 }
