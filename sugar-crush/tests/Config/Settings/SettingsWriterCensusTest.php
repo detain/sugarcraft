@@ -114,6 +114,11 @@ final class SettingsWriterCensusTest extends TestCase
         self::assertSame([
             'App/App.php::confirmSettingsSave->write' => 1,
             'App/App.php::grantProjectTrust->grantTrust' => 1,
+            // crush-media W4.1 (lane A carried seam): the media form's preset
+            // persist door is minted here — one write of exactly the
+            // sd.presets key, the sanctioned SettingsWriter path, the form
+            // itself never names the writer (the W3.9 separation law holds).
+            'App/App.php::openMediaForm->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
             // N-P5: a settings PROFILE, not a settings file — its write is

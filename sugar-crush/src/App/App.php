@@ -82,8 +82,14 @@ use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\ClipboardImagePastedMsg;
+use SugarCraft\Crush\Media\ImageIngress;
+use SugarCraft\Crush\Support\ClipboardImage;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\MediaStore;
+use SugarCraft\Crush\Tui\MediaForm\MediaPresets;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
+use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\ZoneClickTracker;
 use DateTimeImmutable;
@@ -1414,7 +1420,48 @@ final class App implements Model
         // W3.4 runtime override: when an SD base is configured the live
         // /samplers + /schedulers sets replace the §2.9 enums (ChoiceFeed
         // caches per process and fails open to null on any error).
-        return $this->mutate(mediaForm: MediaForm::open($request, ChoiceFeed::forForm()));
+        //
+        // crush-media W4.1 carried seam (lane d): the three media settings
+        // the form renders — sd.presets, ui.mediaDisplayOverrides and
+        // sd.savePattern — ride into open() here, parsed on this one
+        // explicit request (the openSettings()/previewSettings() "one small
+        // read" shape). Values that are not their declared type degrade to
+        // null; a failing read fails open to a plain form. The persist door
+        // keeps the W3.9 law that the form never names a SettingsWriter:
+        // the hop lives in this seam, and refusals surface through the
+        // form's own '!' status (SettingsWriter::write throws before it
+        // writes anything).
+        $settings = $this->mediaFormSettings();
+        $writer = $this->settingsWriter;
+        $door = $writer === null ? null : static function (array $map) use ($writer): void {
+            $writer->write(SettingsTier::You, [MediaPresets::SETTINGS_KEY => $map]);
+        };
+
+        return $this->mutate(mediaForm: MediaForm::open(
+            $request,
+            ChoiceFeed::forForm(),
+            // Absent on a young config = an EMPTY store, so the first save
+            // through the door creates the key; present but not its Map
+            // shape = null, and the form itself answers loudly.
+            presets: \array_key_exists('sd.presets', $settings)
+                ? (\is_array($settings['sd.presets']) ? $settings['sd.presets'] : null)
+                : [],
+            persistPresets: $door,
+            displayOverrides: \is_array($settings['ui.mediaDisplayOverrides'] ?? null) ? $settings['ui.mediaDisplayOverrides'] : null,
+            savePattern: \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
+                ? $settings['sd.savePattern']
+                : null,
+        ));
+    }
+
+    /** The layered user config for form open; a failed read is an empty map. */
+    private function mediaFormSettings(): array
+    {
+        try {
+            return \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     public function closeMediaForm(): self
@@ -1435,14 +1482,76 @@ final class App implements Model
         return match ($action->kind) {
             MediaFormActionKind::Cancel => [$this->closeMediaForm(), null],
             MediaFormActionKind::Generate => $this->generateFromMediaForm($action->request),
-            // W3.7/W4.2 give these their bindings; no W3.1 key emits them,
-            // so this arm is unreachable today — and an action silently
-            // swallowed must never be possible.
-            MediaFormActionKind::SavePreset,
+            // crush-media W4.1: `s` binds here. The form stays open — the
+            // save is its own Presets-tab machinery running through the
+            // door wired at openMediaForm(), and refusals land as its '!'
+            // status. The carried request rides no further on purpose:
+            // presets store collectValues() lattice data, never payload
+            // bytes (ImageSection keeps source rows off the lattice).
+            MediaFormActionKind::SavePreset => $this->savePresetFromForm(),
+            // ImportPng has no emitter yet — W4.4 lands the emitter; the
+            // loud throw stays until then so an unwired action can never
+            // be silently swallowed.
             MediaFormActionKind::ImportPng => throw new \LogicException(
                 'media form action ' . $action->kind->name . ' is not wired yet',
             ),
         };
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function savePresetFromForm(): array
+    {
+        $form = $this->mediaForm;
+        if ($form === null) {
+            return [$this, null];
+        }
+
+        return [$this->mutate(mediaForm: $form->saveFocusedPreset()), null];
+    }
+
+    /**
+     * The W4.2 paste landing. The clipboard temp file is volatile — the
+     * bytes are admitted through {@see ImageIngress} (the single validation
+     * door) and persisted into the MediaStore session directory BEFORE any
+     * form state names them (volatile-temp law, plan W4.2 microstep 1).
+     * The form then takes the slot through its own withClipboardImage();
+     * the volatile path never enters form state, and a refused paste never
+     * lands bytes in the store. Text/no-image clipboard answers with the
+     * same sentence the chat surface shows.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function pasteIntoMediaForm(ClipboardImagePastedMsg $msg): array
+    {
+        $form = $this->mediaForm;
+        if ($form === null) {
+            return [$this, null];
+        }
+
+        $bytes = $msg->path === null ? false : @file_get_contents($msg->path);
+        if ($bytes === false || $bytes === '') {
+            return [$this->mutate(mediaForm: $form->withStatus(Lang::t('chat.clipboard.no_image'))), null];
+        }
+
+        if (\strlen($bytes) > ImageSource::MAX_BYTES) {
+            return [$this->mutate(mediaForm: $form->withStatus(
+                '! clipboard image is over the ' . ImageSource::MAX_BYTES . '-byte ceiling',
+            )), null];
+        }
+
+        try {
+            // Validate-then-persist, in that order: the ingress door is
+            // cheap enough to walk twice rather than leak refused bytes
+            // into the store.
+            $ingress = ImageIngress::fromBytes($bytes, MediaForm::CLIPBOARD_ORIGIN);
+            MediaStore::forSession($this->sessionId ?? 'clipboard')->put($ingress->bytes, 'png', []);
+        } catch (\InvalidArgumentException | \RuntimeException $error) {
+            return [$this->mutate(mediaForm: $form->withStatus('! ' . $error->getMessage())), null];
+        }
+
+        return [$this->mutate(mediaForm: $form->withClipboardImage($ingress->bytes)), null];
     }
 
     /**
@@ -2257,6 +2366,10 @@ final class App implements Model
             $msg instanceof SettingsFileEditedMsg => $this->settingsFileEdited($msg),
             $msg instanceof SettingsProfileMsg => [$this->settingsProfileDone($msg), null],
             $msg instanceof OpenMediaFormMsg => [$this->openMediaForm($msg->request), null],
+            // crush-media W4.2: with the form up, a clipboard paste lands in
+            // the img2img slot, not in the input box. Form down → the msg
+            // rides on to Chat's @mention arm untouched.
+            $msg instanceof ClipboardImagePastedMsg && $this->mediaForm !== null => $this->pasteIntoMediaForm($msg),
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof DockPaneMsg,
@@ -3061,6 +3174,14 @@ final class App implements Model
         // mystage §6.2): every key except the gate exceptions below is its
         // own, and what it decides leaves as a MediaFormAction.
         if ($this->mediaForm !== null && !self::mediaFormYields($msg)) {
+            // crush-media W4.2: while the form is up, Ctrl+V belongs to the
+            // image paste — the form's own key table answers ctrl runes to
+            // no one, and the clipboard read runs off the update path as a
+            // Cmd, exactly like Chat's paste chord (plan W4.2 microstep 1).
+            if ($msg->type === KeyType::Char && $msg->ctrl && !$msg->alt && $msg->rune === 'v') {
+                return [$this, static fn (): CoreMsg => new ClipboardImagePastedMsg(ClipboardImage::save())];
+            }
+
             [$next, $action] = $this->mediaForm->update($msg);
 
             if ($action !== null) {
