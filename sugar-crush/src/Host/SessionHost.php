@@ -963,10 +963,12 @@ final class SessionHost
 
         $result = $command->run($this->commandContext(), $text);
 
-        // Both screen-only follow-ups (the inline title editor, the media
-        // form modal) are unservable here, so the headless driver says so.
+        // The screen-only follow-ups (the inline title editor, the media
+        // form modal, the video player) are unservable here, so the headless
+        // driver says so.
         return $result->effect(CommandEffectKind::OpenTitleEditor) !== null
             || $result->effect(CommandEffectKind::OpenMediaForm) !== null
+            || $result->effect(CommandEffectKind::OpenVideoPlayer) !== null
             ? CommandResult::clientOnly($spec->name())
             : $result;
     }

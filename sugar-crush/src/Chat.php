@@ -11584,7 +11584,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens', 'btw',
+        'context', 'tokens', 'btw', 'play',
     ];
 
     /**
@@ -12677,6 +12677,13 @@ final class Chat implements Model
                     $cmds[] = Cmd::send(new \SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg($effect->mediaRequest()));
                     break;
 
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::OpenVideoPlayer:
+                    // crush-media W5.4: same shell-state law as the media
+                    // form — /play resolved and consented to the path, the
+                    // shell owns the player slot.
+                    $cmds[] = Cmd::send(new \SugarCraft\Crush\Tui\VideoPlayer\OpenVideoPlayerMsg($effect->videoPath()));
+                    break;
+
                 case \SugarCraft\Crush\Host\Commands\CommandEffectKind::Async:
                     $cmds[] = Cmd::promise($effect->run());
                     break;
@@ -13633,6 +13640,19 @@ final class Chat implements Model
     private function handleSendToCommand(string $inputBuf): array
     {
         return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\SendToHostCommand(), $inputBuf);
+    }
+
+    /**
+     * Handle /play — {@see \SugarCraft\Crush\Host\Commands\PlayHostCommand},
+     * the W5.4 door onto the full-screen video player. Local disk only; the
+     * player is shell state opened through the OpenVideoPlayer effect, so no
+     * per-command arm exists in the router.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handlePlayCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\PlayHostCommand(), $inputBuf);
     }
 
     /**

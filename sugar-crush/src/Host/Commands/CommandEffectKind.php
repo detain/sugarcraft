@@ -37,6 +37,13 @@ enum CommandEffectKind: string
      */
     case OpenMediaForm = 'open-media-form';
 
+    /**
+     * A screen-only follow-up (the full-screen video player, crush-media
+     * W5.4): like the media form, a headless driver cannot honour it and
+     * answers client-only. Carries the resolved absolute path to play.
+     */
+    case OpenVideoPlayer = 'open-video-player';
+
     /** Off-turn work whose answer lands later as a row; the session stays free. */
     case Async = 'async';
 

@@ -573,6 +573,13 @@ final class Renderer
             return self::renderMediaForm($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
+        // The video player (crush-media W5.4) takes the band on the same
+        // modal law, right beside the form it plays the form's artifacts
+        // from — and like the form, ahead of any pane focus.
+        if ($a->videoPlayer !== null) {
+            return self::renderVideoPlayer($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         if ($a->pane === Pane::Agents) {
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
@@ -897,6 +904,54 @@ final class Renderer
         }
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
+
+        return new View($frame);
+    }
+
+    /**
+     * The video-player frame (crush-media W5.4): shell chrome around the
+     * full-band {@see \SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerScreen}.
+     *
+     * Same discipline as {@see renderMediaForm()} with one ruling twist: a
+     * graphics-mode frame is protocol BYTES (sixel/kitty/iterm2 payloads),
+     * so the width clip is skipped for it — {@see
+     * \SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerScreen::clipsLines()}
+     * answers false and the geometry the shell asked the Player for at
+     * open stands. The v1 screen has no clickable zones, so `$zoneRows`
+     * stays empty and no dropdown rides over the picture.
+     */
+    private static function renderVideoPlayer(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $screen = $a->videoPlayer;
+        \assert($screen !== null);
+        $theme = $a->theme();
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $screen->view($theme, $cols, $paneRows);
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $clipped = self::clipTail($joined, $rows);
+        $frame = $screen->clipsLines() ? self::clipWidth($clipped, $cols) : $clipped;
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, []);
 
         return new View($frame);
     }

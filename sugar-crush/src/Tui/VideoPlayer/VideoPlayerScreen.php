@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\VideoPlayer;
 
 use SugarCraft\Core\Msg as CoreMsg;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Reel\Msg\ResizeRebuildMsg;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Player;
@@ -123,7 +125,7 @@ final class VideoPlayerScreen
         $forwards = $msg instanceof TickMsg
             || $msg instanceof ResizeRebuildMsg
             || $msg instanceof WindowSizeMsg
-            || $msg instanceof \SugarCraft\Core\Msg\KeyMsg;
+            || $msg instanceof KeyMsg;
 
         if (!$forwards) {
             return [$this, null];
@@ -215,7 +217,7 @@ final class VideoPlayerScreen
      * write, so a `"\n"` chrome would land inside row 3 of the picture,
      * not under it).
      */
-    public function view(string $theme, int $cols, int $rows): string
+    public function view(Theme $theme, int $cols, int $rows): string
     {
         $name = basename($this->path);
 

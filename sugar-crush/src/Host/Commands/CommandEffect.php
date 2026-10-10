@@ -86,6 +86,23 @@ final class CommandEffect
     }
 
     /**
+     * Open the full-screen video player (crush-media W5.4) on a resolved
+     * local path; the TUI turns this into an OpenVideoPlayerMsg.
+     */
+    public static function openVideoPlayer(string $path): self
+    {
+        return new self(CommandEffectKind::OpenVideoPlayer, ['path' => $path]);
+    }
+
+    /** The clip path carried by {@see self::openVideoPlayer()}. */
+    public function videoPath(): string
+    {
+        $path = $this->data['path'] ?? null;
+
+        return \is_string($path) ? $path : '';
+    }
+
+    /**
      * Off-turn work. $run starts it and resolves with whatever the TUI routes
      * (a `Msg`, or null for nothing to show); $describe turns that value into
      * the row a headless driver appends, or null for none.

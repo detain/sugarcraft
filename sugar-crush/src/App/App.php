@@ -69,6 +69,15 @@ use SugarCraft\Crush\Tui\MediaForm\MediaForm;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormAction;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormActionKind;
 use SugarCraft\Crush\Tui\MediaForm\OpenMediaFormMsg;
+use SugarCraft\Crush\Tui\VideoPlayer\OpenVideoPlayerMsg;
+use SugarCraft\Crush\Tui\VideoPlayer\PlayerReadyMsg;
+use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerKeys;
+use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerScreen;
+use SugarCraft\Reel\Msg\ResizeRebuildMsg as ReelResizeRebuildMsg;
+use SugarCraft\Reel\Msg\TickMsg as ReelTickMsg;
+use SugarCraft\Reel\Player as ReelPlayer;
+use SugarCraft\Reel\Render\Mode as ReelMode;
+use SugarCraft\Reel\Render\RendererFactory as ReelRendererFactory;
 use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
 use SugarCraft\Crush\Tui\Settings\SettingsFileEditedMsg;
@@ -362,6 +371,16 @@ final class App implements Model
          * so it may open while a turn runs.
          */
         public readonly ?MediaForm $mediaForm = null,
+        /**
+         * The full-screen video player (crush-media W5.4) while it is open,
+         * null otherwise. Shell state on the settings/media-form law: it
+         * writes no history and dials nothing — playback reads a finished
+         * artifact — so it may open while a turn runs. The Player inside is
+         * the single child-holding object; the shutdown teardown registered
+         * at open is what reaps it when the frame loop dies mid-playback
+         * (the global quit chord stops the loop without a model turn).
+         */
+        public readonly ?VideoPlayerScreen $videoPlayer = null,
         /**
          * The reasoning effort every request built off this App asks for
          * (roadmap 4.1-1) — a delegated sub-agent's preset `effort:`, carried
@@ -1243,6 +1262,12 @@ final class App implements Model
         return $this->mutate(mediaForm: $v);
     }
 
+    /** Replace the open player's state (null closes it — WITHOUT stopping; prefer closeVideoPlayer()). */
+    public function withVideoPlayer(?VideoPlayerScreen $v): self
+    {
+        return $this->mutate(videoPlayer: $v);
+    }
+
     public function withSettingsWriter(?SettingsWriter $v): self
     {
         return $this->mutate(settingsWriter: $v);
@@ -1468,6 +1493,119 @@ final class App implements Model
     public function closeMediaForm(): self
     {
         return $this->mediaForm === null ? $this : $this->mutate(mediaForm: null);
+    }
+
+    /**
+     * Raise the full-screen video player (crush-media W5.4) on a resolved
+     * local path. Pure state plus one promise Cmd: the probe-and-spawn runs
+     * inside {@see \SugarCraft\Core\Cmd::promise()} AFTER the "Preparing…"
+     * placeholder is the painted frame, so a slow ffmpeg degrades to a
+     * visible wait rather than a frozen UI. The build itself is the
+     * synchronous, one-time cost the plan accepted; there is no wall-clock
+     * deadline anywhere on it (E646 — the wait is bounded by the spawn, not
+     * by a timer this shell invented).
+     *
+     * Replace-if-open law: opening a second clip stops the first Player
+     * before the new build starts, so at most one decoder child lives per
+     * slot at any instant.
+     *
+     * @param (callable(string,int,int,ReelMode):ReelPlayer)|null $playerFactory
+     *        build seam (tests hand in a scripted decoder's Player; null
+     *        selects {@see ReelPlayer::open()})
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function openVideoPlayer(string $path, ?\Closure $playerFactory = null): array
+    {
+        MenuBar::closeMenu();
+        $this->videoPlayer?->stop();
+
+        $mode = self::videoPlayerMode();
+        [$cellsW, $cellsH] = $this->videoPlayerCells();
+        $factory = $playerFactory
+            ?? static fn (string $p, int $w, int $h, ReelMode $m): ReelPlayer => ReelPlayer::open($p, $w, $h, mode: $m);
+
+        return [
+            $this->mutate(videoPlayer: VideoPlayerScreen::preparing($path, $mode)),
+            CoreCmd::promise(static function () use ($factory, $path, $cellsW, $cellsH, $mode): \React\Promise\PromiseInterface {
+                try {
+                    $player = $factory($path, $cellsW, $cellsH, $mode);
+                    // Adopt BEFORE the answer can be lost: an app exiting
+                    // between build and dispatch still reaps the child.
+                    VideoPlayerScreen::adopt($player);
+
+                    return \React\Promise\resolve(new PlayerReadyMsg($player, null));
+                } catch (\Throwable $error) {
+                    return \React\Promise\resolve(new PlayerReadyMsg(null, $error->getMessage()));
+                }
+            }),
+        ];
+    }
+
+    /** Close the player and stop its clip. The only path that drops the slot. */
+    public function closeVideoPlayer(): self
+    {
+        if ($this->videoPlayer === null) {
+            return $this;
+        }
+
+        $this->videoPlayer->stop();
+
+        return $this->mutate(videoPlayer: null);
+    }
+
+    /**
+     * The render mode the player opens in (plan §W5.4 ruling): a crush
+     * `ui.imageRenderMode` naming one of sugar-reel's modes is honoured,
+     * every other answer (the `auto` default and the `half`/`quarter`/
+     * `chafa` spellings with no Reel analogue) fails soft to the reel's
+     * OWN auto-ladder — video-first sixel > kitty > iterm2 > truecolor
+     * halfblock > ansi256 > ascii.
+     */
+    private static function videoPlayerMode(): ReelMode
+    {
+        $word = strtolower(trim(\SugarCraft\Crush\ToolResult::renderMode()));
+
+        return ReelMode::tryFrom($word) ?? ReelRendererFactory::autoMode();
+    }
+
+    /**
+     * The cell grid handed to the Player: the shell band minus the chrome
+     * the frame renderer stacks around it (menu bar, notice, bottom, the
+     * scrubber row, one row of slack), floored so a tiny terminal still
+     * gets a picture rather than a zero-height decode.
+     *
+     * @return array{0: int, 1: int} cellsW, cellsH
+     */
+    private function videoPlayerCells(): array
+    {
+        $size = TuiRenderer::getTerminalSize();
+        $cols = $this->cols ?? (int) ($size['cols'] ?? 80);
+        $rows = $this->rows ?? (int) ($size['rows'] ?? 24);
+
+        return [max(20, $cols), max(4, $rows - 5)];
+    }
+
+    /**
+     * Drive the open player with one message; with the slot empty the
+     * message is DROPPED (a stray reel tick must never reach Chat, which
+     * has no answer for it) — and a Player built for a slot that closed
+     * mid-build is stopped here rather than leaked.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function driveVideoPlayer(CoreMsg $msg): array
+    {
+        if ($this->videoPlayer === null) {
+            if ($msg instanceof PlayerReadyMsg) {
+                $msg->player?->stop();
+            }
+
+            return [$this, null];
+        }
+
+        [$screen, $cmd] = $this->videoPlayer->update($msg);
+
+        return [$screen === $this->videoPlayer ? $this : $this->mutate(videoPlayer: $screen), $cmd];
     }
 
     /**
@@ -2399,6 +2537,12 @@ final class App implements Model
             $msg instanceof SettingsFileEditedMsg => $this->settingsFileEdited($msg),
             $msg instanceof SettingsProfileMsg => [$this->settingsProfileDone($msg), null],
             $msg instanceof OpenMediaFormMsg => [$this->openMediaForm($msg->request), null],
+            // crush-media W5.4: the player opens like the form — command
+            // decides, shell owns the slot — and the Player's own tick /
+            // rebuild messages are the shell's to route while it is up.
+            $msg instanceof OpenVideoPlayerMsg => $this->openVideoPlayer($msg->path),
+            $msg instanceof PlayerReadyMsg => $this->driveVideoPlayer($msg),
+            $msg instanceof ReelTickMsg || $msg instanceof ReelResizeRebuildMsg => $this->driveVideoPlayer($msg),
             // crush-media W4.2: with the form up, a clipboard paste lands in
             // the img2img slot, not in the input box. Form down → the msg
             // rides on to Chat's @mention arm untouched.
@@ -2592,6 +2736,13 @@ final class App implements Model
             };
 
             return [$notch === 0 ? $this : $this->mutate(mediaForm: $this->mediaForm->wheel($notch)), null];
+        }
+
+        // The player covers the band too (W5.4) — but it has no scrollable
+        // surface yet: the wheel answers to nothing and a click lands on no
+        // zone, so the whole gesture is inert over the picture.
+        if ($this->videoPlayer !== null) {
+            return [$this, null];
         }
 
         // The wheel scrolls whatever scrollable surface is under the pointer —
@@ -3224,6 +3375,22 @@ final class App implements Model
             return [$next === null ? $this->closeMediaForm() : $this->mutate(mediaForm: $next), null];
         }
 
+        // The video player is MODAL on the same law (crush-media W5.4):
+        // while its blob owns the band, every key except the gate
+        // exceptions below is the screen's. The close trio is intercepted
+        // HERE, before the Player ever sees it — forwarded, the Player
+        // would stop the clip (right) and ask the Program to quit (wrong:
+        // one screen, not the app). Ctrl+C stays the app-wide quit chord
+        // the yields law lets through; the player rides out via the
+        // shutdown teardown registered at open.
+        if ($this->videoPlayer !== null && !self::videoPlayerYields($msg)) {
+            if (VideoPlayerKeys::isClose($msg)) {
+                return [$this->closeVideoPlayer(), null];
+            }
+
+            return $this->driveVideoPlayer($msg);
+        }
+
         $handled = $this->dispatchKey($msg);
 
         if ($handled === null) {
@@ -3513,6 +3680,17 @@ final class App implements Model
      * full-band modal, so no shell ever invents its own escape hatch.
      */
     private static function mediaFormYields(KeyMsg $msg): bool
+    {
+        return self::settingsEditorYields($msg);
+    }
+
+    /**
+     * Whether a key goes past the open video player: the exact
+     * settings-view exception list (quit chord, menu key, live menu) —
+     * one law for every full-band modal, so no shell ever invents its own
+     * escape hatch.
+     */
+    private static function videoPlayerYields(KeyMsg $msg): bool
     {
         return self::settingsEditorYields($msg);
     }
@@ -3879,6 +4057,14 @@ final class App implements Model
     {
         [$next, $cmd] = $this->delegateToChat($msg);
 
+        // An open Player resizes itself: the same WindowSizeMsg is its own
+        // rebuild contract (decode geometry follows the band).
+        if ($next->videoPlayer !== null) {
+            [$screen, $playerCmd] = $next->videoPlayer->update($msg);
+            $next = $screen === $next->videoPlayer ? $next : $next->mutate(videoPlayer: $screen);
+            $cmd ??= $playerCmd;
+        }
+
         return [$next->mutate(rows: $msg->rows, cols: $msg->cols), $cmd];
     }
 
@@ -4162,6 +4348,7 @@ final class App implements Model
             settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
             settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
             mediaForm: array_key_exists('mediaForm', $changes) ? $changes['mediaForm'] : $this->mediaForm,
+            videoPlayer: array_key_exists('videoPlayer', $changes) ? $changes['videoPlayer'] : $this->videoPlayer,
             reasoningEffort: array_key_exists('reasoningEffort', $changes) ? $changes['reasoningEffort'] : $this->reasoningEffort,
             agentViewTarget: array_key_exists('agentViewTarget', $changes) ? $changes['agentViewTarget'] : $this->agentViewTarget,
             agentViewTail: array_key_exists('agentViewTail', $changes) ? $changes['agentViewTail'] : $this->agentViewTail,
