@@ -1233,3 +1233,4 @@ sugar-crush/tests/Tui/MediaForm/VideoSectionTest.php	7.0	96
 sugar-crush/tests/Tui/VideoPlayer/VideoPlayerScreenTest.php	6.5	51
 sugar-crush/tests/Host/Commands/PlayHostCommandTest.php	6.4	28
 sugar-crush/tests/App/VideoPlayerWiringTest.php	6.4	31
+sugar-crush/tests/Commands/RenderModeCommandTest.php	7.0	29

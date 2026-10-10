@@ -13656,6 +13656,19 @@ final class Chat implements Model
     }
 
     /**
+     * Handle /rendermode — {@see \SugarCraft\Crush\Host\Commands\RenderModeHostCommand},
+     * the W5.7 one-command switch for the media render mode: the validated
+     * SettingsWriter door persists `ui.imageRenderMode`, then the live word
+     * and the probe memo follow it so the next image paint re-derives.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRenderModeCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\RenderModeHostCommand(), $inputBuf);
+    }
+
+    /**
      * A slash command that exited non-zero, reported IN the transcript —
      * {@see \SugarCraft\Crush\Host\Commands\CommandResult::failure()}.
      *

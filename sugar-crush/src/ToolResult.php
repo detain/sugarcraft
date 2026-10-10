@@ -485,6 +485,32 @@ final class ToolResult
     }
 
     /**
+     * Discard every cached probe in the per-mode memo (W5.7, crush_media
+     * §8.2) so the next {@see mosaic()} re-derives instead of answering from
+     * a `??=` hit. This resets the CACHES, not the word — the word only
+     * changes through {@see setRenderMode()} (and the boot-time precedence
+     * in {@see \SugarCraft\Crush\Cli\Bootstrap::applyMediaRenderMode()},
+     * where `SUGARCRUSH_MEDIA_RENDER_MODE` reasserts itself at the next
+     * launch). The `/rendermode` command calls set-then-reset together; a
+     * bare reset is the seam for any future caller that re-detects the
+     * terminal without changing the requested mode.
+     *
+     * Honesty notes for the mid-session flip this enables:
+     * - {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} threads ONE mosaic
+     *   instance into Chat's `mosaic:` parameter at launch; that threaded
+     *   object is unaffected — this seam serves only NEW derivations made
+     *   through this class.
+     * - Graphics terminals may hold already-painted blobs (kitty ids,
+     *   sixel rows) that no repaint clears; a /clear-class redraw cleans
+     *   the stale frames — candy-mosaic's Renderer delete-class primitives
+     *   (§8.2) are the eventual in-app path.
+     */
+    public static function resetRenderMode(): void
+    {
+        self::$mosaics = [];
+    }
+
+    /**
      * Public accessor for the same probe-once {@see Mosaic} instance
      * {@see probeMosaic()} caches -- the shared instance {@see
      * \SugarCraft\Crush\Cli\Bootstrap::chat()} threads into {@see
