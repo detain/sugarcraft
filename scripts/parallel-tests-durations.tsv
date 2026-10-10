@@ -1216,3 +1216,4 @@ sugar-crush/tests/Tui/MediaForm/ScriptFieldsTest.php	0.17	16
 sugar-crush/tests/Tui/MediaForm/OverrideRowsTest.php	0.08	39
 sugar-crush/tests/Tui/MediaForm/DisplayOverridesTest.php	0.03	12
 sugar-crush/tests/Tui/MediaForm/PresetsTest.php	0.04	24
+sugar-crush/tests/Media/BatchResultsTest.php	7.2	8

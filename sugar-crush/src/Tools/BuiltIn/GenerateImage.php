@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Media\BatchResults;
 use SugarCraft\Crush\Media\Capability\EndpointFamily;
 use SugarCraft\Crush\Events\MediaProgress;
 use SugarCraft\Crush\Media\Infotext;
@@ -43,12 +44,17 @@ use SugarCraft\Crush\Tools\ToolResult;
  * through {@see MediaRequest} (unknown knobs ride `withUnknown` so
  * forward-compatible extras survive), go out as one `POST /sdapi/v1/txt2img`
  * on the {@see Client}, come back through the {@see Response} decoder (which
- * applies the grid-prepend and infotext-shift laws), and EVERY artifact —
- * samples and any batch grid — is saved through {@see MediaStore} under the
- * session's media directory with the save-name pattern from `sd.savePattern`.
- * Each PNG carries its infotext re-embedded verbatim when the server sent one
- * (the replay loop the A1111 UI itself uses), else the canonical
- * {@see Infotext::emit()} rendering of what we actually asked for.
+ * applies the grid-prepend and infotext-shift laws), and fan out through
+ * {@see BatchResults} — the sole consumer-side pairing of each `n_iter ×
+ * batch_size` sample with its own raw infotext row and save-name tokens
+ * (plan W4.5). EVERY artifact — samples and any batch grid — is saved through
+ * {@see MediaStore} under the session's media directory with the save-name
+ * pattern from `sd.savePattern`, the grid taking the same pattern plus its
+ * `-grid` marker. Each PNG carries its infotext re-embedded verbatim when the
+ * server sent one (the replay loop the A1111 UI itself uses), else the
+ * canonical {@see Infotext::emit()} rendering of what we actually asked for.
+ * When `save_to_disk` set, the server kept its own outdir copy too — the
+ * result says so, honestly, because the wire enumerates nothing back (§4.2).
  *
  * CAPABILITY GATE FIRST (binding ruling C-1, sdapi-implemented-first). Before
  * any dial: a configured `mediaFamily` outside the implemented set (e.g.
@@ -428,54 +434,50 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
     }
 
     /**
-     * Decode (grid law), re-embed infotext, save every artifact through
-     * MediaStore, report. imageBytes/imagePath ride the first SAMPLE (the
-     * grid is listed, never headlined), matching the display contract.
+     * Decode (grid law), fan out the batch pairing through BatchResults,
+     * re-embed each artifact's OWN infotext, save every artifact through
+     * MediaStore (the grid under the pattern plus its `-grid` marker),
+     * report. imageBytes/imagePath ride the first SAMPLE (the grid is listed,
+     * never headlined — grids cheaply exceed the display ceilings, §8.6-4),
+     * matching the display contract.
      *
      * @param array<array-key, mixed> $settings
      */
     private function collect(SdTransportResult $rendered, MediaRequest $request, array $settings, string $callId): ToolResult
     {
         $decoded = Response::generation($rendered);
-        $samples = $decoded->response->artifacts();
-        $grid = $decoded->grid;
-        if ($samples === [] && $grid === null) {
+        $results = BatchResults::fromResponse($decoded, $request);
+        if ($results->isEmpty()) {
             return new ToolResult($callId, 'the server returned a generation response with no images in it', true);
         }
 
         $pattern = \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
             ? $settings['sd.savePattern']
             : null;
-        $store = MediaStore::forSession(
-            $this->engine?->sessionId() ?? self::FALLBACK_SESSION,
-            $this->mediaRoot,
-            $pattern,
-        );
-
-        $infotexts = isset($decoded->info['infotexts']) && \is_array($decoded->info['infotexts'])
-            ? array_values($decoded->info['infotexts'])
-            : [];
-        $shift = $grid !== null ? 1 : 0;
+        $session = $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
+        $store = MediaStore::forSession($session, $this->mediaRoot, $pattern);
 
         /** @var list<string> $lines */
         $lines = [];
         $headBytes = null;
         $headPath = null;
 
-        foreach ($samples as $slot => $artifact) {
-            $raw = $infotexts[$slot + $shift] ?? null;
-            $bytes = $this->embed($artifact, $request, \is_string($raw) ? $raw : null);
-            $saved = $this->save($store, $artifact, $bytes, $request);
+        foreach ($results->samples as $slot => $entry) {
+            $bytes = $this->embed($entry['artifact'], $request, $entry['infotext']);
+            $saved = $store->put($bytes, 'png', $entry['tokens']);
             if ($slot === 0) {
                 $headBytes = $bytes;
                 $headPath = $saved->path();
             }
             $lines[] = 'image ' . ($slot + 1) . ': ' . (string) $saved->path();
         }
+        $grid = $results->grid;
         if ($grid !== null) {
-            $gridRaw = $infotexts[0] ?? null;
-            $gridBytes = $this->embed($grid, $request, \is_string($gridRaw) ? $gridRaw : null);
-            $savedGrid = $this->save($store, $grid, $gridBytes, $request);
+            // A store of the suffixed pattern: same session directory, same
+            // collision tick, and every grid it publishes reads as a grid.
+            $gridStore = MediaStore::forSession($session, $this->mediaRoot, BatchResults::gridPattern($pattern));
+            $gridBytes = $this->embed($grid['artifact'], $request, $grid['infotext']);
+            $savedGrid = $gridStore->put($gridBytes, 'png', $grid['tokens']);
             array_unshift($lines, 'batch grid: ' . (string) $savedGrid->path());
             if ($headBytes === null) {
                 $headBytes = $gridBytes;
@@ -483,9 +485,16 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             }
         }
 
-        $content = 'Generated ' . \count($samples) . ' image' . (\count($samples) === 1 ? '' : 's')
+        $content = 'Generated ' . \count($results->samples) . ' image' . (\count($results->samples) === 1 ? '' : 's')
             . ($grid !== null ? ' plus the batch grid' : '') . " on the SD server:\n"
             . implode("\n", $lines);
+        if ($request->saveImages() === true) {
+            // The dual-save honesty law (plan W4.5 step 3): save_images made
+            // the server archive under its own outdir/pattern, and the wire
+            // enumerates NONE of those paths back — say exactly that.
+            $content .= "\nsaved to server store (outdir) + crush media store"
+                . ' — the server does not report its own copy paths back, so only the files above are enumerated';
+        }
 
         return new ToolResult(
             toolCallId: $callId,
@@ -512,30 +521,6 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
         }
 
         return trim($text) === '' ? $bytes : Png::setInfotext($bytes, $text);
-    }
-
-    /**
-     * Save one artifact with palette-only filename tokens: the Response
-     * companion bag can carry `subseed`, which the save-name palette does not
-     * model, so it is filtered (MediaStore refuses off-palette keys by name).
-     */
-    private function save(MediaStore $store, MediaArtifact $artifact, string $bytes, MediaRequest $request): MediaArtifact
-    {
-        $tokens = array_intersect_key($artifact->tokenValues(), array_flip(MediaStore::TOKENS));
-        $fromRequest = [
-            'steps' => $request->isSet('steps') ? $request->steps() : null,
-            'cfg' => $request->isSet('cfg_scale') ? $request->cfgScale() : null,
-            'sampler' => $request->isSet('sampler_name') ? $request->samplerName() : null,
-            'width' => $request->isSet('width') ? $request->width() : null,
-            'height' => $request->isSet('height') ? $request->height() : null,
-        ];
-        foreach ($fromRequest as $token => $value) {
-            if (!isset($tokens[$token]) && $value !== null) {
-                $tokens[$token] = $value;
-            }
-        }
-
-        return $store->put($bytes, 'png', $tokens);
     }
 
     /** @return array<array-key, mixed> */

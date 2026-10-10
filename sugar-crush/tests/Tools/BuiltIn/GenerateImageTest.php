@@ -88,6 +88,9 @@ final class GenerateImageTest extends TestCase
         self::assertSame(0o600, fileperms((string) $result->imagePath()) & 0o777);
         self::assertStringContainsString('Generated 1 image', $result->content());
         self::assertStringContainsString($this->mediaRoot, $result->content());
+        // save_images was never dialed: no server-store sentence on a
+        // crush-store-only save.
+        self::assertStringNotContainsString('server store', $result->content());
         self::assertSame('call-1', $result->toolCallId());
     }
 
@@ -121,6 +124,49 @@ final class GenerateImageTest extends TestCase
         self::assertCount(1, $headline);
         self::assertSame($result->imagePath(), $headline[0]);
         self::assertCount(3, array_unique(array_map(static fn (string $f): string => basename($f), $files)));
+        // W4.5 name law: exactly one file is the grid, marked by the -grid
+        // suffix on its pattern — never counted among the sample names.
+        $grids = array_values(array_filter($files, static fn (string $f): bool => str_ends_with(basename($f), '-grid.png')));
+        self::assertCount(1, $grids);
+    }
+
+    public function testEachSavedPngEmbedsItsOwnSamplesInfotextAndTheGridRowRidesTheGridFile(): void
+    {
+        // R4-m2: the s+1 shift law must survive all the way onto disk. Three
+        // distinct rows, distinct seeds — if the pairing slid by one, these
+        // byte comparisons land shuffled and this test reddens.
+        $tool = $this->tool($this->server(
+            [['state' => ['finished' => true]]],
+            $this->envelope(
+                [self::PNG_B64, self::PNG_B64, self::PNG_B64],
+                ['grid row prompt ALPHA', 'first sample prompt BETA', 'second sample prompt GAMMA'],
+                ['index_of_first_image' => 1, 'all_seeds' => [11, 22]],
+            ),
+        ));
+
+        $result = $tool->execute(['prompt' => 'pairing']);
+        self::assertFalse($result->isError(), $result->content());
+
+        $files = glob($this->mediaRoot . '/*/*.png');
+        self::assertIsArray($files);
+        self::assertCount(3, $files);
+
+        $embeddedByArtifact = [];
+        foreach ($files as $file) {
+            $name = basename($file);
+            $embedded = Png::readText((string) file_get_contents($file), Png::KEYWORD_PARAMETERS);
+            self::assertIsString($embedded, $name);
+            if (str_ends_with($name, '-grid.png')) {
+                $embeddedByArtifact['grid'] = trim($embedded);
+                continue;
+            }
+            self::assertSame(1, preg_match('/^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-(\d+)-\d+\.png$/', $name, $matches), $name);
+            $embeddedByArtifact[(int) $matches[1]] = trim($embedded);
+        }
+
+        self::assertSame('first sample prompt BETA', $embeddedByArtifact[11] ?? null, 'seed-11 file must carry sample 0\'s row');
+        self::assertSame('second sample prompt GAMMA', $embeddedByArtifact[22] ?? null, 'seed-22 file must carry sample 1\'s row');
+        self::assertSame('grid row prompt ALPHA', $embeddedByArtifact['grid'] ?? null, 'the -grid file must carry infotexts[0]');
     }
 
     public function testUnconfiguredHostRefusesWithoutAnyDial(): void
@@ -233,6 +279,10 @@ final class GenerateImageTest extends TestCase
         self::assertTrue($this->postJson()['save_images']);
         self::assertArrayNotHasKey('save_to_disk', $this->postJson());
         self::assertArrayNotHasKey('id', $this->postJson());
+        // W4.5 dual-save honesty: the server returns no paths for its own
+        // outdir copy, so the result names both stores without enumerating
+        // server-side files.
+        self::assertStringContainsString('saved to server store (outdir) + crush media store', $result->content());
     }
 
     public function testServerValidationErrorBecomesAnErrorResultNotAThrow(): void
