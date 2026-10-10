@@ -25,13 +25,17 @@ use SugarCraft\Crush\ToolResult;
  * After the settings land, the session state follows the word:
  * {@see ToolResult::setRenderMode()} moves the live word and
  * {@see ToolResult::resetRenderMode()} discards the per-mode probe memo so
- * the next image paint re-derives (the memo is what made the boot-time word
- * feel restart-only). Two truths the reply states rather than hides:
- * graphics terminals can keep already-painted blobs until a /clear-class
- * redraw, and `SUGARCRUSH_MEDIA_RENDER_MODE` reasserts its precedence at the
- * next launch — a mid-session switch is a switch of the session, not of the
- * environment. The player picks the new word up on the NEXT `/play`; inside
- * the player, `m` still cycles reel's own ladder live (W5.4 asymmetry).
+ * the next derivation re-probes (the memo is what made the boot-time word
+ * feel restart-only). What the flip does NOT reach is stated rather than
+ * hidden: Bootstrap::chat() threads ONE mosaic into Chat at launch and the
+ * transcript paints through it, so transcript images keep the LAUNCH-time
+ * renderer for the whole session — new image results' collapsed protocol
+ * labels re-derive through this class, and the painted transcript follows
+ * only at the next launch. `SUGARCRUSH_MEDIA_RENDER_MODE` reasserts its
+ * precedence there too — a mid-session switch is a switch of the session,
+ * not of the environment. The player picks the new word up on the NEXT
+ * `/play`; inside the player, `m` still cycles reel's own ladder live
+ * (W5.4 asymmetry).
  *
  * Permission reasoning (recorded per house law): this writes the user's own
  * config through the same door `/settings` uses, at the operator's explicit
@@ -85,7 +89,7 @@ final class RenderModeHostCommand implements HostCommand
         return CommandResult::new(
             Message::user($text),
             Message::assistant(sprintf(
-                "render mode: %s — saved to %s\nimages apply on the next paint (stale graphics blobs may need /clear); the player starts in this word on the next /play\nSUGARCRUSH_MEDIA_RENDER_MODE reasserts at next launch when set",
+                "render mode: %s — saved to %s\nnew image labels and the player on the next /play follow this word; transcript images keep the renderer chosen at launch and repaint in this one at the next launch\nSUGARCRUSH_MEDIA_RENDER_MODE reasserts at next launch when set",
                 $word,
                 $path,
             )),

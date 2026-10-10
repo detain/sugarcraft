@@ -79,6 +79,12 @@ final class RenderModeCommandTest extends TestCase
 
         $body = $result->rows[1]->content;
         self::assertStringContainsString('render mode: halfblock', $body);
+        self::assertStringContainsString(
+            'transcript painting keeps the launch-time renderer',
+            $body,
+            'R13-M2: the report must state the honesty law — Chat threads ONE mosaic at launch, so transcript paint does not follow the mid-session word',
+        );
+        self::assertStringNotContainsString('images apply on the next paint', $body, 'the disproven promise may never ride the reply again');
         self::assertStringContainsString('reel analogue: halfblock', $body, 'the pure tryFrom half of the player pick law must show');
         self::assertStringContainsString('images:', RenderModeCommand::help());
         self::assertStringContainsString('video:', RenderModeCommand::help(), 'the asymmetry has to live in the help text');
@@ -110,6 +116,12 @@ final class RenderModeCommandTest extends TestCase
         $result = (new RenderModeHostCommand())->run($context, '/rendermode halfblock');
 
         self::assertStringContainsString('render mode: halfblock', $result->rows[1]->content);
+        self::assertStringContainsString(
+            'transcript images keep the renderer chosen at launch',
+            $result->rows[1]->content,
+            'R13-M2: the set-path reply tells the launch-boundary truth instead of promising next-paint switching',
+        );
+        self::assertStringNotContainsString('images apply on the next paint', $result->rows[1]->content);
         self::assertSame('halfblock', ToolResult::renderMode(), 'the session follows the word without a restart');
 
         $written = (array) json_decode((string) \file_get_contents($config), true);

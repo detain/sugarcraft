@@ -116,7 +116,7 @@ final class RenderModeCommand
         $analogue = ReelMode::tryFrom($current);
 
         return implode("\n", [
-            'render mode: ' . $current . '  (images apply on the next paint; the player reads it on the next /play)',
+            'render mode: ' . $current . '  (new image labels and the next /play follow this word; transcript painting keeps the launch-time renderer until the next launch)',
             'reel analogue: ' . ($analogue?->value ?? 'none — player uses its own auto-ladder') . '  (cycle live with m inside the player)',
             '',
             '  allowed: ' . implode(', ', MediaSettings::RENDER_MODES),
