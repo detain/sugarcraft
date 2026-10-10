@@ -41,6 +41,19 @@ use SugarCraft\Reel\Render\Mode;
  * stops without a model turn, so no update() would ever see the close).
  * No wall-clock deadline exists anywhere here (E646): playback advances
  * only on ticks the Player itself arms while unpaused.
+ *
+ * Audio (W5.8 / Appendix C-4 ruling: silent v1): this screen wires no
+ * audio surface of its own. Honest probe fact — sugar-reel's Player is
+ * NOT audio-opt-in on the open() path: a source WITH an audio track gets
+ * an AudioPlayer companion auto-created (Player.php:197) and started on
+ * first play (Player.php:721). Generated videos carry no audio track, so
+ * crush's own artifacts are inherently silent; a user-typed /play on an
+ * audio-bearing file plays sound when ffplay/mpv exist — accepted reel
+ * behavior for v1. Either way the companion dies with the Player: stop()
+ * bounds-kills it (BoundedShutdown ladder) and the teardown law above
+ * already routes every exit path through stop(). Whether silence should
+ * be ENFORCED (factory builds via Player::fromDecoder with
+ * audioPlayer: null) is the Wave-7 operator question recorded at C-4.
  */
 final class VideoPlayerScreen
 {
