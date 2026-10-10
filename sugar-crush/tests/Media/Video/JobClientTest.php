@@ -47,7 +47,7 @@ final class JobClientTest extends TestCase
         $this->rrmdir($this->mediaRoot);
     }
 
-    public function testSubmitForwardsParamsVerbatimAndReturnsTheServerTaskId(): void
+    public function testSubmitForwardsParamsUnchangedAndReturnsTheServerTaskId(): void
     {
         $calls = [];
         $client = $this->w5vClient(['POST /v1/videos' => [$this->w5vFixtureRow('jobs-submit.json')]], calls: $calls);
@@ -58,8 +58,38 @@ final class JobClientTest extends TestCase
         self::assertCount(1, $calls);
         self::assertSame('POST', $calls[0]['method']);
         self::assertSame('/v1/videos', $calls[0]['path']);
-        // Opaque-params law: the array rides verbatim, nested unknowns included.
+        // Opaque-params law: the array rides unchanged, nested unknowns
+        // included; only the explicit nulls of the W5.0 egress law drop out
+        // (pinned by their own test below).
         self::assertSame(['prompt' => 'a cat riding a rocket', 'num_frames' => 121, 'weird' => ['nested' => 1]], $calls[0]['json']);
+    }
+
+    /**
+     * R12-m1: the W5.0 stripExplicitNulls egress law now honestly covers the
+     * video submit too (the W5.2 commit message always claimed the reuse).
+     * A null posted to a pydantic-shaped server binds Python None onto the
+     * Optional field instead of leaving its default — omitting the key IS
+     * the default — while zero-valued arms (fps 0, false flags) must ride.
+     */
+    public function testSubmitStripsExplicitNullsAtTheWireAndKeepsEveryOtherValue(): void
+    {
+        $calls = [];
+        $client = $this->w5vClient(['POST /v1/videos' => [$this->w5vFixtureRow('jobs-submit.json')]], calls: $calls);
+
+        $client->submit([
+            'prompt' => 'a cat',
+            'seed' => null,
+            'num_frames' => 0,
+            'fps' => 0.0,
+            'loop' => false,
+            'negative_prompt' => null,
+        ]);
+
+        self::assertSame(
+            ['prompt' => 'a cat', 'num_frames' => 0, 'fps' => 0.0, 'loop' => false],
+            $calls[0]['json'],
+            'nulls drop at the boundary; zeros, empty floats and false stay',
+        );
     }
 
     public function testSubmitOnTheImageOnlySdApiFamilyRefusesWithoutDialling(): void

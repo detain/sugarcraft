@@ -124,11 +124,21 @@ final class JobClient
     /**
      * Hand the render request to the server and take back its task id.
      *
-     * $params ride verbatim (opaque-params law). The live sglang contract
-     * POSTs multipart (plan :1090) — the W1.3 transport seam is JSON-only,
-     * so the JSON body here is the fixture-tested shape; the multipart
-     * widening belongs to the sglang-diffusion implementation step the
-     * W7.7 live smoke will need anyway (loud note in the W5 REPORT).
+     * $params ride unchanged (opaque-params law) except for the W5.0 egress
+     * law: explicit nulls are dropped at this boundary by
+     * {@see Client::stripExplicitNulls()}, the same call the image wire made
+     * at 44f50a77d and this lane now honestly reuses (R12-m1). The argument
+     * transfers because the video dialect is the same Python shape —
+     * sglang-Diffusion is FastAPI/pydantic, where a posted null binds
+     * Python None onto an Optional field instead of leaving its default,
+     * and nothing in MediaRequest carries set-to-null wire intent (the
+     * XSet sentinels distinguish absent, and absent is what the server
+     * defaults table wants). The live sglang contract POSTs multipart
+     * (plan :1090) — the W1.3 transport seam is JSON-only, so the JSON body
+     * here is the fixture-tested shape; the multipart widening belongs to
+     * the sglang-diffusion implementation step the W7.7 live smoke will
+     * need anyway (loud note in the W5 REPORT), where omitting the field —
+     * exactly what the strip produces — is the correct spelling of default.
      *
      * @param  array<string, mixed>  $params
      * @throws SdException on a dialect without a video job route, on transport failure, or on an id-less response
@@ -147,7 +157,7 @@ final class JobClient
         }
 
         $decoded = $this->object(
-            $this->send('POST', $routes['submit'], $params, [], 'submit')->decodedJson(),
+            $this->send('POST', $routes['submit'], Client::stripExplicitNulls($params), [], 'submit')->decodedJson(),
             'submit',
         );
 
