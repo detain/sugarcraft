@@ -92,6 +92,10 @@ final class GenFormKeys
     public const string FIELD_RESTORE_FACES = 'tui.genform.field.restore_faces';
     public const string FIELD_DENOISING_STRENGTH = 'tui.genform.field.denoising_strength';
     public const string FIELD_IMAGE_CFG_SCALE = 'tui.genform.field.image_cfg_scale';
+    public const string FIELD_RESIZE_MODE = 'tui.genform.field.resize_mode';
+    public const string FIELD_MASK_MODE = 'tui.genform.field.mask_mode';
+    public const string FIELD_MASKED_CONTENT = 'tui.genform.field.masked_content';
+    public const string FIELD_INPAINT_AREA = 'tui.genform.field.inpaint_area';
 
     // -- seed affordances (§2.3, tooltip sentences verbatim) --------------------------
     public const string SEED_RANDOMIZE = 'tui.genform.seed.randomize';
@@ -180,6 +184,7 @@ final class GenFormKeys
     public const string IMAGE_BATCH_DIR = 'tui.genform.image.batch_dir';
     public const string IMAGE_DETECT_SIZE = 'tui.genform.image.detect_size';
     public const string IMAGE_SCALE = 'tui.genform.image.scale';
+    public const string IMAGE_SHOW_CFG = 'tui.genform.image.show_cfg';
     public const string IMAGE_SCALE_HELP = 'tui.genform.image.scale_help';
 
     // -- resize-mode radios (§2.6, verbatim) ----------------------------------------------------

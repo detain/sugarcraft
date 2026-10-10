@@ -16,10 +16,11 @@ use SugarCraft\Crush\Theme;
 use SugarCraft\Forms\Field\Confirm;
 
 /**
- * The 60-column law (crush-media W3.5 narrow pass): W3.5 labels are longer
- * than anything the W3.4 tabs carried ("Resize seed from width", "Show extra
- * sampling method"), so this pins that the shell still fits a 60x24 band on
- * EVERY disclosure tab - labels, values, and the expanded Hires accordion.
+ * The 60-column law (crush-media W3.5/W3.7 narrow pass): the disclosure and
+ * gated labels are longer than anything the W3.4 tabs carried ("Resize seed
+ * from width", "Only masked padding, pixels"), so this pins that the shell
+ * still fits a 60x24 band on EVERY tab - including the seven-tab strip and
+ * the expanded Hires accordion.
  *
  * Ruling (recorded, per the geometry law): at narrow widths the label column
  * truncates before wrapping - MediaForm::cell() clips every line to the
@@ -33,11 +34,14 @@ final class MediaFormNarrowTest extends TestCase
 {
     private const NARROW_GOLDEN_DIR = __DIR__ . '/golden';
 
-    public function testEveryDisclosureTabFitsA60x24Band(): void
+    /** Production registration order: Prompt, Params, Extra, Hires, Refiner, Image, Inpaint. */
+    private const TAB_COUNT = 7;
+
+    public function testEveryTabFitsA60x24Band(): void
     {
         $form = $this->wideForm();
 
-        for ($tab = 0; $tab < 5; $tab++) {
+        for ($tab = 0; $tab < self::TAB_COUNT; $tab++) {
             $lines = explode("\n", Ansi::strip($form->click(MediaForm::TAB_ZONE . $tab)->view(Theme::default(), 60, 24)));
             $this->assertCount(24, $lines, "frame height at tab {$tab}");
 
@@ -75,9 +79,21 @@ final class MediaFormNarrowTest extends TestCase
         $this->assertStringContainsString('1024x1024', $frame, 'the §2.4 preview row survives the squeeze');
     }
 
+    public function testTheGatedImageTabAt60ColumnsIsOneQuietRow(): void
+    {
+        $frame = Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '5')->view(Theme::default(), 60, 24));
+
+        $this->assertNarrowGolden('image-gated-60x24.txt', $frame);
+        $this->assertStringContainsString(
+            substr(Lang::t(GenFormKeys::GATE_WAVE4), 0, 12),
+            $frame,
+            'the Wave-4 gate sentence is the whole tab while closed',
+        );
+    }
+
     // ---- fixtures -----------------------------------------------------------------
 
-    /** The production five-tab registration, opened on a blank draft. */
+    /** The production seven-tab registration, opened on a blank draft. */
     private function wideForm(): MediaForm
     {
         return MediaForm::open(MediaRequest::new());

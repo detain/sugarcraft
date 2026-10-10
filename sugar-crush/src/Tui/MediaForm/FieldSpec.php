@@ -182,6 +182,7 @@ final readonly class FieldSpec
             self::WIDGET_CONFIRM => \SugarCraft\Forms\Field\Confirm::new($key, (bool) $this->default),
             self::WIDGET_MULTI => \SugarCraft\Forms\Field\MultiSelect::new($key)
                 ->withOptions(...($this->options ?? [])),
+            self::WIDGET_RADIO => \SugarCraft\Forms\Field\RadioPills::new($key, ...$this->optionLabels()),
             self::WIDGET_SELECT => \SugarCraft\Forms\Field\Select::new($key)
                 ->withOptions(...$this->optionLabels($choices)),
             default => throw new \InvalidArgumentException('no widget factory for ' . $this->widget),
@@ -360,6 +361,133 @@ final readonly class FieldSpec
         ];
     }
 
+    /**
+     * The W3.7 img2img/inpaint registry (§2.6/§2.7). Every range, step and
+     * default below is the §2-table number verbatim; the radio rows carry
+     * their option labels (§2.7 spellings) and bridge label↔index at the
+     * wire. Present-but-gated: while {@see Wave4Gate} is closed no section
+     * collects these rows, so the registry exists to pin the vocabulary and
+     * coercion in tests long before the editor ships.
+     *
+     * RULINGS. No mode-selector row is invented: A1111's `mode_img2img`
+     * sub-tab index (Sketch/Inpaint tabs) IS the crush tab strip — Image and
+     * Inpaint are their own sections here, mirroring the webui's split of
+     * img2img vs inpaint knobs. The §2.6 source rows (upload, batch dir,
+     * detect size, scale) have no DTO home until W4 image ingress lands and
+     * deliberately wait there. `denoising_strength` is the second per-section
+     * view of ONE wire key (0.7 hires-context in {@see disclosureRows()},
+     * 0.75 img2img-context here, §2.2) — while the gate holds the hires row
+     * is the sole collector; when it lifts, tab order decides the fold.
+     *
+     * @return list<self>
+     */
+    public static function wave4Rows(): array
+    {
+        return [
+            new self(
+                key: 'resize_mode', labelKey: GenFormKeys::FIELD_RESIZE_MODE, widget: self::WIDGET_RADIO,
+                min: null, max: null, step: null, default: self::resizeModeOptions()[0],
+                section: 'image', infotextLabel: 'Resize mode',
+                options: self::resizeModeOptions(),
+            ),
+            new self(
+                key: 'denoising_strength', labelKey: GenFormKeys::FIELD_DENOISING_STRENGTH, widget: self::WIDGET_SLIDER,
+                min: 0.0, max: 1.0, step: 0.01, default: 0.75,
+                section: 'image', infotextLabel: 'Denoising strength',
+            ),
+            new self(
+                key: 'image_cfg_scale', labelKey: GenFormKeys::FIELD_IMAGE_CFG_SCALE, widget: self::WIDGET_SLIDER,
+                min: 0.0, max: 3.0, step: 0.05, default: 1.5,
+                section: 'image', infotextLabel: 'Image CFG scale',
+            ),
+            new self(
+                key: 'mask_blur', labelKey: GenFormKeys::MASK_BLUR, widget: self::WIDGET_SLIDER,
+                min: 0, max: 64, step: 1, default: 4,
+                section: 'inpaint', infotextLabel: 'Mask blur',
+            ),
+            new self(
+                key: 'inpainting_mask_invert', labelKey: GenFormKeys::FIELD_MASK_MODE, widget: self::WIDGET_RADIO,
+                min: null, max: null, step: null, default: self::maskInvertOptions()[0],
+                section: 'inpaint', infotextLabel: 'Mask mode',
+                options: self::maskInvertOptions(),
+            ),
+            new self(
+                key: 'inpainting_fill', labelKey: GenFormKeys::FIELD_MASKED_CONTENT, widget: self::WIDGET_RADIO,
+                min: null, max: null, step: null, default: self::fillOptions()[1],
+                section: 'inpaint', infotextLabel: 'Masked content',
+                options: self::fillOptions(),
+            ),
+            new self(
+                key: 'inpaint_full_res', labelKey: GenFormKeys::FIELD_INPAINT_AREA, widget: self::WIDGET_RADIO,
+                min: null, max: null, step: null, default: self::areaOptions()[0],
+                section: 'inpaint', infotextLabel: 'Inpaint area',
+                options: self::areaOptions(),
+            ),
+            new self(
+                key: 'inpaint_full_res_padding', labelKey: GenFormKeys::AREA_PADDING, widget: self::WIDGET_SLIDER,
+                min: 0, max: 256, step: 4, default: 32,
+                section: 'inpaint', infotextLabel: 'Only masked padding, pixels',
+            ),
+        ];
+    }
+
+    /**
+     * §2.7's four resize modes, verbatim A1111 spellings — wire index = position.
+     *
+     * @return list<string>
+     */
+    public static function resizeModeOptions(): array
+    {
+        return [
+            Lang::t(GenFormKeys::RESIZE_JUST),
+            Lang::t(GenFormKeys::RESIZE_CROP),
+            Lang::t(GenFormKeys::RESIZE_FILL),
+            Lang::t(GenFormKeys::RESIZE_LATENT),
+        ];
+    }
+
+    /**
+     * §2.7's masked-content options. EXACTLY FOUR (C-1): fill, original,
+     * latent noise, latent nothing — a fifth entry or a 5-way split would
+     * be a Forge/SD.Next concept, not stock A1111, and is a CRITICAL defect.
+     * UI default is "original" (index 1); wire index = position.
+     *
+     * @return list<string>
+     */
+    public static function fillOptions(): array
+    {
+        return [
+            Lang::t(GenFormKeys::FILL_FILL),
+            Lang::t(GenFormKeys::FILL_ORIGINAL),
+            Lang::t(GenFormKeys::FILL_LATENT_NOISE),
+            Lang::t(GenFormKeys::FILL_LATENT_NOTHING),
+        ];
+    }
+
+    /** §2.7 mask mode: inpaint the masked region or its complement.
+     *
+     * @return list<string>
+     */
+    public static function maskInvertOptions(): array
+    {
+        return [
+            Lang::t(GenFormKeys::MASK_MODE_MASKED),
+            Lang::t(GenFormKeys::MASK_MODE_NOT_MASKED),
+        ];
+    }
+
+    /** §2.7 inpaint area: whole picture (false) or only masked (true).
+     *
+     * @return list<string>
+     */
+    public static function areaOptions(): array
+    {
+        return [
+            Lang::t(GenFormKeys::AREA_WHOLE),
+            Lang::t(GenFormKeys::AREA_ONLY_MASKED),
+        ];
+    }
+
     /** Does this row's section still want it visible given the draft state? (W3.5 owns conditionals.) */
     public function belongsTo(string $sectionKey): bool
     {
@@ -400,6 +528,18 @@ final readonly class FieldSpec
             'hr_negative_prompt' => $draft->hrNegativePrompt(),
             'refiner_checkpoint' => $draft->refinerCheckpoint(),
             'refiner_switch_at' => $draft->refinerSwitchAt(),
+            // W3.7 radios store their wire shape as ints/bools; the row's
+            // readable value is the option LABEL at that index.
+            'resize_mode' => self::labelAtIndex($draft->resizeMode(), self::resizeModeOptions()),
+            'inpainting_mask_invert' => self::labelAtIndex($draft->inpaintingMaskInvert(), self::maskInvertOptions()),
+            'inpainting_fill' => self::labelAtIndex($draft->inpaintingFill(), self::fillOptions()),
+            'inpaint_full_res' => self::labelAtIndex(
+                $draft->inpaintFullRes() === null ? null : (int) $draft->inpaintFullRes(),
+                self::areaOptions(),
+            ),
+            'image_cfg_scale' => $draft->imageCfgScale(),
+            'mask_blur' => $draft->maskBlur(),
+            'inpaint_full_res_padding' => $draft->inpaintFullResPadding(),
             default => null,
         };
 
@@ -444,6 +584,18 @@ final readonly class FieldSpec
             'hr_negative_prompt' => $draft->withHrNegativePrompt(trim((string) $value) === '' ? null : (string) $value),
             'refiner_checkpoint' => $draft->withRefinerCheckpoint(self::sentinelWire($value, self::noneLabel())),
             'refiner_switch_at' => $draft->withRefinerSwitchAt(self::floatOrNull($value)),
+            // W3.7 radio arms: the label is what the widget holds, the index
+            // is what the wire carries (§2.7); inpaint_full_res is the one
+            // BOOL field of the set ("Only masked" = index 1 = true).
+            'resize_mode' => $draft->withResizeMode(self::indexAtLabel($value, self::resizeModeOptions())),
+            'inpainting_mask_invert' => $draft->withInpaintingMaskInvert(self::indexAtLabel($value, self::maskInvertOptions())),
+            'inpainting_fill' => $draft->withInpaintingFill(self::indexAtLabel($value, self::fillOptions())),
+            'inpaint_full_res' => $draft->withInpaintFullRes(
+                $value === null ? null : self::indexAtLabel($value, self::areaOptions()) === 1,
+            ),
+            'mask_blur' => $draft->withMaskBlur(self::intOrNull($value)),
+            'inpaint_full_res_padding' => $draft->withInpaintFullResPadding(self::intOrNull($value)),
+            'image_cfg_scale' => $draft->withImageCfgScale(self::floatOrNull($value)),
             default => $draft->withUnknown($this->key, $value),
         };
     }
@@ -484,5 +636,35 @@ final readonly class FieldSpec
         return $value === null || (string) $value === '' || (string) $value === $sentinel
             ? null
             : (string) $value;
+    }
+
+    /**
+     * The option label at a wire index, or null when the draft never set
+     * one (the row default takes over via valueFrom's fallback). Out-of-range
+     * indices are treated as unset — the registry is the only writer, so a
+     * stray index means data from outside this form.
+     *
+     * @param list<string> $options
+     */
+    private static function labelAtIndex(mixed $index, array $options): ?string
+    {
+        return is_int($index) && isset($options[$index]) ? $options[$index] : null;
+    }
+
+    /**
+     * The wire index of an option label; an unknown label (or null from a
+     * closed group) rides the DTO as null — set-to-default, never a guess.
+     *
+     * @param list<string> $options
+     */
+    private static function indexAtLabel(mixed $label, array $options): ?int
+    {
+        if ($label === null) {
+            return null;
+        }
+
+        $index = array_search((string) $label, $options, true);
+
+        return $index === false ? null : $index;
     }
 }

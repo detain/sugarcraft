@@ -15,6 +15,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\NumberField;
+use SugarCraft\Forms\Field\RadioPills;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Slider;
 use SugarCraft\Forms\Field\Text;
@@ -255,6 +256,12 @@ abstract class RegistrySection implements Section, FieldValuedSection
             // the imported bool, keeping its title (the row's own label).
             FieldSpec::WIDGET_CONFIRM => $field instanceof Confirm && is_bool($value)
                 ? Confirm::new($field->key(), $value)->withTitle($field->getTitle())
+                : null,
+            // Radios hold their option LABEL; a value outside the row's
+            // option list is junk and refuses (null), never a silent guess.
+            FieldSpec::WIDGET_RADIO => $field instanceof RadioPills && is_string($value)
+                && \in_array($value, $spec->optionLabels(), true)
+                ? $field->withValue($value)
                 : null,
             default => null,
         };

@@ -10,7 +10,6 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Theme;
-use SugarCraft\Crush\Tui\Settings\SettingsTabStrip;
 use SugarCraft\Forms\Field;
 use SugarCraft\Sprinkles\Style;
 
@@ -82,11 +81,14 @@ final class MediaForm
         $sections = [
             Sections\PromptSection::forDraft($draft),
             Sections\ParamsSection::forDraft($draft, $runtimeChoices),
-            // W3.5 disclosure groups; lanes c/d append the Scripts/Advanced
-            // and Presets/Output registration rows after these lines.
+            // W3.5 disclosure groups.
             Sections\SeedSection::forDraft($draft),
             Sections\HiresSection::forDraft($draft, $runtimeChoices),
             Sections\RefinerSection::forDraft($draft, $runtimeChoices),
+            // W3.7 gated groups (Wave4Gate closed); lanes c/d append the
+            // Scripts/Advanced and Presets/Output rows after these lines.
+            Sections\ImageSection::forDraft($draft, $runtimeChoices),
+            Sections\InpaintSection::forDraft($draft, $runtimeChoices),
         ];
 
         return new self($sections, $draft, MediaFormState::forSection(0, \count($sections[0]->rows())));
@@ -249,6 +251,17 @@ final class MediaForm
             // InputReader maps both Tab and Shift+Tab to KeyType::Tab with
             // the shift flag — reverse crosses sections backwards.
             return [$this->switchSection($msg->shift ? -1 : 1), null];
+        }
+
+        // FormTabs ruling (W3.7): the tab strip is reached by these section-
+        // jump keys and its click zones, never by Up/Down — those stay row
+        // navigation so an editing NumberField keeps its ↑/↓ inc/dec.
+        if ($msg->type === KeyType::PageUp) {
+            return [$this->switchSection(-1), null];
+        }
+
+        if ($msg->type === KeyType::PageDown) {
+            return [$this->switchSection(1), null];
         }
 
         if ($msg->type !== KeyType::Char || $msg->ctrl || $msg->alt) {
@@ -421,7 +434,7 @@ final class MediaForm
         $topFill = max(0, $cols - 3 - Width::string($title));
         $lines = [$border->render('╭─' . $title . str_repeat('─', $topFill) . '╮')];
 
-        [$tabLine] = SettingsTabStrip::render($this->tabLabels(), $this->state->section, $width, $theme);
+        [$tabLine] = FormTabs::render($this->tabLabels(), $this->state->section, $width, $theme);
 
         $rule = $muted->render(str_repeat('─', $width));
         $statusLine = $this->status !== null
@@ -458,7 +471,7 @@ final class MediaForm
         }
 
         $zones = [];
-        [, $tabSpans] = SettingsTabStrip::render($this->tabLabels(), $this->state->section, $inner, $theme);
+        [, $tabSpans] = FormTabs::render($this->tabLabels(), $this->state->section, $inner, $theme);
         foreach ($tabSpans as [$from, $to, $index]) {
             $zones[] = [1, 2 + $from, 2 + $to, self::TAB_ZONE . $index];
         }
