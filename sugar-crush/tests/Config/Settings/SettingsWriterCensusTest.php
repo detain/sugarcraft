@@ -120,6 +120,11 @@ final class SettingsWriterCensusTest extends TestCase
             // itself never names the writer (the W3.9 separation law holds).
             'App/App.php::openMediaForm->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
+            // crush-media W5.7: /rendermode writes the chosen render mode
+            // through the sanctioned writer — the one command that mutates a
+            // settings key, which is why it takes the host command's writer
+            // rather than touching AtomicJsonFile itself.
+            'Host/Commands/RenderModeHostCommand.php::run->write' => 1,
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
             // N-P5: a settings PROFILE, not a settings file — its write is
             // AtomicJsonFile's, it names SettingsWriter only to ask which keys

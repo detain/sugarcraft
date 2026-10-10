@@ -32,7 +32,7 @@ use SugarCraft\Reel\Render\Mode;
  */
 final class VideoPlayerWiringTest extends TestCase
 {
-    private const CLIP = '/media/w5b/clip.mp4';
+    private const W5B_CLIP = '/media/w5b/clip.mp4';
 
     private ProviderInterface $vwProvider;
 
@@ -102,7 +102,7 @@ final class VideoPlayerWiringTest extends TestCase
     public function testGateForwardingKeepsPlayerKeysInsideTheScreen(): void
     {
         $decoder = new VideoPlayerScriptedDecoder($this->vwFrames(4));
-        $paused = Player::fromDecoder($decoder, 8, 3, 10.0, Mode::HalfBlock, 4, self::CLIP, paused: true);
+        $paused = Player::fromDecoder($decoder, 8, 3, 10.0, Mode::HalfBlock, 4, self::W5B_CLIP, paused: true);
         $app = $this->vwReadyApp($paused);
 
         [$playing, $cmd] = $app->update(new KeyMsg(KeyType::Space, rune: ' '));
@@ -177,7 +177,7 @@ final class VideoPlayerWiringTest extends TestCase
         [$player, $decoder] = $this->vwScripted();
         $app = $this->vwApp();
 
-        [, $cmd] = $app->openVideoPlayer(self::CLIP, static fn (): Player => $player);
+        [, $cmd] = $app->openVideoPlayer(self::W5B_CLIP, static fn (): Player => $player);
         self::assertNotNull($cmd);
 
         // Invoking the promise Cmd runs the build synchronously — exactly
@@ -212,7 +212,7 @@ final class VideoPlayerWiringTest extends TestCase
     {
         $decoder = new VideoPlayerScriptedDecoder($this->vwFrames(4));
 
-        return [Player::fromDecoder($decoder, 8, 3, 10.0, Mode::HalfBlock, 4, self::CLIP, paused: false), $decoder];
+        return [Player::fromDecoder($decoder, 8, 3, 10.0, Mode::HalfBlock, 4, self::W5B_CLIP, paused: false), $decoder];
     }
 
     /**
@@ -231,7 +231,7 @@ final class VideoPlayerWiringTest extends TestCase
 
     private function vwReadyApp(Player $player): App
     {
-        [$preparing] = $this->vwApp()->openVideoPlayer(self::CLIP, static fn (): Player => $player);
+        [$preparing] = $this->vwApp()->openVideoPlayer(self::W5B_CLIP, static fn (): Player => $player);
         [$ready] = $preparing->update(new PlayerReadyMsg($player, null));
 
         return $ready;

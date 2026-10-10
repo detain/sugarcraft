@@ -1334,7 +1334,7 @@ final class ChatTest extends TestCase
 
     public function testSlashMenuUpDownWrapsSelection(): void
     {
-        $chat = new Chat(inputBuf: '/re'); // matches: recompress, redo, rename, rewind, rules
+        $chat = new Chat(inputBuf: '/re'); // matches: recompress, redo, rename, rendermode, rewind, rules
         $this->assertSame(0, $chat->slashMenuIndex());
 
         [$down] = $chat->update(new KeyMsg(KeyType::Down, ''));
@@ -1346,14 +1346,17 @@ final class ChatTest extends TestCase
         [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(3, $down->slashMenuIndex());
 
+        [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(4, $down->slashMenuIndex());
+
         [$atEnd] = $down->update(new KeyMsg(KeyType::Down, ''));
-        $this->assertSame(4, $atEnd->slashMenuIndex());
+        $this->assertSame(5, $atEnd->slashMenuIndex());
 
         [$wrapped] = $atEnd->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(0, $wrapped->slashMenuIndex());
 
         [$up] = $wrapped->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame(4, $up->slashMenuIndex());
+        $this->assertSame(5, $up->slashMenuIndex());
     }
 
     public function testEnterCompletesAmbiguousMatchInsteadOfSubmitting(): void

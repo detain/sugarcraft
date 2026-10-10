@@ -289,18 +289,38 @@ final class Bootstrap
      *
      * The messages routed here interpolate values NOTHING bounds — a path from
      * the user's config, a glob from a project's `disabledTools`, an exception
-     * message from a preset registry. MEASURED against the longest legitimate
-     * message this class can build today, {@see hookFiles()}'s untrusted-file
-     * notice at 283 characters with a realistic pair of absolute paths; the
-     * tool-removal report is 179 and the rest are under 190. 400 clears every
-     * one of them, so no honest warning is ever clipped, and it still bounds a
-     * hostile one.
+     * message from a preset registry. MEASURED at round 47 against the longest
+     * legitimate message this class could build then, {@see hookFiles()}'s
+     * untrusted-file notice at 283 characters with a realistic pair of absolute
+     * paths; the tool-removal report has since outgrown that — its disabled
+     * list is one name per tool — so it is the entry the both-ends clip below
+     * exists for, while every other honest warning still rides under the bound
+     * uncut. The bound itself is what makes a hostile message safe.
+     *
+     * THE CLIP KEEPS BOTH ENDS (W5 gate). A head-only cut let the project-tier
+     * tool-removal report grow past the bound silently: the twenty-six-name
+     * disabled list (235 characters since `GenerateVideo` joined it at W5.3)
+     * pushed the survivor clause — the half a security warning exists to say —
+     * off the end of the row. The clip now preserves the opening of the message
+     * AND its closing clause, cutting the middle of whichever list is long.
      *
      * THE STDERR COPY IS NOT CLIPPED. That channel is the complete record and
      * costs no tokens — see {@see warnPermissionConfigInTranscript()}, which is
      * why the clipped row says where the full text is.
      */
     private const LAUNCH_NOTICE_MAX_CHARS = 400;
+
+    /**
+     * How many trailing characters a clipped transcript row keeps.
+     *
+     * MEASURED against the closing clause of the longest legitimate message:
+     * the tool-removal report's survivor tail (` — leaving: Bash.`) is 17
+     * characters with one survivor and stays whole up to roughly six average
+     * tool names; 96 carries that with room, and a survivor list longer than
+     * the tail budget loses only its own middle — same trade the head makes for
+     * the disabled list, with stderr still the complete record.
+     */
+    private const LAUNCH_NOTICE_TAIL_CHARS = 96;
 
     /**
      * Appended to a clipped notice, and counted against
@@ -7230,14 +7250,31 @@ final class Bootstrap
         // cutting one mid-codepoint would hand Chat a row that is not valid
         // UTF-8 — which json_encode() (the session store, the `-p` document)
         // refuses outright rather than degrading.
-        $notice = mb_strlen($message, 'UTF-8') > self::LAUNCH_NOTICE_MAX_CHARS
-            ? mb_substr(
-                $message,
-                0,
-                self::LAUNCH_NOTICE_MAX_CHARS - mb_strlen(self::translated(self::LAUNCH_NOTICE_CLIP_SUFFIX), 'UTF-8'),
-                'UTF-8',
-            ) . self::translated(self::LAUNCH_NOTICE_CLIP_SUFFIX)
-            : $message;
+        //
+        // BOTH ENDS SURVIVE, joined by an explicit ellipsis (W5 gate): the
+        // clipped half is always a list's middle, never a sentence's point. A
+        // head-only cut let the twenty-six-name tool-removal report push its
+        // ` — leaving: …` survivor clause past the bound, which is exactly the
+        // information the warning is issued to carry.
+        $suffix = self::translated(self::LAUNCH_NOTICE_CLIP_SUFFIX);
+        $notice = $message;
+        if (mb_strlen($message, 'UTF-8') > self::LAUNCH_NOTICE_MAX_CHARS) {
+            $headChars = self::LAUNCH_NOTICE_MAX_CHARS
+                - mb_strlen($suffix, 'UTF-8')
+                - 3 // the ' … ' joiner between the kept ends
+                - self::LAUNCH_NOTICE_TAIL_CHARS;
+            if ($headChars < 1) {
+                // Config bug, unreachable today (400 - 28 - 3 - 96 = 273): the
+                // bounds no longer compose to a row that fits. Loud, because a
+                // silently negative mb_substr length would clip to the empty
+                // head and advertise text the row does not contain.
+                throw new \LogicException('LAUNCH_NOTICE_MAX_CHARS does not leave room for the clip suffix, joiner and tail');
+            }
+            $notice = mb_substr($message, 0, $headChars, 'UTF-8')
+                . ' … '
+                . mb_substr($message, -self::LAUNCH_NOTICE_TAIL_CHARS, null, 'UTF-8')
+                . $suffix;
+        }
 
         // The de-dup check comes FIRST so a message already recorded is never
         // counted as an overflow — a repeat costs the transcript nothing, and

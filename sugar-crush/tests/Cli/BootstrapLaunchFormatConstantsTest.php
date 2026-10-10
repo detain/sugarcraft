@@ -390,13 +390,22 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * field is longer than this is NOT nominated, and the sweep reports its
      * absence as silence. Nothing here can detect that, which is why the bound
      * is generous — the longest field a quoting page interpolates is the
-     * project-tier tool-removal report's survivor list, 205 bytes for the
-     * twenty-four tools it names since W10 (it was 160 until that list
-     * outgrew it), every other one under sixty — and why the fixture in
+     * project-tier tool-removal report's disabled list, 235 bytes for the
+     * twenty-six tools the sample names since crush-media W5.3 (it was 205 for
+     * twenty-four until that join, and 160 until W10 widened the bound past
+     * it), every other one under sixty — and why the fixture in
      * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} pins
      * both directions rather than only the one this file wants.
+     *
+     * THE CEILING IS THE FIXTURE, NOT A ROUND NUMBER: 256 clears the measured
+     * 235 with room for roughly one or two more tool names, and stays under the
+     * fixture's 280-byte "far" gap so the false-positive direction remains
+     * pinned. Each future tool that lands in that sample spends part of the
+     * headroom; when it runs out, the sweep reds LOUDLY on the quoting page
+     * dropping out — which is this bound's way of asking for the same
+     * measured-widening W10 and W5 performed, or for the doc sample to shrink.
      */
-    private const PAGE_QUOTE_FIELD_BYTES = 220;
+    private const PAGE_QUOTE_FIELD_BYTES = 256;
 
     /**
      * PHPUnit's own two output forms. Never excused by an anchor — see

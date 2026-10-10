@@ -2615,6 +2615,9 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     private const ACCEPTED_CONST_DUPLICATION = [
         'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
         'CHUNKED' => 'The crush-media W4.4 pair (the /sendto host command and the PNG-info importer) point at the one chunked-payload fixture; both files sit two levels under the package, so the identical relative path is a single statement about the fixture tree, not a value to diverge.',
+        'CORRUPT' => 'The crush-media W5.6 pair (the image-ingress suite and the video-tab suite) point at the one corrupt-PNG fixture under fixtures/img; identical by the same depth argument as CHUNKED, and a re-roll of the fixture moves the pair together.',
+        'GIF' => 'The crush-media W5.6 pair share the one tiny-GIF fixture pointer (the wrong-format polarity of the ingress door); identical by the same depth argument as CHUNKED.',
+        'TINY' => 'The crush-media W5.6 pair share the one tiny-PNG fixture pointer (the accepted-bytes polarity of the ingress door); identical by the same depth argument as CHUNKED.',
         'DEEPSEEK_V4' => 'The SGLang suites that pin DeepSeek-V4 behaviour (DSML hold-back, server limits, the truncation guard and its warning rate limit) name the same deployment id, spelled out since audit A26 moved SglangProvider::DEFAULT_MODEL to Qwen3.8; it is a request label those suites send, and the served-model suite names its own V4.5 id under a different constant.',
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
         'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the shutdown pair each pin one lifetime; the odd values are the drift polity.',
