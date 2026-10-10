@@ -106,6 +106,26 @@ final class MediaFormKeysTest extends TestCase
         $this->assertSame(1, $moved->mediaForm?->state()->section, 'Shift+Tab crosses backwards');
     }
 
+    public function testPageKeysCrossSectionsMirroringTab(): void
+    {
+        // R8-MINOR-1: the FormTabs strip is reached by PageUp/PageDown
+        // exactly like Tab/Shift+Tab — one wrap law at the strip ends.
+        $app = $this->app()->withMediaForm($this->twoSectionForm());
+
+        $moved = $this->press($app, new KeyMsg(KeyType::PageDown));
+        $this->assertSame(1, $moved->mediaForm?->state()->section, 'PageDown crosses to the next section');
+
+        $moved = $this->press($moved, new KeyMsg(KeyType::PageDown));
+        $this->assertSame(0, $moved->mediaForm?->state()->section, 'at the last tab PageDown wraps forward, like Tab');
+        $this->assertSame(0, $moved->mediaForm?->state()->row, 'crossing resets the row cursor');
+
+        $moved = $this->press($app, new KeyMsg(KeyType::PageUp));
+        $this->assertSame(1, $moved->mediaForm?->state()->section, 'PageUp from the first section wraps backwards to the last');
+
+        $moved = $this->press($moved, new KeyMsg(KeyType::PageUp));
+        $this->assertSame(0, $moved->mediaForm?->state()->section, 'PageUp crosses to the previous section');
+    }
+
     public function testWheelScrollsTheFormRows(): void
     {
         $app = $this->press(
