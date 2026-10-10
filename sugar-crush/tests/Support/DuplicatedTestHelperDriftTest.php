@@ -2667,7 +2667,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'BOUND_SECONDS' => 'Per-suite waits: a reap test and a shutdown test legitimately bound differently. THE SEMANTIC DIFFERENCES LIVE HERE, which is why this map is per-polity and not a widening of the other.',
         'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'The census documents a different budget than the suites enforce; that difference is the claim being tested.',
         'COLS' => 'Per-fixture terminal geometry from unrelated suites that named one constant the same.',
-        'CORRUPT' => 'The crush-media mask-ingress and image-ingress suites point at the one corrupt-PNG fixture; the single-token difference is each file\'s directory depth under tests/ — the LANG_DIR shape, not drift.',
+        'CORRUPT' => 'The crush-media MaskIngestTest and the TUI ImageSectionIngressTest both point at the one corrupt-PNG fixture; the single-token difference is each file\'s directory depth under tests/ — the LANG_DIR shape, not drift.',
         'DESCRIPTION_SENTINEL' => 'Each containment suite plants its own description sentinel; same word, different payloads.',
         'FIXTURE_LIFETIME_SECONDS' => 'Per-suite lifetimes against each other; the identical pairs live on the duplication map.',
         'FLAG' => 'A file-mode literal against a flag emoji — pure name collision.',
