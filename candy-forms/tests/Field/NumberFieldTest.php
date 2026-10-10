@@ -342,4 +342,15 @@ final class NumberFieldTest extends TestCase
         $this->expectExceptionMessage(Lang::t('number.step_positive'));
         NumberField::new('n', 0, 10, 0);
     }
+
+    public function testIntSpanOverflowThrowsAtTheBoundary(): void
+    {
+        // R6-M1: min=-1..max=PHP_INT_MAX is a legal-looking all-int geometry
+        // whose span (2^63) overflows int — the exact walk could never run,
+        // and the float delegate corrupts int64 seeds to float(-9.22e18).
+        // The ctor refuses the shape instead of accepting an unhonorable law.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Lang::t('number.span_overflow'));
+        NumberField::new('s', -1, PHP_INT_MAX, 1, PHP_INT_MAX);
+    }
 }

@@ -56,6 +56,7 @@ return [
     'number.invalid' => 'Not a number — digits with an optional leading minus and decimal point only',
     'number.separators_refused' => 'Thousands separators are not accepted — type the plain digits',
     'number.out_of_range' => 'Number is outside the representable 64-bit integer range',
+    'number.span_overflow' => 'Number field integer bounds must not span more than the 64-bit integer range',
     'field.readonly' => '(read-only)',
     'validation.async_return_type' => 'Async validator for field "{key}" must return a promise, got {type}',
     'validation.async_result_type' => 'Async validation of field "{key}" must resolve to an error string or null, got {type}',

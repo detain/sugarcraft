@@ -40,7 +40,10 @@ use SugarCraft\Forms\Util\RenderSafe;
  * to Slider::withValue() — the single clamp/snap site for floats stays
  * Slider's normalise(), re-used, never re-implemented here. `99999999999999999`
  * round-trips digit-exact (NumberFieldTest pins it), which a float would
- * corrupt; a draft beyond int64 is REFUSED, not silently widened.
+ * corrupt; a draft beyond int64 is REFUSED, not silently widened. The
+ * geometry itself answers to the same law: an all-int lattice whose span
+ * exceeds int64 is rejected by the constructor (R6-M1) rather than accepted
+ * with an int path that could never run.
  *
  * Locale-safe parse: canonical `-?[0-9]+` and plain-decimal/exponent float
  * forms only. Thousands separators are refused with a message, never guessed
@@ -95,6 +98,14 @@ final class NumberField implements Field
         }
         if (!($step > 0)) {
             throw new \InvalidArgumentException(Lang::t('number.step_positive'));
+        }
+        // R6-M1 fail-fast: an all-int geometry whose span overflows int64
+        // (min=-1, max=PHP_INT_MAX) cannot honour the int64 law — the exact
+        // walk below would fall to the corrupting float delegate — so the
+        // shape that makes the promise unhonorable is refused here, at the
+        // same boundary as the other nonsense-geometry throws.
+        if (is_int($min) && is_int($max) && is_int($step) && !is_int($max - $min)) {
+            throw new \InvalidArgumentException(Lang::t('number.span_overflow'));
         }
         $this->value = $value === null ? null : self::coerce($key, $min, $max, $step, $value);
     }
@@ -341,8 +352,10 @@ final class NumberField implements Field
      * The single coercion onto [min, max]'s step lattice. INT PATH (the
      * int64 law): when min/max/step and the raw number are all int and the
      * span itself fits int, clamp + half-up snap runs on pure integer
-     * arithmetic (intdiv — overflow-free below the guard) so an int64 seed
-     * round-trips digit-exact. FLOAT PATH: everything else delegates to
+     * arithmetic (intdiv — overflow-free below the guard; the constructor
+     * refuses all-int geometries whose span overflows int, so the in-walk
+     * span guard is defense-in-depth) so an int64 seed round-trips
+     * digit-exact. FLOAT PATH: everything else delegates to
      * Slider::withValue() — Slider's normalise() stays the ONE float
      * clamp/snap site in the library, EPS tie rule included. The two paths
      * are pinned equal on the overlap by NumberFieldTest's cross-engine walk.
