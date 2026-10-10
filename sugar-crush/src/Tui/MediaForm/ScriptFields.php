@@ -29,7 +29,10 @@ use SugarCraft\Forms\Field\Slider;
  * 2. non-numeric `value` (string, bool, array, null) → Input seeded with the
  *    textualised default; bools seed `True`/`False` and map back on collect.
  * 3. full numeric lattice (`minimum`+`maximum`+`step`, step > 0) AND the
- *    default sits exactly on that lattice → Slider.
+ *    default sits exactly on that lattice → Slider — but only while the
+ *    value actually seeded into it (a draft import) also sits on the grid;
+ *    an off-grid seed demotes the row to the text Input instead
+ *    ({@see self::field()}, the R8-MINOR-2 round-trip law).
  * 4. integer `value` → NumberField walking 1-step integer lattice across the
  *    declared span, defaulting to ±2·10⁹ where a bound is absent (see
  *    {@see self::INT_SPAN} for why not PHP_INT_MAX on the negative side).
@@ -157,12 +160,20 @@ final class ScriptFields
     /**
      * Build the widget for one argument row, seeded from $seed when a draft
      * carries a prior value for it, else from the descriptor default.
+     * A slider-shaped row whose incoming seed sits off the lattice demotes
+     * to the text Input instead — the same no-mutilation law the default
+     * escape follows, so a round-tripped value is never silently snapped
+     * (R8-MINOR-2).
      *
      * @param array{label: string, value: mixed, minimum: float|null, maximum: float|null, step: float|null, choices: list<string>} $arg
      */
     public static function field(string $key, array $arg, string $label, mixed $seed = null): Field
     {
         $effective = $seed ?? $arg['value'];
+        $kind      = self::kind($arg);
+        if ($kind === self::KIND_SLIDER && self::lattice($arg, $effective) === null) {
+            $kind = self::KIND_INPUT;
+        }
         // R6-M1 caller law: NumberField's ctor refuses an all-int geometry
         // whose span overflows int64 and PHP's (int)-cast of a beyond-range
         // server float is undefined — land every declared bound on the
@@ -173,7 +184,7 @@ final class ScriptFields
         $intMin    = self::intBound($arg['minimum'], -self::INT_SPAN);
         $intMax    = self::intCeiling(self::intBound($arg['maximum'], self::INT_SPAN), $intMin);
 
-        return match (self::kind($arg)) {
+        return match ($kind) {
             self::KIND_SELECT => Select::new($key)
                 ->withOptions(...$arg['choices'])
                 ->withSelected(self::text(is_string($effective) && in_array($effective, $arg['choices'], true)
@@ -212,7 +223,12 @@ final class ScriptFields
     {
         return match (self::kind($arg)) {
             self::KIND_SELECT => (string) $field->value(),
-            self::KIND_SLIDER => self::restoreNumeric((float) $field->value(), $arg['value']),
+            // A slider-shaped row demoted to Input by an off-grid seed
+            // (R8-MINOR-2) contributes through the text escape — casting a
+            // non-numeric edit through (float) would corrupt it to 0.0.
+            self::KIND_SLIDER => $field instanceof Slider
+                ? self::restoreNumeric((float) $field->value(), $arg['value'])
+                : self::wireFromText((string) $field->value(), $arg['value']),
             self::KIND_NUMBER => (int) $field->value(),
             default => self::wireFromText((string) $field->value(), $arg['value']),
         };
@@ -246,12 +262,15 @@ final class ScriptFields
 
     /**
      * The slider lattice an argument can honestly ride: full bounds, a
-     * positive step, and the descriptor's own default sitting on that
-     * lattice. Null means "no slider" (the caller falls onward/upward).
+     * positive step, and the probed value sitting on that lattice — the
+     * descriptor's own default by default, or a draft's imported seed when
+     * $value carries one (R8-MINOR-2: an off-grid import must not be
+     * silently snapped). Null means "no slider" (the caller falls
+     * onward/upward).
      *
      * @param array{value: mixed, minimum: float|null, maximum: float|null, step: float|null} $arg
      */
-    private static function lattice(array $arg): ?array
+    private static function lattice(array $arg, mixed $value = null): ?array
     {
         $min = $arg['minimum'];
         $max = $arg['maximum'];
@@ -260,7 +279,7 @@ final class ScriptFields
             return null;
         }
 
-        $value = self::num($arg['value']);
+        $value = self::num($value ?? $arg['value']);
         if ($value === null || $value < $min - self::LATTICE_EPSILON || $value > $max + self::LATTICE_EPSILON) {
             return null;
         }

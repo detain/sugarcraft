@@ -122,6 +122,32 @@ final class ScriptFieldsTest extends TestCase
         $this->assertSame(0.42, ScriptFields::wireValue($edited, $arg), 'a free edit is never snapped to the server grid');
     }
 
+    public function testAnOffLatticeImportedSeedEscapesTheSliderCarryingItsExactValue(): void
+    {
+        // R8-MINOR-2 round-trip law: kind() reads the descriptor, but the
+        // no-mutilation rule rides the value actually seeded in — a draft
+        // import off the slider lattice must reach the text Input whole,
+        // never be silently snapped at build time.
+        $arg = ['label' => 'Amount', 'value' => 0.5, 'minimum' => 0.0, 'maximum' => 1.0, 'step' => 0.25, 'choices' => []];
+
+        $this->assertSame(ScriptFields::KIND_SLIDER, ScriptFields::kind($arg), 'the descriptor itself still projects a Slider');
+
+        $kept = ScriptFields::field('k', $arg, 'Amount', 0.75);
+        $this->assertInstanceOf(Slider::class, $kept, 'an on-grid seed keeps the Slider');
+        $this->assertSame(0.75, $kept->value(), '0.75 sits on the 0.0..1.0/0.25 grid, held digit-exact');
+
+        $escaped = ScriptFields::field('k', $arg, 'Amount', 0.3);
+        $this->assertInstanceOf(Input::class, $escaped, 'an off-grid seed ⇒ Input escape-hatch, not a snapped Slider');
+        $this->assertSame('0.3', $escaped->value());
+        $this->assertSame(0.3, ScriptFields::wireValue($escaped, $arg), 'the wire value carries the imported number, un-snapped');
+
+        $edited = $escaped->withValue('0.375');
+        $this->assertSame(0.375, ScriptFields::wireValue($edited, $arg), 'a free edit on the demoted row maps back onto the declared float');
+
+        $garbage = $escaped->withValue('later');
+        $this->assertSame('later', ScriptFields::wireValue($garbage, $arg), 'a non-numeric edit rides text, never a corrupt 0.0 cast');
+    }
+
     public function testAnInt64TopDeclaredMaximumLandsOnASafeCeiling(): void
     {
         // R6-M1 caller law: a scraped descriptor may declare the int64
