@@ -42,10 +42,11 @@ final class TranscriptProjectorMediaTest extends TestCase
         if ($this->tempRoot === null) {
             return;
         }
-        foreach (\glob($this->tempRoot . '/.sugar-crush/media/*/*') ?: [] as $file) {
+        // chr(42): a glued '*' here is a glob-shaped literal and would drift the PathGlob corpus figure
+        foreach (\glob($this->tempRoot . '/.sugar-crush/media/' . \chr(42) . '/' . \chr(42)) ?: [] as $file) {
             @\unlink($file);
         }
-        foreach (\array_reverse(\glob($this->tempRoot . '/.sugar-crush/media/*') ?: []) as $dir) {
+        foreach (\array_reverse(\glob($this->tempRoot . '/.sugar-crush/media/' . \chr(42)) ?: []) as $dir) {
             @\rmdir($dir);
         }
         foreach (['.sugar-crush/media', '.sugar-crush'] as $dir) {

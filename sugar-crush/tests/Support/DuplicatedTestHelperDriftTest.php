@@ -2666,6 +2666,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * @var array<string,string>
      */
     private const ACCEPTED_CONST_DRIFT = [
+        'BASE' => 'Each suite names its own fixture origin URL; the SD studio port and the provider host are unrelated constants sharing the generic word.',
         'BODY_SENTINEL' => 'Each containment suite plants its own payload under the same word; the names collide, the fixtures do not.',
         'BOUND_SECONDS' => 'Per-suite waits: a reap test and a shutdown test legitimately bound differently. THE SEMANTIC DIFFERENCES LIVE HERE, which is why this map is per-polity and not a widening of the other.',
         'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'The census documents a different budget than the suites enforce; that difference is the claim being tested.',

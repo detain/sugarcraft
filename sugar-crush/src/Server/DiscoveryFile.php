@@ -56,8 +56,7 @@ final class DiscoveryFile
 
     /**
      * The record for THIS process, serving at $url.
-     */
-    /**
+     *
      * @param array{image: bool, video: bool, baseUrlHostOnly: string|null}|null $media
      */
     public static function forThisProcess(

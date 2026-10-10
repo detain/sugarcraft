@@ -650,7 +650,7 @@ final class TreeWideGuardRosterTest extends TestCase
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).
         'Support/ProcessTreeKillAsyncTest.php' => ['glob($this->dir.\'/*\')'],
-        'Tools/GenerateVideoTest.php' => ["glob(\$this->mediaRoot.'/main/'.\\chr(42).'.mp4')", "glob(\$this->mediaRoot.'/main/'.\\chr(42).'.json')", "glob(\$quietRoot.'/'.\\chr(42).'/'.\\chr(42).'.json')", "glob(\$this->mediaRoot.'/'.\\chr(42).'/'.\\chr(42))", 'scandir($dir)'],
+        'Tools/GenerateVideoTest.php' => ["glob(\$this->mediaRoot.'/main/'.\\chr(42).'.mp4')", "glob(\$this->mediaRoot.'/main/'.\\chr(42).'.json')", "glob(\$quietRoot.'/'.\\chr(42).'/'.\\chr(42).'.json')", "glob(\$this->mediaRoot.'/'.\\chr(42).'/'.\\chr(42))", "glob(\$root.'/main/'.\\chr(42).'.mp4')", "glob(\$root.'/main/'.\\chr(42).'.json')", 'scandir($dir)'],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
