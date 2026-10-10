@@ -66,6 +66,17 @@ export const useConnectionStore = defineStore('connection', () => {
    */
   const defaultDelivery = computed<NonNullable<MethodParams<'session.send'>['delivery']>>(() => hello.value?.defaults?.delivery ?? 'steer')
 
+  /**
+   * The server's media readiness, read once from the handshake (W6.7): the
+   * flags answer "may this launch offer generation" WITHOUT the browser ever
+   * dialing the SD server. `null` means the server predates the field — say
+   * nothing, offer nothing (hide affordances, never guess). `baseUrlHostOnly`
+   * is a sha256 prefix, never a hostname (plan :839).
+   */
+  const capabilitiesMedia = computed(() => hello.value?.features?.media ?? null)
+  const canGenerateImage = computed(() => capabilitiesMedia.value?.image === true)
+  const canGenerateVideo = computed(() => capabilitiesMedia.value?.video === true)
+
   let client: SugarCrushClient | null = null
   let overrides: Partial<ClientOptions> = {}
   let scheduler: Scheduler = defaultScheduler
@@ -200,6 +211,9 @@ export const useConnectionStore = defineStore('connection', () => {
     hello,
     scopes,
     defaultDelivery,
+    capabilitiesMedia,
+    canGenerateImage,
+    canGenerateVideo,
     rttMs,
     retryAt,
     lastError,

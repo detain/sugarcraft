@@ -655,6 +655,12 @@ export interface Methods {
           enabled: boolean
           root: string | null
         }
+        /** Whether this server may offer image/video generation, derived from config ∩ capability at boot with no dial (plan_crush_media W6.7); `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured. */
+        media?: {
+          image: boolean
+          video: boolean
+          baseUrlHostOnly: string | null
+        }
       }
       limits: Record<string, number>
       principal: {
