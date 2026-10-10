@@ -141,6 +141,62 @@ final class GenerateVideoTest extends TestCase
         }
     }
 
+    /**
+     * R12-m2: the sidecar's number token carries the resolved video's
+     * number (GenerateVideo::collect), not a fresh 0. The law becomes
+     * load-bearing when a deleted earlier sidecar leaves a hole in the json
+     * namespace: gen1 lands X-0.mp4 + X-0.json; after X-0.json is deleted,
+     * gen2's mp4 still ticks past the taken X-0.mp4 to X-1.mp4, but the
+     * json namespace now sees X-0 free — without the carry the sidecar
+     * drops into the stale hole and is no longer adjacent to its video.
+     * The [date]/[time] tokens are clock-derived, so both generations must
+     * fall inside the SAME wall-clock second for the name bodies to
+     * collide at all: re-cut until the clock is still (never skip —
+     * SuiteSkipRoster law).
+     */
+    public function testASidecarHoleCannotStrandTheNextGenerationOutOfAdjacency(): void
+    {
+        $params = ['prompt' => 'p', 'fps' => 16, 'seed' => 7];
+
+        for ($attempt = 0; $attempt < 30; $attempt++) {
+            $root = \sys_get_temp_dir() . '/gv-carry-' . \uniqid('r', true);
+            $this->mediaRoot = $root;
+            $before = \date('H-i-s');
+
+            $first = $this->gvTool($this->gvServer([$this->gvFixture('jobs-done-b64')]))->execute($params);
+            self::assertFalse($first->isError(), $first->content());
+
+            $videos = glob($root . '/main/' . \chr(42) . '.mp4');
+            $sidecars = glob($root . '/main/' . \chr(42) . '.json');
+            self::assertCount(1, $videos);
+            self::assertCount(1, $sidecars);
+            unlink((string) $sidecars[0]); // punch the hole in the json namespace
+
+            $second = $this->gvTool($this->gvServer([$this->gvFixture('jobs-done-b64')]))->execute($params);
+            self::assertFalse($second->isError(), $second->content());
+            $after = \date('H-i-s');
+
+            if ($before !== $after) {
+                $this->rrmdir($root); // different name bodies — no collision to pin this round
+                continue;
+            }
+
+            $videos = glob($root . '/main/' . \chr(42) . '.mp4');
+            $sidecars = glob($root . '/main/' . \chr(42) . '.json');
+            self::assertCount(2, $videos, 'the second generation ticks past the taken mp4 name');
+            self::assertCount(1, $sidecars, 'the json namespace must not refill its stale hole');
+            self::assertSame(
+                basename((string) $videos[1], '.mp4') . '.json',
+                basename((string) $sidecars[0]),
+                "R12-m2: the sidecar carries the video's number — adjacency survives a deleted sibling",
+            );
+
+            return;
+        }
+
+        self::fail('30 back-to-back generations all crossed a wall-clock second boundary');
+    }
+
     public function testLadderSnapsUpBeforeTheWireAndSaysSoAfterwards(): void
     {
         $tool = $this->gvTool($this->gvServer([$this->gvFixture('jobs-done-b64')]));
