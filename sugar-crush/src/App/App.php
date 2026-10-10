@@ -64,6 +64,7 @@ use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Crush\Tui\MediaForm\GenerateFromMediaFormMsg;
+use SugarCraft\Crush\Tui\MediaForm\ImportPng;
 use SugarCraft\Crush\Tui\MediaForm\MediaForm;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormAction;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormActionKind;
@@ -1489,13 +1490,35 @@ final class App implements Model
             // presets store collectValues() lattice data, never payload
             // bytes (ImageSection keeps source rows off the lattice).
             MediaFormActionKind::SavePreset => $this->savePresetFromForm(),
-            // ImportPng has no emitter yet — W4.4 lands the emitter; the
-            // loud throw stays until then so an unwired action can never
-            // be silently swallowed.
-            MediaFormActionKind::ImportPng => throw new \LogicException(
-                'media form action ' . $action->kind->name . ' is not wired yet',
-            ),
+            // crush-media W4.4: `i` binds here. The import is local-first —
+            // the attached PNG's own parameters chunk — and the server
+            // png-info helper is consulted only when that chunk is absent
+            // AND this launch configures an SD base over a family the
+            // import speaks (the zero-dial law, ImportPng::serverInfoFor).
+            // Refusals land as the form's '!' status; the arm can never
+            // swallow the action silently.
+            MediaFormActionKind::ImportPng => $this->importPngFromForm(),
         };
+    }
+
+    /**
+     * The W4.4 `i` door: fold the attached PNG's parameters over the form's
+     * draft ({@see MediaForm::importAttachedPng()}). The form stays open —
+     * like the save door, everything visible about the outcome is the
+     * status row; the draft is the wire truth Generate folds from.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function importPngFromForm(): array
+    {
+        $form = $this->mediaForm;
+        if ($form === null) {
+            return [$this, null];
+        }
+
+        $serverInfo = static fn (string $base64): ?string => ImportPng::serverInfoFor($base64);
+
+        return [$this->mutate(mediaForm: $form->importAttachedPng($serverInfo)), null];
     }
 
     /**

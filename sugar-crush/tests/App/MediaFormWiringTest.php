@@ -18,6 +18,8 @@ use SugarCraft\Crush\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Crush\Tui\MediaForm\DisplayOverrides;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\ImportPng;
+use SugarCraft\Crush\Media\Png;
 use SugarCraft\Crush\Tui\MediaForm\MediaForm;
 use SugarCraft\Crush\Tui\MediaForm\Sections\PresetsSection;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
@@ -154,16 +156,60 @@ final class MediaFormWiringTest extends TestCase
         self::assertSame([], json_decode((string) file_get_contents(Bootstrap::userConfigPath()), true));
     }
 
-    public function testTheImportPngArmStillThrowsAndNamesTheWiringWave(): void
+    public function testTheImportPngArmIsWiredToTheImporter(): void
     {
         $src = (string) file_get_contents(__DIR__ . '/../../src/App/App.php');
-        // W4.4 lands the emitter; until then the arm stays loud, and this
-        // pin reddens the day someone swallows it silently.
-        self::assertStringContainsString('W4.4 lands the emitter', $src);
+        // W4.4 landed the emitter; the loud throw must stay dead — if the
+        // arm is ever unwired again this pin reddens the day it happens.
         self::assertStringContainsString(
+            'MediaFormActionKind::ImportPng => $this->importPngFromForm()',
+            $src,
+        );
+        self::assertStringNotContainsString('W4.4 lands the emitter', $src);
+        self::assertStringNotContainsString(
             'MediaFormActionKind::ImportPng => throw new \LogicException(',
             $src,
         );
+    }
+
+    public function testTheImportRuneWithoutAnAttachmentRefusesOnTheStatusRow(): void
+    {
+        // The whole `i` channel end to end: rune → MediaFormAction::importPng
+        // → the shell arm → the form's refusal status. Nothing is attached,
+        // so no chunk read runs and no server hop is even constructed.
+        $app = $this->awApp()->openMediaForm();
+        [$refused, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'i'));
+        self::assertNull($cmd);
+        self::assertSame(
+            '! ' . ImportPng::NO_ATTACH,
+            $this->awStatusOf($refused->mediaForm),
+        );
+    }
+
+    public function testTheImportRuneImportsTheAttachedPngOntoTheDraft(): void
+    {
+        $this->awArmHomeSandbox();
+        $volatile = tempnam(sys_get_temp_dir(), 'aw-import-');
+        self::assertIsString($volatile);
+        file_put_contents($volatile, Png::setInfotext(
+            (string) file_get_contents(__DIR__ . '/../fixtures/img/tiny.png'),
+            "a fox at dawn\nNegative prompt: blur\nSteps: 33",
+        ));
+
+        $app = $this->awApp()->openMediaForm();
+        [$pasted, $pasteCmd] = $app->update(new ClipboardImagePastedMsg($volatile));
+        self::assertNull($pasteCmd);
+        [$armed, $cmd] = $pasted->update(new KeyMsg(KeyType::Char, 'i'));
+        self::assertNull($cmd);
+        $form = $armed->mediaForm;
+        self::assertInstanceOf(MediaForm::class, $form);
+        $status = $this->awStatusOf($form);
+        self::assertIsString($status);
+        self::assertStringStartsWith(ImportPng::ATTACHED, $status, 'the import row names file and channel');
+        self::assertStringContainsString('(' . ImportPng::VIA_LOCAL_LABEL . ')', $status);
+        $draft = $form->draft()->toArray();
+        self::assertSame('a fox at dawn', $draft['prompt'] ?? null);
+        self::assertSame(33, (int) ($draft['steps'] ?? 0), 'the chunk rode onto the draft');
     }
 
     // ---- Ctrl+V and the paste landing -------------------------------------------------

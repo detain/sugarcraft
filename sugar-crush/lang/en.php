@@ -1064,6 +1064,10 @@ TXT,
     'cmd.share.upload-failed' => 'Upload to {url} did not happen: {error} The local file above is the export.',
     'cmd.share.usage' => 'Usage: /share [md|html|json|text] [path]',
     'cmd.share.usage-hint' => 'Without a path the export goes to ~/{exports}/; a path must stay inside the project.',
+    'cmd.sendto.description' => 'Import a saved PNG\'s parameters back into the generate form',
+    // Kept inside the /help spill-row budget (KeyHelpTest pins the hint as one
+    // unbroken row); SendToCommand::USAGE carries the full synopsis.
+    'cmd.sendto.hint' => '<file.png> [--to img2img|inpaint] [--mask FILE]',
     'cmd.skills.description' => 'List the skill drafts the dream pass proposed, or accept or reject one',
     'cmd.skills.hint' => '[proposed|accept <name> [--replace]|reject <name>]',
     'cmd.sweep.description' => 'Prune the tool outputs since your last prompt (or the last n) from what the model sees',

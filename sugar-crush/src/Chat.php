@@ -13623,6 +13623,19 @@ final class Chat implements Model
     }
 
     /**
+     * Handle /sendto — {@see \SugarCraft\Crush\Host\Commands\SendToHostCommand},
+     * the W4.4 door that imports a saved PNG's parameters back into the
+     * generate form. Local disk only; the command opens the form itself via
+     * the OpenMediaForm effect, so no per-command arm exists in the router.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleSendToCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\SendToHostCommand(), $inputBuf);
+    }
+
+    /**
      * A slash command that exited non-zero, reported IN the transcript —
      * {@see \SugarCraft\Crush\Host\Commands\CommandResult::failure()}.
      *

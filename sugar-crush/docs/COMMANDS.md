@@ -357,6 +357,7 @@ edit it by hand.
 | `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
 | `/generate` | ✓ | | `<prompt> [--steps N] [--size WxH] [--seed N] [--save]` | Generate an image on the configured SD server |
 | `/generate-form` | | | — | Open the interactive image generation form |
+| `/sendto` | ✓ | | `<file.png> [--to img2img\|inpaint] [--mask FILE]` | Import a saved PNG's parameters back into the generate form |
 <!-- commands:table:end -->
 
 **S** is blank on `new-picker`, `session-pin`, `session-delete`, `docs`,

@@ -351,11 +351,12 @@ final class MediaForm
             // `s` is the W4.2 SavePreset binding (crush-media W4.1/W4.2):
             // the action leaves the form, the shell routes it back into
             // {@see self::saveFocusedPreset()} — one code path with the
-            // Presets tab's Save press-row. ImportPng (`i`) keeps waiting
-            // for W4.4's emitter; its kind arm in the shell stays a loud
-            // throw so a bound-but-unwired action can never be swallowed.
+            // Presets tab's Save press-row. `i` is the W4.4 ImportPng
+            // binding: same shape, routed into
+            // {@see self::importAttachedPng()} over the attached PNG.
             'g' => [null, MediaFormAction::generate($this->collect())],
             's' => [null, MediaFormAction::savePreset($this->collect())],
+            'i' => [null, MediaFormAction::importPng()],
             'k' => [$this->moveRow(-1), null],
             'j' => [$this->moveRow(1), null],
             'h' => [$this->switchSection(-1), null],
@@ -483,6 +484,63 @@ final class MediaForm
         }
 
         return $this->mutate(['status' => '! ' . self::CLIPBOARD_UNAVAILABLE]);
+    }
+
+    /**
+     * The first PNG attached on the Image tab, or null when none is — the
+     * subject the `i` import reads ({@see self::importAttachedPng()}).
+     * JPEG/GIF sources never qualify: the infotext lives in PNG chunks.
+     */
+    public function attachedPng(): ?ImageIngress
+    {
+        foreach ($this->sections as $section) {
+            if (!$section instanceof Sections\ImageSection) {
+                continue;
+            }
+
+            foreach ($section->sources() as $source) {
+                if ($source->mime === 'image/png') {
+                    return $source;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The shell-side `i` binding (crush-media W4.4): import the attached
+     * PNG's parameters over the draft, local chunk first and the gated
+     * server png-info helper second ({@see ImportPng::import()}). The
+     * imported fields land on the draft — the wire truth Generate folds
+     * from — under Infotext's onlyUnset law, so nothing the user already
+     * set is clobbered. Widget rows re-derive from the draft the next time
+     * the form opens; mid-session the draft is authoritative on its own.
+     * Refusals land as a '!' status exactly like the paste door's.
+     *
+     * @param ?callable(string):?string $serverInfo png-info channel seam;
+     *        production passes the gated {@see ImportPng::serverInfoFor()}.
+     */
+    public function importAttachedPng(?callable $serverInfo = null): self
+    {
+        $png = $this->attachedPng();
+        if ($png === null) {
+            return $this->mutate(['status' => '! ' . ImportPng::NO_ATTACH]);
+        }
+
+        $result = ImportPng::import($png->bytes, $this->draft, $serverInfo);
+        if ($result['error'] !== null) {
+            return $this->mutate(['status' => '! ' . $result['error']]);
+        }
+
+        $via = $result['via'] === ImportPng::VIA_SERVER
+            ? ImportPng::VIA_SERVER_LABEL
+            : ImportPng::VIA_LOCAL_LABEL;
+
+        return $this->mutate([
+            'draft' => $result['request'],
+            'status' => ImportPng::ATTACHED . ' from ' . $png->name() . ' (' . $via . ')',
+        ]);
     }
 
     /** Hand the typed field back to its section, which owns coercion. */

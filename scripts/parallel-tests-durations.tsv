@@ -669,6 +669,7 @@ sugar-crush/tests/Hooks/ProtectFilesHookTest.php	0.060	130
 sugar-crush/tests/PlanModeToggleTest.php	0.059	10
 sugar-crush/tests/Memory/MemoryWriterTest.php	0.059	10
 sugar-crush/tests/Context/MemoryRecallBlockTest.php	0.059	13
+sugar-crush/tests/Commands/SendToCommandTest.php	0.059	45
 sugar-crush/tests/Context/AbsoluteThresholdTest.php	0.058	21
 sugar-crush/tests/Config/ReadmeSettingsTierClaimTest.php	0.058	6
 sugar-crush/tests/Tui/StallDetectorTest.php	0.057	21
@@ -886,6 +887,7 @@ sugar-crush/tests/Chat/EscapeSoftCancelTest.php	0.013	6
 sugar-crush/tests/Skills/SkillSourceTest.php	0.013	11
 sugar-crush/tests/Todo/TodoListTest.php	0.013	19
 sugar-crush/tests/Integration/BinSugarcrushTuiErrorLogTest.php	0.013	6
+sugar-crush/tests/Media/ImportPngTest.php	0.012	45
 sugar-crush/tests/Providers/ClaudeCodeProviderTest.php	0.012	37
 sugar-crush/tests/Support/CommandLoaderContainmentTest.php	0.012	10
 sugar-crush/tests/Agents/WorktreeConfigTest.php	0.012	31
