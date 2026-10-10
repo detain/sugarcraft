@@ -32,12 +32,12 @@ final class ParamsSection implements Section
 
     /** Row labels in display order; each is a Lang key. */
     private const ROWS = [
-        'tui.genform.row.prompt',
-        'tui.genform.row.steps',
-        'tui.genform.row.cfg_scale',
-        'tui.genform.row.sampler',
-        'tui.genform.row.size',
-        'tui.genform.row.seed',
+        GenFormKeys::ROW_PROMPT,
+        GenFormKeys::ROW_STEPS,
+        GenFormKeys::ROW_CFG_SCALE,
+        GenFormKeys::ROW_SAMPLER,
+        GenFormKeys::ROW_SIZE,
+        GenFormKeys::ROW_SEED,
     ];
 
     private function __construct(
@@ -50,7 +50,7 @@ final class ParamsSection implements Section
     {
         return new self(
             Input::new('prompt')
-                ->withPrompt(Lang::t('tui.genform.row.prompt'))
+                ->withPrompt(Lang::t(GenFormKeys::ROW_PROMPT))
                 ->withValue((string) ($draft->prompt() ?? '')),
             $draft,
         );
@@ -63,7 +63,7 @@ final class ParamsSection implements Section
 
     public function label(): string
     {
-        return Lang::t('tui.genform.tab.params');
+        return Lang::t(GenFormKeys::TAB_PARAMS);
     }
 
     public function visible(MediaFormState $state): bool
@@ -103,7 +103,7 @@ final class ParamsSection implements Section
             default => null,
         };
 
-        return $value === null ? Lang::t('tui.genform.not_set') : (string) $value;
+        return $value === null ? Lang::t(GenFormKeys::NOT_SET) : (string) $value;
     }
 
     public function collect(MediaRequest $draft): MediaRequest

@@ -47,10 +47,6 @@ use SugarCraft\Forms\Field\Select;
 final class ScriptsSection implements Section, FieldValuedSection
 {
     use RegistrySection {
-        collect as registryCollect;
-        fieldAt as registryFieldAt;
-        accept as registryAccept;
-        display as registryDisplay;
         extraLabel as registryExtraLabel;
     }
 

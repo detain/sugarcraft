@@ -32,11 +32,8 @@ use SugarCraft\Forms\Field\Text;
 final class PresetsSection implements Section, FieldValuedSection
 {
     use RegistrySection {
-        collect as registryCollect;
-        fieldAt as registryFieldAt;
         accept as registryAccept;
         display as registryDisplay;
-        extraLabel as registryExtraLabel;
     }
 
     public const string ROW_NAME = 'preset_name';

@@ -717,13 +717,13 @@ final class MediaForm
         $body = $rows - 6;
 
         if ($width < 16 || $body < 1) {
-            return self::fit([Style::new()->foreground($theme->shellMuted)->render(Lang::t('tui.genform.too_small'))], $cols, $rows);
+            return self::fit([Style::new()->foreground($theme->shellMuted)->render(Lang::t(GenFormKeys::TOO_SMALL))], $cols, $rows);
         }
 
         $border = Style::new()->foreground($theme->shellPrimary);
         $muted = Style::new()->foreground($theme->shellMuted);
 
-        $title = Width::truncate(' 🎨 ' . Lang::t('tui.genform.title') . ' ', max(0, $cols - 3));
+        $title = Width::truncate(' 🎨 ' . Lang::t(GenFormKeys::TITLE) . ' ', max(0, $cols - 3));
         $topFill = max(0, $cols - 3 - Width::string($title));
         $lines = [$border->render('╭─' . $title . str_repeat('─', $topFill) . '╮')];
 
@@ -824,7 +824,7 @@ final class MediaForm
             $value = $section->valueAt($index);
             $lines[] = ($selected ? $active : $muted)->render(($selected ? '▸ ' : '  ') . $labels[$index])
                 . str_repeat(' ', max(1, $labelW - Width::string($labels[$index])))
-                . ($value === Lang::t('tui.genform.not_set') ? $muted : $active)->render($value);
+                . ($value === Lang::t(GenFormKeys::NOT_SET) ? $muted : $active)->render($value);
         }
 
         return $lines;
@@ -839,15 +839,15 @@ final class MediaForm
     private function footer(): array
     {
         if ($this->editing !== null) {
-            return [Lang::t('tui.genform.key.commit'), Lang::t('tui.genform.key.cancel')];
+            return [Lang::t(GenFormKeys::KEY_COMMIT), Lang::t(GenFormKeys::KEY_CANCEL)];
         }
 
         return [
-            Lang::t('tui.genform.key.generate'),
-            Lang::t('tui.genform.key.edit'),
-            Lang::t('tui.genform.key.move'),
-            Lang::t('tui.genform.key.sections'),
-            Lang::t('tui.genform.key.close'),
+            Lang::t(GenFormKeys::KEY_GENERATE),
+            Lang::t(GenFormKeys::KEY_EDIT),
+            Lang::t(GenFormKeys::KEY_MOVE),
+            Lang::t(GenFormKeys::KEY_SECTIONS),
+            Lang::t(GenFormKeys::KEY_CLOSE),
         ];
     }
 
