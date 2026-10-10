@@ -1,0 +1,5 @@
+{
+    "id": "job-77",
+    "status": "failed",
+    "error": "CUDA out of memory on the worker"
+}
