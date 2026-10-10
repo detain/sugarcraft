@@ -62,6 +62,23 @@ export interface EventEnvelope {
   root?: string
 }
 
+/** A media artifact a finished tool produced — identity and path only; bytes never ride the journal (Appendix C-7). */
+export interface MediaRef {
+  /** MediaStore artifact id: the stored name minus its final extension. */
+  artifactId: string
+  kind: "image" | "video"
+  /** Server-local path to the stored file — a reference, never the bytes (Appendix C-7). */
+  path: string
+  /** Size as the tool delivered it; 0 when the event carries only a path. */
+  bytes: number
+  /** Media type inferred from the stored extension. */
+  mime: string
+  /** SHA-256 of the PNG infotext embedded in the artifact, when one was readable. */
+  infotextDigest?: string
+  /** Batch slot label, when a multi-artifact result names its rows. */
+  indexLabel?: string
+}
+
 export interface MemoryEntry {
   id: string
   type?: string
@@ -429,6 +446,73 @@ export interface Methods {
       /** False when the directory itself could not be read (entries is then empty). */
       readable: boolean
       project: boolean
+    }
+  }
+  /** A generation job's state, progress and artifact refs, from its ledger. */
+  "generate.status": {
+    params: {
+      sessionId: SessionId
+      jobId: string
+    }
+    result: {
+      state: "queued" | "running" | "done" | "failed" | "cancelled"
+      progress01: number
+      etaSeconds?: number
+      error?: string
+      artifacts?: MediaRef[]
+    }
+  }
+  /** Start an image generation; answers with its job id. */
+  "generate.submit": {
+    params: {
+      sessionId: SessionId
+      /** What to render, self-contained: style, subject, framing. Required, non-empty */
+      prompt: string
+      /** What to steer away from, in the same comma-clause style */
+      negative_prompt?: string
+      /** Image width in pixels (server default applies) */
+      width?: number
+      /** Image height in pixels (server default applies) */
+      height?: number
+      /** Sampling steps — more is slower, past a point indistinguishable */
+      steps?: number
+      /** Prompt adherence; high values burn in artefacts */
+      cfg_scale?: number
+      /** Exact seed to reproduce a prior image, or -1 for a fresh draw */
+      seed?: number
+      /** Sampler as the server names it (Euler a, DPM++ 2M Karras, ...) */
+      sampler_name?: string
+      /** Scheduler as the server names it */
+      scheduler?: string
+      /** Images per request */
+      batch_size?: number
+      /** Repeat requests; narrows the watchdog window on long renders */
+      n_iter?: number
+      /** Also ask the server to write its own copy into its output directory; the tool always saves its copy regardless */
+      save_to_disk?: boolean
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      jobId: string
+    }
+  }
+  /** A stored media artifact's bytes, in base64 slices. */
+  "media.fetch": {
+    params: {
+      sessionId: SessionId
+      artifactId?: string
+      path?: string
+      offset?: number
+      limit?: number
+    }
+    result: {
+      artifactId: string
+      offset: number
+      bytes: string
+      totalBytes: number
+      eof: boolean
+      mime?: string
     }
   }
   /** Add a note. */
@@ -1071,6 +1155,9 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "files.diff": "read",
   "files.read": "read",
   "fs.listDirs": "read",
+  "generate.status": "read",
+  "generate.submit": "write",
+  "media.fetch": "read",
   "memory.add": "write",
   "memory.delete": "write",
   "memory.edit": "write",
@@ -1123,6 +1210,7 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "bg.spawn",
   "bg.stop",
   "command.exec",
+  "generate.submit",
   "memory.add",
   "memory.delete",
   "memory.edit",
@@ -1396,6 +1484,9 @@ export interface Events {
       kind: string
       reason?: string
     }
+    /** Artifact refs from the session media store — paths only, never bytes (Appendix C-7). */
+    media?: MediaRef[]
+    mediaTruncated?: boolean
     replaces?: string
   }
   /** A tool call started. */
