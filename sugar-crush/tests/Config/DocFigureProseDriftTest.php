@@ -2713,7 +2713,7 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/(\w+) SugarCraft siblings: (.*?)\. `ext-sqlite3` is declared/s', $arch, $m),
             'the siblings sentence no longer runs from a spelled count through the named list into the ext-sqlite3 paragraph that follows',
         );
-        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15];
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16];
         self::assertArrayHasKey($m[1], $words, "the spelled count '{$m[1]}' is outside the pinned word map — extend it deliberately");
 
         preg_match_all('/`(candy-[a-z]+|sugar-veil|sugar-[a-z-]+)`/', $m[2], $named);

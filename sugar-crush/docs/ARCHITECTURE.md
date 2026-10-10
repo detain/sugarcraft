@@ -847,7 +847,17 @@ deliberately unimplemented until a later wave ships their transport. Artifacts
 land in `Support\MediaStore` under `~/.sugar-crush/media/<session>/` — session
 directories `0700`, files `0600`, written temp-then-renamed, with filenames
 built from the server's own parameter tokens (`sd.savePattern`) and never from
-prompt text. Live preview frames (`PreviewSlots`, `PreviewPaint`) ride
+prompt text. Video runs the same store through its own `Media\Video\` side:
+`JobClient` speaks whatever job contract the live server proved (or the config
+family declared), `JobPollLoop` bounds the wait with a heartbeat per status
+poll, and `FrameLadder` snaps frame counts up to a rung — above the top rung a
+request is refused, never clamped. Admission is a separate honest door: an
+`sdapi`-family video submit is refused by name because core A1111 has no video
+route, while a family with a recorded contract is dialed; a finished video
+lands beside a JSON sidecar of its request params and job ledger. Playback is
+`src/Tui/VideoPlayer/` — the `/play` command and the player screen render
+through sugar-reel, and the audio door (decision C-4) leaves generated videos
+silent. Live preview frames (`PreviewSlots`, `PreviewPaint`) ride
 display-only progress events: they replace in place, clear when the job
 settles, and are never written into the transcript or the session store. The
 render mode itself is resolved once at launch by
@@ -1207,10 +1217,12 @@ reads, once-per-process latched warnings, and construction-time-only notices. A
 stderr line written after the alt screen is up lands inside a frame the renderer
 believes it owns.
 
-### The image-generation form
+### The media-generation form
 
-`src/Tui/MediaForm/` is the full-band modal that gathers one image-generation
-request. It mirrors the settings editor's shape — its own frame inside
+`src/Tui/MediaForm/` is the full-band modal that gathers one generation
+request — image or video, on tabbed sections, with a fail-closed kind gate: a
+section shows its tab only when it names its media kinds in the registry. It
+mirrors the settings editor's shape — its own frame inside
 `Tui\Renderer`, opened through a keyboard chord, a palette row and a slash
 command that all dispatch the same message, and dead while another modal holds
 the keyboard. The one-registry law lives in `FieldSpec`: every field of the
@@ -1234,11 +1246,12 @@ only through the settings layers like every other key.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`sugarcrush serve`'s HTTP + WebSocket transport), fifteen SugarCraft siblings: `candy-core` (the MVC-style runtime —
+`sugarcrush serve`'s HTTP + WebSocket transport), sixteen SugarCraft siblings: `candy-core` (the MVC-style runtime —
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
 `sugar-toast` (the toast a settings save reports through),
+`sugar-reel` (the video the player screen renders through),
 `candy-mosaic`, `candy-mouse`,
 `candy-layout` (dock geometry), `candy-focus`, `candy-kit`, `candy-pty`
 (the pseudo-terminal interactive tool output is captured through).
