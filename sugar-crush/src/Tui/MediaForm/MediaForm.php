@@ -128,6 +128,11 @@ final class MediaForm
             // Scripts/Advanced and Presets/Output rows after these lines.
             Sections\ImageSection::forDraft($draft, $runtimeChoices),
             Sections\InpaintSection::forDraft($draft, $runtimeChoices),
+            // W5.6 video tab: kind-gated FAIL-CLOSED for the tab (it shows
+            // only when mediaKinds names 'video'; un-declared hosts keep the
+            // tool path), zero-dial; an unengaged tab never folds onto the
+            // draft, so image runs are untouched. Tests inject $enabled.
+            Sections\VideoSection::forDraft($draft),
             // W3.6 scripts tab (descriptors from the caller; undiscovered
             // today renders the fail-open note).
             Sections\ScriptsSection::forDraft($draft, $scriptDescriptors),

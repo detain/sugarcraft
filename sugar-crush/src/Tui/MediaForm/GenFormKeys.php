@@ -252,6 +252,19 @@ final class GenFormKeys
     public const string OUTPUT_PATTERN = 'tui.genform.output.pattern';
     public const string OUTPUT_TOKENS = 'tui.genform.output.tokens';
 
+    // -- video tab (crush-media W5.6, plan §6.2/§6.5) -----------------------------------------------------
+    public const string SECTION_VIDEO = 'tui.genform.section.video';
+    public const string VIDEO_FRAMES = 'tui.genform.row.frames';
+    public const string VIDEO_FPS = 'tui.genform.row.fps';
+    public const string VIDEO_RESOLUTION = 'tui.genform.row.resolution';
+    public const string VIDEO_CFG = 'tui.genform.row.cfg';
+    public const string VIDEO_CFG2 = 'tui.genform.row.cfg2';
+    public const string VIDEO_MOTION = 'tui.genform.row.motion';
+    public const string VIDEO_FIRST_FRAME = 'tui.genform.video.first_frame';
+    public const string VIDEO_CLEAR_FIRST_FRAME = 'tui.genform.video.clear_first_frame';
+    public const string VIDEO_TIMING = 'tui.genform.video.timing';
+    public const string VIDEO_SNAP = 'tui.genform.video.snap';
+
     private function __construct()
     {
     }
