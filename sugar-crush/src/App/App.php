@@ -62,6 +62,7 @@ use SugarCraft\Crush\Tui\PaneDragController;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Crush\Media\MediaRequest;
+use SugarCraft\Crush\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Crush\Tui\MediaForm\GenerateFromMediaFormMsg;
 use SugarCraft\Crush\Tui\MediaForm\MediaForm;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormAction;
@@ -1410,7 +1411,10 @@ final class App implements Model
     {
         MenuBar::closeMenu();
 
-        return $this->mutate(mediaForm: MediaForm::open($request));
+        // W3.4 runtime override: when an SD base is configured the live
+        // /samplers + /schedulers sets replace the §2.9 enums (ChoiceFeed
+        // caches per process and fails open to null on any error).
+        return $this->mutate(mediaForm: MediaForm::open($request, ChoiceFeed::forForm()));
     }
 
     public function closeMediaForm(): self

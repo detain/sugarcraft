@@ -69,11 +69,20 @@ final class MediaForm
     ) {
     }
 
-    /** Open the W3.1 shell over `$request` (a fresh draft when null). */
-    public static function open(?MediaRequest $request = null): self
+    /** Open the form over `$request` (a fresh draft when null) with the W3.4
+     *  registry sections: Prompt and Params. `$runtimeChoices` is an optional
+     *  {@see ChoiceFeed} map — the HTTP hop lives in the App seam, never
+     *  here, so this constructor stays deterministic and network-free.
+     *
+     * @param array<string, list<string>>|null $runtimeChoices
+     */
+    public static function open(?MediaRequest $request = null, ?array $runtimeChoices = null): self
     {
         $draft = $request ?? MediaRequest::new();
-        $sections = [ParamsSection::forDraft($draft)];
+        $sections = [
+            Sections\PromptSection::forDraft($draft),
+            Sections\ParamsSection::forDraft($draft, $runtimeChoices),
+        ];
 
         return new self($sections, $draft, MediaFormState::forSection(0, \count($sections[0]->rows())));
     }
@@ -105,6 +114,58 @@ final class MediaForm
     public function draft(): MediaRequest
     {
         return $this->draft;
+    }
+
+    /**
+     * The current widget values across every {@see FieldValuedSection},
+     * keyed by wire name (preset save / infotext emit, crush-media W3.4).
+     *
+     * @return array<string, mixed>
+     */
+    public function collectValues(): array
+    {
+        $values = [];
+        foreach ($this->sections as $section) {
+            if ($section instanceof FieldValuedSection) {
+                $values += $section->fieldValues();
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * Push a flat wire-keyed value map (PNG infotext import, preset load)
+     * into every value-carrying section and refresh the draft from the
+     * rebuilt widgets. Junk values are refused by the sections' own
+     * injection, so an import can never forge an off-lattice number.
+     *
+     * @param array<string, mixed> $values
+     */
+    public function hydrateFields(array $values): self
+    {
+        $sections = array_map(
+            static fn (Section $s): Section => $s instanceof FieldValuedSection ? $s->withFieldValues($values) : $s,
+            $this->sections,
+        );
+        $form = $this->mutate(['sections' => $sections]);
+
+        return $form->mutate(['sections' => $sections, 'draft' => $form->collect()]);
+    }
+
+    /**
+     * Teach the ♻ row the seed of the last settled generation (W3.5 seam:
+     * the shell calls this when a result lands while the form is open;
+     * until then the row honestly reports "not set").
+     */
+    public function withLastSeed(?int $seed): self
+    {
+        $sections = array_map(
+            static fn (Section $s): Section => $s instanceof Sections\ParamsSection ? $s->withLastSeed($seed) : $s,
+            $this->sections,
+        );
+
+        return $this->mutate(['sections' => $sections]);
     }
 
     public function state(): MediaFormState

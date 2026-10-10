@@ -49,20 +49,25 @@ final class MediaFormRenderTest extends TestCase
         }
     }
 
-    public function testASeedPrintsItsValuesIntoTheSummaryRows(): void
+    public function testASeedPrintsItsValuesIntoTheRows(): void
     {
+        // W3.4 moved the dials onto their own tab: the Prompt frame stays
+        // text-only, and stepping right reveals the seeded numbers.
         $frame = self::plain($this->form()->view(
             Theme::default(),
             100,
             40,
         ));
-        $this->assertStringNotContainsString('21', $frame, 'an empty draft shows placeholders only');
+        $this->assertStringNotContainsString('21', $frame, 'an empty prompt frame shows placeholders only');
 
-        $seeded = self::plain(MediaForm::open(
+        [$seeded] = MediaForm::open(
             MediaRequest::new()->fromArray(['prompt' => 'a cat', 'steps' => 21]),
-        )->view(Theme::default(), 100, 40));
-        $this->assertStringContainsString('21', $seeded);
-        $this->assertStringContainsString('a cat', $seeded);
+        )->update(new KeyMsg(KeyType::Right));
+        $params = self::plain($seeded->view(Theme::default(), 100, 40));
+        $this->assertStringContainsString('21', $params);
+
+        [$promptTab] = $seeded->update(new KeyMsg(KeyType::Left));
+        $this->assertStringContainsString('a cat', self::plain($promptTab->view(Theme::default(), 100, 40)));
     }
 
     public function testNarrowFramesKeepEveryRowWithinTheColumnBudget(): void
@@ -85,6 +90,12 @@ final class MediaFormRenderTest extends TestCase
         // Model-level carry: typed text committed into the field reaches the
         // action's request; the App E2E seam (same command pipeline, zero
         // real dials) is pinned in MediaFormKeysTest.
+        //
+        // crush-media W3.4: the schema-era fold test that let a blank draft
+        // emit nothing is superseded - every visible core row collects, so
+        // the wire carries the §2.1 defaults alongside the typed prompt
+        // (the webUI's always-post-defaults behaviour; unset optionals ride
+        // as explicit nulls, matching what the form knows).
         $form = $this->form();
         [$form] = $form->update(new KeyMsg(KeyType::Enter));
 
@@ -96,7 +107,20 @@ final class MediaFormRenderTest extends TestCase
         [, $action] = $form->update(new KeyMsg(KeyType::Char, rune: 'g'));
 
         $this->assertNotNull($action);
-        $this->assertSame(['prompt' => 'a cat'], $action->request?->toArray());
+        $this->assertSame([
+            'prompt' => 'a cat',
+            'negative_prompt' => null,
+            'styles' => null,
+            'seed' => -1,
+            'sampler_name' => 'Euler',
+            'scheduler' => 'Automatic',
+            'batch_size' => 1,
+            'n_iter' => 1,
+            'steps' => 20,
+            'cfg_scale' => 7.0,
+            'width' => 512,
+            'height' => 512,
+        ], $action->request?->toArray());
     }
 
     // ---- fixtures -----------------------------------------------------------------

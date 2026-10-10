@@ -70,6 +70,10 @@ final class GenFormKeys
     public const string SECTION_PRESETS = 'tui.genform.section.presets';
     public const string SECTION_OUTPUT = 'tui.genform.section.output';
 
+    // -- text placeholders (lane b W3.4 addition, C-2: neutral, no chord myths) --
+    public const string PROMPT_PLACEHOLDER = 'tui.genform.prompt.placeholder';
+    public const string NEGATIVE_PLACEHOLDER = 'tui.genform.negative_prompt.placeholder';
+
     // -- field labels (§2.1/§2.6) ----------------------------------------------------
     public const string FIELD_NEGATIVE_PROMPT = 'tui.genform.field.negative_prompt';
     public const string FIELD_STYLES = 'tui.genform.field.styles';
@@ -95,6 +99,11 @@ final class GenFormKeys
     public const string SEED_ENSD = 'tui.genform.seed.ensd';
     public const string SEED_RANDN_SOURCE = 'tui.genform.seed.randn_source';
     public const string SEED_LAST = 'tui.genform.seed.last';
+
+    // -- seed action row labels (lane b W3.4 addition; the tooltip sentences above
+    //    are the SEED_RANDOMIZE / SEED_REUSE help text, these are the short rows) --
+    public const string SEED_ACTION_RANDOMIZE = 'tui.genform.seed.action_randomize';
+    public const string SEED_ACTION_REUSE = 'tui.genform.seed.action_reuse';
 
     // -- semantics help sentences (§2.2/§2.3) ------------------------------------------
     public const string HELP_STEPS = 'tui.genform.help.steps';

@@ -1206,4 +1206,5 @@ sugar-crush/tests/Preview/RunningRowPreviewTest.php	2.1	8
 sugar-crush/tests/Chat/MediaProgressFoldTest.php	0.8	6
 sugar-crush/tests/Tools/BuiltIn/GenerateImagePreviewEmitTest.php	1.4	4
 sugar-crush/tests/Tui/MediaForm/MediaFormKeysTest.php	0.3	7
-sugar-crush/tests/Tui/MediaForm/MediaFormRenderTest.php	0.3	4
+sugar-crush/tests/Tui/MediaForm/MediaFormRenderTest.php	0.5	5
+sugar-crush/tests/Tui/MediaForm/MediaFormFieldsTest.php	7.0	33

@@ -1,12 +1,12 @@
 ╭─ 🎨 Generate image ──────────────────────────────────────────────────────────────────────────────╮
-│  Params                                                                                          │
+│  Prompt │ Generation params                                                                      │
 │ ──────────────────────────────────────────────────────────────────────────────────────────────── │
-│ ▸ prompt                                                                                         │
-│   steps         not set                                                                          │
-│   cfg scale     not set                                                                          │
-│   sampler       not set                                                                          │
-│   size          not set                                                                          │
-│   seed          not set                                                                          │
+│ ▸ prompt        not set                                                                          │
+│   Negative prompt not set                                                                        │
+│   Styles        Default                                                                          │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
