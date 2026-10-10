@@ -1,4 +1,4 @@
-import type { EventEnvelope, Events, PendingAsk, PermissionMode, QueueEntry, SessionSnapshot, Usage } from '../protocol/generated'
+import type { EventEnvelope, Events, MediaRef, PendingAsk, PermissionMode, QueueEntry, SessionSnapshot, Usage } from '../protocol/generated'
 import { utf8Length } from '../protocol/jsonrpc'
 import { keepStarted } from './agents/tree'
 
@@ -62,6 +62,10 @@ export interface ToolItem {
   diff?: string
   durationMs?: number
   denial?: { kind: string; reason?: string }
+  /** Artifact refs from the session media store — paths only, never bytes (Appendix C-7). Absent stays absent. */
+  media?: MediaRef[]
+  /** The server capped the ref list at MAX_EVENT_MEDIA_REFS; more artifacts exist. */
+  mediaTruncated?: boolean
   reasoning?: string
 }
 
@@ -421,6 +425,10 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
         diff: data.diff || undefined,
         durationMs: data.durationMs,
         denial: data.denial,
+        // Absent stays absent (old-server compat): the ref list lands only when
+        // the event carries one — never an invented empty array (W6.3 compat law).
+        media: data.media,
+        mediaTruncated: data.mediaTruncated,
         reasoning: existing?.reasoning,
       }
       upsert(state, item)

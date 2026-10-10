@@ -49,6 +49,52 @@ describe('reducer: replay idempotency', () => {
   })
 })
 
+describe('reducer: media refs (W6.3)', () => {
+  const ref = { artifactId: 'crush-20261010-120000-1', kind: 'image' as const, path: '/srv/.sugar-crush/media/s1/crush-20261010-120000-1.png', bytes: 0, mime: 'image/png' }
+  const second = { ...ref, artifactId: 'crush-20261010-120000-2', path: '/srv/.sugar-crush/media/s1/crush-20261010-120000-2.png' }
+
+  it('lands the artifact refs and the truncation flag on the finished tool', () => {
+    const state = run(createState('s1'), [
+      ev('tool.started', { toolCallId: 'g1', name: 'GenerateImage', arguments: {} }),
+      ev('tool.finished', { toolCallId: 'g1', name: 'GenerateImage', isError: false, content: 'done', media: [ref, second], mediaTruncated: true }),
+    ])
+    expect(tools(state)[0]).toMatchObject({ status: 'done', media: [ref, second], mediaTruncated: true })
+  })
+
+  it('a server that sends no media leaves the item exactly as before the field existed', () => {
+    const finished = ev('tool.finished', { toolCallId: 'c1', name: 'Bash', isError: false, content: 'a.txt', durationMs: 12 })
+    const state = run(createState('s1'), [ev('tool.started', { toolCallId: 'c1', name: 'Bash', arguments: {} }), finished])
+    const item = tools(state)[0]
+    expect(item?.media).toBeUndefined()
+    expect(item?.mediaTruncated).toBeUndefined()
+    // The compat law: an absent list is never fabricated into an empty one.
+    expect(item).toEqual({
+      kind: 'tool',
+      key: 'tool:t1:c1',
+      turnId: 't1',
+      toolCallId: 'c1',
+      name: 'Bash',
+      arguments: {},
+      description: undefined,
+      status: 'done',
+      content: 'a.txt',
+      truncated: false,
+      diff: undefined,
+      durationMs: 12,
+      denial: undefined,
+      reasoning: undefined,
+    })
+  })
+
+  it('a durable replay of a media-bearing finish yields the same single item', () => {
+    const finished = ev('tool.finished', { toolCallId: 'g1', name: 'GenerateImage', isError: false, content: 'done', media: [ref] })
+    const state = run(createState('s1'), [ev('tool.started', { toolCallId: 'g1', name: 'GenerateImage', arguments: {} }), finished, finished])
+    expect(tools(state)).toHaveLength(1)
+    expect(tools(state)[0]?.media).toEqual([ref])
+    expect(tools(state)[0]?.mediaTruncated).toBeUndefined()
+  })
+})
+
 describe('reducer: deltas', () => {
   it('appends a delta only at the byte offset the part holds; duplicates are dropped', () => {
     const state = run(createState('s1'), [delta('héllo', 0), delta('héllo', 0), delta(' you', 6)])
