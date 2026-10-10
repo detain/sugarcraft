@@ -13,6 +13,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\Sd\Client;
+use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Crush\Tui\MediaForm\DisplayOverrides;
@@ -279,6 +280,66 @@ final class MediaFormWiringTest extends TestCase
         [$after, $cmd] = $app->update(new ClipboardImagePastedMsg($volatile));
         self::assertNull($after->mediaForm);
         self::assertNull($cmd);
+        self::assertDirectoryDoesNotExist($this->awHomeDir . '/home/.sugar-crush/media');
+    }
+
+    public function testThePasteCeilingIsSettledOnTheStatBeforeTheSlurp(): void
+    {
+        // R10-m2 structural pin: a stat-able oversized clipboard temp must be
+        // refused on its size alone — @filesize lands before the whole-file
+        // @file_get_contents, mirroring the ImageIngress ceiling-before-read
+        // order (functional suites stay green under a reorder, hence the slice).
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/App/App.php');
+        $start = strpos($src, 'private function pasteIntoMediaForm');
+        self::assertIsInt($start, 'App no longer declares pasteIntoMediaForm() — update this pin, do not delete it.');
+        $end = strpos($src, "\n    }\n", $start);
+        self::assertIsInt($end, 'Could not find the end of pasteIntoMediaForm().');
+
+        $stat = strpos($src, '@filesize($msg->path)', $start);
+        $slurp = strpos($src, '@file_get_contents($msg->path)', $start);
+        self::assertIsInt($stat, 'pasteIntoMediaForm() no longer pre-sizes via @filesize($msg->path)');
+        self::assertIsInt($slurp, 'pasteIntoMediaForm() no longer reads via @file_get_contents($msg->path)');
+        self::assertLessThan($slurp, $stat, 'the size ceiling must land BEFORE the whole-temp read');
+        self::assertLessThan($end, $slurp, 'the paste read drifted out of its own method');
+    }
+
+    public function testAnOverCeilingPasteRefusesOnTheStatAlone(): void
+    {
+        $this->awArmHomeSandbox();
+        // Sparse temp: the stat size carries the refusal, no bytes behind it.
+        $volatile = tempnam(sys_get_temp_dir(), 'aw-paste-');
+        self::assertIsString($volatile);
+        $handle = fopen($volatile, 'wb');
+        self::assertNotFalse($handle);
+        self::assertTrue(ftruncate($handle, ImageSource::MAX_BYTES + 1));
+        fclose($handle);
+
+        $app = $this->awApp()->openMediaForm();
+        [$pasted, $cmd] = $app->update(new ClipboardImagePastedMsg($volatile));
+        self::assertNull($cmd);
+        self::assertSame(
+            '! clipboard image is over the ' . ImageSource::MAX_BYTES . '-byte ceiling',
+            $this->awStatusOf($pasted->mediaForm),
+        );
+    }
+
+    public function testRefusedPasteBytesNeverReachTheStore(): void
+    {
+        // R10-m3 polarity mirror of the form-down non-touch pin: the ingress
+        // door refuses corrupt bytes BEFORE the persist, so a refused paste
+        // with the form up still leaves no media tree behind.
+        $this->awArmHomeSandbox();
+        $volatile = tempnam(sys_get_temp_dir(), 'aw-paste-');
+        self::assertIsString($volatile);
+        file_put_contents($volatile, str_repeat("\x00", 64));
+
+        $app = $this->awApp()->openMediaForm();
+        [$pasted, $cmd] = $app->update(new ClipboardImagePastedMsg($volatile));
+        self::assertNull($cmd);
+        $status = $this->awStatusOf($pasted->mediaForm);
+        self::assertIsString($status);
+        self::assertStringStartsWith('! ', $status);
+        self::assertStringContainsString('GD failed to load image', $status);
         self::assertDirectoryDoesNotExist($this->awHomeDir . '/home/.sugar-crush/media');
     }
 

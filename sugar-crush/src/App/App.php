@@ -1534,6 +1534,9 @@ final class App implements Model
         return [$this->mutate(mediaForm: $form->saveFocusedPreset()), null];
     }
 
+    /** One ceiling sentence for both the stat cap and the strlen backstop (R10-m2). */
+    private const PASTE_CEILING_STATUS = '! clipboard image is over the ' . ImageSource::MAX_BYTES . '-byte ceiling';
+
     /**
      * The W4.2 paste landing. The clipboard temp file is volatile — the
      * bytes are admitted through {@see ImageIngress} (the single validation
@@ -1553,15 +1556,22 @@ final class App implements Model
             return [$this, null];
         }
 
+        // Cap before the read (R10-m2, mirroring ImageIngress::fromPath): a
+        // multi-gigabyte clipboard temp must never be slurped into memory
+        // just to be measured. The strlen pass below stays as the backstop
+        // for temps whose size cannot be stat'ed.
+        $size = $msg->path === null ? false : @filesize($msg->path);
+        if ($size !== false && $size > ImageSource::MAX_BYTES) {
+            return [$this->mutate(mediaForm: $form->withStatus(self::PASTE_CEILING_STATUS)), null];
+        }
+
         $bytes = $msg->path === null ? false : @file_get_contents($msg->path);
         if ($bytes === false || $bytes === '') {
             return [$this->mutate(mediaForm: $form->withStatus(Lang::t('chat.clipboard.no_image'))), null];
         }
 
         if (\strlen($bytes) > ImageSource::MAX_BYTES) {
-            return [$this->mutate(mediaForm: $form->withStatus(
-                '! clipboard image is over the ' . ImageSource::MAX_BYTES . '-byte ceiling',
-            )), null];
+            return [$this->mutate(mediaForm: $form->withStatus(self::PASTE_CEILING_STATUS)), null];
         }
 
         try {
