@@ -178,8 +178,13 @@ final class BootstrapMcpTrustPinsTest extends TestCase
         self::assertMatchesRegularExpression('/\bbare \([^)]*\bGITHUB_TOKEN\b/', $notice);
         // The developer's own shell may hold other credentials, so `declared`
         // can still be named for those; it must not be named for the one it
-        // declared.
-        self::assertDoesNotMatchRegularExpression('/\bdeclared \([^)]*\bGITHUB_TOKEN\b/', $notice, 'a server that declared the name kept it');
+        // declared. The span must not cross the both-ends clip's joiner (W5
+        // gate): the tail window repeats GITHUB_TOKEN inside the guidance
+        // sentence, and reading it back into the `declared (` group would
+        // accuse a kept credential. A real mis-naming sits contiguous inside
+        // the group; the omitted middle is lossy by construction and the full
+        // text rides stderr.
+        self::assertDoesNotMatchRegularExpression('/\bdeclared \([^)…]*\bGITHUB_TOKEN\b/', $notice, 'a server that declared the name kept it');
         self::assertStringNotContainsString('ghp_FAKE_w1int', $notice, 'names only, never values');
     }
 
