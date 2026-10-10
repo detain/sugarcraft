@@ -438,9 +438,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
 `/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff` `/help`
 `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices`
-`/pane` `/permissions` `/pruning` `/recompress` `/redo` `/rename` `/rewind`
-`/rules` `/sendto` `/sessions` `/settings` (`/config`) `/share` `/skills`
-`/sweep` `/theme` `/undo` `/websearch` `/workflow`.
+`/pane` `/permissions` `/play` `/pruning` `/recompress` `/redo` `/rename`
+`/rewind` `/rules` `/sendto` `/sessions` `/settings` (`/config`) `/share`
+`/skills` `/sweep` `/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
