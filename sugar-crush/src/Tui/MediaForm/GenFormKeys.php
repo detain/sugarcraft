@@ -188,6 +188,7 @@ final class GenFormKeys
     public const string IMAGE_SCALE = 'tui.genform.image.scale';
     public const string IMAGE_SHOW_CFG = 'tui.genform.image.show_cfg';
     public const string IMAGE_SCALE_HELP = 'tui.genform.image.scale_help';
+    public const string IMAGE_CLEAR = 'tui.genform.image.clear';
 
     // -- resize-mode radios (§2.6, verbatim) ----------------------------------------------------
     public const string RESIZE_JUST = 'tui.genform.resize.just';

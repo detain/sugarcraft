@@ -285,6 +285,42 @@ final class GenerateImageTest extends TestCase
         self::assertStringContainsString('saved to server store (outdir) + crush media store', $result->content());
     }
 
+    public function testImg2imgDraftDialsTheImg2imgEndpointWithTheRawBase64(): void
+    {
+        $tool = $this->tool($this->server(
+            [['state' => ['finished' => true]]],
+            $this->envelope([self::PNG_B64], ['img2img cat']),
+        ));
+
+        $result = $tool->execute([
+            'prompt' => 'an img2img cat',
+            'init_images' => ['cGFja2FnZQ=='],
+            'id' => 'call-1',
+        ]);
+
+        self::assertFalse($result->isError(), $result->content());
+        $posts = array_values(array_filter($this->calls, static fn (array $c): bool => $c[0] === 'POST'));
+        self::assertCount(1, $posts);
+        // W4.1 routing: a draft carrying init_images leaves on the sibling
+        // endpoint; the payload rides verbatim (raw base64, no data: URI).
+        self::assertSame('/sdapi/v1/img2img', $posts[0][1]);
+        self::assertSame(['cGFja2FnZQ=='], $posts[0][2]['init_images']);
+    }
+
+    public function testEmptyInitImagesRefusesBeforeAnyDial(): void
+    {
+        $tool = $this->tool($this->server([], $this->envelope([self::PNG_B64], ['x'])));
+
+        $result = $tool->execute(['prompt' => 'orphan draft', 'init_images' => [], 'id' => 'call-1']);
+
+        self::assertTrue($result->isError());
+        self::assertStringContainsString('carries no init images', $result->content());
+        self::assertSame(
+            [],
+            array_values(array_filter($this->calls, static fn (array $c): bool => $c[0] === 'POST'))
+        );
+    }
+
     public function testServerValidationErrorBecomesAnErrorResultNotAThrow(): void
     {
         $transport = new CallableSdTransport(function (string $method, string $path) {

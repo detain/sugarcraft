@@ -79,15 +79,19 @@ final class MediaFormNarrowTest extends TestCase
         $this->assertStringContainsString('1024x1024', $frame, 'the §2.4 preview row survives the squeeze');
     }
 
-    public function testTheGatedImageTabAt60ColumnsIsOneQuietRow(): void
+    public function testTheOpenedImageTabAt60ColumnsLeadsWithTheSourceRows(): void
     {
+        // W4.1 flipped the img2img half of the gate open: tab 5 is no longer
+        // one quiet note row — the attach row leads and the §2.6 lattice rows
+        // follow. The gate sentence must NOT appear here anymore.
         $frame = Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '5')->view(Theme::default(), 60, 24));
 
-        $this->assertNarrowGolden('image-gated-60x24.txt', $frame);
-        $this->assertStringContainsString(
+        $this->assertNarrowGolden('image-open-60x24.txt', $frame);
+        $this->assertStringContainsString(Lang::t(GenFormKeys::IMAGE_SOURCE), $frame);
+        $this->assertStringNotContainsString(
             substr(Lang::t(GenFormKeys::GATE_WAVE4), 0, 12),
             $frame,
-            'the Wave-4 gate sentence is the whole tab while closed',
+            'the img2img tab is open; only the inpaint tab still carries the gate sentence',
         );
     }
 

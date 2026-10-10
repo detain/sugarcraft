@@ -158,6 +158,12 @@ final class PresetsSection implements Section, FieldValuedSection
         }));
     }
 
+    /** The name currently typed in the name row, trimmed ('' when empty). */
+    public function pendingName(): string
+    {
+        return $this->nameValue();
+    }
+
     private function nameValue(): string
     {
         $name = $this->fields[self::ROW_NAME] ?? null;

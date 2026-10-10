@@ -120,6 +120,10 @@ final class MediaFormRenderTest extends TestCase
             'cfg_scale' => 7.0,
             'width' => 512,
             'height' => 512,
+            // W4.1: the img2img half of Wave4Gate opened, so §2.6 defaults
+            // fold onto the wire like every other visible core row.
+            'denoising_strength' => 0.75,
+            'resize_mode' => 0,
         ], $action->request?->toArray());
     }
 

@@ -8,9 +8,11 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Lang;
+use SugarCraft\Crush\Media\ImageIngress;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Forms\Field;
+use SugarCraft\Forms\Field\FilePicker;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -55,6 +57,19 @@ final class MediaForm
 
     /** Rows one wheel notch moves, matching the settings editor. */
     private const WHEEL_ROWS = 3;
+
+    /**
+     * Literal-English status strings, MediaPresets::STORE_UNAVAILABLE
+     * precedent: they name a ruling, not a UI phrase, and must read the
+     * same in every locale (the store refusal lane d shipped is one).
+     */
+    public const PRESET_NAME_REQUIRED = 'name the preset on the Presets tab first';
+
+    public const CLIPBOARD_ORIGIN = 'clipboard.png';
+
+    public const CLIPBOARD_ATTACHED = 'clipboard image attached';
+
+    public const CLIPBOARD_UNAVAILABLE = 'the img2img section is not open on this launch';
 
     /**
      * @param list<Section> $sections tab order; visible ones form the strip
@@ -273,9 +288,15 @@ final class MediaForm
         $plainRune = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt ? $msg->rune : null;
 
         // An open field takes every key: Enter commits it, Esc drops it.
+        // The one exception is the W4.1 image picker (file-URL law of this
+        // shell): while the picker has no selection yet, Enter belongs to it
+        // — descend and select. Once a path is selected the next Enter is
+        // the commit, which routes through ImageSection::accept().
         if ($this->editing !== null) {
             return match ($msg->type) {
-                KeyType::Enter => [$this->commitEdit(), null],
+                KeyType::Enter => $this->pickerStillBrowsing()
+                    ? [$this->feedEdit($msg), null]
+                    : [$this->commitEdit(), null],
                 KeyType::Escape => [$this->cancelEdit(), null],
                 default => [$this->feedEdit($msg), null],
             };
@@ -327,10 +348,14 @@ final class MediaForm
         }
 
         return match ($msg->rune) {
-            // SavePreset (`s`) and ImportPng (`i`) get their bindings in
-            // W3.7/W4.2; the action kinds exist now so the shell's
-            // consumption arm is total from day one.
+            // `s` is the W4.2 SavePreset binding (crush-media W4.1/W4.2):
+            // the action leaves the form, the shell routes it back into
+            // {@see self::saveFocusedPreset()} — one code path with the
+            // Presets tab's Save press-row. ImportPng (`i`) keeps waiting
+            // for W4.4's emitter; its kind arm in the shell stays a loud
+            // throw so a bound-but-unwired action can never be swallowed.
             'g' => [null, MediaFormAction::generate($this->collect())],
+            's' => [null, MediaFormAction::savePreset($this->collect())],
             'k' => [$this->moveRow(-1), null],
             'j' => [$this->moveRow(1), null],
             'h' => [$this->switchSection(-1), null],
@@ -387,6 +412,77 @@ final class MediaForm
         [$updated] = $field->update($msg);
 
         return $this->mutate(['editing' => $updated]);
+    }
+
+    /**
+     * True while the open field is the W4.1 image picker with no selection
+     * yet — during that browse Enter belongs to the picker (descend/select),
+     * not to the commit. Once a path is selected, the next Enter commits.
+     */
+    private function pickerStillBrowsing(): bool
+    {
+        return $this->editing instanceof FilePicker && $this->editing->value() === null;
+    }
+
+    /** The name currently typed on the Presets tab, trimmed ('' when none). */
+    public function pendingPresetName(): string
+    {
+        foreach ($this->sections as $section) {
+            if ($section instanceof Sections\PresetsSection) {
+                return $section->pendingName();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The shell-side `s` binding (crush-media W4.1): save the current
+     * values under the typed preset name through the injected persist door.
+     * Payload bytes never ride along — the save folds `collectValues()`,
+     * and the image source rows are section-local, not lattice fields.
+     * Refusals land as a '!' status exactly like the Presets tab's Save row.
+     */
+    public function saveFocusedPreset(): self
+    {
+        $name = $this->pendingPresetName();
+        if ($name === '') {
+            return $this->mutate(['status' => '! ' . self::PRESET_NAME_REQUIRED]);
+        }
+
+        return $this->runPresetCommand(['save', $name]);
+    }
+
+    /**
+     * The W4.2 clipboard paste: the host persists the bytes first (volatile
+     * temp law) and hands them here; the img2img section takes the slot, or
+     * the refusal message rides the form status. Nothing is validated
+     * twice — {@see ImageIngress::fromBytes()} is the single door.
+     */
+    public function withClipboardImage(string $bytes): self
+    {
+        foreach ($this->sections as $i => $section) {
+            if (!$section instanceof Sections\ImageSection) {
+                continue;
+            }
+
+            try {
+                $ingress = ImageIngress::fromBytes($bytes, self::CLIPBOARD_ORIGIN);
+            } catch (\InvalidArgumentException | \RuntimeException $error) {
+                return $this->mutate(['status' => '! ' . $error->getMessage()]);
+            }
+
+            $sections = $this->sections;
+            $sections[$i] = $section->withIngress($ingress);
+
+            return $this->mutate([
+                'sections' => $sections,
+                'draft' => $sections[$i]->collect($this->draft),
+                'status' => self::CLIPBOARD_ATTACHED . ' (' . $ingress->dimensions() . ')',
+            ]);
+        }
+
+        return $this->mutate(['status' => '! ' . self::CLIPBOARD_UNAVAILABLE]);
     }
 
     /** Hand the typed field back to its section, which owns coercion. */

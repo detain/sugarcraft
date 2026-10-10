@@ -121,19 +121,30 @@ final class ImageSectionGateTest extends TestCase
         $this->assertSame(0.42, $hires->valueFrom($folded));
     }
 
-    // ---- gate closed (production today) -------------------------------------------
+    // ---- gate split (W4.1: image open, inpaint gated) ------------------------------
 
-    public function testTheClosedImageGateIsOneNoteRowWithNoWidgetsAndNoValues(): void
+    public function testTheWaveFourGateIsSplitImageOpenInpaintClosed(): void
     {
-        $this->assertFalse(Wave4Gate::enabled(), 'W3.7 ships the gate CLOSED');
-        $section = ImageSection::forDraft(MediaRequest::new());
+        $this->assertTrue(Wave4Gate::img2img(), 'W4.1 opened the img2img half');
+        $this->assertFalse(Wave4Gate::inpaint(), 'the inpaint half waits for its own ingress (lane b)');
+        $this->assertFalse(Wave4Gate::enabled(), 'the wave as a whole is still closed');
 
-        $this->assertSame([Lang::t(GenFormKeys::GATE_WAVE4)], $section->rows());
-        $this->assertNull($section->fieldAt(0), 'no widget to edit — Enter is inert');
-        $this->assertSame('', $section->valueAt(0));
+        // Default construction is the production polarity: open, source-led.
+        $section = ImageSection::forDraft(MediaRequest::new());
+        $this->assertNotSame(
+            [Lang::t(GenFormKeys::GATE_WAVE4)],
+            $section->rows(),
+            'the img2img tab is no longer one note row in production',
+        );
+
+        // The explicit closed override still behaves under the W3.7 law.
+        $closed = ImageSection::forDraft(MediaRequest::new(), null, false);
+        $this->assertSame([Lang::t(GenFormKeys::GATE_WAVE4)], $closed->rows());
+        $this->assertNull($closed->fieldAt(0), 'no widget to edit — Enter is inert');
+        $this->assertSame('', $closed->valueAt(0));
 
         $held = MediaRequest::new()->withResizeMode(2);
-        $this->assertSame($held->toArray(), $section->collect($held)->toArray(), 'a closed gate is absent, not nulling');
+        $this->assertSame($held->toArray(), $closed->collect($held)->toArray(), 'a closed gate is absent, not nulling');
     }
 
     public function testTheClosedInpaintGateHidesItsRowsAndNeverMintsTheTransparencyKey(): void
@@ -165,18 +176,20 @@ final class ImageSectionGateTest extends TestCase
 
         $this->assertSame(
             [
+                Lang::t(GenFormKeys::IMAGE_SOURCE),
                 Lang::t(GenFormKeys::FIELD_RESIZE_MODE),
                 Lang::t(GenFormKeys::FIELD_DENOISING_STRENGTH),
                 Lang::t(GenFormKeys::IMAGE_SHOW_CFG),
             ],
             $section->rows(),
-            'image CFG scale stays hidden until revealed, and the reveal row closes the list',
+            'W4.1: the attach row leads, image CFG scale stays hidden until revealed, and the reveal row closes the list',
         );
 
         $wire = $section->collect(MediaRequest::new())->toArray();
         $this->assertSame(0, $wire['resize_mode']);
         $this->assertSame(0.75, $wire['denoising_strength']);
         $this->assertArrayNotHasKey('image_cfg_scale', $wire);
+        $this->assertArrayNotHasKey('init_images', $wire, 'zero sources never sets the img2img field');
     }
 
     public function testRevealingImageCfgExposesItAndHidingItAgainStaleClears(): void
@@ -184,7 +197,7 @@ final class ImageSectionGateTest extends TestCase
         $section = ImageSection::forDraft(MediaRequest::new(), null, true);
         $revealed = $this->asImage($section->withField(Confirm::new(ImageSection::ROW_SHOW_IMAGE_CFG, false)));
 
-        $this->assertCount(4, $revealed->rows());
+        $this->assertCount(5, $revealed->rows(), 'attach row + three lattice rows + the revealed CFG row');
         $this->assertSame(
             1.5,
             $revealed->collect(MediaRequest::new())->toArray()['image_cfg_scale'],

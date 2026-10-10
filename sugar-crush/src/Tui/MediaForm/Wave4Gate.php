@@ -5,16 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\MediaForm;
 
 /**
- * The single switch for the W3.7 img2img/inpaint surface (plan §W3.7).
+ * The Wave-4 capability split (crush-media W4.1).
  *
- * The whole control vocabulary already ships — registry rows, radio
- * coercion, §2.7 verbatim labels, the tabs — but Wave 4 is what lands image
- * ingress and the mask editor; until then there is no image to condition a
- * generation on. So both sections render as one note row, expose zero
- * editable widgets, and collect zero values: present-but-gated, exactly the
- * plan's ruling (mirrors the RESERVED→LIVE discipline of the wire error
- * roster). Flipping {@see enabled()} to true when W4 merges lights the
- * registration without touching either section's code.
+ * W3.7 shipped the img2img and inpaint groups present-but-gated behind one
+ * closed switch; W4 opens the halves as their lanes land. The gate exists so
+ * a section can answer "rows or note row?" from ONE source of truth — tests
+ * override per-section with the explicit `$enabled` argument of each
+ * `forDraft()`, never by mutating this class.
+ *
+ * `img2img()` opened with W4.1 (local image ingress + clipboard paste).
+ * `inpaint()` waits for W4.2's mask editor on lane b — flipping it is that
+ * lane's call, and only that lane's.
  */
 final class Wave4Gate
 {
@@ -22,9 +23,21 @@ final class Wave4Gate
     {
     }
 
-    /** True only once Wave 4 (image ingress + mask editor) ships. */
-    public static function enabled(): bool
+    /** The img2img half: source rows are live (W4.1). */
+    public static function img2img(): bool
+    {
+        return true;
+    }
+
+    /** The inpaint half: mask ingress has not landed yet. */
+    public static function inpaint(): bool
     {
         return false;
+    }
+
+    /** The whole Wave-4 surface — closed until BOTH halves have landed. */
+    public static function enabled(): bool
+    {
+        return self::img2img() && self::inpaint();
     }
 }

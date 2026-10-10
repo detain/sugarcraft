@@ -168,6 +168,10 @@ final class MediaFormFieldsTest extends TestCase
             'sampler_name' => 'Euler a',
             'scheduler' => 'Karras',
             'seed' => 123,
+            // W4.1: the img2img section is open by default, so its lattice
+            // defaults ride the values map alongside the hydrated fields.
+            'resize_mode' => 'Just resize',
+            'denoising_strength' => 0.75,
         ];
 
         $form = MediaForm::open(MediaRequest::new())->hydrateFields($values);

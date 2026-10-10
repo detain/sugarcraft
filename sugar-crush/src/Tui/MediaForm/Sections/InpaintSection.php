@@ -58,7 +58,7 @@ final class InpaintSection implements Section, FieldValuedSection
      */
     public static function forDraft(MediaRequest $draft, ?array $runtimeChoices = null, ?bool $enabled = null): self
     {
-        $enabled ??= Wave4Gate::enabled();
+        $enabled ??= Wave4Gate::inpaint();
         $specs = [];
         $fields = [];
         $rowKeys = [];

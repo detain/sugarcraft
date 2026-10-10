@@ -43,7 +43,9 @@ use SugarCraft\Crush\Tools\ToolResult;
  * SHAPE. The prompt and the A1111 knob subset arrive as tool args, flow
  * through {@see MediaRequest} (unknown knobs ride `withUnknown` so
  * forward-compatible extras survive), go out as one `POST /sdapi/v1/txt2img`
- * on the {@see Client}, come back through the {@see Response} decoder (which
+ * — or, when the request carries `init_images` from an attached source
+ * (plan W4.1), `POST /sdapi/v1/img2img` — on the {@see Client}, come back
+ * through the {@see Response} decoder (which
  * applies the grid-prepend and infotext-shift laws), and fan out through
  * {@see BatchResults} — the sole consumer-side pairing of each `n_iter ×
  * batch_size` sample with its own raw infotext row and save-name tokens
@@ -285,6 +287,16 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             return $request; // DTO refusal (api-owned or v1-unsupported key) surfaced verbatim
         }
 
+        // crush-media W4.1: sdapi treats an img2img call with no init_images
+        // as a hard 400-class server error; refuse it client-side, before
+        // any dial, with the same words every surface can echo (plan W4.1
+        // microstep 5). `isSet` distinguishes the deliberate img2img draft
+        // (key present, e.g. emptied by a clear) from a plain txt2img call
+        // that never names the field.
+        if ($request->isSet('init_images') && ($request->initImages() ?? []) === []) {
+            return new ToolResult($callId, 'an img2img request carries no init images; attach a source or drop the field', true);
+        }
+
         $apiKey = \is_string($settings['sd.apiKey'] ?? null) && $settings['sd.apiKey'] !== ''
             ? $settings['sd.apiKey']
             : null;
@@ -375,7 +387,13 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             if ($callId !== '' && ToolCancelRequests::isRequested($callId)) {
                 return true;
             }
-            $awaited = $client->txt2img($request);
+            // crush-media W4.1 routing: a draft carrying init_images is an
+            // img2img call — the sibling endpoint, same body. The empty-
+            // field case is refused in generate() before this closure ever
+            // runs, so a non-empty list is the only image shape here.
+            $awaited = ($request->initImages() ?? []) !== []
+                ? $client->img2img($request)
+                : $client->txt2img($request);
 
             return false;
         };

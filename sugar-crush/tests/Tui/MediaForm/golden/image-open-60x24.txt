@@ -1,10 +1,10 @@
 ╭─ 🎨 Generate image ──────────────────────────────────────╮
 │ ‹ Extra │ Hires. fix │ Refiner │ img2img │ Inpaint ›     │
 │ ──────────────────────────────────────────────────────── │
-│ ▸ img2img & inpaint arrive in a later build              │
-│                                                          │
-│                                                          │
-│                                                          │
+│ ▸ Source image  0 × Source image                         │
+│   Resize mode   Just resize                              │
+│   Denoising strength 0.75                                │
+│   Show image CFG scale off                               │
 │                                                          │
 │                                                          │
 │                                                          │
