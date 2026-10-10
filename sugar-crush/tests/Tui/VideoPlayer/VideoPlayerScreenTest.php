@@ -157,6 +157,32 @@ final class VideoPlayerScreenTest extends TestCase
         self::assertSame(1, $decoder->vpCloseCount(), 'stop is latched, the child dies once');
     }
 
+    /**
+     * R13-C1: the reel Player re-mints a new wrapper on every seek, resize
+     * rebuild and mode cycle (immutability), while the live decoder rides
+     * along. The shutdown memo must follow the newest wrapper — otherwise
+     * the Ctrl+C teardown stops the superseded object and the child of the
+     * player actually on screen is orphaned.
+     */
+    public function testSeekReMintMovesTheShutdownMemoOntoTheLiveWrapper(): void
+    {
+        [$player, $decoder] = $this->vpScriptedPlayer();
+        VideoPlayerScreen::adopt($player);
+        $screen = $this->vpReady($player);
+
+        // Right = forward seek: advances the SAME decoder, mutates to a new
+        // Player instance — the screen's swap branch must fire.
+        [$seeked] = $screen->update(new KeyMsg(KeyType::Right));
+
+        $live = $seeked->player();
+        self::assertNotSame($player, $live, 'the seek re-minted the wrapper (swap branch premise)');
+        self::assertSame($live, VideoPlayerScreen::activePlayer(), 'the memo follows the live wrapper');
+        self::assertSame(0, $decoder->vpCloseCount(), 'reattaching stops nothing — the stream stays live');
+
+        VideoPlayerScreen::stopActive();
+        self::assertSame(1, $decoder->vpCloseCount(), 'the teardown stops the decoder exactly once, via the fresh memo');
+    }
+
     public function testLateAnswerForAMovedOnScreenStopsTheBuilder(): void
     {
         [$first, $firstDecoder] = $this->vpScriptedPlayer();

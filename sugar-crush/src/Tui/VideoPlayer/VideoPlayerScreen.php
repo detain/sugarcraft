@@ -150,9 +150,17 @@ final class VideoPlayerScreen
 
         [$next, $cmd] = $this->player->update($msg);
 
-        return [$next instanceof Player && $next !== $this->player
-            ? new self($this->state, $this->path, $next, $this->mode, $this->error)
-            : $this, $cmd];
+        if (!$next instanceof Player || $next === $this->player) {
+            return [$this, $cmd];
+        }
+
+        // The Player re-minted itself (seek, resize rebuild, mode cycle all
+        // mutate to a new wrapper — R13-C1): the shutdown memo must follow
+        // this wrapper, or stopActive() would stop the superseded object
+        // while the live decoder child rides the new one.
+        self::reattach($next);
+
+        return [new self($this->state, $this->path, $next, $this->mode, $this->error), $cmd];
     }
 
     /**
@@ -192,6 +200,21 @@ final class VideoPlayerScreen
     }
 
     /**
+     * Move the shutdown memo onto a Player that re-minted itself under an
+     * already-adopted wrapper (R13-C1). Unlike {@see adopt()} this stops
+     * NOTHING: the reel Player is immutable, so every handled key returns a
+     * fresh wrapper around the SAME live decoder — halting the superseded
+     * one here would kill the stream the new wrapper is playing. The old
+     * wrapper's own stop() stays harmless: its memo guard simply no longer
+     * matches, and Player::stop is latched.
+     */
+    public static function reattach(Player $player): void
+    {
+        self::$activePlayer = $player;
+        self::registerShutdownTeardown();
+    }
+
+    /**
      * Arm the shutdown stop once (house precedent: Bootstrap's MCP/LSP
      * shutdown registration). PHP runs shutdown functions on every exit
      * that is not SIGKILL — normal quit, the Ctrl+C quit chord, and a
@@ -223,6 +246,12 @@ final class VideoPlayerScreen
     public static function hasActivePlayer(): bool
     {
         return self::$activePlayer !== null;
+    }
+
+    /** Test seam: the memoized live player itself — identity checks need the instance, not just presence. */
+    public static function activePlayer(): ?Player
+    {
+        return self::$activePlayer;
     }
 
     /**
