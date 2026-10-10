@@ -344,11 +344,12 @@ final class Client
     // ------------------------------------------------------------------ internals
 
     /**
-     * Project MediaRequest's wire array through the two edge laws: data-URI
-     * strip on the b64 fields, and the save_images derivation — the A1111
+     * Project MediaRequest's wire array through the three edge laws: data-URI
+     * strip on the b64 fields, the save_images derivation — the A1111
      * handler OVERWRITES do_not_save_samples/do_not_save_grid from save_images
      * (§4.2 note), so we set them ourselves the same way unless the caller
-     * already stated them (an explicit field still wins, per-request).
+     * already stated them (an explicit field still wins, per-request) — and
+     * the explicit-null drop of {@see stripExplicitNulls}().
      *
      * @param MediaRequest|array<string, mixed> $request
      * @return array<string, mixed>
@@ -380,7 +381,41 @@ final class Client
             }
         }
 
-        return $wire;
+        return self::stripExplicitNulls($wire);
+    }
+
+    /**
+     * Drop keys whose value is an explicit null from any dialled body
+     * (R8-ADVISORY-1, carried into W5 as the egress law).
+     *
+     * The DTO keeps set-to-null distinct from unset — MediaRequest::toArray()
+     * emits nulls for XSet fields on purpose, so fromArray(toArray())
+     * round-trips exactly (class docblock, plan W1.1). The WIRE, however,
+     * cannot tell "clear to default" from null: A1111's request models are
+     * generated dynamically with EVERY field typed `Optional[T]` whose default
+     * is the processing `__init__` default (plan_crush_media.md Appendix F,
+     * PydanticModelGenerator row) — so a key sent as null VALIDATES (no 422)
+     * and then pushes Python `None` into processing arithmetic, where an
+     * ABSENT key is filled from the server's own defaults table
+     * (`set_defaults`). Omit therefore equals default on sdapi, and a stale-
+     * clear row collapsed by the W3.5 disclosure machinery ("enable_hr":null,
+     * "hr_scale":null) means exactly "revert to defaults" — which is what
+     * dropping the key says. The strip is applied HERE, at the transport
+     * boundary, never in the DTO, so both laws hold: bookkeeping round-trips,
+     * egress carries intent.
+     *
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    public static function stripExplicitNulls(array $body): array
+    {
+        foreach ($body as $key => $value) {
+            if ($value === null) {
+                unset($body[$key]);
+            }
+        }
+
+        return $body;
     }
 
     /**

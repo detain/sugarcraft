@@ -169,6 +169,61 @@ final class ClientTest extends TestCase
         self::assertSame(7, $this->calls[0][2]['steps']);
     }
 
+    public function testExplicitNullsAreDroppedAtEgressAndNowhereElse(): void
+    {
+        // R8-ADVISORY-1 (W5 egress law). The W3.5 stale-clear path emits
+        // "enable_hr":null rows into the draft; the DTO's XSet law KEEPS them
+        // (round-trip fidelity), the wire must never see them — A1111's
+        // dynamically generated models type every field Optional[T], so a
+        // null validates and then overrides the server's defaults table with
+        // Python None, while an ABSENT key is what "revert to default" means
+        // there (Client::stripExplicitNulls docblock, plan Appendix F).
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $request = MediaRequest::fromArray([
+            'prompt' => 'a cat',
+            'steps' => 20,
+            'enable_hr' => null,
+            'hr_scale' => null,
+        ]);
+        // Pin the DTO side first: the nulls are SET values, not absence.
+        self::assertTrue($request->isSet('enable_hr'), 'the DTO round-trip law must not move');
+        self::assertNull($request->toArray()['enable_hr']);
+
+        $client->txt2img($request);
+
+        $sent = $this->calls[0][2];
+        self::assertArrayNotHasKey('enable_hr', $sent, 'set-to-null must not reach the wire');
+        self::assertArrayNotHasKey('hr_scale', $sent);
+        self::assertSame('a cat', $sent['prompt']);
+        self::assertSame(20, $sent['steps'], 'non-null values ride untouched');
+    }
+
+    public function testNullDropIsExactOnNullAndOnlyOnNull(): void
+    {
+        // Array-shaped callers take the same funnel (JobClient reuse in W5.2),
+        // and the falsy neighbours of null — false, 0, '', [] — are VALUES the
+        // server must receive, never absence to be laundered away.
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $client->img2img([
+            'prompt' => 'p',
+            'enable_hr' => false,
+            'denoising_strength' => 0,
+            'negative_prompt' => '',
+            'alwayson_scripts' => [],
+            'hr_second_pass_steps' => null,
+            'mask_blur' => null,
+        ]);
+
+        $sent = $this->calls[0][2];
+        self::assertArrayHasKey('enable_hr', $sent);
+        self::assertFalse($sent['enable_hr']);
+        self::assertSame(0, $sent['denoising_strength']);
+        self::assertSame('', $sent['negative_prompt']);
+        self::assertSame([], $sent['alwayson_scripts']);
+        self::assertArrayNotHasKey('hr_second_pass_steps', $sent);
+        self::assertArrayNotHasKey('mask_blur', $sent);
+    }
+
     // ------------------------------------------------------------------ paths
 
     public function testEveryClientCallReachesTheTransportServerRelative(): void
