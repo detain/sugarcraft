@@ -17,9 +17,11 @@ use SugarCraft\Forms\Field\RadioPills;
 use SugarCraft\Forms\Field\Slider;
 
 /**
- * The inpaint group (§2.7, crush-media W3.7) — PRESENT-BUT-GATED exactly
- * like {@see ImageSection}: closed gate means one note row, no widgets, no
- * collects.
+ * The inpaint group (§2.7, crush-media W3.7) — gated exactly like
+ * {@see ImageSection}: closed gate means one note row, no widgets, no
+ * collects. Production opened this half with W4.3 (mask ingress on the image
+ * tab); tests pin the closed polarity through the explicit `$enabled`
+ * override, never by mutating the gate.
  *
  * Open, it carries mask blur (0–64, default 4), the mask mode pair, the
  * masked-content radio — EXACTLY the four §2.7 options fill / original /
@@ -30,6 +32,20 @@ use SugarCraft\Forms\Field\Slider;
  * slider (0–256, step 4, default 32), and a final read-only row explaining
  * that mask transparency is editor-only: A1111 keeps it client-side, so it
  * is a note here and NEVER a collected key.
+ *
+ * TWO §4.3 TRAPS this group deliberately rides:
+ * - SINGLE-BLUR LAW: the UI shows ONE blur slider and the form sends only
+ *   `mask_blur`; the per-axis API pair `mask_blur_x`/`mask_blur_y` stays in
+ *   the override-settings escape hatch (§2.1 rows), never a registry field.
+ * - MASK_ROUND DEFAULT: `mask_round` defaults TRUE server-side and A1111
+ *   applies the blur BEFORE the rounding pass, so with round left at its
+ *   default a large blur is partially re-hardened — this is upstream
+ *   behaviour, not our bug. We do not expose mask_round in the lattice (§2.7
+ *   row list omits it); anyone tempted to "fix" the blur as ineffective must
+ *   read the override hatch, not delete this note.
+ *
+ * The mask FILE itself is an upload and lives on ImageSection's mask rows
+ * (W4.3); this tab only parameterises it.
  */
 final class InpaintSection implements Section, FieldValuedSection
 {

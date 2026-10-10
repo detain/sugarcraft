@@ -124,6 +124,12 @@ final class MediaFormRenderTest extends TestCase
             // fold onto the wire like every other visible core row.
             'denoising_strength' => 0.75,
             'resize_mode' => 0,
+            // W4.3 opened the inpaint half: §2.7 defaults fold the same way.
+            'mask_blur' => 4,
+            'inpainting_fill' => 1,
+            'inpaint_full_res' => false,
+            'inpaint_full_res_padding' => 32,
+            'inpainting_mask_invert' => 0,
         ], $action->request?->toArray());
     }
 

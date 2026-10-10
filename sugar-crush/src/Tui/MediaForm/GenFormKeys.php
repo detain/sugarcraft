@@ -204,6 +204,16 @@ final class GenFormKeys
     public const string MASK_MODE_MASKED = 'tui.genform.mask.mode_masked';
     public const string MASK_MODE_NOT_MASKED = 'tui.genform.mask.mode_not_masked';
 
+    // -- mask ingress rows (§2.7 upload conventions, crush-media W4.3) -------------------------
+    public const string MASK_ATTACH = 'tui.genform.mask.attach';
+    public const string MASK_LABEL = 'tui.genform.mask.label';
+    public const string MASK_CLEAR = 'tui.genform.mask.clear';
+    public const string MASK_CLASS_ALPHA = 'tui.genform.mask.class.alpha';
+    public const string MASK_CLASS_LUMINANCE = 'tui.genform.mask.class.luminance';
+    public const string MASK_ADV_EVERYTHING = 'tui.genform.mask.advisory.everything';
+    public const string MASK_ADV_NOTHING = 'tui.genform.mask.advisory.nothing';
+    public const string MASK_ADV_LEVEL = 'tui.genform.mask.advisory.level';
+
     // -- masked-content radios (§2.6, verbatim per C-1) ----------------------------------------------
     public const string FILL_FILL = 'tui.genform.fill.fill';
     public const string FILL_ORIGINAL = 'tui.genform.fill.original';

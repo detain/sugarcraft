@@ -2,10 +2,10 @@
 │ ‹ Extra │ Hires. fix │ Refiner │ img2img │ Inpaint ›     │
 │ ──────────────────────────────────────────────────────── │
 │ ▸ Source image  0 × Source image                         │
+│   Attach mask   0 × Attach mask                          │
 │   Resize mode   Just resize                              │
 │   Denoising strength 0.75                                │
 │   Show image CFG scale off                               │
-│                                                          │
 │                                                          │
 │                                                          │
 │                                                          │

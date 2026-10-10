@@ -14,8 +14,8 @@ namespace SugarCraft\Crush\Tui\MediaForm;
  * `forDraft()`, never by mutating this class.
  *
  * `img2img()` opened with W4.1 (local image ingress + clipboard paste).
- * `inpaint()` waits for W4.2's mask editor on lane b — flipping it is that
- * lane's call, and only that lane's.
+ * `inpaint()` opened with W4.3 (mask ingress on lane b — {@see
+ * \SugarCraft\Crush\Media\MaskIngest}); the §4.3 mask rows arrive with it.
  */
 final class Wave4Gate
 {
@@ -29,10 +29,10 @@ final class Wave4Gate
         return true;
     }
 
-    /** The inpaint half: mask ingress has not landed yet. */
+    /** The inpaint half: mask ingress landed with W4.3. */
     public static function inpaint(): bool
     {
-        return false;
+        return true;
     }
 
     /** The whole Wave-4 surface — closed until BOTH halves have landed. */

@@ -121,13 +121,13 @@ final class ImageSectionGateTest extends TestCase
         $this->assertSame(0.42, $hires->valueFrom($folded));
     }
 
-    // ---- gate split (W4.1: image open, inpaint gated) ------------------------------
+    // ---- gate split (W4.1 img2img, W4.3 inpaint — both halves live) ---------------
 
-    public function testTheWaveFourGateIsSplitImageOpenInpaintClosed(): void
+    public function testTheWaveFourGateIsFullyOpen(): void
     {
         $this->assertTrue(Wave4Gate::img2img(), 'W4.1 opened the img2img half');
-        $this->assertFalse(Wave4Gate::inpaint(), 'the inpaint half waits for its own ingress (lane b)');
-        $this->assertFalse(Wave4Gate::enabled(), 'the wave as a whole is still closed');
+        $this->assertTrue(Wave4Gate::inpaint(), 'W4.3 opened the inpaint half (mask ingress on the image tab)');
+        $this->assertTrue(Wave4Gate::enabled(), 'the whole Wave-4 surface is live');
 
         // Default construction is the production polarity: open, source-led.
         $section = ImageSection::forDraft(MediaRequest::new());
@@ -149,23 +149,33 @@ final class ImageSectionGateTest extends TestCase
 
     public function testTheClosedInpaintGateHidesItsRowsAndNeverMintsTheTransparencyKey(): void
     {
-        $section = InpaintSection::forDraft(MediaRequest::new());
+        // Explicit override: production ships this half OPEN since W4.3; the
+        // closed polarity stays pinned through the forDraft argument only.
+        $section = InpaintSection::forDraft(MediaRequest::new(), null, false);
 
         $this->assertSame([Lang::t(GenFormKeys::GATE_WAVE4)], $section->rows());
         $this->assertNull($section->fieldAt(0));
         $this->assertSame([], $section->collect(MediaRequest::new())->toArray());
     }
 
-    public function testTheShellShowsTheGateSentenceOnBothTabsAndTheirLabelsInTheStrip(): void
+    public function testTheShellShowsBothOpenedTabsAndNoGateSentenceAnywhere(): void
     {
         $frame = $this->strippedFrame(MediaForm::open());
         $this->assertStringContainsString('img2img', $frame, 'the Image tab rides the strip');
         $this->assertStringContainsString('Inpaint', $frame, 'the Inpaint tab rides the strip');
+        $this->assertStringNotContainsString('arrive in a later build', $frame, 'the gate sentence left the default pane with W4.3');
 
         $inpaintTab = Ansi::strip(
             MediaForm::open()->click(MediaForm::TAB_ZONE . '6')->view(Theme::default(), 100, 40),
         );
-        $this->assertStringContainsString('arrive in a later build', $inpaintTab);
+        $this->assertStringContainsString('Mask blur', $inpaintTab, 'the inpaint tab is its row lattice, not the note row');
+        $this->assertStringNotContainsString('arrive in a later build', $inpaintTab);
+
+        $imageTab = Ansi::strip(
+            MediaForm::open()->click(MediaForm::TAB_ZONE . '5')->view(Theme::default(), 100, 40),
+        );
+        $this->assertStringContainsString('Attach mask', $imageTab, 'the W4.3 mask ingress row leads behind the source rows');
+        $this->assertStringNotContainsString('arrive in a later build', $imageTab);
     }
 
     // ---- gate forced open (the W4 preview) ----------------------------------------
@@ -177,12 +187,13 @@ final class ImageSectionGateTest extends TestCase
         $this->assertSame(
             [
                 Lang::t(GenFormKeys::IMAGE_SOURCE),
+                Lang::t(GenFormKeys::MASK_ATTACH),
                 Lang::t(GenFormKeys::FIELD_RESIZE_MODE),
                 Lang::t(GenFormKeys::FIELD_DENOISING_STRENGTH),
                 Lang::t(GenFormKeys::IMAGE_SHOW_CFG),
             ],
             $section->rows(),
-            'W4.1: the attach row leads, image CFG scale stays hidden until revealed, and the reveal row closes the list',
+            'W4.1+W4.3: source attach leads, the mask attach row follows, image CFG scale stays hidden until revealed',
         );
 
         $wire = $section->collect(MediaRequest::new())->toArray();
@@ -190,6 +201,7 @@ final class ImageSectionGateTest extends TestCase
         $this->assertSame(0.75, $wire['denoising_strength']);
         $this->assertArrayNotHasKey('image_cfg_scale', $wire);
         $this->assertArrayNotHasKey('init_images', $wire, 'zero sources never sets the img2img field');
+        $this->assertArrayNotHasKey('mask', $wire, 'no mask attached never sets the inpaint field');
     }
 
     public function testRevealingImageCfgExposesItAndHidingItAgainStaleClears(): void
@@ -197,7 +209,7 @@ final class ImageSectionGateTest extends TestCase
         $section = ImageSection::forDraft(MediaRequest::new(), null, true);
         $revealed = $this->asImage($section->withField(Confirm::new(ImageSection::ROW_SHOW_IMAGE_CFG, false)));
 
-        $this->assertCount(5, $revealed->rows(), 'attach row + three lattice rows + the revealed CFG row');
+        $this->assertCount(6, $revealed->rows(), 'attach + mask attach + three lattice rows + the revealed CFG row');
         $this->assertSame(
             1.5,
             $revealed->collect(MediaRequest::new())->toArray()['image_cfg_scale'],

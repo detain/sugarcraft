@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\ImageIngress;
+use SugarCraft\Crush\Media\MaskIngest;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
 use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
@@ -45,6 +46,17 @@ use SugarCraft\Forms\Field\Slider;
  * reproduces A1111's `enable_image_cfg` checkbox as form state: hidden
  * until revealed (the edit-model hint the webui gates on model type becomes
  * an explicit user reveal in a terminal that cannot ask the server cheaply).
+ *
+ * The mask half of the §2.7 upload conventions (crush-media W4.3) lives here
+ * rather than on the inpaint tab because the mask is an UPLOAD, like the
+ * source images, and the §4.3 parameters that shape it are plain registry
+ * rows on InpaintSection. While {@see Wave4Gate::inpaint()} is open (the
+ * production default since W4.3) the group carries a mask attach row, an
+ * inert classification note (alpha vs luminance + the covers-everything/
+ * -nothing advisory — never serialized), and a clear press-row. SINGLE-MASK
+ * LAW: attaching a mask REPLACES any previous one; the wire `mask` is one
+ * base64 string. The §2.6 mask-transparency note row stays on InpaintSection
+ * as editor-only decoration — it must never reach the payload.
  */
 final class ImageSection implements Section, FieldValuedSection
 {
@@ -61,6 +73,11 @@ final class ImageSection implements Section, FieldValuedSection
     public const ROW_ATTACH = 'image_attach';
     public const ROW_CLEAR = 'image_clear';
 
+    /** Mask ingress rows (W4.3): picker, inert classification note, clear press-row. */
+    public const ROW_MASK_ATTACH = 'mask_attach';
+    public const ROW_MASK = 'mask';
+    public const ROW_MASK_CLEAR = 'mask_clear';
+
     /** Prefix of the inert per-image note rows; full key is prefix + index. */
     public const ROW_SOURCE_PREFIX = 'image_source_';
 
@@ -68,6 +85,9 @@ final class ImageSection implements Section, FieldValuedSection
 
     /**
      * @param list<ImageIngress> $sources attached images, pick order
+     * @param bool $inpaint the W4.3 half-gate: mask rows and the wire `mask`
+     *        entry exist only with it open (pinned per-test, never by
+     *        mutating Wave4Gate)
      */
     private function __construct(
         protected readonly array $specs,
@@ -76,6 +96,9 @@ final class ImageSection implements Section, FieldValuedSection
         private readonly bool $enabled,
         private readonly array $sources = [],
         private readonly ?string $attachError = null,
+        private readonly bool $inpaint = true,
+        private readonly ?MaskIngest $mask = null,
+        private readonly ?string $maskError = null,
     ) {
 
     }
@@ -84,10 +107,13 @@ final class ImageSection implements Section, FieldValuedSection
      * @param array<string, list<string>>|null $runtimeChoices unused here —
      *        the group is range/radio only; kept for the registration shape.
      * @param bool|null $enabled override to pin both gate polarities in tests.
+     * @param bool|null $inpaint override to pin the W4.3 mask rows closed in
+     *        tests even while the production gate is open.
      */
-    public static function forDraft(MediaRequest $draft, ?array $runtimeChoices = null, ?bool $enabled = null): self
+    public static function forDraft(MediaRequest $draft, ?array $runtimeChoices = null, ?bool $enabled = null, ?bool $inpaint = null): self
     {
         $enabled ??= Wave4Gate::img2img();
+        $inpaint ??= Wave4Gate::inpaint();
         $specs = [];
         $fields = [];
         $rowKeys = [];
@@ -124,7 +150,19 @@ final class ImageSection implements Section, FieldValuedSection
             $rowKeys[] = self::ROW_CLEAR;
         }
 
-        return new self($specs, $fields, $rowKeys, $enabled);
+        if ($enabled && $inpaint) {
+            // W4.3 mask ingress, same section-local shape as the source
+            // rows: picker + inert note key (no widget) + clear press-row,
+            // all outside the registry so presets can never carry mask bytes.
+            $rowKeys[] = self::ROW_MASK_ATTACH;
+            $fields[self::ROW_MASK_ATTACH] = self::maskPickerField(getcwd() ?: '.');
+            $rowKeys[] = self::ROW_MASK;
+            $fields[self::ROW_MASK_CLEAR] = Confirm::new(self::ROW_MASK_CLEAR, false)
+                ->withTitle(Lang::t(GenFormKeys::MASK_CLEAR));
+            $rowKeys[] = self::ROW_MASK_CLEAR;
+        }
+
+        return new self($specs, $fields, $rowKeys, $enabled, inpaint: $inpaint);
     }
 
     public function key(): string
@@ -141,6 +179,12 @@ final class ImageSection implements Section, FieldValuedSection
     public function sources(): array
     {
         return $this->sources;
+    }
+
+    /** The admitted mask (W4.3), if any — single-mask law, replace on attach. */
+    public function mask(): ?MaskIngest
+    {
+        return $this->mask;
     }
 
     /**
@@ -169,6 +213,12 @@ final class ImageSection implements Section, FieldValuedSection
             ));
         }
 
+        // Raw base64 of the exact mask file (§2.7 no-re-encode law); the
+        // classification rides the row label and is NEVER serialized.
+        if ($this->inpaint && $this->mask !== null) {
+            $draft = $draft->withMask($this->mask->base64());
+        }
+
         return $draft;
     }
 
@@ -187,8 +237,20 @@ final class ImageSection implements Section, FieldValuedSection
             $keys[] = self::ROW_CLEAR;
         }
 
+        if ($this->inpaint) {
+            $keys[] = self::ROW_MASK_ATTACH;
+            if ($this->mask !== null) {
+                $keys[] = self::ROW_MASK;
+                $keys[] = self::ROW_MASK_CLEAR;
+            }
+        }
+
         foreach ($this->rowKeys as $key) {
             if ($key === self::ROW_ATTACH || $key === self::ROW_CLEAR) {
+                continue;
+            }
+
+            if ($key === self::ROW_MASK_ATTACH || $key === self::ROW_MASK || $key === self::ROW_MASK_CLEAR) {
                 continue;
             }
 
@@ -236,6 +298,15 @@ final class ImageSection implements Section, FieldValuedSection
                 sources: [],
                 attachError: null,
             ),
+            self::ROW_MASK_ATTACH => $field instanceof FilePicker && $field->value() !== null
+                ? $this->takeMaskPath((string) $field->value())
+                : $this,
+            self::ROW_MASK_CLEAR => $this->mutate(
+                fields: [self::ROW_MASK_CLEAR => Confirm::new($key, false)->withTitle(Lang::t(GenFormKeys::MASK_CLEAR))],
+                mask: null,
+                maskError: null,
+            ),
+            self::ROW_MASK => $this,
             self::ROW_SHOW_IMAGE_CFG => $this->rebuild([
                 self::ROW_SHOW_IMAGE_CFG => Confirm::new($key, !$this->revealed())
                     ->withTitle(Lang::t(GenFormKeys::IMAGE_SHOW_CFG)),
@@ -258,6 +329,9 @@ final class ImageSection implements Section, FieldValuedSection
             self::ROW_SHOW_IMAGE_CFG => Lang::t(GenFormKeys::IMAGE_SHOW_CFG),
             self::ROW_ATTACH => Lang::t(GenFormKeys::IMAGE_SOURCE),
             self::ROW_CLEAR => Lang::t(GenFormKeys::IMAGE_CLEAR),
+            self::ROW_MASK_ATTACH => Lang::t(GenFormKeys::MASK_ATTACH),
+            self::ROW_MASK => Lang::t(GenFormKeys::MASK_LABEL),
+            self::ROW_MASK_CLEAR => Lang::t(GenFormKeys::MASK_CLEAR),
             default => throw new \InvalidArgumentException('image has no row ' . $key),
         };
     }
@@ -276,8 +350,34 @@ final class ImageSection implements Section, FieldValuedSection
             self::ROW_ATTACH => $this->attachError !== null
                 ? '! ' . $this->attachError
                 : (count($this->sources) . ' × ' . Lang::t(GenFormKeys::IMAGE_SOURCE)),
+            self::ROW_MASK_ATTACH => $this->maskError !== null
+                ? '! ' . $this->maskError
+                : ($this->mask?->name() ?? '0 × ' . Lang::t(GenFormKeys::MASK_ATTACH)),
+            self::ROW_MASK => $this->maskValueCell(),
             default => $this->registryDisplay($key),
         };
+    }
+
+    /** "8×8 · transparent (alpha)" plus, for flat masks, the §2.7 advisory. */
+    private function maskValueCell(): string
+    {
+        if ($this->mask === null) {
+            return '';
+        }
+
+        $cell = $this->mask->dimensions() . ' · ' . Lang::t(match ($this->mask->mode) {
+            MaskIngest::MODE_ALPHA => GenFormKeys::MASK_CLASS_ALPHA,
+            default => GenFormKeys::MASK_CLASS_LUMINANCE,
+        });
+
+        $advisoryKey = match ($this->mask->advisory) {
+            MaskIngest::ADVISORY_COVERS_EVERYTHING => GenFormKeys::MASK_ADV_EVERYTHING,
+            MaskIngest::ADVISORY_COVERS_NOTHING => GenFormKeys::MASK_ADV_NOTHING,
+            MaskIngest::ADVISORY_UNIFORM_LEVEL => GenFormKeys::MASK_ADV_LEVEL,
+            default => null,
+        };
+
+        return $advisoryKey === null ? $cell : $cell . ' · ! ' . Lang::t($advisoryKey);
     }
 
     private function takePath(string $path): self
@@ -308,11 +408,48 @@ final class ImageSection implements Section, FieldValuedSection
     }
 
     /**
+     * A committed mask picker classifies through {@see MaskIngest}; the
+     * single-mask law means the new admission REPLACES the old slot. Same
+     * refusal/picker-reset shape as {@see self::takePath()}.
+     */
+    private function takeMaskPath(string $path): self
+    {
+        try {
+            $mask = MaskIngest::fromPath($path);
+        } catch (\InvalidArgumentException | \RuntimeException $error) {
+            return $this->mutate(
+                fields: [self::ROW_MASK_ATTACH => self::maskPickerField(dirname($path))],
+                maskError: $error->getMessage(),
+            );
+        }
+
+        return $this->mutate(
+            fields: [self::ROW_MASK_ATTACH => self::maskPickerField(dirname($path))],
+            mask: $mask,
+            maskError: null,
+        );
+    }
+
+    private static function maskPickerField(string $cwd): FilePicker
+    {
+        return FilePicker::new(self::ROW_MASK_ATTACH, $cwd)
+            ->exts(ImageIngress::EXTENSIONS)
+            ->dirAllowed(false)
+            ->fileAllowed(true)
+            ->title(Lang::t(GenFormKeys::MASK_ATTACH));
+    }
+
+    /**
      * @param array<string, Field> $fields
      * @param list<ImageIngress>|null $sources
      */
-    private function mutate(array $fields = [], ?array $sources = null, ?string $attachError = 'SENTINEL'): self
-    {
+    private function mutate(
+        array $fields = [],
+        ?array $sources = null,
+        ?string $attachError = 'SENTINEL',
+        mixed $mask = 'SENTINEL',
+        ?string $maskError = 'SENTINEL',
+    ): self {
         return new self(
             $this->specs,
             [...$this->fields, ...$fields],
@@ -320,6 +457,9 @@ final class ImageSection implements Section, FieldValuedSection
             $this->enabled,
             $sources ?? $this->sources,
             $attachError === 'SENTINEL' ? $this->attachError : $attachError,
+            $this->inpaint,
+            $mask === 'SENTINEL' ? $this->mask : $mask,
+            $maskError === 'SENTINEL' ? $this->maskError : $maskError,
         );
     }
 
@@ -358,11 +498,14 @@ final class ImageSection implements Section, FieldValuedSection
             $this->enabled,
             $this->sources,
             $this->attachError,
+            $this->inpaint,
+            $this->mask,
+            $this->maskError,
         );
     }
 
     protected function rebuildLattice(array $specs, array $fields, array $rowKeys): static
     {
-        return new self($specs, $fields, $rowKeys, $this->enabled, $this->sources, $this->attachError);
+        return new self($specs, $fields, $rowKeys, $this->enabled, $this->sources, $this->attachError, $this->inpaint, $this->mask, $this->maskError);
     }
 }

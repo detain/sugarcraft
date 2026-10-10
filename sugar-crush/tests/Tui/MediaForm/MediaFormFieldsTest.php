@@ -172,6 +172,12 @@ final class MediaFormFieldsTest extends TestCase
             // defaults ride the values map alongside the hydrated fields.
             'resize_mode' => 'Just resize',
             'denoising_strength' => 0.75,
+            // W4.3 opened the inpaint half too: its §2.7 defaults follow.
+            'mask_blur' => 4,
+            'inpainting_mask_invert' => 'Inpaint masked',
+            'inpainting_fill' => 'original',
+            'inpaint_full_res' => 'Whole picture',
+            'inpaint_full_res_padding' => 32,
         ];
 
         $form = MediaForm::open(MediaRequest::new())->hydrateFields($values);

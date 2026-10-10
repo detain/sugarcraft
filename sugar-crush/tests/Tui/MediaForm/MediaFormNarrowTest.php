@@ -83,7 +83,8 @@ final class MediaFormNarrowTest extends TestCase
     {
         // W4.1 flipped the img2img half of the gate open: tab 5 is no longer
         // one quiet note row — the attach row leads and the §2.6 lattice rows
-        // follow. The gate sentence must NOT appear here anymore.
+        // follow; W4.3 added the mask attach row behind the sources. The gate
+        // sentence must NOT appear here anymore — nowhere in production.
         $frame = Ansi::strip($this->wideForm()->click(MediaForm::TAB_ZONE . '5')->view(Theme::default(), 60, 24));
 
         $this->assertNarrowGolden('image-open-60x24.txt', $frame);
@@ -91,7 +92,7 @@ final class MediaFormNarrowTest extends TestCase
         $this->assertStringNotContainsString(
             substr(Lang::t(GenFormKeys::GATE_WAVE4), 0, 12),
             $frame,
-            'the img2img tab is open; only the inpaint tab still carries the gate sentence',
+            'both Wave-4 halves are open; the gate sentence no longer ships on any tab',
         );
     }
 
