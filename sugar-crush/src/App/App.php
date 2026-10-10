@@ -1442,6 +1442,12 @@ final class App implements Model
     public function openMediaForm(?MediaRequest $request = null): self
     {
         MenuBar::closeMenu();
+        // R13-m5 symmetry guard (prophylaxis — both-open is unreachable
+        // today): the player door stops its live clip when a new clip
+        // replaces it, and this door must not be the one hole where a
+        // running player is orphaned behind the form. Player::stop is
+        // latched and null-safe, so when nothing plays this costs nothing.
+        $this->videoPlayer?->stop();
 
         // W3.4 runtime override: when an SD base is configured the live
         // /samplers + /schedulers sets replace the §2.9 enums (ChoiceFeed

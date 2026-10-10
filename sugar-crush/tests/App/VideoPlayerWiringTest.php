@@ -200,6 +200,25 @@ final class VideoPlayerWiringTest extends TestCase
         self::assertTrue(VideoPlayerScreen::hasActivePlayer());
     }
 
+    /**
+     * R13-m5: the media-form door carries the same stop-guard as the play
+     * door. Both-open is unreachable through today's UI, so this pins the
+     * prophylaxis directly: opening the form over a live player stops it
+     * and releases the shutdown memo instead of orphaning the clip.
+     */
+    public function testOpeningTheMediaFormStopsALivePlayerBySymmetryGuard(): void
+    {
+        [$player, $decoder] = $this->vwScripted();
+        $app = $this->vwReadyApp($player);
+        self::assertSame(0, $decoder->vpCloseCount(), 'the ready player is live');
+
+        $withForm = $app->openMediaForm();
+
+        self::assertNotNull($withForm->mediaForm, 'the form opens');
+        self::assertSame(1, $decoder->vpCloseCount(), 'the form door stopped the live player');
+        self::assertFalse(VideoPlayerScreen::hasActivePlayer(), 'the stop released the shutdown memo');
+    }
+
     private function vwApp(): App
     {
         return App::new($this->vwProvider, 'test-model');
