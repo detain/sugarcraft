@@ -2363,6 +2363,29 @@
                                     "root"
                                 ],
                                 "description": "Whether `fs.listDirs` and a browse-rooted `workspace.open` answer (serve --allow-dir-browse), and the directory they are confined to."
+                            },
+                            "media": {
+                                "type": "object",
+                                "properties": {
+                                    "image": {
+                                        "type": "boolean"
+                                    },
+                                    "video": {
+                                        "type": "boolean"
+                                    },
+                                    "baseUrlHostOnly": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "image",
+                                    "video",
+                                    "baseUrlHostOnly"
+                                ],
+                                "description": "Whether this server may offer image/video generation, derived from config ∩ capability at boot with no dial (plan_crush_media W6.7); `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured."
                             }
                         },
                         "required": [

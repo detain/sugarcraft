@@ -10,6 +10,7 @@ use React\EventLoop\TimerInterface;
 use React\Socket\ConnectionInterface;
 use SugarCraft\Crush\Host\SessionHub;
 use SugarCraft\Crush\Lang;
+use SugarCraft\Crush\Media\Capability\MediaAffordance;
 use SugarCraft\Crush\Protocol\Dispatcher;
 use SugarCraft\Crush\Protocol\ServerContext;
 use SugarCraft\Crush\Server\Auth\AuthContext;
@@ -405,6 +406,9 @@ final class Serve
                 $config->root,
                 $detached,
                 $detached ? $state->logPath() : null,
+                // W6.7: the same boot-time flags the hello carries, so an
+                // attach-style client reading server.json sees one truth.
+                media: MediaAffordance::current(),
             );
             $record->write($state);
         } catch (\RuntimeException $e) {

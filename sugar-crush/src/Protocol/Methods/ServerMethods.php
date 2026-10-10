@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Protocol\Methods;
 
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Media\Capability\MediaAffordance;
 use SugarCraft\Crush\Backend\QueueMode;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Commands\CommandRegistry;
@@ -100,6 +101,10 @@ final class ServerMethods
                     'enabled' => $config->dirBrowse && $config->browseRoot !== null,
                     'root' => $config->dirBrowse ? $config->browseRoot : null,
                 ],
+                // crush-media W6.7: whether media generation may be offered,
+                // derived from config ∩ capability doors at boot — this read
+                // dials nothing (plan :844) and the host rides hashed (:839).
+                'media' => MediaAffordance::current(),
             ],
             'limits' => [
                 'maxClientFrameBytes' => ServerConfig::MAX_CLIENT_MESSAGE_BYTES,

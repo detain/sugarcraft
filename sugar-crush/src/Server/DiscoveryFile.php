@@ -14,7 +14,13 @@ use SugarCraft\Crush\Support\PrivateRetainedDir;
  * discovery-record pattern):
  *
  *     {pid, procStartTime, version, protocol: {min, max}, url, host, port,
- *      root, startedAt, detached, log}
+ *      root, startedAt, detached, log, media}
+ *
+ * `media` (plan_crush_media W6.7) is the boot-time affordance flags —
+ * {image, video, baseUrlHostOnly} from {@see \SugarCraft\Crush\Media\Capability\MediaAffordance::current()}:
+ * flags and a host hash only, never the SD URL (the "never hostnames in the
+ * clear" law, plan :839). Null means the writer's build predates the field or
+ * said nothing; readers treat it as "unknown", exactly like a missing key.
  *
  * Written 0600 through a write-then-rename into the 0700 state directory, so
  * a reader never sees a torn record. It never carries the token.
@@ -30,6 +36,7 @@ final class DiscoveryFile
 
     /**
      * @param array{min: int, max: int} $protocol
+     * @param array{image: bool, video: bool, baseUrlHostOnly: string|null}|null $media
      */
     private function __construct(
         public readonly int $pid,
@@ -43,11 +50,15 @@ final class DiscoveryFile
         public readonly int $startedAt,
         public readonly bool $detached,
         public readonly ?string $log,
+        public readonly ?array $media = null,
     ) {
     }
 
     /**
      * The record for THIS process, serving at $url.
+     */
+    /**
+     * @param array{image: bool, video: bool, baseUrlHostOnly: string|null}|null $media
      */
     public static function forThisProcess(
         string $version,
@@ -58,6 +69,7 @@ final class DiscoveryFile
         bool $detached,
         ?string $log,
         ?int $now = null,
+        ?array $media = null,
     ): self {
         $pid = (int) \getmypid();
 
@@ -73,6 +85,7 @@ final class DiscoveryFile
             $now ?? \time(),
             $detached,
             $log,
+            $media,
         );
     }
 
@@ -124,11 +137,38 @@ final class DiscoveryFile
             \is_int($data['startedAt'] ?? null) ? $data['startedAt'] : 0,
             ($data['detached'] ?? false) === true,
             \is_string($data['log'] ?? null) ? $data['log'] : null,
+            self::parseMedia($data['media'] ?? null),
         );
     }
 
     /**
-     * @return array{pid: int, procStartTime: int|null, version: string, protocol: array{min: int, max: int}, url: string, host: string, port: int, root: string|null, startedAt: int, detached: bool, log: string|null}
+     * The media flags of a record, parsed at the boundary (W6.7): anything
+     * that is not the exact triple is "said nothing", never a half-believed
+     * claim — the same law as the rest of this lenient reader.
+     *
+     * @return array{image: bool, video: bool, baseUrlHostOnly: string|null}|null
+     */
+    private static function parseMedia(mixed $media): ?array
+    {
+        if (
+            !\is_array($media)
+            || !\is_bool($media['image'] ?? null)
+            || !\is_bool($media['video'] ?? null)
+            || !\array_key_exists('baseUrlHostOnly', $media)
+            || ($media['baseUrlHostOnly'] !== null && !\is_string($media['baseUrlHostOnly']))
+        ) {
+            return null;
+        }
+
+        return [
+            'image' => $media['image'],
+            'video' => $media['video'],
+            'baseUrlHostOnly' => $media['baseUrlHostOnly'],
+        ];
+    }
+
+    /**
+     * @return array{pid: int, procStartTime: int|null, version: string, protocol: array{min: int, max: int}, url: string, host: string, port: int, root: string|null, startedAt: int, detached: bool, log: string|null, media: array{image: bool, video: bool, baseUrlHostOnly: string|null}|null}
      */
     public function toArray(): array
     {
@@ -144,6 +184,7 @@ final class DiscoveryFile
             'startedAt' => $this->startedAt,
             'detached' => $this->detached,
             'log' => $this->log,
+            'media' => $this->media,
         ];
     }
 

@@ -181,7 +181,7 @@ final class StateDirTest extends TestCase
         self::assertSame(\getmypid(), $read->pid);
         self::assertSame(['min' => 1, 'max' => 1], $read->protocol);
         self::assertSame(
-            ['pid', 'procStartTime', 'version', 'protocol', 'url', 'host', 'port', 'root', 'startedAt', 'detached', 'log'],
+            ['pid', 'procStartTime', 'version', 'protocol', 'url', 'host', 'port', 'root', 'startedAt', 'detached', 'log', 'media'],
             \array_keys($read->toArray()),
         );
         self::assertTrue($read->isLive(), 'this process is alive and is the process the record names');
@@ -189,6 +189,40 @@ final class StateDirTest extends TestCase
 
         $read->removeFrom($state);
         self::assertFileDoesNotExist($state->discoveryPath());
+    }
+
+    /**
+     * W6.7 (plan_crush_media): the boot-time media flags ride the record —
+     * flags and a host hash only — and a torn block reads as silence, never
+     * as a half-believed claim (the lenient-reader law of this file).
+     */
+    public function testTheMediaFlagsRoundTripAndTornShapesReadAsSilence(): void
+    {
+        $state = $this->open();
+
+        $flags = ['image' => true, 'video' => false, 'baseUrlHostOnly' => '0123456789abcdef'];
+        $record = DiscoveryFile::forThisProcess('v9', 'http://127.0.0.1:7420', '127.0.0.1', 7420, '/proj', false, null, 1_000, $flags);
+        $record->write($state);
+
+        $read = DiscoveryFile::read($state);
+        self::assertNotNull($read);
+        self::assertSame($flags, $read->media);
+        self::assertSame($record->toArray(), $read->toArray());
+
+        // A record written before W6.7 simply says nothing about media.
+        self::assertNull(DiscoveryFile::fromArray(['pid' => 7, 'url' => 'http://h'])->media);
+
+        foreach ([
+            'not an array' => 'no media block',
+            'string-valued flag' => ['image' => 'true', 'video' => false, 'baseUrlHostOnly' => null],
+            'missing hash key' => ['image' => true, 'video' => false],
+            'number-valued hash' => ['image' => true, 'video' => false, 'baseUrlHostOnly' => 7],
+        ] as $label => $torn) {
+            self::assertNull(
+                DiscoveryFile::fromArray(['pid' => 7, 'url' => 'http://h', 'media' => $torn])->media,
+                'torn media (' . $label . ') must read as silence',
+            );
+        }
     }
 
     public function testARecordIsAClaimNotAFact(): void

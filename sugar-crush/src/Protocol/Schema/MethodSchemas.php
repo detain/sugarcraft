@@ -93,6 +93,11 @@ final class MethodSchemas
                             'enabled' => Schema::boolean(),
                             'root' => Schema::string()->nullable(),
                         ], ['enabled', 'root'])->describe('Whether `fs.listDirs` and a browse-rooted `workspace.open` answer (serve --allow-dir-browse), and the directory they are confined to.'),
+                        'media' => Schema::object([
+                            'image' => Schema::boolean(),
+                            'video' => Schema::boolean(),
+                            'baseUrlHostOnly' => Schema::string()->nullable(),
+                        ], ['image', 'video', 'baseUrlHostOnly'])->describe('Whether this server may offer image/video generation, derived from config ∩ capability at boot with no dial (plan_crush_media W6.7); `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured.'),
                     ], ['methods', 'events']),
                     'limits' => Schema::map(Schema::integer(0)),
                     'principal' => Schema::object([
