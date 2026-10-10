@@ -211,6 +211,50 @@
                 "data"
             ]
         },
+        "MediaRef": {
+            "type": "object",
+            "properties": {
+                "artifactId": {
+                    "type": "string",
+                    "description": "MediaStore artifact id: the stored name minus its final extension."
+                },
+                "kind": {
+                    "enum": [
+                        "image",
+                        "video"
+                    ]
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Server-local path to the stored file — a reference, never the bytes (Appendix C-7)."
+                },
+                "bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Size as the tool delivered it; 0 when the event carries only a path."
+                },
+                "mime": {
+                    "type": "string",
+                    "description": "Media type inferred from the stored extension."
+                },
+                "infotextDigest": {
+                    "type": "string",
+                    "description": "SHA-256 of the PNG infotext embedded in the artifact, when one was readable."
+                },
+                "indexLabel": {
+                    "type": "string",
+                    "description": "Batch slot label, when a multi-artifact result names its rows."
+                }
+            },
+            "required": [
+                "artifactId",
+                "kind",
+                "path",
+                "bytes",
+                "mime"
+            ],
+            "description": "A media artifact a finished tool produced — identity and path only; bytes never ride the journal (Appendix C-7)."
+        },
         "MemoryEntry": {
             "type": "object",
             "properties": {
@@ -4823,6 +4867,17 @@
                         "required": [
                             "kind"
                         ]
+                    },
+                    "media": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/MediaRef"
+                        },
+                        "maxItems": 32,
+                        "description": "Artifact refs from the session media store — paths only, never bytes (Appendix C-7)."
+                    },
+                    "mediaTruncated": {
+                        "type": "boolean"
                     },
                     "replaces": {
                         "type": "string"

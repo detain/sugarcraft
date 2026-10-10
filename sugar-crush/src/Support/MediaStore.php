@@ -646,8 +646,14 @@ final class MediaStore
         return $kept;
     }
 
-    /** Stable artifact id: the stored name minus its final extension. */
-    private static function idOf(string $filename): string
+    /**
+     * Stable artifact id: the stored name minus its final extension.
+     *
+     * Public since W6.1 — the transcript projector names the very ids
+     * `list()` reports on its `tool.finished` media refs (Appendix C-7),
+     * so the rule has one owner rather than a second copy that can drift.
+     */
+    public static function idOf(string $filename): string
     {
         $dot = strrpos($filename, '.');
 

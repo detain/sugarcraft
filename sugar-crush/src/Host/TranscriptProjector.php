@@ -15,7 +15,10 @@ use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Events\UsageUpdated;
+use SugarCraft\Crush\Media\MediaKind;
+use SugarCraft\Crush\Media\Png;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Support\MediaStore;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
@@ -48,6 +51,38 @@ final class TranscriptProjector
      * all of it; only the event is clipped.
      */
     public const MAX_EVENT_CONTENT_BYTES = 262144;
+
+    /**
+     * The largest `media` list a `tool.finished` event carries (W6.1,
+     * Appendix C-7). Past the cap the ordered head is kept and the event
+     * says so with `mediaTruncated` — the same honest-truncation ethic as
+     * {@see MAX_EVENT_CONTENT_BYTES}: a client that sees the flag knows to
+     * ask the media store for the rest instead of assuming the batch ended.
+     */
+    public const MAX_EVENT_MEDIA_REFS = 32;
+
+    /**
+     * Extension (lower-case, no dot) → media type for a ref's `mime`.
+     * An unknown extension projects as `application/octet-stream`; the
+     * ref still carries its path, so nothing is lost but the label.
+     */
+    private const MEDIA_MIME_BY_EXTENSION = [
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'bmp' => 'image/bmp',
+        'tiff' => 'image/tiff',
+        'mp4' => 'video/mp4',
+        'webm' => 'video/webm',
+        'mov' => 'video/quicktime',
+        'mkv' => 'video/x-matroska',
+        'avi' => 'video/x-msvideo',
+    ];
+
+    /** Extensions whose refs project as {@see MediaKind::Video}; everything else is image. */
+    private const MEDIA_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'mkv', 'avi'];
 
     private function __construct()
     {
@@ -230,6 +265,8 @@ final class TranscriptProjector
         if ($truncated) {
             $content = mb_strcut($content, 0, self::MAX_EVENT_CONTENT_BYTES, 'UTF-8');
         }
+        $mediaTruncated = false;
+        $media = self::mediaRefs($result, $mediaTruncated);
 
         return SessionEvent::new(SessionEvent::TOOL_FINISHED, array_filter([
             'toolCallId' => $event->toolCallId,
@@ -240,9 +277,101 @@ final class TranscriptProjector
             'truncated' => $truncated ?: null,
             'diff' => $result->diff,
             'denial' => $result->denial === null ? null : ['kind' => $result->denial->name, 'reason' => (string) $result->error],
+            'media' => $media,
+            'mediaTruncated' => $mediaTruncated ?: null,
             ...self::identityData($identity),
             'replaces' => $replaced === null ? null : $replaced[0],
         ], static fn (mixed $value): bool => $value !== null), $sessionId, $turnId);
+    }
+
+    /**
+     * The `media` list a finished tool result projects to (W6.1).
+     *
+     * C-7 law: the journal carries artifact references — the MediaStore id,
+     * the path, sizes, mime — never image bytes. Production surfaces name at
+     * most one artifact on the result today (the head image's `imagePath`),
+     * so this is the single-ref fold of {@see mediaRefsForPaths()}; the
+     * ordered-list contract is exercised there directly.
+     *
+     * @param-out ?bool $truncated
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public static function mediaRefs(ToolResult $result, ?bool &$truncated = null): ?array
+    {
+        return self::mediaRefsForPaths([$result->imagePath], $result->imageBytes, $truncated);
+    }
+
+    /**
+     * Ordered media refs for a list of stored artifact paths, cut off at
+     * {@see MAX_EVENT_MEDIA_REFS} with the truncation flag raised for the
+     * caller to stamp onto the event. `$headBytes` — the bytes the result
+     * carried for the artifact at index 0 of the list — sizes and digests
+     * only that entry, and rides nowhere else (a head slot without a path
+     * means the bytes describe nothing on this event); other path-only refs
+     * report `bytes: 0` and no digest. Empty (or entirely
+     * unpathed) input projects to null so the event key stays absent for
+     * old-client compatibility.
+     *
+     * @param list<string|null> $paths
+     * @param-out ?bool $truncated
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public static function mediaRefsForPaths(array $paths, ?string $headBytes = null, ?bool &$truncated = null): ?array
+    {
+        $refs = [];
+        foreach ($paths as $index => $path) {
+            if (!\is_string($path) || $path === '') {
+                continue;
+            }
+            $refs[] = self::mediaRef($path, $index === 0 ? $headBytes : null);
+        }
+
+        $truncated = \count($refs) > self::MAX_EVENT_MEDIA_REFS;
+        if ($refs === []) {
+            return null;
+        }
+
+        return \array_slice($refs, 0, self::MAX_EVENT_MEDIA_REFS);
+    }
+
+    /**
+     * One artifact ref: identity and path only (C-7). `artifactId` follows
+     * MediaStore's own id rule so a client can fetch by the id `list()`
+     * would report; `infotextDigest` rides only when the delivered bytes
+     * parse as a PNG carrying infotext.
+     *
+     * @return array<string, mixed>
+     */
+    private static function mediaRef(string $path, ?string $bytes): array
+    {
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+
+        return array_filter([
+            'artifactId' => MediaStore::idOf(basename($path)),
+            'kind' => \in_array($extension, self::MEDIA_VIDEO_EXTENSIONS, true)
+                ? MediaKind::Video->value
+                : MediaKind::Image->value,
+            'path' => $path,
+            'bytes' => $bytes === null ? 0 : \strlen($bytes),
+            'mime' => self::MEDIA_MIME_BY_EXTENSION[$extension] ?? 'application/octet-stream',
+            'infotextDigest' => self::infotextDigest($bytes),
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /** SHA-256 of the PNG infotext, when the delivered bytes carry one. */
+    private static function infotextDigest(?string $bytes): ?string
+    {
+        if ($bytes === null || !Png::isPng($bytes)) {
+            return null;
+        }
+        $infotext = Png::readText($bytes);
+        if ($infotext === null || trim($infotext) === '') {
+            return null;
+        }
+
+        return hash('sha256', $infotext);
     }
 
     /**

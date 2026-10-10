@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Protocol\Schema;
 
+use SugarCraft\Crush\Media\MediaKind;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 
@@ -26,6 +27,7 @@ final class Definitions
     public const ERROR = 'Error';
     public const USAGE = 'Usage';
     public const BACKGROUND_SESSION = 'BackgroundSession';
+    public const MEDIA_REF = 'MediaRef';
 
     private function __construct()
     {
@@ -164,6 +166,15 @@ final class Definitions
                 'reasoningTokens' => Schema::integer(0)->nullable(),
                 'costUsd' => Schema::number(0),
             ]),
+            self::MEDIA_REF => Schema::object([
+                'artifactId' => Schema::string()->describe('MediaStore artifact id: the stored name minus its final extension.'),
+                'kind' => Schema::enum(\array_map(static fn (MediaKind $kind): string => $kind->value, MediaKind::cases())),
+                'path' => Schema::string()->describe('Server-local path to the stored file — a reference, never the bytes (Appendix C-7).'),
+                'bytes' => Schema::integer(0)->describe('Size as the tool delivered it; 0 when the event carries only a path.'),
+                'mime' => Schema::string()->describe('Media type inferred from the stored extension.'),
+                'infotextDigest' => Schema::string()->describe('SHA-256 of the PNG infotext embedded in the artifact, when one was readable.'),
+                'indexLabel' => Schema::string()->describe('Batch slot label, when a multi-artifact result names its rows.'),
+            ], ['artifactId', 'kind', 'path', 'bytes', 'mime'])->describe('A media artifact a finished tool produced — identity and path only; bytes never ride the journal (Appendix C-7).'),
         ];
         \ksort($defs);
 

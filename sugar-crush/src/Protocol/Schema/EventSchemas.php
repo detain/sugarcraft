@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Protocol\Schema;
 
 use SugarCraft\Crush\Host\BackgroundEvents;
 use SugarCraft\Crush\Host\SessionEvent as E;
+use SugarCraft\Crush\Host\TranscriptProjector;
 use SugarCraft\Crush\Protocol\EventType;
 use SugarCraft\Crush\Protocol\Schema\Definitions as D;
 
@@ -141,6 +142,8 @@ final class EventSchemas
                 'truncated' => Schema::boolean(),
                 'diff' => Schema::string(),
                 'denial' => Schema::object(['kind' => Schema::string(), 'reason' => Schema::string()], ['kind']),
+                'media' => Schema::arrayOf(Schema::ref(D::MEDIA_REF), TranscriptProjector::MAX_EVENT_MEDIA_REFS)->describe('Artifact refs from the session media store — paths only, never bytes (Appendix C-7).'),
+                'mediaTruncated' => Schema::boolean(),
                 'replaces' => Schema::string(),
             ], ['toolCallId', 'name', 'isError', 'content']),
             E::PERMISSION_REQUESTED => Schema::ref(D::PENDING_ASK),
