@@ -1,0 +1,268 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tui\VideoPlayer;
+
+use SugarCraft\Core\Msg as CoreMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Reel\Msg\ResizeRebuildMsg;
+use SugarCraft\Reel\Msg\TickMsg;
+use SugarCraft\Reel\Player;
+use SugarCraft\Reel\Render\Mode;
+
+/**
+ * The full-screen video player surface (crush-media W5.4).
+ *
+ * RULING (plan §W5.4, decided): the player is a PUSHED FULL-SCREEN screen
+ * — Option A, the phlix `graphicsChrome` shape — not an ImageLayer/Veil
+ * overlay: sugar-reel's `Player::view()` emits one whole-terminal blob
+ * (sixel/kitty/iterm2 payloads or a full cell grid), which the line-diff
+ * compositor can only paint honestly as its own band, exactly like the
+ * settings editor and the media form before it.
+ *
+ * sugar-reel owns decode and frame painting; this class owns composition
+ * around it: the "Preparing…" placeholder while the probe+spawn promise
+ * runs, the scrubber chrome row, the close interception that keeps the
+ * Player's own quit-trio from tearing down the whole app, and the
+ * process-lifetime safety net. The Player instance itself stays the
+ * single inner TEA model — keys ride into
+ * {@see Player::update()}, and whatever Cmd the Player arms (its tick)
+ * rides straight back out to the Program.
+ *
+ * Teardown law (W5.5 watch-list): every Player this screen adopts is
+ * registered via {@see adopt()}, and a shutdown hook stops it — so ffmpeg
+ * children die on EVERY exit path that runs PHP shutdown, including the
+ * global Ctrl+C chord this screen deliberately yields to (the frame loop
+ * stops without a model turn, so no update() would ever see the close).
+ * No wall-clock deadline exists anywhere here (E646): playback advances
+ * only on ticks the Player itself arms while unpaused.
+ */
+final class VideoPlayerScreen
+{
+    /** Probe/spawn has not answered yet. */
+    public const STATE_PREPARING = 'preparing';
+
+    /** A Player holds the band. */
+    public const STATE_READY = 'ready';
+
+    /** The build answered an error; the screen shows it until closed. */
+    public const STATE_FAILED = 'failed';
+
+    /** The blob protocols whose bytes a width clip would corrupt. */
+    private const GRAPHICS_MODES = [Mode::Sixel, Mode::Kitty, Mode::Iterm2];
+
+    /** The one live player whose children a shutdown must reap. */
+    private static ?Player $activePlayer = null;
+
+    private static bool $shutdownRegistered = false;
+
+    private function __construct(
+        public readonly string $state,
+        public readonly string $path,
+        private readonly ?Player $player,
+        public readonly Mode $mode,
+        public readonly ?string $error,
+    ) {
+    }
+
+    /** The band placeholder while the build promise runs. */
+    public static function preparing(string $path, Mode $mode): self
+    {
+        return new self(self::STATE_PREPARING, $path, null, $mode, null);
+    }
+
+    /** The screen after a Player answered the build. */
+    public static function ready(string $path, Player $player, Mode $mode): self
+    {
+        return new self(self::STATE_READY, $path, $player, $mode, null);
+    }
+
+    /** The screen after the build answered an error sentence. */
+    public static function failed(string $path, string $error, Mode $mode): self
+    {
+        return new self(self::STATE_FAILED, $path, null, $mode, $error);
+    }
+
+    public function player(): ?Player
+    {
+        return $this->player;
+    }
+
+    /**
+     * Drive the inner Player. Reel ticks and rebuilds, keystrokes the gate
+     * forwarded, and resizes are the Player's own contract; everything else
+     * — including a late PlayerReadyMsg on an already-closed screen — is a
+     * no-op. Returns the Player's Cmd verbatim so its tick cadence rides
+     * the Program, never a cadence invented here.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function update(CoreMsg $msg): array
+    {
+        if ($msg instanceof PlayerReadyMsg) {
+            if ($this->state !== self::STATE_PREPARING) {
+                // Late answer for a screen that moved on (closed, or an
+                // error already shown): the child, if any, was never
+                // adopted, so stop it HERE rather than leak the builder.
+                $msg->player?->stop();
+
+                return [$this, null];
+            }
+
+            return [$msg->player !== null
+                ? self::ready($this->path, $msg->player, $this->mode)
+                : self::failed($this->path, (string) $msg->error, $this->mode), null];
+        }
+
+        if ($this->player === null) {
+            return [$this, null];
+        }
+
+        $forwards = $msg instanceof TickMsg
+            || $msg instanceof ResizeRebuildMsg
+            || $msg instanceof WindowSizeMsg
+            || $msg instanceof \SugarCraft\Core\Msg\KeyMsg;
+
+        if (!$forwards) {
+            return [$this, null];
+        }
+
+        [$next, $cmd] = $this->player->update($msg);
+
+        return [$next instanceof Player && $next !== $this->player
+            ? new self($this->state, $this->path, $next, $this->mode, $this->error)
+            : $this, $cmd];
+    }
+
+    /**
+     * Stop playback and release the shutdown registration. Idempotent —
+     * the Player's own stop latch survives every rebuild, so a second
+     * call (close, then teardown) is free.
+     */
+    public function stop(): void
+    {
+        $this->player?->stop();
+
+        if (self::$activePlayer !== null && $this->player !== null && self::$activePlayer === $this->player) {
+            self::$activePlayer = null;
+        }
+    }
+
+    /**
+     * Claim a freshly built Player for process-lifetime safety BEFORE the
+     * "Preparing…" answer can be lost (the app may quit between the build
+     * and the message landing). One hook for the whole process; the memo
+     * always holds the newest player.
+     */
+    public static function adopt(Player $player): void
+    {
+        self::$activePlayer = $player;
+        self::registerShutdownTeardown();
+    }
+
+    /**
+     * Arm the shutdown stop once (house precedent: Bootstrap's MCP/LSP
+     * shutdown registration). PHP runs shutdown functions on every exit
+     * that is not SIGKILL — normal quit, the Ctrl+C quit chord, and a
+     * fatal — which is the coverage the frame-loop-free exits need.
+     */
+    public static function registerShutdownTeardown(): void
+    {
+        if (self::$shutdownRegistered) {
+            return;
+        }
+
+        self::$shutdownRegistered = true;
+        // A plain closure, not an arrow fn: an arrow body is a RETURN
+        // expression, and returning a void call is a compile error.
+        \register_shutdown_function(static function (): void {
+            self::stopActive();
+        });
+    }
+
+    /** Stop the adopted player if one is still live (teardown entry). */
+    public static function stopActive(): void
+    {
+        $player = self::$activePlayer;
+        self::$activePlayer = null;
+        $player?->stop();
+    }
+
+    /** Test seam: the current shutdown state of the memo. */
+    public static function hasActivePlayer(): bool
+    {
+        return self::$activePlayer !== null;
+    }
+
+    /**
+     * Whether the frame renderer may width-clip this screen's output.
+     * Graphics blobs are protocol bytes — a truncate would corrupt them —
+     * so they answer false and the renderer trusts the geometry this
+     * screen asked the Player for at open.
+     */
+    public function clipsLines(): bool
+    {
+        return !\in_array($this->mode, self::GRAPHICS_MODES, true);
+    }
+
+    /**
+     * Compose the band: placeholder, error card, or the Player's blob
+     * with the scrubber chrome — appended as a plain row on text modes,
+     * pinned to the band's bottom row with absolute cursor operations on
+     * graphics modes (the phlix law: the blob is ONE logical multi-row
+     * write, so a `"\n"` chrome would land inside row 3 of the picture,
+     * not under it).
+     */
+    public function view(string $theme, int $cols, int $rows): string
+    {
+        $name = basename($this->path);
+
+        if ($this->state === self::STATE_PREPARING) {
+            return '  preparing ' . $name . ' …'
+                . "\r\n"
+                . '  space play/pause · q close';
+        }
+
+        if ($this->state === self::STATE_FAILED) {
+            return '  cannot play ' . $name
+                . "\r\n"
+                . '  ' . (string) $this->error
+                . "\r\n"
+                . '  q closes this screen';
+        }
+
+        $player = $this->player;
+        \assert($player !== null);
+
+        $chrome = $this->chrome($cols);
+        $blob = $player->view();
+
+        if ($this->clipsLines()) {
+            return $blob . "\r\n" . $chrome;
+        }
+
+        return $blob . Ansi::cursorTo(max(1, $rows), 1) . Ansi::eraseLine() . $chrome;
+    }
+
+    /** Scrubber row, plus the control hint when the band is wide enough. */
+    private function chrome(int $cols): string
+    {
+        $player = $this->player;
+        \assert($player !== null);
+
+        $hint = VideoPlayerKeys::hint();
+        $track = $cols;
+
+        if ($cols >= strlen($hint) + 2 + Scrubber::MIN_WIDTH) {
+            $track = $cols - strlen($hint) - 2;
+        } else {
+            $hint = '';
+        }
+
+        $row = Scrubber::render($player->position(), $player->duration(), $track);
+
+        return $hint === '' ? $row : $row . '  ' . $hint;
+    }
+}
