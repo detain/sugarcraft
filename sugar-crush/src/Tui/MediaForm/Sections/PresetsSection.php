@@ -6,7 +6,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\MediaPresets;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\MultiSelect;
@@ -27,8 +29,16 @@ use SugarCraft\Forms\Field\Text;
  * overrides have nothing to move on this tab and the base early-return keeps
  * it that way.
  */
-final class PresetsSection extends RegistrySection
+final class PresetsSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const string ROW_NAME = 'preset_name';
     public const string ROW_NAMES = 'preset_names';
     public const string ROW_SAVE = 'preset_save';
@@ -40,13 +50,15 @@ final class PresetsSection extends RegistrySection
      * @param list<string> $rowKeys
      * @param array{0: string, 1: mixed}|null $pending
      */
+    protected readonly array $specs;
+
     private function __construct(
-        array $fields,
-        array $rowKeys,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
         private readonly ?MediaPresets $presets = null,
         private readonly ?array $pending = null,
     ) {
-        parent::__construct([], $fields, $rowKeys);
+        $this->specs = [];
     }
 
     public static function forDraft(?MediaPresets $presets): self
@@ -106,7 +118,7 @@ final class PresetsSection extends RegistrySection
             self::ROW_SAVE => $this->press($key, ['save', $this->nameValue()]),
             self::ROW_APPLY => $this->press($key, ['apply', $this->firstChecked()]),
             self::ROW_DELETE => $this->press($key, ['delete', $this->checked()]),
-            default => parent::accept($key, $field),
+            default => $this->registryAccept($key, $field),
         };
     }
 
@@ -122,7 +134,7 @@ final class PresetsSection extends RegistrySection
             self::ROW_NAMES => $this->namesCell(),
             // Press rows are actions, not states — no cell (the seed ♻ pair's law).
             self::ROW_SAVE, self::ROW_APPLY, self::ROW_DELETE => '',
-            default => parent::display($key),
+            default => $this->registryDisplay($key),
         };
     }
 

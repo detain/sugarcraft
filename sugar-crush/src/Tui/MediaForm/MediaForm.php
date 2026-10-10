@@ -129,7 +129,7 @@ final class MediaForm
 
         if ($displayOverrides !== null && $displayOverrides !== []) {
             $sections = array_map(
-                static fn (Section $s): Section => $s instanceof Sections\RegistrySection
+                static fn (Section $s): Section => $s instanceof FieldValuedSection
                     ? $s->withDisplayOverrides($displayOverrides)
                     : $s,
                 $sections,

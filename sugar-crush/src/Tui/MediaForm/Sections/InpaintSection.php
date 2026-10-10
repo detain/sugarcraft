@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Crush\Tui\MediaForm\Wave4Gate;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\NumberField;
@@ -29,18 +31,26 @@ use SugarCraft\Forms\Field\Slider;
  * that mask transparency is editor-only: A1111 keeps it client-side, so it
  * is a note here and NEVER a collected key.
  */
-final class InpaintSection extends RegistrySection
+final class InpaintSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const ROW_GATE_NOTE = 'inpaint_gate_note';
     public const ROW_TRANSPARENCY = 'mask_transparency_note';
 
     private function __construct(
-        array $specs,
-        array $fields,
-        array $rowKeys,
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
         private readonly bool $enabled,
     ) {
-        parent::__construct($specs, $fields, $rowKeys);
+
     }
 
     /**
@@ -81,7 +91,7 @@ final class InpaintSection extends RegistrySection
 
     public function collect(MediaRequest $draft): MediaRequest
     {
-        return $this->enabled ? $this->clearGatedOff(parent::collect($draft)) : $draft;
+        return $this->enabled ? $this->clearGatedOff($this->registryCollect($draft)) : $draft;
     }
 
     protected function visibleRowKeys(): array
@@ -91,7 +101,7 @@ final class InpaintSection extends RegistrySection
 
     public function fieldAt(int $row): ?Field
     {
-        return $this->enabled ? parent::fieldAt($row) : null;
+        return $this->enabled ? $this->registryFieldAt($row) : null;
     }
 
     protected function editableSpecs(): array
@@ -114,7 +124,7 @@ final class InpaintSection extends RegistrySection
             // The gate sentence rides the LABEL column; the cell stays empty.
             self::ROW_GATE_NOTE => '',
             self::ROW_TRANSPARENCY => Lang::t(GenFormKeys::MASK_TRANSPARENCY_NOTE),
-            default => parent::display($key),
+            default => $this->registryDisplay($key),
         };
     }
 

@@ -10,6 +10,8 @@ use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
 use SugarCraft\Crush\Tui\MediaForm\Enum\Schedulers;
 use SugarCraft\Crush\Tui\MediaForm\Enum\Samplers;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\NumberField;
@@ -40,8 +42,16 @@ use SugarCraft\Forms\Field\Slider;
  * Automatic, a KNOWN sampler prefix splits into sampler + scheduler; an
  * unknown prefix stays whole rather than inventing a sampler.
  */
-final class ParamsSection extends RegistrySection
+final class ParamsSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const ROW_RANDOMIZE = 'seed_randomize';
     public const ROW_REUSE = 'seed_reuse';
     public const ROW_LAST = 'seed_last';
@@ -52,12 +62,12 @@ final class ParamsSection extends RegistrySection
      * @param list<string> $rowKeys
      */
     protected function __construct(
-        array $specs,
-        array $fields,
-        array $rowKeys,
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
         private readonly ?int $lastSeed = null,
     ) {
-        parent::__construct($specs, $fields, $rowKeys);
+
     }
 
     /**
@@ -103,7 +113,7 @@ final class ParamsSection extends RegistrySection
 
     public function collect(MediaRequest $draft): MediaRequest
     {
-        return self::applySchedulerSplit(parent::collect($draft));
+        return self::applySchedulerSplit($this->registryCollect($draft));
     }
 
     /**
@@ -142,7 +152,7 @@ final class ParamsSection extends RegistrySection
         return match ($key) {
             self::ROW_RANDOMIZE => $this->pressRandomize(),
             self::ROW_REUSE => $this->pressReuse(),
-            default => parent::accept($key, $field),
+            default => $this->registryAccept($key, $field),
         };
     }
 
@@ -174,7 +184,7 @@ final class ParamsSection extends RegistrySection
             self::ROW_LAST => $this->lastSeed === null
                 ? Lang::t(GenFormKeys::NOT_SET)
                 : (string) $this->lastSeed,
-            default => parent::display($key),
+            default => $this->registryDisplay($key),
         };
     }
 

@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\NumberField;
@@ -33,8 +35,24 @@ use SugarCraft\Forms\Field\Slider;
  * {@see RegistrySection::clearGatedOff()} — never a stale subseed riding a
  * generation the user believes is plain.
  */
-final class SeedSection extends RegistrySection
+final class SeedSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
+
+    private function __construct(
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
+    ) {
+    }
+
     public const ROW_DISCLOSE = 'extra_disclose';
 
     public const GATED_KEYS = ['subseed', 'subseed_strength', 'seed_resize_from_w', 'seed_resize_from_h'];
@@ -74,7 +92,7 @@ final class SeedSection extends RegistrySection
 
     public function collect(MediaRequest $draft): MediaRequest
     {
-        return $this->clearGatedOff(parent::collect($draft));
+        return $this->clearGatedOff($this->registryCollect($draft));
     }
 
     protected function visibleRowKeys(): array
@@ -96,7 +114,7 @@ final class SeedSection extends RegistrySection
     {
         return $key === self::ROW_DISCLOSE
             ? $this->rebuild([self::ROW_DISCLOSE => $this->flippedGate()])
-            : parent::accept($key, $field);
+            : $this->registryAccept($key, $field);
     }
 
     protected function extraLabel(string $key): string
@@ -111,7 +129,7 @@ final class SeedSection extends RegistrySection
     {
         return $key === self::ROW_DISCLOSE
             ? self::boolCell($this->gateOpen())
-            : parent::display($key);
+            : $this->registryDisplay($key);
     }
 
     private function gateOpen(): bool

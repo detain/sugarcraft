@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\Text;
@@ -26,8 +28,18 @@ use SugarCraft\Forms\Field\Text;
  * `["Default"]` is the webui's spelling of "no style"; {@see FieldSpec}
  * folds it back to an unset wire field so the server picks.
  */
-final class PromptSection extends RegistrySection
+final class PromptSection implements Section, FieldValuedSection
 {
+    use RegistrySection;
+
+
+    private function __construct(
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
+    ) {
+    }
+
     /**
      * @param array<string, list<string>>|null $runtimeChoices reserved for the
      *        W3.6 `/styles` merge (it replaces the fixed option set); the

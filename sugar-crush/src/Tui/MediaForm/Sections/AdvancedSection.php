@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\OverrideRows;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\Input;
@@ -35,8 +37,16 @@ use SugarCraft\Forms\Field\Select;
  * overrides actually ship (a lone restore flag would ask the server to
  * revert settings nobody changed).
  */
-final class AdvancedSection extends RegistrySection
+final class AdvancedSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const ROW_NOTE = 'adv_note';
     public const ROW_ADD = 'adv_add';
     public const ROW_RESTORE = 'adv_restore';
@@ -51,14 +61,16 @@ final class AdvancedSection extends RegistrySection
     /**
      * @param array<string, mixed>|null $optionsMap the /sdapi/v1/options payload, null when undiscovered
      */
+    protected readonly array $specs;
+
     private function __construct(
-        array $fields,
-        array $rowKeys,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
         private readonly OverrideRows $model,
         private readonly ?array $optionsMap,
         private readonly bool $restore,
     ) {
-        parent::__construct([], $fields, $rowKeys);
+        $this->specs = [];
     }
 
     /**
@@ -182,7 +194,7 @@ final class AdvancedSection extends RegistrySection
             self::ROW_NOTE => Lang::t(GenFormKeys::ADVANCED_NOTE),
             self::ROW_ADD => Lang::t(GenFormKeys::ADVANCED_ADD),
             self::ROW_RESTORE => Lang::t(GenFormKeys::ADVANCED_RESTORE_AFTERWARDS),
-            default => parent::extraLabel($key),
+            default => $this->registryExtraLabel($key),
         };
     }
 

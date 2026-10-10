@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Crush\Tui\MediaForm\Wave4Gate;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
@@ -34,20 +36,28 @@ use SugarCraft\Forms\Field\Slider;
  * The §2.6 source rows (upload, batch dir, detect size, scale) wait for W4
  * image ingress — there is nothing to point them at yet.
  */
-final class ImageSection extends RegistrySection
+final class ImageSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const ROW_GATE_NOTE = 'image_gate_note';
     public const ROW_SHOW_IMAGE_CFG = 'image_show_cfg';
 
     private const CFG_KEY = 'image_cfg_scale';
 
     private function __construct(
-        array $specs,
-        array $fields,
-        array $rowKeys,
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
         private readonly bool $enabled,
     ) {
-        parent::__construct($specs, $fields, $rowKeys);
+
     }
 
     /**
@@ -93,7 +103,7 @@ final class ImageSection extends RegistrySection
         // Gate closed the feature is ABSENT, not collapsed: identity beats
         // clearGatedOff because no pre-W4 draft can carry these keys, and a
         // future one that does must not be silently nulled by a closed tab.
-        return $this->enabled ? $this->clearGatedOff(parent::collect($draft)) : $draft;
+        return $this->enabled ? $this->clearGatedOff($this->registryCollect($draft)) : $draft;
     }
 
     protected function visibleRowKeys(): array
@@ -116,7 +126,7 @@ final class ImageSection extends RegistrySection
 
     public function fieldAt(int $row): ?Field
     {
-        return $this->enabled ? parent::fieldAt($row) : null;
+        return $this->enabled ? $this->registryFieldAt($row) : null;
     }
 
     protected function editableSpecs(): array
@@ -139,7 +149,7 @@ final class ImageSection extends RegistrySection
                     ->withTitle(Lang::t(GenFormKeys::IMAGE_SHOW_CFG)),
             ]),
             self::ROW_GATE_NOTE => $this,
-            default => parent::accept($key, $field),
+            default => $this->registryAccept($key, $field),
         };
     }
 
@@ -155,7 +165,7 @@ final class ImageSection extends RegistrySection
     protected function display(string $key): string
     {
         // The gate sentence rides the LABEL column; the value cell stays empty.
-        return $key === self::ROW_GATE_NOTE ? '' : parent::display($key);
+        return $key === self::ROW_GATE_NOTE ? '' : $this->registryDisplay($key);
     }
 
     private function revealed(): bool

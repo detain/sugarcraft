@@ -31,25 +31,20 @@ use SugarCraft\Forms\Field\Text;
  * seed action pair). Rows whose key has no field — or which a subclass
  * removes from {@see editableSpecs()} — are read-only or hidden, and hidden
  * rows contribute to neither collect() nor the hydration map (W3.5 law).
+ *
+ * A TRAIT, not an abstract base, because `src/` ships no abstract class as a
+ * file's own PSR-4 symbol (the BuiltInToolCorpus policy the whole tree
+ * obeys): a using section declares this trait's three lattice properties
+ * itself — `protected readonly array $specs` (registry rows keyed by wire
+ * name, display order), `$fields` (current widgets keyed the same way) and
+ * `$rowKeys` (every row, spec keys plus section-local keys, display order) —
+ * by constructor promotion or constructor-body assignment, and implements the
+ * {@see Section} and {@see FieldValuedSection} contracts. Where a section
+ * shadows one of the plumbing methods and still needs the shared body, it
+ * calls the aliased trait copy ($this->registryCollect() and friends).
  */
-abstract class RegistrySection implements Section, FieldValuedSection
+trait RegistrySection
 {
-    /**
-     * @param array<string, FieldSpec> $specs registry rows keyed by wire key, display order
-     * @param array<string, Field> $fields current widgets keyed the same way
-     * @param list<string> $rowKeys every row (spec keys plus section-local keys) in display order
-     */
-    protected function __construct(
-        protected readonly array $specs,
-        protected readonly array $fields,
-        protected readonly array $rowKeys,
-    ) {
-    }
-
-    abstract public function key(): string;
-
-    abstract public function label(): string;
-
     public function visible(MediaFormState $state): bool
     {
         return true;

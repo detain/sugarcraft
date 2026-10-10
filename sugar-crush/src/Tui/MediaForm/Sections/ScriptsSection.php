@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tui\MediaForm\Sections;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\ScriptFields;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\Select;
@@ -42,8 +44,16 @@ use SugarCraft\Forms\Field\Select;
  * that built the widgets — they come out of the one `$descriptors` list,
  * never retyped (a mismatched title is a 422 from the server).
  */
-final class ScriptsSection extends RegistrySection
+final class ScriptsSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const ROW_NO_BACKEND = 'scripts_no_backend';
     public const ROW_SELECT = 'scripts_select';
     public const ROW_IMG2IMG_NOTE = 'scripts_img2img_note';
@@ -59,9 +69,11 @@ final class ScriptsSection extends RegistrySection
     /**
      * @param list<array{name: string, is_alwayson: bool, is_img2img: bool, args: list<array{label: string, value: mixed, minimum: float|null, maximum: float|null, step: float|null, choices: list<string>}>}>|null $descriptors
      */
-    private function __construct(array $fields, array $rowKeys, private readonly ?array $descriptors)
+    protected readonly array $specs;
+
+    private function __construct(protected readonly array $fields, protected readonly array $rowKeys, private readonly ?array $descriptors)
     {
-        parent::__construct([], $fields, $rowKeys);
+        $this->specs = [];
     }
 
     /**
@@ -229,7 +241,7 @@ final class ScriptsSection extends RegistrySection
     protected function extraLabel(string $key): string
     {
         if ($this->descriptors === null) {
-            return $key === self::ROW_NO_BACKEND ? Lang::t(GenFormKeys::SCRIPTS_NO_BACKEND) : parent::extraLabel($key);
+            return $key === self::ROW_NO_BACKEND ? Lang::t(GenFormKeys::SCRIPTS_NO_BACKEND) : $this->registryExtraLabel($key);
         }
 
         // A regex step on the row key resolves it against the descriptor
@@ -259,11 +271,11 @@ final class ScriptsSection extends RegistrySection
             $selected = $this->selectedName();
 
             return $selected === null
-                ? parent::extraLabel($key)
+                ? $this->registryExtraLabel($key)
                 : self::descriptor($this->descriptors, $selected)['args'][(int) $m[1]]['label'];
         }
 
-        return parent::extraLabel($key);
+        return $this->registryExtraLabel($key);
     }
 
     protected function display(string $key): string

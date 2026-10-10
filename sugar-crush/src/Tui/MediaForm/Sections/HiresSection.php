@@ -11,8 +11,10 @@ use SugarCraft\Crush\Tui\MediaForm\DraftContextSection;
 use SugarCraft\Crush\Tui\MediaForm\Enum\Samplers;
 use SugarCraft\Crush\Tui\MediaForm\Enum\Schedulers;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
 use SugarCraft\Crush\Tui\MediaForm\HiresMath;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\NumberField;
@@ -42,8 +44,16 @@ use SugarCraft\Forms\Field\Text;
  * over the draft MediaForm committed last — it previews the request, it is
  * never sent.
  */
-final class HiresSection extends RegistrySection implements DraftContextSection
+final class HiresSection implements Section, FieldValuedSection, DraftContextSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
     public const ROW_ENABLE = 'enable_hr';
     public const ROW_SHOW_CHECKPOINT = 'hires_show_checkpoint';
     public const ROW_SHOW_SAMPLER = 'hires_show_sampler';
@@ -82,13 +92,13 @@ final class HiresSection extends RegistrySection implements DraftContextSection
      * @param array<string, list<string>>|null $runtimeChoices
      */
     private function __construct(
-        array $specs,
-        array $fields,
-        array $rowKeys,
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
         private readonly ?MediaRequest $context = null,
         private readonly ?array $runtimeChoices = null,
     ) {
-        parent::__construct($specs, $fields, $rowKeys);
+
     }
 
     /**
@@ -136,7 +146,7 @@ final class HiresSection extends RegistrySection implements DraftContextSection
 
     public function collect(MediaRequest $draft): MediaRequest
     {
-        return $this->clearGatedOff(parent::collect($draft));
+        return $this->clearGatedOff($this->registryCollect($draft));
     }
 
     protected function visibleRowKeys(): array
@@ -176,7 +186,7 @@ final class HiresSection extends RegistrySection implements DraftContextSection
             self::ROW_SHOW_CHECKPOINT,
             self::ROW_SHOW_SAMPLER,
             self::ROW_SHOW_PROMPTS => $this->rebuild([$key => $this->flippedReveal($key)]),
-            default => parent::accept($key, $field),
+            default => $this->registryAccept($key, $field),
         };
     }
 
@@ -195,7 +205,7 @@ final class HiresSection extends RegistrySection implements DraftContextSection
     {
         return $key === self::ROW_FINAL_RES
             ? $this->finalResolutionCell()
-            : parent::display($key);
+            : $this->registryDisplay($key);
     }
 
     private function enabled(): bool

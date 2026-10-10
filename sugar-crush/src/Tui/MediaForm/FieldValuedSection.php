@@ -31,4 +31,14 @@ interface FieldValuedSection
      * @param array<string, mixed> $values
      */
     public function withFieldValues(array $values): self;
+
+    /**
+     * The section with the `ui.mediaDisplayOverrides` map folded into its
+     * lattice (crush-media W3.9): reshaped rows rebuild their widgets, hidden
+     * rows drop out of render and collection alike, and a section with no
+     * registry rows returns itself untouched.
+     *
+     * @param array<string, mixed> $overrides
+     */
+    public function withDisplayOverrides(array $overrides): self;
 }

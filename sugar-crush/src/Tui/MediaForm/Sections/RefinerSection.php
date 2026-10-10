@@ -8,7 +8,9 @@ use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Crush\Tui\MediaForm\FieldSpec;
+use SugarCraft\Crush\Tui\MediaForm\FieldValuedSection;
 use SugarCraft\Crush\Tui\MediaForm\GenFormKeys;
+use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Slider;
@@ -24,8 +26,24 @@ use SugarCraft\Forms\Field\Slider;
  * to null rather than a stale name. The switch-at row is not even rendered
  * while the group is closed.
  */
-final class RefinerSection extends RegistrySection
+final class RefinerSection implements Section, FieldValuedSection
 {
+    use RegistrySection {
+        collect as registryCollect;
+        fieldAt as registryFieldAt;
+        accept as registryAccept;
+        display as registryDisplay;
+        extraLabel as registryExtraLabel;
+    }
+
+
+    private function __construct(
+        protected readonly array $specs,
+        protected readonly array $fields,
+        protected readonly array $rowKeys,
+    ) {
+    }
+
     private const KEY_CHECKPOINT = 'refiner_checkpoint';
     private const KEY_SWITCH_AT = 'refiner_switch_at';
 
@@ -61,7 +79,7 @@ final class RefinerSection extends RegistrySection
 
     public function collect(MediaRequest $draft): MediaRequest
     {
-        return $this->clearGatedOff(parent::collect($draft));
+        return $this->clearGatedOff($this->registryCollect($draft));
     }
 
     protected function visibleRowKeys(): array
