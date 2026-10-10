@@ -34,8 +34,8 @@ final class MediaFormNarrowTest extends TestCase
 {
     private const NARROW_GOLDEN_DIR = __DIR__ . '/golden';
 
-    /** Production registration order: Prompt, Params, Extra, Hires, Refiner, Image, Inpaint. */
-    private const TAB_COUNT = 7;
+    /** Production registration order: Prompt, Params, Extra, Hires, Refiner, Image, Inpaint, Scripts. */
+    private const TAB_COUNT = 8;
 
     public function testEveryTabFitsA60x24Band(): void
     {

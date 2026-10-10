@@ -1,0 +1,24 @@
+╭─ 🎨 Generate image ──────────────────────────────────────────────────────────╮
+│  Scripts                                                                     │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ ▸ Script        None                                                         │
+│   img2img-only scripts are listed in every mode for now; mode filtering arri │
+│   img2img alternative test on                                                │
+│   Original first pass False                                                  │
+│   Threshold     0.3                                                          │
+│   outdated auto backward-compat off                                          │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ g generate · Enter edit · ↑↓ move · ←→/Tab sections · Esc close              │
+╰──────────────────────────────────────────────────────────────────────────────╯

@@ -72,10 +72,13 @@ final class MediaForm
      *  registry sections: Prompt and Params. `$runtimeChoices` is an optional
      *  {@see ChoiceFeed} map — the HTTP hop lives in the App seam, never
      *  here, so this constructor stays deterministic and network-free.
+     *  `$scriptDescriptors` is the same doctrine for W3.6: the raw
+     *  /sdapi/v1/script-info payload fetched upstream, null until supplied.
      *
      * @param array<string, list<string>>|null $runtimeChoices
+     * @param list<mixed>|null $scriptDescriptors
      */
-    public static function open(?MediaRequest $request = null, ?array $runtimeChoices = null): self
+    public static function open(?MediaRequest $request = null, ?array $runtimeChoices = null, ?array $scriptDescriptors = null): self
     {
         $draft = $request ?? MediaRequest::new();
         $sections = [
@@ -89,6 +92,10 @@ final class MediaForm
             // Scripts/Advanced and Presets/Output rows after these lines.
             Sections\ImageSection::forDraft($draft, $runtimeChoices),
             Sections\InpaintSection::forDraft($draft, $runtimeChoices),
+            // W3.6 scripts tab (descriptors from the caller; undiscovered
+            // today renders the fail-open note). Lane d appends the
+            // Presets/Output rows after these lines.
+            Sections\ScriptsSection::forDraft($draft, $scriptDescriptors),
         ];
 
         return new self($sections, $draft, MediaFormState::forSection(0, \count($sections[0]->rows())));

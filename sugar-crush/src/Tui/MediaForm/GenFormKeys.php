@@ -176,6 +176,8 @@ final class GenFormKeys
     public const string SCRIPTS_NONE = 'tui.genform.scripts.none';
     public const string SCRIPTS_NO_BACKEND = 'tui.genform.scripts.no_backend';
     public const string SCRIPTS_NOTE = 'tui.genform.scripts.note';
+    public const string SCRIPTS_SELECT = 'tui.genform.scripts.select';
+    public const string SCRIPTS_IMG2IMG_NOTE = 'tui.genform.scripts.img2img_note';
 
     // -- img2img controls (§2.6) ---------------------------------------------------------------
     public const string IMAGE_SOURCE = 'tui.genform.image.source';

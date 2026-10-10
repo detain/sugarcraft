@@ -1,5 +1,5 @@
 ╭─ 🎨 Generate image ──────────────────────────────────────╮
-│ ‹ Extra │ Hires. fix │ Refiner │ img2img │ Inpaint       │
+│ ‹ Extra │ Hires. fix │ Refiner │ img2img │ Inpaint ›     │
 │ ──────────────────────────────────────────────────────── │
 │ ▸ img2img & inpaint arrive in a later build              │
 │                                                          │

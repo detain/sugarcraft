@@ -1,0 +1,85 @@
+[
+    {
+        "name": "SD Upscale",
+        "is_alwayson": false,
+        "is_img2img": true,
+        "args": [
+            {
+                "label": "Scale factor",
+                "value": 2,
+                "minimum": 1,
+                "maximum": 4,
+                "step": 1,
+                "choices": []
+            },
+            {
+                "label": "Denoising strength",
+                "value": 0.35,
+                "minimum": 0.05,
+                "maximum": 1.0,
+                "step": 0.05,
+                "choices": []
+            }
+        ]
+    },
+    {
+        "name": "X/Y plot",
+        "is_alwayson": false,
+        "is_img2img": false,
+        "args": [
+            {
+                "label": "X type",
+                "value": "Nothing",
+                "minimum": null,
+                "maximum": null,
+                "step": null,
+                "choices": ["Nothing", "Seed", "CFG Scale"]
+            },
+            {
+                "label": "X values",
+                "value": "1,2,3",
+                "minimum": null,
+                "maximum": null,
+                "step": null,
+                "choices": []
+            },
+            {
+                "label": "Y type",
+                "value": "Nothing",
+                "minimum": null,
+                "maximum": null,
+                "step": null,
+                "choices": ["Nothing", "Seed", "CFG Scale"]
+            }
+        ]
+    },
+    {
+        "name": "img2img alternative test",
+        "is_alwayson": true,
+        "is_img2img": true,
+        "args": [
+            {
+                "label": "Original first pass",
+                "value": false,
+                "minimum": null,
+                "maximum": null,
+                "step": null,
+                "choices": []
+            },
+            {
+                "label": "Threshold",
+                "value": 0.3,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "step": 0.05,
+                "choices": []
+            }
+        ]
+    },
+    {
+        "name": "outdated auto backward-compat",
+        "is_alwayson": true,
+        "is_img2img": false,
+        "args": []
+    }
+]

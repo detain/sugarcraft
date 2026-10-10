@@ -1,5 +1,5 @@
 ╭─ 🎨 Generate image ──────────────────────────────────────────────────────────────────────────────╮
-│  Prompt │ Generation params │ Extra │ Hires. fix │ Refiner │ img2img │ Inpaint                   │
+│  Prompt │ Generation params │ Extra │ Hires. fix │ Refiner │ img2img │ Inpaint │ Scripts         │
 │ ──────────────────────────────────────────────────────────────────────────────────────────────── │
 │ ▸ Width         512                                                                              │
 │   Height        512                                                                              │
