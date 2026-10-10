@@ -122,6 +122,36 @@ final class ScriptFieldsTest extends TestCase
         $this->assertSame(0.42, ScriptFields::wireValue($edited, $arg), 'a free edit is never snapped to the server grid');
     }
 
+    public function testAnInt64TopDeclaredMaximumLandsOnASafeCeiling(): void
+    {
+        // R6-M1 caller law: a scraped descriptor may declare the int64
+        // ceiling itself. The (int)-cast of that float is UB and the -1..
+        // PHP_INT_MAX span is the shape NumberField's ctor now refuses —
+        // ScriptFields must land it on the widest representable window.
+        $arg = ['label' => 'Counter', 'value' => 7, 'minimum' => -1.0, 'maximum' => 9.3e18, 'step' => null, 'choices' => []];
+
+        $this->assertSame(ScriptFields::KIND_NUMBER, ScriptFields::kind($arg), 'no step, no lattice — the number widget owns it');
+        $field = ScriptFields::field('k', $arg, 'Counter');
+        $this->assertInstanceOf(NumberField::class, $field);
+        $this->assertSame(-1, $field->min);
+        $this->assertSame(PHP_INT_MAX - 1, $field->max, 'ceiling = PHP_INT_MAX + min — the FieldSpec discipline, derived');
+        $this->assertSame(7, $field->value(), 'the default rides the window byte-exact');
+        $this->assertSame(7, ScriptFields::wireValue($field, $arg));
+        $this->assertSame(PHP_INT_MAX - 1, $field->withValue(PHP_INT_MAX)->value(), 'an arrow past the top clamps onto the capped ceiling');
+    }
+
+    public function testBoundsBeyondInt64OnBothSidesCollapseToTheWidestRepresentableWindow(): void
+    {
+        $arg = ['label' => 'Chaos', 'value' => 7, 'minimum' => -1e30, 'maximum' => 1e30, 'step' => null, 'choices' => []];
+
+        $this->assertSame(ScriptFields::KIND_NUMBER, ScriptFields::kind($arg));
+        $field = ScriptFields::field('k', $arg, 'Chaos'); // span_overflow throw pre-cure
+        $this->assertInstanceOf(NumberField::class, $field);
+        $this->assertSame(PHP_INT_MIN, $field->min, 'each bound lands on the range edge before the span repair');
+        $this->assertSame(-1, $field->max, 'PHP_INT_MAX + PHP_INT_MIN keeps the span exactly representable');
+        $this->assertSame(-1, $field->value(), 'an out-of-window default clamps to the ceiling, honestly');
+    }
+
     // ---- section layout and the never-coexist law ---------------------------------
 
     public function testTheSelectedScriptRendersExactlyItsArgumentRows(): void

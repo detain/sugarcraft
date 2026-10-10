@@ -33,6 +33,10 @@ use SugarCraft\Forms\Field\Slider;
  * 4. integer `value` → NumberField walking 1-step integer lattice across the
  *    declared span, defaulting to ±2·10⁹ where a bound is absent (see
  *    {@see self::INT_SPAN} for why not PHP_INT_MAX on the negative side).
+ *    Declared bounds beyond representable int land on the widest
+ *    span-representable window instead ({@see self::intCeiling()}, the
+ *    R6-M1 caller law — NumberField's ctor refuses an overflowing all-int
+ *    span rather than corrupting int64 seeds through the float delegate).
  * 5. anything else → Input.
  *
  * Law behind steps 3/5 (the NO-MUTILATION ruling): both Slider and
@@ -159,6 +163,15 @@ final class ScriptFields
     public static function field(string $key, array $arg, string $label, mixed $seed = null): Field
     {
         $effective = $seed ?? $arg['value'];
+        // R6-M1 caller law: NumberField's ctor refuses an all-int geometry
+        // whose span overflows int64 and PHP's (int)-cast of a beyond-range
+        // server float is undefined — land every declared bound on the
+        // representable range, then cap the ceiling so max−min stays int
+        // (the FieldSpec PHP_INT_MAX-minus-one discipline, derived). The
+        // widget clamps its arrow walk inside the window; the server stays
+        // the validator of what is truly accepted.
+        $intMin    = self::intBound($arg['minimum'], -self::INT_SPAN);
+        $intMax    = self::intCeiling(self::intBound($arg['maximum'], self::INT_SPAN), $intMin);
 
         return match (self::kind($arg)) {
             self::KIND_SELECT => Select::new($key)
@@ -176,8 +189,8 @@ final class ScriptFields
             )->withTitle($label),
             self::KIND_NUMBER => NumberField::new(
                 $key,
-                (int) ($arg['minimum'] ?? -self::INT_SPAN),
-                (int) ($arg['maximum'] ?? self::INT_SPAN),
+                $intMin,
+                $intMax,
                 self::intStep($arg),
                 self::int($effective) ?? (int) $arg['value'],
             )->withTitle($label),
@@ -286,6 +299,42 @@ final class ScriptFields
         return is_float($step) && $step >= 1.0 && abs($step - round($step)) < self::LATTICE_EPSILON
             ? (int) round($step)
             : 1;
+    }
+
+    /**
+     * Server-declared bound → representable int: absent lands on $default,
+     * beyond-int64 lands on the range edge (an (int)-cast of 9.3e18 is
+     * undefined behaviour and must never be attempted), anything else
+     * truncates onto the whole-number lattice.
+     */
+    private static function intBound(?float $bound, int $default): int
+    {
+        if ($bound === null) {
+            return $default;
+        }
+
+        if ($bound >= (float) PHP_INT_MAX) {
+            return PHP_INT_MAX;
+        }
+
+        if ($bound <= (float) PHP_INT_MIN) {
+            return PHP_INT_MIN;
+        }
+
+        return (int) $bound;
+    }
+
+    /**
+     * Cap the ceiling so $max − $min stays int: an all-int geometry whose
+     * span exceeds PHP_INT_MAX cannot run NumberField's exact integer walk
+     * (R6-M1 — its ctor now refuses that shape). The capped ceiling
+     * PHP_INT_MAX + $min is the widest representable span and always sits
+     * strictly above $min; the server's own bound is recovered at collect
+     * because the DTO never clamps.
+     */
+    private static function intCeiling(int $max, int $min): int
+    {
+        return is_int($max - $min) ? $max : PHP_INT_MAX + $min;
     }
 
     /** A whole float rides the wire as the int the descriptor advertised. */
