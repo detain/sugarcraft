@@ -297,6 +297,14 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             return new ToolResult($callId, 'an img2img request carries no init images; attach a source or drop the field', true);
         }
 
+        // crush-media R10-m4: a mask without init_images rides a txt2img body
+        // where sdapi ignores the field entirely — the caller believes it
+        // inpainted while the server silently degrades. Refuse the dead-mask
+        // shape pre-dial, mirroring the set-but-empty refusal above.
+        if ($request->isSet('mask') && !$request->isSet('init_images')) {
+            return new ToolResult($callId, 'a mask needs init images to inpaint; attach a source or drop the mask', true);
+        }
+
         $apiKey = \is_string($settings['sd.apiKey'] ?? null) && $settings['sd.apiKey'] !== ''
             ? $settings['sd.apiKey']
             : null;

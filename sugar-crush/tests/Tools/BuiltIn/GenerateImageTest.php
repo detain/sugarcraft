@@ -321,6 +321,43 @@ final class GenerateImageTest extends TestCase
         );
     }
 
+    public function testAMaskWithoutInitImagesRefusesBeforeAnyDial(): void
+    {
+        // R10-m4: the dead-mask shape — sdapi ignores mask on txt2img, so a
+        // silent degrade is refused pre-dial instead.
+        $tool = $this->tool($this->server([], $this->envelope([self::PNG_B64], ['x'])));
+
+        $result = $tool->execute(['prompt' => 'txt2img with an orphan mask', 'mask' => 'cGFja2FnZQ==', 'id' => 'call-1']);
+
+        self::assertTrue($result->isError());
+        self::assertStringContainsString('a mask needs init images to inpaint', $result->content());
+        self::assertSame(
+            [],
+            array_values(array_filter($this->calls, static fn (array $c): bool => $c[0] === 'POST'))
+        );
+    }
+
+    public function testAMaskCarriedByARealImg2imgDraftDialsWithTheMask(): void
+    {
+        $tool = $this->tool($this->server(
+            [['state' => ['finished' => true]]],
+            $this->envelope([self::PNG_B64], ['inpainted cat']),
+        ));
+
+        $result = $tool->execute([
+            'prompt' => 'an inpainted cat',
+            'init_images' => ['cGFja2FnZQ=='],
+            'mask' => 'bWFzaw==',
+            'id' => 'call-1',
+        ]);
+
+        self::assertFalse($result->isError(), $result->content());
+        $posts = array_values(array_filter($this->calls, static fn (array $c): bool => $c[0] === 'POST'));
+        self::assertCount(1, $posts);
+        self::assertSame('/sdapi/v1/img2img', $posts[0][1]);
+        self::assertSame('bWFzaw==', $posts[0][2]['mask']);
+    }
+
     public function testServerValidationErrorBecomesAnErrorResultNotAThrow(): void
     {
         $transport = new CallableSdTransport(function (string $method, string $path) {
