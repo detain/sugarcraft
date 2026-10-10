@@ -228,6 +228,9 @@ final class GenFormKeys
     public const string ADVANCED_JSON = 'tui.genform.advanced.json';
     public const string ADVANCED_JSON_HINT = 'tui.genform.advanced.json_hint';
     public const string ADVANCED_RESTORE_AFTERWARDS = 'tui.genform.advanced.restore_afterwards';
+    public const string ADVANCED_NOTE = 'tui.genform.advanced.note';
+    public const string ADVANCED_UP = 'tui.genform.advanced.up';
+    public const string ADVANCED_DOWN = 'tui.genform.advanced.down';
 
     // -- preset + output rows (W3.9) -----------------------------------------------------------------------
     public const string PRESET_SAVE = 'tui.genform.preset.save';

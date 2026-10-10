@@ -1,0 +1,24 @@
+╭─ 🎨 Generate image ──────────────────────────────────────────────────────────╮
+│  Override settings                                                           │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ ▸ Settings typed here apply to this request only and revert after the job    │
+│   Setting       sd_model_checkpoint                                          │
+│   Type          string                                                       │
+│   Value         v1.5                                                         │
+│   Move down                                                                  │
+│   Remove row                                                                 │
+│   Setting       uni_pc_order                                                 │
+│   Type          int                                                          │
+│   Value         50                                                           │
+│   Move up                                                                    │
+│   Remove row                                                                 │
+│   Add row                                                                    │
+│   Restore settings afterwards on                                             │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ g generate · Enter edit · ↑↓ move · ←→/Tab sections · Esc close              │
+╰──────────────────────────────────────────────────────────────────────────────╯
