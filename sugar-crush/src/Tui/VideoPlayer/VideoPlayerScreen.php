@@ -8,6 +8,7 @@ use SugarCraft\Core\Msg as CoreMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Reel\Msg\ResizeRebuildMsg;
 use SugarCraft\Reel\Msg\TickMsg;
@@ -68,6 +69,9 @@ final class VideoPlayerScreen
         public readonly ?string $error,
     ) {
     }
+
+    /** This wrapper's own stop latch — the Player's stop closes its decoder every call. */
+    private bool $stopped = false;
 
     /** The band placeholder while the build promise runs. */
     public static function preparing(string $path, Mode $mode): self
@@ -145,6 +149,11 @@ final class VideoPlayerScreen
      */
     public function stop(): void
     {
+        if ($this->stopped) {
+            return;
+        }
+
+        $this->stopped = true;
         $this->player?->stop();
 
         if (self::$activePlayer !== null && $this->player !== null && self::$activePlayer === $this->player) {
@@ -160,6 +169,11 @@ final class VideoPlayerScreen
      */
     public static function adopt(Player $player): void
     {
+        // At most one adopted player is live at any instant: a superseded
+        // build whose answer never landed (slot closed under it) dies HERE
+        // rather than waiting for a hook that only knows the newest memo.
+        // Player::stop is latched, so double-stopping is free.
+        self::$activePlayer?->stop();
         self::$activePlayer = $player;
         self::registerShutdownTeardown();
     }
@@ -255,10 +269,13 @@ final class VideoPlayerScreen
         \assert($player !== null);
 
         $hint = VideoPlayerKeys::hint();
+        // The budget is in DISPLAY cells — the hint carries box glyphs and
+        // middots, whose byte length would overstate the reservation.
+        $hintCols = Width::of($hint);
         $track = $cols;
 
-        if ($cols >= strlen($hint) + 2 + Scrubber::MIN_WIDTH) {
-            $track = $cols - strlen($hint) - 2;
+        if ($cols >= $hintCols + 2 + Scrubber::MIN_WIDTH) {
+            $track = $cols - $hintCols - 2;
         } else {
             $hint = '';
         }
