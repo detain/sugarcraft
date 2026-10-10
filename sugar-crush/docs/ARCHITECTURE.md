@@ -1207,6 +1207,26 @@ reads, once-per-process latched warnings, and construction-time-only notices. A
 stderr line written after the alt screen is up lands inside a frame the renderer
 believes it owns.
 
+### The image-generation form
+
+`src/Tui/MediaForm/` is the full-band modal that gathers one image-generation
+request. It mirrors the settings editor's shape — its own frame inside
+`Tui\Renderer`, opened through a keyboard chord, a palette row and a slash
+command that all dispatch the same message, and dead while another modal holds
+the keyboard. The one-registry law lives in `FieldSpec`: every field of the
+form is declared once there, and that single table feeds the rendered sections,
+the request the form builds, the infotext projections and the preset
+round-trip, so a field cannot appear in one surface and be forgotten in
+another. `FormTabs` divides the surface into tabbed sections; `ScriptFields`
+and `OverrideRows` are dynamic — their rows are projected from script metadata
+and from a typed override map at open time rather than declared statically.
+Capabilities that the generation transport cannot serve yet are
+present-but-gated: their rows exist in the registry, but `Wave4Gate` keeps the
+sections that would surface them shut, so enabling one is a single-door change
+rather than a re-thread. Named presets and per-model display overrides are user
+data and ride the `sd.presets` and `ui.mediaDisplayOverrides` settings, written
+only through the settings layers like every other key.
+
 ---
 
 ## Dependencies
