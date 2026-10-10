@@ -119,7 +119,7 @@ async function rename(): Promise<void> {
       <button type="button" class="link" @click="rename">rename</button>
     </header>
     <p v-if="session.error" class="error" role="alert">{{ session.error }}</p>
-    <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" @load-full="loadFull">
+    <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" :session-id="id" @load-full="loadFull">
       <template #after>
         <ReasoningFold v-if="liveReasoning" :text="liveReasoning" live />
         <div v-if="liveText" class="live" data-testid="live-reply" aria-live="polite">

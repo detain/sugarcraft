@@ -12,7 +12,7 @@ import TranscriptItem from './TranscriptItem.vue'
  * `after` slot, inside the same scroller. The view follows the bottom while
  * the reader is there, and stays put once they scroll up.
  */
-const props = defineProps<{ items: Item[]; subagents?: Record<string, SubAgent>; tick?: unknown }>()
+const props = defineProps<{ items: Item[]; subagents?: Record<string, SubAgent>; tick?: unknown; sessionId?: string }>()
 const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
 
 const scroller = ref<HTMLElement | null>(null)
@@ -76,7 +76,7 @@ defineExpose({ jumpToEnd })
           :data-index="row.index"
           :style="{ transform: `translateY(${row.start}px)` }"
         >
-          <TranscriptItem v-if="items[row.index]" :item="items[row.index]!" :subagents="subagents" @load-full="(tool) => emit('loadFull', tool)" />
+          <TranscriptItem v-if="items[row.index]" :item="items[row.index]!" :subagents="subagents" :session-id="sessionId" @load-full="(tool) => emit('loadFull', tool)" />
         </div>
       </div>
       <slot name="after" />

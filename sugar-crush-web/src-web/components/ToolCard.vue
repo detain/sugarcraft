@@ -7,9 +7,10 @@ import { usePanelsStore } from '../stores/agents/panels'
 import { buildTree, foldRuns, startedBy } from '../stores/agents/tree'
 import SubAgentTree from './agents/SubAgentTree.vue'
 import DiffView from './DiffView.vue'
+import MediaCard from './MediaCard.vue'
 import ReasoningFold from './ReasoningFold.vue'
 
-const props = defineProps<{ item: ToolItem; subagents?: SubAgent[] }>()
+const props = defineProps<{ item: ToolItem; subagents?: SubAgent[]; sessionId?: string }>()
 const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
 
 // Collapsed when it succeeded, as the TUI shows it; a failure or a refusal opens.
@@ -64,6 +65,12 @@ function openAgent(id: string): void {
       <DiffView v-if="item.diff" :diff="item.diff" />
       <pre v-if="item.content !== undefined && item.content !== ''" class="output" data-testid="tool-output">{{ item.content }}</pre>
       <button v-if="item.truncated" type="button" class="more" @click="emit('loadFull', item)">Load the full output</button>
+      <!-- Artifact refs ride the event; the bytes are pulled by each card on
+           demand (Appendix C-7). Media joins after the output region. -->
+      <div v-if="item.media && item.media.length > 0" class="media" data-testid="tool-media">
+        <MediaCard v-for="artifact in item.media" :key="artifact.artifactId" :media="artifact" :session-id="sessionId" />
+        <p v-if="item.mediaTruncated" class="media-truncated" data-testid="media-truncated">Some artifacts are not listed.</p>
+      </div>
     </div>
     <SubAgentTree v-if="agentTree.length > 0" class="agents" :nodes="agentTree" compact @open="openAgent" />
   </article>
@@ -169,6 +176,17 @@ pre {
 }
 .more {
   justify-self: start;
+}
+.media {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.media-truncated {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-style: italic;
 }
 .agents {
   margin: 0 0.6rem 0.6rem;

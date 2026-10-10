@@ -5,7 +5,7 @@ import MessageMarkdown from './MessageMarkdown.vue'
 import ReasoningFold from './ReasoningFold.vue'
 import ToolCard from './ToolCard.vue'
 
-const props = defineProps<{ item: TranscriptItem; subagents?: Record<string, SubAgent> }>()
+const props = defineProps<{ item: TranscriptItem; subagents?: Record<string, SubAgent>; sessionId?: string }>()
 const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
 
 // Every run, when this call started one: the card grows the tree below its
@@ -33,7 +33,7 @@ const agents = computed(() => {
     <template v-else-if="item.kind === 'notice'">
       <p class="notice" :class="item.level">{{ item.content }}</p>
     </template>
-    <ToolCard v-else-if="item.kind === 'tool'" :item="item" :subagents="agents" @load-full="(tool) => emit('loadFull', tool)" />
+    <ToolCard v-else-if="item.kind === 'tool'" :item="item" :subagents="agents" :session-id="sessionId" @load-full="(tool) => emit('loadFull', tool)" />
   </div>
 </template>
 
