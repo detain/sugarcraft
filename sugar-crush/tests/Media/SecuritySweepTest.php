@@ -352,10 +352,11 @@ final class SecuritySweepTest extends TestCase
     }
 
     /**
-     * W3.9 secret scrub at preset save: every key matching the deny-shaped
-     * pattern is dropped before the bundle lands in settings. (The pattern
-     * does NOT cover 'authorization'/'cookie' spellings — unreachable via the
-     * current form lattice, documented as FIX-NEEDED (low) in the lane REPORT.)
+     * W3.9 secret scrub at preset save, W7 security widening: every key
+     * matching the deny-shaped pattern is dropped before the bundle lands in
+     * settings — the 'auth' stem now covers the 'authorization' and
+     * 'x-auth-*' spellings and 'cookie' joins the roster, so a hand-edited
+     * preset feed cannot smuggle a session credential into the manifest.
      */
     public function testPresetSaveScrubsWithTheDenyShapePattern(): void
     {
@@ -365,6 +366,8 @@ final class SecuritySweepTest extends TestCase
             'access_token' => 'tok-' . self::CANARY,
             'client_secret' => 'sec-1',
             'PASSWORD' => 'pw-1',
+            'authorization' => 'Bearer ' . self::CANARY,
+            'Cookie' => 'sid=' . self::CANARY,
             'seed' => 5,
             'cfg_scale' => 7,
         ]);

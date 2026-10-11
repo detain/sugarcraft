@@ -28,6 +28,9 @@ final class ClientTest extends TestCase
     protected function tearDown(): void
     {
         putenv(Client::BASE_URL_ENV);
+        putenv('CRUSH_TEST_SD_KEY');
+        putenv('CRUSH_TEST_SD_PAIR');
+        putenv('CRUSH_TEST_SD_EMPTY');
         parent::tearDown();
     }
 
@@ -325,6 +328,61 @@ final class ClientTest extends TestCase
             ['Authorization' => 'Basic ' . base64_encode('user:pass')],
             Client::authHeaders('user:pass'),
         );
+        self::assertSame(
+            ['Authorization' => 'Bearer tok3n'],
+            Client::authHeaders('tok3n'),
+        );
+    }
+
+    /**
+     * W7 security MED-2: the `sd.apiKey` doc advertises `${VAR}` expansion —
+     * authHeaders is the single header-minting choke point every media reader
+     * funnels through (Client::withBase, JobClient::configured, ImportPng), so
+     * the law lives here, mirroring ProviderFactory::resolveEnv(): env value
+     * wins, `${VAR:-default}` fills an unset/empty var, a bare unset
+     * placeholder collapses to empty means NO header is sent. Removing the
+     * expandEnvPlaceholders() call reddens this pin with a literal
+     * `${CRUSH_TEST_SD_KEY}` riding out as a Bearer value.
+     */
+    public function testAuthHeadersExpandEnvPlaceholdersLikeTheProviderLaw(): void
+    {
+        putenv('CRUSH_TEST_SD_KEY=s3cr3t-from-env');
+        putenv('CRUSH_TEST_SD_PAIR=user:pass');
+        putenv('CRUSH_TEST_SD_EMPTY=');
+
+        // Placeholder set → env value, then the normal colon/Bearer ladder.
+        self::assertSame(
+            ['Authorization' => 'Bearer s3cr3t-from-env'],
+            Client::authHeaders('${CRUSH_TEST_SD_KEY}'),
+        );
+        self::assertSame(
+            ['Authorization' => 'Basic ' . base64_encode('user:pass')],
+            Client::authHeaders('${CRUSH_TEST_SD_PAIR}'),
+        );
+        // Surrounding blanks are cosmetic around a placeholder value.
+        self::assertSame(
+            ['Authorization' => 'Bearer s3cr3t-from-env'],
+            Client::authHeaders('  ${CRUSH_TEST_SD_KEY}  '),
+        );
+        // An unset placeholder WITHOUT a default resolves to empty — no key.
+        self::assertSame([], Client::authHeaders('${CRUSH_TEST_SD_UNSET}'));
+        // …and an env var set-but-empty behaves as unset (provider-path parity).
+        self::assertSame([], Client::authHeaders('${CRUSH_TEST_SD_EMPTY}'));
+        // Default form: fills the unset, loses to a set var.
+        self::assertSame(
+            ['Authorization' => 'Bearer fallback-key'],
+            Client::authHeaders('${CRUSH_TEST_SD_UNSET:-fallback-key}'),
+        );
+        self::assertSame(
+            ['Authorization' => 'Bearer s3cr3t-from-env'],
+            Client::authHeaders('${CRUSH_TEST_SD_KEY:-fallback-key}'),
+        );
+        // Embedded placeholders expand inside surrounding literal text.
+        self::assertSame(
+            ['Authorization' => 'Bearer pre-s3cr3t-from-env-post'],
+            Client::authHeaders('pre-${CRUSH_TEST_SD_KEY}-post'),
+        );
+        // Non-placeholder literals ride out untouched.
         self::assertSame(
             ['Authorization' => 'Bearer tok3n'],
             Client::authHeaders('tok3n'),

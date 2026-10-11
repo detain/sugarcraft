@@ -57,6 +57,18 @@ final class Png
     /** Size ceiling both directions — sibling of candy-mosaic ImageSource::MAX_BYTES (64 MiB). */
     public const MAX_BYTES = 67_108_864;
 
+    /**
+     * Text-payload ceiling for ONE tEXt/iTXt chunk, enforced in both
+     * directions (W7 security MED-1). Generation parameters are KB-scale
+     * prose — A1111 prompts and settings never approach even a tenth of
+     * this — so 1 MiB is orders of magnitude of honest headroom while
+     * capping the DEFLATE ratio-bomb: a hostile server's few-KB compressed
+     * iTXt could otherwise inflate unboundedly into memory. The reader
+     * refuses oversized text with null (fail-null law), the writer refuses
+     * it loudly, so no file this class emits is one its reader rejects.
+     */
+    public const MAX_TEXT_BYTES = 1_048_576;
+
     /** A1111 default `pnginfo_section_name` (§3.5): the full parameters block. */
     public const KEYWORD_PARAMETERS = 'parameters';
 
@@ -86,8 +98,10 @@ final class Png
     /**
      * Extract the text stored under `$keyword`, or null for ANY unfavourable
      * shape: not a PNG, oversized, truncated tail, CRC-mismatched chunk,
-     * malformed text chunk, compressed iTXt that will not inflate, or simply
-     * absent keyword. Never throws (reader resilience law).
+     * malformed text chunk, compressed iTXt that will not inflate (including
+     * one that would inflate past {@see MAX_TEXT_BYTES}), a text payload over
+     * that ceiling, or simply absent keyword. Never throws (reader resilience
+     * law).
      */
     public static function readText(string $pngBytes, string $keyword = self::KEYWORD_PARAMETERS): ?string
     {
@@ -129,8 +143,9 @@ final class Png
      *
      * @throws InvalidArgumentException on non-PNG input, > 64 MiB input,
      *                                  damaged framing/CRC, an illegal
-     *                                  keyword, NUL bytes in the text, or a
-     *                                  produced file over the 64 MiB cap
+     *                                  keyword, NUL bytes in the text, text
+     *                                  over the 1 MiB ceiling, or a produced
+     *                                  file over the 64 MiB cap
      */
     public static function writeText(string $pngBytes, string $keyword, string $text, ?string &$strategy = null): string
     {
@@ -140,6 +155,9 @@ final class Png
         }
         if (str_contains($text, "\x00")) {
             throw new InvalidArgumentException('PNG text-chunk payload may not contain NUL bytes.');
+        }
+        if (strlen($text) > self::MAX_TEXT_BYTES) {
+            throw new InvalidArgumentException('PNG text-chunk payload exceeds the 1 MiB text ceiling.');
         }
         $strategy = self::strategyFor($text);
         $replacement = self::chunk($strategy, $keyword . "\x00" . ($strategy === self::STRATEGY_TEXT
@@ -338,7 +356,9 @@ final class Png
         if ($type === 'tEXt') {
             $text = substr($data, $nul + 1);
 
-            return str_contains($text, "\x00") ? null : ['keyword' => $keyword, 'text' => $text];
+            return strlen($text) > self::MAX_TEXT_BYTES || str_contains($text, "\x00")
+                ? null
+                : ['keyword' => $keyword, 'text' => $text];
         }
         if (strlen($data) < $nul + 4) {
             return null;
@@ -358,14 +378,19 @@ final class Png
         }
         $text = substr($data, $transEnd + 1);
         if ($compFlag === 1) {
-            $inflated = @gzuncompress($text);
+            // max_length caps the DEFLATE ratio-bomb at the text ceiling: a
+            // stream expanding past MAX_TEXT_BYTES returns false (W7 MED-1),
+            // so a hostile server's few-KB chunk can never mint hundreds of MB.
+            $inflated = @gzuncompress($text, self::MAX_TEXT_BYTES);
             if ($inflated === false) {
                 return null;
             }
             $text = $inflated;
         }
 
-        return str_contains($text, "\x00") ? null : ['keyword' => $keyword, 'text' => $text];
+        return strlen($text) > self::MAX_TEXT_BYTES || str_contains($text, "\x00")
+            ? null
+            : ['keyword' => $keyword, 'text' => $text];
     }
 
     /** Frame a payload as length+type+data+crc(type.data) — the PNG spec §5.3 law. */

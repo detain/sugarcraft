@@ -33,8 +33,16 @@ final class MediaPresets
     /** Every bundle this build can read; a newer stamp is a loud refusal. */
     public const int PRESET_VERSION = 1;
 
-    /** Value keys stripped from every saved bundle (the secret scrub). */
-    public const string SECRET_KEY_PATTERN = '/api|key|token|secret|password/i';
+    /**
+     * Value keys stripped from every saved bundle (the secret scrub).
+     * W7 security (low): widened with `auth` — which also spells
+     * `authorization`, `x-auth-token`, the header names an exfiltration
+     * bundle would wear — and `cookie`, the session-credential shape the
+     * original deny list missed. Field names in the generation lattice
+     * (steps, cfg, sampler, …) contain neither stem, so the widening costs
+     * no false drops.
+     */
+    public const string SECRET_KEY_PATTERN = '/api|key|token|secret|password|auth|cookie/i';
 
     /** Status line when a press arrives after the store failed to parse. */
     public const string STORE_UNAVAILABLE = 'preset store unavailable: sd.presets did not parse when the form opened';

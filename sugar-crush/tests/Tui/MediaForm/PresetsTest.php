@@ -72,6 +72,8 @@ final class PresetsTest extends TestCase
             'token' => 'y',
             'secret_thing' => 'z',
             'password' => 'w',
+            'authorization' => 'Bearer zz',
+            'Cookie' => 'sid=zz',
             'model_name' => 'v1-5-pruned.safetensors',
         ]);
 

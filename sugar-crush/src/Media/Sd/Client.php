@@ -132,6 +132,17 @@ final class Client
      * carrying a colon is split as credentials; a bare token travels as
      * Bearer, the shape fronting proxies use.
      *
+     * `${VAR}` placeholders resolve FIRST (W7 security MED-2): this is the
+     * single point where a configured media key materialises into a wire
+     * header — every reader (GenerateImage, GenerateVideo via JobClient,
+     * ImportPng, choice feeds) funnels through here — so the expansion the
+     * `sd.apiKey` settings doc advertises is enforced exactly once. The law
+     * mirrors Providers/ProviderFactory.php resolveEnv() (:403): `${VAR}` and
+     * `${VAR:-default}` read the environment, an unset placeholder without a
+     * default resolves to the empty string — which, trimmed, means NO header
+     * is sent. A literal `${SD_API_KEY}` can therefore never ride out as a
+     * Bearer value.
+     *
      * @return array<string, string>
      */
     public static function authHeaders(?string $apiKey): array
@@ -140,13 +151,42 @@ final class Client
             return [];
         }
 
-        $key = trim($apiKey);
+        $key = trim(self::expandEnvPlaceholders($apiKey));
+
+        if ($key === '') {
+            return [];
+        }
 
         if (str_contains($key, ':')) {
             return ['Authorization' => 'Basic ' . base64_encode($key)];
         }
 
         return ['Authorization' => 'Bearer ' . $key];
+    }
+
+    /**
+     * Substitutes every `${VAR}` / `${VAR:-default}` in the value with its
+     * environment, unset-and-defaultless collapsing to ''. Semantics and
+     * pattern are the deliberate twin of ProviderFactory::resolveEnv() — the
+     * two paths must keep resolving placeholders identically.
+     */
+    private static function expandEnvPlaceholders(string $value): string
+    {
+        $expanded = preg_replace_callback(
+            '/\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}/',
+            static function (array $matches): string {
+                $envValue = getenv($matches[1]);
+
+                if ($envValue === false || $envValue === '') {
+                    return $matches[2] ?? '';
+                }
+
+                return $envValue;
+            },
+            $value,
+        );
+
+        return $expanded ?? $value;
     }
 
     // ---------------------------------------------------------------- generate

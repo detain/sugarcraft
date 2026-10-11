@@ -224,14 +224,84 @@ final class PngTest extends TestCase
 
     public function testProducedOutputBeyondCeilingIsRefused(): void
     {
-        // A PNG just under the cap plus a > cap payload: the rebuild must refuse to emit it.
+        // The 64 MiB OUTPUT branch stays reachable under the 1 MiB text
+        // ceiling: a container already near the cap (big ancillary chunk)
+        // plus small legal text must still refuse to emit an oversized file.
         $base = self::bytes();
-        $headroom = Png::MAX_BYTES - strlen($base) - 64;
-        self::assertGreaterThan(0, $headroom);
-        $text = str_repeat('x', $headroom + 1024);
+        $pad = Png::MAX_BYTES - strlen($base) - 12 - 1024;
+        self::assertGreaterThan(0, $pad);
+        $padded = self::withTextChunks($base, [self::chunkBytes('prIv', str_repeat("\x00", $pad))]);
+        self::assertLessThanOrEqual(Png::MAX_BYTES, strlen($padded));
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('exceed the 64 MiB ceiling');
-        Png::writeText($base, 'parameters', $text);
+        Png::writeText($padded, 'parameters', str_repeat('x', 4096));
+    }
+
+    // ---------------------------------------------------------------- W7 MED-1 ceiling
+
+    public function testCompressedITxtExpandingBeyondTheTextCeilingRefusesNull(): void
+    {
+        // Ratio bomb (untrusted server PNG): a few-KB deflated stream whose
+        // expansion exceeds MAX_TEXT_BYTES must refuse to a null. Payload is
+        // NUL-free 'A' filler so the refusal cannot ride the NUL check by
+        // accident. Note the verdict alone does NOT prove the max_length
+        // argument is carried — dropping it inflates fully and the shared
+        // oversized-strlen guard reaches the same null — so the allocation
+        // bound itself is pinned structurally by the call-site census below.
+        // Deleting the `=== false` branch here reddens THIS pin (TypeError on
+        // strlen(false)), which is the discrimination this test owns.
+        $bomb = gzcompress(str_repeat('A', 8 * 1024 * 1024), 9);
+        self::assertLessThan(64 * 1024, strlen($bomb)); // the point: tiny on disk
+        $png = self::withTextChunks(self::bytes(), [
+            self::chunkBytes('iTXt', "parameters\x00" . chr(1) . chr(0) . "\x00\x00" . $bomb),
+        ]);
+        self::assertNull(Png::readText($png));
+    }
+
+    public function testTheInflateCapIsCarriedAtTheGzuncompressCallSite(): void
+    {
+        // MED-1's real law is the ALLOCATION bound, not just the verdict: an
+        // uncapped inflate of a hostile chunk returns the same null (caught
+        // downstream) only after minting the full bomb in RAM. Result-level
+        // tests cannot separate cap-present from cap-absent, so this source
+        // slice pins the argument at the call site — drop it from
+        // decodeTextChunk() and this pin reddens.
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Media/Png.php');
+        self::assertSame(
+            1,
+            substr_count($src, 'gzuncompress($text, self::MAX_TEXT_BYTES)'),
+            'the iTXt inflate must carry MAX_TEXT_BYTES as its max_length argument',
+        );
+    }
+
+    public function testRawTextChunkBeyondTheTextCeilingRefusesNull(): void
+    {
+        // Same ceiling on the uncompressed arm: a legal-frame 2 MiB tEXt in a
+        // legal 64 MiB container is oversized TEXT, not a legal stamp.
+        $png = self::withTextChunks(self::bytes(), [
+            self::chunkBytes('tEXt', "parameters\x00" . str_repeat('A', Png::MAX_TEXT_BYTES + 1)),
+        ]);
+        self::assertNull(Png::readText($png));
+    }
+
+    public function testTextExactlyAtTheCeilingRoundTripsThroughITxt(): void
+    {
+        // Honest-headroom edge: MAX_TEXT_BYTES of CJK (compressed iTXt arm,
+        // inflated size lands exactly on the ceiling) must still read back
+        // byte-identical — the cap refuses OVERSIZED, not every big stamp.
+        $text = str_repeat('猫', (int) ((Png::MAX_TEXT_BYTES - 1) / 3)) . 'a';
+        self::assertSame(Png::MAX_TEXT_BYTES, strlen($text));
+        $strategy = null;
+        $out = Png::writeText(self::bytes(), 'parameters', $text, $strategy);
+        self::assertSame(Png::STRATEGY_ITXT, $strategy);
+        self::assertSame($text, Png::readText($out));
+    }
+
+    public function testWriterRefusesTextBeyondTheCeiling(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('1 MiB text ceiling');
+        Png::writeText(self::bytes(), 'parameters', str_repeat('x', Png::MAX_TEXT_BYTES + 1));
     }
 
     public function testSetInfotextStampsParametersAndSyncsAnExistingPromptChunk(): void
