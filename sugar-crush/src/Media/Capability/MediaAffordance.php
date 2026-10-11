@@ -17,7 +17,9 @@ use SugarCraft\Crush\Providers\ProviderFactory;
  * probe", refreshed by a boot-time config read with no probe on the serve
  * boot path (:844) — so every input here is a setting or a static door,
  * never a socket. Fail-open means the advertisement can never throw and can
- * never hide the tools: an unreadable config answers flags-off, and the
+ * never hide the tools: a config that cannot be read contributes no keys, so
+ * the answer is whatever the environment still supports (an env base-URL
+ * keeps image=true even over a torn config), and the
  * runtime refusal with its pointed message stays the tools' own job
  * ({@see \SugarCraft\Crush\Tools\BuiltIn\GenerateImage::capabilityRefusal()}).
  *
