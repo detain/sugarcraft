@@ -146,6 +146,21 @@ function obj(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
+/**
+ * The `media` list a snapshot row's finished-call entry carries (W7 fold,
+ * R16(a) — the same refs `tool.finished` stamped, derived server-side by one
+ * builder). Absent or malformed stays absent: never a fabricated empty list,
+ * so a pre-media row hydrates exactly as it did before the field existed.
+ */
+function refsFromRow(value: unknown): MediaRef[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const refs = value.filter(
+    (entry): entry is MediaRef => typeof entry === 'object' && entry !== null
+      && typeof (entry as Record<string, unknown>).artifactId === 'string',
+  )
+  return refs.length > 0 ? refs : undefined
+}
+
 /** The transcript items one saved row shows (none for a hidden harness row). */
 export function itemsFromRow(row: Row, index: number): TranscriptItem[] {
   if (row.userVisible === false) return []
@@ -198,6 +213,11 @@ export function itemsFromRow(row: Row, index: number): TranscriptItem[] {
         diff: str(result.diff) || undefined,
         durationMs: typeof result.durationMs === 'number' ? result.durationMs : undefined,
         denial: denial ? { kind: denial, reason: error } : undefined,
+        // W7 snapshot fold (R16(a)): a reload takes media from the row's refs,
+        // the same list the live `tool.finished` frame carried. Absent stays
+        // absent — pre-media rows hydrate exactly as they did before.
+        media: refsFromRow(result.media),
+        mediaTruncated: result.mediaTruncated === true ? true : undefined,
         reasoning: n === 0 ? reasoning : undefined,
       }
     })

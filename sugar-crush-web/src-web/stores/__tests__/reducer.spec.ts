@@ -93,6 +93,35 @@ describe('reducer: media refs (W6.3)', () => {
     expect(tools(state)[0]?.media).toEqual([ref])
     expect(tools(state)[0]?.mediaTruncated).toBeUndefined()
   })
+
+  // W7 fold (R16(a)): the reload path. A snapshot row's finished call now
+  // carries the same ref list the live event stamped (one server-side
+  // builder), and hydration must land it on the ToolItem unchanged.
+  it('a snapshot row carries its finished call media refs onto the item', () => {
+    const [item] = itemsFromRow({
+      role: 'assistant',
+      content: 'saved',
+      toolResults: [{ name: 'GenerateImage', result: 'ok', id: 'g1', media: [ref, second], mediaTruncated: true }],
+    }, 0) as ToolItem[]
+    expect(item).toMatchObject({ status: 'done', media: [ref, second], mediaTruncated: true })
+  })
+
+  it('a snapshot row without media fabricates nothing, and junk refs are refused', () => {
+    const [plain] = itemsFromRow({ role: 'assistant', content: 'x', toolResults: [{ name: 'Bash', result: 'ok', id: 'c' }] }, 0) as ToolItem[]
+    expect(plain?.media).toBeUndefined()
+    expect(plain?.mediaTruncated).toBeUndefined()
+
+    // A list of entries without an artifactId is not refs; treat it as absent
+    // rather than handing MediaCard an object it cannot fetch by.
+    const [junk] = itemsFromRow({
+      role: 'assistant',
+      content: 'x',
+      toolResults: [{ name: 'Bash', result: 'ok', id: 'c', media: [{ nope: 1 }], mediaTruncated: 'yes' }],
+    }, 0) as ToolItem[]
+    expect(junk?.media).toBeUndefined()
+    // The flag keeps the strict-true law: a non-true value stays undefined.
+    expect(junk?.mediaTruncated).toBeUndefined()
+  })
 })
 
 describe('reducer: deltas', () => {

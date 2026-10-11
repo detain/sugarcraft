@@ -174,14 +174,18 @@ test('a second tab streams the same card live and the journal replays its media 
   }
 
   // A tab opening after completion catches up from the snapshot (the web
-  // client subscribes with no cursor on purpose): the durable transcript —
-  // the tool row and its artifact path — is there, while the media arm rides
-  // only event replay (the disclosed W6.4 seam). The journal itself is the
-  // durable record, asserted next over RPC:
+  // client subscribes with no cursor on purpose). W7 closed the seam this
+  // leg used to narrate (R16(a)): the snapshot row now carries the very same
+  // media refs `tool.finished` stamped, so the late tab paints the card from
+  // the row alone — no event replay involved. The journal stays byte-clean:
+  // asserted below over RPC:
   const late = await context.newPage()
   await late.goto(`${server.baseURL}/#/s/${id}`)
   await expect(late.getByTestId('tool-card').filter({ hasText: 'GenerateImage' })).toBeVisible()
   await expect(late.locator('main')).toContainText('Generated 1 image')
+  await expandToolCard(late)
+  await expect(late.getByTestId('media-card')).toHaveAttribute('data-phase', 'ready')
+  await expect(late.getByTestId('media-card').locator('img')).toHaveAttribute('src', /^blob:/)
 
   // And the same EventEnvelope replay an RPC client sees names the same artifact.
   const replay = await RpcClient.connect(server)
@@ -191,6 +195,46 @@ test('a second tab streams the same card live and the journal replays its media 
   expect(JSON.stringify(replayed.data)).not.toContain(TINY_PNG_BASE64)
 
   replay.close()
+  rpc.close()
+})
+
+test('a reload repaints the MediaCard from the snapshot row alone (R16(a))', async ({ page }) => {
+  const rpc = await RpcClient.connect(server)
+  const id = await bypassSession(rpc, 'media-reload')
+  await rpc.call('session.subscribe', { sessionId: id })
+  await openApp(page, server, `/s/${id}`)
+
+  await rpc.call('session.send', { sessionId: id, text: generateTurn('dusk after rain') })
+  const finished = await rpc.waitFor((e) => e.sessionId === id && e.type === 'tool.finished')
+  const artifactId = String((finished.data.media as MediaRow[])[0]?.artifactId)
+  await expandToolCard(page)
+  await expect(page.getByTestId('media-card')).toHaveAttribute('data-phase', 'ready')
+
+  // The wire truth of the fold: a cursor-less subscribe is answered by the
+  // snapshot, and that snapshot's row now names the artifact — refs only,
+  // never the PNG the journal refused to carry.
+  const reader = await RpcClient.connect(server)
+  const subscription = await reader.call<{ snapshot?: { messages?: Record<string, unknown>[] } }>(
+    'session.subscribe', { sessionId: id },
+  )
+  const rows = subscription.snapshot?.messages ?? []
+  const mediaEntries = rows
+    .flatMap((row) => Array.isArray(row.toolResults) ? row.toolResults : [])
+    .map((entry) => (entry as Record<string, unknown>).media)
+    .filter((media): media is MediaRow[] => Array.isArray(media))
+  expect(mediaEntries.flatMap((refs) => refs.map((ref) => ref.artifactId))).toContain(artifactId)
+  expect(JSON.stringify(subscription)).not.toContain(TINY_PNG_BASE64)
+  reader.close()
+
+  // The UX the finding named: refresh drops nothing. The reloaded client has
+  // seen no events at all — everything it paints arrives in the snapshot.
+  await page.reload()
+  await expect(page.getByTestId('session-view')).toHaveAttribute('data-phase', 'live')
+  await expandToolCard(page)
+  await expect(page.getByTestId('tool-media')).toBeVisible()
+  await expect(page.getByTestId('media-card')).toHaveAttribute('data-phase', 'ready')
+  await expect(page.getByTestId('media-card').locator('img')).toHaveAttribute('src', /^blob:/)
+
   rpc.close()
 })
 
