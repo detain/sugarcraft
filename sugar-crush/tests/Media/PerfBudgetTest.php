@@ -225,10 +225,20 @@ final class PerfBudgetTest extends TestCase
         $this->assertSame(4, $a->visibleCalls + $b->visibleCalls, 'a full frame filters visibility exactly twice');
     }
 
-    // ─────────────────────────── wall-clock: 20x-headroom ceilings ───────────────────────────
+    // ─────────────────────── wall-clock ceilings: bench-gated only ───────────────────────
 
+    /**
+     * The five hot-path µs/op ceilings measure a cost, and a cost number on
+     * a loaded CI runner is noise the suite must not trade green for
+     * (plan :916: no wall-clock assertions in CI; R21-m1). They therefore
+     * run only when SUGARCRUSH_PERF_BENCH=1 arms them, mirroring the
+     * env-conditional shape of the live sglang smoke; the default shape
+     * keeps every fixture and one correctness smoke per leg, so the
+     * assertion figure is identical either way.
+     */
     public function testTheMediaHotPathsStayInsideTheirGenerousBudgets(): void
     {
+        $bench = getenv('SUGARCRUSH_PERF_BENCH') === '1';
         $infotext = self::perfFullInfotext();
         $params = GenerationParams::new()
             ->withSteps(28)
@@ -238,12 +248,20 @@ final class PerfBudgetTest extends TestCase
             ->withHeight(512);
 
         // parse: measured 36 µs/op → ceiling 900 µs (25x)
-        $perOp = self::perfMicrosecondsPerOp(static fn () => Infotext::parse($infotext), 400);
-        $this->assertLessThan(900.0, $perOp, "Infotext::parse costs {$perOp} µs/op");
+        if ($bench) {
+            $perOp = self::perfMicrosecondsPerOp(static fn () => Infotext::parse($infotext), 400);
+            $this->assertLessThan(900.0, $perOp, "Infotext::parse costs {$perOp} µs/op");
+        } else {
+            $this->assertSame('28', Infotext::parse($infotext)['Steps'] ?? null);
+        }
 
         // emit: measured 79 µs/op → ceiling 2400 µs (30x)
-        $perOp = self::perfMicrosecondsPerOp(static fn () => Infotext::emit($params, [], self::PROMPT), 150);
-        $this->assertLessThan(2400.0, $perOp, "Infotext::emit costs {$perOp} µs/op");
+        if ($bench) {
+            $perOp = self::perfMicrosecondsPerOp(static fn () => Infotext::emit($params, [], self::PROMPT), 150);
+            $this->assertLessThan(2400.0, $perOp, "Infotext::emit costs {$perOp} µs/op");
+        } else {
+            $this->assertStringContainsString('Steps: 28', Infotext::emit($params, [], self::PROMPT));
+        }
 
         // Response::generation over an 8-image grid: measured 74 µs/op → ceiling 2000 µs
         $result = SdTransportResult::new(200, json_encode([
@@ -252,21 +270,33 @@ final class PerfBudgetTest extends TestCase
             'infotexts' => array_fill(0, 8, $infotext),
             'all_seeds' => [1, 2, 3, 4, 5, 6, 7, 8],
         ], JSON_THROW_ON_ERROR), 'application/json');
-        $perOp = self::perfMicrosecondsPerOp(static fn () => Response::generation($result, 'generation'), 150);
-        $this->assertLessThan(2000.0, $perOp, "Response::generation(8) costs {$perOp} µs/op");
+        if ($bench) {
+            $perOp = self::perfMicrosecondsPerOp(static fn () => Response::generation($result, 'generation'), 150);
+            $this->assertLessThan(2000.0, $perOp, "Response::generation(8) costs {$perOp} µs/op");
+        } else {
+            $this->assertCount(8, Response::generation($result, 'generation')->artifacts());
+        }
 
         // Png::readText on a small stamped file: measured ~14 µs/op → ceiling 600 µs
         $small = Png::writeText(self::perfBigPngBytes(fillerCount: 0), 'parameters', $infotext);
-        $perOp = self::perfMicrosecondsPerOp(static fn () => Png::readText($small), 400);
-        $this->assertLessThan(600.0, $perOp, "Png::readText(small) costs {$perOp} µs/op");
+        if ($bench) {
+            $perOp = self::perfMicrosecondsPerOp(static fn () => Png::readText($small), 400);
+            $this->assertLessThan(600.0, $perOp, "Png::readText(small) costs {$perOp} µs/op");
+        } else {
+            $this->assertStringContainsString('Steps: 28', (string) Png::readText($small));
+        }
 
         // MediaForm full-registry view at 60x24: measured 1.0 ms/op → ceiling 30 ms (30x)
         $form = MediaForm::open(MediaRequest::new()->fromArray([
             'prompt' => 'a lighthouse at dawn', 'steps' => 25, 'cfg_scale' => 7, 'seed' => 42,
         ]));
         $theme = Theme::default();
-        $perOp = self::perfMicrosecondsPerOp(static fn () => $form->view($theme, 60, 24), 20);
-        $this->assertLessThan(30000.0, $perOp, "MediaForm::view costs {$perOp} µs/op");
+        if ($bench) {
+            $perOp = self::perfMicrosecondsPerOp(static fn () => $form->view($theme, 60, 24), 20);
+            $this->assertLessThan(30000.0, $perOp, "MediaForm::view costs {$perOp} µs/op");
+        } else {
+            $this->assertIsString($form->view($theme, 60, 24));
+        }
     }
 
     // ─────────────────────────── helpers ───────────────────────────
