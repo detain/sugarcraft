@@ -595,6 +595,11 @@ final class VhsTapeContractTest extends TestCase
             . 'indicator nor the row it toggles to is on the frame at all. '
             . '117x20 is the first grid where `… 1 line hidden (ctrl+o)` gives '
             . 'way to `Applied 1 hunk to src/Tui/TerminalBackground.php`'],
+        'media-form.tape' => [640, 31,
+            'every form beat paints a one-line caption above a 30-row '
+            . 'MediaForm frame — the script sizes view() to the grid, so a '
+            . 'shorter Set Height would clip the bottom border row off the '
+            . 'screen mid-recording'],
         'permission.tape' => [640, 15,
             'the modal and the post-refusal transcript both render whole at '
             . '117x15, the smallest measured grid'],
@@ -902,14 +907,14 @@ final class VhsTapeContractTest extends TestCase
             }
         }
 
-        // Nine: one `is a …x… grid` sentence per tape, plus the four probe
+        // Ten: one `is a …x… grid` sentence per tape, plus the four probe
         // results cli.tape lists. A header that stops citing its grid takes its
         // half of the cross-check with it, so the roster is pinned like the
         // tape roster is.
         self::assertCount(
-            9,
+            10,
             $cited,
-            'the tape headers between them cite nine measured grids — one per tape, plus the '
+            'the tape headers between them cite ten measured grids — one per tape, plus the '
             . 'four `stty size` results cli.tape lists. Fewer means a header stopped saying '
             . 'which grid it was checked at, which is the drift this test exists to catch',
         );
