@@ -181,6 +181,14 @@ final class GuzzleTransportTest extends TestCase
         );
         self::assertStringNotContainsString("'timeout' =>", $source);
         self::assertStringNotContainsString('usleep', $source);
+        // R3 (W7 ledger): the regex above is a contains-match — a SECOND
+        // unconditional $options['timeout'] write elsewhere would stay green
+        // under it. Census the literal: exactly one write site, the guarded one.
+        self::assertSame(
+            1,
+            substr_count($source, "\$options['timeout']"),
+            "exactly one '\$options[timeout]' write may exist in the transport",
+        );
     }
 
     public function testBudgetFlowsIntoGuzzleOptionsOnlyWhenSupplied(): void
