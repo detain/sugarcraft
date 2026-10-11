@@ -63,11 +63,12 @@ use SugarCraft\Crush\Tools\ToolResult;
  * fixture-era default (the one contract recorded off a live server, W0.1);
  * a `mediaKinds` roster naming kinds without `video` is refused; an
  * unresolvable base URL is refused by {@see JobClient::configured()} before
- * it dials. All produce plain error results and ZERO requests. LOUD
- * RESIDUAL: skynet2's live SGLang-Diffusion front accepts a multipart form
- * while this client posts JSON — submitting against it today surfaces as a
- * server-side error until the W7.7 adapter widening lands. That is an
- * honest transport failure, not a silent degradation.
+ * it dials. All produce plain error results and ZERO requests. The W5-era
+ * LOUD RESIDUAL — this client posting JSON while the live sglang front takes
+ * a multipart form — is CLOSED: the W7 adapter posts form fields
+ * ({@see JobClient::submit}), and the param names arrive in the contract's
+ * own vocabulary (num_inference_steps, guidance_scale(_2), input_reference,
+ * size), so the wire shape matches the W0 openapi record.
  *
  * CANCELLATION. Like the image sibling, a call cancelled while queued never
  * dials. Unlike its synchronous sibling, this wire IS interruptible
@@ -244,7 +245,7 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
                 'cfg' => ['type' => 'number', 'description' => 'Prompt adherence; high values burn in artefacts'],
                 'cfg2' => ['type' => 'number', 'description' => 'Second guidance scale for dual-CFG dialects (ignored otherwise)'],
                 'seed' => ['type' => 'integer', 'description' => 'Exact seed to reproduce a prior render, or -1 for a fresh draw'],
-                'motion' => ['type' => 'number', 'description' => 'Movement strength 0-1, mapped per model mechanism by the server'],
+                'motion' => ['type' => 'number', 'description' => 'Movement strength 0-1; carried as an opaque field — dialects with a motion mechanism map it, sglang Wan exposes none and ignores it'],
                 'first_frame_image' => [
                     'type' => 'string',
                     'description' => 'Image-to-video seed: path to the first frame (v1 supports first-frame only)',

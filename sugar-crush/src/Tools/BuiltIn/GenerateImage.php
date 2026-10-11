@@ -59,13 +59,23 @@ use SugarCraft\Crush\Tools\ToolResult;
  * When `save_to_disk` set, the server kept its own outdir copy too — the
  * result says so, honestly, because the wire enumerates nothing back (§4.2).
  *
- * CAPABILITY GATE FIRST (binding ruling C-1, sdapi-implemented-first). Before
- * any dial: a configured `mediaFamily` outside the implemented set (e.g.
- * `sglang-diffusion`, which discovery can detect but generation does not yet
- * speak) is refused by name, a `mediaKinds` roster that names kinds but omits
- * `image` is refused, and an unresolvable base URL (no `sd.baseUrl`, no env
- * override, no `mediaBaseUrl`) is refused by {@see Client::configured()}'s
- * protocol error — all three produce a plain error result and ZERO requests.
+ * CAPABILITY GATE FIRST (binding ruling C-1, sdapi-implemented-first, W7
+ * widened). Before any dial: a configured `mediaFamily` outside the
+ * implemented set (e.g. `comfyui`, which discovery can detect but generation
+ * does not yet speak) is refused by name, a `mediaKinds` roster that names
+ * kinds but omits `image` is refused, and an unresolvable base URL (no
+ * `sd.baseUrl`, no env override, no `mediaBaseUrl`) is refused by
+ * {@see Client::configured()}'s protocol error — all three produce a plain
+ * error result and ZERO requests.
+ *
+ * SGLANG DIALECT (W7, the C-1 flip). With `mediaFamily=sglang-diffusion` the
+ * draft travels the OpenAI-style `/v1/images` wire instead: sdapi-only knobs
+ * are refused pre-dial by name ({@see Client::sglangImageRefusals}), cfg_scale
+ * rides `guidance_scale`, steps ride `num_inference_steps`, and a draft with
+ * init_images takes the multipart edits route. This dialect exposes no
+ * progress route, so NO ProgressLoop poll runs here — a first-poll 404 on
+ * /sdapi/v1/progress would kill the render before its POST lands — beats fire
+ * around the single blocking POST and mid-render previews are honestly absent.
  *
  * HEARTBEAT TOPOLOGY. The A1111 generation wire is synchronous: the POST
  * returns only when the batch is done, and a built-in tool may not fork (the
@@ -232,7 +242,9 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
     public function description(): string
     {
         return 'Render a still image from a text prompt using the Stable Diffusion server this launch is'
-            . ' configured for (the sdapi endpoint family). `prompt` is required; the server knobs'
+            . ' configured for (the sdapi endpoint family, or sglang-diffusion when that family is'
+            . ' configured — see its `/v1/images` dialect, which refuses sdapi-only knobs by name).'
+            . ' `prompt` is required; the server knobs'
             . ' `negative_prompt`, `width`, `height`, `steps`, `cfg_scale`, `seed` (pass -1 for a random'
             . ' draw), `sampler_name`, `scheduler`, `batch_size` and `n_iter` are optional and forwarded'
             . ' when set — any other knob you pass rides through to the server untouched. Every finished'
@@ -313,6 +325,19 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             return new ToolResult($callId, 'a mask needs init images to inpaint; attach a source or drop the mask', true);
         }
 
+        // crush-media W7 (C-1 flip): on the sglang dialect, a draft naming
+        // sdapi-only knobs is refused by name BEFORE any client build or dial
+        // — the adapter accepts the honest subset, never a silently-dropped
+        // parameter the caller meant. Pure static consult; zero requests.
+        $sglang = $this->isSglang($settings);
+        if ($sglang) {
+            $unspeakable = Client::sglangImageRefusals($request);
+            if ($unspeakable !== []) {
+                return new ToolResult($callId, 'sglang-diffusion does not speak these sdapi-only knobs: '
+                    . implode(', ', $unspeakable) . ' — none were sent; drop them or switch mediaFamily to sdapi', true);
+            }
+        }
+
         $apiKey = \is_string($settings['sd.apiKey'] ?? null) && $settings['sd.apiKey'] !== ''
             ? $settings['sd.apiKey']
             : null;
@@ -322,6 +347,15 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             // resolveBaseUrl answers from settings/env alone: this branch is
             // the unconfigured-host refusal and it has dialed nothing.
             return new ToolResult($callId, 'image generation is not available on this launch: ' . $e->getMessage(), true);
+        }
+
+        if ($sglang) {
+            $rendered = $this->awaitSglangRender($client, $request, $heartbeat, $callId);
+            if ($rendered instanceof ToolResult) {
+                return $rendered;
+            }
+
+            return $this->collectSglang($rendered, $client, $request, $settings, $callId);
         }
 
         $rendered = $this->awaitRender($client, $request, $heartbeat, $callId);
@@ -344,7 +378,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             $family = EndpointFamily::tryFrom(trim($familyRaw));
             if ($family !== null && !$family->isImplemented()) {
                 return 'the media endpoint family "' . $familyRaw . '" is recognised but generation over it'
-                    . ' is not implemented yet; only the A1111 sdapi family is, so no request was sent';
+                    . ' is not implemented yet; only the A1111 sdapi and sglang-diffusion families are, so no request was sent';
             }
         }
 
@@ -465,6 +499,121 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
         }
 
         return $awaited;
+    }
+
+    /**
+     * Declared-family check for the W7 dialect branch: only an explicit
+     * `mediaFamily=sglang-diffusion` setting selects it; an absent or
+     * unparsable family stays sdapi, the config-authority default of the
+     * whole media layer.
+     *
+     * @param array<array-key, mixed> $settings
+     */
+    private function isSglang(array $settings): bool
+    {
+        $raw = $settings['mediaFamily'] ?? null;
+
+        return \is_string($raw) && EndpointFamily::tryFrom(trim($raw)) === EndpointFamily::SglangDiffusion;
+    }
+
+    /**
+     * The waiting room of a dialect with no progress route: beat, the single
+     * blocking POST (edits when the draft carries init_images — the
+     * set-but-empty shape was refused upstream, so a non-empty list is the
+     * only image shape here — generations otherwise), beat. The pre-cancel
+     * door mirrors awaitRender, so a call cancelled while queued never
+     * dials. Honest residual: no mid-render beats or preview frames exist
+     * on this wire; the idle ceiling rides the two beats bracketing the POST.
+     */
+    private function awaitSglangRender(Client $client, MediaRequest $request, ?\Closure $heartbeat, string $callId): SdTransportResult|ToolResult
+    {
+        if ($callId !== '' && ToolCancelRequests::isRequested($callId)) {
+            return new ToolResult($callId, ToolCancelRequests::CANCELLED, true);
+        }
+        $beat = $heartbeat ?? static function (): void {
+        };
+        $beat();
+        $rendered = ($request->initImages() ?? []) !== []
+            ? $client->sglangImageEdit($request)
+            : $client->sglangImageGenerate($request);
+        $beat();
+
+        return $rendered;
+    }
+
+    /**
+     * ImageResponse envelope -> decode, embed OUR infotext (this dialect
+     * sends no per-image infotext rows back), save every PNG through
+     * MediaStore with the sdapi collect's token vocabulary (seed/steps/
+     * width/height/cfg), report. A url/file_path carry refuses the whole
+     * batch by name — the adapter requests b64_json, so a carry row means
+     * the draft overrode response_format into shapes this v1 adapter does
+     * not fetch. No batch grid exists on this wire (grid pairing is an
+     * sdapi concept), so every row is a sample.
+     *
+     * @param array<array-key, mixed> $settings
+     */
+    private function collectSglang(SdTransportResult $rendered, Client $client, MediaRequest $request, array $settings, string $callId): ToolResult
+    {
+        $envelope = $client->sglangImagesDecode($rendered);
+
+        $carries = [];
+        foreach ($envelope['items'] as $item) {
+            if (!isset($item['bytes'])) {
+                $carries[] = isset($item['url']) ? 'url' : 'file_path';
+            }
+        }
+        if ($carries !== []) {
+            return new ToolResult($callId, 'the sglang image response carried ' . implode(', ', $carries)
+                . ' references instead of inline bytes; the adapter requests response_format=b64_json'
+                . ' and does not fetch carries in v1, so nothing was saved', true);
+        }
+
+        $pattern = \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
+            ? $settings['sd.savePattern']
+            : null;
+        $session = $this->storeSession ?? $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
+        $store = MediaStore::forSession($session, $this->mediaRoot, $pattern);
+
+        $tokens = [];
+        foreach (['seed' => $request->seed(), 'steps' => $request->steps(), 'width' => $request->width(),
+            'height' => $request->height(), 'cfg' => $request->cfgScale()] as $name => $value) {
+            if (\is_int($value) || \is_float($value)) {
+                $tokens[$name] = $value;
+            }
+        }
+
+        /** @var list<string> $lines */
+        $lines = [];
+        $headBytes = null;
+        $headPath = null;
+        $count = \count($envelope['items']);
+        foreach ($envelope['items'] as $index => $item) {
+            $bytes = (string) ($item['bytes'] ?? '');
+            if (Png::isPng($bytes)) {
+                $text = Infotext::emit($request, [], $request->prompt());
+                if (trim($text) !== '') {
+                    $bytes = Png::setInfotext($bytes, $text);
+                }
+            }
+            $saved = $store->put($bytes, 'png', $tokens);
+            if ($index === 0) {
+                $headBytes = $bytes;
+                $headPath = $saved->path();
+            }
+            $lines[] = 'image ' . ($index + 1) . ': ' . (string) $saved->path();
+        }
+
+        $content = 'Generated ' . $count . ' image' . ($count === 1 ? '' : 's')
+            . " on the sglang-diffusion server:\n" . implode("\n", $lines);
+
+        return new ToolResult(
+            toolCallId: $callId,
+            content: $content,
+            imageBytes: $headBytes,
+            imagePath: $headPath,
+            imageProtocol: BootProbe::mosaic()->protocol(),
+        );
     }
 
     /**

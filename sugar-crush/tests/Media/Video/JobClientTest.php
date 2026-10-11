@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Media\Capability\EndpointFamily;
 use SugarCraft\Crush\Media\MediaJobStatus;
+use SugarCraft\Crush\Media\Sd\CallableMultipartSdTransport;
 use SugarCraft\Crush\Media\Sd\CallableSdTransport;
 use SugarCraft\Crush\Media\Sd\SdException;
 use SugarCraft\Crush\Media\Video\JobClient;
@@ -26,7 +27,9 @@ use SugarCraft\Crush\Support\MediaStore;
  * 1 s cadence with heartbeat-per-poll, the bounded 3-failure give-up, and
  * cancel-between-polls plus the sdapi global-interrupt fallback.
  *
- * Every dial runs through the CallableSdTransport fake: zero network, zero
+ * Every dial runs through the CallableMultipartSdTransport fake (the W7
+ * adapter made submit post form fields, so the fake must speak multipart):
+ * zero network, zero
  * timers, zero ReactPHP — the Media-layer law.
  */
 final class JobClientTest extends TestCase
@@ -117,6 +120,98 @@ final class JobClientTest extends TestCase
         $this->expectExceptionMessage('no usable task id string');
 
         $client->submit(['prompt' => 'x']);
+    }
+
+    /**
+     * W7 adapter: the submit body is multipart form fields in the contract's
+     * own vocabulary — steps/cfg/cfg2/first_frame_image rename, and a
+     * width/height pair composes the size string (W0 openapi, Q-10).
+     */
+    public function testTheW7SubmitRenamesFieldsIntoTheContractVocabulary(): void
+    {
+        $calls = [];
+        $client = $this->w5vClient(['POST /v1/videos' => [$this->w5vFixtureRow('jobs-submit.json')]], calls: $calls);
+
+        $client->submit([
+            'prompt' => 'a cat',
+            'steps' => 30,
+            'cfg' => 7.5,
+            'cfg2' => 2.0,
+            'first_frame_image' => '/tmp/seed.png',
+            'width' => 512,
+            'height' => 512,
+            'seed' => 7,
+        ]);
+
+        // Renames RE-APPEND at the map tail (unset + set), so the field order
+        // below is the honest wire order, pinned by assertSame.
+        self::assertSame([
+            'prompt' => 'a cat',
+            'seed' => 7,
+            'num_inference_steps' => 30,
+            'guidance_scale' => 7.5,
+            'guidance_scale_2' => 2.0,
+            'input_reference' => '/tmp/seed.png',
+            'size' => '512x512',
+        ], $calls[0]['json'], 'renames land, the pair composes size, unmapped keys ride');
+        self::assertArrayNotHasKey('cfg_scale', $calls[0]['json'], 'this dialect knows no cfg_scale');
+        self::assertArrayNotHasKey('width', $calls[0]['json']);
+        self::assertArrayNotHasKey('height', $calls[0]['json']);
+    }
+
+    public function testALoneDimensionRidesUnrenamedInsteadOfGuessingItsPartner(): void
+    {
+        $calls = [];
+        $client = $this->w5vClient(['POST /v1/videos' => [$this->w5vFixtureRow('jobs-submit.json')]], calls: $calls);
+
+        $client->submit(['prompt' => 'a cat', 'width' => 512]);
+
+        self::assertSame(['prompt' => 'a cat', 'width' => 512], $calls[0]['json']);
+        self::assertArrayNotHasKey('size', $calls[0]['json']);
+    }
+
+    public function testSubmitOnANonMultipartTransportRefusesWithoutDialling(): void
+    {
+        $calls = [];
+        $transport = new CallableSdTransport(
+            function (string $method, string $path, array $json) use (&$calls): array {
+                $calls[] = ['method' => $method, 'path' => $path];
+
+                return ['status' => 200, 'body' => '{}'];
+            },
+        );
+        $client = JobClient::withBase(self::W5V_BASE, $transport, null, EndpointFamily::SglangDiffusion);
+
+        try {
+            $client->submit(['prompt' => 'a cat']);
+            self::fail('expected the multipart-needy contract to refuse a JSON-only transport');
+        } catch (SdException $e) {
+            self::assertStringContainsString('posts multipart', $e->getMessage());
+            self::assertStringContainsString(CallableSdTransport::class, $e->getMessage());
+        }
+
+        self::assertSame([], $calls, 'the refusal happens before the wire, not on it');
+    }
+
+    /**
+     * W7: VideoResponse.progress is an INTEGER percent on the live schema;
+     * the progress01 law wants 0..1. Values above 1 divide by 100 at this
+     * ingress; ratios (and the ambiguous exactly-1) ride verbatim.
+     */
+    public function testIntegerPercentProgressNormalisesToTheZeroOneRatioAtIngress(): void
+    {
+        $rows = [37, 0.37, 100, 1, 0];
+        $expected = [0.37, 0.37, 1.0, 1.0, 0.0];
+        foreach ($rows as $i => $wire) {
+            $client = $this->w5vClient([
+                'GET /v1/videos/job-77' => [[
+                    'status' => 200,
+                    'body' => json_encode(['id' => 'job-77', 'status' => 'processing', 'progress' => $wire], JSON_THROW_ON_ERROR),
+                ]],
+            ]);
+
+            self::assertSame($expected[$i], $client->status('job-77')->progress, 'wire progress ' . var_export($wire, true));
+        }
     }
 
     #[DataProvider('w5vStatusWordRows')]
@@ -466,6 +561,8 @@ final class JobClientTest extends TestCase
      * "METHOD path" key; a queue of exactly one REPEATS (the cancel-between-
      * polls shape needs a stable answer), and an unscripted dial answers 404
      * naming itself so a wiring mistake fails loud instead of hanging.
+     * Multipart submits ride the fake's body position, so the captured
+     * 'json' row IS the form-fields map for those calls (W7 seam law).
      *
      * @param  array<string, list<array{status: int, body: string, contentType?: string}>>  $script
      * @param  list<array{method: string, path: string, json: array<string, mixed>}>|null  $calls
@@ -477,7 +574,7 @@ final class JobClientTest extends TestCase
     ): JobClient {
         $calls = [];
 
-        $transport = new CallableSdTransport(
+        $transport = new CallableMultipartSdTransport(
             function (string $method, string $path, array $json) use (&$script, &$calls): array {
                 $calls[] = ['method' => $method, 'path' => $path, 'json' => $json];
                 $key = $method . ' ' . $path;

@@ -141,9 +141,11 @@ final class ImportPng
      * The production server channel, zero-dial by construction: null (and no
      * socket opened) unless the profile configures an SD base AND speaks a
      * family the import runs over. Mirrors GenerateImage's capability gate —
-     * a declared-but-unimplemented family or an image-less mediaKinds roster
-     * refuses before any request; a parsed-unknown mediaFamily stays the
-     * discovery table's business, not this gate's.
+     * a declared family the import cannot run over (png-info is sdapi-only
+     * dialect, so the W7-implemented sglang still zero-dials here) or an
+     * image-less mediaKinds roster refuses before any request; a
+     * parsed-unknown mediaFamily stays the discovery table's business, not
+     * this gate's.
      *
      * @param ?array<string, mixed> $settings authoritative when injected
      *        (tests); null reads the user config the same way the tool does.
@@ -157,7 +159,11 @@ final class ImportPng
         $familyRaw = $live['mediaFamily'] ?? null;
         if (\is_string($familyRaw) && trim($familyRaw) !== '') {
             $family = EndpointFamily::tryFrom(trim($familyRaw));
-            if ($family !== null && !$family->isImplemented()) {
+            // The import dials the SD-API-specific png-info route, so the
+            // door here is stricter than EndpointFamily::isImplemented()
+            // ever since the W7 adapter made sglang an implemented (but not
+            // sdapi-speaking) family: anything other than sdapi zero-dials.
+            if ($family !== null && $family !== EndpointFamily::SdApi) {
                 return null;
             }
         }

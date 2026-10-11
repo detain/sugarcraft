@@ -87,10 +87,26 @@ final class HelloMediaFlagsTest extends TestCase
 
         self::assertIsArray($media);
         self::assertTrue($media['image'], 'sdapi over a configured base is the shipped image door');
-        self::assertFalse($media['video'], 'generate.submit renders images only until the W7 adapter — the flag says so');
+        self::assertFalse($media['video'], 'the default sdapi family carries no video job contract — the flag says so');
         self::assertSame(\substr(\hash('sha256', 'gpu-host-example'), 0, MediaAffordance::HOST_HASH_CHARS), $media['baseUrlHostOnly']);
         self::assertStringNotContainsString('gpu-host-example', (string) \json_encode($hello), 'plan :839 — the handshake never names the host');
         self::assertSame([], ProtocolSchema::errors($hello, MethodSchemas::result(ServerMethods::HELLO), ServerMethods::HELLO));
+    }
+
+    public function testASglangFamilyBaseOffersImagesAndVideo(): void
+    {
+        \file_put_contents(
+            $this->home . '/.sugar-crush/config.json',
+            (string) \json_encode(['sd.baseUrl' => 'http://GPU-HOST-EXAMPLE:7860', 'mediaFamily' => 'sglang-diffusion']),
+        );
+        MediaAffordance::resetForTesting();
+
+        $media = $this->hello()['features']['media'] ?? null;
+
+        self::assertIsArray($media);
+        self::assertTrue($media['image'], 'the W7 adapter opened the sglang image door');
+        self::assertTrue($media['video'], 'sglang is the first both-offers family — /v1/videos rides the job contract');
+        self::assertSame(\substr(\hash('sha256', 'gpu-host-example'), 0, MediaAffordance::HOST_HASH_CHARS), $media['baseUrlHostOnly']);
     }
 
     public function testTheEnvironmentBaseCountsAsConfigured(): void

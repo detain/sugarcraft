@@ -168,6 +168,16 @@ final class SuiteSkipRoster
         'SugarCraft\Crush\Tests\Tools\BuiltIn\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
 
     /**
+     * The second conditionally-rostered key: the W7.7 live sglang smoke, whose
+     * arm is an environment variable rather than the vendor layout. Same
+     * mechanism as {@see CONDITIONAL} — {@see liveSglangSmokeArmed()} mirrors
+     * the test body's own gate, and {@see expectedForLayout()} lifts the entry
+     * out of the roster exactly when that predicate says the test will RUN.
+     */
+    private const LIVE_SGLANG_SMOKE =
+        'SugarCraft\Crush\Tests\Integration\LiveSglangSmokeTest::testTheLiveDiscoveryLadderNamesSglangDiffusion';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -186,6 +196,15 @@ final class SuiteSkipRoster
      * BOTH entries so the name-existence loop in `SuiteSkipRosterTest` still
      * polices both names; it is {@see install()} that hands the constructor
      * the layout-computed subset.
+     *
+     * The third is ENV-CONDITIONAL on the same mechanism: the W7.7 live smoke
+     * skips while `SUGARCRUSH_LIVE_SGLANG` differs from `1` (every normal run,
+     * so the local and CI floors count it as a skip) and runs against the live
+     * server once the operator arms it, at which point
+     * {@see liveSglangSmokeArmed()} drops it from the effective roster — the
+     * test-only env deliberately unread by `src/`, so `EnvRosterDriftTest`
+     * (which censuses `src/` and `bin/`) demands no docs/ENVIRONMENT.md row
+     * for it.
      */
     public const EXPECTED = [
         'SugarCraft\Crush\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
@@ -199,6 +218,12 @@ final class SuiteSkipRoster
                 . 'are present, as they are wherever CI injects the path repositories, and the '
                 . 'test runs and asserts there; hasPathRepoSymlinks() mirrors the test body\'s own '
                 . 'gate exactly',
+        self::LIVE_SGLANG_SMOKE
+            => 'conditional live-smoke gate: rostered while SUGARCRUSH_LIVE_SGLANG differs from 1 '
+                . '-- every ordinary run, where the W7.7 smoke skips itself. '
+                . 'expectedForLayout() drops it the moment liveSglangSmokeArmed() reads the armed '
+                . 'env and the test runs its GET-only ladder against the real server instead; the '
+                . 'predicate mirrors the test body\'s own gate exactly',
     ];
 
     private static ?self $live = null;
@@ -252,8 +277,9 @@ final class SuiteSkipRoster
             return;
         }
 
-        // The vendor layout decides whether the conditional entry is part of
-        // the roster this run is judged against (see expectedForLayout()).
+        // The vendor layout and the live-smoke env gate decide which conditional
+        // entries are part of the roster this run is judged against (see
+        // expectedForLayout()).
         $roster = new self(self::expectedForLayout(\dirname(__DIR__, 2) . '/vendor/sugarcraft'));
 
         try {
@@ -364,28 +390,46 @@ final class SuiteSkipRoster
     }
 
     /**
-     * The roster this checkout's layout can be judged against:
+     * Whether the W7.7 live smoke will RUN this process: the same
+     * `SUGARCRUSH_LIVE_SGLANG=1` reading the test body makes through its
+     * `liveBase()` gate, spelled here so the roster may only hold the entry to
+     * that test's account when the predicate says the skip will actually happen.
+     */
+    public static function liveSglangSmokeArmed(): bool
+    {
+        return getenv('SUGARCRUSH_LIVE_SGLANG') === '1';
+    }
+
+    /**
+     * The roster this checkout's layout and environment can be judged against:
      * {@see EXPECTED} minus the layout-conditional entry wherever the path-repo
-     * symlinks are present and the conditional test therefore RUNS instead of
-     * skipping.
+     * symlinks are present and the conditional test RUNS instead of skipping,
+     * and minus the env-conditional live-smoke entry wherever the live gate is
+     * armed and that test RUNS instead of skipping.
      *
-     * {@see install()} feeds this to the constructor. Expressing the condition
-     * on the roster side -- rather than forcing one layout to tolerate the
-     * other's skip behaviour -- is what lets a single suite be green in both
-     * layouts: CI's symlink farm sees a roster of 1 matched by 1 skip, the
-     * packagist checkout sees a roster of 2 matched by 2 skips, and checks 1-3
-     * stay fully armed for every key on the effective roster either way.
+     * {@see install()} feeds this to the constructor. Expressing the conditions
+     * on the roster side -- rather than forcing one layout or one shell to
+     * tolerate the other's skip behaviour -- is what lets a single suite be
+     * green in every shape: CI's symlink farm with the live gate unarmed sees a
+     * roster of 2 matched by 2 skips (the canary and the dormant smoke), a
+     * packagist checkout sees a roster of 3 matched by 3 skips, and the armed
+     * operator run drops the smoke's entry so its live assertions judge clean;
+     * checks 1-3 stay fully armed for every key on the effective roster either
+     * way.
      *
      * @return array<string,string>
      */
     public static function expectedForLayout(string $linkFarm): array
     {
-        if (!self::hasPathRepoSymlinks($linkFarm)) {
-            return self::EXPECTED;
+        $effective = self::EXPECTED;
+
+        if (self::hasPathRepoSymlinks($linkFarm)) {
+            unset($effective[self::CONDITIONAL]);
         }
 
-        $effective = self::EXPECTED;
-        unset($effective[self::CONDITIONAL]);
+        if (self::liveSglangSmokeArmed()) {
+            unset($effective[self::LIVE_SGLANG_SMOKE]);
+        }
 
         return $effective;
     }

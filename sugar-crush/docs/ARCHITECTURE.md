@@ -841,9 +841,11 @@ server legitimately lives on the LAN, and configuring `sd.baseUrl` already was
 the trust decision — the guard only stops a request drifting off that origin) —
 and the capability story under `Capability\`: `EndpointFamily` names the
 families a media server might speak, and `isImplemented()` is the single honest
-door — only `sdapi` is speakable today, so families like `sglang-diffusion` are
-DETECTABLE by `CapabilityDiscoverer`'s fail-open ladder of cheap GETs and
-deliberately unimplemented until a later wave ships their transport. Artifacts
+door — since the W7 adapter `sdapi` and `sglang-diffusion` are speakable (the
+latter over its `/v1/images` JSON generations route and multipart edits route),
+so families like `comfyui` stay DETECTABLE by `CapabilityDiscoverer`'s
+fail-open ladder of cheap GETs and deliberately unimplemented until a later
+wave ships their transport. Artifacts
 land in `Support\MediaStore` under `~/.sugar-crush/media/<session>/` — session
 directories `0700`, files `0600`, written temp-then-renamed, with filenames
 built from the server's own parameter tokens (`sd.savePattern`) and never from

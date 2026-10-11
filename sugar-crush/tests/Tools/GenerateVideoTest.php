@@ -8,7 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Events\MediaProgress;
 use SugarCraft\Crush\Media\Capability\EndpointFamily;
-use SugarCraft\Crush\Media\Sd\CallableSdTransport;
+use SugarCraft\Crush\Media\Sd\CallableMultipartSdTransport;
+use SugarCraft\Crush\Media\Sd\SdTransport;
 use SugarCraft\Crush\Media\Sd\Client;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionRule;
@@ -25,7 +26,7 @@ use SugarCraft\Crush\Tools\TakesToolCallId;
 
 /**
  * W5.3 behaviour pins for the GenerateVideo tool: the fake is the transport
- * (CallableSdTransport) so nothing ever dials, the pacing seam keeps the job
+ * (CallableMultipartSdTransport) so nothing ever dials, the pacing seam keeps the job
  * poll off real time, and the canned job shapes ride the shared
  * tests/fixtures/video/*.json roster (fact (f) proves itself: bytes land on
  * disk, only paths continue into the result).
@@ -444,7 +445,7 @@ final class GenerateVideoTest extends TestCase
     /**
      * @param array<string, mixed> $settings
      */
-    private function gvTool(CallableSdTransport $transport, array $settings = [], ?string $base = self::GV_BASE): GenerateVideo
+    private function gvTool(SdTransport $transport, array $settings = [], ?string $base = self::GV_BASE): GenerateVideo
     {
         return GenerateVideo::new()
             ->withFakeDial($transport, $base, $settings)
@@ -456,9 +457,9 @@ final class GenerateVideoTest extends TestCase
     /**
      * @param list<array<string, mixed>> $statusFrames served in order; the last repeats
      */
-    private function gvServer(array $statusFrames): CallableSdTransport
+    private function gvServer(array $statusFrames): CallableMultipartSdTransport
     {
-        return new CallableSdTransport(function (string $method, string $path, array $json) use (&$statusFrames) {
+        return new CallableMultipartSdTransport(function (string $method, string $path, array $json) use (&$statusFrames) {
             $this->calls[] = [$method, $path, $json];
             if ($method === 'POST') {
                 return ['status' => 200, 'body' => json_encode(['id' => 'job-77', 'status' => 'queued'])];

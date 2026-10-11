@@ -9,6 +9,7 @@ use SugarCraft\Crush\Media\MediaArtifact;
 use SugarCraft\Crush\Media\MediaKind;
 use SugarCraft\Crush\Media\Sd\Client;
 use SugarCraft\Crush\Media\Sd\GuzzleTransport;
+use SugarCraft\Crush\Media\Sd\MultipartSdTransport;
 use SugarCraft\Crush\Media\Sd\SdException;
 use SugarCraft\Crush\Media\Sd\SdTransport;
 use SugarCraft\Crush\Media\Sd\SdTransportResult;
@@ -24,7 +25,10 @@ use SugarCraft\Crush\Support\MediaStore;
  * contract at plan :1090: POST /v1/videos → VideoResponse
  * {id,status,progress,url,file_path,seconds,fps,num_frames,error}; GET
  * /v1/videos[/{id}][/{id}/content]; DELETE /v1/videos/{id}) — else the
- * config-declared {@see EndpointFamily} default with fixture-tested shapes.
+ * config-declared {@see EndpointFamily}. Since the W7 adapter the submit
+ * posts multipart form data exactly as that live schema prescribes (the
+ * JSON-body era was the pre-W7 fixture shape), and the read routes carry
+ * the recorded shapes.
  * A1111 core has no video route at all, so an sdapi-family submit refuses
  * honestly instead of inventing one; the job-level CANCEL fallback for that
  * family is A1111's /interrupt (§4.6 — GLOBAL server state, a co-tenant
@@ -133,12 +137,14 @@ final class JobClient
      * Python None onto an Optional field instead of leaving its default,
      * and nothing in MediaRequest carries set-to-null wire intent (the
      * XSet sentinels distinguish absent, and absent is what the server
-     * defaults table wants). The live sglang contract POSTs multipart
-     * (plan :1090) — the W1.3 transport seam is JSON-only, so the JSON body
-     * here is the fixture-tested shape; the multipart widening belongs to
-     * the sglang-diffusion implementation step the W7.7 live smoke will
-     * need anyway (loud note in the W5 REPORT), where omitting the field —
-     * exactly what the strip produces — is the correct spelling of default.
+     * defaults table wants), and the sglang dialect speaks the W0-openapi
+     * MULTIPART form (plan :1090) — the W7 adapter landed that widening:
+     * the fields are mapped by {@see sglangVideoFields()} and posted as
+     * form parts through a {@see MultipartSdTransport}, GuzzleTransport
+     * among them; a transport that speaks no multipart refuses loudly
+     * rather than degrading to the JSON shape that predates this lane.
+     * Omitting a defaulted field entirely — exactly what the null-strip
+     * produces — is the correct spelling of "use the server default".
      *
      * @param  array<string, mixed>  $params
      * @throws SdException on a dialect without a video job route, on transport failure, or on an id-less response
@@ -157,7 +163,10 @@ final class JobClient
         }
 
         $decoded = $this->object(
-            $this->send('POST', $routes['submit'], Client::stripExplicitNulls($params), [], 'submit')->decodedJson(),
+            ($this->family === EndpointFamily::SglangDiffusion
+                ? $this->submitMultipart($routes['submit'], $params)
+                : $this->send('POST', $routes['submit'], Client::stripExplicitNulls($params), [], 'submit')
+            )->decodedJson(),
             'submit',
         );
 
@@ -171,8 +180,89 @@ final class JobClient
     }
 
     /**
+     * The multipart submit dial (W0 openapi Body_create_video_v1_videos_post
+     * is form-data, verified at the raw schema, not guessed). Capability
+     * test mirrors the header/multipart law elsewhere in the layer: a
+     * transport that cannot post form parts refuses loudly here with the
+     * house message shape — never a silent JSON fallback, because the live
+     * server takes no JSON on this route.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function submitMultipart(string $path, array $params): SdTransportResult
+    {
+        if (!$this->transport instanceof MultipartSdTransport) {
+            throw SdException::protocol(
+                'video job submit',
+                'the sglang-diffusion contract posts multipart (W0 openapi) and this transport speaks '
+                    . 'none — GuzzleTransport implements it, got ' . $this->transport::class,
+            );
+        }
+
+        try {
+            $result = $this->transport->requestMultipart('POST', $path, self::sglangVideoFields($params));
+        } catch (SdException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw SdException::transportFailure('video job submit', $e);
+        }
+
+        if ($result->is2xx()) {
+            return $result;
+        }
+
+        throw SdException::fromResponse('video job submit', $result->status, $result->decodedJson(), $result->body);
+    }
+
+    /**
+     * Tool-layer param names -> the video contract's own vocabulary
+     * (W0 openapi, Q-10): `steps` rides `num_inference_steps`, `cfg` and
+     * `cfg2` ride `guidance_scale`/`guidance_scale_2` — this dialect knows
+     * no cfg_scale — and `first_frame_image` becomes `input_reference`, the
+     * Wan I2V door the schema names plainly. A width/height PAIR composes
+     * the `size` string the contract carries; a lone dimension rides
+     * unrenamed rather than guessing its partner. Explicit nulls strip at
+     * this edge like every other egress; every other value rides opaque —
+     * a server-side unknown form field is ignored by FastAPI, and
+     * non-scalar fields are the transport's refusal to make, at the
+     * multipart boundary, not a silent JSON encode here.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public static function sglangVideoFields(array $params): array
+    {
+        $fields = Client::stripExplicitNulls($params);
+
+        foreach (['steps' => 'num_inference_steps', 'cfg' => 'guidance_scale', 'cfg2' => 'guidance_scale_2', 'first_frame_image' => 'input_reference'] as $from => $to) {
+            if (\array_key_exists($from, $fields)) {
+                $fields[$to] = $fields[$from];
+                unset($fields[$from]);
+            }
+        }
+
+        if (\array_key_exists('width', $fields) && \array_key_exists('height', $fields)) {
+            $width = $fields['width'];
+            $height = $fields['height'];
+            if ((\is_int($width) || \is_string($width)) && (\is_int($height) || \is_string($height))) {
+                $fields['size'] = $width . 'x' . $height;
+                unset($fields['width'], $fields['height']);
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
      * One read of the job's status. Unknown state words refuse via
      * {@see JobSnapshot::fromArray()} — the transition vocabulary is closed.
+     *
+     * The sglang VideoResponse.progress is documented INTEGER (W0 openapi,
+     * default 0) — a percent, while this layer's progress01 law reads 0..1
+     * ratios (MediaMethods::progress01 clamps at 1.0). A value above 1 is
+     * therefore normalized as percent here, at the dialect's ingress; ratios
+     * at or below 1 ride verbatim, so the honest 0..1 shapes fixtures (and
+     * servers that answer ratios) never get divided.
      *
      * @throws SdException on transport failure, non-2xx, or an unmappable state
      */
@@ -188,6 +278,11 @@ final class JobClient
             $this->send('GET', $this->jobPath($routes['job'], $taskId), [], [], 'status')->decodedJson(),
             'status',
         );
+
+        $progress = $decoded['progress'] ?? null;
+        if (\is_numeric($progress) && (float) $progress > 1.0) {
+            $decoded['progress'] = (float) $progress / 100.0;
+        }
 
         return JobSnapshot::fromArray($decoded);
     }

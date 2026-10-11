@@ -237,8 +237,10 @@ final readonly class CapabilityDiscoverer
     /**
      * Map the W0.1 /model_info shape (per-model task_type / supported_task_types
      * / is_image_gen) onto kinds and flags. Wan2.2-T2V answers is_image_gen
-     * false + text-to-video task types — exactly the "detectable but
-     * unimplemented" case EndpointFamily::isImplemented() refuses downstream.
+     * false + text-to-video task types — the detectable shape Appendix C-1
+     * made famous; since the W7 adapter the family is IMPLEMENTED, and an
+     * image-capable model additionally reports txt2img/img2img support (the
+     * generations and multipart edits routes both ride /v1/images now).
      *
      * @param  array<array-key, mixed>  $models
      */
@@ -261,10 +263,16 @@ final readonly class CapabilityDiscoverer
             }
             if (($entry['is_image_gen'] ?? null) === true) {
                 $kinds[] = MediaKind::Image;
+                $capability = $capability
+                    ->withSupport(MediaCapability::SUPPORT_TXT2IMG, true)
+                    ->withSupport(MediaCapability::SUPPORT_IMG2IMG, true);
             }
             foreach ($tasks as $task) {
                 if (str_contains($task, 'image')) {
                     $kinds[] = MediaKind::Image;
+                    $capability = $capability
+                        ->withSupport(MediaCapability::SUPPORT_TXT2IMG, true)
+                        ->withSupport(MediaCapability::SUPPORT_IMG2IMG, true);
                 }
                 if (str_contains($task, 'video')) {
                     $kinds[] = MediaKind::Video;

@@ -182,15 +182,18 @@ final class GenerateImageTest extends TestCase
 
     public function testDetectableButUnimplementedFamilyRefusesWithoutAnyDial(): void
     {
-        self::assertFalse(EndpointFamily::SglangDiffusion->isImplemented());
+        // sglang-diffusion left this refuse-set at the W7 adapter; its
+        // zero-dial story now lives in GenerateImageSglangTest's knob door.
+        self::assertFalse(EndpointFamily::ComfyUi->isImplemented());
         $tool = $this->tool($this->server([['state' => ['finished' => true]]], '{}'), [
-            'mediaFamily' => EndpointFamily::SglangDiffusion->value,
+            'mediaFamily' => EndpointFamily::ComfyUi->value,
         ]);
 
         $result = $tool->execute(['prompt' => 'anything']);
 
         self::assertTrue($result->isError());
-        self::assertStringContainsString('sglang-diffusion', $result->content());
+        self::assertStringContainsString('comfyui', $result->content());
+        self::assertStringContainsString('not implemented yet', $result->content());
         self::assertSame([], $this->calls);
     }
 

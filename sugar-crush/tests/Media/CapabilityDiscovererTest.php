@@ -159,8 +159,10 @@ final class CapabilityDiscovererTest extends TestCase
         $this->assertSame([MediaKind::Video], $capability?->kinds());
         $this->assertTrue($capability?->declares(MediaCapability::SUPPORT_VIDEO));
         $this->assertFalse($capability?->declares(MediaCapability::SUPPORT_TXT2IMG));
-        // Appendix C-1 ruling: detectable, and still refused downstream.
-        $this->assertFalse($capability?->family()->isImplemented());
+        // The W7 adapter flipped the family door open; the video-only shape
+        // still declares no image support — the probe reports, the config
+        // rosters decide (the tool doors read settings, not these flags).
+        $this->assertTrue($capability?->family()->isImplemented());
     }
 
     /** Ladder order pin: sglang also serves /v1/models (W0.1) — model_info must win. */
@@ -176,6 +178,10 @@ final class CapabilityDiscovererTest extends TestCase
 
         $this->assertSame(EndpointFamily::SglangDiffusion, $capability?->family());
         $this->assertSame([MediaKind::Image], $capability?->kinds());
+        // W7: an image modality now lights the two-route support pair — the
+        // generations JSON route and the multipart edits route.
+        $this->assertTrue($capability?->declares(MediaCapability::SUPPORT_TXT2IMG));
+        $this->assertTrue($capability?->declares(MediaCapability::SUPPORT_IMG2IMG));
     }
 
     public function testProbeAnswersNullWhenNothingRecognisesTheServer(): void
@@ -350,7 +356,7 @@ final class CapabilityDiscovererTest extends TestCase
             array_map(static fn (EndpointFamily $f): string => $f->value, EndpointFamily::cases())
         );
         $this->assertTrue(EndpointFamily::SdApi->isImplemented());
-        $this->assertFalse(EndpointFamily::SglangDiffusion->isImplemented(), 'C-1: detectable but unimplemented v1');
+        $this->assertTrue(EndpointFamily::SglangDiffusion->isImplemented(), 'W7 adapter: image dialect + video job contract landed');
         foreach ([EndpointFamily::OpenAiImages, EndpointFamily::ComfyUi, EndpointFamily::Custom, EndpointFamily::Unknown] as $family) {
             $this->assertFalse($family->isImplemented());
         }

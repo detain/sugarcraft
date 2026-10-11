@@ -31,12 +31,14 @@ use SugarCraft\Crush\Providers\ProviderFactory;
  *    authority (C-1) — GenerateImage.php:345 refuses on exactly this door.
  *  - VIDEO: a family must be BOTH implemented (C-1) AND carry a recorded
  *    video job contract ({@see JobClient::videoContract()}, the W5.3 video
- *    authority — GenerateVideo.php:509). No family satisfies both today,
- *    which is the honest answer: the RPC `generate.submit` renders images
- *    only until the W7 sglang adapter lands, so a video affordance would
- *    advertise a door the serve surface cannot walk. When a lane flips
- *    either door for one family, the flags flip with it — pinned as a
- *    structural never-both test in `tests/Media/MediaAffordanceTest`.
+ *    authority — GenerateVideo.php:509). The W7 sglang adapter landed the
+ *    first family that satisfies both: sglang-diffusion offers image AND
+ *    video, while sdapi stays the image-only door. The W6.7-era structural
+ *    never-both tripwire was the loud alarm this flip was required to pass
+ *    through — it fired at W7 and was re-read to the both-offers world in
+ *    `tests/Media/MediaAffordanceTest`, which now pins each family's exact
+ *    offer set. When a lane flips either door for one family, the flags
+ *    flip with it.
  *  - KINDS: an absent or empty `mediaKinds` roster means "everything the
  *    host can do" — the W1.8 config-authority fail-open both tools carry
  *    (GenerateImage.php:352, GenerateVideo.php:515).

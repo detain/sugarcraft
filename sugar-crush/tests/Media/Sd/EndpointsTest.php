@@ -177,6 +177,48 @@ final class EndpointsTest extends TestCase
         }
     }
 
+    public function testTheSglangImageRegistryIsSeparateAndClosed(): void
+    {
+        // W7: the sglang image routes ride their own registry precisely so
+        // the clone-snapshot guard above keeps certifying CANONICAL alone —
+        // sglang paths are NOT in A1111's api.py.
+        self::assertSame(
+            ['generations' => '/v1/images/generations', 'edits' => '/v1/images/edits'],
+            Endpoints::SGLANG_IMAGE_ROUTES,
+        );
+        self::assertSame('/v1/images/generations', Endpoints::resolveSglangImage('generations'));
+        self::assertSame('/v1/images/edits', Endpoints::resolveSglangImage('edits'));
+        self::assertNotContains('/v1/images/edits', Endpoints::CANONICAL, 'the sdapi closed set stays sdapi-only');
+    }
+
+    public function testTheSdapiResolverStillRefusesTheSglangPaths(): void
+    {
+        // Map-never-guess across dialects: the generations path is a legal
+        // sglang route but NOT an sdapi endpoint; resolve() must keep throwing.
+        $this->expectException(SdException::class);
+        Endpoints::resolve(Endpoints::SGLANG_IMAGE_ROUTES['generations']);
+    }
+
+    public function testAnUnknownSglangRouteFailsFastListingTheRegisteredOnes(): void
+    {
+        try {
+            Endpoints::resolveSglangImage('txt2video');
+            self::fail('unknown sglang routes must be refused, not guessed');
+        } catch (SdException $e) {
+            self::assertStringContainsString('generations, edits', $e->getMessage());
+        }
+    }
+
+    public function testTheImageContentRouteUrlEncodesItsId(): void
+    {
+        self::assertSame('/v1/images/img-abc/content', Endpoints::sglangImageContent('img-abc'));
+        self::assertSame('/v1/images/a%20b%2Fc/content', Endpoints::sglangImageContent('  a b/c  '), 'trim then encode — no raw slash may ride the path');
+
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('non-empty image id');
+        Endpoints::sglangImageContent('   ');
+    }
+
     /** @return list<string> */
     private static function cloneRoutes(): array
     {

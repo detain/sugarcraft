@@ -6,7 +6,10 @@ namespace SugarCraft\Crush\Media\Sd;
 
 /**
  * The sdapi v1 endpoint registry: every path the media client may dial, the
- * twelve-clause legacy-path map, and the reject verdicts for dead names.
+ * twelve-clause legacy-path map, and the reject verdicts for dead names —
+ * plus, since W7, a separate named registry for the sglang-diffusion image
+ * routes (SGLANG_IMAGE_ROUTES), which deliberately does NOT join CANONICAL
+ * because the clone-snapshot roster guard only certifies stock-A1111 paths.
  *
  * Doctrine (mystage fact (h), plan W1.4): THE CLIENT MAPS, NEVER GUESSES. A
  * caller — or a copied curl line from a 2022 forum post — handing us a legacy
@@ -108,6 +111,28 @@ final class Endpoints
     public const OPENAI_IMAGES_GENERATIONS = '/v1/images/generations';
 
     /**
+     * The sglang-diffusion image projection of img2img — multipart form
+     * (W0 openapi: Body_edits_v1_images_edits_post), unlike its JSON
+     * generations sibling.
+     */
+    public const SGLANG_IMAGES_EDITS = '/v1/images/edits';
+
+    /**
+     * The sglang image dialect's named routes (plan W7 adapter). They ride a
+     * SEPARATE registry from CANONICAL on purpose: the EndpointsTest
+     * clone-snapshot guard proves every CANONICAL path exists in the stock
+     * A1111 api.py, and these do not — they come from the W0 openapi capture
+     * of sglang-diffusion instead. resolve() must never pass them through;
+     * only resolveSglangImage() admits them.
+     *
+     * @var array<string, string>
+     */
+    public const SGLANG_IMAGE_ROUTES = [
+        'generations' => self::OPENAI_IMAGES_GENERATIONS,
+        'edits' => self::SGLANG_IMAGES_EDITS,
+    ];
+
+    /**
      * Closed registry of every path resolve() passes through unchanged.
      *
      * @var list<string>
@@ -174,7 +199,7 @@ final class Endpoints
      * @var array<string, string>
      */
     public const LEGACY_REJECTIONS = [
-        '/sd-metadata.json' => 'ComfyUI-family metadata, not an sdapi route — that dialect is detected via /object_info by CapabilityDiscoverer, and media-scope v1 speaks sdapi only.',
+        '/sd-metadata.json' => 'ComfyUI-family metadata, not an sdapi route — that dialect is detected via /object_info by CapabilityDiscoverer, and media scope still ships no ComfyUI client.',
         '/internal/info' => 'Forge-only server introspection; absent from stock A1111 api.py with no stable sdapi v1 equivalent (cmd-flags + options reads are the nearest live surface, not an equivalent).',
         '/v1/embeddings' => 'embeddings belong to the chat-side OpenAI family, outside the media generation scope.',
         '/reload-clips' => 'the CLIP-model reload path was removed from the modern tree; refresh-checkpoints rescans model dirs but is not an equivalent, and we do not guess.',
@@ -245,6 +270,41 @@ final class Endpoints
             'Endpoints::resolve',
             "unknown endpoint {$path} — the client maps, never guesses." . self::closestHint($path),
         );
+    }
+
+    /**
+     * Resolve a named sglang image route to its path. Same map-never-guess
+     * doctrine as resolve(), over the sibling registry: unknown route names
+     * fail fast listing the registered ones.
+     *
+     * @throws SdException on an unregistered route name.
+     */
+    public static function resolveSglangImage(string $route): string
+    {
+        if (isset(self::SGLANG_IMAGE_ROUTES[$route])) {
+            return self::SGLANG_IMAGE_ROUTES[$route];
+        }
+
+        throw SdException::protocol(
+            'Endpoints::resolveSglangImage',
+            "unknown sglang image route {$route} — the client maps, never guesses. registered: " . implode(', ', array_keys(self::SGLANG_IMAGE_ROUTES)) . '.',
+        );
+    }
+
+    /**
+     * Compose the sglang per-image content fetch route (W0 openapi:
+     * GET /v1/images/{image_id}/content). The id is url-encoded here so every
+     * dial of a dynamic path still passes through this registry rather than
+     * being string-built at the call site.
+     */
+    public static function sglangImageContent(string $imageId): string
+    {
+        $id = trim($imageId);
+        if ($id === '') {
+            throw SdException::protocol('Endpoints::sglangImageContent', 'an image content fetch needs a non-empty image id.');
+        }
+
+        return '/v1/images/' . rawurlencode($id) . '/content';
     }
 
     /**

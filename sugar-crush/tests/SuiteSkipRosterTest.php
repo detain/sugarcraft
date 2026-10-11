@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Integration\LiveSglangSmokeTest;
 use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tests\Support\SuiteSkipRoster;
 
@@ -53,7 +54,7 @@ final class SuiteSkipRosterTest extends TestCase
     ];
 
     /**
-     * The two real roster keys, written out in full so a rename inside
+     * The three real roster keys, written out in full so a rename inside
      * `SuiteSkipRoster::EXPECTED` reddens the layout tests below (via an
      * undefined index) rather than quietly aiming them at a stale key.
      */
@@ -63,6 +64,33 @@ final class SuiteSkipRosterTest extends TestCase
     /** The layout-conditional key -- the private `SuiteSkipRoster::CONDITIONAL`, by literal. */
     private const GITIGNORE_ENTRY =
         'SugarCraft\\Crush\\Tests\\Tools\\BuiltIn\\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
+
+    /** The env-conditional key -- the private `SuiteSkipRoster::LIVE_SGLANG_SMOKE`, by literal. */
+    private const LIVE_SGLANG_ENTRY =
+        'SugarCraft\\Crush\\Tests\\Integration\\LiveSglangSmokeTest::testTheLiveDiscoveryLadderNamesSglangDiffusion';
+
+    /**
+     * Runs $body with SUGARCRUSH_LIVE_SGLANG forced UNARMED and restores the
+     * caller's shell state exactly, so the layout pins stay deterministic no
+     * matter whether the suite itself is running under an armed operator shell.
+     *
+     * @template T
+     *
+     * @param  callable():T  $body
+     * @return T
+     */
+    private static function withLiveGateUnarmed(callable $body): mixed
+    {
+        $prior = getenv('SUGARCRUSH_LIVE_SGLANG');
+
+        putenv('SUGARCRUSH_LIVE_SGLANG');
+
+        try {
+            return $body();
+        } finally {
+            $prior === false ? putenv('SUGARCRUSH_LIVE_SGLANG') : putenv('SUGARCRUSH_LIVE_SGLANG=' . $prior);
+        }
+    }
 
     /**
      * Every roster entry names a test that EXISTS.
@@ -160,8 +188,9 @@ final class SuiteSkipRosterTest extends TestCase
     }
 
     /**
-     * Over a symlink farm the effective roster is EXACTLY the one unconditional
-     * entry -- the structure is pinned, not just the count.
+     * Over a symlink farm with the live gate unarmed the effective roster is
+     * EXACTLY the unconditional entry plus the dormant smoke -- the structure is
+     * pinned, not just the count.
      */
     public function testExpectedForLayoutDropsTheConditionalEntryOverSymlinks(): void
     {
@@ -173,17 +202,23 @@ final class SuiteSkipRosterTest extends TestCase
 
         try {
             self::assertSame(
-                [self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY]],
-                SuiteSkipRoster::expectedForLayout($farm),
-                'over a path-repo symlink farm the conditional test RUNS, so the effective roster '
-                . 'must be the const minus exactly its GitignoreAwareness key, reason intact',
+                self::withLiveGateUnarmed(
+                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                ),
+                [
+                    self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY],
+                    self::LIVE_SGLANG_ENTRY => SuiteSkipRoster::EXPECTED[self::LIVE_SGLANG_ENTRY],
+                ],
+                'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
+                . 'smoke stays rostered, so the effective roster must be the const minus exactly '
+                . 'its GitignoreAwareness key, reasons intact',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
         }
     }
 
-    /** Over a packagist farm the effective roster is the FULL const. */
+    /** Over a packagist farm with the gate unarmed the roster is the FULL const. */
     public function testExpectedForLayoutKeepsTheFullRosterOverRealDirectories(): void
     {
         $dir  = $this->createFarmSandbox();
@@ -194,9 +229,12 @@ final class SuiteSkipRosterTest extends TestCase
         try {
             self::assertSame(
                 SuiteSkipRoster::EXPECTED,
-                SuiteSkipRoster::expectedForLayout($farm),
-                'over a packagist farm the conditional test skips, so the effective roster must be '
-                . 'the full const -- both keys, both reasons, same order',
+                self::withLiveGateUnarmed(
+                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                ),
+                'over a packagist farm the layout-conditional test skips and the unarmed smoke '
+                . 'skips too, so the effective roster must be the full const -- all three keys, '
+                . 'all three reasons, same order',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -204,9 +242,65 @@ final class SuiteSkipRosterTest extends TestCase
     }
 
     /**
-     * CI-shape at the constructor seam: the layout-computed roster of 1, BOTH
-     * conditional tests prepared, only the unconditional one skipping -- the
-     * run is CLEAN.
+     * The live gate's BOTH polarities, each dropping exactly its own key and no
+     * other's. The armed arm over a symlink farm is the operator's W7.7 shape:
+     * the roster collapses to the lone canary while both real tests run.
+     */
+    public function testTheLiveSmokeGateDropsOnlyItsOwnEntryAndOnlyWhenArmed(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/candy-core');
+
+        $prior = getenv('SUGARCRUSH_LIVE_SGLANG');
+
+        try {
+            putenv('SUGARCRUSH_LIVE_SGLANG=1');
+            self::assertTrue(SuiteSkipRoster::liveSglangSmokeArmed(), 'the predicate must read the armed env');
+            $armed = SuiteSkipRoster::expectedForLayout($farm);
+            self::assertArrayNotHasKey(self::LIVE_SGLANG_ENTRY, $armed, 'an armed smoke RUNS, so it may not sit on the roster');
+            self::assertArrayHasKey(self::GITIGNORE_ENTRY, $armed, 'the live gate may not lift the LAYOUT entry');
+
+            putenv('SUGARCRUSH_LIVE_SGLANG');
+            self::assertFalse(SuiteSkipRoster::liveSglangSmokeArmed(), 'an unset gate reads unarmed');
+            self::assertSame(
+                SuiteSkipRoster::EXPECTED,
+                SuiteSkipRoster::expectedForLayout($farm),
+                'the unarmed gate may not lift anything -- the smoke skips and stays rostered',
+            );
+
+            putenv('SUGARCRUSH_LIVE_SGLANG=0');
+            self::assertFalse(SuiteSkipRoster::liveSglangSmokeArmed(), 'only the literal 1 arms the smoke');
+        } finally {
+            $prior === false ? putenv('SUGARCRUSH_LIVE_SGLANG') : putenv('SUGARCRUSH_LIVE_SGLANG=' . $prior);
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The premise under the live gate: the roster predicate and the test body
+     * must read the SAME variable with the SAME arm value, or one polarity here
+     * judges against a roster the other never produces. Literal textual pin —
+     * the mirror of the layout arm's "mirrors the test body's own gate" claim.
+     */
+    public function testTheSmokeTestsOwnGateReadsTheVariableTheRosterPredicateReads(): void
+    {
+        $reflection = new \ReflectionClass(LiveSglangSmokeTest::class);
+        $body       = implode('', (array) file($reflection->getFileName()));
+
+        self::assertSame(
+            1,
+            substr_count($body, "getenv('SUGARCRUSH_LIVE_SGLANG') !== '1'"),
+            'the smoke body no longer gates on the literal the roster predicate reads; move both '
+            . 'together or the armed/unarmed rosters stop matching the skips',
+        );
+    }
+
+    /**
+     * CI-shape at the constructor seam with the live gate unarmed: the
+     * layout-computed roster of 2 (canary + dormant smoke), ALL THREE roster
+     * names prepared, the layout-conditional one running -- the run is CLEAN.
      *
      * This is the exact event shape CI was printing as a violation before the
      * roster computed its condition: check 3 must not see the non-rostered
@@ -222,9 +316,13 @@ final class SuiteSkipRosterTest extends TestCase
         symlink($dir . '/candy-core-real', $farm . '/candy-core');
 
         try {
-            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
+            $roster = self::withLiveGateUnarmed(
+                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+            );
             $roster->recordPrepared(self::MCP_ENTRY);
             $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
+            $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
+            $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
             $roster->recordPrepared(self::GITIGNORE_ENTRY);
 
             self::assertSame(
@@ -235,8 +333,8 @@ final class SuiteSkipRosterTest extends TestCase
             );
             self::assertNull(
                 $roster->report(),
-                'a CI-layout run (roster of 1, one skip, conditional test running and passing) was '
-                . 'judged a violation -- this is the regression this fix exists to end',
+                'a CI-layout run (roster of 2, two skips, layout-conditional test running and '
+                . 'passing) was judged a violation -- this is the regression this fix exists to end',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -245,8 +343,8 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * Packagist-shape mirror through the same seam: the layout-computed roster
-     * of 2 with both rostered skips is clean -- the shape of every local run
-     * and of the suite floor.
+     * of 3 with all three rostered skips is clean -- the shape of every local
+     * run on a real-directory farm and of the suite floor.
      */
     public function testThePackagistShapeRosterJudgesAPackagistRunClean(): void
     {
@@ -256,7 +354,9 @@ final class SuiteSkipRosterTest extends TestCase
         mkdir($farm . '/candy-core');
 
         try {
-            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
+            $roster = self::withLiveGateUnarmed(
+                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+            );
             $roster->recordPrepared(self::MCP_ENTRY);
             $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
             $roster->recordPrepared(self::GITIGNORE_ENTRY);
@@ -265,12 +365,14 @@ final class SuiteSkipRosterTest extends TestCase
                 self::GITIGNORE_ENTRY,
                 'no path-repo symlinks in this checkout',
             );
+            $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
+            $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
 
-            self::assertSame(2, $roster->skipEventCount());
+            self::assertSame(3, $roster->skipEventCount());
             self::assertNull(
                 $roster->report(),
-                'the packagist-shape run no longer matches its roster -- the local floor of two '
-                . 'skips against two entries has to stay green',
+                'the packagist-shape run no longer matches its roster -- the local floor of three '
+                . 'skips against three entries has to stay green',
             );
         } finally {
             $this->purgeFarmSandbox($dir);

@@ -1241,3 +1241,6 @@ sugar-crush/tests/AssistantMsgTest.php	0.001	2
 sugar-crush/tests/Media/FieldSpecParityTest.php	7.60	696
 sugar-crush/tests/Media/PerfBudgetTest.php	0.406	9
 sugar-crush/tests/Media/SecuritySweepTest.php	10.1	75
+sugar-crush/tests/Media/Sd/SglangImageTest.php	0.083	51
+sugar-crush/tests/Tools/BuiltIn/GenerateImageSglangTest.php	0.132	36
+sugar-crush/tests/Integration/LiveSglangSmokeTest.php	0.071	0

@@ -19,10 +19,10 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * including the two the shipped tools carry verbatim (the C-1 image door,
  * the W5.3 video-contract door) and the fail-open roster.
  *
- * The never-both structural leg is the loud tripwire for the W7 sglang
- * adapter: it fires the day a family becomes BOTH implemented AND carries a
- * video contract, which is exactly when this file's video story must be
- * re-read on purpose rather than drift by surprise.
+ * The never-both structural leg was the loud tripwire for the W7 sglang
+ * adapter: it fired the day sglang-diffusion became BOTH implemented AND
+ * video-contracted, and this file was re-read on purpose — the tables below
+ * now pin each family's exact offer set instead of forbidding the pair.
  */
 final class MediaAffordanceTest extends TestCase
 {
@@ -75,15 +75,16 @@ final class MediaAffordanceTest extends TestCase
     {
         $off = ['image' => false, 'video' => false, 'baseUrlHostOnly' => null];
         $imageOnly = ['image' => true, 'video' => false, 'baseUrlHostOnly' => self::hash('gpu.example')];
+        $bothOffers = ['image' => true, 'video' => true, 'baseUrlHostOnly' => self::hash('gpu.example')];
 
         return [
             'no server configured' => [[], null, $off, 'nothing is offered over no base URL'],
-            'sdapi default' => [[], self::BASE, $imageOnly, 'sdapi is the implemented image door; no family named means sdapi'],
+            'sdapi default' => [[], self::BASE, $imageOnly, 'sdapi is the default image door and carries no video contract'],
             'sglang declared' => [
                 ['mediaFamily' => 'sglang-diffusion'],
                 self::BASE,
-                ['image' => false, 'video' => false, 'baseUrlHostOnly' => self::hash('gpu.example')],
-                'detectable-but-unimplemented: image refuses on C-1; video stays false because the RPC submit surface renders images only until W7',
+                $bothOffers,
+                'the W7 adapter made sglang the first family offering both: image via /v1/images, video via the job contract',
             ],
             'roster video-only under sdapi' => [
                 ['mediaKinds' => ['video']],
@@ -130,14 +131,17 @@ final class MediaAffordanceTest extends TestCase
         self::assertStringNotContainsString('http', $wire, 'plan :839 — hash or flag only, never the URL');
     }
 
-    public function testNoFamilyBothOffersImagesAndVideoYet(): void
+    public function testSglangIsTheOnlyFamilyBothOfferingImagesAndVideo(): void
     {
+        // The W7 pre-adapter tripwire demanded this exact table be re-read
+        // when a both-offers family appeared; it is that re-read, landed.
         foreach (EndpointFamily::cases() as $family) {
             $flags = MediaAffordance::flags(['mediaFamily' => $family->value], self::BASE);
-            self::assertFalse(
+            self::assertSame(
+                $family === EndpointFamily::SglangDiffusion,
                 $flags['image'] && $flags['video'],
-                'family ' . $family->value . ' lights BOTH affordances — the W7 adapter landed and this '
-                . 'tripwire demands a deliberate re-read of the video story',
+                'family ' . $family->value . ' changed its both-offers status — sglang is the single '
+                . 'image+video family by design, so any shift here is a deliberate door edit',
             );
         }
     }
@@ -151,7 +155,7 @@ final class MediaAffordanceTest extends TestCase
 
         $sglang = MediaAffordance::flags(['mediaFamily' => 'sglang-diffusion'], self::BASE);
         self::assertNotNull(JobClient::videoContract(EndpointFamily::SglangDiffusion), 'the contract exists…');
-        self::assertFalse($sglang['video'], '…yet video stays false because isImplemented gates it here (stricter than the tool door, disclosed in the W6.7 report)');
+        self::assertTrue($sglang['video'], '…and since W7 isImplemented gates it open too — the flag now matches the tool door');
     }
 
     public function testCurrentReadsTheEnvironmentBaseOnceAndHoldsIt(): void
