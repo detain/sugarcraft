@@ -101,10 +101,12 @@ final class Infotext
                 continue; // emitted as a pair from the 'Variation seed' arm
             }
             if ($label === 'Variation seed') {
+                // R5 (W7 ledger): the strength leg rode on $variationOn alone,
+                // so a strength with no subseed emitted an orphan
+                // 'Variation seed strength:' — the pair law above demands BOTH
+                // legs or none.
                 if ($variationOn && $subseed !== null) {
                     $pairs[] = 'Variation seed: ' . self::quoteValue($subseed);
-                }
-                if ($variationOn) {
                     $pairs[] = 'Variation seed strength: ' . self::quoteValue((string) $strength);
                 }
                 continue;
@@ -686,7 +688,9 @@ final class Infotext
     private static function quoteValue(string $value): string
     {
         if (str_contains($value, ',') || str_contains($value, ':') || str_contains($value, "\n")) {
-            return json_encode($value, JSON_UNESCAPED_SLASHES);
+            // R2 (W7 ledger): invalid UTF-8 made json_encode return false and
+            // the string return type fatal; substitute U+FFFD instead.
+            return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         }
 
         return $value;

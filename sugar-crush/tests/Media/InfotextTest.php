@@ -83,6 +83,25 @@ final class InfotextTest extends TestCase
         self::assertStringContainsString('Variation seed: 1, Variation seed strength: 0.2', $on);
     }
 
+    public function testVariationStrengthWithoutSubseedEmitsNeitherLegOfThePair(): void
+    {
+        // R2 (W7 ledger): strength arrived alone via both routes — the
+        // modelled setter and a raw extras key — and used to leak an orphan
+        // 'Variation seed strength:' line. The pair law is all-or-nothing.
+        $modelled = Infotext::emit(GenerationParams::new()->withSubseedStrength(0.5), [], '');
+        self::assertStringNotContainsString('Variation seed', $modelled);
+        $raw = Infotext::emit(GenerationParams::new(), ['Variation seed strength' => '0.5'], '');
+        self::assertStringNotContainsString('Variation seed', $raw);
+    }
+
+    public function testInvalidUtf8ValueIsSubstitutedNotFatal(): void
+    {
+        // R2 (W7 ledger): json_encode returned false on a bad byte and the
+        // string return type threw a TypeError. SUBSTITUTE keeps emit total.
+        $text = Infotext::emit(GenerationParams::new(), ['Model' => "a,\xFF" . 'b'], '');
+        self::assertStringContainsString('Model: "a,\ufffdb"', $text);
+    }
+
     public function testEmptyNegativeLineIsOmitted(): void
     {
         $text = Infotext::emit(GenerationParams::new()->withSteps(20), ['prompt' => 'only prompt'], 'only prompt');

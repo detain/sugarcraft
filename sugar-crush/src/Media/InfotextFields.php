@@ -97,9 +97,11 @@ final class InfotextFields
         'Variance seed' => 'Variation seed',
         'Variance seed strength' => 'Variation seed strength',
         'Variation amount' => 'Variation seed strength',
-        'Hires upscale' => 'Hires upscale',
+        // R2 (W7 ledger): the 'Hires upscale' / 'Hires denoising strength'
+        // self-rows were exact no-ops — canonicalLabel() falls through to
+        // `$label` via ?? for any key absent here, and both labels are
+        // already canonical FIELDS keys.
         'Denoising strength (highres)' => 'Hires denoising strength',
-        'Hires denoising strength' => 'Hires denoising strength',
     ];
 
     /**
