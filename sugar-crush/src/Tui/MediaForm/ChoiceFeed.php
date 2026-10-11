@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\MediaForm;
 
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Media\Sd\Client;
 
 /**
@@ -12,6 +13,16 @@ use SugarCraft\Crush\Media\Sd\Client;
  * `GET /schedulers` replace the §2.9 enum rosters at form open, cached for
  * the process; any failure leaves the enums in place (fail-open — a dead
  * server must never cost the user the form).
+ *
+ * The listing hops dial through the same {@see Client} as generation and
+ * carry the same credential (W7 seam cure): the key resolves from the
+ * layered settings — `mediaApiKey` first, `sd.apiKey` as the image-era
+ * sibling, the exact ladder GenerateVideo documents ("a host with one
+ * credential uses it for both surfaces") — and rides into
+ * {@see Client::authHeaders()}, the single header-minting choke point, so
+ * `${VAR}` placeholders expand here identically to every other media egress.
+ * Before this cure the feed passed no key at all: a server behind auth
+ * answered 401 and the fail-open door silently kept the enum rosters.
  *
  * The transport is idle-bounded but carries no total deadline (the E646
  * doctrine), so this hop runs ONLY on the real launch path — the App seam
@@ -35,9 +46,16 @@ final class ChoiceFeed
      * configured or the lookup failed. Keys are the FieldSpec::CHOICES_*
      * names the option rows ask for.
      *
+     * @param ?array<string, mixed> $settings     authoritative when injected
+     *        (tests), for the credential read only — the base keeps resolving
+     *        through env/settings exactly as production does; null reads the
+     *        user config the same fail-soft way the tools do.
+     * @param array<string, mixed>  $clientOptions verbatim Guzzle client
+     *        options passed down to the transport ('handler' is the test seam
+     *        that pins egress headers without a socket).
      * @return array<string, list<string>>|null
      */
-    public static function forForm(): ?array
+    public static function forForm(?array $settings = null, array $clientOptions = []): ?array
     {
         $base = Client::resolveBaseUrl();
         if ($base === null) {
@@ -49,7 +67,7 @@ final class ChoiceFeed
         }
 
         try {
-            $client = Client::configured();
+            $client = Client::configured(null, null, self::configuredApiKey($settings ?? self::liveSettings()), $clientOptions);
             $choices = array_filter([
                 FieldSpec::CHOICES_SAMPLERS => self::namesFrom($client->samplers()),
                 FieldSpec::CHOICES_SCHEDULERS => self::namesFrom($client->schedulers()),
@@ -133,6 +151,36 @@ final class ChoiceFeed
         }
 
         return $titles;
+    }
+
+    /**
+     * The media credential ladder, verbatim in precedence to
+     * GenerateVideo::client(): `mediaApiKey` (the W1.8 media roster) first,
+     * `sd.apiKey` (the image-era key) as sibling fallback; anything else —
+     * non-string, empty — means no key and no header.
+     *
+     * @param array<array-key, mixed> $settings
+     */
+    private static function configuredApiKey(array $settings): ?string
+    {
+        foreach (['mediaApiKey', 'sd.apiKey'] as $key) {
+            $value = $settings[$key] ?? null;
+            if (\is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /** The merged user config, fail-soft exactly like ImportPng::liveSettings(). */
+    private static function liveSettings(): array
+    {
+        try {
+            return Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /** Forget the cached set (test seam; production caches per process). */

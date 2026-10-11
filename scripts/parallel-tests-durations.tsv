@@ -587,6 +587,7 @@ sugar-crush/tests/Chat/AgentLiveLinesTest.php	0.100	9
 sugar-crush/tests/Tui/MenuDropdownTest.php	0.099	2
 sugar-crush/tests/Providers/ProviderConnectTimeoutTest.php	0.099	118
 sugar-crush/tests/Tools/BuiltIn/GrepOptionInjectionTest.php	0.099	16
+sugar-crush/tests/Tui/MediaForm/ChoiceFeedTest.php	0.098	25
 sugar-crush/tests/Hooks/ScriptHookJsonStdoutTest.php	0.094	27
 sugar-crush/tests/Agents/Board/BoardTest.php	0.093	20
 sugar-crush/tests/Skills/ProposedSkillsTest.php	0.093	14

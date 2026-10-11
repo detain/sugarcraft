@@ -273,6 +273,52 @@ final class MaskIngestTest extends TestCase
         $this->assertSame(MaskIngest::ADVISORY_COVERS_EVERYTHING, $mask->advisory);
     }
 
+    // ---- W7 seam cure: capped IDAT inflate -------------------------------------
+
+    public function testAnOverCapIdatBombRidesTheGdFallbackWithTheSameVerdict(): void
+    {
+        // MED-1 family (sibling of the Png tEXt cure): a 1×1 header paired
+        // with a ratio-bomb IDAT. libpng inflates only the declared rows —
+        // "Too much image data" is a warning, so ImageIngress ADMITS the
+        // file — which left the byte walk's second inflate as the one place
+        // the full expansion was minted. Post-cure the walk declines on the
+        // capped inflate and GD answers; the verdict is deliberately the
+        // pre-cure verdict (this pin proves the decline is wired, GD still
+        // resolving the picture — the cap itself is pinned structurally
+        // below, because cap-present and cap-absent are indistinguishable
+        // through any verdict).
+        $png = "\x89PNG\r\n\x1a\n"
+            . self::chunk('IHDR', \pack('NNCCCCC', 1, 1, 8, 0, 0, 0, 0))
+            . self::chunk('IDAT', \gzcompress("\x00\xFF" . \str_repeat("\x00", 200_000)))
+            . self::chunk('IEND', '');
+
+        $mask = MaskIngest::fromBytes($png, 'bomb.png');
+
+        $this->assertSame(MaskIngest::MODE_LUMINANCE, $mask->mode, 'one white pixel via GD');
+        $this->assertSame(MaskIngest::ADVISORY_COVERS_EVERYTHING, $mask->advisory);
+    }
+
+    public function testTheIdatInflateCarriesTheCapAndBothHonestyGatesStructurally(): void
+    {
+        // The walkPngBytes inflate MUST carry the header-derived budget as
+        // max_length, and the two gates keeping that argument honest must be
+        // present: `< 1` (max_length 0 behaves as UNLIMITED — measured PHP
+        // 8.3 — so a zero-dimension lie must never reach the call) and the
+        // ceiling (an absurd declaration is declined before inflating). No
+        // functional mode detects their absence — the ceiling branch is not
+        // reachable through fromBytes at all for gray masks, since every
+        // header over the ceiling ALSO trips ImageIngress's own pixel/container
+        // doors first, and the <1 gate is defense-in-depth behind the door
+        // that refuses zero-dimension files. The source slice is the
+        // discriminator (same doctrine as PngTest's tEXt census).
+        $src = (string) \file_get_contents(__DIR__ . '/../../src/Media/MaskIngest.php');
+
+        $this->assertSame(1, \substr_count($src, 'gzuncompress($idat, $expected)'), 'the inflate is capped, once, nowhere uncapped');
+        $this->assertSame(1, \substr_count($src, '$expected < 1'), 'zero-dimension gate present');
+        $this->assertSame(1, \substr_count($src, '$expected > self::MAX_IDAT_RAW_BYTES'), 'ceiling gate present');
+        $this->assertSame(67_108_864, MaskIngest::MAX_IDAT_RAW_BYTES, '64 MiB — no larger than the admitted container');
+    }
+
     // ---- builders --------------------------------------------------------------
 
     /**

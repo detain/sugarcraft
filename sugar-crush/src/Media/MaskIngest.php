@@ -59,6 +59,25 @@ final readonly class MaskIngest
     private const PNG_SIGNATURE = "\x89PNG\r\n\x1a\n";
 
     /**
+     * Raw-scanline ceiling for the IDAT inflate of the byte walk (W7 seam
+     * cure, sibling doctrine of {@see Png::MAX_TEXT_BYTES}): a hostile server
+     * or file can pair a modest IHDR with a DEFLATE ratio-bomb IDAT, and an
+     * uncapped inflate mints the whole expansion in RAM before the scanline
+     * equality check rejects it. The inflate therefore carries a max_length
+     * of exactly the IHDR-derived scanline budget, and shapes declaring MORE
+     * than this ceiling are simply not this walk's shape — they decline to
+     * the GD fallback (libpng bounds its own allocations). 64 MiB is
+     * self-referential: no larger than the compressed container
+     * {@see ImageIngress} admits at all (ImageSource::MAX_BYTES), and it
+     * covers every mask the purpose supports — every gray/gray+alpha mask
+     * inside ImageSource's 50-megapixel admission door (47.7 MiB raw worst
+     * case), RGBA up to 4095². One notch past the ceiling a 4096² RGBA
+     * frame rides GD instead, trading the walk's alpha-254 precision (already
+     * the disclosed fallback limitation) for the bound.
+     */
+    public const MAX_IDAT_RAW_BYTES = 67_108_864;
+
+    /**
      * Walk verdict marker for "decided: neither convention" — distinct from
      * null, which means "not this walk's shape, try the next one".
      */
@@ -143,7 +162,9 @@ final readonly class MaskIngest
     /**
      * Byte-exact walk of the common PNG shape: 8-bit, non-interlaced, colour
      * types 0 (gray), 2 (RGB), 4 (gray+alpha), 6 (RGBA). Returns null for any
-     * other shape (or malformed stream) so the caller falls through to GD.
+     * other shape, any malformed stream, and any header declaring a scanline
+     * budget over {@see self::MAX_IDAT_RAW_BYTES} — the IDAT inflate is capped
+     * at that budget (W7 seam cure) — so the caller falls through to GD.
      *
      * @return array{0: string, 1: ?string}|null mode/advisory, VERDICT_NEITHER,
      *         or null = not my shape (fall through)
@@ -199,8 +220,25 @@ final readonly class MaskIngest
         }
 
         $channels = match ($colorType) { 0 => 1, 2 => 3, 4 => 2, default => 4 };
-        $raw = @gzuncompress($idat);
-        if ($raw === false || strlen($raw) !== $height * (1 + $width * $channels)) {
+
+        // W7 seam cure (MED-1 family): the inflate carries the EXACT scanline
+        // budget as max_length — an over-cap stream returns false (measured
+        // PHP 8.3) and rides the same decline as a mismatched length, minus
+        // the allocation. This closes the reachable bomb: ImageIngress admits
+        // a lying-IHDR file because libpng inflates only the declared rows
+        // ("Too much image data" is a warning), so the second inflate here
+        // was the unbounded expansion. The two gates keep the argument honest
+        // against a lying IHDR: `< 1` refuses zero-dimension headers (max_length
+        // 0 behaves as UNLIMITED — measured), and the ceiling refuses absurd
+        // declarations before inflating; any `$expected` that reaches the call
+        // is a true int (an overflowing product compares > the ceiling as a
+        // float and declines).
+        $expected = $height * (1 + $width * $channels);
+        if ($expected < 1 || $expected > self::MAX_IDAT_RAW_BYTES) {
+            return null;
+        }
+        $raw = @gzuncompress($idat, $expected);
+        if ($raw === false || strlen($raw) !== $expected) {
             return null;
         }
 
