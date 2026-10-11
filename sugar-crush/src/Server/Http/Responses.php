@@ -19,14 +19,18 @@ use React\Http\Message\Response;
 final class Responses
 {
     /**
-     * Headers on every response. A same-origin app with nothing to embed and
-     * nothing to frame: `connect-src 'self'` covers the WebSocket under CSP3.
+     * Headers on every response. A same-origin app with nothing to embed
+     * from OTHER origins and nothing to frame: `connect-src 'self'` covers
+     * the WebSocket under CSP3; `img-src`/`media-src` additionally admit
+     * `blob:` because MediaCard renders `media.fetch` bytes through
+     * same-origin object URLs — without the carve-out Chromium refuses to
+     * decode them (the fetch succeeds; the paint errors).
      */
     public const SECURITY_HEADERS = [
         'X-Content-Type-Options' => 'nosniff',
         'Referrer-Policy' => 'no-referrer',
         'X-Frame-Options' => 'DENY',
-        'Content-Security-Policy' => "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        'Content-Security-Policy' => "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         'Cross-Origin-Opener-Policy' => 'same-origin',
         'Cross-Origin-Resource-Policy' => 'same-origin',
     ];
