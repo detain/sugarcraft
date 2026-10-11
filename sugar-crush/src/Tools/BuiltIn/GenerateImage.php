@@ -689,7 +689,13 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
         );
     }
 
-    /** Re-embed verbatim server infotext, else emit ours; non-PNG rides raw. */
+    /**
+     * Re-embed verbatim server infotext, else emit ours; non-PNG rides raw.
+     * The verbatim replay is forfeited whole when the row carries a
+     * secret-shaped key (plan :902, R21 MAJOR-1) — the scrubbed emit() takes
+     * over, because surgically repairing pairs inside an unbounded raw replay
+     * would leave the rogue server a verbatim-write channel into every PNG.
+     */
     private function embed(MediaArtifact $artifact, MediaRequest $request, ?string $rawText): string
     {
         $bytes = (string) $artifact->bytes();
@@ -697,6 +703,9 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
             return $bytes;
         }
         $text = $rawText;
+        if ($text !== null && Infotext::containsSecretKey($text)) {
+            $text = null;
+        }
         if ($text === null || trim($text) === '') {
             $parsed = $artifact->infotext();
             $text = \is_array($parsed) && $parsed !== []

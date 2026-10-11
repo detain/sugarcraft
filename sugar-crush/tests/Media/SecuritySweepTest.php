@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Host\WorkspaceContext;
 use SugarCraft\Crush\Media\Capability\MediaAffordance;
 use SugarCraft\Crush\Media\Infotext;
+use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Media\Png;
 use SugarCraft\Crush\Media\Sd\CallableSdTransport;
 use SugarCraft\Crush\Media\Sd\Client;
@@ -27,6 +28,7 @@ use SugarCraft\Crush\Protocol\Methods\MediaMethods;
 use SugarCraft\Crush\Support\ClipboardImage;
 use SugarCraft\Crush\Support\MediaStore;
 use SugarCraft\Crush\Support\PrivateDir;
+use SugarCraft\Crush\Support\ToolCancelRequests;
 use SugarCraft\Crush\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Crush\Tests\Server\Support\WireClient;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
@@ -463,6 +465,134 @@ final class SecuritySweepTest extends TestCase
         self::assertNull(Png::readText($signature . $halfChunk));
         self::assertNull(Png::readText($signature));
         self::assertNull(Png::readText('not even close to png'));
+    }
+
+    // ── area 4b: R21 MAJOR-1 — server-sourced secret-shaped keys drop ─
+
+    /**
+     * Plan :902 secret-drop law: an `/api|key|token|secret/i` shaped key
+     * SOURCED FROM THE SERVER never rides into the parsed map, whatever case
+     * the rogue label wears. Modelled field labels the pattern also matches
+     * ('Token merging ratio') are the server's own vocabulary and survive.
+     */
+    public function testParseDropsServerSourcedSecretShapedKeys(): void
+    {
+        $rogue = "a cat\nSteps: 20, sd_api_key: " . self::CANARY
+            . ', Access-Token: tok-' . self::CANARY
+            . ', Client Secret: sec-' . self::CANARY
+            . ', Token merging ratio: 0.5';
+
+        $fields = Infotext::parse($rogue);
+
+        self::assertSame('20', $fields['Steps'] ?? null);
+        self::assertSame('0.5', $fields['Token merging ratio'] ?? null, 'a modelled label is not a secret key');
+        self::assertStringNotContainsString(self::CANARY, (string) json_encode($fields));
+    }
+
+    /**
+     * The hydration channel (ImportPng::fromInfotext and import both fold
+     * parse() over applyTo): a secret-shaped stray must never land in the
+     * request's unknown-key carrier — neither via parse nor via a hand-built
+     * map fed straight to applyTo (defense in depth).
+     */
+    public function testHydrationNeverStoresSecretShapedStrays(): void
+    {
+        $rogue = "a cat\nSteps: 20, sd_api_key: " . self::CANARY . ', ControlNet 0: webui';
+
+        $request = Infotext::applyTo(MediaRequest::new(), Infotext::parse($rogue));
+        $request = Infotext::applyTo($request, ['SD_API_KEY' => self::CANARY, 'Face restoration model' => 'GFPGAN'], onlyUnset: false);
+
+        self::assertArrayNotHasKey('sd_api_key', $request->unknownKeys());
+        // Genuine strays keep their preservation law.
+        self::assertSame('webui', $request->unknownKeys()['controlnet_0'] ?? null);
+    }
+
+    /**
+     * The stamping channel inside emit(): unmodelled extras ride verbatim by
+     * design — except secret-shaped ones, which a rogue server smuggled into
+     * the parsed map can no longer smuggle into the saved PNG.
+     */
+    public function testEmitNeverReEmitsSecretShapedStrayExtras(): void
+    {
+        $text = Infotext::emit(
+            MediaRequest::new()->withPrompt('a cat'),
+            ['ControlNet 0' => 'webui', 'sd_api_key' => self::CANARY],
+        );
+
+        self::assertStringContainsString('ControlNet 0: webui', $text);
+        self::assertStringNotContainsString(self::CANARY, $text);
+    }
+
+    /**
+     * The second stamping channel (plan :902 covers BOTH): the raw server
+     * `infotexts[]` row is embedded verbatim by GenerateImage::embed(). A row
+     * carrying a secret-shaped pair forfeits the verbatim replay entirely —
+     * the whole chunk is dropped and our scrubbed emit() stamps in its
+     * place, because repairing one pair inside an unbounded raw replay would
+     * still hand the rogue server a verbatim-write channel.
+     */
+    public function testRogueServerInfotextRowForfeitsTheVerbatimStamp(): void
+    {
+        $rogue = "a cat\nSteps: 20, sd_api_key: " . self::CANARY;
+        $result = $this->runEmbedSweep($rogue);
+
+        $embedded = Png::readText((string) $result->imageBytes(), Png::KEYWORD_PARAMETERS);
+
+        self::assertIsString($embedded);
+        self::assertStringNotContainsString(self::CANARY, $embedded);
+        self::assertStringContainsString('Steps: 20', $embedded, 'the scrubbed fallback still stamps');
+    }
+
+    /**
+     * Polarity: the cure is aimed at secret-shaped rows only. A clean row —
+     * including the modelled 'Token merging ratio' label the pattern would
+     * otherwise collide with — still rides byte-identically.
+     */
+    public function testCleanServerInfotextRowStillRidesVerbatimIntoTheStamp(): void
+    {
+        $clean = "a lacy test prompt\nSteps: 20, Token merging ratio: 0.5";
+
+        self::assertFalse(Infotext::containsSecretKey($clean));
+        self::assertTrue(Infotext::containsSecretKey("x\nSteps: 1, sd_api_key: k"));
+
+        $result = $this->runEmbedSweep($clean);
+        $embedded = Png::readText((string) $result->imageBytes(), Png::KEYWORD_PARAMETERS);
+
+        self::assertSame($clean, trim((string) $embedded));
+    }
+
+    /**
+     * Drive GenerateImage over a fake sdapi envelope whose per-sample
+     * infotext row is $row; returns the ToolResult holding the saved PNG.
+     * Inline (no shared const/helper): the sibling GenerateImageTest owns
+     * the envelope()/server()/tool() shapes and duplication there is policed.
+     */
+    private function runEmbedSweep(string $row): ToolResult
+    {
+        ToolCancelRequests::forget();
+        $pngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        $tool = GenerateImage::new()
+            ->withFakeDial(new CallableSdTransport(static function (string $method, string $path, array $json) use ($row, $pngB64): array {
+                if ($method === 'POST') {
+                    return ['status' => 200, 'body' => (string) json_encode([
+                        'images' => [$pngB64],
+                        'parameters' => ['prompt' => 'a cat'],
+                        'info' => (string) json_encode(['infotexts' => [$row]]),
+                    ])];
+                }
+
+                return ['status' => 200, 'body' => '{"state":{"finished":true}}'];
+            }), 'http://sd.test:7860', [])
+            ->withMediaRoot($this->homeRoot . '/embed-' . \uniqid('', true))
+            ->withLoopPacing(0.01, static function (float $seconds): void {
+            });
+
+        $result = $tool->execute(['prompt' => 'a cat']);
+        ToolCancelRequests::forget();
+
+        self::assertFalse($result->isError(), $result->content());
+
+        return $result;
     }
 
     // ── area 5: clipboard hygiene ─────────────────────────────────────

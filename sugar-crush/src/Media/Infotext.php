@@ -35,6 +35,17 @@ use SugarCraft\Crush\Cli\Help;
  * parse() never throws: text without a recognisable parameter tail yields an
  * empty field map with the first line kept as the prompt, mirroring upstream's
  * `prompt_from_infotext` fall-through.
+ *
+ * SECRET-DROP LAW (plan :902, R21 MAJOR-1): keys sourced FROM THE SERVER whose
+ * label is credential-shaped ({@see self::SECRET_KEY_PATTERN}) are dropped
+ * before stamping or hydration — a pasted or embedded A1111 infotext carrying
+ * an override `sd_api_key`-shaped pair loses that row, loudly absent rather
+ * than silently persisted. The law covers server-sourced content only: every
+ * label WE emit is vetted, and the modelled vocabulary the pattern also
+ * matches ('Token merging ratio') is protected by {@see
+ * InfotextFields::isCanonical()}. The parsed prompt region is never rewritten
+ * — a secret smuggled as prompt prose stays prompt prose: visible, editable,
+ * and no longer a key/value the request or a re-save would carry.
  */
 final class Infotext
 {
@@ -43,10 +54,60 @@ final class Infotext
 
     public const NEGATIVE_KEY = 'negative prompt';
 
+    /** Credential-shaped label stem, matched case-insensitively (plan :902). */
+    public const string SECRET_KEY_PATTERN = '/api|key|token|secret/i';
+
     private const NEGATIVE_PREFIX = 'Negative prompt:';
 
     private function __construct()
     {
+    }
+
+    /**
+     * Is a server-sourced label credential-shaped? The modelled vocabulary
+     * wins over the pattern: 'Token merging ratio' is upstream's own field,
+     * not a secret, so canonical labels always answer false.
+     */
+    public static function isSecretKey(string $label): bool
+    {
+        if (InfotextFields::isCanonical(InfotextFields::canonicalLabel($label))) {
+            return false;
+        }
+
+        return preg_match(self::SECRET_KEY_PATTERN, $label) === 1;
+    }
+
+    /**
+     * Does a raw infotext chunk carry at least one secret-shaped pair?
+     * Parameter-anchor lines are checked pair-by-pair (so canonical labels
+     * cannot trigger it); any other line is judged on its text before the
+     * first colon — prompt prose after a colon is prose, while a stray
+     * `label: value` line (or a prompt line that opens like one) forfeits
+     * the chunk's verbatim replay. That over-forfeit is the honest side of
+     * the trade: the scrubbed emit() path keeps every legitimate byte.
+     */
+    public static function containsSecretKey(string $text): bool
+    {
+        foreach (explode("\n", rtrim($text, "\r\n")) as $line) {
+            $colon = strpos($line, ':');
+            if ($colon === false) {
+                continue;
+            }
+            if (self::startsParamLine($line)) {
+                foreach (self::splitPairs($line) as [$label]) {
+                    if (self::isSecretKey($label)) {
+                        return true;
+                    }
+                }
+
+                continue;
+            }
+            if (self::isSecretKey(trim(substr($line, 0, $colon)))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -133,6 +194,9 @@ final class Infotext
             if ($label === self::PROMPT_KEY || $label === self::NEGATIVE_KEY) {
                 continue;
             }
+            if (self::isSecretKey($label)) {
+                continue; // never restamp a server-sourced credential shape
+            }
             if ($value === null || $value === '') {
                 continue;
             }
@@ -177,6 +241,9 @@ final class Infotext
         }
         $fields = [];
         foreach (self::splitPairs($lines[$paramIndex]) as [$label, $value]) {
+            if (self::isSecretKey($label)) {
+                continue; // plan :902 secret-drop law (R21 MAJOR-1)
+            }
             $fields[InfotextFields::canonicalLabel($label)] = $value;
         }
         $prompt = [];
@@ -522,6 +589,11 @@ final class Infotext
     {
         $field = InfotextFields::fieldFor($label);
         if ($field === null) {
+            if (self::isSecretKey($label)) {
+                // Defense in depth: maps hand-built past parse() cannot
+                // hydrate a secret-shaped stray either (plan :902).
+                return $request;
+            }
             // Unmodelled stray ('ControlNet 0', 'Face restoration model', …):
             // preserved verbatim under a slug of its own label.
             return self::storeUnknown($request, self::slug($label), $raw);

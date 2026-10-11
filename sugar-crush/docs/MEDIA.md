@@ -137,7 +137,10 @@ prepends a grid image when enabled, its infotext sits first and each sample's
 follows in order; the grid file takes your save pattern with a `-grid`
 suffix. Saved output round-trips: `/sendto` (or the paste channel) lifts the
 parameters out of the PNG's own chunk, so regeneration starts from exactly
-what produced the picture.
+what produced the picture. One exception rides that round-trip: a
+server-sourced key shaped like a credential (`/api|key|token|secret/i`, modelled
+fields like `Token merging ratio` excepted) is dropped — its row never reaches a
+saved PNG, a hydrated request, or your screen.
 
 ## Video
 
