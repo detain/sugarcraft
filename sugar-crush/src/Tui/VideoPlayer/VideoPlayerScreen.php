@@ -51,9 +51,11 @@ use SugarCraft\Reel\Render\Mode;
  * audio-bearing file plays sound when ffplay/mpv exist — accepted reel
  * behavior for v1. Either way the companion dies with the Player: stop()
  * bounds-kills it (BoundedShutdown ladder) and the teardown law above
- * already routes every exit path through stop(). Whether silence should
- * be ENFORCED (factory builds via Player::fromDecoder with
- * audioPlayer: null) is the Wave-7 operator question recorded at C-4.
+ * already routes every exit path through stop(). Whether silence should be
+ * ENFORCED (factory builds via Player::fromDecoder with audioPlayer: null)
+ * was the Wave-7 operator question recorded at C-4 and CLOSED by the C-10
+ * ruling as accepted-as-is: crush's generated artifacts stay inherently
+ * silent, reel's inherent-audio play of user files stands.
  */
 final class VideoPlayerScreen
 {
