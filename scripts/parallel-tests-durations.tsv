@@ -1240,3 +1240,4 @@ sugar-crush/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.p
 sugar-crush/tests/AssistantMsgTest.php	0.001	2
 sugar-crush/tests/Media/FieldSpecParityTest.php	7.60	696
 sugar-crush/tests/Media/PerfBudgetTest.php	0.406	9
+sugar-crush/tests/Media/SecuritySweepTest.php	10.1	75
