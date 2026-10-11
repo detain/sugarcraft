@@ -191,12 +191,14 @@ final class SecuritySweepTest extends TestCase
         $link = $root . '/link';
         symlink($real, $link);
 
+        $caught = null;
         try {
             PrivateDir::ensure($link, 'media store');
-            self::fail('a symlinked store directory must be refused');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('symbolic link', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a symlinked store directory must be refused');
+        self::assertStringContainsString('symbolic link', $caught->getMessage());
 
         $loose = $root . '/loose';
         mkdir($loose, 0o755);

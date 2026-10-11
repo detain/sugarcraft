@@ -260,12 +260,23 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             . 'copy gives the second parameter a default and the other requires it. The bodies '
             . 'are byte-identical, so every body-based check in this file compares them as one '
             . 'helper and reports nothing — which is exactly the hole E285 described. It is '
-            . 'deliberate, and checked rather than assumed: PermissionsCommandTest passes no '
+            .             'deliberate, and checked rather than assumed: PermissionsCommandTest passes no '
             . 'second argument at ANY of its call sites, so the default is the only value that '
             . 'copy ever uses, while PermissionGateReadOnlyInspectionTest passes one at every '
             . 'call site and at two of them passes a value that varies per iteration — a '
             . 'default there would be dead. If a third copy appears, give it the parameter its '
             . 'own suite needs and say so here.',
+        'tool' =>
+            'The GenerateImage suites for the two API dialects (the sdapi port and the '
+            . 'crush-media W7 sglang port) build the tool with the identical fake-dial body '
+            . 'and diverge in the signature on purpose, in both places at once. The transport '
+            . 'parameter is a union in the sglang copy because its `server()` fixture returns '
+            . 'the multipart transport that dialect speaks — a scalar `CallableSdTransport` '
+            . 'there would not typecheck. The two trailing defaults steer each suite at its '
+            . 'own dialect (sglang-diffusion family on :30001, the empty-settings sdapi family '
+            . 'on :7860), and both are live: the sglang call sites omit the settings argument '
+            . 'everywhere except the one door pin that overrides it to ComfyUi, while the '
+            . 'sdapi call sites pass settings only when the case under test changes them.',
     ];
 
     /**
@@ -2640,6 +2651,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'SETTINGS_DOC' => 'The suites point at the same settings documentation path.',
         'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',
         'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
+        'TINY_PNG_B64' => 'The crush-media W7 pair - the perf-budget suite timing the preview paint and the preview suite asserting its pixels - embed the same 1x1 PNG so both measure the one synthetic image; neither derives it, and a re-roll of the fixture moves the pair together, the CHUNKED shape at a different path depth.',
         'TRUNCATED' => 'The two A11 suites - provider-side argumentsError() stamping and Runtime-side refusal - feed the audit\'s one cut-off JSON payload, so both ends of the seam assert on the same malformed input.',
         'UNAUTHORIZED_BODY' => 'The provider-error surfacing suites (engine road and sub-agent road, audit AG-4) feed the same 401 body so both assert the same provider text reaches the user.',
         'VARS' => 'The environment roster the wiring suites pin is one list duplicated per suite; it belongs in a provider, and until it moves this row says so out loud.',
