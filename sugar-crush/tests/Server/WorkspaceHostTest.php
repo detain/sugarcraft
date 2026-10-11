@@ -159,6 +159,40 @@ final class WorkspaceHostTest extends TestCase
         self::assertNotSame($pid, $this->gateway->host($this->other)?->pid());
     }
 
+    public function testTheOverflowAnnounceKeepsAnAllDecimalSessionIdAString(): void
+    {
+        // R5-m2 (W7 ledger): PHP casts all-decimal string array keys to int,
+        // so `Gateway::lost()` reads such a sessionId back as an int and the
+        // wire would carry a JSON number without the (string) cast (fix at
+        // ffffcce37). Real ids are hex, so the coercion only ever exercised
+        // itself by collision luck (~0.35% of runs) — plant the canonical
+        // integer-shaped key instead of waiting for the dice.
+        $client = $this->client();
+        $this->call($client, 'workspace.open', ['root' => $this->other]);
+        $pid = $this->gateway->host($this->other)?->pid();
+        self::assertIsInt($pid);
+
+        $plantId = '1421987654321';
+        $roots = new \ReflectionProperty(Gateway::class, 'sessionRoots');
+        $subs = new \ReflectionProperty(Gateway::class, 'subscribers');
+        $sessionRoots = $roots->getValue($this->gateway);
+        $subscribers = $subs->getValue($this->gateway);
+        $sessionRoots[$plantId] = $this->other;
+        $subscribers[$plantId] = [$client->connection->id() => $client->connection];
+        $roots->setValue($this->gateway, $sessionRoots);
+        $subs->setValue($this->gateway, $subscribers);
+
+        \posix_kill($pid, 9);
+        self::assertTrue($this->runUntil(fn (): bool => $this->gateway->host($this->other) === null, 10.0), 'the gateway never noticed the host died');
+        $overflow = $client->events('server.overflow');
+        self::assertCount(1, $overflow);
+        self::assertSame(
+            ['sessionId' => $plantId, 'dropped' => 0, 'action' => 'resubscribe'],
+            $overflow[0]['data'],
+            'the integer-cast key must land on the wire as the subscribed string',
+        );
+    }
+
     public function testClosingAWorkspaceStopsItsHost(): void
     {
         $client = $this->client();
