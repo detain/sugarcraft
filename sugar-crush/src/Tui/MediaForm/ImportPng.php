@@ -90,7 +90,8 @@ final class ImportPng
     /**
      * The paste-params door: fold an infotext string over a draft locally,
      * under the same onlyUnset law the chunk import uses. Never throws —
-     * {@see Infotext::parse()} tolerates legacy and unknown keys by design.
+     * {@see Infotext::parse()} tolerates legacy and unknown keys by design,
+     * dropping server-sourced secret-shaped ones per {@see Infotext::isSecretKey()}.
      */
     public static function fromInfotext(string $text, MediaRequest $draft): MediaRequest
     {
