@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host;
 
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\ToolResult;
 
 /**
  * One open session as a client first sees it (roadmap O-2g, Appendix O §4.3
@@ -16,7 +17,8 @@ use SugarCraft\Crush\Message;
  * session's {@see SessionEvent}s from {@see $lastSeq} on, so nothing that
  * happens between the snapshot and the subscription is missed or doubled
  * (Appendix O §6.8). Rows are carried as the {@see Message}s the host holds;
- * {@see toArray()} gives them in the shape the transcript is saved in.
+ * {@see toArray()} gives them in the shape the transcript is saved in, plus
+ * the media refs {@see mediaBearingRow()} folds onto finished calls.
  *
  * Immutable: a snapshot is a moment, and the host's next change is a new one.
  */
@@ -60,7 +62,8 @@ final class SessionSnapshot
     }
 
     /**
-     * The wire shape: rows as they are saved ({@see Message::jsonSerialize()}),
+     * The wire shape: rows as they are saved ({@see Message::jsonSerialize()})
+     * with the finished calls' media refs folded in ({@see mediaBearingRow()}),
      * plus the status the rows cannot show.
      *
      * @return array<string, mixed>
@@ -71,10 +74,45 @@ final class SessionSnapshot
             'sessionId' => $this->sessionId,
             'status' => $this->status(),
             'turnId' => $this->turnId,
-            'messages' => array_map(static fn (Message $row): array => $row->jsonSerialize(), $this->history),
+            'messages' => array_map(self::mediaBearingRow(...), $this->history),
             'queued' => $this->queued,
             'spentUsd' => $this->spentUsd,
             'lastSeq' => $this->lastSeq,
         ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * One saved row as the snapshot carries it: the persisted shape plus, on
+     * each finished tool entry that names an artifact, the `media` list and —
+     * only when the cap bites — `mediaTruncated`, built by the very same
+     * {@see TranscriptProjector::mediaRefs()} that stamps `tool.finished`
+     * (W7 snapshot fold, R16(a): a reload must show the same MediaCards a live
+     * tab saw, so the row and the event must never hold two derivations).
+     *
+     * The fold is wire-only: the saved row ({@see Message::jsonSerialize()})
+     * stays as it was, because a ref is derived data — derived at read time it
+     * always agrees with the row it describes; persisted, it could go stale
+     * against a later ref law. A result without an artifact path carries no
+     * keys at all, so every media-less row serialises byte-for-byte as before.
+     */
+    private static function mediaBearingRow(Message $message): array
+    {
+        $row = $message->jsonSerialize();
+        foreach ($message->toolResults as $index => $result) {
+            if (!$result instanceof ToolResult) {
+                continue;
+            }
+            $truncated = false;
+            $media = TranscriptProjector::mediaRefs($result, $truncated);
+            if ($media === null) {
+                continue;
+            }
+            $row['toolResults'][$index]['media'] = $media;
+            if ($truncated) {
+                $row['toolResults'][$index]['mediaTruncated'] = true;
+            }
+        }
+
+        return $row;
     }
 }

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Host\SessionEvent;
+use SugarCraft\Crush\Host\SessionSnapshot;
 use SugarCraft\Crush\Host\TranscriptProjector;
 use SugarCraft\Crush\Media\Png;
 use SugarCraft\Crush\Message;
@@ -263,6 +264,30 @@ final class TranscriptProjectorMediaTest extends TestCase
         self::assertSame($png, $decoded->result->imageBytes());
         self::assertSame('/sessions/s1/wave-6-sample-00.png', $decoded->result->imagePath());
         self::assertSame('kitty', $decoded->result->imageProtocol());
+    }
+
+    public function testTheSnapshotRowCarriesTheEventRefsByteIdentical(): void
+    {
+        $png = self::stampedPng();
+        $result = self::finished('/sessions/s1/wave-6-sample-00.png', $png);
+
+        // W7 fold (R16(a)): same ToolResult, two consumers — the live
+        // `tool.finished` frame and the reload-path snapshot row — must hold
+        // the identical projection. One builder ({@see
+        // TranscriptProjector::mediaRefs()}), never a second derivation.
+        $eventMedia = self::event($result)->data['media'];
+        $wire = SessionSnapshot::new('sess', [TranscriptProjector::resultRow($result)])->toArray();
+        $rowMedia = $wire['messages'][0]['toolResults'][0]['media'];
+
+        self::assertSame($eventMedia, $rowMedia);
+        self::assertSame('wave-6-sample-00', $rowMedia[0]['artifactId']);
+        self::assertStringNotContainsString(
+            \base64_encode($png),
+            \json_encode($rowMedia, JSON_THROW_ON_ERROR),
+        );
+        // A single-ref row cannot trip the cap, so the flag stays absent —
+        // the same absence law the event carries.
+        self::assertArrayNotHasKey('mediaTruncated', $wire['messages'][0]['toolResults'][0]);
     }
 
     /** @param array{0: string, 1: int}|null $identity */
