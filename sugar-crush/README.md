@@ -65,6 +65,7 @@ under [`docs/`](docs/) for the full detail.
 | [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
+| [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
 | [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, serving your own |
 | [`docs/SERVER.md`](docs/SERVER.md) | `sugarcrush serve`, remote access (`--allowed-host`, `--allowed-ips`), picking a new session's directory (`--allow-dir-browse`), the `sugarcrush.v1` protocol, the web UI, `sugarcrush attach`, editors through `sugarcrush acp` |
 | [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
@@ -106,7 +107,7 @@ export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 
 `SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in tools (Bash, Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, `doctor`, Skill, Lsp, Memory, RepoMap, Todo, Prune, Compress, Recall, Workflow, Team, GenerateImage and Task) and the safety hooks automatically. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all (the class is `Tools\BuiltIn\Doctor`; the [Capabilities](#capabilities) roster lists every runtime name beside its class file).
 
-**Generating images.** Point the app at a Stable Diffusion WebUI server — `sd.baseUrl` in your settings, or `SUGARCRUSH_SD_BASE_URL` — then ask the agent for a picture, or type `/generate a cat astronaut --steps 30` yourself. Without a configured server both refuse **before dialing**: no connection is attempted. Today only the `sdapi` family is spoken; other families the capability probe can detect are not yet implemented. Finished files land under `~/.sugar-crush/media/` (private: directories `0700`, files `0600`); previews are display-only and never stored. `auto` render mode asks the terminal what it supports (kitty, iterm2, sixel, chafa, halfblock), or pin one with `ui.imageRenderMode` / `SUGARCRUSH_MEDIA_RENDER_MODE`.
+**Generating images and video.** Point the app at a Stable Diffusion server — `sd.baseUrl` in your settings, or `SUGARCRUSH_SD_BASE_URL` — then ask the agent for a picture, or type `/generate a cat astronaut --steps 30` yourself. Without a configured server every door refuses **before dialing**: no connection is attempted. The speakable dialects are the A1111/SD.Next `sdapi` family (images) and `sglang-diffusion` (images and video); other families the capability probe can detect — ComfyUI, OpenAI-style image endpoints — stay named refusals. Finished files land under `~/.sugar-crush/media/` (private: directories `0700`, files `0600`); previews are display-only and never stored. `auto` render mode asks the terminal what it supports (kitty, iterm2, sixel, chafa, halfblock), `/rendermode` switches it mid-session, and `ui.imageRenderMode` / `SUGARCRUSH_MEDIA_RENDER_MODE` pin it at launch. The whole surface — form tabs, presets, the PNG infotext round-trip, the video job ledger, the RPC methods — lives in [`docs/MEDIA.md`](docs/MEDIA.md).
 
 Every environment variable SugarCrush reads is documented in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
@@ -1348,6 +1349,11 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
 - **Workflows** — staged multi-agent pipelines in YAML or PHP, run with
   `/workflow run` or written by the model itself through the `Workflow` tool.
   See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
+- **Media** — images and video generated against a diffusion server you
+  configure (`sdapi` or `sglang-diffusion`), from `/generate`, the `Ctrl+D`
+  form, the agent's own tools, or `sugarcrush serve`. Saved PNGs carry their
+  parameters and round-trip through `/sendto`. See
+  [`docs/MEDIA.md`](docs/MEDIA.md).
 
 ### Interface settings
 
