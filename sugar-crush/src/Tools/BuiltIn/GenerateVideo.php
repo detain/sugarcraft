@@ -449,12 +449,23 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
         $saved = $client->fetch($taskId, $snapshot, $store, $tokens);
         $job = $job->withStatus(MediaJobStatus::Done)->withArtifactPath((string) $saved->path());
 
-        // Adjacency law: re-putting the SAME token values (number included)
-        // under a different extension resolves the same name body, and
-        // resolveTarget only ticks the collision number onto names that are
-        // already taken — so <name>.json lands beside <name>.mp4.
+        // Adjacency law: re-putting the SAME token values under a different
+        // extension resolves the same name body, and resolveTarget only ticks
+        // the collision number onto names that are already taken — so
+        // <name>.json lands beside <name>.mp4. "SAME" must include the CLOCK
+        // tokens: date/time/job_timestamp are resolved at each put's instant,
+        // so carrying only `number` let a second boundary between the two
+        // writes rename one side of the pair (R21 micro-gate serial caught it
+        // live). The saved artifact's resolved values are the pair's truth.
+        $savedTokens = $saved->tokenValues();
         $sidecarTokens = $tokens;
-        $sidecarTokens['number'] = $saved->tokenValues()['number'] ?? 0;
+        $sidecarTokens['number'] = $savedTokens['number'] ?? 0;
+        foreach (['date', 'time', 'job_timestamp'] as $clockToken) {
+            $resolved = $savedTokens[$clockToken] ?? null;
+            if (\is_string($resolved) && $resolved !== '') {
+                $sidecarTokens[$clockToken] = $resolved;
+            }
+        }
         $sidecar = $store->put(
             (string) json_encode([
                 'kind' => 'video',

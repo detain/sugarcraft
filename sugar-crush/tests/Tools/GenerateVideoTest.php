@@ -440,6 +440,29 @@ final class GenerateVideoTest extends TestCase
         self::assertSame('GenerateVideo', $rule->toolNamePattern());
     }
 
+    /**
+     * The C-6 adjacency law now structurally subsumes the clock: the sidecar copies
+     * date/time/job_timestamp from the SAVED artifact instead of letting the second
+     * put() re-resolve them from the live clock. A second boundary between the two
+     * puts used to rename one half of the pair — R21's micro-gate serial caught it
+     * happening for real.
+     */
+    public function testTheSidecarClockTokensAreCopiedNotReResolved(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Tools/BuiltIn/GenerateVideo.php');
+
+        self::assertSame(
+            1,
+            substr_count($source, "foreach (['date', 'time', 'job_timestamp'] as \$clockToken)"),
+            'the clock overlay lives exactly once, over the three GENERATED_TOKENS',
+        );
+        self::assertSame(
+            1,
+            substr_count($source, '$savedTokens = $saved->tokenValues();'),
+            'the pair truth is read from the saved artifact once',
+        );
+    }
+
     // ---- fixtures ----------------------------------------------------------------
 
     /**
