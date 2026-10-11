@@ -97,7 +97,7 @@ final class MethodSchemas
                             'image' => Schema::boolean(),
                             'video' => Schema::boolean(),
                             'baseUrlHostOnly' => Schema::string()->nullable(),
-                        ], ['image', 'video', 'baseUrlHostOnly'])->describe('Whether this server may offer image/video generation, derived from config ∩ capability at boot with no dial (plan_crush_media W6.7); `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured.'),
+                        ], ['image', 'video', 'baseUrlHostOnly'])->describe('Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured.'),
                     ], ['methods', 'events']),
                     'limits' => Schema::map(Schema::integer(0)),
                     'principal' => Schema::object([
