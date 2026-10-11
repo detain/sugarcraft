@@ -136,6 +136,42 @@ describe('MediaCard', () => {
     await wrapper.find('[data-testid="lightbox-close"]').trigger('click')
     expect(wrapper.find('[data-testid="media-lightbox"]').exists()).toBe(false)
   })
+
+  it('shows an honest error row when the browser cannot decode the bytes', async () => {
+    const wrapper = mountCard({ media: media(), sessionId: 's1' })
+    await flushPromises()
+    await wire.answer('media.fetch', row())
+    expect(wrapper.find('img').exists()).toBe(true)
+    await wrapper.find('[data-testid="media-image"] img').trigger('error')
+    expect(wrapper.find('[data-testid="media-image"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="media-error"]').text()).toContain('failed to decode')
+  })
+
+  it('discards a superseded load without ever creating its object URL', async () => {
+    const created: string[] = []
+    vi.spyOn(objectUrls, 'create').mockImplementation(() => {
+      created.push('blob:superseded')
+      return 'blob:superseded'
+    })
+    const wrapper = mountCard({ media: media(), sessionId: 's1' })
+    await flushPromises()
+    // a1's fetch is in flight; swapping the artifact supersedes it with a2.
+    await wrapper.setProps({ media: media({ artifactId: 'a2' }) })
+    await flushPromises()
+    expect(wire.sent('media.fetch')).toHaveLength(2)
+    // Resolve the OLD request first: its continuation must hit the token
+    // gate and create nothing.
+    const old = wire.sent('media.fetch')[0]
+    if (!old) throw new Error('a1 fetch was never sent')
+    wire.socket().answer(row(), old.id)
+    await flushPromises()
+    expect(created).toHaveLength(0)
+    expect(wrapper.attributes('data-phase')).toBe('loading')
+    // The surviving load still lands normally.
+    await wire.answer('media.fetch', { ...row(), artifactId: 'a2' })
+    expect(created).toEqual(['blob:superseded'])
+    expect(wrapper.attributes('data-phase')).toBe('ready')
+  })
 })
 
 function tool(overrides: Partial<ToolItem> = {}): ToolItem {

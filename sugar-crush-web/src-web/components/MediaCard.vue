@@ -27,6 +27,7 @@ const problem = ref('')
 const url = ref<string | undefined>(undefined)
 const mime = ref(props.media.mime)
 const unsupported = ref(false)
+const broken = ref(false)
 const expanded = ref(false)
 
 let stopped = false
@@ -56,18 +57,17 @@ async function load(): Promise<void> {
   const current = ++token
   disposeUrl()
   unsupported.value = false
+  broken.value = false
   problem.value = ''
   phase.value = 'loading'
   try {
     const assembled = await fetchArtifact(connection, props.sessionId, props.media, () => stopped || current !== token)
-    // A cancelled or superseded load never creates its URL — nothing to revoke.
-    // (An unmount landing mid-load also passes this gate only via `stopped`;
-    // disposeUrl on unmount cannot see a url this continuation has not set yet,
-    // but the token check above means neither can — no leak either way.)
-    // A cancelled or superseded load never creates its URL — nothing to revoke.
-    // (An unmount racing this continuation still lands in disposeUrl's wake:
-    // `stopped` is set first, and even mid-await the token gate above drops
-    // the result before create — one created URL, one revoked URL, always.)
+    // A cancelled or superseded load never creates its URL — nothing to
+    // revoke. An unmount racing this continuation is covered the same way:
+    // `stopped` is set before disposeUrl runs, so even though the unmount
+    // cannot see a url this continuation has not set yet, the gate below
+    // drops the result before create — one created URL, one revoked URL,
+    // always. (Pinned by the supersession case in MediaCard.spec.ts.)
     if (stopped || current !== token) return
     mime.value = assembled.mime
     url.value = objectUrls.create(assembled.blob)
@@ -77,6 +77,13 @@ async function load(): Promise<void> {
     phase.value = 'error'
     problem.value = describe(failure)
   }
+}
+
+function onImageError(): void {
+  // The fetch delivered bytes but the browser cannot render them — an honest
+  // error line, never a blank thumbnail (the R16 m3 arm).
+  broken.value = true
+  problem.value = `The ${mime.value} bytes failed to decode; the artifact may be corrupt.`
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -97,6 +104,7 @@ watch(
   () => {
     mime.value = props.media.mime
     unsupported.value = false
+    broken.value = false
     expanded.value = false
     phase.value = 'idle'
     if (props.media.kind === 'image') void load()
@@ -129,8 +137,9 @@ onBeforeUnmount(() => {
       <p v-else-if="media.kind === 'image' && !imageLike" class="state" data-testid="media-file">
         <a :href="url" :download="media.artifactId">Download the {{ mime }} artifact</a>
       </p>
+      <p v-else-if="broken" class="state error" role="alert" data-testid="media-error">{{ problem }}</p>
       <button v-else type="button" class="thumb-button" data-testid="media-image" :aria-expanded="expanded" @click="expanded = !expanded">
-        <img :src="url" :alt="altText" class="thumb" />
+        <img :src="url" :alt="altText" class="thumb" @error="onImageError" />
       </button>
     </template>
 
