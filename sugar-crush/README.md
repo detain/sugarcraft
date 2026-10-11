@@ -2162,10 +2162,10 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**22,323 tests / 421,357 assertions, 0 failures, 2 skipped** — the whole of
+ **22,336 tests / 421,404 assertions, 0 failures, 2 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-33m29s. Measured 2026-10-11, at the close of the crush-media campaign, on top of an
+32m40s. Measured 2026-10-11, at the close of the crush-media campaign, on top of an
 internal twelve-wave feature roadmap measured 2026-10-08 in 40m56s —
 its eleven waves, the remainder wave, i18n, and the serve and permission
 follow-ups (remote-access flags, directory browsing, read-only shell lines
