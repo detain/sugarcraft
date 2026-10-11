@@ -367,13 +367,28 @@ final class Infotext
      */
     private static function startsParamLine(string $line): bool
     {
-        foreach (InfotextFields::STARTERS as $starter) {
-            if (str_starts_with($line, $starter . ':') || str_contains($line, ', ' . $starter . ':')) {
-                return true;
-            }
+        // W7.5 perf: one compiled alternation replaces the 41-label scan per
+        // line. Every starter needs a ':' after it, so a colon-less line (the
+        // common prompt body) exits before touching PCRE. Backtracking keeps
+        // the prefix-overlapping pairs honest ('Seed' fails its ':' on
+        // 'Seed resize from: …' and the longer alternative then matches at the
+        // same anchor — same verdict as the old per-label loop, pinned by
+        // PerfBudgetTest::testTheAnchorAlternationKeepsPrefixOverlappingLabels).
+        if (!str_contains($line, ':')) {
+            return false;
         }
 
-        return false;
+        return preg_match(self::paramAnchorPattern(), $line) === 1;
+    }
+
+    /** The `(?:^|, )(?:<starters>):` alternation over the 41 STARTERS, built once. */
+    private static function paramAnchorPattern(): string
+    {
+        static $pattern = null;
+
+        return $pattern ??= '/(?:^|, )(?:'
+            . implode('|', array_map(static fn (string $label): string => preg_quote($label, '/'), InfotextFields::STARTERS))
+            . '):/';
     }
 
     /**
@@ -387,16 +402,34 @@ final class Infotext
      */
     private static function splitPairs(string $line): array
     {
+        // W7.5 perf: segment copies between special bytes (strcspn jumps)
+        // replace the per-byte append loop — the state machine, the split
+        // rule (', ' at depth 0 only) and the surviving quotes/backslashes
+        // inside each token are byte-for-byte what the walk produced, pinned
+        // by PerfBudgetTest::testTheSegmentedSplitMatchesTheByteWalk.
         $tokens = [];
-        $token = '';
         $depth = 0;
         $inQuote = false;
         $escaped = false;
+        $start = 0;
         $len = strlen($line);
-        for ($i = 0; $i < $len; $i++) {
+        $i = 0;
+        while ($i < $len) {
+            $jump = strcspn($line, '"<>[],\\', $i);
+            if ($jump > 0 && $escaped) {
+                // The jumped-over bytes consume the pending escape: inside a
+                // quote the byte walk cleared `escaped` on the very next
+                // character, whatever it was — the segments skip those bytes,
+                // so the state must clear here (fuzz-proven: "a\nb" closing
+                // quote was eaten as the escaped byte without this).
+                $escaped = false;
+            }
+            $i += $jump;
+            if ($i >= $len) {
+                break;
+            }
             $ch = $line[$i];
             if ($inQuote) {
-                $token .= $ch;
                 if ($escaped) {
                     $escaped = false;
                 } elseif ($ch === '\\') {
@@ -404,32 +437,24 @@ final class Infotext
                 } elseif ($ch === '"') {
                     $inQuote = false;
                 }
+                $i++;
                 continue;
             }
             if ($ch === '"') {
                 $inQuote = true;
-                $token .= $ch;
-                continue;
-            }
-            if ($ch === '<' || $ch === '[') {
+            } elseif ($ch === '<' || $ch === '[') {
                 $depth++;
-                $token .= $ch;
-                continue;
-            }
-            if ($ch === '>' || $ch === ']') {
+            } elseif ($ch === '>' || $ch === ']') {
                 $depth = max(0, $depth - 1);
-                $token .= $ch;
+            } elseif ($ch === ',' && $depth === 0 && ($line[$i + 1] ?? '') === ' ') {
+                $tokens[] = substr($line, $start, $i - $start);
+                $i += 2; // consume both bytes of the ', ' separator
+                $start = $i;
                 continue;
             }
-            if ($ch === ',' && $depth === 0 && ($line[$i + 1] ?? '') === ' ') {
-                $tokens[] = $token;
-                $token = '';
-                $i++; // consume the space of the ', ' separator
-                continue;
-            }
-            $token .= $ch;
+            $i++;
         }
-        $tokens[] = $token;
+        $tokens[] = substr($line, $start, $len - $start);
         $pairs = [];
         foreach ($tokens as $candidate) {
             $pair = self::splitPair($candidate);

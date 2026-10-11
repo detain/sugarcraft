@@ -728,11 +728,16 @@ final class MediaForm
         $border = Style::new()->foreground($theme->shellPrimary);
         $muted = Style::new()->foreground($theme->shellMuted);
 
+        // W7.5 perf: the visible set is evaluated once per painted frame and
+        // threaded through tab labels and body rows (it was computed twice,
+        // and zones() twice more, per keystroke-repaint).
+        $visible = $this->visibleSections();
+
         $title = Width::truncate(' 🎨 ' . Lang::t(GenFormKeys::TITLE) . ' ', max(0, $cols - 3));
         $topFill = max(0, $cols - 3 - Width::string($title));
         $lines = [$border->render('╭─' . $title . str_repeat('─', $topFill) . '╮')];
 
-        [$tabLine] = FormTabs::render($this->tabLabels(), $this->state->section, $width, $theme);
+        [$tabLine] = FormTabs::render($this->tabLabelsFrom($visible), $this->state->section, $width, $theme);
 
         $rule = $muted->render(str_repeat('─', $width));
         $statusLine = $this->status !== null
@@ -740,7 +745,7 @@ final class MediaForm
                 ->render(Width::truncate(ltrim($this->status, '! '), $width))
             : $muted->render(self::hints($this->footer(), $width));
 
-        $inner = [$tabLine, $rule, ...$this->bodyLines($theme, $width, $body), $rule, $statusLine];
+        $inner = [$tabLine, $rule, ...$this->bodyLines($theme, $width, $body, $visible), $rule, $statusLine];
 
         foreach ($inner as $line) {
             $lines[] = $border->render('│') . ' ' . self::cell($line, $width) . ' ' . $border->render('│');
@@ -769,7 +774,8 @@ final class MediaForm
         }
 
         $zones = [];
-        [, $tabSpans] = FormTabs::render($this->tabLabels(), $this->state->section, $inner, $theme);
+        $visible = $this->visibleSections();
+        [, $tabSpans] = FormTabs::render($this->tabLabelsFrom($visible), $this->state->section, $inner, $theme);
         foreach ($tabSpans as [$from, $to, $index]) {
             $zones[] = [1, 2 + $from, 2 + $to, self::TAB_ZONE . $index];
         }
@@ -777,7 +783,7 @@ final class MediaForm
         // Rows are clickable only while the list is what the body shows.
         if ($this->editing === null) {
             $offset = $this->listOffset($body);
-            $count = $this->focusedRows();
+            $count = $this->focusedRowsFrom($visible);
             for ($r = 0; $r < $body; $r++) {
                 $index = $offset + $r;
                 if ($index >= $count) {
@@ -792,15 +798,17 @@ final class MediaForm
     }
 
     /**
+     * @param list<Section> $visible the frame's visible sections (evaluated once by the caller)
+     *
      * @return list<string>
      */
-    private function bodyLines(Theme $theme, int $width, int $rows): array
+    private function bodyLines(Theme $theme, int $width, int $rows, array $visible): array
     {
         if ($this->editing !== null) {
             return array_pad(\array_slice(explode("\n", $this->editing->view()), 0, $rows), $rows, '');
         }
 
-        $section = $this->focusedSection();
+        $section = $this->focusedSectionFrom($visible);
         if ($section === null) {
             return array_fill(0, $rows, '');
         }
@@ -857,11 +865,13 @@ final class MediaForm
     }
 
     /**
+     * @param list<Section> $visible
+     *
      * @return list<string> the strip labels, visible sections only
      */
-    private function tabLabels(): array
+    private function tabLabelsFrom(array $visible): array
     {
-        return array_values(array_map(static fn (Section $s): string => $s->label(), $this->visibleSections()));
+        return array_values(array_map(static fn (Section $s): string => $s->label(), $visible));
     }
 
     /** @return list<Section> */
@@ -873,14 +883,26 @@ final class MediaForm
         ));
     }
 
+    /** @param list<Section> $visible */
+    private function focusedSectionFrom(array $visible): ?Section
+    {
+        return $visible[$this->state->section] ?? null;
+    }
+
+    /** @param list<Section> $visible */
+    private function focusedRowsFrom(array $visible): int
+    {
+        return \count($this->focusedSectionFrom($visible)?->rows() ?? []);
+    }
+
     private function focusedSection(): ?Section
     {
-        return $this->visibleSections()[$this->state->section] ?? null;
+        return $this->focusedSectionFrom($this->visibleSections());
     }
 
     private function focusedRows(): int
     {
-        return \count($this->focusedSection()?->rows() ?? []);
+        return $this->focusedRowsFrom($this->visibleSections());
     }
 
     /**

@@ -54,14 +54,16 @@ final class PreviewPaint
      */
     public static function paint(string $frameB64, Mosaic $mosaic, int $paneCols, int $rowBudget): ?array
     {
-        $bytes = base64_decode($frameB64, true);
-        if ($bytes === false || !Png::isPng($bytes)) {
-            return null;
-        }
-
-        $cols = self::budgetCols($paneCols);
-        $rows = self::rowsFor($bytes, $cols, $rowBudget);
-        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol();
+        // W7.5 perf: the memo is keyed on the b64 payload itself, checked
+        // BEFORE the decode — a live-row repaint serves the identical newest
+        // frame every poll tick, and the old order paid base64_decode +
+        // getimagesizefromstring + a second hash even on hits. Both cols and
+        // rows are pure functions of ($paneCols, $rowBudget, bytes) and bytes
+        // of ($frameB64), so a b64-keyed entry answers exactly what the
+        // byte-keyed lookup would; two distinct spellings decoding to equal
+        // bytes now cost two entries instead of sharing one — bounded churn,
+        // never a wrong body.
+        $key = hash('xxh3', $frameB64) . ':' . $paneCols . ':' . $rowBudget . ':' . $mosaic->protocol();
 
         if (isset(self::$memo[$key])) {
             $hit = self::$memo[$key];
@@ -70,6 +72,14 @@ final class PreviewPaint
 
             return $hit;
         }
+
+        $bytes = base64_decode($frameB64, true);
+        if ($bytes === false || !Png::isPng($bytes)) {
+            return null;
+        }
+
+        $cols = self::budgetCols($paneCols);
+        $rows = self::rowsFor($bytes, $cols, $rowBudget);
 
         try {
             $body = $mosaic->render(ImageSource::fromString($bytes), $cols, $rows);

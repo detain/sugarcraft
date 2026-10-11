@@ -100,7 +100,7 @@ final class Png
             if (!isset(self::TEXT_CHUNKS[$chunk['type']])) {
                 continue;
             }
-            $entry = self::decodeTextChunk($chunk['type'], $chunk['data']);
+            $entry = self::decodeTextChunk($chunk['type'], self::dataOf($pngBytes, $chunk));
             if ($entry === null) {
                 return null; // malformed text chunk = damaged container, fail closed
             }
@@ -149,7 +149,7 @@ final class Png
         $placed = false;
         foreach ($chunks as $chunk) {
             $isText = isset(self::TEXT_CHUNKS[$chunk['type']]);
-            $entry = $isText ? self::decodeTextChunk($chunk['type'], $chunk['data']) : null;
+            $entry = $isText ? self::decodeTextChunk($chunk['type'], self::dataOf($pngBytes, $chunk)) : null;
             if ($isText && $entry === null) {
                 throw new InvalidArgumentException("Png::writeText(): {$chunk['type']} chunk payload malformed at offset {$chunk['start']}.");
             }
@@ -241,11 +241,18 @@ final class Png
 
     /**
      * Parse the chunk framing into trusted records
-     * `{type,data,start,end}` or null for any damage — the Early Exit
-     * guard stack of the reader: signature, size cap, IHDR-first, complete
-     * frames, CRC over type+data, stop at IEND.
+     * `{type,start,end,dataStart,length}` or null for any damage — the Early
+     * Exit guard stack of the reader: signature, size cap, IHDR-first,
+     * complete frames, CRC over type+data, stop at IEND.
      *
-     * @return list<array{type: string, data: string, start: int, end: int}>|null
+     * LAZY-FRAMING LAW (W7.5 perf pass): records carry framing integers only,
+     * never the payload bytes. The CRC rides one transient `type+data` copy
+     * that is checked and dropped inside the iteration, so scanning a 64 MiB
+     * container costs the size of its largest chunk at peak instead of a
+     * second whole-file allocation held for every caller — text consumers
+     * extract payloads on demand through {@see dataOf()}.
+     *
+     * @return list<array{type: string, start: int, end: int, dataStart: int, length: int}>|null
      */
     private static function scan(string $pngBytes): ?array
     {
@@ -265,15 +272,14 @@ final class Png
                 return null; // truncated chunk
             }
             $type = substr($pngBytes, $offset + 4, 4);
-            $data = substr($pngBytes, $offset + 8, $length);
             $crc = unpack('N', substr($pngBytes, $offset + 8 + $length, 4))[1];
-            if ($crc !== (crc32($type . $data) & 0xFFFFFFFF)) {
+            if ($crc !== (crc32(substr($pngBytes, $offset + 4, 4 + $length)) & 0xFFFFFFFF)) {
                 return null; // CRC covers type+data (PNG spec §5.3) — mismatch = damaged
             }
             if ($chunks === [] && $type !== 'IHDR') {
                 return null;
             }
-            $chunks[] = ['type' => $type, 'data' => $data, 'start' => $offset, 'end' => $end];
+            $chunks[] = ['type' => $type, 'start' => $offset, 'end' => $end, 'dataStart' => $offset + 8, 'length' => $length];
             if ($type === 'IEND') {
                 return $chunks; // stop at IEND; any trailing bytes are the caller's to preserve
             }
@@ -282,9 +288,20 @@ final class Png
     }
 
     /**
+     * One chunk's payload bytes, extracted only where a caller truly needs
+     * them — the lazy half of {@see scan()}'s framing-records law.
+     *
+     * @param array{type: string, start: int, end: int, dataStart: int, length: int} $chunk
+     */
+    private static function dataOf(string $pngBytes, array $chunk): string
+    {
+        return substr($pngBytes, $chunk['dataStart'], $chunk['length']);
+    }
+
+    /**
      * Writer-side gate: same walk, loud verdicts instead of null.
      *
-     * @return list<array{type: string, data: string, start: int, end: int}>
+     * @return list<array{type: string, start: int, end: int, dataStart: int, length: int}>
      */
     private static function requireParseable(string $pngBytes, string $caller): array
     {

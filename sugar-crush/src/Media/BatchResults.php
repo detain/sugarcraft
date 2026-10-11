@@ -135,7 +135,10 @@ final readonly class BatchResults
      */
     private static function tokensFor(MediaArtifact $artifact, MediaRequest $request): array
     {
-        $tokens = array_intersect_key($artifact->tokenValues(), array_flip(MediaStore::TOKENS));
+        static $palette = null;
+        $palette ??= array_flip(MediaStore::TOKENS);
+
+        $tokens = array_intersect_key($artifact->tokenValues(), $palette);
 
         $fromRequest = [
             'seed' => $request->isSet('seed') ? $request->seed() : null,
