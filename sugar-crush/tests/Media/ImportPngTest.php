@@ -58,6 +58,24 @@ final class ImportPngTest extends TestCase
         self::assertSame(4, $request->width());
     }
 
+    public function testAChunkedPngImportsLocallyWithoutTouchingTheServerChannel(): void
+    {
+        // R11-m2 (W7 ledger): the wiring pin proves the production channel
+        // is not dialed, but no unit test combined chunked bytes WITH a live
+        // server double — a local-bypass regression (always dialing) would
+        // have passed. The throwing double makes local-first loud.
+        $serverInfo = static fn (string $base64): ?string => throw new \LogicException('the server channel must stay shut when the chunk answers');
+
+        $result = ImportPng::import((string) file_get_contents(self::CHUNKED), MediaRequest::new(), $serverInfo);
+
+        self::assertNull($result['error']);
+        self::assertSame(ImportPng::VIA_LOCAL, $result['via']);
+        $request = $result['request'];
+        self::assertNotNull($request);
+        self::assertSame('a cat, sitting', $request->prompt());
+        self::assertSame(20, $request->steps());
+    }
+
     public function testImportHonoursTheOnlyUnsetLawAUserSetValueOutranksTheFile(): void
     {
         // The draft already answers Steps: 11 — the chunk's "Steps: 20" must
