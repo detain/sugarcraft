@@ -356,7 +356,7 @@ edit it by hand.
 | `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
 | `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
 | `/generate` | ✓ | | `<prompt> [--steps N] [--size WxH] [--seed N] [--save]` | Generate an image on the configured SD server |
-| `/generate-form` | | | — | Open the interactive image generation form |
+| `/generate-form` | | | — | Open the interactive generation form (image and video tabs) |
 | `/sendto` | ✓ | | `<file.png> [--to img2img\|inpaint] [--mask FILE]` | Import a saved PNG's parameters back into the generate form |
 | `/play` | ✓ | | `<file\|artifact-name>` | Play a video artifact by name or a local clip by path in the full-screen player |
 | `/rendermode` | ✓ | | `<mode>` | Show or switch the media render mode (images repaint from the new word, the player starts from it) |

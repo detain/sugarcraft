@@ -241,14 +241,14 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `bashTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn | yes |
 | `bashMaxTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn | yes |
 | `chatToolTimeoutSeconds` | `Chat::waitForToolChildrenAsync()`, as a batch starts | yes |
-| `sd.baseUrl` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) reads it per request | **no** |
-| `sd.apiKey` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) sends it per request | **no** |
-| `sd.timeoutSeconds` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) bounds each request with it | **no** |
-| `sd.defaultModel` | `SettingsResolver::resolve()` at the launch resolve; the media form (W1.9+) preselects it | **no** |
-| `ui.imageRenderMode` | `SettingsResolver::resolve()` at the launch resolve; the painter (W2.2) picks the mode per frame | **no** |
-| `sd.presets` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) names the presets | **no** |
-| `ui.mediaDisplayOverrides` | `SettingsResolver::resolve()` at the launch resolve; the painter (W2.2) applies them | **no** |
-| `sd.savePattern` | `SettingsResolver::resolve()` at the launch resolve; the save path (W1.9+) names files with it | **no** |
+| `sd.baseUrl` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline reads it per request | **no** |
+| `sd.apiKey` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline sends it per request | **no** |
+| `sd.timeoutSeconds` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline bounds each request with it | **no** |
+| `sd.defaultModel` | `SettingsResolver::resolve()` at the launch resolve; the media form preselects it | **no** |
+| `ui.imageRenderMode` | `SettingsResolver::resolve()` at the launch resolve; the painter picks the mode per frame | **no** |
+| `sd.presets` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline names the presets | **no** |
+| `ui.mediaDisplayOverrides` | `SettingsResolver::resolve()` at the launch resolve; the painter applies them | **no** |
+| `sd.savePattern` | `SettingsResolver::resolve()` at the launch resolve; the save path names files with it | **no** |
 | `skills.pathNudges` | `SkillPathNudge::forPaths()` → `enabled()`, per tool call | yes |
 | `instructions` | `Bootstrap::forcedInstructions()` | **no** |
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |

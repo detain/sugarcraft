@@ -921,7 +921,7 @@ TXT,
     'cmd.generate.description' => 'Generate an image on the configured SD server',
     // Kept inside the /help spill-row budget (KeyHelpTest pins the hint as one
     // unbroken row; GenerateCommand::USAGE carries the full flag list).
-    'cmd.generate.form.description' => 'Open the interactive image generation form',
+    'cmd.generate.form.description' => 'Open the interactive generation form (image and video tabs)',
     'cmd.generate.form.label' => 'Generate image',
     'cmd.generate.hint' => '<prompt> [--steps N] [--size WxH] [--seed N] [--save]',
     'cmd.goal.description' => 'Work until a condition is met, judged by the title model after every turn',

@@ -85,7 +85,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sd.baseUrl.label'))
                 ->withHelp('HTTP base URL of an AUTOMATIC1111-compatible Stable Diffusion webui (`http://127.0.0.1:7860`); prompts, images and the API key all egress there.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) reads it per request'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline reads it per request'),
             SettingDefinition::new('sd.apiKey', SettingType::Secret)
                 ->withCategory(SettingCategory::Media)
                 ->withRiskClass(RiskClass::Security)
@@ -94,7 +94,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sd.apiKey.label'))
                 ->withHelp('Bearer key sent to the Stable Diffusion server, if it demands one; prefer the `${VAR}` placeholder form over a literal.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) sends it per request'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline sends it per request'),
             SettingDefinition::new('sd.timeoutSeconds', SettingType::Int, 300)
                 ->withCategory(SettingCategory::Media)
                 ->withRiskClass(RiskClass::Tuning)
@@ -104,7 +104,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sd.timeoutSeconds.label'))
                 ->withHelp('Seconds one generation request may run before it is abandoned; diffusion on a weak GPU routinely takes minutes.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) bounds each request with it'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline bounds each request with it'),
             SettingDefinition::new('sd.defaultModel', SettingType::String)
                 ->withCategory(SettingCategory::Media)
                 ->withRiskClass(RiskClass::Tuning)
@@ -113,7 +113,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sd.defaultModel.label'))
                 ->withHelp('Model id generation requests start with; the server keeps the pick to itself when unset.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media form (W1.9+) preselects it'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media form preselects it'),
             // Cosmetic: the word picks how a finished image is PAINTED, never
             // what is requested or spent. `auto` asks the terminal.
             SettingDefinition::new('ui.imageRenderMode', SettingType::Enum, 'auto')
@@ -125,7 +125,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.ui.imageRenderMode.label'))
                 ->withHelp('How generated images are painted in the terminal; `auto` picks the best protocol the terminal reports.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the painter (W2.2) picks the mode per frame'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the painter picks the mode per frame'),
             SettingDefinition::new('sd.presets', SettingType::Map, [])
                 ->withCategory(SettingCategory::Media)
                 ->withRiskClass(RiskClass::Tuning)
@@ -135,7 +135,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sd.presets.label'))
                 ->withHelp('Named parameter bundles the media form offers; the shape is the media pipeline\'s own, opaque to the settings layer.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline (W1.9+) names the presets'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline names the presets'),
             SettingDefinition::new('ui.mediaDisplayOverrides', SettingType::Map, [])
                 ->withCategory(SettingCategory::Media)
                 ->withRiskClass(RiskClass::Cosmetic)
@@ -145,7 +145,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.ui.mediaDisplayOverrides.label'))
                 ->withHelp('Per-render-mode display tweaks (size caps, fallbacks); keys are the render-mode words, the values the display knobs.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the painter (W2.2) applies them'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the painter applies them'),
             SettingDefinition::new('sd.savePattern', SettingType::String, '[date]-[time]-[seed]-[number]')
                 ->withCategory(SettingCategory::Media)
                 ->withRiskClass(RiskClass::Cosmetic)
@@ -153,7 +153,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sd.savePattern.label'))
                 ->withHelp('File name template for saved media; the `[date]`, `[time]`, `[seed]` and `[number]` tokens fill at save time.')
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
-                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the save path (W1.9+) names files with it'),
+                ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the save path names files with it'),
         ];
     }
 }

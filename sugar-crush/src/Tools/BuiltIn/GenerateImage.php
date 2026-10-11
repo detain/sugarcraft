@@ -101,7 +101,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * own, costs real GPU time, and dials an external host — the user approves
  * each launch of it.
  */
-#[BuiltInTool(name: 'GenerateImage', permission: ToolPermissionClass::Ask, position: 33, gloss: 'render a still image from a text prompt on the configured Stable Diffusion server (sdapi)')]
+#[BuiltInTool(name: 'GenerateImage', permission: ToolPermissionClass::Ask, position: 33, gloss: 'render a still image from a text prompt on the configured Stable Diffusion server (sdapi or sglang-diffusion)')]
 final readonly class GenerateImage implements Tool, BuildsFromCatalog, DelegatesToEngine, AcceptsHeartbeat, TakesToolCallId
 {
     use TruncatesOutput;
