@@ -449,16 +449,22 @@ final class ToolResult
      *
      * An unknown word fails SOFT to `auto` (the settings Enum validator is
      * the upstream gate; this hop stays silent, no error_log, so the
-     * StderrEmitterCensus gains no site).
+     * StderrEmitterCensus gains no site). Since R5-m3 (W7 ledger) the soft
+     * landing shares the ONE 'auto' bucket instance instead of minting a
+     * fresh probe per distinct junk word — every auto-shaped key now reads
+     * the same memoized detection.
      */
     private static function probeMosaic(): Mosaic
     {
         $mode = self::$renderMode;
+        if (!isset(self::$mosaics[$mode])) {
+            // fromModeString() answers 'auto' with Mosaic::auto() itself and
+            // null only for words mosaic has never heard of.
+            $mosaic = Mosaic::fromModeString($mode);
+            self::$mosaics[$mode] = $mosaic ??= self::$mosaics['auto'] ??= Mosaic::auto();
+        }
 
-        // fromModeString() answers 'auto' with Mosaic::auto() itself and
-        // null only for words mosaic has never heard of -- one hop covers
-        // the forced modes and the fail-soft fallback.
-        return self::$mosaics[$mode] ??= Mosaic::fromModeString($mode) ?? Mosaic::auto();
+        return self::$mosaics[$mode];
     }
 
     /**

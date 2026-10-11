@@ -230,6 +230,14 @@ final class ToolResultRenderModeTest extends TestCase
             self::innerProtocol(Mosaic::auto()->protocol()),
             self::innerProtocol(ToolResult::mosaic()->protocol()),
         );
+        // R5-m3 (W7 ledger): the soft landing must not just LOOK like auto —
+        // it IS the auto bucket. Same junk word re-reads the same instance,
+        // and a later 'auto' read returns that very object (no second probe,
+        // no per-junk-word fork).
+        $junk = ToolResult::mosaic();
+        self::assertSame($junk, ToolResult::mosaic());
+        ToolResult::setRenderMode('auto');
+        self::assertSame($junk, ToolResult::mosaic());
     }
 
     // =========================================================================
