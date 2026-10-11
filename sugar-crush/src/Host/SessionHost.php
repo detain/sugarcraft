@@ -334,12 +334,7 @@ final class SessionHost
      */
     public function permissionMode(): ?PermissionMode
     {
-        if ($this->permissionMode !== null) {
-            return $this->permissionMode;
-        }
-        $backend = $this->workspace->backend;
-
-        return $backend instanceof EngineBackend ? $backend->permissionGate()?->mode() : $this->workspace->permissionGate?->mode();
+        return $this->permissionGate()?->mode();
     }
 
     /**
@@ -350,6 +345,19 @@ final class SessionHost
     public function setPermissionMode(?PermissionMode $mode): void
     {
         $this->permissionMode = $mode;
+    }
+
+    /**
+     * The gate this session is consented by — the same resolution
+     * {@see backend()} forks onto its turn backend: the session's own mode
+     * over the base rules when it names one, else the base gate itself.
+     * Out-of-turn side-effect surfaces (`generate.submit`) must consult
+     * this, not the bare workspace gate, or a bypass-admitted session would
+     * run tools freely in-turn yet be refused at the RPC door (R15 MAJOR-1).
+     */
+    public function permissionGate(): ?PermissionGate
+    {
+        return $this->sessionGate($this->basePermissionGate());
     }
 
     /** The session's remembered "always" answers. */
@@ -1497,20 +1505,46 @@ final class SessionHost
     private function backend(): Backend
     {
         $backend = $this->workspace->backend ?? throw new \LogicException('This session has no backend.');
-        if ($this->permissionMode === null || !$backend instanceof EngineBackend) {
+        if (!$backend instanceof EngineBackend) {
             return $backend;
         }
-        $gate = $backend->permissionGate();
-        if ($gate !== null && $gate->mode() === $this->permissionMode) {
+        $base = $backend->permissionGate();
+        $gated = $this->sessionGate($base);
+        if ($gated === null || $gated === $base) {
             return $backend;
         }
 
-        return $backend->withPermissionGate(new PermissionGate(
+        return $backend->withPermissionGate($gated);
+    }
+
+    /**
+     * The gate the session's backend carries: the EngineBackend's own, or —
+     * for a backend without gates — the workspace's.
+     */
+    private function basePermissionGate(): ?PermissionGate
+    {
+        $backend = $this->workspace->backend;
+
+        return $backend instanceof EngineBackend ? $backend->permissionGate() : $this->workspace->permissionGate;
+    }
+
+    /**
+     * $base itself unless this session names its own mode, in which case a
+     * gate in that mode over the same rules — the single construction site
+     * for session-cloned gates ({@see permissionGate()}, {@see backend()}).
+     */
+    private function sessionGate(?PermissionGate $base): ?PermissionGate
+    {
+        if ($this->permissionMode === null || $base?->mode() === $this->permissionMode) {
+            return $base;
+        }
+
+        return new PermissionGate(
             $this->permissionMode,
-            $gate?->rules() ?? [],
+            $base?->rules() ?? [],
             new SafetyClassifier(),
             'session',
-        ));
+        );
     }
 
     private function root(): string

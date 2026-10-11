@@ -275,6 +275,35 @@ final class MediaMethodsTest extends TestCase
         self::assertSame(0, $this->counter->renders);
     }
 
+    public function testConsentFollowsTheSessionEffectiveGateNotTheWorkspaceOne(): void
+    {
+        // R15 MAJOR-1: submit must see the gate the session's turns run
+        // under, not merely the workspace's — a bypass-admitted session runs
+        // GenerateImage freely in-turn, so the RPC door must open for it too.
+        $this->armStub('bytes');
+        MediaMethods::setGateForTesting(null);
+        $host = $this->fixture->hub->get($this->sessionId);
+        self::assertNotNull($host, 'the open session must be addressable to flip its consent');
+
+        $host->setPermissionMode(PermissionMode::BypassPermissions);
+        $bypassed = $this->client->call('generate.submit', [
+            'sessionId' => $this->sessionId,
+            'prompt' => 'a bypass-admitted session runs',
+        ]);
+        self::assertMatchesRegularExpression(MediaMethods::JOB_ID_PATTERN, $bypassed['jobId']);
+        self::assertSame(1, $this->counter->renders);
+
+        // Fail-closed is symmetric: back to an Ask mode with no memo, the
+        // same session's submit is refused again and renders nothing.
+        $host->setPermissionMode(PermissionMode::Default);
+        $asked = $this->client->request('generate.submit', [
+            'sessionId' => $this->sessionId,
+            'prompt' => 'unanswered after switching back',
+        ]);
+        self::assertSame('permission_ask_unanswered', $asked['error']['data']['kind']);
+        self::assertSame(1, $this->counter->renders, 'an unanswered session-mode ask never reaches the render');
+    }
+
     // ── fetch containment ──────────────────────────────────────────────
 
     public function testFetchRefusesForeignPathsParentEscapesAndSymlinkExits(): void

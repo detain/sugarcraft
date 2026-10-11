@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Protocol\Methods;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Host\TranscriptProjector;
 use SugarCraft\Crush\Host\TurnController;
-use SugarCraft\Crush\Host\WorkspaceContext;
+use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Media\MediaJob;
 use SugarCraft\Crush\Media\MediaJobStatus;
 use SugarCraft\Crush\Media\MediaKind;
@@ -124,9 +124,11 @@ final class MediaMethods
     }
 
     /**
-     * Override the workspace's consent gate. Null falls back to
-     * `$host->workspace()->permissionGate`, and a workspace without a gate
-     * is treated as a perpetual unanswered Ask — never as consent.
+     * Override the consent gate. Null falls back to
+     * {@see SessionHost::permissionGate()} — the session-EFFECTIVE gate, the
+     * same one the in-turn tool path forks — and a session whose gate
+     * resolves to null is treated as a perpetual unanswered Ask, never as
+     * consent.
      */
     public static function setGateForTesting(?PermissionGate $gate): void
     {
@@ -177,7 +179,7 @@ final class MediaMethods
             throw RpcError::invalidParams('invalid params: prompt is empty');
         }
 
-        self::consent($host->workspace(), $host->grants(), $sessionId, $args);
+        self::consent($host, $sessionId, $args);
 
         $job = MediaJob::new(MediaKind::Image)->withStatus(MediaJobStatus::Running);
         $store = MediaStore::forSession($sessionId);
@@ -353,18 +355,22 @@ final class MediaMethods
     // ── consent ────────────────────────────────────────────────────────
 
     /**
-     * The same gate the in-turn tool path consults ({@see
-     * EngineBackend}'s PermissionGateHook), asked about the same
-     * `GenerateImage` call the tool would carry. Allow runs; Deny refuses;
-     * Ask is answered only by this session's memo of an earlier
+     * The same gate the in-turn tool path consults —
+     * {@see SessionHost::permissionGate()}, whose session-mode clone
+     * {@see backend()} forks onto the turn's EngineBackend — asked about the
+     * same `GenerateImage` call the tool would carry. Allow runs; Deny
+     * refuses; Ask is answered only by this session's memo of an earlier
      * always-allow — the identical door {@see SessionHost} opens for a
      * re-ask inside a turn — and otherwise refuses, because out-of-turn ask
      * relay is descoped (W6.6) and silence is not consent.
+     *
+     * @param array<string, mixed> $args
      */
-    private static function consent(?WorkspaceContext $workspace, \SugarCraft\Crush\Permissions\SessionPermissionMemo $grants, string $sessionId, array $args): void
+    private static function consent(SessionHost $host, string $sessionId, array $args): void
     {
-        $gate = self::$gateOverride ?? $workspace?->permissionGate;
-        $decision = $gate?->evaluate(new ToolCall(GenerateImage::NAME, $args), $workspace?->root, $sessionId)
+        $gate = self::$gateOverride ?? $host->permissionGate();
+        $root = $host->workspace()->root;
+        $decision = $gate?->evaluate(new ToolCall(GenerateImage::NAME, $args), $root, $sessionId)
             ?? PermissionDecision::Ask;
 
         if ($decision === PermissionDecision::Allow) {
@@ -375,7 +381,7 @@ final class MediaMethods
             throw RpcError::of(ErrorCode::Forbidden, 'generate.submit was denied by the permission policy', 'permission_denied');
         }
 
-        if ($gate !== null && $grants->allows(GenerateImage::NAME, $args, $workspace?->root)) {
+        if ($gate !== null && $host->grants()->allows(GenerateImage::NAME, $args, $root)) {
             return;
         }
 
