@@ -1059,9 +1059,22 @@ final class Width
     }
 
     /**
-     * Codepoints Unicode's emoji-data assigns Emoji_Presentation=Yes: they
-     * render as full-colour emoji — TWO cells — by default in every modern
-     * terminal, whether or not their East_Asian_Width property is Wide.
+     * Codepoints pinned to the Emoji_Presentation=Yes set of Unicode 16.0's
+     * emoji-data.txt: they render as full-colour emoji — TWO cells — by
+     * default in every modern terminal, whether or not their
+     * East_Asian_Width property is Wide.
+     *
+     * KNOWN LAG: newer Unicode releases may add Emoji_Presentation=Yes
+     * codepoints this snapshot does not carry; the boundary rows in
+     * candy-core/tests/Util/WidthTest.php are the tripwire that keeps the
+     * roster honest to the release it claims.
+     *
+     * PRESENTATION SELECTORS ARE NOT CONSULTED: the rule is first-codepoint,
+     * so U+FE0E/U+FE0F never reach this predicate as the scored character —
+     * U+231A followed by U+FE0E (text-style watch) over-counts as 2, and
+     * U+2764 followed by U+FE0F (red heart) under-counts as 1. Declared
+     * limitation class; cluster-level selector handling would rewrite
+     * compute()'s grapheme walk for two glyphs nobody pastes.
      *
      * WHY THIS IS NOT FOLDED INTO {@see isWide()}: those tables are the
      * classic block-shaped East-Asian ranges (Markus Kuhn's 2006 set), and
@@ -1130,6 +1143,10 @@ final class Width
         }
 
         // Astral members outside the ranges isWide() already covers whole.
+        // The 1FA70+ block merges the Unicode 16.0 additions into the ranges
+        // they extend — every seam is EP=Yes on both sides, so the ranges stay
+        // an exact cover of the pinned set (boundary rows in WidthTest prove
+        // neither creep nor gap).
         return $cp === 0x1F004
             || $cp === 0x1F0CF
             || $cp === 0x1F18E
@@ -1140,15 +1157,14 @@ final class Width
             || ($cp >= 0x1F250 && $cp <= 0x1F251)
             || ($cp >= 0x1F260 && $cp <= 0x1F265)
             || ($cp >= 0x1F7E0 && $cp <= 0x1F7EB)
-            || ($cp >= 0x1FA70 && $cp <= 0x1FA74)
-            || ($cp >= 0x1FA78 && $cp <= 0x1FA7C)
-            || ($cp >= 0x1FA80 && $cp <= 0x1FA86)
-            || ($cp >= 0x1FA90 && $cp <= 0x1FAAC)
-            || ($cp >= 0x1FAB0 && $cp <= 0x1FABA)
-            || ($cp >= 0x1FAC0 && $cp <= 0x1FAC5)
-            || ($cp >= 0x1FAD0 && $cp <= 0x1FAD9)
-            || ($cp >= 0x1FAE0 && $cp <= 0x1FAE7)
-            || ($cp >= 0x1FAF0 && $cp <= 0x1FAF6);
+            || $cp === 0x1F7F0
+            || ($cp >= 0x1FA70 && $cp <= 0x1FA7C)
+            || ($cp >= 0x1FA80 && $cp <= 0x1FA89)
+            || ($cp >= 0x1FA8F && $cp <= 0x1FABF)
+            || ($cp >= 0x1FAC0 && $cp <= 0x1FAC6)
+            || ($cp >= 0x1FACE && $cp <= 0x1FADC)
+            || ($cp >= 0x1FADF && $cp <= 0x1FAE9)
+            || ($cp >= 0x1FAF0 && $cp <= 0x1FAF8);
     }
 
     /**

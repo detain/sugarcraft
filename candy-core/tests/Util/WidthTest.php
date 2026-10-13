@@ -35,7 +35,8 @@ final class WidthTest extends TestCase
     }
 
     /**
-     * Emoji_Presentation=Yes codepoints score 2 cells.
+     * Emoji_Presentation=Yes codepoints (Unicode 16.0 emoji-data.txt pin)
+     * score 2 cells.
      *
      * The user-reported frame corruption: a live thinking row padded to the
      * pane width counted its ✅ (U+2705) as one cell where every modern
@@ -88,8 +89,27 @@ final class WidthTest extends TestCase
             ["\u{1F201}", 2], ["\u{1F202}", 2],         // Japanese service buttons
             ["\u{1F21A}", 2], ["\u{1F22F}", 2],         // ideographic month/ideograph
             ["\u{1F7E0}", 2], ["\u{1F7EB}", 2],         // 🟠..🟫 coloured circles/squares
-            ["\u{1FA70}", 2], ["\u{1FA74}", 2],         // extended-A bandage..
-            ["\u{1FAF0}", 2], ["\u{1FAF6}", 2],         // extended-A heart-hands block tail
+            ["\u{1F7F0}", 2],                           // grey heart (Unicode 16.0)
+            // Unicode 16.0 additions — both endpoints of every (merged) range
+            ["\u{1FA70}", 2], ["\u{1FA74}", 2],         // bandage..pre-16 tail
+            ["\u{1FA75}", 2], ["\u{1FA77}", 2],         // health seam (U16)
+            ["\u{1FA78}", 2], ["\u{1FA7C}", 2],         // occupied core..end
+            ["\u{1FA80}", 2], ["\u{1FA86}", 2],         // musical start..pre-16 tail
+            ["\u{1FA87}", 2], ["\u{1FA89}", 2],         // musical seam (U16)
+            ["\u{1FA8F}", 2], ["\u{1FA90}", 2],         // heart-hands join (U16)
+            ["\u{1FAAC}", 2], ["\u{1FAAD}", 2],         // hairy-face seam (U16)
+            ["\u{1FAAF}", 2], ["\u{1FAB0}", 2],         // ..into the eggs (U16)
+            ["\u{1FABA}", 2], ["\u{1FABB}", 2],         // nest seam (U16)
+            ["\u{1FABF}", 2], ["\u{1FAC0}", 2],         // ..into anatomical (U16)
+            ["\u{1FAC5}", 2], ["\u{1FAC6}", 2],         // fingerprint (U16)
+            ["\u{1FACE}", 2], ["\u{1FACF}", 2],         // mammoth pair (U16)
+            ["\u{1FAD0}", 2], ["\u{1FAD9}", 2],         // tools block
+            ["\u{1FADA}", 2], ["\u{1FADC}", 2],         // plunger seam (U16)
+            ["\u{1FADF}", 2], ["\u{1FAE0}", 2],         // bubble join (U16)
+            ["\u{1FAE7}", 2], ["\u{1FAE8}", 2],         // shaking-face seam (U16)
+            ["\u{1FAE9}", 2],                           // ..handshake end (U16)
+            ["\u{1FAF0}", 2], ["\u{1FAF6}", 2],         // heart-hands block
+            ["\u{1FAF7}", 2], ["\u{1FAF8}", 2],         // extended-A tail (U16)
             // boundary neighbours that must stay 1 cell (table may not creep)
             ["\u{2319}", 1], ["\u{231C}", 1],           // ⌙ ⌜ around 231A/231B
             ["\u{23E8}", 1], ["\u{23ED}", 1],
@@ -101,7 +121,14 @@ final class WidthTest extends TestCase
             ["\u{2B51}", 1], ["\u{2B54}", 1],
             ["\u{1F18D}", 1], ["\u{1F190}", 1],
             ["\u{1F203}", 1],                           // gap between the 1F200s sub-ranges
-            ["\u{1FAF7}", 1],                           // just past the extended-A tail
+            ["\u{1F7EF}", 1], ["\u{1F7F1}", 1],         // either side of the grey heart
+            ["\u{1FA8A}", 1],                           // past the musical seam
+            ["\u{1FA8E}", 1],                           // before the heart-hands join
+            ["\u{1FAC7}", 1],                           // past the fingerprint
+            ["\u{1FACD}", 1],                           // before the mammoth pair
+            ["\u{1FADD}", 1], ["\u{1FADE}", 1],         // gap before the bubble join
+            ["\u{1FAEA}", 1],                           // past the handshake
+            ["\u{1FAF9}", 1],                           // just past the extended-A tail
             ["\u{1F1FF}", 1],                           // lone regional indicator (letter box)
             // deliberate exclusions, pinned toward narrow
             ["\u{2329}", 1], ["\u{232A}", 1],           // deprecated angle brackets — NOT emoji
