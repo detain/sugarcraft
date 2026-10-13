@@ -958,7 +958,7 @@ final class Width
         if (self::isZeroWidth($cp)) {
             return 0;
         }
-        if (self::isWide($cp)) {
+        if (self::isWide($cp) || self::isEmojiPresentation($cp)) {
             return 2;
         }
         return 1;
@@ -1056,6 +1056,99 @@ final class Width
             || ($cp >= 0x1f900 && $cp <= 0x1f9ff)
             || ($cp >= 0x20000 && $cp <= 0x2fffd)
             || ($cp >= 0x30000 && $cp <= 0x3fffd);
+    }
+
+    /**
+     * Codepoints Unicode's emoji-data assigns Emoji_Presentation=Yes: they
+     * render as full-colour emoji — TWO cells — by default in every modern
+     * terminal, whether or not their East_Asian_Width property is Wide.
+     *
+     * WHY THIS IS NOT FOLDED INTO {@see isWide()}: those tables are the
+     * classic block-shaped East-Asian ranges (Markus Kuhn's 2006 set), and
+     * the members here mostly carry East_Asian_Width=Neutral — a different
+     * axis of the spec. Keeping the rule separate preserves isWide()'s
+     * meaning (and the endpoint corpus in tests/Util/WidthTest.php that
+     * mirrors its ranges) while letting graphemeWidth() charge the union,
+     * which is what the terminal lays out. This is the shape
+     * {@see isEmoji()}'s docblock anticipated: the width-relevant emoji
+     * predicate, now with the callers it was reserved for.
+     *
+     * THE INCIDENT: a live "💭 Thinking…" row padded to exactly the pane
+     * width counted its ✅ (U+2705) as one cell, the terminal gave it two,
+     * and the wrap slid every border on and below it one column left — the
+     * ragged right edge of a user report. Measured against PHP 8.3's
+     * `mb_strwidth` and the terminal consensus; roster and pins live in
+     * candy-core/tests/Util/WidthTest.php.
+     *
+     * DELIBERATE EXCLUSIONS:
+     * - U+2329/232A angle brackets — EAW-W by ancestry, not emoji, and
+     *   deprecated toward narrow by modern practice;
+     * - U+1F1E6..U+1F1FF regional indicators — paired flags are already
+     *   scored by {@see isRegionalIndicatorPair()} at the cluster level;
+     * - non-emoji scripts whose modern EAW-W the 2006 isWide() table also
+     *   misses (Tangut, Nushu, Hangul Ext-B, small-form variants) — a
+     *   separate, disclosed gap with zero chat traffic; widening isWide()
+     *   itself would move ~40 libs' snapshots under this one fix.
+     */
+    private static function isEmojiPresentation(int $cp): bool
+    {
+        // BMP emoji-presentation members, grouped as Unicode blocks list them.
+        if ($cp <= 0xFFFF) {
+            return ($cp >= 0x231A && $cp <= 0x231B)
+                || ($cp >= 0x23E9 && $cp <= 0x23EC)
+                || $cp === 0x23F0
+                || $cp === 0x23F3
+                || ($cp >= 0x25FD && $cp <= 0x25FE)
+                || ($cp >= 0x2614 && $cp <= 0x2615)
+                || ($cp >= 0x2648 && $cp <= 0x2653)
+                || $cp === 0x267F
+                || $cp === 0x2693
+                || $cp === 0x26A1
+                || ($cp >= 0x26AA && $cp <= 0x26AB)
+                || ($cp >= 0x26BD && $cp <= 0x26BE)
+                || ($cp >= 0x26C4 && $cp <= 0x26C5)
+                || $cp === 0x26CE
+                || $cp === 0x26D4
+                || $cp === 0x26EA
+                || ($cp >= 0x26F2 && $cp <= 0x26F3)
+                || $cp === 0x26F5
+                || $cp === 0x26FA
+                || $cp === 0x26FD
+                || $cp === 0x2705
+                || ($cp >= 0x270A && $cp <= 0x270B)
+                || $cp === 0x2728
+                || $cp === 0x274C
+                || $cp === 0x274E
+                || ($cp >= 0x2753 && $cp <= 0x2755)
+                || $cp === 0x2757
+                || ($cp >= 0x2795 && $cp <= 0x2797)
+                || $cp === 0x27B0
+                || $cp === 0x27BF
+                || ($cp >= 0x2B1B && $cp <= 0x2B1C)
+                || $cp === 0x2B50
+                || $cp === 0x2B55;
+        }
+
+        // Astral members outside the ranges isWide() already covers whole.
+        return $cp === 0x1F004
+            || $cp === 0x1F0CF
+            || $cp === 0x1F18E
+            || ($cp >= 0x1F191 && $cp <= 0x1F19A)
+            || ($cp >= 0x1F200 && $cp <= 0x1F202)
+            || ($cp >= 0x1F210 && $cp <= 0x1F23B)
+            || ($cp >= 0x1F240 && $cp <= 0x1F248)
+            || ($cp >= 0x1F250 && $cp <= 0x1F251)
+            || ($cp >= 0x1F260 && $cp <= 0x1F265)
+            || ($cp >= 0x1F7E0 && $cp <= 0x1F7EB)
+            || ($cp >= 0x1FA70 && $cp <= 0x1FA74)
+            || ($cp >= 0x1FA78 && $cp <= 0x1FA7C)
+            || ($cp >= 0x1FA80 && $cp <= 0x1FA86)
+            || ($cp >= 0x1FA90 && $cp <= 0x1FAAC)
+            || ($cp >= 0x1FAB0 && $cp <= 0x1FABA)
+            || ($cp >= 0x1FAC0 && $cp <= 0x1FAC5)
+            || ($cp >= 0x1FAD0 && $cp <= 0x1FAD9)
+            || ($cp >= 0x1FAE0 && $cp <= 0x1FAE7)
+            || ($cp >= 0x1FAF0 && $cp <= 0x1FAF6);
     }
 
     /**

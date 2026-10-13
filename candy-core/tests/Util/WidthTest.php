@@ -34,6 +34,106 @@ final class WidthTest extends TestCase
         $this->assertSame(2, Width::string('🎉'));
     }
 
+    /**
+     * Emoji_Presentation=Yes codepoints score 2 cells.
+     *
+     * The user-reported frame corruption: a live thinking row padded to the
+     * pane width counted its ✅ (U+2705) as one cell where every modern
+     * terminal lays out two, the row wrapped, and every border on and below
+     * it slid a column left. `isWide()`'s classic East-Asian ranges miss the
+     * whole default-emoji class because these codepoints carry
+     * East_Asian_Width=Neutral — width comes from emoji-data, not EAW — so
+     * `isEmojiPresentation()` carries the union and this test carries its
+     * edges: both endpoints of every range count 2, the codepoint just
+     * outside each boundary still counts 1 (the table may not quietly widen),
+     * and the double-oracle law from the sugar-crush L5 fix holds — where
+     * PHP's `mb_strwidth` agrees it corroborates, and the roster rows it
+     * lags on are the block-shaped ranges' unassigned tails, never a
+     * disagreement against the terminal truth this class exists to model.
+     *
+     * @return array{string, int}[] glyph => expected cells
+     */
+    public static function emojiPresentationEdges(): array
+    {
+        return [
+            // in-range endpoints (2 cells)
+            ["\u{231A}", 2], ["\u{231B}", 2],           // watch/hourglass
+            ["\u{23E9}", 2], ["\u{23EC}", 2],           // media arrows
+            ["\u{23F0}", 2], ["\u{23F3}", 2],           // alarm/sand timer
+            ["\u{25FD}", 2], ["\u{25FE}", 2],           // small squares
+            ["\u{2614}", 2], ["\u{2615}", 2],           // umbrella/hot beverage
+            ["\u{2648}", 2], ["\u{2653}", 2],           // zodiac block
+            ["\u{267F}", 2], ["\u{2693}", 2],           // wheelchair/anchor
+            ["\u{26A1}", 2], ["\u{26AA}", 2],           // high voltage, black/white circle
+            ["\u{26AB}", 2], ["\u{26BD}", 2],
+            ["\u{26BE}", 2], ["\u{26C4}", 2],
+            ["\u{26C5}", 2], ["\u{26CE}", 2],
+            ["\u{26D4}", 2], ["\u{26EA}", 2],
+            ["\u{26F2}", 2], ["\u{26F3}", 2],
+            ["\u{26F5}", 2], ["\u{26FA}", 2],
+            ["\u{26FD}", 2],
+            ["\u{2705}", 2],                            // ✅ THE incident glyph
+            ["\u{270A}", 2], ["\u{270B}", 2],           // raised fist/hand
+            ["\u{2728}", 2],                            // ✨
+            ["\u{274C}", 2], ["\u{274E}", 2],           // ❌ cross marks
+            ["\u{2753}", 2], ["\u{2755}", 2],           // question/exclamation ornaments
+            ["\u{2757}", 2],                            // ❗
+            ["\u{2795}", 2], ["\u{2797}", 2],           // heavy math signs
+            ["\u{27B0}", 2], ["\u{27BF}", 2],           // curly loops
+            ["\u{2B1B}", 2], ["\u{2B1C}", 2],           // large squares
+            ["\u{2B50}", 2], ["\u{2B55}", 2],           // ⭐ circle
+            ["\u{1F004}", 2], ["\u{1F0CF}", 2],         // mahjong/red joker
+            ["\u{1F18E}", 2],                           // AB button
+            ["\u{1F191}", 2], ["\u{1F19A}", 2],         // squared CL..VS
+            ["\u{1F201}", 2], ["\u{1F202}", 2],         // Japanese service buttons
+            ["\u{1F21A}", 2], ["\u{1F22F}", 2],         // ideographic month/ideograph
+            ["\u{1F7E0}", 2], ["\u{1F7EB}", 2],         // 🟠..🟫 coloured circles/squares
+            ["\u{1FA70}", 2], ["\u{1FA74}", 2],         // extended-A bandage..
+            ["\u{1FAF0}", 2], ["\u{1FAF6}", 2],         // extended-A heart-hands block tail
+            // boundary neighbours that must stay 1 cell (table may not creep)
+            ["\u{2319}", 1], ["\u{231C}", 1],           // ⌙ ⌜ around 231A/231B
+            ["\u{23E8}", 1], ["\u{23ED}", 1],
+            ["\u{25FC}", 1], ["\u{25FF}", 1],
+            ["\u{2613}", 1], ["\u{2616}", 1],
+            ["\u{2647}", 1], ["\u{2654}", 1],
+            ["\u{2704}", 1], ["\u{2706}", 1],           // neighbours of ✅
+            ["\u{2709}", 1], ["\u{270C}", 1],
+            ["\u{2B51}", 1], ["\u{2B54}", 1],
+            ["\u{1F18D}", 1], ["\u{1F190}", 1],
+            ["\u{1F203}", 1],                           // gap between the 1F200s sub-ranges
+            ["\u{1FAF7}", 1],                           // just past the extended-A tail
+            ["\u{1F1FF}", 1],                           // lone regional indicator (letter box)
+            // deliberate exclusions, pinned toward narrow
+            ["\u{2329}", 1], ["\u{232A}", 1],           // deprecated angle brackets — NOT emoji
+            // classic wide siblings still 2 (no regression on the EAW path)
+            ["\u{1F600}", 2], ["\u{4E00}", 2],
+        ];
+    }
+
+    /**
+     * @dataProvider emojiPresentationEdges
+     */
+    public function testEmojiPresentationCodepointsScoreTheirPinnedCells(string $glyph, int $cells): void
+    {
+        $this->assertSame($cells, Width::string($glyph), sprintf('U+%04X mis-scored', \IntlChar::ord($glyph)));
+    }
+
+    public function testEmojiPresentationRosterAgreesWithMbStrwidthOracle(): void
+    {
+        // The double-oracle law: for the assigned, commonly-painted members
+        // of the set, PHP's independent Unicode tables must say the same
+        // thing. (This runtime's mb_strwidth already returns 2 for ✅ — the
+        // very disagreement the incident turned on is Width's side of it.)
+        $roster = ['✅', '✨', '❌', '❗', '⭐', '⛔', '🟠', '🟩', '⌚', '⛅', '☔', '⚫', '⚪', '➰', '🈴', '🃏'];
+        foreach ($roster as $glyph) {
+            $this->assertSame(
+                mb_strwidth($glyph, 'UTF-8'),
+                Width::string($glyph),
+                sprintf('U+%04X: Width and mb_strwidth disagree', \IntlChar::ord($glyph)),
+            );
+        }
+    }
+
     public function testOfHandlesZwjFamilyEmoji(): void
     {
         $this->assertSame(2, Width::of("👨‍👩‍👧‍👦"));

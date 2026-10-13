@@ -428,7 +428,9 @@ final class ToastRenderingTest extends TestCase
         yield 'emoji' => ['🎉', 2];
         yield 'box drawing' => ['─', 1];
         yield 'info glyph' => ['ℹ', 1];
-        yield 'dingbat' => ['✨', 1];
+        // ✨ U+2728 is Emoji_Presentation=Yes: candy-core Width scores it 2
+        // cells (r9x emoji-presentation fix); the fork row follows canonical.
+        yield 'dingbat' => ['✨', 2];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('widthOracleTable')]
