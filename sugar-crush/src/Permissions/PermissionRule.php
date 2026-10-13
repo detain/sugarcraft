@@ -28,7 +28,10 @@ use SugarCraft\Crush\Tools\Edit\PatchParser;
  * ## Grammar
  *
  *     pattern  := name-glob [ "(" argument-glob ")" ]
- *     name-glob     := fnmatch() pattern, matched against ToolCall::$name
+ *     name-glob     := fnmatch() pattern, matched against ToolCall::$name —
+ *                      with one proxy exception: a restrictive name-glob
+ *                      naming a shell tool binds its shell siblings too,
+ *                      see {@see namesCall()}
  *     argument-glob := fnmatch() pattern, matched against the call's SUBJECT
  *                      argument (see SUBJECT_ARGUMENTS)
  *
@@ -213,10 +216,17 @@ final class PermissionRule
      *
      * `PtyRun` joined because it runs its `command` through the very same
      * `/bin/sh -c` (via {@see \SugarCraft\Crush\Support\ProcessContainment}), so
-     * the property above holds verbatim: a user `Deny Bash(rm *)` must keep its
-     * force when the model reaches for the interactive driver instead, and the
-     * argument half of a `PtyRun(...)` rule is matched against that command
-     * text exactly as `Bash`'s is.
+     * the property above holds verbatim. That holds TWO ways now, and
+     * {@see namesCall()} enforces both: membership in this list makes a tool's
+     * subject read through {@see matchesShellSubject()} — the argument half of
+     * any `Bash(...)`/`PtyRun(...)` rule is matched against the command text
+     * with the same segment readings — AND it puts the tool inside the shell
+     * proxy: a RESTRICTIVE (`Deny`/`Ask`) rule naming ANY member binds calls
+     * to EVERY member, in either direction, so `Deny Bash(rm *)` keeps its
+     * force when the model reaches for the interactive driver and a
+     * `Deny PtyRun(...)` rule binds `Bash` too. `Allow` stays per-tool: a
+     * grant covers only what it names, and widening across two tools that
+     * differ in what a human sees must be spelled out.
      *
      * @var list<string>
      */
@@ -400,7 +410,7 @@ final class PermissionRule
             return $this->matchesPatch($call, $argumentsKnown, $projectRoot === '' ? null : $projectRoot);
         }
 
-        if (!self::matchesToolName($this->toolNamePattern(), $call->name)) {
+        if (!$this->namesCall($call)) {
             return false;
         }
 
@@ -451,6 +461,62 @@ final class PermissionRule
             $call->name,
             $projectRoot === '' ? null : $projectRoot,
         );
+    }
+
+    /**
+     * Does this rule's tool-name half bind this call?
+     *
+     * Exact glob first — a rule naming the tool the call arrives as binds it
+     * like it always has. Then the SHELL PROXY, mirroring
+     * {@see matchesPatch()}'s `$named` derivation for a second family: every
+     * member of {@see SHELL_SUBJECT_TOOLS} runs its `command` through the same
+     * `/bin/sh -c`, so a RESTRICTIVE rule (`Deny`/`Ask`) naming ANY member of
+     * that list binds calls to EVERY member, in either direction. `Bash(rm *)`
+     * denied the shell, not the tool labelled `Bash`; letting the model reach
+     * the same shell through the interactive driver was the second door this
+     * class's own history calls a deny that denies nothing (measured before
+     * this branch: `new PermissionRule('Bash(rm *)', Deny)` did NOT match
+     * `PtyRun{command: "rm foo"}`, so under `bypass-permissions` the string
+     * denied `Bash` and Allowed the identical `PtyRun` call).
+     *
+     * An `Allow` is NOT carried over, for the same two reasons the patch proxy
+     * states them: a grant covers what it names — and the fail-closed law at
+     * the top of this class says permissive rules fire only on the reading the
+     * user spelled out. Permission WIDENING must stay explicit: `Allow
+     * Bash(ls *)` is a statement about the plain tool, and a tool that paints
+     * an interactive screen under the same string is a bigger grant than the
+     * glob's author agreed to. A user who wants both writes both.
+     *
+     * The proxy never reaches outside the list: a restrictive `Edit(.env)`
+     * still cannot bind a `PtyRun` call — different subject, different
+     * capability. And the call's OWN subject is what gets matched, via the
+     * unchanged extraction path below, so the rule's argument glob is
+     * evaluated against the target call's `command` through
+     * {@see matchesShellSubject()} with all of its segment readings.
+     */
+    private function namesCall(ToolCall $call): bool
+    {
+        $namePattern = $this->toolNamePattern();
+
+        if (self::matchesToolName($namePattern, $call->name)) {
+            return true;
+        }
+
+        if ($this->action === PermissionAction::Allow) {
+            return false;
+        }
+
+        if (!in_array($call->name, self::SHELL_SUBJECT_TOOLS, true)) {
+            return false;
+        }
+
+        foreach (self::SHELL_SUBJECT_TOOLS as $sibling) {
+            if ($sibling !== $call->name && self::matchesToolName($namePattern, $sibling)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

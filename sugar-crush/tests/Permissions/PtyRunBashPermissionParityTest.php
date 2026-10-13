@@ -28,6 +28,12 @@ use SugarCraft\Crush\ToolCall;
  * (`bypass-permissions`, `auto`, and a user `Deny <tool>(rm *)` rule set). If a
  * future control re-introduces a `Bash`-only branch, one of these rows goes red.
  *
+ * Fix round 2 (re-review MAJOR-1) added the CROSS arms of the same table: one
+ * deny string written for ONE tool judged at BOTH doors — the shell proxy in
+ * {@see PermissionRule::namesCall()} is what makes the two halves of that
+ * sentence mean the same verdict — plus the Allow polarity (grants stay
+ * per-tool) and a source-scan of the modal's shell arm.
+ *
  * No call is ever executed here — this is pure gate evaluation, so the destructive
  * corpus commands are safe as strings.
  */
@@ -183,5 +189,154 @@ final class PtyRunBashPermissionParityTest extends TestCase
     {
         $this->assertSame('command', PermissionRule::subjectArgumentName('Bash'));
         $this->assertSame('command', PermissionRule::subjectArgumentName('PtyRun'));
+    }
+
+    // --- the SHELL PROXY: a RESTRICTIVE rule naming one shell tool binds the
+    // --- other shell tool's call, because both names spell the same `/bin/sh -c`
+    // --- capability (re-review MAJOR-1: before PermissionRule::namesCall() a user
+    // --- `Bash(rm *)` deny did NOT bind PtyRun, so under bypass the identical
+    // --- command string was Deny via one door and Allow via the other).
+
+    public function testDenyRuleWrittenForBashBindsThePtyRunCall(): void
+    {
+        $rule = new PermissionRule('Bash(rm *)', PermissionAction::Deny);
+
+        $this->assertTrue(
+            $rule->matches(new ToolCall('PtyRun', ['command' => 'rm foo'])),
+            'Deny Bash(rm *) must bind PtyRun — the proxy direction the review measured false',
+        );
+        $this->assertFalse(
+            $rule->matches(new ToolCall('PtyRun', ['command' => 'ls -la'])),
+            'the proxy binds the TOOL, the argument glob still decides the call',
+        );
+    }
+
+    public function testDenyRuleWrittenForPtyRunBindsTheBashCall(): void
+    {
+        $rule = new PermissionRule('PtyRun(rm *)', PermissionAction::Deny);
+
+        $this->assertTrue(
+            $rule->matches(new ToolCall('Bash', ['command' => 'rm foo'])),
+            'the proxy is symmetric: Deny PtyRun(rm *) binds the Bash call too',
+        );
+        $this->assertFalse($rule->matches(new ToolCall('Bash', ['command' => 'ls -la'])));
+    }
+
+    public function testAskRulesCarryAcrossShellToolsLikeDenyRulesDo(): void
+    {
+        $ontoPty = new PermissionRule('Bash(rm *)', PermissionAction::Ask);
+        $ontoBash = new PermissionRule('PtyRun(rm *)', PermissionAction::Ask);
+
+        $this->assertTrue($ontoPty->matches(new ToolCall('PtyRun', ['command' => 'rm foo'])));
+        $this->assertTrue($ontoBash->matches(new ToolCall('Bash', ['command' => 'rm foo'])));
+        $this->assertFalse($ontoPty->matches(new ToolCall('PtyRun', ['command' => 'echo hi'])));
+    }
+
+    public function testNameOnlyRestrictiveRuleBindsTheSiblingShellTool(): void
+    {
+        // mirrors matchesPatch(): a restrictive proxy rule binds "name-only or
+        // by path", so `Deny Bash` withholds Bash wholesale from PtyRun too.
+        $this->assertTrue((new PermissionRule('Bash', PermissionAction::Deny))
+            ->matches(new ToolCall('PtyRun', ['command' => 'anything'])));
+        $this->assertTrue((new PermissionRule('PtyRun', PermissionAction::Deny))
+            ->matches(new ToolCall('Bash', ['command' => 'anything'])));
+    }
+
+    public function testTheProxyNeverReachesBeyondTheShellPair(): void
+    {
+        // The grant-widening direction stays impossible AND the proxy must not
+        // invent bindings across subject kinds: a restrictive rule naming a
+        // NON-shell tool never rides onto a shell call, and a shell rule never
+        // binds a non-shell call.
+        $edit = new PermissionRule('Edit(.env)', PermissionAction::Deny);
+        $this->assertFalse($edit->matches(new ToolCall('PtyRun', ['command' => 'cat .env'])));
+        $this->assertFalse($edit->matches(new ToolCall('Read', ['file_path' => 'other'])));
+
+        $bash = new PermissionRule('Bash(rm *)', PermissionAction::Deny);
+        $this->assertFalse($bash->matches(new ToolCall('Read', ['file_path' => 'rm'])));
+
+        // A DECLARATION is not a call: the argument-scoped proxy arm must keep
+        // the class's central decision and refuse to bind an unknowable subject.
+        $this->assertFalse($bash->matches(new ToolCall('PtyRun', []), argumentsKnown: false));
+    }
+
+    public function testAllowRulesDoNotCarryAcrossShellTools(): void
+    {
+        // Permission widening stays explicit: `Allow Bash(ls *)` grants the
+        // plain tool, NOT the interactive driver running the same string — a
+        // grant covers what it names (see namesCall()).
+        $allowLs = new PermissionRule('Bash(ls *)', PermissionAction::Allow);
+        $this->assertTrue($allowLs->matches(new ToolCall('Bash', ['command' => 'ls -la'])));
+        $this->assertFalse(
+            $allowLs->matches(new ToolCall('PtyRun', ['command' => 'ls -la'])),
+            'an Allow must not silently widen to the shell sibling',
+        );
+
+        $mirror = new PermissionRule('PtyRun(ls *)', PermissionAction::Allow);
+        $this->assertFalse($mirror->matches(new ToolCall('Bash', ['command' => 'ls -la'])));
+    }
+
+    #[DataProvider('commandCorpus')]
+    public function testBashDenyRuleYieldsIdenticalGateVerdictsForBothShellTools(string $command): void
+    {
+        // The cross arm over the same 10-command corpus: ONE deny string written
+        // for Bash, judged against both doors. Pre-fix this row was
+        // asymmetric for 'chain with rm target' (Deny via Bash, Allow via
+        // PtyRun); the breaker rows were already symmetric via step 0.
+        $this->assertSame(
+            $this->verdict('Bash', $command, PermissionMode::BypassPermissions, 'Bash'),
+            $this->verdict('PtyRun', $command, PermissionMode::BypassPermissions, 'Bash'),
+            "the Bash-written deny rule read the two shell doors differently for {$command}",
+        );
+    }
+
+    #[DataProvider('commandCorpus')]
+    public function testPtyRunDenyRuleYieldsIdenticalGateVerdictsForBothShellTools(string $command): void
+    {
+        $this->assertSame(
+            $this->verdict('PtyRun', $command, PermissionMode::BypassPermissions, 'PtyRun'),
+            $this->verdict('Bash', $command, PermissionMode::BypassPermissions, 'PtyRun'),
+            "the PtyRun-written deny rule read the two shell doors differently for {$command}",
+        );
+    }
+
+    public function testTheCrossRuleActuallyDeniesTheOtherDoorNonVacuously(): void
+    {
+        // Parity could in principle agree on two wrong Allows; anchor one row
+        // to the real verdict: `rm -rf build` matches `rm *` without tripping
+        // the breaker, so the deny must ARRIVE (not merely agree) at both doors.
+        foreach (['Bash', 'PtyRun'] as $door) {
+            $this->assertSame(
+                PermissionDecision::Deny,
+                $this->verdict($door, 'echo hi && rm -rf build', PermissionMode::BypassPermissions, 'Bash'),
+                "Bash(rm *) must Deny the {$door} door on a rule-matching, breaker-clean command",
+            );
+        }
+    }
+
+    public function testTheAskModalCommandBlockCoversBothShellTools(): void
+    {
+        // Re-review: zero tests referenced Renderer::permissionSubjectLines(),
+        // the arm that paints the reviewable `$ command` text. Source-scan pin
+        // (house precedent: KittyKeyboardNegotiationTest's bin/sugarcrush scan)
+        // so deleting PtyRun from the shell arm reddens here, not in a human's
+        // modal-free session.
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Renderer.php');
+
+        $this->assertSame(
+            1,
+            preg_match('/private static function permissionSubjectLines.*?\n {4}\}/s', $src, $m),
+            'permissionSubjectLines() moved or lost its exact-4-space close',
+        );
+        $body = $m[0];
+
+        foreach (['Bash', 'PtyRun'] as $tool) {
+            $this->assertStringContainsString(
+                "'{$tool}'",
+                $body,
+                "the modal's shell arm must name {$tool} or its command renders as a bare argument dump",
+            );
+        }
+        $this->assertStringContainsString('tui.permission.run_command', $body, 'the `$ command` block itself went away');
     }
 }

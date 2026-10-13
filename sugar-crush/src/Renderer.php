@@ -6599,13 +6599,14 @@ final class Renderer
     }
 
     /**
-     * The modal's "what will run" rows for $call: for `Bash`, the question
-     * and the COMMAND itself ({@see permissionCommandBlock()}); for any other
-     * tool, the call with its arguments. The model's `description` is a
-     * caption it wrote about its own call, so it is never shown INSTEAD of the
-     * call — {@see Message::describeToolCall()} prefers it, which is right for
-     * a transcript row and wrong for a gate — only beneath it, faint, as the
-     * agent's note.
+     * The modal's "what will run" rows for $call: for the shell tools
+     * (`Bash`, `PtyRun` — both carry their command under `command`), the
+     * question and the COMMAND itself ({@see permissionCommandBlock()}); for
+     * any other tool, the call with its arguments. The model's `description`
+     * is a caption it wrote about its own call, so it is never shown
+     * INSTEAD of the call — {@see Message::describeToolCall()} prefers it,
+     * which is right for a transcript row and wrong for a gate — only
+     * beneath it, faint, as the agent's note.
      *
      * @return list<string>
      */

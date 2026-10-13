@@ -596,12 +596,18 @@ mode, `Bash{command: "rm -rf build"}`:
 name; argument-scoped patterns have matched since the matcher moved into
 `PermissionRule`, and the old table no longer describes the code.)
 
-The name half still has to name the tool a call arrives as, so a rule aimed at the
-interactive driver is written `PtyRun(rm *)`, not `Bash(rm *)`. Its argument half
-is then matched against `PtyRun`'s `command` **exactly** as `Bash`'s is — the same
-shell tokeniser, the same per-segment rules — so a `Deny PtyRun(rm *)` keeps the
-force of a `Deny Bash(rm *)` and an `Allow PtyRun(ls *)` grants against the command
-string rather than failing the whole tool closed.
+For the two shell tools the name half carries one exception, in the fail-closed
+direction only: a **restrictive** rule (`deny`, `ask`) naming `Bash` or `PtyRun`
+binds calls to **both** of them, in either direction — `Deny Bash(rm *)` refuses a
+`PtyRun{command: "rm foo"}` exactly as it refuses the same string through `Bash`,
+and `Deny PtyRun(rm *)` binds `Bash` too, because both tools hand their `command`
+to the same `/bin/sh -c` and a deny is about the shell, not about which name the
+call arrived under (mirrors how a `Deny Edit(.env)` binds `ApplyPatch`, and
+`PermissionRule::namesCall()` enforces it). The rule's argument half is then
+matched against the TARGET call's command with the same tokeniser and the same
+per-segment readings. **Allow stays per-tool**: `Allow Bash(ls *)` does not grant
+`PtyRun(ls *)` — a grant covers exactly what its author named, and widening one
+tool's approval onto another must be written down.
 
 How the argument half is matched:
 
