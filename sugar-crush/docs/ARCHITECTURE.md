@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              30 built-ins + MCP bridges
+                                         ├─ Tools\*              31 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -815,16 +815,16 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **thirty** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `GenerateVideo`, `Glob`, `Grep`, `InterruptAgentTool`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SendMessageTool`, `SkillTool`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships twenty-eight of them —
+`src/Tools/BuiltIn/` holds **thirty-one** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `GenerateVideo`, `Glob`, `Grep`, `InterruptAgentTool`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `PtyRun`, `Read`, `Recall`, `RepoMapTool`, `SendMessageTool`, `SkillTool`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships twenty-nine of them —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool. The other two, `BoardReadTool` and
 `BoardPostTool`, are on no launch: `TaskTool` hands them, bound to the batch's
 shared board, to the runs of a parallel `Task` batch's members.
 
-Domain matters here: **thirty is the count of *wired* tools, not of *usable*
+Domain matters here: **thirty-one is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
 language server configured" error until the user lists a server under the `lsp`
-setting. A figure saying "thirty working tools" would be the wrong claim.
+setting. A figure saying "thirty-one working tools" would be the wrong claim.
 `GenerateImage` follows the same door for a different service: it is reachable
 on every launch and useful only once `sd.baseUrl` (or its
 `SUGARCRUSH_SD_BASE_URL` env binding) names a server — with none configured it
@@ -1282,7 +1282,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Thirty tools" means wired built-ins.
+4. **A count carries its domain.** "Thirty-one tools" means wired built-ins.
    "Eight skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are

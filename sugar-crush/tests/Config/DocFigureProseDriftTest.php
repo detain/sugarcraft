@@ -5297,6 +5297,10 @@ final class DocFigureProseDriftTest extends TestCase
             $wordNumbers['twenty-' . $unit] = 21 + $i;
         }
         $wordNumbers['thirty'] = 30;
+        // PtyRun era, in-step census flip: the built-in directory grew to
+        // thirty-one classes and the generator re-spelled both pages; the map
+        // rides the same commit or the agreement leg reads a false miss.
+        $wordNumbers['thirty-one'] = 31;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
