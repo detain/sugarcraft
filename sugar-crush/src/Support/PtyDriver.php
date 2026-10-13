@@ -107,6 +107,7 @@ final class PtyDriver
             return $empty;
         }
 
+        $pty = null;
         try {
             // Open at the requested size, then spawn at it too: the master's
             // winsize is set before the child's first draw (class docblock).
@@ -123,6 +124,16 @@ final class PtyDriver
                 true,
             );
         } catch (\Throwable $failure) {
+            // spawn() throwing AFTER open() succeeded would otherwise strand the
+            // master fd — the finally below belongs to the run loop, which this
+            // path never reaches. open() itself throwing leaves $pty null.
+            if ($pty !== null) {
+                try {
+                    $pty->close();
+                } catch (\Throwable) {
+                    // Nothing to escalate a failure to; the refusal is the answer.
+                }
+            }
             $empty['refusal'] = 'pty refused: the pseudo-terminal could not be allocated (' . $failure->getMessage() . ')';
 
             return $empty;

@@ -671,7 +671,7 @@ final class Runtime
      *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow'];
+    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'PtyRun', 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

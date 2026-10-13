@@ -339,7 +339,12 @@ final class SafetyClassifier
     public function classify(ToolCall $call, ?string $projectRoot = null): ?string
     {
         return match ($call->name) {
-            'Bash' => $this->classifyBash($call),
+            // `PtyRun` shares `Bash`'s arm: it hands the same `command` string to
+            // `/bin/sh -c`, so an unjudged PtyRun would let Auto mode allow — and
+            // reset its circuit-breaker counters on — exactly the calls the
+            // classifier exists to catch. classifyBash() reads `command`, the
+            // identical key both tools carry.
+            'Bash', 'PtyRun' => $this->classifyBash($call),
             'Edit', 'Write' => $this->classifyWrite($call, $projectRoot),
             'ApplyPatch' => self::scopeCategory(self::patchScope($call, $projectRoot)),
             'WebFetch' => $this->classifyFetch($call),

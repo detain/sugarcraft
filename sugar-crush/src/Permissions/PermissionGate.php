@@ -1169,8 +1169,11 @@ final class PermissionGate
      */
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
-        // Only applies to Bash tool calls
-        if ($call->name !== 'Bash') {
+        // The breaker covers every tool whose `command` is handed to a shell,
+        // not just `Bash` — `PtyRun` spawns the same `/bin/sh -c $command`, so a
+        // model that reaches for the interactive driver must not step around an
+        // unswitchable floor. See PermissionRule::SHELL_SUBJECT_TOOLS.
+        if ($call->name !== 'Bash' && $call->name !== 'PtyRun') {
             return false;
         }
 

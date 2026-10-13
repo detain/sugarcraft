@@ -147,8 +147,11 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\SugarCraft\Crush\Agents\PathJail $worktreeJail = null,
     ) {
-        // The wall ceiling is what the turn waits on; like Bash's, it exists
-        // so no single call can hold the loop forever.
+        // The wall ceiling is what the turn waits on. Same purpose as Bash's —
+        // so no single call can hold the loop forever — but deliberately
+        // tighter than Bash's (30s default / 300s max against Bash's
+        // 120s / 600s): an interactive driver is meant to nudge a program
+        // step-by-step, not to babysit a long job.
         if ($this->defaultTimeoutSeconds < 1 || $this->defaultTimeoutSeconds > self::MAX_TIMEOUT_SECONDS) {
             throw new \InvalidArgumentException(sprintf('default timeout must be between 1 and %d seconds', self::MAX_TIMEOUT_SECONDS));
         }
@@ -504,9 +507,14 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
     private function render(string $toolCallId, int $cols, int $rows, array $run, string $harvest): ToolResult
     {
         $status = match (true) {
-            // Killed first: the ladder fires, the reap lands, and `exited`
-            // becomes true — reading that flag first would hide the death.
-            $run['killed'] => 'still running at the wall deadline: terminated and reaped via TERM/KILL (code 124)',
+            // Killed and reaped: the ladder fired and the child's death landed
+            // before the result was built. Reading `exited` first would hide the
+            // death, so killed wins — but only claim "reaped" when the reap
+            // actually happened.
+            $run['killed'] && $run['exited'] => 'still running at the wall deadline: terminated and reaped via TERM/KILL (code 124)',
+            // Ladder fired, child not yet confirmed gone: don't overclaim a reap
+            // that the late-reaper may still be armed for.
+            $run['killed'] => 'still running at the wall deadline: terminated via TERM/KILL, not yet reaped (late reap armed)',
             $run['exited'] => 'exited code=' . ($run['exitCode'] ?? '?'),
             default => 'detached (uninterruptible child, late reap armed)',
         };

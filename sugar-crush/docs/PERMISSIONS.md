@@ -120,8 +120,8 @@ to `default` on import (see
 
 Step 0 runs **before** rules and before the mode, so no `allow` rule and no
 mode — `bypass-permissions` included — can talk the gate into a self-destruct.
-It judges the words bash will actually run, not the raw text: the command line
-is tokenised with quote removal (`Permissions\ShellWords`), so a quoted flag
+It judges the words the shell will actually run, not the raw text: the command
+line is tokenised with quote removal (`Permissions\ShellWords`), so a quoted flag
 (`rm '-rf' ~`, `rm "-rf" /`, `rm $'-rf' /`) is a flag. It is tolerant of flag
 reordering (`-fr`), flag splitting (`-r -f`), flags after the operand
 (`rm ~ -rf`), long forms and their GNU abbreviations (`--recursive --force`,
@@ -136,6 +136,10 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 `find / -delete` — so it remains a guard rail, not a containment boundary.
 (Before audit F-P1 the quoted-flag spellings, a second target, `/*`, `~/` and
 `$HOME` were all **allowed** under `bypass-permissions`.)
+
+It fires for `Bash` **and** `PtyRun` alike: `PtyRun` hands its `command` to the same
+`/bin/sh -c`, so `PtyRun{command: "rm -rf ~"}` is refused at step 0 exactly as
+`Bash`'s is — reaching for the interactive driver is not a way around the floor.
 
 <!-- tools:classes:begin -->
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
@@ -182,7 +186,7 @@ rule — see [Rules](#rules).
 | `default` | Allow | Ask — except a `Bash` line made only of read-only commands, Allow ([below](#read-only-shell-commands-run-unasked)) | Ask |
 | `accept-edits` | Allow | a read-only `Bash` line Allow, as under `default`; `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
 | `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.sugar-crush/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch` and unhinted `mcp__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
+| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash`/`PtyRun` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
@@ -474,7 +478,7 @@ risk (audit F-P3(b) — before it, only `Bash` was read, so
 
 | Call | Blocked as | When |
 |---|---|---|
-| `Bash` | one of the command categories (`curl/wget-into-shell`, `external-endpoint`, `force-push-reset-hard`, …) | the command matches a row |
+| `Bash` / `PtyRun` | one of the command categories (`curl/wget-into-shell`, `external-endpoint`, `force-push-reset-hard`, …) | the command matches a row (`PtyRun` runs the same shell classifier — its `command` is `/bin/sh -c` text) |
 | `Edit` / `Write` | `protected-path-write` | the target is under `.git`, `.sugar-crush` or `.mcp.json` |
 | `Edit` / `Write` | `outside-root-write` | the target is not provably inside the project root — absolute elsewhere, escaping, `~/…`, a symlink out, or absent |
 | `ApplyPatch` | `outside-root-write`, else `protected-path-write` | as for `Edit`, judged over every path the patch adds, updates, moves to or deletes; the worst one decides, and a patch that does not parse is `outside-root-write` |
@@ -575,8 +579,8 @@ zero rules and says so.
 A pattern is `Tool` or `Tool(argument-glob)`, and both halves are `fnmatch()`
 (`PermissionRule::matches()`): `Bash*` is a prefix match, `mcp__*__push`
 works, and the argument half is matched against the tool's **subject**
-argument (`PermissionRule::SUBJECT_ARGUMENTS`) — `command` for `Bash`,
-`file_path` / `path` for the file tools, `url` for `WebFetch`, `query` for
+argument (`PermissionRule::SUBJECT_ARGUMENTS`) — `command` for `Bash` and
+`PtyRun` (both carry the shell line under `command`), `file_path` / `path` for the file tools, `url` for `WebFetch`, `query` for
 `WebSearch`, `name` for `Skill`. Measured on this tree, `bypass-permissions`
 mode, `Bash{command: "rm -rf build"}`:
 
@@ -592,9 +596,16 @@ mode, `Bash{command: "rm -rf build"}`:
 name; argument-scoped patterns have matched since the matcher moved into
 `PermissionRule`, and the old table no longer describes the code.)
 
+The name half still has to name the tool a call arrives as, so a rule aimed at the
+interactive driver is written `PtyRun(rm *)`, not `Bash(rm *)`. Its argument half
+is then matched against `PtyRun`'s `command` **exactly** as `Bash`'s is — the same
+shell tokeniser, the same per-segment rules — so a `Deny PtyRun(rm *)` keeps the
+force of a `Deny Bash(rm *)` and an `Allow PtyRun(ls *)` grants against the command
+string rather than failing the whole tool closed.
+
 How the argument half is matched:
 
-- **Shell subjects** (`Bash`) are split into simple commands by a quote-aware
+- **Shell subjects** (`Bash`, `PtyRun` — `PermissionRule::SHELL_SUBJECT_TOOLS`) are split into simple commands by a quote-aware
   tokeniser (`ShellWords`): on every **unquoted** `;`, `&`, `&&`, `|`, `||`,
   newline and subshell paren, so `git commit -m "a; b"` is one command. A
   restrictive rule (`deny`, `ask`) fires when the whole command **or any

@@ -6617,7 +6617,10 @@ final class Renderer
             unset($arguments['description']);
         }
 
-        $command = $call->name === 'Bash' ? ($arguments['command'] ?? null) : null;
+        // Both shell tools carry their command line under `command`; show it as a
+        // `$ …` block so the human approves the exact shell text either way.
+        $isShell = $call->name === 'Bash' || $call->name === 'PtyRun';
+        $command = $isShell ? ($arguments['command'] ?? null) : null;
         $lines = [];
         if (\is_string($command) && trim($command) !== '') {
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()

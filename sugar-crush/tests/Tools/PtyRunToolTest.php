@@ -25,7 +25,7 @@ use SugarCraft\Crush\Tools\BuiltIn\PtyRun;
  */
 final class PtyRunToolTest extends TestCase
 {
-    private const FIXTURE = __DIR__ . '/../fixtures/pty-mini-tui.php';
+    private const MINI_TUI_FIXTURE = __DIR__ . '/../fixtures/pty-mini-tui.php';
 
     public function testSchemaAdvertisesTheDrivingSurface(): void
     {
@@ -80,7 +80,7 @@ final class PtyRunToolTest extends TestCase
         foreach ($plans as $label => $extra) {
             $started = microtime(true);
             $result = (new PtyRun())->execute($extra + [
-                'command' => 'php ' . escapeshellarg(self::FIXTURE),
+                'command' => 'php ' . escapeshellarg(self::MINI_TUI_FIXTURE),
                 'description' => 'Refused plan',
                 'timeout' => 1,
             ]);
@@ -97,7 +97,7 @@ final class PtyRunToolTest extends TestCase
 
         try {
             $result = (new PtyRun())->execute([
-                'command' => 'php ' . escapeshellarg(self::FIXTURE),
+                'command' => 'php ' . escapeshellarg(self::MINI_TUI_FIXTURE),
                 'description' => 'Driven with no pty',
             ]);
         } finally {
@@ -169,8 +169,13 @@ final class PtyRunToolTest extends TestCase
     public function testWallDeadlineTerminatesAndReapsASilentSleeper(): void
     {
         $started = microtime(true);
+        // `trap '' HUP` ignores SIGHUP, and a disposition set to ignore SURVIVES
+        // `exec`, so the `sleep` that replaces the shell still shrugs off the HUP
+        // the master close sends. That leaves the TERM→KILL ladder as the ONLY
+        // thing that can end the child — with escalate() neutered the post-
+        // teardown alive() check below goes red instead of passing vacuously.
         $result = (new PtyRun())->execute([
-            'command' => 'sleep 60',
+            'command' => "trap '' HUP; exec sleep 60",
             'description' => 'Prove the ceiling',
             'timeout' => 2,
         ]);
@@ -230,7 +235,7 @@ final class PtyRunToolTest extends TestCase
     private function driveFixture(int $cols, int $rows, array $steps, int $timeout, string $harvest = 'transcript'): \SugarCraft\Crush\Tools\ToolResult
     {
         return (new PtyRun(root: dirname(__DIR__, 2)))->execute([
-            'command' => 'php ' . escapeshellarg(self::FIXTURE),
+            'command' => 'php ' . escapeshellarg(self::MINI_TUI_FIXTURE),
             'description' => 'Drive the mini-TUI',
             'cols' => $cols,
             'rows' => $rows,

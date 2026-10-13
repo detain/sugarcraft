@@ -848,7 +848,8 @@ final class SessionPermissionMemo
 
     /**
      * The arguments a grant is remembered under and checked against:
-     * $arguments with a `Bash` command's leading in-project `cd <dir> &&`
+     * $arguments with a shell-subject tool's (`Bash` or `PtyRun`) leading
+     * in-project `cd <dir> &&`
      * removed ({@see LeadingCd::strip()}), or $arguments unchanged — any other
      * tool, no root, or a prefix that does not qualify. THE one normaliser
      * every grant path shares: {@see patternsFor()} and {@see callKey()} (and
@@ -863,7 +864,11 @@ final class SessionPermissionMemo
      */
     public static function grantArguments(string $tool, array $arguments, ?string $projectRoot): array
     {
-        if ($tool !== 'Bash') {
+        // Any tool whose subject is shell text gets the leading-cd strip — both
+        // `Bash` and `PtyRun` run `cd x && …` through /bin/sh, so a grant memo
+        // for one must normalise identically to the other. subjectArgumentName()
+        // already resolves each to `command`.
+        if ($tool !== 'Bash' && $tool !== 'PtyRun') {
             return $arguments;
         }
         $subjectName = PermissionRule::subjectArgumentName($tool) ?? 'command';

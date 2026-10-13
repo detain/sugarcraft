@@ -191,6 +191,7 @@ final class PermissionRule
      */
     public const SUBJECT_ARGUMENTS = [
         'Bash' => 'command',
+        'PtyRun' => 'command',
         'Read' => 'file_path',
         'Edit' => 'file_path',
         'Write' => 'file_path',
@@ -210,9 +211,16 @@ final class PermissionRule
      * on — "this string is parsed by a shell, so `;`/`&`/`|`/newline hide a
      * second command in it" — is named where a future tool can join it.
      *
+     * `PtyRun` joined because it runs its `command` through the very same
+     * `/bin/sh -c` (via {@see \SugarCraft\Crush\Support\ProcessContainment}), so
+     * the property above holds verbatim: a user `Deny Bash(rm *)` must keep its
+     * force when the model reaches for the interactive driver instead, and the
+     * argument half of a `PtyRun(...)` rule is matched against that command
+     * text exactly as `Bash`'s is.
+     *
      * @var list<string>
      */
-    private const SHELL_SUBJECT_TOOLS = ['Bash'];
+    private const SHELL_SUBJECT_TOOLS = ['Bash', 'PtyRun'];
 
     /**
      * Tools whose subject argument is a FILESYSTEM PATH, and therefore gets the
