@@ -149,6 +149,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory search PHP',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -168,6 +169,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory search nonexistent',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -187,6 +189,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: "/memory edit {$id} Updated content",
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -209,6 +212,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory edit 00000000000000000000000000000000 New content',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -228,6 +232,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: "/memory delete {$id}",
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -249,6 +254,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory delete 00000000000000000000000000000000',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -552,6 +558,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory clear --scope project',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -576,6 +583,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory clear --scope project --confirm',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -597,6 +605,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -619,6 +628,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory list',
             backend: new EchoBackend(),
             memoryStore: null,
@@ -636,6 +646,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory unknown',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -653,6 +664,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory list',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -670,6 +682,7 @@ final class MemoryCommandTest extends TestCase
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory list --scope project',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -733,6 +746,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '',
             backend: new EchoBackend(),
         );
