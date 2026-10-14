@@ -26,7 +26,7 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-ONE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-THREE:
  *
  *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, nine —
  *    `run()` twice (a thrown backend error, and an answer that would not encode

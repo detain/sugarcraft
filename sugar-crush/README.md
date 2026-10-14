@@ -1035,9 +1035,9 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and eighteen keys are layered — `provider`, `models`,
-`titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
-`thinkingBudget`, `promptCache`, `parallelToolCalls`,
+Only these one hundred and nineteen keys are layered — `provider`, `models`,
+`providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
+`extraBody`, `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
 `compaction.reminderPercent`, `compaction.autoPercent`,
 `compaction.blockPercent`, `compaction.keepRecent`,
@@ -1113,7 +1113,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, sixty-three keys are **never** taken from a project file:
+Even for a trusted project, sixty-four keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
