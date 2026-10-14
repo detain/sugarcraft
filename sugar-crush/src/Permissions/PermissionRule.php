@@ -228,9 +228,13 @@ final class PermissionRule
      * grant covers only what it names, and widening across two tools that
      * differ in what a human sees must be spelled out.
      *
+     * The names themselves live in one place now, {@see ShellSubjectTools}
+     * (rv-php-2); this const stays as the local reading, and the completeness
+     * test fails if the roster and the five sibling sites ever drift apart.
+     *
      * @var list<string>
      */
-    private const SHELL_SUBJECT_TOOLS = ['Bash', 'PtyRun'];
+    private const SHELL_SUBJECT_TOOLS = ShellSubjectTools::NAMES;
 
     /**
      * Tools whose subject argument is a FILESYSTEM PATH, and therefore gets the

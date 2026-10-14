@@ -343,7 +343,9 @@ final class SafetyClassifier
             // `/bin/sh -c`, so an unjudged PtyRun would let Auto mode allow — and
             // reset its circuit-breaker counters on — exactly the calls the
             // classifier exists to catch. classifyBash() reads `command`, the
-            // identical key both tools carry.
+            // identical key both tools carry. The literals repeat {@see
+            // ShellSubjectTools::NAMES} because match patterns cannot interpolate
+            // a constant — ShellSubjectToolsCompletenessTest pins them equal.
             'Bash', 'PtyRun' => $this->classifyBash($call),
             'Edit', 'Write' => $this->classifyWrite($call, $projectRoot),
             'ApplyPatch' => self::scopeCategory(self::patchScope($call, $projectRoot)),

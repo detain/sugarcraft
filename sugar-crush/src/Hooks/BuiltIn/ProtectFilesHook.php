@@ -99,6 +99,40 @@ final readonly class ProtectFilesHook implements HookInterface
      *  - SSH identities `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (and
      *    their `_sk`/suffixed variants such as `id_rsa_work`), EXCEPT the
      *    `.pub` half, which exists to be shared.
+     *
+     * CREDENTIAL-STORE FILES (rv-sec-2): the SDK/tool keychains that hold real
+     * credentials under names nobody thought to give `.env`, `.pem` or `id_*`.
+     * Read- AND write-denied like the rest of this list, in every mode except
+     * the disclosed `bypass-permissions` waiver (see {@see self::execute()}).
+     *
+     *  - `~/.aws/credentials` — the AWS SDK shared-credentials file this repo
+     *    literally depends on (`aws/aws-sdk-php`). The `credentials` tail is
+     *    prefix-absorbed (no trailing boundary): a suffixed sibling inside the
+     *    `.aws/` directory (`credentials-work`, a `credentials.backup`) is the
+     *    same class of secret, and the fail-closed direction of the
+     *    incomplete-list argument at {@see self::WRITE_ONLY_PATTERNS} applies.
+     *  - the WHOLE `~/.ssh/` DIRECTORY, not only `id_*` names: `~/.ssh/config`
+     *    carries `IdentityCommand`/`ProxyCommand` (code that ssh runs), and a
+     *    key named `deploy_key` matches none of the identity patterns above.
+     *    The arm requires a `/` or end-of-word after `.ssh`, so
+     *    `.ssh-known_hosts` style names and `.sshfoo/` are other things; the
+     *    identity arm's `.pub` exception carries into the directory arm via a
+     *    lookahead, so `~/.ssh/id_ed25519.pub` stays readable exactly as it was
+     *    before (the `.pub` half exists to be shared), while every other name
+     *    under the directory — `config`, `authorized_keys`, `deploy_key` — is
+     *    refused.
+     *  - `~/.config/gcloud/` — Google ADC (`google/cloud-ai-platform` is a
+     *    dep): `application_default_credentials.json` inside it is an OAuth
+     *    refresh token.
+     *  - `.netrc` / `_netrc` (the Windows spelling) and `.npmrc` — the
+     *    `password`/`_authToken` lines. `\b`-bounded, so `netrcparser.php` and
+     *    a word glued before them (lookbehind) stay readable; `.netrc.bak`
+     *    rides the denial (a backup of the secret is the secret).
+     *  - `~/.docker/config.json` — registry `auths` bearer tokens; and
+     *    `~/.git-credentials` — plaintext `user:token@host` lines.
+     *
+     * All carry `i` for case-insensitive filesystems (macOS, Windows), the
+     * `.git/hooks` argument above: there `~/.SSH/` IS the ssh directory.
      */
     public const DEFAULT_PROTECTED_PATTERNS = [
         '/(?<![\w.-])\.env(?:rc)?(?![\w\/-])(?!(?:\.[\w-]+)*\.(?:example|sample|dist|template|tpl)(?![\w.-]))/',
@@ -106,6 +140,13 @@ final readonly class ProtectFilesHook implements HookInterface
         '/(?<![\w.-])id_(?:rsa|dsa|ecdsa|ed25519)[\w.-]*(?<!\.pub)(?![\w.-])/',
         '/\.git\/config\b/',
         '/(^|\/)config\/[^\s]*\.php\b/',
+        '/(?<![\w.-])\.aws\/credentials/i',
+        '/(?<![\w.-])\.ssh(?:\/(?!\S*\.pub(?![\w.-]))|$)/i',
+        '/(?<![\w.-])\.config\/gcloud(?![\w.-])/i',
+        '/(?<![\w.-])[._]netrc\b/i',
+        '/(?<![\w.-])\.npmrc\b/i',
+        '/(?<![\w.-])\.docker\/config\.json\b/i',
+        '/(?<![\w.-])\.git-credentials\b/i',
         ...self::WRITE_ONLY_PATTERNS,
     ];
 

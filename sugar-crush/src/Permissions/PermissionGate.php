@@ -1172,8 +1172,9 @@ final class PermissionGate
         // The breaker covers every tool whose `command` is handed to a shell,
         // not just `Bash` — `PtyRun` spawns the same `/bin/sh -c $command`, so a
         // model that reaches for the interactive driver must not step around an
-        // unswitchable floor. See PermissionRule::SHELL_SUBJECT_TOOLS.
-        if ($call->name !== 'Bash' && $call->name !== 'PtyRun') {
+        // unswitchable floor. Roster: ShellSubjectTools (rv-php-2 single source),
+        // pinned across all six sites by ShellSubjectToolsCompletenessTest.
+        if (!ShellSubjectTools::covers($call->name)) {
             return false;
         }
 

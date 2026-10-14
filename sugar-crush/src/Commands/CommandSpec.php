@@ -649,12 +649,23 @@ final class CommandSpec
         // E672/E674: a command substitution runs model-authored shell text;
         // the choke point gives it the no-controlling-terminal spawn and the
         // fail-fast env like every other site.
+        // rv-sec-4: SCRUBBED env, not the bare inherited one. The substitution's
+        // stdout is text the MODEL reads — it lands verbatim in the expanded
+        // prompt — which is exactly the audit F-E1 class that takes
+        // {@see ProcessContainment::scrubbedEnv()} (Bash, Grep, script hooks),
+        // not the operator-backend exemption that keeps {@see
+        // ProcessContainment::env()} unscrubbed: a `` !`printenv OPENAI_API_KEY` ``
+        // would otherwise mint a credential into the context window. No
+        // per-command allowlist is threaded here because scrubbedEnv() already
+        // consults the process-global `secretEnvAllowlist` Bootstrap installs —
+        // an operator who needs a template to see a credential grants it there,
+        // the same lever every other scrubbed site honours.
         $process = @proc_open(
             ProcessContainment::spawnSpec(['bash', '-c', $command]),
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $cwd,
-            ProcessContainment::env(),
+            ProcessContainment::scrubbedEnv(),
         );
 
         if (!\is_resource($process)) {

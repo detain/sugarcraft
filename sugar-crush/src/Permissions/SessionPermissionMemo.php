@@ -867,8 +867,8 @@ final class SessionPermissionMemo
         // Any tool whose subject is shell text gets the leading-cd strip — both
         // `Bash` and `PtyRun` run `cd x && …` through /bin/sh, so a grant memo
         // for one must normalise identically to the other. subjectArgumentName()
-        // already resolves each to `command`.
-        if ($tool !== 'Bash' && $tool !== 'PtyRun') {
+        // already resolves each to `command`. Roster: ShellSubjectTools (rv-php-2).
+        if (!ShellSubjectTools::covers($tool)) {
             return $arguments;
         }
         $subjectName = PermissionRule::subjectArgumentName($tool) ?? 'command';
