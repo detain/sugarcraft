@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-ASCII GIF viewer on the SugarCraft stack for PHP 8.3+. Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate.
+ANSI/GIF animation viewer on the SugarCraft stack for PHP 8.3+. Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate. It also plays back `.ansi` ANSI-art documents — parse, catalog, and timer-free frame pacing (see [ANSI art playback](#ansi-art-playback-ansiart-artlibrary-artloop) below); `.ansi` playback needs no GD at all.
 
 ```bash
 composer require sugarcraft/candy-flip
@@ -30,6 +30,38 @@ candy-flip my-animation.gif density # ASCII luminance ramp
 | `→`                | Step forward one frame              |
 | `d`                | Toggle solid ↔ density preset       |
 | `q` / `Esc`        | Quit                                |
+
+## ANSI art playback (AnsiArt / ArtLibrary / ArtLoop)
+
+`.ansi` art documents (SGR-escaped text, optionally a multi-frame redraw
+stream) parse into a cell model — one `AnsiCell` (glyph + active SGR prefix)
+per codepoint — that hosts paint into any surface, or replay verbatim via
+`AnsiArt::sgrText()`. `ArtLibrary` catalogs a directory of
+`logo-<slug>[-skinny][-anim]-<16|256|tc>-<WxH>.ansi` files and resolves a slug
+at the terminal's detected colour depth with a kind/depth cascade (wide form
+preferred; depth fallback is adjacent-first). `ArtLoop` is pure pacing math:
+no timers, `frameAt(elapsedSeconds)` maps wall-clock offset to frame index.
+
+```php
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Flip\AnsiArt;
+use SugarCraft\Flip\ArtLibrary;
+use SugarCraft\Flip\ArtLoop;
+
+$library = ArtLibrary::fromDir(__DIR__ . '/logo');           // optional ->mergeManifest('logos.jsonl')
+$depth   = ArtLibrary::profileTag(ColorProfile::detect());  // 'tc' | '256' | '16'
+$art     = $library->pick('art-deco-gilt', $depth);         // ?AnsiArt, cascade-resolved
+
+if ($art !== null && $art->isAnimated()) {
+    $loop  = ArtLoop::new($art->frameCount());              // 0.1 s/frame + 2.5 s closing hold
+    $frame = $art->frameCells($loop->frameAt(microtime(true) - $startedAt));
+    foreach ($frame as $y => $row) {
+        foreach ($row as $x => $cell) {
+            $surface->put($x, $y, $cell->glyph, $cell->sgr); // paint cells, or echo $art->sgrText($i)
+        }
+    }
+}
+```
 
 ## Implementation notes
 

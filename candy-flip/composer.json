@@ -1,12 +1,13 @@
 {
     "name": "sugarcraft/candy-flip",
-    "description": "ASCII GIF viewer \u2014 port of namzug16/gifterm on the SugarCraft stack.",
+    "description": "ANSI/GIF animation viewer — ASCII GIF playback (gifterm port) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop).",
     "type": "project",
     "license": "MIT",
     "keywords": [
         "tui",
         "cli",
         "gif",
+        "ansi-art",
         "ascii-art",
         "gifterm",
         "sugarcraft"
@@ -30,8 +31,10 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-pty": "dev-master",
-        "ext-gd": "*"
+        "sugarcraft/candy-pty": "dev-master"
+    },
+    "suggest": {
+        "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",
