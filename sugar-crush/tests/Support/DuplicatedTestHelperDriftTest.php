@@ -192,6 +192,11 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             . 'from reading each other\'s file. The `-F`/`-f` defect that made the copies '
             . 'differ in BEHAVIOUR was fixed in both, one round apart, which is the event this '
             . 'guard exists to make visible next time.',
+        'minimalEnv' =>
+            'Per-suite sandbox tag inside the temp HOME path: `bin_tty_guard_home_` in one copy,'
+            . ' `bin_dispatch_home_` in the other. Each suite mints its own sentinel directory so leaked '
+            . 'residue names its owner; the helper bodies are otherwise one statement about '
+            . 'the minimal child env, and a fix there must land in both copies together.',
         'package' =>
             'The generated-doc drift suites each locate the package root from their own '
             . 'directory: `tests/Commands/` is two levels down, `tests/Config/Settings/` and '
@@ -2653,6 +2658,9 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',
         'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
         'TINY_PNG_B64' => 'The crush-media W7 pair - the perf-budget suite timing the preview paint and the preview suite asserting its pixels - embed the same 1x1 PNG so both measure the one synthetic image; neither derives it, and a re-roll of the fixture moves the pair together, the CHUNKED shape at a different path depth.',
+        'TIMEOUT_SECONDS' => 'The two bin-spawning suites (the no-tty guard, and the dispatch battery) hold '.
+            'the same wall-clock leash on a `bin/sugarcrush` child: 20 seconds is one statement about that '.
+            'child, so the copies must move together.',
         'TRUNCATED' => 'The two A11 suites - provider-side argumentsError() stamping and Runtime-side refusal - feed the audit\'s one cut-off JSON payload, so both ends of the seam assert on the same malformed input.',
         'UNAUTHORIZED_BODY' => 'The provider-error surfacing suites (engine road and sub-agent road, audit AG-4) feed the same 401 body so both assert the same provider text reaches the user.',
         'VARS' => 'The environment roster the wiring suites pin is one list duplicated per suite; it belongs in a provider, and until it moves this row says so out loud.',
