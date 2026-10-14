@@ -15,9 +15,11 @@ use SugarCraft\Top\View\Surface;
 
 /**
  * The flip-art façade: env-driven selection (off / slug / seeded random),
- * the process-wide memo, and the Banner-shaped blit (centred with the
- * house -1 offset, unstyled spaces left to the surface base, right-edge
- * cells dropped instead of wrapped).
+ * the slug-only process-wide memo (random draws bypass it and advance the
+ * mt_rand stream, the seed planting exactly once per reset era so it fixes
+ * a per-open SEQUENCE), and the Banner-shaped blit (centred with the house
+ * -1 offset, cells painted with their cumulative SGR, right-edge cells
+ * dropped instead of wrapped).
  */
 final class LogoTest extends TestCase
 {
@@ -112,6 +114,28 @@ final class LogoTest extends TestCase
         $this->assertSame(Logo::pick(ColorProfile::TrueColor), Logo::pick(ColorProfile::TrueColor));
     }
 
+    public function testRandomDrawsBypassTheMemoAndAdvanceTheSequence(): void
+    {
+        $this->skipWithoutCorpus();
+        putenv(Logo::CHOICE_ENV . '=random');
+        putenv(Logo::SEED_ENV . '=42');
+        Logo::resetForTesting();
+        $first = Logo::pick(ColorProfile::TrueColor);
+        $second = Logo::pick(ColorProfile::TrueColor);
+        $this->assertNotNull($first);
+        $this->assertNotNull($second);
+        // The old memo keyed on (depth,"random") froze every open onto the
+        // first draw — the exact bug the per-open re-roll removes.
+        $this->assertNotSame($first->sgrText(0), $second->sgrText(0), 'consecutive draws under one seed must differ');
+        $this->assertSame(2, Logo::picksForTesting(), 'each draw counts');
+        putenv(Logo::CHOICE_ENV . '=rock-candy-prism');
+        Logo::pick(ColorProfile::TrueColor);
+        Logo::pick(ColorProfile::TrueColor);
+        $this->assertSame(2, Logo::picksForTesting(), 'explicit-slug lookups are memo hits, not draws');
+        Logo::resetForTesting();
+        $this->assertSame(0, Logo::picksForTesting(), 'reset opens a fresh seed era');
+    }
+
     public function testPaintCentresWithHouseOffsetAndKeepsUnstyledSpaces(): void
     {
         $art = $this->synthetic();
@@ -121,8 +145,30 @@ final class LogoTest extends TestCase
         $this->assertSame('    AB      ', $surface->plainLines()[1]);
         $this->assertSame('     CD     ', $surface->plainLines()[2]);
         $this->assertSame("\x1b[31m", $surface->style(4, 1));
-        $this->assertSame('', $surface->style(5, 2), 'unstyled space inherits the surface base');
+        // Cumulative-SGR AnsiArt (candy-flip fix): the mid-stream space now
+        // carries the inherited run instead of an empty sgr, so it is a
+        // deliberate fill and gets painted. Only cells before the first SGR
+        // are unstyled; the inherit-the-base idiom below still guards those.
+        $this->assertSame("\x1b[31m", $surface->style(5, 2), 'cumulative run makes the space a styled fill');
         $this->assertSame("\x1b[32m", $surface->style(6, 2));
+    }
+
+    public function testPaintSkipsUnstyledSpaceSoTheBackdropShowsThrough(): void
+    {
+        // The skip guard itself: a space cell with an EMPTY sgr (before any
+        // SGR run) must not be blitted — sentinel backdrop glyph and colour
+        // both survive — while the following visible glyph is painted.
+        $art = AnsiArt::fromString(" \x1b[31mZ");
+        $surface = Surface::new(4, 1);
+        $surface->put(0, 0, '....', "\x1b[35m");
+        // Centre offset: intdiv(4,2) - intdiv(2,2) - 1 = 0, so the space
+        // lands on col 0 and Z on col 1.
+        Logo::paint($surface, 0, $art, 0, Ink::new(ThemeConfig::new()));
+
+        $this->assertSame('.', $surface->glyph(0, 0), 'unstyled space leaves the backdrop glyph');
+        $this->assertSame("\x1b[35m", $surface->style(0, 0), '...and its colour');
+        $this->assertSame('Z', $surface->glyph(1, 0), 'the styled glyph right after it is blitted');
+        $this->assertSame("\x1b[31m", $surface->style(1, 0));
     }
 
     public function testPaintClampsCentreOffsetAndDropsOverflowColumns(): void

@@ -10,29 +10,37 @@ use SugarCraft\Flip\ArtLibrary;
 
 /**
  * The animated/logo alternative to the block-letter {@see Banner}: ANSI art
- * from candy-flip, picked once per process and painted by the main, options
- * and help menus in place of the banner.
+ * from candy-flip, re-picked every time a menu opens (the App calls
+ * {@see pick()} again on each transition into the main, options or help
+ * menu) and painted in place of the banner.
  *
  * Selection (env CANDY_TOP_LOGO):
  *  - `off`            → null, every caller keeps painting the legacy banner
  *                       (the byte-identical golden-fallback contract);
- *  - a slug name      → that art, deterministic across runs;
+ *  - a slug name      → that art, memoised, so every re-open shows the same
+ *                       logo (the goldens pin explicit slugs and depend on
+ *                       this determinism);
  *  - unset / `random` → a random slug at the depth the colour profile maps
- *                       to via {@see ArtLibrary::profileTag()}.
+ *                       to via {@see ArtLibrary::profileTag()}; random draws
+ *                       deliberately BYPASS the memo so each call advances
+ *                       the draw and every re-open can land on new art.
  *
- * CANDY_TOP_LOGO_SEED (an integer) reseeds mt_srand before the random pick,
- * so two runs with the same seed land on the same logo. Honesty note: the
- * reseed is process-global (mt_srand has no narrower form) — the logo pick
- * is currently the app's only mt_rand consumer, so nothing else is
- * observably affected, but a future feature drawing mt_rand would share the
- * seeded stream.
+ * CANDY_TOP_LOGO_SEED (an integer) seeds mt_srand EXACTLY ONCE per process,
+ * at the first random resolve (resetForTesting clears the flag), so the seed
+ * fixes the deterministic SEQUENCE of per-open draws rather than pinning
+ * every open to the same first value. Honesty note: the seeding is
+ * process-global (mt_srand has no narrower form) — the logo draw is
+ * currently the app's only mt_rand consumer, so nothing else is observably
+ * affected, but a future feature drawing mt_rand would share the seeded
+ * stream.
  *
  * The library is memoised process-wide (parsing ~430 files is file I/O that
- * must happen exactly once); a pick is memoised per (depth, choice) because
- * a tty_mode/truecolor flip re-picks at a new depth on every toggle and the
- * parse itself walks a multi-frame .ansi file. Any failure — missing logo
- * dir, unparsable corpus, unknown slug — resolves to null, i.e. the banner:
- * a broken optional decoration must never stop the monitor from drawing.
+ * must happen exactly once) and explicit slugs are memoised per
+ * (depth, choice) because a tty_mode/truecolor flip re-picks at a new depth
+ * on every toggle and the parse itself walks a multi-frame .ansi file. Any
+ * failure — missing logo dir, unparsable corpus, unknown slug — resolves to
+ * null, i.e. the banner: a broken optional decoration must never stop the
+ * monitor from drawing.
  */
 final class Logo
 {
@@ -47,8 +55,14 @@ final class Logo
 
     private static ?ArtLibrary $library = null;
 
-    /** @var array<string, AnsiArt|false> memoised picks; false = resolved to null */
+    /** @var array<string, AnsiArt|false> memoised explicit-slug picks; false = resolved to null */
     private static array $picks = [];
+
+    /** mt_srand runs at most once per process so the seed fixes a draw SEQUENCE. */
+    private static bool $seededOnce = false;
+
+    /** Random draws attempted since the last reset — the per-open re-roll counter. */
+    private static int $randomPicks = 0;
 
     private function __construct()
     {
@@ -69,6 +83,15 @@ final class Logo
             return null;
         }
         $tag = ArtLibrary::profileTag($profile);
+        if ($choice === '' || $choice === 'random') {
+            // Random draws skip the memo entirely: the whole point of
+            // re-picking on every menu open is that each call advances the
+            // rng, so memoising (depth, "random") would freeze the logo to
+            // its first value — the exact behaviour users complained about.
+            ++self::$randomPicks;
+
+            return self::draw($library, $tag);
+        }
         $memo = $tag . '|' . $choice;
         if (isset(self::$picks[$memo])) {
             return self::$picks[$memo] === false ? null : self::$picks[$memo];
@@ -133,6 +156,18 @@ final class Logo
     {
         self::$library = null;
         self::$picks = [];
+        self::$seededOnce = false;
+        self::$randomPicks = 0;
+    }
+
+    /**
+     * Random draws attempted since the last {@see resetForTesting()} — lets
+     * tests pin that every menu open really advanced the draw (explicit
+     * slugs never count: they are memo lookups, not rolls).
+     */
+    public static function picksForTesting(): int
+    {
+        return self::$randomPicks;
     }
 
     private static function library(): ?ArtLibrary
@@ -152,18 +187,34 @@ final class Logo
     private static function resolve(ArtLibrary $library, string $tag, string $choice): ?AnsiArt
     {
         try {
-            if ($choice === '' || $choice === 'random') {
+            return $library->pick($choice, $tag, true);
+        } catch (\RuntimeException | \InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * One random draw at depth `$tag`. Seeding lives here rather than in
+     * pick()'s call sites so the once-per-process rule has exactly one
+     * owner: the first draw plants the seed (when CANDY_TOP_LOGO_SEED is
+     * numeric), every later draw rides the same mt_rand stream, and the
+     * seed therefore fixes the per-open SEQUENCE instead of pinning one
+     * repeated value.
+     */
+    private static function draw(ArtLibrary $library, string $tag): ?AnsiArt
+    {
+        try {
+            if (!self::$seededOnce) {
+                self::$seededOnce = true;
                 $seed = getenv(self::SEED_ENV);
                 if (is_string($seed) && $seed !== '' && is_numeric($seed)) {
                     mt_srand((int) $seed);
                 }
-                $rng = static fn (int $n): int => mt_rand(0, $n - 1);
-                $slug = $library->randomSlug($tag, true, $rng);
-
-                return $slug === null ? null : $library->pick($slug, $tag, true);
             }
+            $rng = static fn (int $n): int => mt_rand(0, $n - 1);
+            $slug = $library->randomSlug($tag, true, $rng);
 
-            return $library->pick($choice, $tag, true);
+            return $slug === null ? null : $library->pick($slug, $tag, true);
         } catch (\RuntimeException | \InvalidArgumentException) {
             return null;
         }

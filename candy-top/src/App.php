@@ -216,6 +216,8 @@ final class App implements Model
         private readonly bool $logoArmed = false,
         /** Bumped on every re-pick so a superseded tick chain retires itself. */
         private readonly int $logoEpoch = 0,
+        /** Wall time the current art was armed — frames advance from here (per-open animation start). */
+        private readonly float $logoStartedAt = 0.0,
     ) {
         $this->overlays = $overlays ?? OverlayStack::new();
         $this->themes = $themes ?? self::systemThemes();
@@ -234,10 +236,13 @@ final class App implements Model
      *                                scanned by the caller; null = builtin Default and TTY only, and
      *                                `ctrl+r` does not rescan
      *
-     * The logo art ({@see Logo}) is picked here, once per process, for the
-     * start-up colour profile; it is NOT armed — the animation only runs
-     * while a logo overlay is open, and the clock tick sweeps that on
-     * (a pick that resolves to null leaves every menu on the legacy banner).
+     * The logo art ({@see Logo}) is picked here for the start-up colour
+     * profile so the first menu paint has art before any transition; every
+     * later entry into a logo menu re-picks through the {@see withOverlay()}
+     * choke (a random choice therefore changes per open, an explicit slug
+     * replays identically). It is NOT armed — the animation only runs while
+     * a logo overlay is open, and the clock tick sweeps that on (a pick
+     * that resolves to null leaves every menu on the legacy banner).
      */
     public static function start(
         Config $config,
@@ -368,7 +373,9 @@ final class App implements Model
             // is the single sweep that (re-)arms the 0.1 s chain after the
             // menu opened, instead of threading a Cmd through every open path.
             if ($next->logoAnimating() && !$next->logoArmed && $next->logoOverlayOpen()) {
-                $next = $next->mutate(logoArmed: true);
+                // startedAt rides the arm: the chain paces from this sweep,
+                // so the fresh art holds frame 0 from open until now.
+                $next = $next->mutate(logoArmed: true, logoStartedAt: $msg->time);
                 $cmd = Cmd::batch($cmd, $next->logoTick());
             }
 
@@ -387,11 +394,14 @@ final class App implements Model
             }
             $loop = ArtLoop::new($this->logoArt->frameCount());
 
-            // Absolute wall phase, not an accumulated clock: a late tick
-            // lands on the frame it should show, and re-arming after a
-            // freeze (a long collect) never drifts.
+            // Per-art elapsed, not absolute wall phase: each re-picked logo
+            // animates from its own start (frame 0 held until the arm
+            // stamped startedAt), and ArtLoop::frameAt applies its own fmod
+            // wrap so a late tick still lands on the frame this art should
+            // show and the loop simply cycles. An absolute phase would jump
+            // a freshly opened logo to a mid-loop frame off the wall clock.
             return [
-                $this->mutate(logoFrame: $loop->frameAt(fmod(max(0.0, $msg->time), $loop->cycleSeconds()))),
+                $this->mutate(logoFrame: $loop->frameAt(max(0.0, $msg->time - $this->logoStartedAt))),
                 $this->logoTick(),
             ];
         }
@@ -624,7 +634,64 @@ final class App implements Model
      */
     public function withOverlay(Overlay $overlay): self
     {
-        return $this->mutate(overlays: $this->overlays->push($overlay, $this->cols, $this->rows))->settledBackdrop(false);
+        $previous = $this->overlays->top();
+
+        return $this->mutate(overlays: $this->overlays->push($overlay, $this->cols, $this->rows))
+            ->repickedFor($previous)
+            ->settledBackdrop(false);
+    }
+
+    /**
+     * The single re-pick choke, applied wherever the stack's new top is
+     * adopted (push via {@see withOverlay()}, pop-reveal and replace via
+     * {@see deliverOverlay()}). Re-rolls the logo only on a genuine entry
+     * into a banner-family menu: the new top must be one, and it must be a
+     * different menu class than what was on top before — same-class
+     * re-instances are menu navigation (arrow keys rebuild MainMenu every
+     * press and must NOT re-roll), and pushing a non-logo overlay (signal,
+     * renice, msgbox) is not an entry anywhere the logo shows.
+     */
+    private function repickedFor(?Overlay $previous): self
+    {
+        $top = $this->overlays->top();
+        if ($top === null || !self::isLogoOverlay($top)) {
+            return $this;
+        }
+        if ($previous !== null && $previous::class === $top::class) {
+            return $this;
+        }
+
+        return $this->repickLogo();
+    }
+
+    /**
+     * Fresh random art for the current depth at frame zero. Identity of the
+     * picked instance short-circuits the whole state churn: `off` keeps null
+     * (no arming work), an explicit slug memo-hits to the same art (the
+     * goldens and testProfileFlip depend on that determinism), and only a
+     * genuinely new draw bumps the epoch and restarts the animation clock.
+     */
+    private function repickLogo(): self
+    {
+        $art = Logo::pick($this->ink->profile());
+        if ($art === $this->logoArt) {
+            return $this;
+        }
+
+        return $this->mutate(
+            logoArt: $art,
+            logoArtSet: true,
+            logoFrame: 0,
+            logoArmed: false,
+            logoEpoch: $this->logoEpoch + 1,
+            logoStartedAt: $this->now ?? microtime(true),
+        );
+    }
+
+    /** One of the three banner-family menus that paint the logo. */
+    private static function isLogoOverlay(Overlay $overlay): bool
+    {
+        return $overlay instanceof MainMenu || $overlay instanceof OptionsMenu || $overlay instanceof HelpMenu;
     }
 
     /** The context an overlay is updated and painted with, built now. */
@@ -808,6 +875,13 @@ final class App implements Model
             logoFrame: $ink !== null ? 0 : null,
             logoArmed: $ink !== null ? $armLogoTick : null,
             logoEpoch: $ink !== null ? $this->logoEpoch + 1 : null,
+            // applyConfig fires BETWEEN ticks (no ClockTickMsg rides it), so
+            // $this->now is up to ~1 s stale and would start the fresh art's
+            // elapsed clock in the past — the animation would resume a frame
+            // or two late. Stamp live wall time, same clock the LogoTickMsgs
+            // carry; the sweep arm at the ClockTickMsg handler keeps using
+            // $msg->time because there the tick IS the current instant.
+            logoStartedAt: $ink !== null ? microtime(true) : null,
         )->relayout()->settledBackdrop(true);
         $cmds = [$periodChanged ? $next->dataTick() : null];
         if ($ink !== null && $armLogoTick) {
@@ -903,13 +977,13 @@ final class App implements Model
     {
         $top = $this->overlays->top();
 
-        return $top instanceof MainMenu || $top instanceof OptionsMenu || $top instanceof HelpMenu;
+        return $top !== null && self::isLogoOverlay($top);
     }
 
     /**
      * The logo-frame tick Cmd for the current pick. One frame step per fire
      * (ArtLoop's own frameSeconds drives the on-screen cadence through the
-     * absolute-time phase); the delay is capped at 0.1 s so a slow first
+     * per-art elapsed clock); the delay is capped at 0.1 s so a slow first
      * frame still lands promptly, mirroring dataTick()'s capture pattern.
      * Precondition: a logo is picked — every call site arms behind
      * logoAnimating()/the applyConfig pick guard, so a null here is a wiring
@@ -1088,7 +1162,14 @@ final class App implements Model
         $switched = $result->overlay === null || $result->push !== null;
         $next = $this->mutate(overlays: $this->overlays->replaceTop($result->overlay, $this->cols, $this->rows))->settledBackdrop($switched);
         if ($result->push !== null) {
+            // The choke inside withOverlay() sees the just-replaced top as
+            // `previous`, so an Enter (fresh MainMenu underneath + push of
+            // OptionsMenu) re-picks exactly once, on entry to OptionsMenu.
             $next = $next->withOverlay($result->push);
+        } else {
+            // Pop-reveal or class switch without a push: the new top was
+            // uncovered here, not pushed, so the choke rides this leg too.
+            $next = $next->repickedFor($top);
         }
         [$next, $applied] = $next->applyOptions($result->set);
 
@@ -1688,6 +1769,7 @@ final class App implements Model
         ?int $logoFrame = null,
         ?bool $logoArmed = null,
         ?int $logoEpoch = null,
+        ?float $logoStartedAt = null,
     ): self {
         return new self(
             $config ?? $this->config,
@@ -1715,6 +1797,7 @@ final class App implements Model
             $logoFrame ?? $this->logoFrame,
             $logoArmed ?? $this->logoArmed,
             $logoEpoch ?? $this->logoEpoch,
+            $logoStartedAt ?? $this->logoStartedAt,
         );
     }
 }
