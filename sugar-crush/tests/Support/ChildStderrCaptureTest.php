@@ -259,6 +259,21 @@ final class ChildStderrCaptureTest extends TestCase
      * @var array<string,array{count:int,reason:string}>
      */
     private const ACCEPTED_DISCARDED_STDERR = [
+        // PtyRun's mini-TUI fixture (r9x lane): its two stty probes discard
+        // the helper's stderr into /dev/null on purpose — a missing or busy
+        // ctty must fall back to the declared 80x24 defaults silently, and
+        // whoever launches this fixture (PtyDriver's pty) reads the screen,
+        // not fd 2; any text stty writes there would pollute the very grid
+        // the suite asserts on.
+        'fixtures/pty-mini-tui.php' => [
+            'count' => 2,
+            'reason' =>
+                'The two `stty ... 2>/dev/null` probes (geometry read, mode set). The fixture '
+                . 'must answer with clean ANSI on stdout even when stty refuses - a detached '
+                . 'hand run falls back to 80x24 rather than fataling - and its stderr has no '
+                . 'reader: the parent drives a pty and parses the screen, so surfacing stty '
+                . 'noise there would land in the grid the PtyRun suites byte-assert.',
+        ],
         'Integration/BinSugarcrushDispatchTest.php' => [
             'count' => 1,
             'reason' =>

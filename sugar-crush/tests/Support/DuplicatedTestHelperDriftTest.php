@@ -2647,6 +2647,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'PNG_B64' => 'The sdapi media suites - the W1 response reader, the W2.1 GenerateImage tool, the W2.3 /generate command - each wrap the same 1x1 PNG in their transport fake; no suite asserts on the bytes, they only let the pipeline decode an image. A re-roll to a different PNG flips the pair to the drift polity, which is the human decision this row defers.',
         'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',
         'README' => 'The documentation-census suites point at the same repository file path.',
+        'ROWS' => 'The child-ask view suite and the thinking-frame border suite each build a 60-row terminal frame; the value is one viewport-height fixture choice per suite, unrelated classes, and neither reads the other — consolidating would couple two render censuses that move independently.',
         'SAFE_BYTES' => 'The under-capacity byte count the drain and wedge families share.',
         'SETTINGS_DOC' => 'The suites point at the same settings documentation path.',
         'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',

@@ -129,6 +129,8 @@ trait TruncatesOutput
      * NOT EVERY USER OF THIS CONSTANT IS IN THAT RELATIONSHIP:
      * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash},
      * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool},
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\PtyRun} (its own spelled copy of
+     * the number, the F-T3 shape the census names),
      * {@see \SugarCraft\Crush\Tools\McpToolBridge} (one per MCP tool, since
      * audit 0.5) and
      * {@see \SugarCraft\Crush\Tools\BuiltIn\WebFetch} take the same default
