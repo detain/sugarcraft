@@ -181,11 +181,21 @@ trait CapturesProcessOutput
         // none.
         $spawnSpec = ProcessContainment::spawnSpec($command);
         $env = ProcessContainment::scrubbedEnv($envOverrides);
+        // Clear the last error before the @-suppressed call so error_get_last()
+        // below can only describe THIS spawn, never a stale diagnostic from
+        // earlier in the process; proc_open() failure always pairs with a
+        // warning, so a null here means the call failed silently and the
+        // message says only what is known.
+        error_clear_last();
         $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
+            $cause = error_get_last()['message'] ?? null;
+            $shown = strlen($command) > 120 ? substr($command, 0, 117) . '...' : $command;
             return [
                 'stdout' => '',
-                'stderr' => 'Failed to start process',
+                'stderr' => 'Could not start the command ' . $shown . ' — proc_open() failed'
+                    . ($cause === null ? '' : ' (' . $cause . ')')
+                    . '; the command was never run. This is a system-level spawn failure (process-table exhaustion or a denied fork), not a problem with the command text; check `ulimit -u` / system process limits and retry.',
                 'exitCode' => 127,
                 'truncatedBytes' => 0,
                 'stdoutDropped' => 0,
