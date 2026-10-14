@@ -32,6 +32,7 @@
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
         "sugarcraft/candy-core": "@dev",
+        "sugarcraft/candy-flip": "@dev",
         "sugarcraft/candy-sprinkles": "@dev",
         "sugarcraft/sugar-bits": "@dev",
         "sugarcraft/sugar-dash": "@dev"

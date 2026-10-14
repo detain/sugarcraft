@@ -17,3 +17,12 @@ require __DIR__ . '/../vendor/autoload.php';
 if (class_exists(\SugarCraft\Testing\LoopPin::class)) {
     \SugarCraft\Testing\LoopPin::pinStableClock();
 }
+
+// Deterministic suite default: the flip-logo overlay stays OFF (legacy
+// Banner path) unless a test opts in via CANDY_TOP_LOGO. Production unset
+// means "random art"; pinning here keeps every golden byte-identical to
+// the pre-logo tree. Logo opts-in tests resetForTesting() around their own
+// env values.
+if (getenv('CANDY_TOP_LOGO') === false) {
+    putenv('CANDY_TOP_LOGO=off');
+}

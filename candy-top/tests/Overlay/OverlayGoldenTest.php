@@ -25,6 +25,7 @@ use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Tests\Support\Cmds;
 use SugarCraft\Top\Tests\Support\Harness;
 use SugarCraft\Top\Theme\TtyTheme;
+use SugarCraft\Top\View\Logo;
 use SugarCraft\Top\View\Surface;
 
 /**
@@ -45,10 +46,23 @@ final class OverlayGoldenTest extends TestCase
         T::reset();
         $this->tz = date_default_timezone_get();
         date_default_timezone_set('UTC');
+        // Pin the logo env BEFORE any dataset reads it: the first dataset
+        // has no preceding tearDown, so an ambient CANDY_TOP_LOGO (e.g. a
+        // stray `CANDY_TOP_LOGO=random vendor/bin/phpunit`) would otherwise
+        // swap the legacy banner under the very first golden. Logo datasets
+        // set their own env inside the test body.
+        putenv('CANDY_TOP_LOGO=off');
+        putenv('CANDY_TOP_LOGO_SEED');
+        Logo::resetForTesting();
     }
 
     protected function tearDown(): void
     {
+        // datasets() may opt a run into a flip logo; every other golden (and
+        // every later test file) must see the legacy banner again.
+        putenv('CANDY_TOP_LOGO=off');
+        putenv('CANDY_TOP_LOGO_SEED');
+        Logo::resetForTesting();
         date_default_timezone_set($this->tz);
     }
 
@@ -82,7 +96,7 @@ final class OverlayGoldenTest extends TestCase
         return $surface;
     }
 
-    /** @return iterable<string, array{string, int, int, ?\Closure, list<string>, array<string, bool|int|string>}> */
+    /** @return iterable<string, array{string, int, int, ?\Closure, list<string>, array<string, bool|int|string>, array<string, string>}> */
     public static function grids(): iterable
     {
         yield 'main menu' => ['main-120x40', 120, 40, null, ['m'], []];
@@ -102,6 +116,12 @@ final class OverlayGoldenTest extends TestCase
         yield 'options update_ms' => ['options-update-ms-120x40', 120, 40, null, ['o', ...array_fill(0, 13, 'down'), 'right'], []];
         yield 'options editing' => ['options-edit-120x40', 120, 40, null, ['o', ...array_fill(0, 8, 'down'), 'enter', 'x'], []];
         yield 'options warning' => ['options-warning-120x40', 120, 40, null, ['o', ...array_fill(0, 13, 'down'), 'left'], ['update_ms' => 100]];
+        // Flip-logo integrations: the harness clock never re-ticks after the
+        // overlay opens, so the armed animation is frozen at frame 0 and these
+        // goldens are as deterministic as the legacy ones.
+        yield 'main menu, flip logo' => ['main-logo-tc-80x24', 80, 24, null, ['m'], [], ['CANDY_TOP_LOGO' => 'rock-candy-prism']];
+        yield 'options, flip logo' => ['options-logo-tc-120x40', 120, 40, null, ['o'], [], ['CANDY_TOP_LOGO' => 'rock-candy-prism']];
+        yield 'main menu, static logo' => ['main-static-tc-100x30', 100, 30, null, ['m'], [], ['CANDY_TOP_LOGO' => 'chocolate-bar-emboss']];
     }
 
     /**
@@ -109,8 +129,12 @@ final class OverlayGoldenTest extends TestCase
      * @param array<string, bool|int|string> $options
      */
     #[DataProvider('grids')]
-    public function testCellGridGolden(string $name, int $cols, int $rows, ?\Closure $overlay, array $keys, array $options): void
+    public function testCellGridGolden(string $name, int $cols, int $rows, ?\Closure $overlay, array $keys, array $options, array $env = []): void
     {
+        foreach ($env as $k => $v) {
+            putenv($k . '=' . $v);
+        }
+        Logo::resetForTesting();
         // The Harness palette is Default; name it so the options menu shows it.
         $config = Config::new()->with('color_theme', 'Default');
         foreach ($options as $k => $v) {
@@ -119,6 +143,25 @@ final class OverlayGoldenTest extends TestCase
         $surface = self::framed($cols, $rows, $overlay === null ? null : $overlay(), $keys, $config);
         $this->assertSame($rows, count($surface->lines()));
         $this->assertGolden(self::DIR . $name . '.txt', implode("\n", $surface->plainLines()) . "\n");
+    }
+
+    /**
+     * Determinism pin: two framed() builds of the animated-logo dataset must
+     * agree byte-for-byte — the logo tick is never driven in the harness, so
+     * frame 0 is structural, not a race we happen to win.
+     */
+    public function testLogoGoldenFrameZeroIsStable(): void
+    {
+        putenv('CANDY_TOP_LOGO=rock-candy-prism');
+        Logo::resetForTesting();
+        $first = self::framed(80, 24, null, ['m'])->plainLines();
+        Logo::resetForTesting();
+        $second = self::framed(80, 24, null, ['m'])->plainLines();
+        $this->assertSame($first, $second);
+        // And it is genuinely the art, not a silent fallback to the banner.
+        putenv('CANDY_TOP_LOGO=off');
+        Logo::resetForTesting();
+        $this->assertNotSame($first, self::framed(80, 24, null, ['m'])->plainLines());
     }
 
     public function testConfirmBoxSgrGolden(): void

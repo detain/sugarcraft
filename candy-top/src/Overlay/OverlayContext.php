@@ -9,6 +9,7 @@ use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\Ink;
+use SugarCraft\Top\View\LogoFrame;
 
 /**
  * What an {@see Overlay} reads on every update() and paint(): the App's
@@ -21,6 +22,10 @@ use SugarCraft\Top\View\Ink;
  * from {@see \SugarCraft\Top\Panel\OptionChoices} panels), `$gpu` (a GPU
  * answered: the gpu tab shows) and `$themes` (Theme::themes, scanned at
  * startup and on `ctrl+r`; null = the builtin Default and TTY only).
+ *
+ * `$logo` is the frame the menus paint in place of the banner — null (the
+ * default, so every older construction site compiles) keeps the legacy
+ * {@see \SugarCraft\Top\View\Banner} byte-identical.
  */
 final class OverlayContext
 {
@@ -35,6 +40,7 @@ final class OverlayContext
         public readonly array $choices = [],
         public readonly bool $gpu = false,
         public readonly ?ThemeRegistry $themes = null,
+        public readonly ?LogoFrame $logo = null,
     ) {
     }
 

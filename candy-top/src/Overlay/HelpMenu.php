@@ -9,6 +9,7 @@ use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\View\Banner;
+use SugarCraft\Top\View\Logo;
 use SugarCraft\Top\View\Surface;
 
 /**
@@ -53,23 +54,56 @@ final class HelpMenu implements Overlay
     /**
      * btop's help geometry, 1-based: [x, y, height, pages].
      *
+     * `$delta` is the logo's extra height over the 6-row banner (see
+     * {@see self::logoDelta()}): the box top moves down by it and the box
+     * shrinks by it, keeping the bottom row anchored where it was — the
+     * whole block stays centered the way today's banner+box is.
+     *
      * @return array{0: int, 1: int, 2: int, 3: int}
      */
-    public static function geometry(int $cols, int $rows): array
+    public static function geometry(int $cols, int $rows, int $delta = 0): array
     {
         $n = count(KeyTable::rows());
         $y = max(1, intdiv($rows, 2) - 4 - intdiv($n, 2));
         $x = intdiv($cols, 2) - 39;
-        $height = min($rows - 6, $n + 3);
+        $height = min($rows - 6 - $delta, $n + 3);
         $pages = $height > 3 ? (int) ceil($n / ($height - 3)) : 1;
 
         return [$x, $y, $height, max(1, $pages)];
     }
 
+    /**
+     * Rows the resolved logo adds over the banner; 0 keeps every geometry
+     * and paint term at its legacy value (byte-identical fallback). Two
+     * gates: the box needs at least a 6-row interior (border, title,
+     * separator, one key row, footer, border) before a logo is worth the
+     * squeeze, AND the true delta'd extents — with `y` centred/clamped by
+     * geometry() the bottom border can ride past the last row while the
+     * interior floor still passes (rows-6-δ beats 6 at heights where the
+     * content or clamp term wins). Delegates the height/pages math to
+     * geometry() itself so the two can never diverge.
+     */
+    public static function logoDelta(OverlayContext $c): int
+    {
+        if ($c->logo === null) {
+            return 0;
+        }
+        $delta = $c->logo->art->height() - Banner::height();
+        if ($delta <= 0) {
+            return 0;
+        }
+        if ($c->rows - 6 - $delta < 6) {
+            return 0;
+        }
+        [$x, $y, $height] = self::geometry($c->cols, $c->rows, $delta);
+
+        return Logo::blockFits($y - 1, $y + 5 + $delta + $height, $c->rows) ? $delta : 0;
+    }
+
     public function update(Msg $msg, OverlayContext $context): OverlayResult
     {
         $key = KeyName::of($msg);
-        $pages = self::geometry($context->cols, $context->rows)[3];
+        $pages = self::geometry($context->cols, $context->rows, self::logoDelta($context))[3];
         if (in_array($key, ['escape', 'q', 'h', 'backspace', 'space', 'enter', 'mouse_click'], true)) {
             return OverlayResult::close();
         }
@@ -86,24 +120,29 @@ final class HelpMenu implements Overlay
     public function paint(Surface $surface, OverlayContext $c): void
     {
         $ink = $c->ink;
-        [$x, $y, $height, $pages] = self::geometry($c->cols, $c->rows);
+        $delta = self::logoDelta($c);
+        [$x, $y, $height, $pages] = self::geometry($c->cols, $c->rows, $delta);
         $page = min($this->page, $pages - 1);
-        Banner::paint($surface, $y - 1, $ink, $c->tty());
-        MenuDraw::box($surface, $c, $x, $y + 6, self::WIDTH, $height, Lang::t('overlay.title.help'));
-        $clip = MenuDraw::inside($x, $y + 6, self::WIDTH, $height);
+        if ($delta !== 0) {
+            Logo::paint($surface, $y - 1, $c->logo->art, $c->logo->frameIndex, $ink);
+        } else {
+            Banner::paint($surface, $y - 1, $ink, $c->tty());
+        }
+        MenuDraw::box($surface, $c, $x, $y + 6 + $delta, self::WIDTH, $height, Lang::t('overlay.title.help'));
+        $clip = MenuDraw::inside($x, $y + 6 + $delta, self::WIDTH, $height);
         $bold = MenuDraw::BOLD;
         if ($pages > 1) {
             [$open, $close] = $c->border()->embedJunctions(true);
             MenuDraw::at(
                 $surface,
-                $y + 5 + $height,
+                $y + 5 + $delta + $height,
                 $x + 2,
                 $ink->fg('hi_fg') . $open . $bold . '↑' . $ink->fg('title') . ' '
                     . Lang::t('overlay.help.page', ['page' => $page + 1, 'pages' => $pages]) . ' '
                     . $ink->fg('hi_fg') . '↓' . MenuDraw::UNBOLD . $close,
             );
         }
-        $cy = $y + 7;
+        $cy = $y + 7 + $delta;
         MenuDraw::at($surface, $cy++, $x + 1, $ink->fg('title') . $bold . MenuDraw::cjust(Lang::t('menu.help.key'), 20) . Lang::t('menu.help.description'), '', $clip);
         $rows = KeyTable::rows();
         $per = max(1, $height - 3);

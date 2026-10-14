@@ -19,6 +19,7 @@ use SugarCraft\Top\Input\TextKeys;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\Banner;
+use SugarCraft\Top\View\Logo;
 use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Surface;
@@ -97,7 +98,13 @@ final class OptionsMenu implements Overlay
      * the way btop's redraw does (page clamped, row clamped to the page,
      * then moved forward off a heading — #1791b).
      *
-     * @return array{x: int, y: int, height: int, ih: int, pages: int, entries: list<string>, index: int, page: int, category: string, categories: list<string>}
+     * The logo's extra height over the banner ({@see self::logoDelta()})
+     * ships inside the result as `delta`: every caller (buttons, click,
+     * paint) reads it from here, so hit-rects and painted rows can never
+     * diverge — the box moves down by `delta` and shrinks by `delta`,
+     * keeping its bottom row anchored where the banner layout had it.
+     *
+     * @return array{x: int, y: int, height: int, ih: int, pages: int, entries: list<string>, index: int, page: int, category: string, categories: list<string>, delta: int}
      */
     public function geometry(OverlayContext $c): array
     {
@@ -106,7 +113,8 @@ final class OptionsMenu implements Overlay
         $max = OptionsCatalog::maxItems($c->gpu);
         $y = max(1, intdiv($c->rows, 2) - 3 - $max);
         $x = intdiv($c->cols, 2) - 39;
-        $height = min($c->rows - 7, $max * 2 + 4);
+        $delta = self::logoDelta($c);
+        $height = min($c->rows - 7 - $delta, $max * 2 + 4);
         if ($height % 2 !== 0) {
             $height--;
         }
@@ -127,8 +135,40 @@ final class OptionsMenu implements Overlay
         return [
             'x' => $x, 'y' => $y, 'height' => $height, 'ih' => $ih, 'pages' => $pages,
             'entries' => $entries, 'index' => $index, 'page' => intdiv($index, $ih),
-            'category' => $category, 'categories' => $categories,
+            'category' => $category, 'categories' => $categories, 'delta' => $delta,
         ];
+    }
+
+    /**
+     * Rows the resolved logo adds over the 6-row banner; 0 keeps every
+     * geometry and paint term at its legacy value (the byte-identical
+     * fallback). Two gates: the legacy interior floor (the box needs a
+     * usable 6-row core before trading rows for a bigger logo is honest)
+     * AND the true extents of the delta'd layout — geometry() clamps `y`
+     * to 1 and its height min() can land on the content term, either of
+     * which lets the bottom border ride past the last row while the floor
+     * check still passes. The arithmetic below mirrors geometry() exactly.
+     */
+    private static function logoDelta(OverlayContext $c): int
+    {
+        if ($c->logo === null) {
+            return 0;
+        }
+        $delta = $c->logo->art->height() - Banner::height();
+        if ($delta <= 0) {
+            return 0;
+        }
+        if ($c->rows - 7 - $delta < 6) {
+            return 0;
+        }
+        $max = OptionsCatalog::maxItems($c->gpu);
+        $y = max(1, intdiv($c->rows, 2) - 3 - $max);
+        $height = min($c->rows - 7 - $delta, $max * 2 + 4);
+        if ($height % 2 !== 0) {
+            $height--;
+        }
+
+        return Logo::blockFits($y - 1, $y + 5 + $delta + $height, $c->rows) ? $delta : 0;
     }
 
     /**
@@ -147,11 +187,11 @@ final class OptionsMenu implements Overlay
         $map = [];
         $tab = $c->gpu ? 12 : 15;
         foreach ($g['categories'] as $i => $_) {
-            $map['select_cat_' . $i] = [$g['x'] + 1 + $tab * $i, $g['y'] + 5, $tab, 3];
+            $map['select_cat_' . $i] = [$g['x'] + 1 + $tab * $i, $g['y'] + 5 + $g['delta'], $tab, 3];
         }
         $option = $g['entries'][$g['index']];
         if (self::isTwoD($option, $c)) {
-            $line = $g['y'] + 9 + 2 * ($g['index'] - $g['page'] * $g['ih']);
+            $line = $g['y'] + 9 + $g['delta'] + 2 * ($g['index'] - $g['page'] * $g['ih']);
             $map['left'] = [$g['x'] - 1, $line - 1, 5, 2];
             $map['right'] = [$g['x'] + 24, $line - 1, 5, 2];
         }
@@ -222,11 +262,11 @@ final class OptionsMenu implements Overlay
     {
         // btop compares the 1-based mouse cell against its 1-based origin.
         [$mx, $my, $x, $y] = [$msg->x, $msg->y, $g['x'], $g['y']];
-        if ($mx < $x || $mx > $x + 80 || $my < $y + 6 || $my > $y + 6 + $g['height']) {
+        if ($mx < $x || $mx > $x + 80 || $my < $y + 6 + $g['delta'] || $my > $y + 6 + $g['delta'] + $g['height']) {
             return OverlayResult::close();
         }
-        if ($mx < $x + 30 && $my > $y + 8) {
-            $row = (int) ceil(($my - $y - 8) / 2) - 1;
+        if ($mx < $x + 30 && $my > $y + 8 + $g['delta']) {
+            $row = (int) ceil(($my - $y - 8 - $g['delta']) / 2) - 1;
             $target = $g['page'] * $g['ih'] + $row;
             if ($target !== $g['index']) {
                 return OverlayResult::keep($this->mutate(index: $target));
@@ -433,21 +473,25 @@ final class OptionsMenu implements Overlay
         $hi = $ink->fg('hi_fg');
         $bold = MenuDraw::BOLD;
 
-        Banner::paint($surface, $y - 1, $ink, $c->tty());
-        MenuDraw::box($surface, $c, $x, $y + 6, self::WIDTH, $height, $hi . 'tab' . $ink->fg('main_fg') . '→');
-        $clip = MenuDraw::inside($x, $y + 6, self::WIDTH, $height);
-        $frame = Rect::new($x - 1, $y + 5, self::WIDTH, $height);
+        if ($g['delta'] !== 0) {
+            Logo::paint($surface, $y - 1, $c->logo->art, $c->logo->frameIndex, $ink);
+        } else {
+            Banner::paint($surface, $y - 1, $ink, $c->tty());
+        }
+        MenuDraw::box($surface, $c, $x, $y + 6 + $g['delta'], self::WIDTH, $height, $hi . 'tab' . $ink->fg('main_fg') . '→');
+        $clip = MenuDraw::inside($x, $y + 6 + $g['delta'], self::WIDTH, $height);
+        $frame = Rect::new($x - 1, $y + 5 + $g['delta'], self::WIDTH, $height);
         MenuDraw::at(
             $surface,
-            $y + 8,
+            $y + 8 + $g['delta'],
             $x,
             $hi . '├' . $ink->fg('div_line') . str_repeat('─', 29) . '┬' . str_repeat('─', self::WIDTH - 32) . $hi . '┤',
             '',
             $frame,
         );
-        MenuDraw::at($surface, $y + 5 + $height, $x + 30, $hi . '┴', '', $frame);
+        MenuDraw::at($surface, $y + 5 + $g['delta'] + $height, $x + 30, $hi . '┴', '', $frame);
         for ($i = 0; $i < $height - 4; $i++) {
-            MenuDraw::at($surface, $y + 9 + $i, $x + 30, $ink->fg('div_line') . '│', '', $clip);
+            MenuDraw::at($surface, $y + 9 + $g['delta'] + $i, $x + 30, $ink->fg('div_line') . '│', '', $clip);
         }
 
         // Category tabs: `[name]` for the open one, `<digit>name ` else, then
@@ -458,14 +502,14 @@ final class OptionsMenu implements Overlay
             $text = $cat === $g['category']
                 ? $hi . '[' . $ink->fg('title') . $label . $hi . ']'
                 : $hi . $i . $ink->fg('title') . $label . ' ';
-            $col += MenuDraw::at($surface, $y + 7, $col, $bold . $text, '', $clip) + ($c->gpu ? 7 : 10);
+            $col += MenuDraw::at($surface, $y + 7 + $g['delta'], $col, $bold . $text, '', $clip) + ($c->gpu ? 7 : 10);
         }
 
         if ($g['pages'] > 1) {
             [$open, $close] = $border->embedJunctions(true);
             MenuDraw::at(
                 $surface,
-                $y + 5 + $height,
+                $y + 5 + $g['delta'] + $height,
                 $x + 2,
                 $hi . $open . $bold . '↑' . $ink->fg('title') . ' '
                     . Lang::t('overlay.options.page', ['page' => $g['page'] + 1, 'pages' => $g['pages']]) . ' '
@@ -476,7 +520,7 @@ final class OptionsMenu implements Overlay
         }
 
         $styles = self::rowStyles($ink);
-        $cy = $y + 9;
+        $cy = $y + 9 + $g['delta'];
         $entries = $g['entries'];
         $from = $g['page'] * $g['ih'];
         for ($i = $from; $i < min(count($entries), $from + $g['ih']); $i++) {
@@ -511,7 +555,7 @@ final class OptionsMenu implements Overlay
             MenuDraw::at($surface, $cy + 1, $x + 1, $line2, '', $clip);
             $cy += 2;
             if ($selected) {
-                $this->paintDescription($surface, $c, $entry, $x, $y, $height, $clip);
+                $this->paintDescription($surface, $c, $entry, $x, $y + $g['delta'], $height, $clip);
             }
         }
 

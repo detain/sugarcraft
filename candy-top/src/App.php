@@ -20,6 +20,8 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View as CoreView;
+use SugarCraft\Flip\AnsiArt;
+use SugarCraft\Flip\ArtLoop;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\Config\GpuPanels;
@@ -33,9 +35,13 @@ use SugarCraft\Top\Msg\OpenOverlayMsg;
 use SugarCraft\Top\Msg\PaletteMsg;
 use SugarCraft\Top\Msg\QuitRequestMsg;
 use SugarCraft\Top\Msg\SampledMsg;
+use SugarCraft\Top\Msg\LogoTickMsg;
 use SugarCraft\Top\Msg\SetOptionMsg;
 use SugarCraft\Top\Msg\UpdateStepMsg;
+use SugarCraft\Top\Overlay\HelpMenu;
+use SugarCraft\Top\Overlay\MainMenu;
 use SugarCraft\Top\Overlay\Menus;
+use SugarCraft\Top\Overlay\OptionsMenu;
 use SugarCraft\Top\Overlay\Overlay;
 use SugarCraft\Top\Overlay\OverlayContext;
 use SugarCraft\Top\Overlay\OverlayStack;
@@ -57,6 +63,8 @@ use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\GpuRoster;
 use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Layout;
+use SugarCraft\Top\View\Logo;
+use SugarCraft\Top\View\LogoFrame;
 use SugarCraft\Top\View\SizeError;
 use SugarCraft\Top\View\VmsMode;
 use SugarCraft\Top\View\Surface;
@@ -200,6 +208,14 @@ final class App implements Model
         private readonly ?ConfigFile $file = null,
         public readonly bool $writeNew = false,
         private readonly ?ThemeRegistry $catalog = null,
+        /** Chosen candy-flip logo art; null = paint the legacy banner. */
+        public readonly ?AnsiArt $logoArt = null,
+        /** Frame of `$logoArt` the menus paint right now (advanced by ticks). */
+        public readonly int $logoFrame = 0,
+        /** A logo tick chain is armed (see logoTick()). */
+        private readonly bool $logoArmed = false,
+        /** Bumped on every re-pick so a superseded tick chain retires itself. */
+        private readonly int $logoEpoch = 0,
     ) {
         $this->overlays = $overlays ?? OverlayStack::new();
         $this->themes = $themes ?? self::systemThemes();
@@ -217,6 +233,11 @@ final class App implements Model
      * @param ?ThemeRegistry $catalog the theme list the options menu cycles (btop Theme::themes),
      *                                scanned by the caller; null = builtin Default and TTY only, and
      *                                `ctrl+r` does not rescan
+     *
+     * The logo art ({@see Logo}) is picked here, once per process, for the
+     * start-up colour profile; it is NOT armed — the animation only runs
+     * while a logo overlay is open, and the clock tick sweeps that on
+     * (a pick that resolves to null leaves every menu on the legacy banner).
      */
     public static function start(
         Config $config,
@@ -242,6 +263,7 @@ final class App implements Model
             file: $file,
             writeNew: $writeNew,
             catalog: $catalog,
+            logoArt: Logo::pick($profile),
         );
     }
 
@@ -339,8 +361,39 @@ final class App implements Model
         }
         if ($msg instanceof ClockTickMsg) {
             $delay = max(0.01, 1.0 - fmod($msg->time, 1.0));
+            $next = $this->mutate(now: $msg->time, uptime: $msg->uptime);
+            $cmd = Cmd::tick($delay, $this->clock);
+            // Logo animation lives only while a logo overlay is open, and
+            // candy-core cannot cancel an armed tick — so the 1 Hz clock tick
+            // is the single sweep that (re-)arms the 0.1 s chain after the
+            // menu opened, instead of threading a Cmd through every open path.
+            if ($next->logoAnimating() && !$next->logoArmed && $next->logoOverlayOpen()) {
+                $next = $next->mutate(logoArmed: true);
+                $cmd = Cmd::batch($cmd, $next->logoTick());
+            }
 
-            return [$this->mutate(now: $msg->time, uptime: $msg->uptime), Cmd::tick($delay, $this->clock)];
+            return [$next, $cmd];
+        }
+        if ($msg instanceof LogoTickMsg) {
+            // A stale epoch (a re-pick happened) or a disarmed chain: retire
+            // without re-arming — the live chain is armed elsewhere, and
+            // processing both would double it every cycle.
+            if (!$this->logoArmed || !$this->logoAnimating() || $msg->epoch !== $this->logoEpoch) {
+                return [$this, null];
+            }
+            if (!$this->logoOverlayOpen()) {
+                // Menu closed: drop the chain and leave no timer residue.
+                return [$this->mutate(logoArmed: false), null];
+            }
+            $loop = ArtLoop::new($this->logoArt->frameCount());
+
+            // Absolute wall phase, not an accumulated clock: a late tick
+            // lands on the frame it should show, and re-arming after a
+            // freeze (a long collect) never drifts.
+            return [
+                $this->mutate(logoFrame: $loop->frameAt(fmod(max(0.0, $msg->time), $loop->cycleSeconds()))),
+                $this->logoTick(),
+            ];
         }
         if ($msg instanceof DataTickMsg) {
             if ($msg->generation !== $this->generation) {
@@ -586,7 +639,16 @@ final class App implements Model
             }
         }
 
-        return new OverlayContext($this->config, $this->cols, $this->rows, $this->ink, $choices, $gpus > 0, $this->catalog);
+        return new OverlayContext(
+            $this->config,
+            $this->cols,
+            $this->rows,
+            $this->ink,
+            $choices,
+            $gpus > 0,
+            $this->catalog,
+            $this->logoArt === null ? null : new LogoFrame($this->logoArt, $this->logoFrame),
+        );
     }
 
     /**
@@ -730,13 +792,27 @@ final class App implements Model
         $before = VmsMode::effective($this->config->shownBoxes());
         $profile = self::profileFor($config);
         $ink = $profile !== self::profileFor($this->config) ? Ink::new($this->ink->palette(), $profile) : null;
+        // The depth tag follows the profile, so a tty_mode/truecolor flip
+        // re-picks the logo at the new depth: frame 0, a fresh epoch (the old
+        // chain retires itself), and a re-arm only if the new art animates
+        // under an open logo menu.
+        $logo = $ink === null ? null : Logo::pick($profile);
+        $armLogoTick = $logo !== null && $logo->isAnimated() && $this->logoOverlayOpen();
         $next = $this->mutate(
             config: $config,
             ink: $ink,
             generation: $this->generation + ($periodChanged ? 1 : 0),
             writeNew: $this->writeNew || ($dirty && $config->persistedDiffers($this->config)),
+            logoArt: $logo,
+            logoArtSet: $ink !== null,
+            logoFrame: $ink !== null ? 0 : null,
+            logoArmed: $ink !== null ? $armLogoTick : null,
+            logoEpoch: $ink !== null ? $this->logoEpoch + 1 : null,
         )->relayout()->settledBackdrop(true);
         $cmds = [$periodChanged ? $next->dataTick() : null];
+        if ($ink !== null && $armLogoTick) {
+            $cmds[] = $next->logoTick();
+        }
         if (self::themeKey($config) !== self::themeKey($this->config)) {
             $cmds[] = $next->themeCmd();
         }
@@ -801,6 +877,54 @@ final class App implements Model
         $generation = $this->generation;
 
         return Cmd::tick($this->config->updateMs() / 1000, static fn (): Msg => new DataTickMsg($generation));
+    }
+
+    /**
+     * True when the chosen art has more than one frame, i.e. there is
+     * something to animate at all.
+     */
+    public function logoAnimating(): bool
+    {
+        return $this->logoArt !== null && $this->logoArt->isAnimated();
+    }
+
+    /** True while a tick chain for the current logo pick is armed. */
+    public function isLogoArmed(): bool
+    {
+        return $this->logoArmed;
+    }
+
+    /**
+     * Whether the topmost overlay is one of the three menus that paint the
+     * logo (btop's banner family). The signal/renice/msgbox overlays never
+     * show it, so their being open stops the animation.
+     */
+    public function logoOverlayOpen(): bool
+    {
+        $top = $this->overlays->top();
+
+        return $top instanceof MainMenu || $top instanceof OptionsMenu || $top instanceof HelpMenu;
+    }
+
+    /**
+     * The logo-frame tick Cmd for the current pick. One frame step per fire
+     * (ArtLoop's own frameSeconds drives the on-screen cadence through the
+     * absolute-time phase); the delay is capped at 0.1 s so a slow first
+     * frame still lands promptly, mirroring dataTick()'s capture pattern.
+     * Precondition: a logo is picked — every call site arms behind
+     * logoAnimating()/the applyConfig pick guard, so a null here is a wiring
+     * bug and fails loud rather than pacing an invisible dummy frame.
+     */
+    public function logoTick(): \Closure
+    {
+        $art = $this->logoArt;
+        if ($art === null) {
+            throw new \LogicException('logoTick() requires a picked logo (logoAnimating() is false)');
+        }
+        $epoch = $this->logoEpoch;
+        $delay = min(0.1, ArtLoop::new($art->frameCount())->frameSeconds);
+
+        return Cmd::tick($delay, static fn (): Msg => new LogoTickMsg($epoch, microtime(true)));
     }
 
     /**
@@ -1559,6 +1683,11 @@ final class App implements Model
         bool $backdropSet = false,
         ?bool $writeNew = null,
         ?ThemeRegistry $catalog = null,
+        ?AnsiArt $logoArt = null,
+        bool $logoArtSet = false,
+        ?int $logoFrame = null,
+        ?bool $logoArmed = null,
+        ?int $logoEpoch = null,
     ): self {
         return new self(
             $config ?? $this->config,
@@ -1582,6 +1711,10 @@ final class App implements Model
             $this->file,
             $writeNew ?? $this->writeNew,
             $catalog ?? $this->catalog,
+            $logoArtSet ? $logoArt : $this->logoArt,
+            $logoFrame ?? $this->logoFrame,
+            $logoArmed ?? $this->logoArmed,
+            $logoEpoch ?? $this->logoEpoch,
         );
     }
 }

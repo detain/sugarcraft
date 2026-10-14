@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Msg\QuitRequestMsg;
 use SugarCraft\Top\View\Banner;
+use SugarCraft\Top\View\Logo;
 use SugarCraft\Top\View\Surface;
 
 /**
@@ -104,14 +105,43 @@ final class MainMenu implements Overlay
     }
 
     /**
+     * Extra rows a resolved logo adds over the 6-row banner, shared by
+     * paint() and buttons() so painted rows and hit-rects never diverge.
+     * Zero — the legacy banner path — whenever no logo resolved OR the
+     * block (logo rows + gap + the three 3-row entries) would overrun the
+     * bottom of the screen: a clipped logo is worse than no logo.
+     */
+    private static function logoDelta(OverlayContext $c): int
+    {
+        if ($c->logo === null) {
+            return 0;
+        }
+        $delta = $c->logo->art->height() - Banner::height();
+        if ($delta <= 0) {
+            return 0;
+        }
+
+        // Logo top at 0-based y-1 (Logo::paint's row), the nine entry rows
+        // end at 1-based y+6+delta+9; both extents must sit on-screen —
+        // the same true-block gate the options and help menus use.
+        $y = self::top($c->rows);
+
+        return Logo::blockFits($y - 1, $y + 6 + $delta + 9, $c->rows) ? $delta : 0;
+    }
+
+    /**
      * btop's mouse_mappings button_0..2 (0-based [x, y, w, h]).
+     *
+     * `$delta` shifts the hit-rects down by however many extra rows a logo
+     * adds over the 6-row banner — the SAME value {@see self::logoDelta()}
+     * gives paint(), so clicks keep landing on the rows actually drawn.
      *
      * @return array<string, array{0: int, 1: int, 2: int, 3: int}>
      */
-    public static function buttons(int $cols, int $rows): array
+    public static function buttons(int $cols, int $rows, int $delta = 0): array
     {
         $map = [];
-        $cy = self::top($rows) + 7;
+        $cy = self::top($rows) + 7 + $delta;
         foreach (self::WIDTHS as $i => $w) {
             $map['button_' . $i] = [intdiv($cols, 2) - intdiv($w, 2) - 1, $cy - 1, $w, 3];
             $cy += 3;
@@ -122,7 +152,7 @@ final class MainMenu implements Overlay
 
     public function update(Msg $msg, OverlayContext $context): OverlayResult
     {
-        $key = KeyName::mapped($msg, self::buttons($context->cols, $context->rows));
+        $key = KeyName::mapped($msg, self::buttons($context->cols, $context->rows, self::logoDelta($context)));
         if (in_array($key, ['escape', 'q', 'm', 'mouse_click'], true)) {
             return OverlayResult::close();
         }
@@ -164,9 +194,14 @@ final class MainMenu implements Overlay
         $ink = $c->ink;
         $tty = $c->tty();
         $y = self::top($c->rows);
-        Banner::paint($surface, $y - 1, $ink, $tty);
+        $delta = self::logoDelta($c);
+        if ($delta !== 0) {
+            Logo::paint($surface, $y - 1, $c->logo->art, $c->logo->frameIndex, $ink);
+        } else {
+            Banner::paint($surface, $y - 1, $ink, $tty);
+        }
         $profile = $ink->profile();
-        $cy = $y + 7;
+        $cy = $y + 7 + $delta;
         foreach (self::WIDTHS as $i => $w) {
             $art = !$tty && $i === $this->selected ? self::SELECTED[$i] : self::NORMAL[$i];
             foreach ($art as $ic => $line) {
