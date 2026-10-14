@@ -16,8 +16,12 @@ namespace SugarCraft\Crush\Workflows;
  *      ->timeout(3600)
  *      ->build();
  *
- * Each method returns $this for chaining, and build() produces
- * the immutable Workflow value object.
+ * Each command method returns $this for chaining, and build() produces
+ * the immutable Workflow value object. {@see withVerification()} is the
+ * one true wither: house law reserves the `with*` prefix for copy-on-write
+ * returns (AGENTS.md "Immutable + fluent"), and it is the only method here
+ * so named — callers must use its return value, never the discarded-call
+ * side effect the command methods offer.
  */
 final class WorkflowBuilder
 {
@@ -168,10 +172,16 @@ final class WorkflowBuilder
     }
 
     /**
-     * Add a verification stage that runs a task then a verifier.
+     * Return a builder with a verification stage appended: a task runs, then
+     * a verifier validates its result.
      *
      * The task executes first; if it succeeds the verifier runs to validate
      * the result. If the verifier returns failure, the entire stage fails.
+     *
+     * Copy-on-write per the house `with*` law (rv-php-8): the clone carries
+     * the stages accumulated so far, the receiver is left untouched, so
+     * composing two withers can never double-add. The clone is safe as a
+     * shallow copy — every field is a scalar or a copy-on-write array.
      *
      * @param string      $name     Human-readable name for this stage.
      * @param TaskBuilder $task     The task to run and then verify.
@@ -179,14 +189,15 @@ final class WorkflowBuilder
      */
     public function withVerification(string $name, TaskBuilder $task, TaskBuilder $verifier): self
     {
-        $this->stages[] = [
+        $clone = clone $this;
+        $clone->stages[] = [
             'name' => $name,
             'type' => 'verification',
             'task' => $task->build(),
             'verifier' => $verifier->build(),
         ];
 
-        return $this;
+        return $clone;
     }
 
     /**

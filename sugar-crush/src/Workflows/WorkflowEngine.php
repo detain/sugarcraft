@@ -65,7 +65,7 @@ use SugarCraft\Crush\Tools\Tool;
  * sequence — and with it PosixBackend's destructor, which is what puts termios
  * back — never ran, leaving the terminal in raw mode inside the alt screen.
  *
- * Mirrors charmbracelet/charmcrush WorkflowEngine implementation.
+ * Mirrors charmbracelet/crush WorkflowEngine implementation.
  */
 final class WorkflowEngine implements WorkflowEngineInterface
 {

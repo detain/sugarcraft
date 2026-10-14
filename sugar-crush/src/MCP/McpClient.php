@@ -540,7 +540,7 @@ final class McpClient
                 // it is created lazily here so stdio/git-only configs never
                 // touch ~/.local/share/sugar-crush/mcp-auth.json. Tests pass
                 // an explicit store backed by a temp path for hermeticity.
-                authStore: $this->authStore ?? McpAuthStore::create(),
+                authStore: $this->authStore ?? McpAuthStore::new(),
             ),
             // `timeout` (seconds per git invocation, hooks included) is
             // OPTIONAL — audit R18. GitCommandHandlers::configuredTimeout()

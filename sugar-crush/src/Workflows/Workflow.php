@@ -60,7 +60,8 @@ final readonly class Workflow
     /**
      * Clone-with-changes helper using named arguments.
      *
-     * Mirrors charmbracelet/whalershark.Crunchy/mutate.
+     * House idiom (AGENTS.md "Immutable + fluent") with no upstream analogue
+     * to cite — the WHY is the sentinel paragraph below, not a port.
      *
      * `$stopOnFirstFailure` pairs with a `bool $stopOnFirstFailureSet`
      * sentinel, the same shape Usage.php's nullable counters use: a plain

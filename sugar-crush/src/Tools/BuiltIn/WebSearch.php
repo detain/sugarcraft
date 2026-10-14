@@ -332,9 +332,14 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
         try {
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
+            // The parser's own reason is diagnostic gold here (rv-php-10):
+            // "Syntax error" vs "Malformed UTF-8" vs "Recursion limit reached"
+            // point at a broken endpoint, a corrupt proxy, or a 512-deep
+            // payload respectively. Clipped like the Workspace gateway's
+            // wire errors so a runaway message cannot bloat the transcript.
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
-                content: 'Error: search endpoint returned invalid JSON response',
+                content: 'Error: search endpoint returned invalid JSON response: ' . substr($e->getMessage(), 0, 300),
                 isError: true,
             );
         }

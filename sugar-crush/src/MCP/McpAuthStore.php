@@ -24,11 +24,25 @@ final class McpAuthStore
     }
 
     /**
-     * Create a McpAuthStore with a default OAuthClientRegistration.
+     * Default factory: an McpAuthStore over a default OAuthClientRegistration.
+     *
+     * Mirrors the house `::new()` law (AGENTS.md — factories mirror upstream;
+     * `::create()` is a refused second vocabulary, rv-php-4).
+     */
+    public static function new(): self
+    {
+        return new self(new OAuthClientRegistration());
+    }
+
+    /**
+     * @deprecated use {@see new()} — kept as a thin alias for the two
+     *             out-of-directory call sites (Cli/Subcommands.php,
+     *             MCP/McpClient.php is migrated); removal rides the next
+     *             minor without a BC promise.
      */
     public static function create(): self
     {
-        return new self(new OAuthClientRegistration());
+        return self::new();
     }
 
     /**

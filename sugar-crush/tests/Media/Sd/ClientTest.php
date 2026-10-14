@@ -476,4 +476,19 @@ final class ClientTest extends TestCase
         // so lane a's frozen consumers keep working untouched.
         self::assertTrue((new \ReflectionClass(HeaderAwareSdTransport::class))->isSubclassOf(SdTransport::class));
     }
+
+    public function testTheDeadReadoutMethodsStayDeleted(): void
+    {
+        // rv-php-5: cmdFlags/latentUpscaleModes/promptStyles/scriptInfo had zero
+        // production and test callers (the Endpoints consts remain the registry's
+        // own record of the dialable routes). This pin refuses a silent
+        // reintroduction of public API nobody asked for; re-add them WITH a
+        // caller, not before.
+        foreach (['cmdFlags', 'latentUpscaleModes', 'promptStyles', 'scriptInfo'] as $gone) {
+            self::assertFalse(
+                method_exists(Client::class, $gone),
+                "Client::{$gone}() returned without a caller — dead API is deleted API (rv-php-5)",
+            );
+        }
+    }
 }

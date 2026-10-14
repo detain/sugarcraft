@@ -758,7 +758,7 @@ final class OAuthClientRegistration
      *
      * @return resource
      */
-    private function acquireAuthLock()
+    private function acquireAuthLock(): mixed
     {
         $lockPath = $this->authFilePath . '.lock';
 

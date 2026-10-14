@@ -294,11 +294,20 @@ final class McpAuthStoreTest extends TestCase
     }
 
     // =========================================================================
-    // McpAuthStore::create() Tests
+    // McpAuthStore::new() / ::create() Tests
     // =========================================================================
 
-    public function testCreateInstantiatesWithDefaultOAuthClient(): void
+    public function testNewInstantiatesWithDefaultOAuthClient(): void
     {
+        $store = McpAuthStore::new();
+        $this->assertInstanceOf(McpAuthStore::class, $store);
+        $this->assertInstanceOf(OAuthClientRegistration::class, $store->oauth());
+    }
+
+    public function testDeprecatedCreateIsAThinAliasOfNew(): void
+    {
+        // BC pin (rv-php-4): the refused-vocabulary factory must keep
+        // producing the same shape until the next minor removes it.
         $store = McpAuthStore::create();
         $this->assertInstanceOf(McpAuthStore::class, $store);
         $this->assertInstanceOf(OAuthClientRegistration::class, $store->oauth());

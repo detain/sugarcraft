@@ -569,12 +569,6 @@ final class Client
         return $this->post(Endpoints::OPTIONS, $settings, 'options-set');
     }
 
-    /** @return array<string, mixed> */
-    public function cmdFlags(): array
-    {
-        return $this->decodedArray($this->get(Endpoints::CMD_FLAGS, [], 'cmd-flags'), 'cmd-flags');
-    }
-
     /** @return list<array<string, mixed>> */
     public function samplers(): array
     {
@@ -594,15 +588,6 @@ final class Client
     }
 
     /** @return list<array<string, mixed>> */
-    public function latentUpscaleModes(): array
-    {
-        return array_values($this->decodedList(
-            $this->get(Endpoints::LATENT_UPSCALE_MODES, [], 'latent-upscale-modes'),
-            'latent-upscale-modes',
-        ));
-    }
-
-    /** @return list<array<string, mixed>> */
     public function sdModels(): array
     {
         return array_values($this->decodedList($this->get(Endpoints::SD_MODELS, [], 'sd-models'), 'sd-models'));
@@ -614,22 +599,10 @@ final class Client
         return array_values($this->decodedList($this->get(Endpoints::SD_VAE, [], 'sd-vae'), 'sd-vae'));
     }
 
-    /** @return list<array<string, mixed>> */
-    public function promptStyles(): array
-    {
-        return array_values($this->decodedList($this->get(Endpoints::PROMPT_STYLES, [], 'prompt-styles'), 'prompt-styles'));
-    }
-
     /** @return array<string, mixed> */
     public function scripts(): array
     {
         return $this->decodedArray($this->get(Endpoints::SCRIPTS, [], 'scripts'), 'scripts');
-    }
-
-    /** @return list<array<string, mixed>> */
-    public function scriptInfo(): array
-    {
-        return array_values($this->decodedList($this->get(Endpoints::SCRIPT_INFO, [], 'script-info'), 'script-info'));
     }
 
     /** @return array<string, mixed> */
