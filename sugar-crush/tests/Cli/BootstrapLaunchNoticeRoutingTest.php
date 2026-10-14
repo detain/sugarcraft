@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
@@ -622,11 +623,15 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             . 'echo json_encode($rows);' . "\n",
         );
 
-        self::assertCount($limit + 1, $history);
+        // $limit capped notices + the overflow row + rv-enduser-4's offline-echo
+        // notice, which rides OUTSIDE the cap (a single fixed row, not flood
+        // traffic) and lands after the overflow tail through both entry points.
+        self::assertCount($limit + 2, $history);
         self::assertStringContainsString(
             sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
             $history[$limit],
         );
+        self::assertStringContainsString('offline echo backend', $history[$limit + 1]);
     }
 
     /**
@@ -689,7 +694,12 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
 
         self::assertSame(
             ['allowedTools/disabledTools left no tools at all, so the model will be given an empty '
-                . 'tool set and can do nothing but talk'],
+                . 'tool set and can do nothing but talk',
+                // rv-enduser-4 (crush-review-1014): the sandbox HOME has no provider, so
+                // chat() seeds the offline-echo notice as its own baseline row; read
+                // through Lang because pinning THIS test's point — the delta invariant —
+                // to the copy's exact wording was never its purpose.
+                trim(Lang::t('chat.launch.echo_backend'))],
             $viaChat,
             'the bare chat() transcript is the baseline the shell must not change',
         );
@@ -735,8 +745,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $rows("\\SugarCraft\\Crush\\Cli\\Bootstrap::app({$root})->chat"),
         );
 
-        // The cap's notices + exactly ONE overflow row, through both entry points.
-        self::assertCount($limit + 1, $viaChat, 'the cap holds through a bare chat()');
+        // The cap's notices + exactly ONE overflow row + the one offline-echo
+        // notice (rv-enduser-4; outside the cap by design), through both entry
+        // points — the delta law the case exists for is the assertSame below.
+        self::assertCount($limit + 2, $viaChat, 'the cap holds through a bare chat()');
         self::assertSame($viaChat, $viaApp, 'the shell must not re-append the overflow row');
 
         // Not vacuous: the row that would be duplicated is really present, and

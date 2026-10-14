@@ -354,8 +354,13 @@ final class BootstrapTest extends TestCase
 
         // Shell chrome (Tui\Renderer -> MenuBar).
         $this->assertStringContainsString('Currently: Chat', $plain);
-        // Content (ChatPane -> src/Renderer.php's own empty-transcript text).
-        $this->assertStringContainsString('empty conversation', $plain);
+        // Content (ChatPane -> the transcript's own first rows). Since
+        // rv-enduser-4 (crush-review-1014) a no-provider launch opens on the
+        // offline-echo notice rather than on Renderer's "(empty conversation …)"
+        // placeholder — the placeholder's own shape stays pinned against a
+        // directly-built Chat in tests/RendererTest.php; what this case reads is
+        // that live transcript content reaches the hosted frame.
+        $this->assertStringContainsString('No provider is configured', $plain);
 
         // Invariant 1/3 of Renderer::renderView(): the frame is clipped, never
         // merely padded — an over-tall or over-wide frame desynchronises

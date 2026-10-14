@@ -115,7 +115,7 @@ final class KeyBindingRegistryTest extends TestCase
         $runes = KeyBindingRegistry::chatCtrlRunes();
         sort($runes);
 
-        $this->assertSame(['a', 'c', 'o', 'p', 'r', 'v', 'w'], $runes);
+        $this->assertSame(['a', 'c', 'l', 'o', 'p', 'r', 'v', 'w'], $runes);
     }
 
     /**
@@ -158,12 +158,12 @@ final class KeyBindingRegistryTest extends TestCase
         // In DECLARED row order, which is the order the accessors build in —
         // the sorted spellings live in the two tests above.
         $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'cold call');
-        $this->assertSame(['w', 'p', 'o', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
+        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'cold call');
 
         // Warm: the same answer, and now out of the memo rather than rebuilt.
         $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'warm call');
-        $this->assertSame(['w', 'p', 'o', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
+        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'warm call');
 
         $byContext = (new \ReflectionProperty(KeyBindingRegistry::class, 'ctrlRuneMemo'))->getValue();
@@ -337,14 +337,15 @@ final class KeyBindingRegistryTest extends TestCase
      * first row of the `Media form` context; the frame's own keys are painted
      * help, not registry rows, until W3.4 gives it more chords.
      *
-     * 143 -> 144 live (144 all), 14 groups, with the permission modal's `p`:
+     * 144 -> 145 live (145 all), 14 groups, with the rv-a11y chat `Ctrl+L`
+     * repaint row (crush-review-1014) joining the claims, and earlier the permission modal's `p`:
      * `permission.persist` — `a`'s scope also written to `permissionRules`
      * so the grant outlives the session.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(144, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(144, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(145, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(145, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(14, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

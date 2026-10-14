@@ -123,17 +123,20 @@ final class ShellSubjectToolsCompletenessTest extends TestCase
 
     public function testRuntimeWriteCapableRosterContainsTheShellPair(): void
     {
-        // Site 6 (foreign file, read-only pin): the roster is wider than the
-        // shell pair by design (Edit, Write, ...), so the law here is CONTAINMENT.
-        $source = self::src('Runtime.php');
-        self::assertSame(
-            1,
-            preg_match('/WRITE_CAPABLE_TOOL_NAMES = \[([^\]]+)\]/', $source, $m),
-            'Runtime::WRITE_CAPABLE_TOOL_NAMES is no longer a literal array — re-anchor this pin',
-        );
-        $names = self::quotedLiterals($m[1]);
+        // Site 6: the roster is wider than the shell pair by design (Edit,
+        // Write, ...), so the law here is CONTAINMENT. Since rv-php-2b the
+        // declaring line spreads ShellSubjectTools::NAMES instead of respelling
+        // the pair, so a literal-text grep would pin the OLD shape; the pin
+        // reads the RESOLVED constant through reflection, which holds under
+        // either spelling.
+        $roster = (new \ReflectionClass(\SugarCraft\Crush\Runtime::class))->getConstant('WRITE_CAPABLE_TOOL_NAMES');
+        self::assertIsArray($roster, 'Runtime::WRITE_CAPABLE_TOOL_NAMES vanished or stopped being an array constant');
         foreach (ShellSubjectTools::NAMES as $tool) {
-            self::assertContains($tool, $names, 'the write-capable roster lost a shell-subject tool');
+            self::assertContains($tool, $roster, 'the write-capable roster lost a shell-subject tool');
+        }
+        $source = self::src('Runtime.php');
+        if ( ! str_contains($source, 'WRITE_CAPABLE_TOOL_NAMES = [')) {
+            self::fail('Runtime::WRITE_CAPABLE_TOOL_NAMES no longer declares an array constant — re-anchor this pin');
         }
     }
 

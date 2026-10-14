@@ -1516,16 +1516,17 @@ final class KeyboardHandlerTest extends TestCase
      * `shellOwnsKeyboard()` being true is NOT "the shell claims every key":
      * `claims()` consults `chatOwns()` FIRST, so Chat's own chords still escape.
      * A first draft of the renderer comment said three did; swept, it was six,
-     * and seven once `Ctrl+V` (audit 15b-15) joined Chat's own chords. And
+     * and seven once `Ctrl+V` (audit 15b-15) joined Chat's own chords — eight since the
+     * rv-a11y `Ctrl+L` repaint row (crush-review-1014) claimed its rune. And
      * `KeyboardHandler::shellOwnsKeyboard()`'s own docblock said "every key" for a
      * round after this test contradicted it — the same claim in two places, only
      * one of them corrected — which is why the last loop below asserts the LINK
      * that docblock's argument needs rather than leaving it to prose.
      *
      * Domain: 95 printable runes x Ctrl on/off, plus the nine named keys this
-     * app binds x Ctrl on/off. What the seven do — dispatch `/agents`, quit,
+     * app binds x Ctrl on/off. What the eight do — dispatch `/agents`, quit,
      * toggle a tool's output, open the palette, attach the clipboard image,
-     * delete a word, cycle sessions —
+     * delete a word, cycle sessions, clear-and-repaint the frame —
      * is why none of them can consume a stale ceiling; the two routes that COULD
      * (`?`, and `Enter` reaching `submit()`'s `/keys` arm) are both claimed here.
      */
@@ -1562,9 +1563,9 @@ final class KeyboardHandlerTest extends TestCase
         }
 
         $this->assertSame(
-            ['Ctrl+a', 'Ctrl+c', 'Ctrl+o', 'Ctrl+p', 'Ctrl+v', 'Ctrl+w', 'Ctrl+Tab'],
+            ['Ctrl+a', 'Ctrl+c', 'Ctrl+l', 'Ctrl+o', 'Ctrl+p', 'Ctrl+v', 'Ctrl+w', 'Ctrl+Tab'],
             $escaped,
-            'these seven reach Chat in Pane::Agents and no others — none of them calls withKeyHelp(), '
+            'these eight reach Chat in Pane::Agents and no others — none of them calls withKeyHelp(), '
             . 'which is what keeps that pane from consuming a stale overflow ceiling',
         );
 
@@ -1600,7 +1601,7 @@ final class KeyboardHandlerTest extends TestCase
      * The `shellOwnsKeyboard($app)` conjunct inside `chatOwns()`, pinned at the
      * predicate because routing cannot see it: inside those three states rule 2
      * claims every key `chatOwns()` has not already taken — see
-     * {@see testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()} for the six
+     * {@see testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()} for the eight
      * that it has — and
      * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
      * yielded rune out of the shell's own set, so a mutation that yields the

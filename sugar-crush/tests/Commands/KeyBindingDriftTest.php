@@ -918,6 +918,26 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertArrayNotHasKey('call-1', $collapsed->expanded(), 'the same key must collapse it again');
                 $this->assertArrayNotHasKey($thought, $collapsed->expanded(), 'and the thought with it');
             },
+            // rv-a11y (2026-10-14): "Clear AND repaint" is two effects, so
+            // both halves of the dispatched Cmd are opened — the erase+home
+            // bytes, then the same-size WindowSizeMsg whose arrival at
+            // Program::dispatch() is what forces the full-frame reset.
+            'chat.repaint' => function (array $k): void {
+                $chat = $this->chat([], 'draft');
+                [$next, $cmd] = $chat->update($k[0]);
+                $this->assertNotNull($cmd, 'the chord must answer with a Cmd');
+                $this->assertSame('draft', $next->inputBuf, 'and it must type nothing');
+                $batch = $cmd();
+                $this->assertInstanceOf(\SugarCraft\Core\BatchMsg::class, $batch);
+                $this->assertCount(2, $batch->cmds, 'clear bytes first, then the forcing resize');
+                $first = ($batch->cmds[0])();
+                $this->assertInstanceOf(\SugarCraft\Core\RawMsg::class, $first, 'the clear rides verbatim bytes');
+                $this->assertStringContainsString("\x1b[2J", $first->bytes);
+                $second = ($batch->cmds[1])();
+                $this->assertInstanceOf(\SugarCraft\Core\Msg\WindowSizeMsg::class, $second);
+                $this->assertSame($chat->cols(), $second->cols, 'same size — it forces the repaint, not a resize');
+                $this->assertSame($chat->rows(), $second->rows);
+            },
             // Audit 15b-15: the chord reads the clipboard's image off the
             // update path (a Cmd), and its answer lands in the draft as an @
             // mention. Both halves are driven, through the tool seams.

@@ -557,15 +557,16 @@ final class ChatInputCursorTest extends TestCase
 
     /**
      * `TextArea::update()` reserves ctrl+a/e/u/k/o for its own line edits, and
-     * `Chat` binds ctrl+a/o/p/r/w to commands of its own. Handing a
+     * `Chat` binds ctrl+a/l/o/p/r/w to commands of its own. Handing a
      * ctrl-flagged Char to the widget's `update()` would therefore swallow
-     * Ctrl+L and Ctrl+K, which `Renderer\KeyHelpTest`'s byte map asserts type
-     * the LETTER — the measurement its "a form feed is not typeable" claim
-     * rests on. So they go to `insertRune()` instead.
+     * Ctrl+K, which `Renderer\KeyHelpTest`'s byte map asserts types the
+     * LETTER. So they go to `insertRune()` instead. (Ctrl+L belonged to that
+     * typed set until rv-a11y (2026-10-14) claimed it as the repaint chord —
+     * it now sits in the chord roster below.)
      */
     public function testAnUnclaimedCtrlCharStillTypesItsLetterAtTheCursor(): void
     {
-        foreach (['l', 'k', 'e', 'u'] as $rune) {
+        foreach (['k', 'e', 'u'] as $rune) {
             $this->assertSame(
                 'why' . $rune,
                 $this->drive(new Chat(inputBuf: 'why'), new KeyMsg(KeyType::Char, $rune, ctrl: true))->inputBuf,
@@ -577,20 +578,22 @@ final class ChatInputCursorTest extends TestCase
         $mid = $this->drive(
             new Chat(inputBuf: 'why'),
             new KeyMsg(KeyType::Home),
-            new KeyMsg(KeyType::Char, 'l', ctrl: true),
+            new KeyMsg(KeyType::Char, 'k', ctrl: true),
         );
-        $this->assertSame('lwhy', $mid->inputBuf);
+        $this->assertSame('kwhy', $mid->inputBuf);
     }
 
     /**
      * Chat's own chords stay Chat's: TextArea binds Ctrl+O to "open the draft
      * in $EDITOR" and Ctrl+A/Ctrl+E to line motion, all three of which Chat
      * claims first. Ctrl+O reaching the widget would spawn an editor out of a
-     * chord that is documented to expand tool output.
+     * chord that is documented to expand tool output. Ctrl+L joined the roster
+     * with rv-a11y (2026-10-14): it answers with the repaint Cmd and must
+     * type nothing.
      */
     public function testChatsOwnCtrlChordsAreNotTypedAndDoNotReachTheWidget(): void
     {
-        foreach (['p', 'o', 'r'] as $rune) {
+        foreach (['p', 'o', 'r', 'l'] as $rune) {
             $this->assertSame(
                 '',
                 $this->drive(new Chat(), new KeyMsg(KeyType::Char, $rune, ctrl: true))->inputBuf,

@@ -347,8 +347,9 @@ final class KeyHelpTest extends TestCase
      *     the route that reaches `"\t"`, `" \t "`, `"\t/keys"` and `"\u{000C}"`,
      *     none of which any keystroke types: `parse("\t")` yields `KeyType::Tab`
      *     and Chat's Tab arm leaves the buffer alone, and `parse("\x0C")` yields
-     *     `KeyType::Char 'l'` with `ctrl`, so Ctrl+L types the letter `l` and
-     *     never a form feed (all three asserted below). A tab-bearing USER message
+     *     `KeyType::Char 'l'` with `ctrl`, which Chat has claimed as its repaint
+     *     chord since rv-a11y (2026-10-14) — it types nothing at all, let alone
+     *     a form feed (all three asserted below). A tab-bearing USER message
      *     is not typeable either — `submit()` trims — but
      *     `Chat::reviveCheckpointMessage()` maps a checkpoint row whose role is
      *     neither `assistant` nor `system` to a `user` message with its content
@@ -400,8 +401,9 @@ final class KeyHelpTest extends TestCase
         $this->assertSame(
             [[KeyType::Char->name, 'l']],
             self::decode("\x0C"),
-            'fixture: a form-feed byte decodes as Ctrl+L and Chat types the LETTER, so "\u{000C}" is not '
-            . 'typeable either — the bullet above lists it as recalled-only on the strength of this',
+            'fixture: a form-feed byte decodes as Ctrl+L — which Chat answers with its repaint Cmd, '
+            . 'typing nothing (driven below) — so "\u{000C}" is not typeable either; the bullet above '
+            . 'lists it as recalled-only on the strength of this',
         );
         $this->assertSame(['ctrl'], self::decodeMods("\x0C"), 'fixture: and it carries ctrl, not alt');
         $this->assertSame(
@@ -422,12 +424,14 @@ final class KeyHelpTest extends TestCase
                 $tabbed->inputBuf,
                 'fixture: KeyType::Tab puts nothing in the box, which is what makes a tab draft untypeable',
             );
-            [$ctrlL] = $this->chat($before)->update(new KeyMsg(KeyType::Char, 'l', ctrl: true));
+            [$ctrlL, $ctrlLCmd] = $this->chat($before)->update(new KeyMsg(KeyType::Char, 'l', ctrl: true));
             $this->assertSame(
-                $before . 'l',
+                $before,
                 $ctrlL->inputBuf,
-                'fixture: and Ctrl+L types the letter, so no keystroke puts a form feed in the box either',
+                'fixture: and Ctrl+L is Chat\'s repaint chord (rv-a11y, 2026-10-14) — it types nothing, '
+                . 'so no keystroke puts a form feed in the box either',
             );
+            $this->assertNotNull($ctrlLCmd, 'fixture: and the chord answers with the repaint Cmd');
             [$altEnter] = $this->chat($before)->update(new KeyMsg(KeyType::Enter, alt: true));
             $this->assertSame(
                 $before . "\n",
@@ -754,7 +758,8 @@ final class KeyHelpTest extends TestCase
      * The modifiers {@see decode()} deliberately drops, flattened to the names set
      * on the FIRST decoded key. Two of the reachability facts above turn on them
      * and on nothing else: `\x1b\r` is Alt+Enter, the arm that appends `"\n"`, and
-     * `\x0C` is Ctrl+L, which types the letter `l` rather than a form feed. Read
+     * `\x0C` is Ctrl+L, whose `ctrl` flag is what routes it to Chat's repaint
+     * chord (rv-a11y) instead of to a typed rune. Read
      * off the same `[[type, rune]]` pair, both would look like drafts they are not.
      *
      * @return list<string>

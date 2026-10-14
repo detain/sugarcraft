@@ -490,6 +490,12 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.page', 'PgUp / PgDn', Lang::t('keys.chat.page'), $c),
             KeyBinding::new('chat.palette', 'Ctrl+P', Lang::t('keys.chat.palette'), $c),
             KeyBinding::new('chat.tool-output', 'Ctrl+O', Lang::t('keys.chat.tool-output'), $c),
+            // rv-a11y (2026-10-14 review): the classic terminal refresh chord.
+            // The diff renderer repaints only changed rows, so bytes a kernel
+            // message or a child process smeared over the frame used to stick
+            // until a resize forced the reset. Ctrl+L clears and repaints on
+            // demand (Chat::update()'s ctrl-'l' arm).
+            KeyBinding::new('chat.repaint', 'Ctrl+L', Lang::t('keys.chat.repaint'), $c),
             // Audit 15b-15: a terminal pastes text only, so the clipboard's
             // IMAGE is read through the platform tool (Support\ClipboardImage).
             KeyBinding::new('chat.paste-image', 'Ctrl+V', Lang::t('keys.chat.paste-image'), $c),

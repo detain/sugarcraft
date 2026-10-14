@@ -15,6 +15,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Diagnostics\NoticeSink;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\RuntimeNoticePumpMsg;
 use SugarCraft\Crush\Support\ForkedChild;
@@ -666,9 +667,24 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             );
 
             [$afterLaunch] = $second->update(new RuntimeNoticePumpMsg());
+            // rv-enduser-4 (crush-review-1014): the sandbox HOME has no provider,
+            // so BOTH launches seed the offline-echo notice themselves. That row is
+            // raised FOR the second session, not carried from the first, so the
+            // inheritance law reads the history minus the echo notice — and the
+            // count leg below keeps the echo row from silently multiplying.
+            $echo = trim(Lang::t('chat.launch.echo_backend'));
+            $foreign = array_values(array_filter(
+                $afterLaunch->history,
+                static fn ($m): bool => $m->content !== $echo,
+            ));
+            self::assertCount(
+                1,
+                $afterLaunch->history,
+                'the second session seeded something other than exactly its own echo notice',
+            );
             self::assertSame(
                 [],
-                $afterLaunch->history,
+                $foreign,
                 'the second session opened with a row raised for the first',
             );
 
@@ -677,7 +693,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             [$next] = $second->update(new RuntimeNoticePumpMsg());
             $rows = array_values(array_filter(
                 $next->history,
-                static fn ($m): bool => $m->role === Role::System,
+                static fn ($m): bool => $m->role === Role::System && $m->content !== $echo,
             ));
             self::assertCount(1, $rows, 'the second Chat drains nothing at all; the empty transcript above proves nothing');
             self::assertSame('a row raised in the second session', $rows[0]->content);

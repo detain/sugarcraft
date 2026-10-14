@@ -31,6 +31,7 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\ShellSubjectTools;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\SiblingSpendLedger;
@@ -669,9 +670,17 @@ final class Runtime
      * agents run the session's write tools. `ApplyPatch` (roadmap 3.I-3) is
      * `Edit` and `Write` across several files at once.
      *
+     * THE SHELL PAIR IS NOT RESPELLED HERE (rv-php-2b, crush-review-1014).
+     * `Bash` and `PtyRun` ride in from {@see ShellSubjectTools::NAMES} by
+     * spread — the same adoption the f-perms-sec sites made — so an eighth
+     * shell-subject tool lands on this roster the moment it joins the
+     * canonical one, instead of waiting for someone to remember this line.
+     * The completeness test's site-6 pin reads the RESOLVED constant through
+     * reflection for exactly that reason.
+     *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'PtyRun', 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow'];
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

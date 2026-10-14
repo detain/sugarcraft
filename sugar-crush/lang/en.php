@@ -1526,13 +1526,6 @@ TXT,
     'chat.session.read_only' => 'Session {session} is open in another sugarcrush{holder}, so this window is read-only: nothing typed here is sent to the model or saved to that session. Type /branch to fork it into a new session this window owns and carry on there, or close the other window and this one becomes writable by itself.',
     'chat.session.resumed' => '_Resumed session {session}._',
     'chat.session.writable' => 'The other sugarcrush has closed session {session}, so this window can write to it now. The transcript was reloaded to include what it saved.',
-    // DEAD until wave-2 (Chat::sessionHelpResponse removal) — the 5 chat.session_help.* keys below
-    // are read only by that unreachable method; delete the keys and the method together.
-    'chat.session_help.branch' => '`/branch` — Fork the current session into a new copy',
-    'chat.session_help.heading' => '**Available /session commands:**',
-    'chat.session_help.rename' => '`/rename <name>` — Name the current session for easy resume',
-    'chat.session_help.rewind' => '`/rewind [n]` — Rewind n steps (default: 1) to a previous checkpoint',
-    'chat.session_help.session' => '`/session` — Show this help text',
     'chat.sessions.created' => 'New session created: {session}',
     'chat.sessions.no_store' => 'Session store not configured. Set a SessionStore to use /sessions.',
     'chat.sessions.no_store_new' => 'Session store not configured. Set a SessionStore to create sessions.',
@@ -2606,4 +2599,8 @@ TXT,
     'settings.providers.label' => 'Provider overrides',
     'appLaunch.notice.policy_changed' => '⚠ config.json or hooks.yaml changed since the last launch. New project hooks stay quarantined for this launch only — review ~/.sugar-crush/config.json and hooks.yaml, then they are honoured',
     'appLaunch.notice.bypass_mode' => '⚠ Permission mode is bypass-permissions: every tool call runs without a prompt. Change it with /permissions (TUI), --permission-mode, or set a different permission mode in ~/.sugar-crush/config.json',
+
+    // --- fix-w2-chat 2026-10-14 ---
+    'chat.launch.echo_backend' => 'No provider is configured, so this session runs on the built-in offline echo backend — replies are echoed locally, no model is called. Run `sugarcrush doctor` to see what a provider needs, then press Ctrl+P to switch model once one is configured.',
+    'keys.chat.repaint' => 'Clear the screen and repaint the frame',
 ];

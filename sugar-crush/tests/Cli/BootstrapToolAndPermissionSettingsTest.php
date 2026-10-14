@@ -1312,16 +1312,18 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
 
         $history = $this->chatHistoryOfLaunch();
 
-        // Three rows, and the count is a FLOOR pinned by this fixture's shape,
+        // Four rows, and the count is a FLOOR pinned by this fixture's shape,
         // not a roster: the tool-removal report, then E653's narrowed-grant
         // aggregate — at most a header row and an "and M more" tail whatever
-        // the fan-out, so a flood can no longer turn this list into twelve.
+        // the fan-out, so a flood can no longer turn this list into twelve —
+        // then rv-enduser-4's offline-echo notice (this sandbox HOME carries no
+        // provider, so chat() seeds the one notice row naming it).
         // The pair packing itself is asserted exactly (and dynamically) in
         // {@see PermissionWarningDrainTest}.
         self::assertSame('system', $history[0]['role']);
         self::assertStringContainsString(LayeredSettings::SHARED_PATH, $history[0]['content']);
         self::assertStringContainsString('leaving: Bash', $history[0]['content']);
-        self::assertCount(3, $history);
+        self::assertCount(4, $history);
         self::assertSame('system', $history[1]['role']);
         self::assertStringContainsString('narrowed by this session', $history[1]['content']);
         self::assertStringNotContainsString(' if that is not the configuration', $history[1]['content']);
@@ -1338,17 +1340,29 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
             . '$/';
         self::assertSame('system', $history[2]['role']);
         self::assertMatchesRegularExpression($tailPattern, $history[2]['content']);
+        self::assertCount(4, $history);
+        self::assertSame('system', $history[3]['role']);
+        self::assertStringContainsString('offline echo backend', $history[3]['content']);
     }
 
     /**
      * CONTROL for the one above, and the one that would catch a seam wired to
-     * fire unconditionally: an ordinary launch still opens on an EMPTY
-     * transcript, which is what {@see \SugarCraft\Crush\Renderer}'s
-     * "(empty conversation …)" placeholder is keyed off.
+     * fire unconditionally: a launch with nothing to warn about carries no
+     * report rows. It is no longer EMPTY since rv-enduser-4 (crush-review-1014):
+     * a sandbox HOME without a provider resolves to the offline echo backend,
+     * and chat() now seeds exactly that one notice row — so the control asserts
+     * the transcript is EXACTLY the echo notice, nothing else. Renderer's
+     * "(empty conversation …)" placeholder keeps its meaning for launches that
+     * do configure a provider; at the Chat level an empty history is still what
+     * it keys off, and the direct-construction Renderer tests pin that shape.
      */
-    public function testAnOrdinaryLaunchStillOpensOnAnEmptyTranscript(): void
+    public function testAnOrdinaryLaunchOpensOnNothingButTheOfflineEchoNotice(): void
     {
-        self::assertSame([], $this->chatHistoryOfLaunch());
+        $history = $this->chatHistoryOfLaunch();
+
+        self::assertCount(1, $history, 'an ordinary no-provider launch must carry nothing but the echo notice');
+        self::assertSame('system', $history[0]['role']);
+        self::assertStringContainsString('offline echo backend', $history[0]['content']);
     }
 
     /**

@@ -3331,6 +3331,22 @@ final class Chat implements Model
             // it, silently discarding the draft.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
                 => $this->runCommand('/agents'),
+            // Ctrl+L clears the screen and repaints the frame (rv-a11y,
+            // 2026-10-14 review). The line-diff renderer only writes changed
+            // rows, so foreign bytes (kernel messages, child-process noise)
+            // that smear the frame used to stick until a resize. clearScreen()
+            // writes erase+home verbatim; the SAME-SIZE WindowSizeMsg then
+            // rides Program::dispatch()'s resize path, whose renderer reset is
+            // unconditional outside inline mode (crush runs the alt screen),
+            // so the next frame repaints every row. Checked before the generic
+            // ctrl-Char arm below — that arm used to type the letter here, and
+            // the flip is disclosed in Renderer/KeyHelpTest's byte map and
+            // ChatInputCursorTest's chord roster.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'l'
+                => [$this, Cmd::batch(
+                    Cmd::clearScreen(),
+                    fn (): Msg => new WindowSizeMsg($this->cols(), $this->rows()),
+                )],
             // "?" opens the keybinding reference, but ONLY on a BLANK input
             // line. It is a plain printable character with no modifier, so an
             // unconditional bind would make a question impossible to type -
@@ -3516,8 +3532,10 @@ final class Chat implements Model
                 => $this->cycleSessionTab($msg->shift ? -1 : 1),
             // A ctrl-flagged Char no arm above claimed types the LETTER, and
             // that is pinned rather than tidy: KeyHelpTest's byte map asserts
-            // Ctrl+L puts "l" in the box and Ctrl+K puts "k", which is the
-            // measurement behind its "a form feed is not typeable" claim.
+            // Ctrl+K puts "k" in the box (Ctrl+L joined the claimed set as the
+            // repaint chord in rv-a11y, 2026-10-14 — the arm above this one),
+            // which is the measurement behind its "a form feed is not
+            // typeable" claim.
             // So it goes to insertRune() and NOT to update(), because
             // TextArea::update() reserves ctrl+a/e/u/k/o for its own line
             // edits and would swallow those two instead of typing them.
@@ -10664,6 +10682,28 @@ final class Chat implements Model
             $messages[] = Message::notice($notice);
         }
 
+        // rv-enduser-4 (2026-10-14 review): a first run with no provider
+        // resolves to the offline echo backend SILENTLY — Bootstrap::backend()
+        // degrades to it without a row when no provider is configured (its
+        // warn path covers construction failures only), so the user typed into
+        // a mock and wondered why nothing answered. This channel is the launch
+        // warning surface, and an echo session IS "something the session can no
+        // longer DO" by the rule on
+        // {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}.
+        // Grown here rather than in Bootstrap so the check reads the backend
+        // the Chat actually holds; the history scan keeps it to ONE row across
+        // the two calls Bootstrap makes (`chat()` then `app()`'s incremental
+        // second pass) and any ACP re-entry.
+        $echoNotice = trim(Lang::t('chat.launch.echo_backend'));
+        if ($echoNotice !== ''
+            && $echoNotice !== 'chat.launch.echo_backend'
+            && $this->backend instanceof Backend\EngineBackend
+            && $this->backend->provider() instanceof \SugarCraft\Crush\Providers\EchoProvider
+            && !$this->holdsHistoryRow($echoNotice)
+        ) {
+            $messages[] = Message::notice($echoNotice);
+        }
+
         // $this, not a clone, when there is nothing to say: a launch with no
         // warnings is the common one, and an identical-but-new instance would
         // make the caller's `$chat` a different object for no reason.
@@ -10672,6 +10712,25 @@ final class Chat implements Model
         }
 
         return $this->mutate(['history' => [...$this->history, ...$messages]]);
+    }
+
+    /**
+     * True when a history row already carries exactly this content.
+     *
+     * The one-shot guard {@see withLaunchNotices()} runs for the echo-backend
+     * notice: the method is called more than once per launch by design
+     * ("APPENDS, and callers depend on that"), and a notice the user can fix
+     * in one keystroke must not become wallpaper.
+     */
+    private function holdsHistoryRow(string $content): bool
+    {
+        foreach ($this->history as $message) {
+            if ($message->content === $content) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isStreaming(): bool
@@ -16176,28 +16235,6 @@ final class Chat implements Model
     private function handleMemoryCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\MemoryCommand(), $inputText);
-    }
-
-    /**
-     * Show help text for /session commands.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function sessionHelpResponse(string $inputText, ?string $error = null): array
-    {
-        $lines = [];
-        if ($error !== null) {
-            $lines[] = Lang::t('chat.command.error', ['error' => $error]);
-            $lines[] = '';
-        }
-        $lines[] = Lang::t('chat.session_help.heading');
-        $lines[] = '';
-        $lines[] = Lang::t('chat.session_help.rename');
-        $lines[] = Lang::t('chat.session_help.branch');
-        $lines[] = Lang::t('chat.session_help.rewind');
-        $lines[] = Lang::t('chat.session_help.session');
-
-        return $this->sessionResponse($inputText, implode("\n", $lines));
     }
 
     private function withInputBuf(string $buf): self
