@@ -129,10 +129,21 @@ final class Subcommands
      */
     private static function emitDocument(array $document): void
     {
+        // The envelope version rides HERE rather than at the fifteen call
+        // sites (rv-tui-5): every subcommand document passes through this one
+        // method, so one prepend keeps the whole family — `models`, `doctor`,
+        // `session …`, `mcp …` — byte-for-byte in contract with the one-shot
+        // path, and a call site can no more forget the key than it can forget
+        // the encode flags. `+` preserves the literal's key order after the
+        // leading `schema`; a call site that ever spelled its own `schema`
+        // wins, which is the same offset-union precedence the array-plus
+        // idiom carries everywhere else in this file.
+        $document = ['schema' => NonInteractive::SCHEMA] + $document;
+
         try {
             echo NonInteractive::encodeDocument($document) . "\n";
         } catch (\JsonException) {
-            echo '{"result":null,"error":{"type":"encoding","message":"the answer could not be encoded as JSON"}}' . "\n";
+            echo '{"schema":' . NonInteractive::SCHEMA . ',"result":null,"error":{"type":"encoding","message":"the answer could not be encoded as JSON"}}' . "\n";
         }
     }
 
@@ -315,6 +326,47 @@ final class Subcommands
                     ? Lang::t('cli.doctor.loaded')
                     : Lang::t('cli.doctor.curl_missing'),
             ],
+
+            'ext-mbstring' => static function (): array {
+                // `require`, and EXERCISED, not name-checked (rv-enduser-6):
+                // `Message`, `Renderer` and the palette all count and clip
+                // text through mb_* on the painted path, so the probe performs
+                // a real multibyte call and demands its answer. A box without
+                // the extension fails the same call at first paint — FAIL,
+                // never WARN, because the manifest already declares it.
+                try {
+                    $exercised = \mb_substr_count('sugarcrush', 'r') === 2;
+                    $state = Lang::t('cli.doctor.loaded');
+                } catch (\Throwable) {
+                    $exercised = false;
+                    $state = Lang::t('appLaunch.doctor.mbstring_missing');
+                }
+
+                return [
+                    'status' => $exercised ? 'OK' : 'FAIL',
+                    'detail' => $state,
+                ];
+            },
+
+            'ext-intl' => static function (): array {
+                // Same shape as mbstring (rv-devops-6): the renderer walks
+                // every frame through `grapheme_extract()` (see
+                // `Renderer::graphemes()`) and the Edit matcher NFKC-normalises
+                // through `Normalizer`, so the probe calls into the extension
+                // rather than naming it.
+                try {
+                    $exercised = \IntlChar::ord('B') === 66;
+                    $state = Lang::t('cli.doctor.loaded');
+                } catch (\Throwable) {
+                    $exercised = false;
+                    $state = Lang::t('appLaunch.doctor.intl_missing');
+                }
+
+                return [
+                    'status' => $exercised ? 'OK' : 'FAIL',
+                    'detail' => $state,
+                ];
+            },
 
             'server mode' => static function (): array {
                 // WARN, never FAIL: an install without these runs the TUI and

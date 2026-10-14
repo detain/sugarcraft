@@ -89,7 +89,11 @@ final readonly class ProviderFactory
     private const TYPE_SCHEMAS = [
         'openai' => [
             'required' => ['apiKey'],
-            'optional' => ['organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels'],
+            // rv-enduser-1: the wire target of every other type is settable;
+            // `openai` was the one stuck to the SDK's hardcoded host, which
+            // made gateways and self-hosted compat servers require renaming
+            // the block to `custom` and re-declaring everything.
+            'optional' => ['baseUrl', 'organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels'],
         ],
         'anthropic' => [
             'required' => ['apiKey'],
@@ -145,7 +149,7 @@ final readonly class ProviderFactory
 
         // Early Exit - validate provider type
         if (!$this->isValidType($type)) {
-            throw new \InvalidArgumentException("Unknown provider type: {$type}");
+            throw $this->unknownTypeError($type);
         }
 
         // Resolve environment variables in all string values
@@ -461,7 +465,7 @@ final readonly class ProviderFactory
                 return $projectConfig;
             }
 
-            throw new \InvalidArgumentException("Unknown provider type: {$type}");
+            throw $this->unknownTypeError($type);
         }
 
         return match ($type) {
@@ -469,6 +473,11 @@ final readonly class ProviderFactory
                 'type' => 'openai',
                 'apiKey' => getenv('OPENAI_API_KEY') ?: '',
                 'organization' => getenv('OPENAI_ORG_ID') ?: null,
+                // rv-enduser-1: same env-var shape as anthropic's line below.
+                // Null means "the SDK's own api.openai.com", and the provider
+                // only calls withBaseUri() when it is set, so an unset env is
+                // byte-identical to before.
+                'baseUrl' => getenv('OPENAI_BASE_URL') ?: null,
                 'model' => 'gpt-4o',
             ],
             'anthropic' => [
@@ -484,7 +493,11 @@ final readonly class ProviderFactory
             ],
             'sglang' => [
                 'type' => 'sglang',
-                'baseUrl' => 'http://localhost:30000',
+                // rv-enduser-1: OPENAI_BASE_URL is the one endpoint variable
+                // operators already export for OpenAI-compatible servers
+                // (rv-sec's `providers` ask names it too); the localhost URL
+                // stays the fallback when it is unset.
+                'baseUrl' => getenv('OPENAI_BASE_URL') ?: 'http://localhost:30000',
                 // The FOURTH place this default lived, and the one
                 // `$SUGARCRUSH_PROVIDER=sglang` actually reaches (this method
                 // is bin/sugarcrush's only hook into the provider system, see
@@ -551,13 +564,14 @@ final readonly class ProviderFactory
             'custom' => [
                 'type' => 'custom',
                 'name' => 'custom',
-                'baseUrl' => 'http://localhost:8080',
+                // Same OPENAI_BASE_URL honour as sglang above.
+                'baseUrl' => getenv('OPENAI_BASE_URL') ?: 'http://localhost:8080',
                 'model' => 'gpt-4o',
                 'apiKey' => null,
                 'supportsStreaming' => true,
                 'supportsFunctionCalling' => true,
             ],
-            default => throw new \InvalidArgumentException("Unknown provider type: {$type}"),
+            default => throw $this->unknownTypeError($type),
         };
     }
 
@@ -660,6 +674,28 @@ final readonly class ProviderFactory
     }
 
     /**
+     * Required config key => the environment variable that answers it,
+     * per provider type (rv-enduser-3).
+     *
+     * A missing `apiKey` today says "requires 'apiKey' to be set" — true, and
+     * useless to someone who has never seen a config block. The env var is the
+     * documented front door for exactly these values (`${VAR}` interpolation
+     * and the built-in defaults below both read it), so the refusal names it
+     * beside the config path. Types or keys absent from this map keep the bare
+     * sentence: inventing an env var that nothing reads would be worse than
+     * naming none.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const REQUIRED_KEY_ENVS = [
+        'openai' => ['apiKey' => 'OPENAI_API_KEY'],
+        'anthropic' => ['apiKey' => 'ANTHROPIC_API_KEY'],
+        'sglang' => ['baseUrl' => 'OPENAI_BASE_URL'],
+        'bedrock' => ['region' => 'AWS_REGION'],
+        'vertex' => ['projectId' => 'GCP_PROJECT_ID'],
+    ];
+
+    /**
      * Validates that all required keys are present for the given type.
      *
      * @throws \RuntimeException When required keys are missing
@@ -671,9 +707,51 @@ final readonly class ProviderFactory
 
         foreach ($required as $key) {
             if (!isset($config[$key]) || (is_string($config[$key]) && trim($config[$key]) === '')) {
-                throw new \RuntimeException("Provider type '{$type}' requires '{$key}' to be set");
+                $hint = self::REQUIRED_KEY_ENVS[$type][$key] ?? null;
+
+                throw new \RuntimeException(
+                    "Provider type '{$type}' requires '{$key}' to be set"
+                    . ($hint === null
+                        ? ''
+                        : " — set the {$hint} environment variable, or a \"{$key}\" entry under providers.<name> in ~/.sugar-crush/config.json"),
+                );
             }
         }
+    }
+
+    /**
+     * The refusal every unknown-name seam raises (rv-enduser-3).
+     *
+     * "Unknown provider type: opnenai" used to be the whole sentence, leaving
+     * the typo to rediscover the valid set by reading source. The prefix stays
+     * byte-identical — existing pins and the transcript's denial-shape scans
+     * key off it — and behind it now ride the seven valid types, the closest
+     * spelling by {@see similar_text()} percentage (only when the candidate
+     * shares at least half its length with the ask, so `cat` does not get
+     * told it meant `custom`), and the one command that lists what this
+     * install can actually select.
+     *
+     * @throws \InvalidArgumentException never returns
+     */
+    private function unknownTypeError(string $type): \InvalidArgumentException
+    {
+        $types = $this->availableTypes();
+        $best = null;
+        $bestPercent = 0.0;
+        foreach ($types as $candidate) {
+            \similar_text($type, $candidate, $percent);
+            if ($percent > $bestPercent && $percent >= 50.0) {
+                $best = $candidate;
+                $bestPercent = $percent;
+            }
+        }
+
+        return new \InvalidArgumentException(
+            "Unknown provider type: {$type}"
+            . ' (valid types: ' . \implode(', ', $types) . ')'
+            . ($best === null ? '' : " — closest match: {$best}")
+            . ' — run `sugarcrush models` to see selectable providers',
+        );
     }
 
     /**
@@ -714,12 +792,20 @@ final readonly class ProviderFactory
         // verbatim, including the assistants=v2 beta header it sets; only the
         // injected HTTP client differs. `withProject()` is omitted because its
         // default is already null and nothing here configures a project.
-        $client = \OpenAI::factory()
+        // rv-enduser-1: an explicit baseUrl (providers map or the
+        // OPENAI_BASE_URL default above) redirects the wire; absent/null it is
+        // NOT passed, so the factory's own api.openai.com default rides the
+        // exact same code path as before this key existed.
+        $baseUrl = $config['baseUrl'] ?? null;
+        $factory = \OpenAI::factory()
             ->withApiKey($config['apiKey'])
             ->withOrganization($config['organization'] ?? null)
             ->withHttpHeader('OpenAI-Beta', 'assistants=v2')
-            ->withHttpClient(self::guzzleClient())
-            ->make();
+            ->withHttpClient(self::guzzleClient());
+        if (is_string($baseUrl) && trim($baseUrl) !== '') {
+            $factory = $factory->withBaseUri($baseUrl);
+        }
+        $client = $factory->make();
 
         $model = $config['model'] ?? 'gpt-4o';
 

@@ -277,6 +277,27 @@ final class LspConnection implements LspConnectionInterface
     }
 
     /**
+     * Re-arm the per-request bound after connect() chose the handshake's.
+     *
+     * THE SECOND (and last) WRITER of {@see self::$requestTimeout}.
+     * `LspLauncher::start()` connects with the paint-first handshake budget
+     * (`DEFAULT_HANDSHAKE_TIMEOUT_SECONDS`) and restores the server's own
+     * per-request `timeout` here once `initialize`/`initialized` has cleared,
+     * so a slow-but-live definition lookup still gets its full budget while a
+     * slow STARTUP never does. Public on the concrete class only — the
+     * launcher reaches it through `method_exists`, mirroring how it already
+     * tolerates in-memory fakes without `sendRequest()`.
+     */
+    public function setRequestTimeout(float $seconds): void
+    {
+        if ($seconds <= 0.0 || !\is_finite($seconds)) {
+            throw new \InvalidArgumentException('LSP request timeout must be a positive finite number of seconds');
+        }
+
+        $this->requestTimeout = $seconds;
+    }
+
+    /**
      * Start the LSP server process with the given command and environment.
      *
      * @param string $command The server executable path

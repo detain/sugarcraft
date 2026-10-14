@@ -66,6 +66,25 @@ final class NonInteractive
     public const FORMAT_TEXT = 'text';
     public const FORMAT_JSON = 'json';
 
+    /**
+     * Top-level version of every `--output-format json` envelope (rv-tui-5).
+     *
+     * THE GAP THIS CLOSES: the envelope carried `result`, `error` and
+     * `refusals` but no way for a machine consumer to tell which contract it is
+     * reading, so the first future reshape (a `usage` block, a streamed answer)
+     * lands on `jq` pipelines with no signal to branch on. Every document this
+     * package puts on stdout — one-shot success, one-shot error, subcommand,
+     * and the autoload-guard twin in `bin/sugarcrush` — now opens with
+     * `"schema": 1`; a reader treats a document without the key as schema 0.
+     *
+     * FIRST KEY on every side, deliberately: `array_keys()` order is pinned
+     * pair-wise between NonInteractive's real documents and the hand-rolled
+     * guard literal (BinSugarcrushAutoloadGuardTest), and putting the version
+     * before the payload means a streaming parser sees it before any bytes it
+     * might need to interpret differently.
+     */
+    public const SCHEMA = 1;
+
     /** The prompt ran and produced an answer. */
     public const EXIT_OK = 0;
 
@@ -717,7 +736,7 @@ final class NonInteractive
             $error['provider'] = $provider;
         }
 
-        $document = ['result' => null, 'error' => $error];
+        $document = ['schema' => self::SCHEMA, 'result' => null, 'error' => $error];
         if ($refusals !== []) {
             $document['refusals'] = $refusals;
         }
@@ -749,7 +768,8 @@ final class NonInteractive
             // branch is apologising to. It fires only when the message itself
             // is unencodable, and an empty stdout at exit 1 is worse.
             $json = \sprintf(
-                '{"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
+                '{"schema":%d,"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
+                self::SCHEMA,
                 $type,
             );
         }
@@ -1097,7 +1117,7 @@ final class NonInteractive
      *
      * `text` (default): the assistant's raw content, matching the plain
      * stdout contract of every tool surveyed in crush_feat.md section 2.
-     * `json`: `{"result": "<content>"}`, plus a `refusals` array when the turn
+     * `json`: `{"schema": 1, "result": "<content>"}`, plus a `refusals` array when the turn
      * blocked at least one tool call — see {@see self::emitErrorDocument()}
      * for why that key alone is conditional, and {@see self::refusalFrom()}
      * for what counts as one and for the optional per-row `unattended`
@@ -1155,7 +1175,7 @@ final class NonInteractive
     public static function format(Message $message, string $outputFormat, array $refusals = []): string
     {
         if ($outputFormat === self::FORMAT_JSON) {
-            $document = ['result' => $message->content];
+            $document = ['schema' => self::SCHEMA, 'result' => $message->content];
             if ($refusals !== []) {
                 $document['refusals'] = $refusals;
             }

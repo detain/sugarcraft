@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Providers;
 
 use OpenAI\Contracts\ClientContract;
+use OpenAI\Exceptions\TransporterException;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -383,7 +384,19 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
             );
         }
 
-        $response = $this->client->chat()->create($params);
+        try {
+            $response = $this->client->chat()->create($params);
+        } catch (TransporterException $e) {
+            // rv-enduser-3: openai-php hands the raw Guzzle transport failure
+            // through unchanged, and its message is the cURL line plus a
+            // help-doc URL — readable prose naming the endpoint is what the
+            // operator's transcript should carry. The chain is preserved
+            // verbatim (same doctrine as SglangProvider's request-failure
+            // wrap), so TransientFailure::isTransient(), which walks
+            // `getPrevious()`, still sees the TransporterException and the
+            // retry classification is byte-untouched.
+            throw self::transportFailure($e);
+        }
 
         // Billing fix: the request's model is what the wire billed, so it is
         // what must be priced — `$defaultModel` is this object's fallback
@@ -434,7 +447,11 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
             $params['messages'] = array_merge([['role' => 'system', 'content' => $request->systemPrompt]], $params['messages']);
         }
 
-        $stream = $this->client->chat()->createStreamed($params);
+        try {
+            $stream = $this->client->chat()->createStreamed($params);
+        } catch (TransporterException $e) {
+            throw self::transportFailure($e);
+        }
 
         $streamUsage = null;
 
@@ -448,7 +465,9 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
         // fragments a stream left buffered are flushed (audit 15a A4's rule).
         $streamFinishReason = null;
 
-        foreach ($stream as $chunk) {
+        // Mid-body transport death (dropped connection, failed read) rides the
+        // same prose; `yield from` keeps the loop below byte-untouched.
+        foreach (self::guardStream($stream) as $chunk) {
             $data = $chunk->toArray();
 
             // The include_usage terminal frame: usage present, choices empty.
@@ -494,6 +513,56 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
                 costUsd: $streamUsage->costUsd,
                 usage: $streamUsage,
             );
+        }
+    }
+
+    /**
+     * Convert an openai-php transport failure into readable prose (rv-enduser-3).
+     *
+     * `TransporterException` is the SDK's wrapper around the PSR-18 client's
+     * own exception; left alone it reaches the transcript as
+     * `cURL error 7: Failed to connect to localhost:11434: Connection refused
+     * (see https://curl.se/libcurl/c/libcurl-errors.html) for POST
+     * http://localhost:11434/v1/chat/completions` — the useful halves of which
+     * are exactly the inner message and the request URI that message carries.
+     * This drops the help-document URL clause, names the provider, and quotes
+     * the failing endpoint; the response BODY is never appended, because a
+     * proxy's 401 page is where echoes of `Authorization` headers live. The
+     * original exception rides as `getPrevious()` at code 0, byte-for-byte the
+     * SglangProvider wrap-shape that keeps {@see TransientFailure}'s chain
+     * walk — and therefore the retry verdict — untouched.
+     */
+    private static function transportFailure(TransporterException $e): \RuntimeException
+    {
+        $text = $e->getMessage();
+        $clean = \preg_replace('/\s*\(see https?:\/\/[^)]*\)/', '', $text) ?? $text;
+        $endpoint = '';
+        if (\preg_match('#https?://[^\s"]++#', $clean, $m) === 1) {
+            $endpoint = ' (endpoint ' . $m[0] . ')';
+        }
+
+        return new \RuntimeException(
+            'OpenAI-compatible provider could not reach its endpoint: ' . $clean . $endpoint,
+            0,
+            $e,
+        );
+    }
+
+    /**
+     * Re-raise a mid-stream transport death as {@see transportFailure()}.
+     *
+     * A generator, so the call site's `foreach` body stays byte-identical;
+     * the exception surfaces while advancing the inner iterator — inside this
+     * frame — and `yield from` propagates nothing else it does not throw.
+     *
+     * @param \Traversable<mixed> $stream
+     */
+    private static function guardStream(\Traversable $stream): \Generator
+    {
+        try {
+            yield from $stream;
+        } catch (TransporterException $e) {
+            throw self::transportFailure($e);
         }
     }
 

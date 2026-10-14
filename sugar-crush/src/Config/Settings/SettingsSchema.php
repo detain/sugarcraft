@@ -24,8 +24,10 @@ use SugarCraft\Core\I18n\T;
  * three `claudeMcp*` grant keys and `enabledSkills`. Nothing speculative: a key
  * joins when its reader does, for the reason `LayeredSettings::LAYERED_KEYS`
  * gives — a key nothing reads is worse than a missing one, because it looks
- * configurable. Package provider definitions (`config.dev.json`) are not
- * settings keys and are not here.
+ * configurable. Since rv-enduser-1 the user-tier `providers` map — provider
+ * definitions authored as a setting — is itself a key and is listed; the
+ * package fixture's entries (`config.dev.json`) are data that map shadows,
+ * not settings keys, and are not here.
  *
  * CACHED PER LOCALE: a definition's label is `Lang::t()` of its `labelKey`,
  * evaluated as the definitions are built (audit 15b-14), so one build answers

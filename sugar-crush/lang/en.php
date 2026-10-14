@@ -2599,4 +2599,11 @@ TXT,
     // --- fix-tui-interact 2026-10-14 ---
     'tui.picker.notice.slash_filter' => '"{word}" reads like a slash command, not a filter — Enter here would resume the best match. Press Escape and type the command in the input instead.',
     'tui.app.stop_all_armed' => 'About to stop every running agent — press "s" again within 3 s to confirm.',
+
+    // --- fix-app-launch 2026-10-14 ---
+    'appLaunch.doctor.mbstring_missing' => 'missing — frame width maths (mb_*) cannot run; reinstall PHP with ext-mbstring',
+    'appLaunch.doctor.intl_missing' => 'missing — grapheme/IntlChar width maths cannot run; reinstall PHP with ext-intl',
+    'settings.providers.label' => 'Provider overrides',
+    'appLaunch.notice.policy_changed' => '⚠ config.json or hooks.yaml changed since the last launch. New project hooks stay quarantined for this launch only — review ~/.sugar-crush/config.json and hooks.yaml, then they are honoured',
+    'appLaunch.notice.bypass_mode' => '⚠ Permission mode is bypass-permissions: every tool call runs without a prompt. Change it with /permissions (TUI), --permission-mode, or set a different permission mode in ~/.sugar-crush/config.json',
 ];

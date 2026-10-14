@@ -183,7 +183,7 @@ ini_set('display_errors', 'stderr');
 
     if ($format === 'json') {
         $document = json_encode(
-            ['result' => null, 'error' => ['type' => 'installation', 'message' => $message]],
+            ['schema' => 1, 'result' => null, 'error' => ['type' => 'installation', 'message' => $message]],
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
         );
         // Every field above is an ASCII literal this file owns, so `false` is
@@ -200,7 +200,7 @@ ini_set('display_errors', 'stderr');
         // reads this literal out of this file and compares it against the bytes
         // the reachable arm actually printed.
         echo ($document === false
-            ? '{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}'
+            ? '{"schema":1,"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}'
             : $document) . "\n";
     }
 
@@ -440,6 +440,20 @@ if ($args->promptRequested) {
     exit(NonInteractive::run($args, null, $args->outputFormat));
 }
 
+// rv-qa-1 / rv-devops-2: the TUI below takes the terminal and pumps the React
+// event loop until a key arrives. With both stdin and stdout redirected there
+// is no keyboard and no screen: the MEASURED outcome was 21 KB of ANSI painted
+// into the pipe and a hang until an external timeout killed it (rc 124). One
+// usage line naming the safe paths, exit 2 like every other pre-flight, and
+// only when NEITHER stream is a tty — a script feeding stdin to an operator's
+// live terminal (or capturing only stdout while a ctty exists) still launches,
+// because one real terminal side is enough for the renderer to own.
+if (!\stream_isatty(\STDIN) && !\stream_isatty(\STDOUT)) {
+    \fwrite(\STDERR, "sugarcrush: interactive mode needs a terminal; stdin and stdout are both redirected.\nUse `-p \"prompt\"` for one-shot output or `sugarcrush serve` for the headless server; `sugarcrush --help` lists every path.\n");
+
+    exit(2);
+}
+
 // All backend/tool/session-store/memory-store/instruction-loader wiring
 // lives in Bootstrap (R19) so it can be exercised by a test without
 // shelling out to this script and blocking on Program::run(). See
@@ -506,18 +520,50 @@ if ($tuiErrorLog !== null) {
     });
 }
 
+// rv-tui-1(c)/rv-tui-3: the recovery the E705 comment below named as "the one
+// uncovered exit". An exception thrown out of run() skips Program's teardown,
+// leaving alt screen, hidden cursor, mouse capture and any unicode/paste mode
+// latched — every later line the shell prints lands in a screen the operator
+// cannot see. A shutdown function armed by a flag covers BOTH exits the fatal
+// writer sees (an uncaught throw also lands there, as E_ERROR) and exits the
+// flag never clears; it is registered AFTER the fatal line above so shutdown
+// order prints the reason first and the restore second. The byte set mirrors
+// Program::teardownTerminal() plus both mouse-off spellings and the Kitty pop,
+// every one of them an idempotent OFF sequence, so the honest gap — a throw
+// from the first statements of run(), before setupTerminal() has touched
+// anything — costs a handful of no-op CSI sequences on a terminal that was
+// never entered. Headless paths (`--help`, `--version`, `-p`, every
+// subcommand) exit long before this line and stay byte-silent, as pinned.
+$terminalWasRun = false;
+register_shutdown_function(static function () use (&$terminalWasRun): void {
+    if (!$terminalWasRun) {
+        return;
+    }
+    // \r\n explicitly: a fatal mid-run leaves the terminal raw, where a bare
+    // \n does not return the carriage.
+    fwrite(STDOUT, Ansi::popKittyKeyboard() . Ansi::mouseCellMotionOff() . Ansi::mouseAllMotionOff() . Ansi::bracketedPasteOff() . Ansi::unicodeOff() . Ansi::cursorShow() . Ansi::altScreenLeave());
+    fwrite(STDERR, "\r\nsugarcrush: exited abnormally — terminal restored\r\n");
+});
+
 // Audit CLI-2(b): the words left on the command line ride Bootstrap::app()'s
 // arguments — no Bootstrap call of their own may sit between the TUI log
 // redirect above and Program — and the hosted Chat submits them from init().
-$finalModel = (new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions()))->run();
+$program = new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions());
+// Armed at the call, not at setupTerminal(): candy-core owns the attach and
+// exposes no hook, so the flag's window is deliberately a superset — see the
+// idempotent-OFF note above for why the superset costs nothing.
+$terminalWasRun = true;
+$finalModel = $program->run();
+$terminalWasRun = false;
 
 // E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.
 // Every way out of run() — QuitMsg, SIGINT's InterruptMsg, kill() — stops the
 // loop without giving the model a turn to emit anything, so the balanced
 // `CSI < 1 u` is written here, after teardown, where all exits funnel.
 // Non-Kitty terminals ignore the bytes; a terminal we never pushed to cannot
-// have its base flags popped below default. The one uncovered exit is an
-// exception thrown out of run() — which also skips Program's own teardown.
+// have its base flags popped below default. The exception exit that once left
+// this pop unscheduled is covered by the shutdown guard above, which also pops
+// — so on that path the byte is written twice, both harmless.
 fwrite(STDOUT, Ansi::popKittyKeyboard());
 
 // Step 3.D-2: the session ends HERE, once, after every way out of run() has

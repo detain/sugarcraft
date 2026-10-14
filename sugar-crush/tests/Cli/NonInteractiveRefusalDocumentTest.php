@@ -176,7 +176,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     {
         $backend = $this->backendEmitting([]);
 
-        self::assertSame(['result'], array_keys($this->documentFrom($backend, NonInteractive::EXIT_OK)));
+        self::assertSame(['schema', 'result'], array_keys($this->documentFrom($backend, NonInteractive::EXIT_OK)));
     }
 
     /**

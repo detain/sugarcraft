@@ -34,6 +34,8 @@
     "require": {
         "php": "^8.3",
         "ext-sqlite3": "*",
+        "ext-mbstring": "*",
+        "ext-intl": "*",
         "react/promise": "^3.3",
         "react/http": "^1.11",
         "react/socket": "^1.16",

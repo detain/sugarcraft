@@ -57,6 +57,25 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withHelp('The model to run, per provider ({"<provider>": "<model id>"}); unset uses the provider default.')
                 ->withReaderSymbol(Bootstrap::class . '::selectedModelName')
                 ->withReadBy('`Bootstrap::selectedModelName()`, `backendFor()`, `selectedProviderLabel()`'),
+            // rv-enduser-1: the endpoint lockout fix. A map of provider NAME
+            // => partial provider config ({type, baseUrl, apiKey, model?}),
+            // layered over the built-in defaults by
+            // `Bootstrap::providerConfigFor()` on every wire path. User tier
+            // only — the whole map's direction is Egress (it decides where
+            // prompts and credentials go), and the doctrine behind
+            // `RiskClass::projectSettableAllowed()` refuses to let a
+            // checked-out repository redirect the operator's key. Project-side
+            // provider NAMES keep flowing through the package's own
+            // .sugar-crush/config.dev.json fixture, unchanged.
+            SettingDefinition::new('providers', SettingType::Map, [])
+                ->withCategory(SettingCategory::ModelProvider)
+                ->withRiskClass(RiskClass::Egress)
+                ->withLayered()
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.providers.label'))
+                ->withHelp('Provider definitions per name ({"<name>": {"type": …, "baseUrl": …, "apiKey": …, "model": …}}); each entry layers over that type\'s defaults. User tier only: a project must never move where your credential is sent.')
+                ->withReaderSymbol(Bootstrap::class . '::providerOverrides')
+                ->withReadBy('`Bootstrap::providerOverrides()`, `providerConfigFor()` → `provider()`, `backendFor()`, `workerProviderSpec()`, `toollessBackend()`, `selectedProviderLabel()`, `availableProviders()`'),
             SettingDefinition::new('titleModel', SettingType::String)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)

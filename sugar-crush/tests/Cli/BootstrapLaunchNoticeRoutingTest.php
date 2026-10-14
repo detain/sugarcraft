@@ -18,7 +18,7 @@ use SugarCraft\Crush\Skills\SkillLoader;
  *
  * HOW THAT NUMBER IS OBTAINED — not by `grep`, which overstates it by roughly
  * double because the identifier is mostly prose in `Bootstrap.php`'s
- * doc-blocks. `Bootstrap.php` holds TWENTY-FOUR calls to the seam by a token scan
+ * doc-blocks. `Bootstrap.php` holds TWENTY-SEVEN calls to the seam by a token scan
  * (`token_get_all()`, whitespace and comments stripped, T_STRING of that name
  * both preceded by `::` and followed by `(`); one of them is round 39's, so
  * this file guards the other twenty-two. Re-derive it in one command:
@@ -106,22 +106,30 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             ['SUGARCRUSH_PROVIDER' => 'nope-env'],
         );
 
-        self::assertSame(
-            [
-                "provider 'nope-env' unavailable (Unknown provider type: nope-env); falling back to echo",
-                "persisted provider 'nope-persisted' unavailable "
-                . '(Unknown provider type: nope-persisted); falling back to echo',
-            ],
-            $notices,
-        );
+        // The routing this case guards is the fallback NOTICE reaching both
+        // channels once each, in order — not the provider-copy inside it, which
+        // rv-enduser-3 widened (valid-types list + nearest match). Assert the
+        // stable head/tail of each message so a change to the middle copy does
+        // not silently un-route the notice.
+        self::assertCount(2, $notices);
         self::assertStringContainsString(
-            "sugarcrush: provider 'nope-env' unavailable (Unknown provider type: nope-env); "
-            . "falling back to echo.\n",
+            "provider 'nope-env' unavailable (Unknown provider type: nope-env",
+            $notices[0],
+        );
+        self::assertStringEndsWith('; falling back to echo', $notices[0]);
+        self::assertStringContainsString(
+            "persisted provider 'nope-persisted' unavailable (Unknown provider type: nope-persisted",
+            $notices[1],
+        );
+        self::assertStringEndsWith('; falling back to echo', $notices[1]);
+
+        self::assertStringContainsString(
+            "sugarcrush: provider 'nope-env' unavailable (Unknown provider type: nope-env",
             $stderr,
         );
         self::assertStringContainsString(
             "sugarcrush: persisted provider 'nope-persisted' unavailable "
-            . "(Unknown provider type: nope-persisted); falling back to echo.\n",
+            . "(Unknown provider type: nope-persisted",
             $stderr,
         );
     }
@@ -216,7 +224,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      *
      * ONE ROW WHATEVER THE COUNT — this message is an aggregate, and that is
      * what makes it safe to seat in a transcript that also carries
-     * twenty-three other sources (twenty-four seam call sites by the token scan in
+     * twenty-six other sources (twenty-seven seam call sites by the token scan in
      * {@see BootstrapTranscriptSeamCallSiteCensusTest}, of which this is one;
      * `grep` gives about double and is the wrong tool). Two unreadable files,
      * one notice, and the notice says two.
@@ -986,7 +994,15 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             . ($emitsOwnPayload ? '' : "echo json_encode(\\SugarCraft\\Crush\\Cli\\Bootstrap::launchNotices());\n"),
         );
 
-        $prefix = 'HOME=' . escapeshellarg($this->home) . ' SUGARCRUSH_PERMISSION_MODE= ';
+        // `default` (not the empty/absent spelling) so these launches resolve
+        // to a NON-bypass permission mode. rv-sec-1 added an unavoidable
+        // bypass-mode launch notice, and every case below launches headless —
+        // under the headless bypass default that notice would ride into the
+        // exact-count and cap arithmetic these tests pin. It is orthogonal to
+        // what this file guards (provider-fallback, dropped-rule, empty-tool-set
+        // and over-long-notice ROUTING, none of which depend on the mode) and
+        // has its own pin in {@see BypassLaunchBannerTest}.
+        $prefix = 'HOME=' . escapeshellarg($this->home) . ' SUGARCRUSH_PERMISSION_MODE=default ';
         foreach ($env as $key => $value) {
             $prefix .= $key . '=' . escapeshellarg($value) . ' ';
         }

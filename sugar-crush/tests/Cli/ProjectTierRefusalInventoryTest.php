@@ -360,6 +360,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // and not the checkout under analysis. Still gated, because a
         // package-relative path is one a symlink can move just as easily.
         'Providers/ProviderFactory.php|.sugar-crush/config.dev.json' => self::PACKAGE,
+        // rv-enduser-3 (lane f-app-launch 2026-10-14): the REQUIRED_KEY_ENVS hint
+        // NAMES the operator's own user-tier file inside an error message; it
+        // loads nothing, resolves nothing, and serves no project tier at all.
+        'Providers/ProviderFactory.php|.sugar-crush/config.json' => self::USER,
 
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.sugar-crush/worktrees' => self::NOT_A_TIER,
@@ -403,7 +407,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY occurrences — one per entry
+     * APPEARS IN. On this tree that is FIFTY-ONE occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-FOUR distinct paths. TWENTY-ONE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and

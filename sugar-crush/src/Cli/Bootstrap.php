@@ -18,6 +18,7 @@ use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Config\PolicySnapshot;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
@@ -206,7 +207,8 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 40 is that sum, 36, plus four rows of headroom. A launch that does hit
+     * 40 is that sum — 39 after this lane's three notice-raising sources — plus
+     * one row of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
@@ -282,6 +284,9 @@ final class Bootstrap
         'mcpClient' => 2,
         'reportIgnoredFrontmatter' => 4,
         'lspClient' => 1,
+        'permissionGate' => 1,
+        'availableProviders' => 1,
+        'checkPolicyFreshness' => 1,
     ];
 
     /**
@@ -835,7 +840,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 24;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 27;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -956,6 +961,17 @@ final class Bootstrap
      * @var array<string, list<string>>
      */
     private static array $trustedRoots = [];
+
+    // rv-sec-3 policy-freshness guard state — see ensurePolicyFreshnessChecked().
+    private static bool $policyFreshnessChecked = false;
+
+    private static bool $policyChanged = false;
+
+    /** @var array<string, list<string>> canonical root => hook entry identities the LAST launch loaded */
+    private static array $policyPreviousProjectHooks = [];
+
+    /** @var list<string> roots the LAST launch had under trustedProjectHooks */
+    private static array $policyPreviousTrustedRoots = [];
 
     /**
      * The same, for {@see TRUSTED_PROJECT_MCP_CONFIG_KEY} — a SEPARATE map
@@ -1629,13 +1645,18 @@ final class Bootstrap
                     self::$ignoredFrontmatter[$audit::RULE][(string) json_encode([$root, $key])] = [$key, $labels];
                 }
             } catch (\Throwable) {
+                // Deliberately silent here (rv-php m): this is the pre-paint
+                // preview walk with `reportRefusals: false`, and the same walk
+                // runs again WITH reporting on the first turn, where a failure
+                // belongs — duplicating a stderr line before the alt screen is
+                // up would only pre-empt the reported one.
             }
         }
         self::reportIgnoredFrontmatter();
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-FOUR call sites now routed onto the transcript seam. This said
+        // TWENTY-SEVEN call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -1646,7 +1667,11 @@ final class Bootstrap
         // drain below; it said twenty-one until E172 (round 70) added the
         // twenty-second, the command-file skip aggregate just above, and
         // twenty-two until the audit 15d-02 follow-up added the twenty-third,
-        // the unreadable-memory-note aggregate. All six are the reason
+        // the unreadable-memory-note aggregate; lane f-app-launch (2026-10-14)
+        // added the last three — the rv-sec-1 bypass-mode banner in
+        // permissionGate(), the rv-sec-3 policy-freshness notice in
+        // checkPolicyFreshness() and the rv-enduser-1 unselectable
+        // provider-override row in availableProviders(). All six are the reason
         // this line is LAST rather than merely tidy: the retention summary is
         // raised from sessionStore() far EARLIER in this method, and the MCP
         // one is raised far LATER, transitively through backend() -> tools() ->
@@ -3240,7 +3265,7 @@ final class Bootstrap
         if ($providerName !== null) {
             try {
                 $factory = new ProviderFactory();
-                $config = $factory->defaultConfig($providerName);
+                $config = self::providerConfigFor($providerName, $factory);
                 $config['model'] = $model;
 
                 return [$factory->create($config), $model];
@@ -3305,7 +3330,7 @@ final class Bootstrap
 
         try {
             $factory = new ProviderFactory();
-            $config = $factory->defaultConfig($providerName);
+            $config = self::providerConfigFor($providerName, $factory);
             $config['model'] = $model ?? self::selectedModelName($providerName) ?? ($config['model'] ?? 'gpt-4o');
 
             // E652 review fix — never put a RESOLVED credential on the fork
@@ -3609,7 +3634,7 @@ final class Bootstrap
         // `backend()`.
         self::useProjectRootForSettings(self::configRoot($root));
         $factory = new ProviderFactory();
-        $config = $factory->defaultConfig($providerName);
+        $config = self::providerConfigFor($providerName, $factory);
         // --model wins over $SUGARCRUSH_MODEL wins over the model persisted for
         // THIS provider (D9, `models`) wins over the provider default.
         $model = self::selectedModelName($providerName) ?? ($config['model'] ?? 'gpt-4o');
@@ -3799,6 +3824,85 @@ final class Bootstrap
     }
 
     /**
+     * The `providers` map from the layered settings reader (rv-enduser-1):
+     * name => partial config array, each entry needing at least a string
+     * `type` to be honoured. Entries without one are dropped silently here
+     * and reported by {@see availableProviders()} when the palette asks, so
+     * a malformed row costs a name, never a launch.
+     *
+     * WHICH LAYER WINS: {@see readUserConfig()}'s merge is shallow at the top
+     * level, so the highest layer that carries a `providers` key supplies the
+     * WHOLE map — a user config.json map replaces a settings.json map
+     * wholesale rather than deep-merging per name. That is the same
+     * replace-not-merge doctrine every other Map-typed key already lives by
+     * (`models`, `modelPrices`), and it keeps "which endpoint am I actually
+     * talking to" answerable from one file.
+     *
+     * The tier is USER-only on purpose: `providers` decides where prompts and
+     * credentials are sent, which is RiskClass::Egress, and the schema's own
+     * {@see \SugarCraft\Crush\Config\Settings\RiskClass::projectSettableAllowed()}
+     * refuses a checked-out repository that direction — a clone must never be
+     * able to redirect the operator's API key. Project-side NAMES already
+     * reach selection through the package's own
+     * .sugar-crush/config.dev.json fixture ({@see availableProviders()}
+     * merges it below), which is the half of the review's "project layer"
+     * that survived the doctrine check.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function providerOverrides(): array
+    {
+        try {
+            $raw = self::readUserConfig()['providers'] ?? null;
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $overrides = [];
+        foreach ($raw as $name => $entry) {
+            if (is_string($name) && is_array($entry)
+                && isset($entry['type']) && is_string($entry['type']) && $entry['type'] !== '') {
+                $overrides[$name] = $entry;
+            }
+        }
+
+        return $overrides;
+    }
+
+    /**
+     * The config array one provider NAME resolves to on this launch: the
+     * settings-layer override when {@see providerOverrides()} carries the
+     * name — layered over the defaults for its declared `type` so
+     * credentials, base URLs and models the entry omits still come from the
+     * built-in arm — or {@see ProviderFactory::defaultConfig()} unchanged.
+     *
+     * Every site that turns a selected provider name into a config array
+     * MUST call this instead of `defaultConfig()` directly, or the map is
+     * honoured in the palette and ignored on the wire — the exact split this
+     * review item (endpoint lockout) was about. An entry naming an unknown
+     * `type` lets the factory's own listing-plus-nearest-match error
+     * ({@see ProviderFactory::unknownTypeError()}) surface from the base
+     * lookup; this funnel adds no opinion about it.
+     *
+     * @return array<string, mixed>
+     */
+    public static function providerConfigFor(string $name, ProviderFactory $factory): array
+    {
+        $entry = self::providerOverrides()[$name] ?? null;
+        if ($entry === null) {
+            return $factory->defaultConfig($name);
+        }
+
+        $type = (string) $entry['type'];
+
+        return array_merge($factory->defaultConfig($type), $entry);
+    }
+
+    /**
      * Every provider name currently selectable, for the Ctrl+P palette's
      * Switch Model action: the built-in provider types {@see
      * ProviderFactory::availableTypes()} knows about, plus every name
@@ -3809,6 +3913,11 @@ final class Bootstrap
      * absent/unreadable/invalid, matching {@see
      * ProviderFactory::projectProviderConfig()}'s own tolerance for a
      * missing project config.
+     *
+     * Since rv-enduser-1 the layered `providers` map joins the same list,
+     * last: a settings-file name overrides a same-named built-in or dev-json
+     * entry (highest layer wins), and an entry whose `type` resolves nowhere
+     * is reported and skipped rather than killing the palette.
      *
      * @return array<string, array<string, mixed>> name => defaultConfig()'s config array
      */
@@ -3838,6 +3947,21 @@ final class Bootstrap
                         $providers[$name] = $config;
                     }
                 }
+            }
+        }
+
+        // The settings-layer map lands last so it beats both earlier sources,
+        // mirroring how every other layered key shadows what it redefines.
+        foreach (self::providerOverrides() as $name => $entry) {
+            try {
+                $providers[$name] = self::providerConfigFor($name, $factory);
+            } catch (\Throwable $e) {
+                // A name whose type resolves nowhere must not blank the
+                // palette: report once through the launch-notice channel and
+                // keep whatever earlier layer offered for that name.
+                self::warnPermissionConfigInTranscript(
+                    "provider override '{$name}' is not selectable: " . $e->getMessage(),
+                );
             }
         }
 
@@ -4392,6 +4516,105 @@ final class Bootstrap
     public static function useProjectRootForSettings(?string $root): void
     {
         self::$projectRootForSettings = $root === null || trim($root) === '' ? null : $root;
+        self::ensurePolicyFreshnessChecked();
+    }
+
+    /**
+     * rv-sec-3: the one-launch policy-freshness guard, armed at most once per
+     * process (see {@see PolicySnapshot} for what it records and why).
+     */
+    private static function ensurePolicyFreshnessChecked(): void
+    {
+        if (self::$policyFreshnessChecked) {
+            return;
+        }
+        self::$policyFreshnessChecked = true;
+
+        try {
+            self::checkPolicyFreshness();
+        } catch (\Throwable) {
+            // Fail-open by ruling: the guard needs the config directory to be
+            // writable and the policy files to be readable, and every one of
+            // those uncertainties has a louder, already-reported path in the
+            // same launch (requirePrivatePolicyFile, the hook-chain refusal).
+            // A guard that can brick a launch on its own bookkeeping failure
+            // is a second bug, not a safety property.
+            self::$policyChanged = false;
+        }
+    }
+
+    /**
+     * Compare this launch's policy files to the snapshot the LAST launch
+     * wrote, report any drift loudly, quarantine what is new for this launch
+     * only, then record the current state for the next comparison.
+     *
+     * Order matters: the notice is pushed AFTER the new record is written, so
+     * a launch that fatals between the two still leaves the quarantine armed
+     * consistently for its successor; and the current-state record is built
+     * from the UNFILTERED trust list, so the launch after the quarantine
+     * honours exactly what the operator has now seen announced.
+     */
+    private static function checkPolicyFreshness(): void
+    {
+        $configDir = static fn (): string => self::trustedConfigDirPath();
+        $userConfigPath = $configDir() . '/config.json';
+        $userHooksPath = $configDir() . '/hooks.yaml';
+
+        $previous = PolicySnapshot::read($configDir);
+        $currentConfig = PolicySnapshot::fingerprint($userConfigPath);
+        $currentHooks = PolicySnapshot::fingerprint($userHooksPath);
+
+        $changed = $previous !== null
+            && ($currentConfig !== $previous['userConfig'] || $currentHooks !== $previous['userHooks']);
+
+        self::$policyChanged = $changed;
+        self::$policyPreviousProjectHooks = $changed ? $previous['projectHooks'] : [];
+        self::$policyPreviousTrustedRoots = $changed && is_array($previous['trustedRoots'] ?? null)
+            ? $previous['trustedRoots']
+            : [];
+
+        $trustedRoots = self::trustedProjectHookRoots(self::permissionConfig());
+        $projectHookIdentities = [];
+        foreach ($trustedRoots as $root) {
+            $file = $root . '/.sugar-crush/hooks.yaml';
+            try {
+                $entries = is_file($file) ? self::hookFileEntries($file) : [];
+            } catch (\Throwable) {
+                // Unreadable/malformed today: `hooks()` will refuse the launch
+                // over it with the real message; the record stores the empty
+                // set, which quarantines everything tomorrow — the safe side.
+                $entries = [];
+            }
+            $projectHookIdentities[$root] = array_values(array_map(
+                static fn (array $e): string => $e['name'] . '|' . $e['event'] . '|' . $e['command'],
+                $entries,
+            ));
+        }
+
+        PolicySnapshot::write($configDir, [
+            'version' => PolicySnapshot::VERSION,
+            'userConfig' => $currentConfig,
+            'userHooks' => $currentHooks,
+            'trustedRoots' => $trustedRoots,
+            'projectHooks' => $projectHookIdentities,
+        ]);
+
+        if ($changed) {
+            self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.policy_changed'));
+        }
+    }
+
+    /**
+     * Whether THIS launch is quarantining freshly-seen project policy
+     * (rv-sec-3). True only when the last launch's snapshot exists and the
+     * user's config.json or hooks.yaml hashed differently — see
+     * {@see checkPolicyFreshness()}.
+     */
+    private static function policyQuarantineActive(): bool
+    {
+        self::ensurePolicyFreshnessChecked();
+
+        return self::$policyChanged;
     }
 
     /**
@@ -5093,7 +5316,7 @@ final class Bootstrap
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // twenty-three other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // twenty-six other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -5758,9 +5981,18 @@ final class Bootstrap
         // reason: a file entry must not be able to take its event+name.
         $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\BoardNoticeHook());
 
+        $quarantine = self::policyQuarantineActive();
+        $userHooksPath = self::trustedConfigDirPath() . '/hooks.yaml';
         foreach (self::hookFiles($root) as $path) {
             try {
-                $hooks->loadEntries(self::hookFileEntries($path), $path);
+                $entries = self::quarantineNewHookEntries(
+                    $path,
+                    self::hookFileEntries($path),
+                    $quarantine,
+                    $userHooksPath,
+                );
+
+                $hooks->loadEntries($entries, $path);
             } catch (\InvalidArgumentException | \RuntimeException $e) {
                 // Same refusal {@see permissionConfig()} makes, for the same
                 // reason: this file is part of the launch's gating policy, so
@@ -5841,6 +6073,43 @@ final class Bootstrap
         }
 
         return self::$hookFileEntries[$path];
+    }
+
+    /**
+     * rv-sec-3 one-launch quarantine filter for one hook file's entries.
+     *
+     * While the policy snapshot says the user's config or hooks changed since
+     * the previous launch, PROJECT-tier entries that launch never saw do not
+     * load this time. The user's own file is never entry-filtered — the launch
+     * notice IS the consent there; a repository's file is the one that can
+     * change by nobody at this keyboard editing anything. Lives beside
+     * {@see hookFileEntries()} rather than inline in `hooks()` so the
+     * registration-order anchors SKILLS.md cites stay inside the excerpt
+     * window the doc guard reads them from.
+     *
+     * @param list<array<string, mixed>> $entries
+     * @return list<array<string, mixed>>
+     */
+    private static function quarantineNewHookEntries(
+        string $path,
+        array $entries,
+        bool $quarantine,
+        string $userHooksPath,
+    ): array {
+        if (!$quarantine || $path === $userHooksPath) {
+            return $entries;
+        }
+
+        $seenBefore = self::$policyPreviousProjectHooks[\dirname(\dirname($path))] ?? [];
+
+        return array_values(array_filter(
+            $entries,
+            static fn (array $e): bool => \in_array(
+                $e['name'] . '|' . $e['event'] . '|' . $e['command'],
+                $seenBefore,
+                true,
+            ),
+        ));
     }
 
     /**
@@ -6147,7 +6416,21 @@ final class Bootstrap
         $path = self::trustedConfigDirPath() . '/config.json';
 
         if (!\array_key_exists($path, self::$trustedRoots)) {
-            self::$trustedRoots[$path] = self::trustedProjectHookRoots(self::permissionConfig());
+            $roots = self::trustedProjectHookRoots(self::permissionConfig());
+
+            // rv-sec-3: during a quarantine launch, a root that only APPEARED
+            // in trustedProjectHooks after the last snapshot is not trusted
+            // yet either — adding a line to the user's config naming a fresh
+            // clone is the same "first sight of a repository" event as the
+            // clone shipping its own hooks.yaml. The launch after, honoured.
+            if (self::policyQuarantineActive() && self::$policyPreviousTrustedRoots !== []) {
+                $roots = array_values(array_filter(
+                    $roots,
+                    static fn (string $root): bool => \in_array($root, self::$policyPreviousTrustedRoots, true),
+                ));
+            }
+
+            self::$trustedRoots[$path] = $roots;
         }
 
         return self::$trustedRoots[$path];
@@ -6528,6 +6811,19 @@ final class Bootstrap
             }
         }
         $mode ??= $interactive ? self::INTERACTIVE_DEFAULT_PERMISSION_MODE : self::DEFAULT_PERMISSION_MODE;
+
+        // rv-sec-1: bypass-permissions is the mode at which NO tool call is
+        // ever asked about, and until now a launch that resolved to it — the
+        // built-in headless default as much as a `permissionMode` in config —
+        // said nothing. The statement rides the SAME launch-notices store the
+        // `/notices` panel reads, so it reaches the TUI transcript and the
+        // operator's stderr without touching DEFAULT_PERMISSION_MODE itself
+        // (owner ruling: the default stands; the silence is what changes).
+        // `warnPermissionConfigInTranscript` de-dups by message identity, so
+        // the per-turn re-resolutions of this method cost one notice total.
+        if ($mode === PermissionMode::BypassPermissions) {
+            self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.bypass_mode'));
+        }
 
         // Roadmap 5.11-2: `autoReview` in the user's own config.json — never a
         // project file, because every review is a paid model call — puts an
@@ -8340,7 +8636,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // twenty-three call sites: {@see chat()} holds no `self::tools(` call of
+            // twenty-six call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is
@@ -9665,7 +9961,7 @@ final class Bootstrap
         $model = self::selectedModelName($name);
         if ($model === null) {
             try {
-                $configured = (new ProviderFactory())->defaultConfig($name)['model'] ?? null;
+                $configured = self::providerConfigFor($name, new ProviderFactory())['model'] ?? null;
             } catch (\Throwable) {
                 $configured = null;
             }
@@ -9886,7 +10182,7 @@ final class Bootstrap
 
         try {
             $factory = new ProviderFactory();
-            $config = $factory->defaultConfig($providerName);
+            $config = self::providerConfigFor($providerName, $factory);
 
             $model = getenv($modelEnvVar);
             if ($model === false || $model === '') {

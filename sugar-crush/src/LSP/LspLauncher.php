@@ -44,8 +44,29 @@ final class LspLauncher
     /** The settings key the server list is read from. */
     public const SETTINGS_KEY = 'lsp';
 
-    /** Each request's bound (and the `initialize` handshake's), in seconds. */
+    /** Each request's bound, in seconds. */
     public const DEFAULT_TIMEOUT_SECONDS = 10.0;
+
+    /**
+     * The handshake's own bound (rv-tui-2), in seconds.
+     *
+     * `Bootstrap::app()` builds the tool set — and with it the LSP client —
+     * BEFORE the first frame paints, so this handshake is the pre-paint block
+     * the user waits through. A cold language server routinely takes longer
+     * than a repaint is worth: at the 10 s per-request default, eight hostile
+     * servers (MAX_SERVERS) held a launch for up to eighty seconds. The
+     * `initialize`/`initialized` exchange is now bounded at 2 s each (the
+     * smaller of this and the server's own `timeout`), after which the
+     * connection's regular request budget is restored for tool traffic.
+     * A server that misses the 2 s window fails that one server — the
+     * fail-open-on-capability doctrine above — instead of stealing the frame.
+     *
+     * The fully paint-first shape (handshake completes AFTER the first frame
+     * via an init-Cmd and a ready message) needs `App`/`Chat` wiring outside
+     * this file's reach and is recorded as the lane's seam; the bound here is
+     * the half that lives entirely in the launcher.
+     */
+    public const DEFAULT_HANDSHAKE_TIMEOUT_SECONDS = 2.0;
 
     /** The most servers one launch starts — each is a long-lived process. */
     public const MAX_SERVERS = 8;
@@ -160,7 +181,11 @@ final class LspLauncher
     private function start(LspConnectionInterface $connection, array $server): ?string
     {
         try {
-            $connection->connect($server['command'], $server['env'], $this->root, $server['timeout']);
+            // rv-tui-2: the connect budget is the HANDSHAKE's, never the
+            // server's full per-request timeout — this exchange happens
+            // pre-paint. `min()` so a config that asks for a tighter timeout
+            // still gets its own number.
+            $connection->connect($server['command'], $server['env'], $this->root, min($server['timeout'], self::DEFAULT_HANDSHAKE_TIMEOUT_SECONDS));
 
             if (!method_exists($connection, 'sendRequest') || !method_exists($connection, 'sendNotification')) {
                 $connection->initialize();
@@ -176,6 +201,12 @@ final class LspLauncher
                 return $response->errorMessage ?? 'initialize failed';
             }
             $connection->sendNotification('initialized', []);
+
+            // Handshake cleared — hand the connection back the per-request
+            // budget tools expect (see LspConnection::setRequestTimeout()).
+            if (method_exists($connection, 'setRequestTimeout')) {
+                $connection->setRequestTimeout($server['timeout']);
+            }
 
             return null;
         } catch (\Throwable $e) {

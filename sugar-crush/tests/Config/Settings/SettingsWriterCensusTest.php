@@ -158,7 +158,11 @@ final class SettingsWriterCensusTest extends TestCase
         // SettingsProfile writes a profile file the user names (N-P5), never a
         // settings layer: it refuses config.json / settings.json /
         // settings.local.json by name (SettingsFilesAndProfilesTest).
-        self::assertSame(['Config/Settings/SettingsWriter.php', 'Tui/Settings/SettingsProfile.php'], array_keys($files));
+        // Config/PolicySnapshot.php (f-app-launch 2026-10-14, rv-sec-3) writes
+        // its OWN 0600 freshness state file through the same atomic door; it
+        // reads and writes no settings layer — the writer census stays honest
+        // because the roster names every toucher, not only the layer writer.
+        self::assertSame(['Config/PolicySnapshot.php', 'Config/Settings/SettingsWriter.php', 'Tui/Settings/SettingsProfile.php'], array_keys($files));
     }
 
     /**

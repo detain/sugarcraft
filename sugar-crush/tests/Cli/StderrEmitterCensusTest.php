@@ -57,7 +57,11 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-one sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — twenty-three sites (f-app-launch 2026-10-14: +2 in
+ *     `bin/sugarcrush` — the rv-qa-1 TTY-guard refusal line and the rv-tui-1
+ *     recovery line, both stderr-alone by decision: neither names a lost
+ *     capability and both must land on a channel the dying process still
+ *     owns). The channel that census describes.
  *     (Roadmap 5.9: `Acp::stderr()`, `acp`'s one funnel — stdout is the
  *     editor's protocol, so everything else goes here. And `/new`'s
  *     `SessionRelaunch::tell()`, after the TUI has exited.)
@@ -211,7 +215,9 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — THIRTY-THREE call sites in `src/Cli/Bootstrap.php`, each producing a
+ * it — THIRTY-SIX call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
+ * and the rv-enduser-1 unselectable-override row), each producing a
  * distinct `sugarcrush: ` line, against a channel-4 credit of six for that
  * file. Off by roughly five times, in the blind direction.
  *
@@ -286,7 +292,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const DIRECT_SITES = [
-        'bin/sugarcrush' => 2,
+        'bin/sugarcrush' => 4,
         // Roadmap 5.9: `acp`'s one funnel (Acp::stderr()) for whatever PHP
         // would have printed onto the protocol, and the launch warnings.
         // Stderr alone: stdout is the editor's JSON-RPC stream, and an editor
@@ -426,7 +432,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const MESSAGE_SHAPES = [
-        'bin/sugarcrush' => 5,
+        'bin/sugarcrush' => 7,
         // The nine files below are E154's: each `error_log()` message they
         // retained now carries the prefix in its own literal instead of
         // arriving at fd 2 anonymous. Counts are per LITERAL (the shape arm
@@ -509,7 +515,7 @@ final class StderrEmitterCensusTest extends TestCase
         // non-boolean value; on with no provider to review with). Stderr
         // only: the user's config is off, the session is intact and auto
         // mode keeps its old deny-and-strike answer.
-        'src/Cli/Bootstrap.php' => 33,
+        'src/Cli/Bootstrap.php' => 36,
     ];
 
     /**
@@ -840,7 +846,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-seven' => 27,
         'twenty-eight' => 28,
         'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31,
-        'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
+        'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
     ];
