@@ -293,7 +293,7 @@ final class SessionSubcommandsTest extends TestCase
         $kid = $this->store->createChildSession($branch, SessionKind::Background, 'bg', null, 'openai', 'gpt-4o');
         [$rc, $text] = $this->dispatch(['session', 'delete', $branch, '--with-children']);
         self::assertSame(0, $rc, $text);
-        self::assertSame('Deleted session ' . $branch . " and 1 child session(s)\n", $text);
+        self::assertSame('Deleted session ' . $branch . "; child sessions removed with it: 1\n", $text);
         self::assertNull($this->store->getSession($kid));
     }
 

@@ -424,7 +424,7 @@ this process has at least one started server to report — a session that
 started no servers shows no liveness block, hence no verdict line even after
 its config drifts. While that block is rendering and the file's bytes no
 longer match the digest taken at launch, the panel adds one line:
-`Config: changed since launch — restart sugar-crush to apply (reload is not
+`Config: changed since launch — restart SugarCrush to apply (reload is not
 implemented)`. That is a DETECTION, not a fix, and the fix was weighed and
 declined (option β — hot-reloading the config): re-reading the file in-session would relaunch
 servers under a root grant the process already holds, which re-arms exactly

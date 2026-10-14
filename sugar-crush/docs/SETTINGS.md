@@ -100,6 +100,14 @@ and `/theme <name>`). Those are the only two values `Chat`'s `onConfigChange`
 callback is invoked with, and `Bootstrap` wires that callback to
 `writeUserConfig()` at one site.
 
+One value `/theme` lists deserves a word here: `adaptive` picks no fixed
+palette. It pairs the dark and light presets and resolves on each read against
+the attached terminal's actual background — asked over OSC 11, falling back to
+`COLORFGBG` ([`ENVIRONMENT.md`](ENVIRONMENT.md)) — so a persisted
+`theme: "adaptive"` re-reads the terminal at every launch instead of freezing
+whatever the first one detected, and the chrome/markdown halves always come
+from the same side of the light/dark split.
+
 The `/model` half is easy to miss and this page missed it: `Chat`'s
 `handleModelCommand()` ends in `selectPaletteProvider()`, which is the *sole*
 site that invokes `onConfigChange('provider', …)`. The palette row and the

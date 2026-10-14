@@ -21,7 +21,7 @@ asking.
 | [CONTEXT.md](CONTEXT.md) | Context budget, compaction, "turn was NOT sent" | Long sessions start dropping turns |
 | [SERVER.md](SERVER.md) | `sugarcrush serve`, the WebSocket protocol, tokens | You embed or remote-control the agent |
 | [MEDIA.md](MEDIA.md) | Image/video generation, render modes, presets | You generate media |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | The code's shape, seams and invariants | You are reading or changing `src/` |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The code's shape, seams and invariants, incl. [the screen, zone by zone](ARCHITECTURE.md#the-screen-zone-by-zone) | You are reading or changing `src/` |
 | [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behaviour |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Symptom-first error recovery, incl. CI automation notes | Something is broken |
 | [protocol/](protocol/) | Generated JSON schema of the serve wire | You build a client |

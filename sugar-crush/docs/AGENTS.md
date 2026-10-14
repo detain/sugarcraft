@@ -247,7 +247,7 @@ then the turn, which cancels a running `Task` the same way.
 pane is a dashboard of every run: `↑`/`↓` move, `Enter` or `Space` peeks
 (and `Enter` in the peek opens the Agent View), `Alt+1…9` jump to a row, `c` cancels the selected run (again within
 3 s to stop it now), `r` resumes a paused run or continues a finished one, `s`
-stops every run, and `q` leaves. A dashboard row that is not a `Task` run (a
+stops every run — press again within 3 s to confirm — and `q` leaves. A dashboard row that is not a `Task` run (a
 workflow stage, a background session) shows its live output instead and does
 not take these controls.
 

@@ -523,7 +523,7 @@ final class AgentSplitCompositorTest extends TestCase
 
         self::assertStringContainsString('alpha', $plain);
         self::assertStringNotContainsString('beta', $plain);
-        self::assertStringContainsString('+ 2 more agent(s)', $plain);
+        self::assertStringContainsString('+ 2 more…', $plain);
         self::assertLessThanOrEqual(8, substr_count($column, "\n") + 1);
     }
 

@@ -53,8 +53,8 @@ final class AgentOutputPaneTest extends TestCase
         $this->assertStringContainsString('coder-1', $output);
         $this->assertStringContainsString('[working]', $output);
         $this->assertStringContainsString('claude-sonnet-4-6', $output);
-        // No "more line(s)" indicator when buffer is empty.
-        $this->assertStringNotContainsString('more line(s)', $output);
+        // No "more…" indicator when buffer is empty.
+        $this->assertStringNotContainsString('more…', $output);
     }
 
     public function testRenderPeekNonEmptyBufferShowsLastNPeeksLines(): void
@@ -76,8 +76,8 @@ final class AgentOutputPaneTest extends TestCase
         $this->assertStringContainsString('line 1', $output);
         $this->assertStringContainsString('line 2', $output);
         $this->assertStringContainsString('line 3', $output);
-        // No "more line(s)" indicator when buffer fits entirely.
-        $this->assertStringNotContainsString('more line(s)', $output);
+        // No "more…" indicator when buffer fits entirely.
+        $this->assertStringNotContainsString('more…', $output);
     }
 
     public function testRenderPeekExceedsPeekLinesShowsTruncationIndicator(): void
@@ -105,7 +105,7 @@ final class AgentOutputPaneTest extends TestCase
         $this->assertStringNotContainsString('line 1', $output);
         $this->assertStringNotContainsString('line 2', $output);
         // Truncation indicator should appear.
-        $this->assertStringContainsString('more line(s)', $output);
+        $this->assertStringContainsString('more…', $output);
         $this->assertStringContainsString('4', $output); // 8 - 4 = 4 more lines.
     }
 
@@ -131,7 +131,7 @@ final class AgentOutputPaneTest extends TestCase
 
         $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
 
-        $this->assertStringContainsString('+ 96 more line(s)', $output, '100 produced, 4 shown');
+        $this->assertStringContainsString('+ 96 more…', $output, '100 produced, 4 shown');
         $this->assertStringContainsString('line 100', $output);
         $this->assertStringContainsString('Generating code', $output, 'a peek tile names what the agent is doing');
     }

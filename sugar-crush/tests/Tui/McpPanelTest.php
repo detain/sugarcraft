@@ -521,7 +521,7 @@ final class McpPanelTest extends TestCase
         $needle = 'Config: changed since launch';
 
         self::assertStringContainsString(
-            $needle . ' — restart sugar-crush to apply (reload is not implemented)',
+            $needle . ' — restart SugarCrush to apply (reload is not implemented)',
             McpPanel::render($inventory, 160, $liveness, true),
         );
         self::assertStringNotContainsString($needle, McpPanel::render($inventory, 160, $liveness, false));

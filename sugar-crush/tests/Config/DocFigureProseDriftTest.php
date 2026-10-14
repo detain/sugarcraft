@@ -5917,7 +5917,7 @@ final class DocFigureProseDriftTest extends TestCase
         $prose = self::markdownProse($raw);
         $panel = self::sourceOf('Tui/McpPanel.php');
 
-        $needle = 'Config: changed since launch — restart sugar-crush to apply (reload is not implemented)';
+        $needle = 'Config: changed since launch — restart SugarCrush to apply (reload is not implemented)';
         self::assertStringContainsString("'  ' . Lang::t('tui.mcp.config_changed')", $panel, 'the panel row moved — the page quotes it');
         self::assertSame($needle, self::englishCatalogue()['tui.mcp.config_changed'] ?? null, 'the catalogue sentence moved — the page quotes it');
         self::assertStringContainsString($needle, $prose, 'MCP.md no longer quotes the panel sentence byte-for-byte');

@@ -7,6 +7,52 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
+## Fixed (2026-10-14 review wave)
+
+A 15-persona review pass (docs, PHP, TUI, DevOps, end-user, accessibility,
+copy, newcomer, security, QA) whose findings were fixed across six lanes:
+
+- **Two-press destructive keys.** On the Agents dashboard, bare `s` (stop
+  every run) now arms with a countdown and fires only on a second press
+  within 3 s; the `Ctrl+X` `s` chord keeps its immediate behavior. In the
+  settings view, `d` on the list arms the same discard confirmation `Esc`
+  opens — no more dead key, no more one-press loss of staged changes.
+- **`Ctrl+O` walks older.** The first press still expands the newest tool
+  unit; repeat presses within 3 s walk one transcript row older and cycle,
+  and any open palette, picker or overlay disarms the walk.
+- **Session picker guards commands.** `Enter` on a filter word that reads
+  like a slash command is refused with a notice routing you back to the
+  input, instead of resuming the best match.
+- **Color env vars restyle the whole frame.** `NO_COLOR`, `TERM=dumb` and
+  `CLICOLOR_FORCE` now apply across the shell chrome, not just the
+  transcript; piped stdout output is unchanged.
+- **Terminal recovery.** A crash or fatal inside the TUI now runs teardown
+  through `try/finally`, so the terminal is left usable (modes restored)
+  after candy-core `Program` failures; `SIGTERM`/`SIGHUP` stop the loop
+  through the same recovery path.
+- **Session locks are private.** Session lock files are created `0600`
+  instead of relying on the caller's umask.
+- **Retention sweeps more.** `sessionRetentionDays` now also prunes media
+  directories, sub-agent/mailbox logs and share exports, not only session
+  transcripts.
+- **File protection widened.** `ProtectFiles` and the credential-store
+  guards now cover `~/.aws/credentials`, `~/.ssh`, `~/.config/gcloud`,
+  `.netrc`, `~/.npmrc`, `~/.docker/config.json` and `~/.git-credentials`.
+- **Env scrubbing.** Child commands no longer inherit secrets through
+  command-substitution-adjacent environment leakage on the scrubbed paths.
+- **Clearer failures.** `WebSearch` invalid-JSON errors now name the parse
+  cause; `CapturesProcessOutput`'s "Failed to start process" names the
+  command and the reason.
+- **`WorkflowBuilder::withVerification` clone fix** — the setter previously
+  returned an unmutated copy.
+- **Copy pass.** `/agents` output aligned, `/notices` subtitle fixed,
+  directory-picker brand casing, unified error labels, curly quotes removed
+  from generated output, loader failures carry file and cause.
+- **Docs.** CHANGELOG covers 2026-09/10 work, new `GLOSSARY.md` and
+  `docs/README.md` index, the OS environment roster is pinned by a drift
+  test, a broken ARCHITECTURE anchor was fixed, and the onboarding,
+  prerequisites, CI and containers sections in the READMEs were reworked.
+
 ## Feature-parity pass (current) — 2026-08
 
 Driven by an internal 12-agent comparison of
