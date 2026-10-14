@@ -727,6 +727,12 @@ final class SettingsEditor
 
         return match ($msg->rune) {
             '/' => $this->mutate(['searching' => true]),
+            // rv-a11y M3(b): the registered `settings.discard` key `d` was a
+            // dead key on the idle list — only Esc ever reached the discard
+            // question. It now arms that same question, so the destructive
+            // close takes two presses; with nothing to discard it closes
+            // directly, exactly as Esc does, because there is nothing to lose.
+            'd' => $this->hasChanges() ? $this->withConfirm(self::CONFIRM_DISCARD) : null,
             'k' => $this->move(-1),
             'j' => $this->move(1),
             'h' => $this->switchTab(-1),

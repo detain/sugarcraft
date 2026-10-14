@@ -720,12 +720,36 @@ final class KeyboardHandlerTest extends TestCase
      */
     public function testSKeyEmitsStopAllAgentsCmd(): void
     {
+        // rv-a11y M3a: bare `s` is now the app's two-press pattern (mirrors the
+        // per-agent hard-cancel arm in App::deliverAgentControl) — the first
+        // press arms with a countdown status note, the second fires.
         $app = $this->createAgentViewApp(AgentViewMode::List, 0);
 
-        [$nextApp, $cmd] = $this->handler->handle('s', $app);
+        [$armed, $firstCmd] = $this->handler->handle('s', $app);
 
-        $this->assertSame($app, $nextApp);
+        $this->assertNotSame($app, $armed, 'the arming press mutates the shell');
+        $this->assertNull($firstCmd, 'the first bare "s" only arms');
+        $this->assertNotNull($armed->agentsStopArmedAt);
+        $this->assertStringContainsString('press "s" again', (string) $armed->status);
+
+        [$fired, $cmd] = $this->handler->handle('s', $armed);
+
         $this->assertInstanceOf(StopAllAgentsCmd::class, $cmd);
+        $this->assertNull($fired->agentsStopArmedAt, 'firing clears the arming');
+    }
+
+    public function testAnyOtherKeyDisarmsThePendingStopAll(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+        [$armed] = $this->handler->handle('s', $app);
+        $this->assertNotNull($armed->agentsStopArmedAt);
+
+        [$disarmed, $cmd] = $this->handler->handle('j', $armed);
+        $this->assertNull($disarmed->agentsStopArmedAt, 'another key takes the stop-all off the table');
+        $this->assertNull($cmd);
+
+        [$rearmed] = $this->handler->handle('s', $disarmed);
+        $this->assertNotNull($rearmed->agentsStopArmedAt, 'after the disarm, "s" arms afresh instead of firing');
     }
 
     /**
@@ -1823,7 +1847,15 @@ final class KeyboardHandlerTest extends TestCase
         $this->assertNotNull($resume);
         $this->assertInstanceOf(ResumeAgentCmd::class, $resume[1]);
 
-        $stop = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 's'), $app);
+        // rv-a11y M3a: `s` is two-press — the first arms, the second within
+        // the window fires; the claim (not the outcome) is what this test
+        // is about, so it drives both presses.
+        $arm = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 's'), $app);
+        $this->assertNotNull($arm);
+        $this->assertNull($arm[1]);
+        $this->assertNotNull($arm[0]->agentsStopArmedAt);
+
+        $stop = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 's'), $arm[0]);
         $this->assertNotNull($stop);
         $this->assertInstanceOf(StopAllAgentsCmd::class, $stop[1]);
 

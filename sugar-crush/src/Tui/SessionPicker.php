@@ -12,6 +12,7 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Lang;
+use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Forms\TextInput\TextInput;
@@ -751,9 +752,22 @@ final class SessionPicker
     private function filterKey(string $name, ?KeyMsg $msg): array
     {
         switch ($name) {
+            case 'enter':
+                // rv-qa-2 (MAJOR): Enter while filtering resolves the best
+                // match. A query whose text — with or without the '/' the
+                // filter-entry key consumed — names a registered slash command
+                // ("/exit", "/help") is a command mis-typed into the overlay,
+                // and resuming the highlighted row is the opposite of what the
+                // user meant. Refuse loudly: overlay stays open, nothing is
+                // resumed, the notice routes the command to the input line.
+                // SessionPickerSlashFilterTest pins every branch.
+                if (($commandWord = self::slashCommandWord($this->query)) !== null) {
+                    return [$this->withNotice(Lang::t('tui.picker.notice.slash_filter', ['word' => $commandWord])), 'edit', null];
+                }
+
+                return $this->rowKey($name);
             case 'up':
             case 'down':
-            case 'enter':
             case 'ctrl+b':
             case 'tab':
                 return $this->rowKey($name);
@@ -784,6 +798,34 @@ final class SessionPicker
         }
 
         return [$this->withQuery($this->query . $typed), 'edit', null];
+    }
+
+    /**
+     * Does the filter text read as a slash command mis-typed into the overlay?
+     * The `/` that opens the filter is consumed as the mode key (Appendix P
+     * §3.2), so a user who means `/exit<Enter>` leaves the word `exit` as the
+     * query. Matching it case-insensitively against the registered command
+     * names — or accepting a literal leading slash if one did reach the text —
+     * catches that intent without vetoing ordinary filter words. Returns the
+     * matched command name for the notice, or null when the text is a filter.
+     */
+    private static function slashCommandWord(string $query): ?string
+    {
+        $text = trim($query);
+        $word = strtolower(ltrim($text, '/'));
+        if ($word === '' || str_contains($word, ' ')) {
+            // A lone '/' (or '///') in the text is still slash-headed: the
+            // brief's literal rule — never resume on a query starting with '/'.
+            return str_starts_with($text, '/') ? $text : null;
+        }
+
+        foreach (CommandRegistry::all() as $spec) {
+            if (strtolower($spec->name) === $word) {
+                return strtolower($spec->name);
+            }
+        }
+
+        return null;
     }
 
     /** Keys on the list itself. */

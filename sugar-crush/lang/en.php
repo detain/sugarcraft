@@ -2577,4 +2577,8 @@ TXT,
     'keys.dirpicker.path' => 'Type or paste a path to go to',
     'keys.dirpicker.start' => 'Start the session in the directory on screen',
     'keys.dirpicker.close' => 'Cancel; nothing starts',
+
+    // --- fix-tui-interact 2026-10-14 ---
+    'tui.picker.notice.slash_filter' => '"{word}" reads like a slash command, not a filter — Enter here would resume the best match. Press Escape and type the command in the input instead.',
+    'tui.app.stop_all_armed' => 'About to stop every running agent — press "s" again within 3 s to confirm.',
 ];

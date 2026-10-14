@@ -1726,8 +1726,16 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame(['resume'], $this->controls($session, 'run-2'));
             },
             'agents.stop-all' => function (array $k): void {
+                // rv-a11y M3a: bare `s` is two-press now — the first arms with
+                // a countdown note, the confirming press reaches the runs.
                 [$app, $session] = $this->dashboardOn($this->stripApp(), 'run-2');
-                $app->update($k[0]);
+                [$armed] = $app->update($k[0]);
+                $this->assertNotNull($armed->agentsStopArmedAt, 'the first press arms');
+                foreach (['run-1', 'run-2', 'run-3'] as $run) {
+                    $this->assertSame([], $this->controls($session, $run), "{$run} untouched until the confirming press");
+                }
+
+                $armed->update($k[0]);
                 foreach (['run-1', 'run-2', 'run-3'] as $run) {
                     $this->assertSame(['cancel'], $this->controls($session, $run), "{$run} is asked to stop");
                 }

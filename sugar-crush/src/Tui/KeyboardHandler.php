@@ -572,6 +572,14 @@ final class KeyboardHandler
             if ($result !== null) {
                 return $result;
             }
+
+            // rv-a11y M3a: a key the dashboard declines still takes a pending
+            // stop-all off the table — the disarmed copy inside
+            // handleAgentViewKey() is discarded with its null return, so the
+            // disarm is re-applied to the app the fall-through keeps using.
+            if ($key !== 's' && $app->agentsStopArmedAt !== null) {
+                $app = $app->withAgentsStopArmedAt(null);
+            }
         }
 
         // An OPEN menu takes the arrow/vim keys first. Ordered before the
@@ -700,6 +708,13 @@ final class KeyboardHandler
             return $this->handleAgentAttachKey($key, $app);
         }
 
+        // rv-a11y M3a: any key other than `s` takes the pending stop-all
+        // request off the table — the same disarm convention the session
+        // picker's armed `d` uses ({@see SessionPicker::handleKey()}).
+        if ($key !== 's' && $app->agentsStopArmedAt !== null) {
+            $app = $app->withAgentsStopArmedAt(null);
+        }
+
         // Alt+1..9 — jump straight to slot N of the dashboard (crush_feat.md
         // §5 E5). The slot→agent mapping is AgentDashboardPane's, not a second
         // ordering invented here, so the number the user presses is the number
@@ -725,7 +740,18 @@ final class KeyboardHandler
         }
 
         if ($key === 's') {
-            return [$app, new StopAllAgentsCmd()];
+            // rv-a11y M3a: stopping EVERY run is destructive, so bare `s` now
+            // mirrors the per-agent hard-cancel two-press in
+            // {@see App::deliverAgentControl()} — first press arms with a
+            // countdown note, a second within {@see App::STOP_ALL_ARMED_SECONDS}
+            // fires, any other key disarms above. The Ctrl+X leader's `s` chord
+            // (handleOpenAgentViewKey) is already two-step and stays immediate.
+            $armed = $app->agentsStopArmedAt;
+            if ($armed !== null && microtime(true) - $armed <= App::STOP_ALL_ARMED_SECONDS) {
+                return [$app->withAgentsStopArmedAt(null), new StopAllAgentsCmd()];
+            }
+
+            return [$app->withAgentsStopArmedAt(microtime(true))->withStatus(Lang::t('tui.app.stop_all_armed')), null];
         }
 
         if ($key === 'q') {

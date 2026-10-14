@@ -41,6 +41,7 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\ToolResult;
 use SugarCraft\Layout\Dock\DockLayout;
 use SugarCraft\Layout\Dock\Side;
 use SugarCraft\Crush\Tui\AgentViewMode;
@@ -149,6 +150,12 @@ final class App implements Model
 
     /** A second cancel of the same runs within this many seconds stops them at once ({@see $agentCancelArmed}). */
     public const AGENT_HARD_CANCEL_SECONDS = 3.0;
+
+    /** A second `s` in the Agents dashboard within this many seconds stops every run ({@see $agentsStopArmedAt}). */
+    public const STOP_ALL_ARMED_SECONDS = 3.0;
+
+    /** Consecutive `Ctrl+O` presses within this many seconds walk up the transcript instead of retoggling the newest row ({@see $toolWalkState}). */
+    public const TOOL_WALK_WINDOW_SECONDS = 3.0;
 
     private function __construct(
         public readonly ProviderInterface $provider,
@@ -462,6 +469,21 @@ final class App implements Model
          * @var array{ids: list<string>, at: float}|null
          */
         public readonly ?array $agentCancelArmed = null,
+        /**
+         * When the dashboard's `s` last armed a stop-all (rv-a11y M3a): a
+         * second `s` within {@see STOP_ALL_ARMED_SECONDS} emits the real
+         * `StopAllAgentsCmd`, mirroring the per-run soft/hard cancel pair.
+         */
+        public readonly ?float $agentsStopArmedAt = null,
+        /**
+         * Which transcript row the last `Ctrl+O` toggled (rv-a11y M3c):
+         * index `0` is the newest unit (Chat's own route), and a press
+         * within {@see TOOL_WALK_WINDOW_SECONDS} walks one row older, the
+         * keyboard equivalent of clicking an older row.
+         *
+         * @var array{at: float, index: int}|null
+         */
+        public readonly ?array $toolWalkState = null,
         /**
          * The runs the user paused and has not let go yet, so `Ctrl+X p`
          * knows which way it toggles. A run that hit the pause cap goes on by
@@ -871,6 +893,15 @@ final class App implements Model
     public function withAgentViewLeader(bool $down): self
     {
         return $down === $this->agentViewLeader ? $this : $this->mutate(agentViewLeader: $down);
+    }
+
+    /**
+     * The same shell with the Agents dashboard stop-all arming stamp set or
+     * cleared ({@see $agentsStopArmedAt}, rv-a11y M3a two-press `s`).
+     */
+    public function withAgentsStopArmedAt(?float $at): self
+    {
+        return $at === $this->agentsStopArmedAt ? $this : $this->mutate(agentsStopArmedAt: $at);
     }
 
     /** Whether the user paused run $id and has not let it go ({@see $agentPaused}). */
@@ -4121,6 +4152,27 @@ final class App implements Model
             return [$this, null];
         }
 
+        // rv-a11y M3(c): `Ctrl+O` stops being newest-only at the shell. The
+        // first press of a burst is delegated untouched — Chat's own
+        // collapse/expand of the newest unit, byte-identical to yesterday —
+        // and every further press within TOOL_WALK_WINDOW_SECONDS walks one
+        // transcript row older, cycling. This is the one delivery choke point
+        // both keyboard doors pass (the E666 note above), so claiming the
+        // chord here cannot steal it from a modal: the abandoned-palette and
+        // stand-down guards have already run, and every surface that would
+        // answer Ctrl+O before the transcript expansion arm — an open palette,
+        // session picker or directory picker inside Chat, or a settings,
+        // media-form, video-player or agent-view overlay above it — disarms
+        // the walk, so that keystroke reaches the modal exactly as before.
+        if ($msg instanceof KeyMsg && self::isToolWalkChord($msg)
+            && $this->settingsEditor === null && $this->mediaForm === null
+            && $this->videoPlayer === null && $this->agentViewTarget === null
+            && $this->chat?->palette() === null && $this->chat?->sessionPicker() === null
+            && $this->chat?->dirPicker() === null
+        ) {
+            return $this->walkToolOutput($msg);
+        }
+
         [$next, $cmd] = $this->chat->update($msg);
 
         if (!$next instanceof Chat || $next === $this->chat) {
@@ -4128,6 +4180,97 @@ final class App implements Model
         }
 
         return [$this->withChat($next)->autoEnablePanes(), $cmd];
+    }
+
+    /**
+     * Is this keystroke exactly the `Ctrl+O` chord Chat's newest-expansion
+     * arm answers? Mirrors that arm's shape so the walk intercepts precisely
+     * the presses that would reach it — nothing wider.
+     */
+    private static function isToolWalkChord(KeyMsg $msg): bool
+    {
+        return $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o';
+    }
+
+    /**
+     * The transcript's expandable row units, newest first: one per history
+     * message carrying a settled thought, a running placeholder, or tool
+     * results. The keys are the same ones `Chat::$expanded` is keyed by (see
+     * {@see Renderer::thoughtKey()} and Chat's `latestToolResultIds()` — the
+     * identical `$result->id ?? $result->name` ladder), so the click zones,
+     * Chat's own `Ctrl+O` and this walk drive ONE expansion state.
+     *
+     * @return list<list<string>>
+     */
+    private function toolWalkUnits(): array
+    {
+        $units = [];
+
+        foreach (array_reverse($this->chat?->history ?? []) as $message) {
+            $keys = [];
+            if ($message->reasoning !== null && trim($message->reasoning) !== '') {
+                $keys[] = Renderer::thoughtKey($message->reasoning);
+            }
+            if ($message->pendingToolCallId !== null) {
+                $keys[] = $message->pendingToolCallId;
+            }
+            foreach ($message->toolResults as $result) {
+                if ($result instanceof ToolResult) {
+                    $keys[] = $result->id ?? $result->name;
+                }
+            }
+            if ($keys !== []) {
+                $units[] = $keys;
+            }
+        }
+
+        return $units;
+    }
+
+    /**
+     * The route behind `Ctrl+O` at the shell (rv-a11y M3c). The FIRST press
+     * of a burst is delegated to Chat untouched — the newest-unit behavior
+     * users already have, byte-identical. Each further press within
+     * {@see TOOL_WALK_WINDOW_SECONDS} toggles the next-older row unit
+     * ({@see toolWalkUnits()}) as one unit, following the unit's first key
+     * exactly like Chat's own batch toggle, and cycles once the transcript
+     * runs out. A burst that times out restarts at the newest row.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function walkToolOutput(KeyMsg $msg): array
+    {
+        $units = $this->toolWalkUnits();
+        if ($units === []) {
+            return [$this, null];
+        }
+
+        $now = microtime(true);
+        $state = $this->toolWalkState;
+        $index = ($state !== null && $now - $state['at'] <= self::TOOL_WALK_WINDOW_SECONDS
+            ? $state['index'] + 1
+            : 0) % count($units);
+
+        if ($index === 0) {
+            [$next, $cmd] = $this->chat->update($msg);
+            $app = $next instanceof Chat && $next !== $this->chat
+                ? $this->withChat($next)->autoEnablePanes()
+                : $this;
+
+            return [$app->mutate(toolWalkState: ['at' => $now, 'index' => 0]), $cmd];
+        }
+
+        $chat = $this->chat;
+        $expand = !$chat->isToolOutputExpanded($units[$index][0]);
+        foreach ($units[$index] as $id) {
+            if ($chat->isToolOutputExpanded($id) !== $expand) {
+                $chat = $chat->toggleToolOutput($id);
+            }
+        }
+
+        $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
+
+        return [$app->mutate(toolWalkState: ['at' => $now, 'index' => $index]), null];
     }
 
     /**
@@ -4365,6 +4508,8 @@ final class App implements Model
             agentBroadcast: array_key_exists('agentBroadcast', $changes) ? $changes['agentBroadcast'] : $this->agentBroadcast,
             agentViewLeader: array_key_exists('agentViewLeader', $changes) ? $changes['agentViewLeader'] : $this->agentViewLeader,
             agentCancelArmed: array_key_exists('agentCancelArmed', $changes) ? $changes['agentCancelArmed'] : $this->agentCancelArmed,
+            agentsStopArmedAt: array_key_exists('agentsStopArmedAt', $changes) ? $changes['agentsStopArmedAt'] : $this->agentsStopArmedAt,
+            toolWalkState: array_key_exists('toolWalkState', $changes) ? $changes['toolWalkState'] : $this->toolWalkState,
             agentPaused: array_key_exists('agentPaused', $changes) ? $changes['agentPaused'] : $this->agentPaused,
             paneAutoShow: array_key_exists('paneAutoShow', $changes) ? $changes['paneAutoShow'] : $this->paneAutoShow,
         );

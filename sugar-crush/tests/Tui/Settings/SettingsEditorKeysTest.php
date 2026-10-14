@@ -125,6 +125,32 @@ final class SettingsEditorKeysTest extends TestCase
         $this->assertNotNull($saving->settingsEditor?->preview, 's goes to the preview instead');
     }
 
+    public function testDKeyIsTheTwoPressDiscardRouteOnTheIdleList(): void
+    {
+        // rv-a11y M3(b): the registered settings.discard key `d` was dead on
+        // the idle list — the second press of the question it now opens is the
+        // route that actually closes.
+        $app = $this->press($this->staged(), new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNotNull($app->settingsEditor, 'the first d asks instead of closing');
+        $this->assertSame(SettingsEditor::CONFIRM_DISCARD, $app->settingsEditor->confirm);
+
+        $answered = $this->press($app, new KeyMsg(KeyType::Char, 'n'));
+        $this->assertNull($answered->settingsEditor?->confirm, 'n keeps editing');
+        $this->assertSame(['maxToolSteps' => 40], $answered->settingsEditor?->set);
+
+        $discarded = $this->press($app, new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNull($discarded->settingsEditor, 'the second d throws the changes away');
+    }
+
+    public function testDKeyClosesDirectlyWhenThereIsNothingToDiscard(): void
+    {
+        // No changes: the question would be theatre — `d` closes like Esc does.
+        $app = $this->press($this->app('max tool steps'), new KeyMsg(KeyType::Char, 'd'));
+
+        $this->assertNull($app->settingsEditor, 'd on a clean list closes the settings view');
+
+    }
+
     public function testEnterOnATrustListAsksAndYGrantsTheProject(): void
     {
         $app = $this->press($this->app('trustedProjectSettings'), new KeyMsg(KeyType::Enter));
