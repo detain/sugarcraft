@@ -709,6 +709,37 @@ YAML;
     // Helpers
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // rv-qa-3 / rv-enduser-7 — the package's own presets are never audited
+    // -------------------------------------------------------------------------
+
+    public function testThePackageBundledPresetsAreNeverAudited(): void
+    {
+        $registry = new AgentPresetRegistry([$this->shippedAgentsDir()]);
+
+        $this->assertNotEmpty($registry->list());
+        $this->assertSame([], $registry->ignoredFrontmatter(), 'shipping a preset is not a finding to report to the user');
+    }
+
+    public function testTheAuditStillSoundsForPresetsOutsideThePackage(): void
+    {
+        file_put_contents($this->tempDir . '/loud.md', <<<'YAML'
+---
+name: loud
+description: A preset declaring an inert key
+memory: project
+---
+# loud
+YAML);
+
+        $registry = new AgentPresetRegistry([$this->tempDir]);
+        $registry->list();
+
+        $ignored = $registry->ignoredFrontmatter();
+        $this->assertArrayHasKey('loud', $ignored);
+        $this->assertStringContainsString('memory', implode(' ', $ignored['loud']));
+    }
+
     /**
      * Absolute path to the repo's shipped .sugar-crush/agents/ preset directory.
      */

@@ -168,6 +168,35 @@ final class AgentLiveRegistryTest extends TestCase
     }
 
     /**
+     * rv-a11y-4: with the static spinner engaged, every frame resolves to
+     * index 0 no matter how far the clock runs — one glyph, zero churn.
+     * (50.48 s and 500.48 s are chosen so the cycling computation lands on
+     * frames 1 and 6: without the gate this test is red, not vacuous.)
+     */
+    public function testTheStaticSpinnerPinsEveryFrameToZeroWhenEngaged(): void
+    {
+        self::assertFalse(AgentLiveRegistry::staticSpinner());
+
+        AgentLiveRegistry::setStaticSpinner(true);
+
+        try {
+            $clock = 50.48;
+            $registry = AgentLiveRegistry::new(static function () use (&$clock): float {
+                return $clock;
+            });
+            self::assertSame(0, $registry->spinnerFrame(), 'the ctor resolves frame 0 even past the first cycle');
+
+            $clock = 500.48;
+            $registry->advance();
+            self::assertSame(0, $registry->spinnerFrame(), 'twelve seconds later, still frame 0');
+        } finally {
+            AgentLiveRegistry::setStaticSpinner(false);
+        }
+
+        self::assertFalse(AgentLiveRegistry::staticSpinner());
+    }
+
+    /**
      * @param list<ActivityItem> $items
      * @param array<string, int|float> $stats
      */

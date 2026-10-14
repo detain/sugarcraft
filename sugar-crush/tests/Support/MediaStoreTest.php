@@ -351,6 +351,34 @@ final class MediaStoreTest extends TestCase
         return $found;
     }
 
+    /**
+     * rv-devops-4: sweepExpiredDirs removes only aged SESSION DIRECTORIES of
+     * the explicit root — a fresh directory, a stray top-level file and a
+     * symlink are all kept; days<=0 touches nothing.
+     */
+    public function testSweepExpiredDirsRemovesAgedSessionDirectoriesKeepingFreshStraysAndLinks(): void
+    {
+        $root = $this->storeRoot . '/media-sweep';
+        mkdir($root . '/aged', 0o700, true);
+        file_put_contents($root . '/aged/x.png', "x\n");
+        touch($root . '/aged', time() - 8 * 86400 - 10);
+        mkdir($root . '/fresh', 0o700, true);
+        file_put_contents($root . '/fresh/y.png', "y\n");
+        touch($root . '/fresh', time());
+        file_put_contents($root . '/stray.png', "s\n");
+        symlink($root . '/fresh', $root . '/linked');
+
+        self::assertSame(0, MediaStore::sweepExpiredDirs(0));
+        self::assertDirectoryExists($root . '/aged');
+
+        self::assertSame(1, MediaStore::sweepExpiredDirs(7, time(), $root));
+        self::assertDirectoryDoesNotExist($root . '/aged');
+        self::assertDirectoryExists($root . '/fresh');
+        self::assertFileExists($root . '/fresh/y.png');
+        self::assertFileExists($root . '/stray.png');
+        self::assertFileExists($root . '/linked');
+    }
+
     private function purgeStoreTree(string $dir): void
     {
         if (!is_dir($dir)) {

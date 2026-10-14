@@ -38,7 +38,7 @@ use SugarCraft\Crush\Tools\PathJail;
  * Output goes to stdout, which {@see Chat::handleShareCommand()} captures
  * into the transcript.
  *
- * @mirrors charmbracelet/<repo>.ShareCommand
+ * @mirrors charmbracelet/crush ShareCommand
  */
 final class ShareCommand
 {
@@ -222,5 +222,61 @@ final class ShareCommand
         echo "\n";
         echo '  ' . Lang::t('cmd.share.usage-hint', ['exports' => self::EXPORTS_SUBDIR]) . "\n";
         echo "\n";
+    }
+
+    /**
+     * Delete export files older than $days, returning how many went (review
+     * rv-devops-4: the retention sweep covered sessions only, so exports
+     * accumulated forever). Called from the launch retention path
+     * ({@see \SugarCraft\Crush\Agents\AgentManager::pruneSessionArtifacts()})
+     * only when `SUGARCRUSH_SESSION_RETENTION_DAYS` is positive — opt-in, like
+     * the session sweep it joins.
+     *
+     * Age basis is the file's own mtime; the layout under the exports root is
+     * flat files (one per share), so no tree is walked. Symbolic links and
+     * anything that is not a plain file are left alone, and every failure is
+     * swallowed — an export that cannot be deleted today is not a reason to
+     * disturb the launch, mirroring the sweep's session-side posture.
+     *
+     * @param string|null $exportsRoot where to sweep; null is the default
+     *        `~/.sugar-crush/exports` under an owned home (a seam for tests)
+     */
+    public static function sweepExpiredExports(int $days, ?int $now = null, ?string $exportsRoot = null): int
+    {
+        if ($days <= 0) {
+            return 0;
+        }
+
+        if ($exportsRoot === null) {
+            $home = HomeDirectory::owned();
+            if ($home === null) {
+                return 0;
+            }
+            $exportsRoot = rtrim($home, '/') . '/' . self::EXPORTS_SUBDIR;
+        }
+
+        if (!is_dir($exportsRoot)) {
+            return 0;
+        }
+
+        $cutoff = ($now ?? time()) - $days * 86400;
+        $removed = 0;
+        foreach (scandir($exportsRoot) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $exportsRoot . '/' . $entry;
+            if (is_link($path) || !is_file($path)) {
+                continue;
+            }
+            $mtime = @filemtime($path);
+            if ($mtime !== false && $mtime <= $cutoff) {
+                if (@unlink($path)) {
+                    $removed++;
+                }
+            }
+        }
+
+        return $removed;
     }
 }

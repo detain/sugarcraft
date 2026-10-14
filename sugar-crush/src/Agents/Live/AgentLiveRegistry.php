@@ -38,6 +38,24 @@ final class AgentLiveRegistry
     /** Milliseconds per spinner frame: about 12 frames a second at most. */
     public const SPINNER_FRAME_MS = 80;
 
+    /**
+     * Reduced-motion switch (review rv-a11y-4): when on, {@see frameAt()}
+     * answers one static frame and the spinner glyph never advances, while
+     * elapsed-seconds movement still repaints. Gated HERE rather than at the
+     * readers because every surface that draws the spinner (the transcript
+     * renderer, the activity line) indexes {@see SPINNER} by
+     * {@see spinnerFrame()} — zeroing the index makes them all static at once.
+     *
+     * THE LAUNCH WIRE-UP IS OWED by the CLI lane, deliberately not read here:
+     * the environment name `SUGARCRUSH_REDUCED_MOTION` (values `1`, `true`,
+     * `yes`, like this app's other truthy env reads) must be tabulated in
+     * docs/ENVIRONMENT.md and the help roster in the same change that reads
+     * it, or the env-roster drift guard reddens — so the getenv call, the doc
+     * row, and the help entry land together on that side. The one-liner:
+     * `AgentLiveRegistry::setStaticSpinner(in_array(strtolower((string) getenv('SUGARCRUSH_REDUCED_MOTION')), ['1', 'true', 'yes'], true));`
+     */
+    private static bool $staticSpinner = false;
+
     /** @var \WeakMap<object, self>|null */
     private static ?\WeakMap $owned = null;
 
@@ -214,7 +232,27 @@ final class AgentLiveRegistry
 
     private static function frameAt(float $seconds): int
     {
+        if (self::$staticSpinner) {
+            return 0;
+        }
+
         return intdiv((int) floor($seconds * 1000), self::SPINNER_FRAME_MS) % count(self::SPINNER);
+    }
+
+    /**
+     * Turn the static spinner on or off ({@see $staticSpinner} for why and for
+     * the launch wire-up this waits on). Process-wide: the spinner is one
+     * presentation fact about the terminal, not per-run state.
+     */
+    public static function setStaticSpinner(bool $static): void
+    {
+        self::$staticSpinner = $static;
+    }
+
+    /** Whether the spinner is pinned to its first frame (see {@see setStaticSpinner()}). */
+    public static function staticSpinner(): bool
+    {
+        return self::$staticSpinner;
     }
 
     private function evictFinished(): void

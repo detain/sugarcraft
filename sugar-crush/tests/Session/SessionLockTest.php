@@ -139,4 +139,45 @@ final class SessionLockTest extends TestCase
         self::assertNotNull($second);
         self::assertFalse($first->isEnforced());
     }
+
+    /**
+     * rv-qa-4: the lock file names a holder, and the house law is that nothing
+     * under ~/.sugar-crush is born group-readable. `fopen('c+e')` alone would
+     * inherit the process umask (0022 here → 0664), so acquire() settles the
+     * mode on the inode before it writes the pid.
+     */
+    public function testTheLockFileIsCreatedPrivate(): void
+    {
+        $lock = SessionLock::acquire($this->dir . '/sessions', 'abc123');
+        self::assertNotNull($lock);
+
+        $path = SessionLock::pathFor($this->dir . '/sessions', 'abc123');
+        clearstatcache(true, $path);
+        $stat = stat($path);
+        self::assertIsArray($stat);
+        self::assertSame(0o600, $stat['mode'] & 0o777);
+    }
+
+    /**
+     * The tightening is not just a birth right: a lock file left loose by an
+     * older build (or any other hand) is chmod'ed by the next acquirer, and
+     * the stale pid text inside is replaced as before.
+     */
+    public function testALeakedLooseLockFileIsTightenedByTheNextAcquirer(): void
+    {
+        mkdir($this->dir . '/sessions', 0o700, true);
+        $path = SessionLock::pathFor($this->dir . '/sessions', 'abc123');
+        file_put_contents($path, "999999\n");
+        chmod($path, 0o664);
+
+        $lock = SessionLock::acquire($this->dir . '/sessions', 'abc123');
+        self::assertNotNull($lock);
+        self::assertTrue($lock->isEnforced());
+
+        clearstatcache(true, $path);
+        $stat = stat($path);
+        self::assertIsArray($stat);
+        self::assertSame(0o600, $stat['mode'] & 0o777);
+        self::assertSame(getmypid(), SessionLock::holderPid($this->dir . '/sessions', 'abc123'));
+    }
 }

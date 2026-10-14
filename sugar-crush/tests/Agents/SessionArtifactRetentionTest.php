@@ -95,6 +95,70 @@ final class SessionArtifactRetentionTest extends TestCase
         $this->assertDirectoryDoesNotExist($mail . '/' . $gone);
     }
 
+    /**
+     * rv-devops-4: with retention opted in, aged artifacts go even when their
+     * session still exists — sub-agent dirs by the same newest-mtime basis,
+     * media session dirs by their directory mtime (the last publish bumps it),
+     * share exports file by file. Fresh work, stray files and links survive.
+     */
+    public function testRetentionDaysSweepsAgedArtifactsOfLiveSessionsToo(): void
+    {
+        $old = time() - 8 * 86400 - 3600;
+        $this->file('subagents/live2/old-run.jsonl', $old);
+        $this->file('media/oldsess/art.png', $old);
+        $this->file('media/freshsess/art.png', time());
+        $this->file('exports/old.md', $old);
+        $this->file('exports/fresh.md', time());
+        // Neither sweeper follows a link, in either root.
+        symlink($this->home . '/media/freshsess', $this->home . '/media/linked');
+        $this->file('elsewhere/keep.txt', $old);
+        symlink($this->home . '/elsewhere', $this->home . '/subagents/linked');
+
+        putenv('SUGARCRUSH_SESSION_RETENTION_DAYS=7');
+
+        try {
+            // Every session exists: only the age leg can fire.
+            $removed = AgentManager::pruneSessionArtifacts(static fn (string $id): bool => true, $this->home);
+        } finally {
+            putenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        }
+
+        $this->assertSame(3, $removed, 'aged subagent dir + aged media dir + aged export file');
+        $this->assertDirectoryDoesNotExist($this->home . '/subagents/live2');
+        $this->assertDirectoryDoesNotExist($this->home . '/media/oldsess');
+        $this->assertFileDoesNotExist($this->home . '/exports/old.md');
+        $this->assertFileExists($this->home . '/media/freshsess/art.png');
+        $this->assertFileExists($this->home . '/exports/fresh.md');
+        $this->assertFileExists($this->home . '/elsewhere/keep.txt');
+        $this->assertTrue(is_link($this->home . '/media/linked'));
+        $this->assertTrue(is_link($this->home . '/subagents/linked'));
+    }
+
+    /**
+     * Retention off (the default) keeps every byte the sweep could reach: the
+     * gone-session legs stay, the aged-live legs never fire.
+     */
+    public function testRetentionOffLeavesAgedArtifactsOfLiveSessionsAlone(): void
+    {
+        $old = time() - 8 * 86400 - 3600;
+        $this->file('subagents/live2/old-run.jsonl', $old);
+        $this->file('media/oldsess/art.png', $old);
+        $this->file('exports/old.md', $old);
+
+        putenv('SUGARCRUSH_SESSION_RETENTION_DAYS=0');
+
+        try {
+            $removed = AgentManager::pruneSessionArtifacts(static fn (string $id): bool => true, $this->home);
+        } finally {
+            putenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        }
+
+        $this->assertSame(0, $removed);
+        $this->assertFileExists($this->home . '/subagents/live2/old-run.jsonl');
+        $this->assertFileExists($this->home . '/media/oldsess/art.png');
+        $this->assertFileExists($this->home . '/exports/old.md');
+    }
+
     private function file(string $relative, int $mtime): void
     {
         $path = $this->home . '/' . $relative;

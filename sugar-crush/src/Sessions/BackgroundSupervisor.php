@@ -23,7 +23,7 @@ use SugarCraft\Crush\Tui\StallWarning;
  * each session reports a heartbeat on a fixed interval, and the supervisor
  * marks it stalled if heartbeats stop arriving.
  *
- * Mirrors charmbracelet/charmcrush background session supervisor design.
+ * Mirrors charmbracelet/crush background session supervisor design.
  *
  * ## IPC trust model (audit M5)
  *

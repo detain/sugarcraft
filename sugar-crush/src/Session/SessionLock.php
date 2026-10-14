@@ -86,6 +86,21 @@ final class SessionLock
                 return self::unenforced($sessionId);
             }
 
+            // The lock file carries a pid, so it gets the house private-file
+            // mode (review rv-qa-4: `fopen` alone created it at the umask
+            // default — 0664 under the usual 0022). The mode is settled on
+            // the inode BEFORE any payload is written (the AtomicJsonFile
+            // ordering law), and a file leaked by an earlier loose build is
+            // tightened here on the way in, because this open is the moment
+            // its content becomes live again. Failure to chmod fails open
+            // like every other unhopeful path in this class: a session whose
+            // lock file cannot be tightened is still correctly locked.
+            if (@chmod($path, 0o600) === false) {
+                fclose($handle);
+
+                return self::unenforced($sessionId);
+            }
+
             $wouldBlock = 0;
             if (!@flock($handle, LOCK_EX | LOCK_NB, $wouldBlock)) {
                 fclose($handle);

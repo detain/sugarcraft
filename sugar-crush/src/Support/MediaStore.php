@@ -43,8 +43,13 @@ use SugarCraft\Crush\Media\MediaKind;
  * with an exclusive `xb` create, so two racing writers can only ever collide
  * onto the next `[number]`, never tear or clobber each other's bytes.
  *
- * NO SWEEP. Retention is a Wave-7 ruling (Appendix C); nothing here deletes
- * on a timer.
+ * SWEEP IS OPT-IN. {@see sweepExpiredDirs()} deletes a session's whole media
+ * directory once it has aged past the launch retention window, driven by the
+ * same `SUGARCRUSH_SESSION_RETENTION_DAYS` gate as the session sweep it joins
+ * (review rv-devops-4 — the store used to grow unbounded). The age basis is
+ * the directory's own mtime: every publish creates a file inside it (and
+ * renames a `.partial` in), which bumps it, so dir-mtime IS the last-publish
+ * clock. Retention off (the default, `0`) means nothing here ever deletes.
  */
 final class MediaStore
 {
@@ -253,7 +258,7 @@ final class MediaStore
         return $bytes === false ? null : $bytes;
     }
 
-    /** Remove one artifact; false when the id names nothing. Retention sweeps are NOT this class (Wave-7). */
+    /** Remove one artifact by id; false when the id names nothing. Age sweeps are {@see sweepExpiredDirs()}, not this method. */
     public function delete(string $artifactId): bool
     {
         $path = $this->pathFor($artifactId);
@@ -277,6 +282,83 @@ final class MediaStore
         }
 
         return $home . '/.sugar-crush/media';
+    }
+
+    /**
+     * Delete whole session directories whose last publish aged past $days
+     * (review rv-devops-4), returning how many went. Called from the launch
+     * retention path ({@see \SugarCraft\Crush\Agents\AgentManager::pruneSessionArtifacts()})
+     * only when `SUGARCRUSH_SESSION_RETENTION_DAYS` is positive — off by
+     * default, exactly like the session sweep it joins.
+     *
+     * Each entry of the media root is one session's directory, so the sweep
+     * judges directories by their own mtime (the last-publish clock, per the
+     * class doc-block) and removes the bounded two-level tree inside. Stray
+     * top-level files and symbolic links are left alone; an unreadable root or
+     * a directory that refuses to empty fails open — the launch sweep never
+     * disturbs the session it runs for.
+     *
+     * @param string|null $mediaRoot where to sweep; null is the default
+     *        `~/.sugar-crush/media` under an owned home (a seam for tests)
+     */
+    public static function sweepExpiredDirs(int $days, ?int $now = null, ?string $mediaRoot = null): int
+    {
+        if ($days <= 0) {
+            return 0;
+        }
+
+        if ($mediaRoot === null) {
+            try {
+                $mediaRoot = self::defaultRoot();
+            } catch (\RuntimeException) {
+                return 0;
+            }
+        }
+
+        if (!is_dir($mediaRoot)) {
+            return 0;
+        }
+
+        $cutoff = ($now ?? time()) - $days * 86400;
+        $removed = 0;
+        foreach (scandir($mediaRoot) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $dir = $mediaRoot . '/' . $entry;
+            if (is_link($dir) || !is_dir($dir)) {
+                continue;
+            }
+            $mtime = @filemtime($dir);
+            if ($mtime === false || $mtime > $cutoff) {
+                continue;
+            }
+            if (self::removeSweptTree($dir, 2)) {
+                $removed++;
+            }
+        }
+
+        return $removed;
+    }
+
+    /** Remove $dir and what is in it, $depth levels down; a link is unlinked, never followed. */
+    private static function removeSweptTree(string $dir, int $depth): bool
+    {
+        foreach (scandir($dir) ?: [] as $entry) {
+            $path = $dir . '/' . $entry;
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            if (!is_link($path) && is_dir($path)) {
+                if ($depth <= 0 || !self::removeSweptTree($path, $depth - 1)) {
+                    return false;
+                }
+                continue;
+            }
+            @unlink($path);
+        }
+
+        return @rmdir($dir);
     }
 
     /**

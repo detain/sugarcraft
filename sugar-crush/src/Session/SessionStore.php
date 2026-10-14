@@ -9,7 +9,7 @@ use PDO;
 /**
  * SQLite session persistence with WAL mode.
  *
- * Mirrors charmbracelet/charmbracelet session storage.
+ * Mirrors charmbracelet/crush session storage.
  */
 final class SessionStore
 {

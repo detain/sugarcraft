@@ -18,7 +18,7 @@ use SugarCraft\Crush\Tools\Tool;
  * stdin/stdout pipes using JSON messages. Each message is a single line
  * terminated by a newline character.
  *
- * Mirrors charmbracelet/charmcrush ProcessExecutor implementation.
+ * Mirrors charmbracelet/crush ProcessExecutor implementation.
  */
 final class ProcessExecutor implements ExecutorInterface
 {

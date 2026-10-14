@@ -15,7 +15,7 @@ use SugarCraft\Crush\Support\ProcessContainment;
  * returning results as they complete via a Generator. Coordinates execution through
  * an ExecutorInterface which handles the actual spawning mechanism.
  *
- * Mirrors charmbracelet/charmcrush AgentWorkerPool implementation.
+ * Mirrors charmbracelet/crush AgentWorkerPool implementation.
  */
 final class AgentWorkerPool
 {
@@ -1132,7 +1132,7 @@ final class AgentWorkerPool
      * executeAll() checks $this->stopOnFirstFailure when yielding results.
      *
      * NOTE: This is an extension beyond the base 6-method spec — not in the
-     * charmbracelet/charmcrush AgentWorkerPool contract.
+     * charmbracelet/crush AgentWorkerPool contract.
      */
     public function withStopOnFirstFailure(bool $stop): self
     {
@@ -1197,14 +1197,6 @@ final class AgentWorkerPool
     public function maxRetries(): int
     {
         return $this->maxRetries;
-    }
-
-    /**
-     * Returns the configured concurrency limit, or null when the pool has none.
-     */
-    public function getMaxConcurrent(): ?int
-    {
-        return $this->maxConcurrent;
     }
 
     /**

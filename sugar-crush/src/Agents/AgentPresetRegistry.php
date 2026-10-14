@@ -251,9 +251,21 @@ final class AgentPresetRegistry
                 // so a genuine programming error still surfaces.
                 try {
                     $presets[$name] = $this->parsePresetFile($file);
-                    $ignored = FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, $this->lastFrontmatter);
-                    if ($ignored !== []) {
-                        $this->ignoredFrontmatter[$name] = $ignored;
+                    // The audit exists to tell a USER that a file they (or an
+                    // import) wrote asks for something this build ignores.
+                    // The presets shipped INSIDE this package are none of the
+                    // user's business: launching from the package's own tree
+                    // warned on every start about `memory:`/`color:` in the
+                    // bundled trio — files a user cannot act on (reviews
+                    // rv-qa-3, rv-enduser-7). Bundle the notice out of scope
+                    // by directory identity, not by key: everything below the
+                    // package's own `.sugar-crush/agents/` stays quiet, and
+                    // every user- or project-authored preset keeps its voice.
+                    if (!self::isBundledPresetPath($file)) {
+                        $ignored = FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, $this->lastFrontmatter);
+                        if ($ignored !== []) {
+                            $this->ignoredFrontmatter[$name] = $ignored;
+                        }
                     }
                 } catch (\RuntimeException | \InvalidArgumentException | \TypeError $e) {
                     $this->skippedFiles[$file] = $e->getMessage();
@@ -305,6 +317,36 @@ final class AgentPresetRegistry
     public function ignoredFrontmatter(): array
     {
         return $this->ignoredFrontmatter;
+    }
+
+    /**
+     * The package-bundled presets directory (`<package root>/.sugar-crush/
+     * agents`, beside this class's own `src/`), or null when this install
+     * ships none.
+     */
+    private static function bundledPresetsDirectory(): ?string
+    {
+        $real = realpath(\dirname(__DIR__, 2) . '/.sugar-crush/agents');
+
+        return $real === false || !is_dir($real) ? null : $real;
+    }
+
+    /**
+     * True when $file is one of the presets shipped INSIDE this package —
+     * {@see bundledPresetsDirectory()} by resolved-path identity, so a user
+     * or project directory that merely shares the name is still audited. An
+     * unresolvable path (deleted between glob and audit) is not bundled.
+     */
+    private static function isBundledPresetPath(string $file): bool
+    {
+        $bundled = self::bundledPresetsDirectory();
+        if ($bundled === null) {
+            return false;
+        }
+
+        $real = realpath($file);
+
+        return $real !== false && str_starts_with($real, $bundled . '/');
     }
 
     /**

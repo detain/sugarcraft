@@ -15,7 +15,7 @@ use SugarCraft\Crush\Agents\AgentStatus;
  * their health via heartbeats. The BackgroundSupervisor monitors these
  * heartbeats and flags a session as stalled if they stop arriving.
  *
- * Mirrors charmbracelet/charmcrush background session design.
+ * Mirrors charmbracelet/crush background session design.
  */
 final class BackgroundSession
 {

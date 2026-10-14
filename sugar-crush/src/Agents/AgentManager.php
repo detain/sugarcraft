@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Mcp\McpRouter;
@@ -18,6 +19,7 @@ use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Skills\SkillListingSection;
 use SugarCraft\Crush\Skills\SkillMatcher;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\MediaStore;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Tool;
@@ -2586,16 +2588,31 @@ final class AgentManager
      * such gap. Symbolic links are never followed or removed, and only the
      * two-level layouts those writers make are walked.
      *
+     * THE AGED LEG (review rv-devops-4): when the operator OPTED IN to
+     * retention — `SUGARCRUSH_SESSION_RETENTION_DAYS` positive, read through
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::sessionRetentionDays()}, the
+     * single parse of that setting — an artifact directory also goes once its
+     * newest file is older than the window even though its session still
+     * exists, and the media store ({@see MediaStore::sweepExpiredDirs()}) and
+     * the share exports ({@see ShareCommand::sweepExpiredExports()}) are swept
+     * by the same clock. With retention off — the default — none of that
+     * happens and this method behaves exactly as it did before the leg: only
+     * gone-session sub-agent trees are removed. Deleting an old session's
+     * artifacts is what the opt-in paid for; a live session's media older than
+     * the window is by the same ruling expired media, and the docs have said
+     * since then that enabling retention ages history out.
+     *
      * @param \Closure(string $sessionId): bool $sessionExists
      * @param string|null $home the `.sugar-crush` directory; null is where the
      *        writers put them ({@see Live\SubAgentTranscriptLog::defaultRoot()},
      *        {@see Live\AgentInbox::defaultRoot()})
      *
-     * @return int session directories removed
+     * @return int artifact directories and export files removed
      */
     public static function pruneSessionArtifacts(\Closure $sessionExists, ?string $home = null, int $graceSeconds = 3600, ?int $now = null): int
     {
         $now ??= time();
+        $days = \SugarCraft\Crush\Cli\Bootstrap::sessionRetentionDays();
         $roots = $home === null
             ? [Live\SubAgentTranscriptLog::defaultRoot(), Live\AgentInbox::defaultRoot()]
             : [rtrim($home, '/') . '/' . Live\SubAgentTranscriptLog::DIR_NAME, rtrim($home, '/') . '/' . Live\AgentInbox::DIR_NAME];
@@ -2610,13 +2627,23 @@ final class AgentManager
                 if ($session === '.' || $session === '..' || is_link($dir) || !is_dir($dir)) {
                     continue;
                 }
-                if ($sessionExists($session) || self::newestMtime($dir, 2) > $now - $graceSeconds) {
+                $newest = self::newestMtime($dir, 2);
+                if ($newest > $now - $graceSeconds) {
                     continue;
                 }
-                if (self::removeTree($dir, 2)) {
-                    $removed++;
+                if (!$sessionExists($session) || ($days > 0 && $newest <= $now - $days * 86400)) {
+                    if (self::removeTree($dir, 2)) {
+                        $removed++;
+                    }
                 }
             }
+        }
+
+        if ($days > 0) {
+            $mediaRoot = $home === null ? null : rtrim($home, '/') . '/media';
+            $exportsRoot = $home === null ? null : rtrim($home, '/') . '/exports';
+            $removed += MediaStore::sweepExpiredDirs($days, $now, $mediaRoot);
+            $removed += ShareCommand::sweepExpiredExports($days, $now, $exportsRoot);
         }
 
         return $removed;

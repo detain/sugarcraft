@@ -18,7 +18,7 @@ use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
  * agent states, and checkpoint snapshots to enable meaningful session
  * resumption, context replay, and /rewind functionality.
  *
- * Mirrors charmbracelet/charmbracelet enhanced session storage.
+ * Mirrors charmbracelet/crush enhanced session storage.
  */
 final class EnhancedSessionStore
 {
