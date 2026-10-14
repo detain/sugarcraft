@@ -35,9 +35,10 @@ use React\EventLoop\TimerInterface;
  *   3. Run model->init() and dispatch any returned Cmd.
  *   4. Watch the input stream; parse bytes into Msgs and feed update().
  *   5. Render the latest view() at the configured framerate.
- *   6. On QuitMsg / SIGINT / loop stop: cancel every timer and
- *      subscription it armed on the loop, hand the signals it took back to
- *      their previous handlers (and async delivery back to its previous
+ *   6. On QuitMsg / SIGINT / SIGTERM / SIGHUP / loop stop — and on any
+ *      Throwable escaping the loop, via run()'s finally: cancel every timer
+ *      and subscription it armed on the loop, hand the signals it took back
+ *      to their previous handlers (and async delivery back to its previous
  *      mode), tear down the terminal, and return the model.
  */
 final class Program
@@ -76,6 +77,15 @@ final class Program
     private ?MouseMode $activeMouseMode = null;
     private ?bool $activeFocusReporting = null;
     private ?bool $activeBracketedPaste = null;
+    /**
+     * True between a {@see setupTerminal()} that acquired the terminal and
+     * the {@see teardownTerminal()} that releases it. Makes teardown
+     * idempotent: run()'s finally must be able to call it blindly — after a
+     * Throwable escaped the loop, after the normal path already tore down,
+     * or after a caller's own releaseTerminal() — without emitting the
+     * recovery bytes (cursor show, alt-screen leave, mode-offs) twice.
+     */
+    private bool $terminalAttached = false;
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
@@ -411,84 +421,101 @@ final class Program
         $this->setupTerminal();
         $this->installSignalHandlers();
 
-        // Initial size + env + colour-profile + init Cmd. Each
-        // honours the matching ProgramOptions override when set —
-        // unset falls back to the live tty / getenv() / detect().
-        $size = $this->options->windowSize ?? $this->tty->size();
-        $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
-        $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
-        $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detect()));
+        // rv-tui-1 (crush-review-1014): every step below can raise — a model
+        // whose update() throws on the pre-loop dispatches, a Cmd that blows
+        // up, or any Throwable escaping a loop callback through loop->run().
+        // Without this finally the process died with alt-screen still entered,
+        // the cursor hidden and mouse/focus/paste capture left ON: the crash
+        // stranded the user in a broken terminal instead of merely losing the
+        // frame. The teardown calls moved here are byte-identical to the old
+        // straight-line tail; teardownTerminal() is idempotent ($terminalAttached)
+        // and releaseRuntime() clears the state it walks, so the normal return,
+        // the early-quit return and the throw path share this single exit.
+        $tickTimer = null;
+        $inputWatched = false;
+        try {
+            // Initial size + env + colour-profile + init Cmd. Each
+            // honours the matching ProgramOptions override when set —
+            // unset falls back to the live tty / getenv() / detect().
+            $size = $this->options->windowSize ?? $this->tty->size();
+            $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
+            $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
+            $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detect()));
 
-        $initCmd = $this->activeModel()->init();
-        if ($initCmd !== null) {
-            $this->scheduleCmd($initCmd);
-        }
-
-        // Drain any messages queued via send() before run().
-        $this->drainPending();
-
-        // Initial subscription reconciliation — start whatever the model wants.
-        $this->reconcileWantedSubscriptions();
-
-        // Pending dispatch may have already requested quit. Skip the loop.
-        if (!$this->running) {
-            $this->releaseRuntime();
-            $this->teardownTerminal();
-            return $this->model;
-        }
-
-        // Stream watcher.
-        @stream_set_blocking($this->input, false);
-        $this->loop->addReadStream($this->input, function ($stream): void {
-            $this->readInput($stream);
-        });
-
-        // Render tick.
-        $tickInterval = 1.0 / max(1.0, $this->options->framerate);
-        $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
-            // Fallback signal pump for environments where async delivery is
-            // unavailable (or was declined). When async signals are enabled,
-            // handlers already fired and nothing is pending, so skip this to
-            // avoid a redundant dispatch.
-            if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
-                pcntl_signal_dispatch();
+            $initCmd = $this->activeModel()->init();
+            if ($initCmd !== null) {
+                $this->scheduleCmd($initCmd);
             }
+
+            // Drain any messages queued via send() before run().
+            $this->drainPending();
+
+            // Initial subscription reconciliation — start whatever the model wants.
+            $this->reconcileWantedSubscriptions();
+
+            // Pending dispatch may have already requested quit. Skip the loop.
+            if (!$this->running) {
+                return $this->model;
+            }
+
+            // Stream watcher.
+            @stream_set_blocking($this->input, false);
+            $this->loop->addReadStream($this->input, function ($stream): void {
+                $this->readInput($stream);
+            });
+            $inputWatched = true;
+
+            // Render tick.
+            $tickInterval = 1.0 / max(1.0, $this->options->framerate);
+            $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
+                // Fallback signal pump for environments where async delivery is
+                // unavailable (or was declined). When async signals are enabled,
+                // handlers already fired and nothing is pending, so skip this to
+                // avoid a redundant dispatch.
+                if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
+                    pcntl_signal_dispatch();
+                }
+                if ($this->dirty) {
+                    $this->renderFrame();
+                    $this->dirty = false;
+                }
+            });
+
+            // Paint the initial frame synchronously, before the loop starts, so the
+            // first view is on screen immediately rather than one render-tick later.
+            // This also makes startup deterministic: a program that quits almost
+            // immediately (a fast init Cmd, or a short test timer) still emits its
+            // first frame instead of racing the first periodic tick — previously a
+            // too-early quit on a slow host could write only the setup/teardown
+            // terminal escapes and no frame at all. ($this->running is guaranteed
+            // true here — the early-return guard above already handled a quit during
+            // the initial dispatches.)
             if ($this->dirty) {
                 $this->renderFrame();
                 $this->dirty = false;
             }
-        });
 
-        // Paint the initial frame synchronously, before the loop starts, so the
-        // first view is on screen immediately rather than one render-tick later.
-        // This also makes startup deterministic: a program that quits almost
-        // immediately (a fast init Cmd, or a short test timer) still emits its
-        // first frame instead of racing the first periodic tick — previously a
-        // too-early quit on a slow host could write only the setup/teardown
-        // terminal escapes and no frame at all. ($this->running is guaranteed
-        // true here — the early-return guard above already handled a quit during
-        // the initial dispatches.)
-        if ($this->dirty) {
-            $this->renderFrame();
-            $this->dirty = false;
+            // One run() for the life of the program. Not because the process must
+            // stay inside uv_run() — ExtUvLoop::run() is itself a loop of short
+            // uv_run() calls — but because the alternative shape, repeated
+            // run()/stop() bursts, puts long synchronous stretches between the
+            // clock refreshes libuv does per iteration, and every timer armed in
+            // one of those gaps fires early by the gap. See the timer-accuracy
+            // notes on this method.
+            $this->loop->run();
+
+            return $this->model;
+        } finally {
+            if ($tickTimer !== null) {
+                $this->loop->cancelTimer($tickTimer);
+            }
+            if ($inputWatched) {
+                $this->loop->removeReadStream($this->input);
+            }
+            $this->releaseRuntime();
+            $this->teardownTerminal();
+            $this->recorder?->close();
         }
-
-        // One run() for the life of the program. Not because the process must
-        // stay inside uv_run() — ExtUvLoop::run() is itself a loop of short
-        // uv_run() calls — but because the alternative shape, repeated
-        // run()/stop() bursts, puts long synchronous stretches between the
-        // clock refreshes libuv does per iteration, and every timer armed in
-        // one of those gaps fires early by the gap. See the timer-accuracy
-        // notes on this method.
-        $this->loop->run();
-
-        $this->loop->cancelTimer($tickTimer);
-        $this->loop->removeReadStream($this->input);
-        $this->releaseRuntime();
-
-        $this->teardownTerminal();
-        $this->recorder?->close();
-        return $this->model;
     }
 
     /**
@@ -1306,10 +1333,24 @@ final class Program
         }
         $this->activeBracketedPaste = $this->options->bracketedPaste;
         $this->tty->enableRawMode();
+        $this->terminalAttached = true;
     }
 
+    /**
+     * Hand the terminal back. Idempotent by the {@see $terminalAttached}
+     * latch: run()'s finally calls this blindly on every exit — normal,
+     * early-quit and Throwable — and a double invocation must be a byte-safe
+     * no-op rather than re-emitting cursor-show / alt-screen-leave over the
+     * caller's own terminal. The runExec and Ctrl-Z suspend paths pair this
+     * with setupTerminal(), which re-arms the latch, so their re-entry
+     * emission counts are unchanged.
+     */
     private function teardownTerminal(): void
     {
+        if (!$this->terminalAttached) {
+            return;
+        }
+        $this->terminalAttached = false;
         $this->tty->restore();
         if ($this->activeBracketedPaste) {
             $this->writeOutput(Ansi::bracketedPasteOff());
@@ -1331,6 +1372,13 @@ final class Program
         if ($this->options->useAltScreen) {
             $this->writeOutput(Ansi::altScreenLeave());
         }
+        // The mirrors describe what the TERMINAL currently has enabled; after
+        // this method nothing is. Clearing them only AFTER the emissions above
+        // (which diff against the mirrors) keeps applyViewSideEffects()'s
+        // transition logic honest if a frame ever renders while detached.
+        $this->activeMouseMode = MouseMode::Off;
+        $this->activeFocusReporting = false;
+        $this->activeBracketedPaste = false;
     }
 
     /**
@@ -1559,6 +1607,17 @@ final class Program
             && $a->r === $b->r && $a->g === $b->g && $a->b === $b->b;
     }
 
+    /**
+     * Cooperative loop stop shared by the SIGINT/SIGTERM/SIGHUP arms: mark
+     * the run finished and unblock the loop so run() unwinds into its
+     * finally, which performs the full terminal teardown.
+     */
+    private function stopProgram(): void
+    {
+        $this->running = false;
+        $this->loop->stop();
+    }
+
     private function installSignalHandlers(): void
     {
         if ($this->options->withoutSignalHandler
@@ -1580,9 +1639,26 @@ final class Program
             $this->asyncSignals = true;
         }
         $this->installProgramSignal(SIGINT, function (): void {
-            $this->running = false;
-            $this->loop->stop();
+            $this->stopProgram();
         });
+        // rv-tui-1 (crush-review-1014): a plain `kill <pid>` (SIGTERM) and a
+        // closed terminal (SIGHUP) used to die default-style mid-frame — the
+        // exact stranded-terminal class the try/finally in run() heals for
+        // Throwables, just signal-shaped. Route them through the same stop
+        // path as SIGINT so the loop unwinds and run()'s finally restores the
+        // terminal. Same defined() guards as the existing arms: builds without
+        // these constants (Windows) simply never arm them, and
+        // restoreSignalHandlers() hands each signal back via the prev map.
+        if (defined('SIGTERM')) {
+            $this->installProgramSignal(SIGTERM, function (): void {
+                $this->stopProgram();
+            });
+        }
+        if (defined('SIGHUP')) {
+            $this->installProgramSignal(SIGHUP, function (): void {
+                $this->stopProgram();
+            });
+        }
         if (defined('SIGWINCH')) {
             $this->installProgramSignal(SIGWINCH, function (): void {
                 $size = $this->tty->size();
