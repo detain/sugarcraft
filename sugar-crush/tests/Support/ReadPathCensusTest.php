@@ -349,6 +349,12 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the `/editor` temp file: tempnam() created it owner-only in the system temp '
                 . 'directory, it is read back once after the user\'s editor exits, and unlinked',
         ],
+        'Commands/ShareCommand.php|scandir' => [
+            'NAMES_ONLY — sweepExpiredExports() (rv-devops-4) lists the share-exports root under '
+                . 'HomeDirectory::owned() for file mtimes only; links and non-files are skipped, no '
+                . 'export content is ever read here, and only a regular file past the retention '
+                . 'cutoff is unlinked',
+        ],
         'Config/LayeredSettings.php|file_get_contents' => [
             // NOT `CONTAINED`, which is what this row said first and is true of only ONE of the two '
             // callers — the recurring defect in a single word. readFile() is private and both of its
@@ -774,6 +780,12 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — list() enumerates this store\'s own session directory; no content is '
                 . 'read, `.partial` residue and non-regular entries are skipped, and the gate is '
                 . 'on the later read through pathFor()',
+            'NAMES_ONLY — sweepExpiredDirs() (rv-devops-4) lists the media root\'s session '
+                . 'directories for their mtimes only; links and non-directories are skipped, no '
+                . 'content is read, and only a directory past the retention cutoff is unlinked',
+            'NAMES_ONLY — removeSweptTree() lists one already-condemned expired session directory '
+                . 'to unlink its regular files and rmdir it when empty; links are unlinked, never '
+                . 'followed, and no file content is ever read',
         ],
         'Support/PrivateRetainedDir.php|scandir' => [
             'NAMES_ONLY — sweep() lists a retained store\'s own owner-only directory (and its one level of '

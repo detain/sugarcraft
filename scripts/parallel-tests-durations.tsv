@@ -379,6 +379,8 @@ sugar-crush/tests/Tools/WebSearchTransportTest.php	0.519	13
 sugar-crush/tests/Commands/MemoryLogRestoreCommandTest.php	0.511	6
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkStderrTest.php	0.507	5
 sugar-crush/tests/Chat/ProviderSwitchKeepsTaskToolTest.php	0.506	4
+sugar-crush/tests/Tui/AmbientColorProfileTest.php	0.50	17
+sugar-crush/tests/App/ToolOutputWalkTest.php	0.50	26
 sugar-crush/tests/Media/FieldSpecParityTest.php	0.478	71
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.478	15
 sugar-crush/tests/Integration/TaskToolWiringTest.php	0.470	4
@@ -407,6 +409,7 @@ sugar-crush/tests/Chat/InterimNarrationKeptTest.php	0.405	4
 sugar-crush/tests/Cli/BootstrapClaudeMcpGrantTest.php	0.404	10
 sugar-crush/tests/Workspace/ShadowRepoTest.php	0.403	6
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.400	46
+sugar-crush/tests/Tui/SessionPickerSlashFilterTest.php	0.40	25
 sugar-crush/tests/Workspace/ShadowGarbageCollectorTest.php	0.399	3
 sugar-crush/tests/Tui/SessionPickerActionsTest.php	0.399	24
 sugar-crush/tests/RuntimeInitialDispatchOrderTest.php	0.395	3
@@ -594,6 +597,7 @@ sugar-crush/tests/Tools/BuiltIn/GrepOptionInjectionTest.php	0.103	16
 sugar-crush/tests/Tui/ThinkingFrameBorderAlignmentTest.php	0.103	3
 sugar-crush/tests/Commands/CommandFailureTranscriptTest.php	0.102	7
 sugar-crush/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.101	4
+sugar-crush/tests/Workflows/WorkflowBuilderWithVerificationTest.php	0.10	21
 sugar-crush/tests/Workflows/WorkflowRegistryTest.php	0.099	87
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.098	35
 sugar-crush/tests/Context/RulebookPromptRenderTest.php	0.098	12
@@ -843,6 +847,8 @@ sugar-crush/tests/Config/Settings/SettingsResolverTest.php	0.020	14
 sugar-crush/tests/Commands/TranscriptTableTest.php	0.020	23
 sugar-crush/tests/Skills/SkillMentionTest.php	0.020	13
 sugar-crush/tests/Skills/SkillRequiresGatingTest.php	0.020	19
+sugar-crush/tests/Hooks/ProtectFilesCredentialStoresTest.php	0.02	63
+sugar-crush/tests/Commands/CommandSpecScrubbedEnvTest.php	0.02	7
 sugar-crush/tests/Chat/AutoMemoryConsolidationWiringTest.php	0.019	3
 sugar-crush/tests/Integration/GitMcpServerTest.php	0.019	7
 sugar-crush/tests/Commands/CommandLoaderTest.php	0.019	17
@@ -974,6 +980,7 @@ sugar-crush/tests/Tui/MenuBarTest.php	0.010	13
 sugar-crush/tests/Tools/BuiltIn/AskUserToolTest.php	0.010	18
 sugar-crush/tests/Permissions/SafetyClassifierTest.php	0.010	26
 sugar-crush/tests/LSP/LspClientTest.php	0.010	20
+sugar-crush/tests/Permissions/ShellSubjectToolsCompletenessTest.php	0.01	24
 sugar-crush/tests/Renderer/PruneBadgeTest.php	0.009	2
 sugar-crush/tests/Agents/AgentPresetAnchorKeyTest.php	0.009	8
 sugar-crush/tests/Backend/CacheHealthWatchTest.php	0.009	16

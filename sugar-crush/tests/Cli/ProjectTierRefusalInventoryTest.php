@@ -195,6 +195,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      */
     private const DOT_PATHS = [
         // Repository-chosen: the checkout under analysis says where these point.
+        // f-agents-qa (rv-qa-3): the bundled-preset exemption anchor — realpath'd
+        // against the package's OWN `<root>/.sugar-crush/agents` so a preset read
+        // from the shipped checkout skips the frontmatter-key audit, while a HOME
+        // copy of the same name stays audited. It reads nothing and refuses
+        // nothing here; the containment judgements live in the tier loaders.
+        'Agents/AgentPresetRegistry.php|.sugar-crush/agents' => self::REPOSITORY,
         'Agents/ForeignAgentPresetRegistry.php|.opencode/agents' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/agents' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/hooks.yaml' => self::REPOSITORY,
@@ -397,8 +403,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-NINE occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-FOUR distinct paths. TWENTY of those
+     * APPEARS IN. On this tree that is FIFTY occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-FOUR distinct paths. TWENTY-ONE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are SIXTEEN distinct paths — which is the figure
