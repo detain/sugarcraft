@@ -393,6 +393,51 @@ final class ArtLibraryTest extends TestCase
         }
     }
 
+    public function testRealCorpusDecoGiltSixteenCarriesInheritedBackgroundOnFgOnlyRuns(): void
+    {
+        // The diagnosed defect shape, pinned on a live file: the header row
+        // opens ESC[40;32m and later runs set ONLY the foreground (ESC[91m,
+        // ESC[97m) — a terminal keeps painting them on black, so every cell
+        // must resolve with bg=40 in its canonical style.
+        $art = $this->corpusArt('logo-art-deco-gilt-16-76x9.ansi');
+        $row = $art->frameCells(0)[0];
+
+        self::assertSame('╭', $row[0]->glyph);
+        self::assertSame("\x1b[32;40m", $row[0]->sgr, 'opening run resolves fg+bg canonically');
+        self::assertSame('¹', $row[3]->glyph);
+        self::assertSame("\x1b[91;40m", $row[3]->sgr, 'ESC[91m keeps the carried black background');
+        self::assertSame('c', $row[4]->glyph);
+        self::assertSame("\x1b[97;40m", $row[4]->sgr, 'ESC[97m run: white-on-BLACK, not white-on-default');
+        self::assertSame('u', $row[6]->glyph);
+        self::assertSame("\x1b[97;40m", $row[6]->sgr);
+    }
+
+    public function testRealCorpusDecoGiltAnimTruecolorInheritsBackgroundAcrossFrames(): void
+    {
+        // anim-tc header: ESC[48;2;0;0;0;38;2;...m opens, every later run is
+        // fg-only — the rgb black bg must survive into every following cell.
+        $art = $this->corpusArt('logo-art-deco-gilt-anim-tc-76x9.ansi');
+        self::assertGreaterThanOrEqual(2, $art->frameCount());
+        $row = $art->frameCells(0)[0];
+
+        self::assertSame("\x1b[38;2;85;109;89;48;2;0;0;0m", $row[0]->sgr);
+        self::assertSame("\x1b[38;2;238;238;238;48;2;0;0;0m", $row[4]->sgr, 'cpu label: fg swapped, rgb bg inherited');
+
+        $later = $art->frameCells(1)[0];
+        self::assertNotSame('', $later[0]->sgr, 'frame 1 inherits the document state, never resets per-frame');
+        self::assertStringContainsString('48;2;0;0;0', $later[0]->sgr, 'bg carried across the frame header');
+    }
+
+    private function corpusArt(string $file): AnsiArt
+    {
+        $path = self::CORPUS_DIR . '/' . $file;
+        if (!is_file($path)) {
+            $this->markTestSkipped('candy-top logo corpus not present beside candy-flip');
+        }
+
+        return AnsiArt::fromFile($path);
+    }
+
     private function corpusLibrary(): ArtLibrary
     {
         if (!is_dir(self::CORPUS_DIR)) {

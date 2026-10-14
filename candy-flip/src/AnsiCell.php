@@ -6,13 +6,16 @@ namespace SugarCraft\Flip;
 
 /**
  * One rendered terminal cell of a parsed `.ansi` artwork: the glyph plus
- * the raw SGR escape prefix that was active for it ('' when the artwork
- * leaves the cell at terminal default).
+ * the CANONICAL RESOLVED SGR state active for it — the full cumulative
+ * ECMA-48 style (attributes + foreground + background) a real terminal
+ * would be showing at that point, as a single `ESC[…m` run in the fixed
+ * order documented on `AnsiArt::canonicalSgr()`; '' when every component
+ * is at terminal default.
  *
- * The prefix is kept verbatim rather than decoded into colours on purpose:
- * replaying art byte-faithfully only requires re-emitting what the source
- * emitted, and decoding would drop the exact reset/attribute combinations
- * the logo renderer produced.
+ * The whole-state form (not the raw source run) is deliberate: consumers
+ * blit cells standalone into cell grids whose `put()` sets a cell's entire
+ * style at once, so an inherited background or attribute a source run
+ * omitted would otherwise silently vanish from the painted cell.
  */
 final class AnsiCell
 {

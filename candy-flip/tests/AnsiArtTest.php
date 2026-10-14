@@ -188,6 +188,143 @@ final class AnsiArtTest extends TestCase
         }
     }
 
+    // ---- cumulative SGR state (ECMA-48 whole-document carry) ----
+
+    public function testStyleAccumulatesAcrossRunsWithinRow(): void
+    {
+        // ESC[B is a cursor-down CSI (dropped, state-neutral), then a plain
+        // fg-only run: C must come back red-on-BLACK, bg untouched.
+        $art = AnsiArt::fromString("\x1b[91;40mA\x1b[97m B\x1b[B\x1b[91mC");
+        $row = $art->frameCells(0)[0];
+
+        self::assertSame("\x1b[91;40m", $row[0]->sgr, 'A: red-on-black');
+        self::assertSame("\x1b[97;40m", $row[2]->sgr, 'B: fg re-set, background SURVIVES the run');
+        self::assertSame("\x1b[91;40m", $row[3]->sgr, 'C: fg re-set again, bg still inherited');
+    }
+
+    public function testStyleCarriesAcrossRowNewlinesAndFrames(): void
+    {
+        // Frame 0 never resets, so frame 1 (a cursor-up redraw) inherits the
+        // carried bold+bg exactly like a terminal receiving \r + cursor-up.
+        $bytes = "\x1b[1;40mA\nB\n"
+            . "\x1b[2A\rC\x1b[31mD" . self::RESET . "\n";
+        $art = AnsiArt::fromString($bytes);
+
+        $f0 = $art->frameCells(0);
+        self::assertSame("\x1b[1;40m", $f0[0][0]->sgr, 'bold + bg resolve together');
+        self::assertSame("\x1b[1;40m", $f0[1][0]->sgr, 'style survives the newline into row 2');
+
+        $f1 = $art->frameCells(1);
+        self::assertSame("\x1b[1;40m", $f1[0][0]->sgr, 'frame 2 inherits bold and bg across the frame header');
+        self::assertSame("\x1b[1;31;40m", $f1[0][1]->sgr, 'in-row run adds fg, keeps inherited attrs/bg');
+    }
+
+    public function testForegroundBackgroundDefaultsResetIndependently(): void
+    {
+        $art = AnsiArt::fromString("\x1b[31;44mA\x1b[39mB\x1b[49mC\x1b[0mD");
+        $row = $art->frameCells(0)[0];
+
+        self::assertSame("\x1b[31;44m", $row[0]->sgr);
+        self::assertSame("\x1b[44m", $row[1]->sgr, '39 drops only the foreground');
+        self::assertSame('', $row[2]->sgr, '49 then leaves full default');
+        self::assertSame('', $row[3]->sgr, '0 after default stays default');
+    }
+
+    public function testTruecolorMidRowThenFullReset(): void
+    {
+        $art = AnsiArt::fromString("\x1b[38;2;10;20;30;48;2;1;2;3mA\x1b[0mB");
+        $row = $art->frameCells(0)[0];
+
+        self::assertSame("\x1b[38;2;10;20;30;48;2;1;2;3m", $row[0]->sgr, 'rgb fg before rgb bg, canonical order');
+        self::assertSame('', $row[1]->sgr, 'ESC[0m mid-row clears both colours');
+    }
+
+    public function testIndexedColorFoldsToCanonicalPaletteForms(): void
+    {
+        // 38;5;n with n<16 canonicalises to the short 3X/9X/4X/10X code;
+        // deeper indices keep the 38;5;n spelling.
+        $art = AnsiArt::fromString("\x1b[38;5;9;48;5;4mA\x1b[0m\x1b[38;5;196mB");
+        $row = $art->frameCells(0)[0];
+
+        self::assertSame("\x1b[91;44m", $row[0]->sgr);
+        self::assertSame("\x1b[38;5;196m", $row[1]->sgr);
+    }
+
+    public function testColonFormTruecolorSkipsTheColorspaceIdentifier(): void
+    {
+        // ITU T.416 colon syntax is 38:2:Cs:r:g:b (Cs usually empty) — the
+        // colourspace byte is NOT red; reading it as the first component
+        // lands every colon colour one slot early. A real emulator shows
+        // rgb(12,34,56) for '38:2::12:34:56', canonicalised to the 38;2 form.
+        $art = AnsiArt::fromString("\x1b[38:2::12:34:56mA\x1b[0m\x1b[48:2:0:8:9:10mB");
+        $row = $art->frameCells(0)[0];
+        self::assertSame("\x1b[38;2;12;34;56m", $row[0]->sgr, 'empty Cs skipped, triple taken from the next three sub-params');
+        self::assertSame("\x1b[48;2;8;9;10m", $row[1]->sgr, 'the 48 colon path carries its own Cs byte too');
+    }
+
+    public function testColonFormNonEmptyColorspaceStillResolvesTheRemainingTriple(): void
+    {
+        // 38:2:Cs:R:G:B with an explicit Cs=1 → rgb(2,3,4), not rgb(1,2,3).
+        $art = AnsiArt::fromString("\x1b[38:2:1:2:3:4mA");
+        self::assertSame("\x1b[38;2;2;3;4m", $art->frameCells(0)[0][0]->sgr);
+    }
+
+    public function testColonIndexedKeepsDirectIndexAndShortColonRgbIsDropped(): void
+    {
+        // Colon kind 5 has NO colourspace slot — n is the index directly.
+        // The 5-field colon rgb form '38:2:r:g:b' leaves the triple ambiguous
+        // (is 1 the Cs or the red?) and is dropped whole, never re-read.
+        $art = AnsiArt::fromString("\x1b[38:5:196mA\x1b[0m\x1b[38:2:1:2:3mB");
+        $row = $art->frameCells(0)[0];
+        self::assertSame("\x1b[38;5;196m", $row[0]->sgr);
+        self::assertSame('', $row[1]->sgr, 'colon rgb requires the Cs slot: short form ignored');
+    }
+
+    public function testTruncatedExtendedColorConsumesTheRestOfTheParamList(): void
+    {
+        // 'ESC[38;5m' ends the parameters mid-colour-spec: terminals bind
+        // every following value to the dropped 38 request, so the stray 5
+        // must never resurface as a standalone blink code.
+        $art = AnsiArt::fromString("\x1b[38;5mX");
+        self::assertSame('', $art->frameCells(0)[0][0]->sgr, 'truncated colour applies nothing, not blink');
+
+        // A prior run's bold survives; the 5 adds no second attribute.
+        $art = AnsiArt::fromString("\x1b[1mY\x1b[38;5mZ");
+        $row = $art->frameCells(0)[0];
+        self::assertSame("\x1b[1m", $row[0]->sgr);
+        self::assertSame("\x1b[1m", $row[1]->sgr, 'Y and Z share the bold-only style');
+
+        // Consumption stops at the spec: codes AFTER a COMPLETE 38;5;n apply.
+        $art = AnsiArt::fromString("\x1b[38;5;196;1mA");
+        self::assertSame("\x1b[1;38;5;196m", $art->frameCells(0)[0][0]->sgr);
+    }
+
+    public function testCanonicalSerializationOrderIsStable(): void
+    {
+        // attrs ascending, then fg, then bg — one exact string, order-fixed.
+        $art = AnsiArt::fromString("\x1b[44;9;107;4;97;1mA");
+        self::assertSame("\x1b[1;4;9;97;107m", $art->frameCells(0)[0][0]->sgr);
+    }
+
+    public function testUnknownAndTruncatedSgrParamsIgnoredGracefully(): void
+    {
+        // 20 (fraktur) and 70 are unknown standalone codes: ignored. The
+        // invalid extended-colour selector 9 in `38;9` binds the REST of the
+        // parameter list to the dropped 38 request (terminal behaviour), so
+        // neither the 9 (strikethrough) nor the 32 (green) is re-read as a
+        // standalone code — the whole run applies nothing; state never corrupts.
+        $art = AnsiArt::fromString("\x1b[20;70;38;9;32mA");
+        self::assertSame('', $art->frameCells(0)[0][0]->sgr);
+    }
+
+    public function testSgrTextTransitionsResetBeforeWholeStateSwap(): void
+    {
+        // The source explicitly drops bold (ESC[0;32m), so B's whole-state
+        // run must not repaint onto A's carried state: replay resets first.
+        $art = AnsiArt::fromString("\x1b[1;31mA\x1b[0;32mB");
+        self::assertSame("\x1b[1;31mA\x1b[0m\x1b[32mB\x1b[0m", $art->sgrText(0));
+    }
+
     public function testFromFileRoundTrip(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'ansiert') . '.ansi';

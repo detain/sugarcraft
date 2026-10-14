@@ -34,9 +34,10 @@ candy-flip my-animation.gif density # ASCII luminance ramp
 ## ANSI art playback (AnsiArt / ArtLibrary / ArtLoop)
 
 `.ansi` art documents (SGR-escaped text, optionally a multi-frame redraw
-stream) parse into a cell model — one `AnsiCell` (glyph + active SGR prefix)
-per codepoint — that hosts paint into any surface, or replay verbatim via
-`AnsiArt::sgrText()`. `ArtLibrary` catalogs a directory of
+stream) parse into a cell model — one `AnsiCell` (glyph + canonical resolved
+SGR state, accumulated ECMA-48-style across rows and frames like a real
+terminal) per codepoint — that hosts paint into any surface, or replay
+verbatim via `AnsiArt::sgrText()`. `ArtLibrary` catalogs a directory of
 `logo-<slug>[-skinny][-anim]-<16|256|tc>-<WxH>.ansi` files and resolves a slug
 at the terminal's detected colour depth with a kind/depth cascade (wide form
 preferred; depth fallback is adjacent-first). `ArtLoop` is pure pacing math:

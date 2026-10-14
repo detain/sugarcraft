@@ -19,11 +19,22 @@ use RuntimeException;
  * no embedded frame delays — pacing is the caller's concern (see
  * {@see ArtLoop}).
  *
+ * SGR state is CUMULATIVE ECMA-48 state carried across the whole document —
+ * every row and every frame — exactly like a real terminal: a `ESC[97m` run
+ * that follows `ESC[91;40m` means white-on-BLACK, not white-on-default. Each
+ * {@see AnsiCell} therefore stores the fully RESOLVED canonical style
+ * (attributes + foreground + background) active at that cell, serialised in
+ * the fixed order documented on {@see self::canonicalSgr()}. Consumers blit
+ * cells standalone into cell grids (a Surface paints a whole-cell style in
+ * one shot), so a partial delta run would silently drop the inherited
+ * components — the historical replace-per-run bug this class now guards.
+ *
  * Anything the corpus never emits (unknown CSI sequences, well-formed OSC
  * strings such as hyperlinks, stray `\r` inside a row body) is dropped
  * conservatively: art is replayed cell-wise, so a positioning sequence we
  * cannot honour must not leak into the model as a phantom glyph. Dropped
- * bytes are documented per site below.
+ * bytes are documented per site below. Unknown or truncated SGR parameters
+ * are ignored gracefully and never corrupt the cumulative state.
  *
  * Deliberately NOT done: grapheme clustering. The corpus is strictly
  * codepoint-per-cell (box-drawing, half/full blocks, and ASCII), and the
@@ -86,6 +97,9 @@ final class AnsiArt
 
         $frames = [];
         $width = 0;
+        // One SGR cursor for the whole document: a terminal that receives
+        // `\r` + cursor-up to start a redraw frame does NOT reset its colors.
+        $sgrCursor = self::defaultSgrState();
         foreach ($chunks as $chunk) {
             if ($chunk === '') {
                 continue; // empty chunk between adjacent headers: not a frame
@@ -94,7 +108,7 @@ final class AnsiArt
             if (preg_match(self::FRAME_HEADER, $chunk, $header) === 1) {
                 $chunk = substr($chunk, strlen($header[0]));
             }
-            $frame = self::parseFrame($chunk, $width);
+            $frame = self::parseFrame($chunk, $width, $sgrCursor);
             if ($frame === []) {
                 continue; // keep only frames that render >=1 row
             }
@@ -167,13 +181,14 @@ final class AnsiArt
 
     /**
      * Raw single-frame byte blob for apps that prefer replaying escapes
-     * verbatim instead of walking cells. Prefixes are re-emitted only on
-     * SGR-state *transitions* (a default cell after a coloured one re-gets
-     * its `\x1b[0m`), and each row closes in default state, so the blob is
-     * both terminal-correct as replay and cell-exactly re-parseable by
-     * {@see fromString()} — the per-cell model alone could not promise the
-     * second half, since '' cannot distinguish "never coloured" from "just
-     * reset".
+     * verbatim instead of walking cells. Each cell carries a canonical
+     * WHOLE-state run, so a state change re-emits `ESC[0m` first (clearing
+     * components the next state omits) followed by the new canonical run;
+     * a change from default needs no reset, and each row plus the blob end
+     * in default state. The result is terminal-correct as replay AND
+     * cell-exactly re-parseable by {@see fromString()} — the accumulator
+     * reproduces every canonical whole-state run byte-for-byte, so the
+     * per-cell model and the raw stream stay in lockstep.
      *
      * @throws OutOfRangeException when the frame index is unknown
      */
@@ -187,15 +202,16 @@ final class AnsiArt
             $previous = '';
             foreach ($row as $cell) {
                 if ($cell->sgr !== $previous) {
-                    // At row start '' is already the state, so a default
-                    // first cell emits nothing; later it means "reset back".
-                    $line .= $cell->sgr === '' ? "\x1b[0m" : $cell->sgr;
+                    if ($previous !== '') {
+                        $line .= "\x1b[0m"; // clear the carried whole-state first
+                    }
+                    $line .= $cell->sgr; // '' after a reset == default state
                     $previous = $cell->sgr;
                 }
                 $line .= $cell->glyph;
             }
             if ($previous !== '' && $index !== $last) {
-                $line .= "\x1b[0m"; // rows are self-contained: next row starts default
+                $line .= "\x1b[0m"; // rows re-open from default when replayed standalone
             }
             $out[] = $line;
         }
@@ -208,9 +224,10 @@ final class AnsiArt
      * Returns [] when the body holds no rows at all.
      *
      * @param int<0,max> $width in/out: max row cell-count seen so far
+     * @param array $sgrCursor in/out: document-wide cumulative SGR state
      * @return list<list<AnsiCell>>
      */
-    private static function parseFrame(string $body, int &$width): array
+    private static function parseFrame(string $body, int &$width, array &$sgrCursor): array
     {
         $lines = explode("\n", $body);
         // A trailing newline terminates the last row; it is not itself a row.
@@ -220,7 +237,7 @@ final class AnsiArt
 
         $frame = [];
         foreach ($lines as $line) {
-            $cells = self::tokenizeRow($line);
+            $cells = self::tokenizeRow($line, $sgrCursor);
             $count = count($cells);
             if ($count > $width) {
                 $width = $count;
@@ -232,16 +249,18 @@ final class AnsiArt
     }
 
     /**
-     * Walk one row, tracking the active SGR prefix and emitting one cell per
-     * codepoint. `\x1b[0m` and `\x1b[m` normalise the active prefix to '' so
-     * default-state cells round-trip as empty prefixes.
+     * Walk one row against the cumulative SGR cursor, emitting one cell per
+     * codepoint. Each cell carries the canonical resolved style at that
+     * point (see {@see self::canonicalSgr()}), so a consumer painting cells
+     * standalone gets exactly what a terminal would show. `ESC[0m` and the
+     * bare `ESC[m` reset the cursor to default, whose canonical form is ''.
      *
+     * @param array $sgrCursor in/out: cumulative ECMA-48 SGR state
      * @return list<AnsiCell>
      */
-    private static function tokenizeRow(string $line): array
+    private static function tokenizeRow(string $line, array &$sgrCursor): array
     {
         $cells = [];
-        $current = '';
         $offset = 0;
         $length = strlen($line);
 
@@ -249,8 +268,7 @@ final class AnsiArt
             if ($line[$offset] === "\x1b") {
                 $matched = [];
                 if (preg_match(self::SGR_AT, $line, $matched, 0, $offset) === 1) {
-                    $params = $matched[1];
-                    $current = ($params === '' || $params === '0') ? '' : "\x1b[{$params}m";
+                    $sgrCursor = self::applySgr($sgrCursor, $matched[1]);
                     $offset += strlen($matched[0]);
                     continue;
                 }
@@ -274,14 +292,259 @@ final class AnsiArt
                 : substr($line, $offset, $next - $offset);
             $offset += strlen($run);
 
+            $resolved = self::canonicalSgr($sgrCursor);
             foreach (mb_str_split($run) as $glyph) {
                 if ($glyph === "\r") {
                     continue; // stray CR inside a body row: no cell position to honour
                 }
-                $cells[] = AnsiCell::new($glyph, $current);
+                $cells[] = AnsiCell::new($glyph, $resolved);
             }
         }
 
         return $cells;
+    }
+
+    /**
+     * The ECMA-48 SGR state a cell inherits: attribute flags plus optional
+     * foreground/background colours. A colour is either a palette index
+     * (0-15, the 16-colour + bright-16 range) or an RGB triple; null means
+     * "terminal default".
+     *
+     * @return array{attrs: array<string, bool>, fg: ?array, bg: ?array}
+     */
+    private static function defaultSgrState(): array
+    {
+        return [
+            'attrs' => [
+                'bold' => false, 'dim' => false, 'italic' => false, 'underline' => false,
+                'blink' => false, 'reverse' => false, 'hidden' => false, 'strikethrough' => false,
+            ],
+            'fg' => null,
+            'bg' => null,
+        ];
+    }
+
+    /**
+     * Apply one `ESC[<params>m` run to the cumulative state (ECMA-48 SGR
+     * subset: the codes the corpus uses plus the standard on/off and colour
+     * family). Semicolon and colon sub-parameter forms of 38/48 are both
+     * honoured. Unknown, out-of-range, or truncated parameters are ignored
+     * gracefully — the state is never corrupted, matching terminal behaviour.
+     *
+     * @param array $state current cumulative state
+     * @return array state after applying every parameter in the run
+     */
+    private static function applySgr(array $state, string $params): array
+    {
+        // '' and '0' (and any run starting with an omitted param) reset first.
+        if ($params === '' || $params === '0') {
+            return self::defaultSgrState();
+        }
+
+        // Each ';'-part may carry ':' sub-parameters (ITU T.416 form).
+        $parts = array_map(
+            static fn (string $part): array => array_map('intval', explode(':', $part)),
+            explode(';', $params)
+        );
+
+        for ($i = 0, $n = count($parts); $i < $n; $i++) {
+            $sub = $parts[$i];
+            $code = $sub[0] ?? 0;
+            $coloured = count($sub) > 1; // colon form: whole colour spec lives in $sub
+
+            if ($coloured && ($code === 38 || $code === 48 || $code === 58)) {
+                $state = self::applyExtendedColor($state, $code, $sub, colon: true);
+                continue;
+            }
+            if (!$coloured && ($code === 38 || $code === 48 || $code === 58)) {
+                // Semicolon form: the colour spec rides the FOLLOWING parts.
+                $spec = [];
+                $kind = $parts[$i + 1][0] ?? null;
+                if ($kind === 5 && isset($parts[$i + 2])) {
+                    $spec = [5, $parts[$i + 2][0]];
+                } elseif ($kind === 2 && isset($parts[$i + 4])) {
+                    $spec = [2, $parts[$i + 2][0], $parts[$i + 3][0], $parts[$i + 4][0]];
+                }
+                if ($spec === []) {
+                    // Absent or malformed spec (e.g. a doc ending '38;5'):
+                    // terminals bind EVERY remaining parameter to the
+                    // 38/48/58 request and apply nothing — re-reading the
+                    // leftovers as standalone codes would turn a missing
+                    // colour index into a stray blink.
+                    break;
+                }
+                $i += count($spec); // skip consumed spec parts
+                $state = self::applyExtendedColor($state, $code, array_merge([$code], $spec));
+                continue;
+            }
+            if ($coloured) {
+                continue; // colon form on a plain code (e.g. '1:2'): not meaningful, ignore
+            }
+
+            $state = self::applySgrCode($state, $code);
+        }
+
+        return $state;
+    }
+
+    /**
+     * A single SGR code with no colour payload: resets (0), attribute on
+     * (1-9), attribute off (21-29), palette colours (30-37/90-97,
+     * 40-47/100-107) and defaults (39/49). Everything else (fonts,
+     * ideograms, 59 underline-default, 6 rapid-blink folded into blink
+     * excluded, ...) is ignored gracefully.
+     *
+     * @param array $state
+     * @return array
+     */
+    private static function applySgrCode(array $state, int $code): array
+    {
+        switch (true) {
+            case $code === 0:
+                return self::defaultSgrState();
+            case $code === 1: $state['attrs']['bold'] = true; return $state;
+            case $code === 2: $state['attrs']['dim'] = true; return $state;
+            case $code === 3: $state['attrs']['italic'] = true; return $state;
+            case $code === 4: $state['attrs']['underline'] = true; return $state;
+            case $code === 5: $state['attrs']['blink'] = true; return $state;
+            case $code === 7: $state['attrs']['reverse'] = true; return $state;
+            case $code === 8: $state['attrs']['hidden'] = true; return $state;
+            case $code === 9: $state['attrs']['strikethrough'] = true; return $state;
+            // 21 is widely implemented as "underline off" (xterm family);
+            // ECMA-48 double-underline has no canonical form here.
+            case $code === 21: $state['attrs']['underline'] = false; return $state;
+            case $code === 22: $state['attrs']['bold'] = false; $state['attrs']['dim'] = false; return $state;
+            case $code === 23: $state['attrs']['italic'] = false; return $state;
+            case $code === 24: $state['attrs']['underline'] = false; return $state;
+            case $code === 25: $state['attrs']['blink'] = false; return $state;
+            case $code === 27: $state['attrs']['reverse'] = false; return $state;
+            case $code === 28: $state['attrs']['hidden'] = false; return $state;
+            case $code === 29: $state['attrs']['strikethrough'] = false; return $state;
+            case $code === 39: $state['fg'] = null; return $state;
+            case $code === 49: $state['bg'] = null; return $state;
+            case $code >= 30 && $code <= 37:
+                $state['fg'] = ['palette' => $code - 30];
+                return $state;
+            case $code >= 90 && $code <= 97: // bright 16 (aixterm family), indices 8-15
+                $state['fg'] = ['palette' => $code - 90 + 8];
+                return $state;
+            case $code >= 40 && $code <= 47:
+                $state['bg'] = ['palette' => $code - 40];
+                return $state;
+            case $code >= 100 && $code <= 107:
+                $state['bg'] = ['palette' => $code - 100 + 8];
+                return $state;
+            default:
+                return $state; // unknown code: ignored gracefully, state unchanged
+        }
+    }
+
+    /**
+     * 38/48 (and 58, consumed-then-discarded so its payload can never be
+     * misread as plain codes) in the `;5;n`/`;2;r;g;b` semicolon form or the
+     * `:5:n`/`:2:Cs:r:g:b` colon form. The colon direct-colour syntax per
+     * ITU T.416 carries a colourspace identifier between the kind and the
+     * triple (usually empty: `38:2::r:g:b`); the semicolon form does not,
+     * so the two spellings read the triple at different offsets. A colon
+     * triple without the Cs slot is malformed (the byte is not optional in
+     * that syntax) and a truncated spec in either form is ignored.
+     *
+     * @param array $state
+     * @param list<int> $spec code followed by its payload: [38,5,n] or
+     *                        [38,2,r,g,b] semicolon, [38,2,Cs,r,g,b] colon
+     * @param bool $colon which spelling $spec arrived in
+     * @return array
+     */
+    private static function applyExtendedColor(array $state, int $code, array $spec, bool $colon = false): array
+    {
+        $target = $code === 38 ? 'fg' : ($code === 48 ? 'bg' : null); // 58: underline colour — consumed, not modelled
+        $kind = $spec[1] ?? null;
+
+        if ($kind === 5 && isset($spec[2])) {
+            $index = $spec[2];
+            if ($index < 0 || $index > 255) {
+                return $state;
+            }
+            if ($target !== null && $index < 16) {
+                $state[$target] = ['palette' => $index]; // fold to canonical 3X/9X/4X/10X form
+            } elseif ($target !== null) {
+                $state[$target] = ['indexed' => $index];
+            }
+            return $state;
+        }
+
+        if ($kind === 2) {
+            // Colon payload layout: Cs at index 2, triple at 3..5; the Cs
+            // byte is NOT red — reading it as the first component shifts
+            // every colon colour one slot (real emulators show rgb(12,34,56)
+            // for '38:2::12:34:56', not rgb(0,12,34)).
+            $first = $colon ? 3 : 2;
+            if (isset($spec[$first], $spec[$first + 1], $spec[$first + 2])) {
+                if ($target !== null) {
+                    $state[$target] = ['rgb' => [
+                        (int) max(0, min(255, $spec[$first])),
+                        (int) max(0, min(255, $spec[$first + 1])),
+                        (int) max(0, min(255, $spec[$first + 2])),
+                    ]];
+                }
+                return $state;
+            }
+        }
+
+        return $state; // malformed extended-colour spec: ignored
+    }
+
+    /**
+     * Canonical serialisation of a resolved SGR state: one `ESC[…m` run with
+     * active attributes in ascending code order (1,2,3,4,5,7,8,9), then the
+     * foreground, then the background. Palette 0-7 use 3X/4X, bright 8-15
+     * use 9X/10X, anything deeper uses `38;5;n` / `48;5;n`; RGB uses
+     * `38;2;r;g;b` / `48;2;r;g;b`. The fully-default state serialises to ''
+     * so default cells keep the empty-prefix round-trip property.
+     *
+     * @param array $state
+     */
+    private static function canonicalSgr(array $state): string
+    {
+        $segments = [];
+        $attrCodes = [
+            'bold' => 1, 'dim' => 2, 'italic' => 3, 'underline' => 4,
+            'blink' => 5, 'reverse' => 7, 'hidden' => 8, 'strikethrough' => 9,
+        ];
+        foreach ($attrCodes as $attr => $code) {
+            if ($state['attrs'][$attr]) {
+                $segments[] = (string) $code;
+            }
+        }
+        if (($col = $state['fg']) !== null) {
+            $segments[] = self::canonicalColor($col, 30, 90, 38);
+        }
+        if (($col = $state['bg']) !== null) {
+            $segments[] = self::canonicalColor($col, 40, 100, 48);
+        }
+
+        return $segments === [] ? '' : "\x1b[" . implode(';', $segments) . 'm';
+    }
+
+    /**
+     * @param array $color ['palette'=>i] | ['indexed'=>i] | ['rgb'=>[r,g,b]]
+     * @param int $base   normal palette base code (30 / 40)
+     * @param int $bright bright palette base code (90 / 100)
+     * @param int $ext    extended-colour selector code (38 / 48)
+     */
+    private static function canonicalColor(array $color, int $base, int $bright, int $ext): string
+    {
+        if (isset($color['rgb'])) {
+            return $ext . ';2;' . implode(';', $color['rgb']);
+        }
+        $index = $color['indexed'] ?? $color['palette'];
+        if ($index <= 7) {
+            return (string) ($base + $index);
+        }
+        if ($index <= 15) {
+            return (string) ($bright + $index - 8);
+        }
+
+        return $ext . ';5;' . $index;
     }
 }
