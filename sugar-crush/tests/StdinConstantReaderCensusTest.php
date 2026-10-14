@@ -393,6 +393,10 @@ final class StdinConstantReaderCensusTest extends TestCase
         'sugar-crush/src/Cli/NonInteractive.php' => ['STDIN'],
         'sugar-crush/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
         'sugar-crush/src/Server/Workspace/WorkspaceHostProcess.php' => ['STDIN'],
+        // rv-qa-1: the no-tty pre-flight names \STDIN in stream_isatty() only. A closed
+        // descriptor 0 makes stream_isatty() answer false, which is the SAFE direction —
+        // the launch is refused with the usage line instead of degrading into a read.
+        'sugar-crush/bin/sugarcrush' => ['STDIN'],
     ];
 
     public function testTheReachableDescriptorZeroReaderRosterIsUnchanged(): void

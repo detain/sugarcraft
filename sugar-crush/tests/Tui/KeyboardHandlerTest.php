@@ -1453,7 +1453,7 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
         $this->assertSame(3800, $presses, '2 menu states x 10 panes x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 1900, 1 => 1031, 2 => 869],
+            [0 => 1900, 1 => 1029, 2 => 871],
             $histogram,
             'the distribution the memo docblock states, over the sweep it names',
         );
@@ -1497,7 +1497,7 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
         $this->assertSame(1520, $subPresses, '8 keyboard-owning sub-states x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 760, 1 => 704, 2 => 56],
+            [0 => 760, 1 => 696, 2 => 64],
             $subHistogram,
             'the sub-state distribution: nothing for ordinary typing, one set for a Ctrl chord this '
             . 'registry does not give Chat, two when it does and the yielded set has to be consulted',

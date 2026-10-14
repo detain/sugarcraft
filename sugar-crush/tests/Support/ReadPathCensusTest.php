@@ -370,6 +370,17 @@ final class ReadPathCensusTest extends TestCase
                 . '~/.sugar-crush, deliberately NOT dirname(userConfigPath()) and so not '
                 . 'relocatable by --config',
         ],
+        'Config/PolicySnapshot.php|file_get_contents' => [
+            'CALLER_SUPPLIED — read() resolves the snapshot path through the caller\'s '
+                . '$configDir callable; production hands it Bootstrap\'s trusted config dir (the '
+                . 'home-OWNED ~/.sugar-crush), and a missing or malformed record degrades to '
+                . 'null (baseline reset / entry-level-only quarantine), never a crash path.',
+            'CALLER_SUPPLIED — fingerprint() hashes the exact bytes of a policy file whose '
+                . 'path the caller names (user config / hooks files in Bootstrap); a file that '
+                . 'cannot be read counts as ABSENT (null), the same verdict the loader itself '
+                . 'would reach, so the snapshot never admits a path the caller did not already '
+                . 'trust it to hash',
+        ],
         'Context/Compaction/ReinjectionPlan.php|file_get_contents' => [
             'CONTAINED — renderFiles() (roadmap 2.6): a file the conversation\'s Read/Edit/Write calls '
                 . 'touched, re-read after a compaction only when ContainedPath::below() holds it under the '

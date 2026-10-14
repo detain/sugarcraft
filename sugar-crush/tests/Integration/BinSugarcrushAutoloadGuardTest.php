@@ -301,7 +301,7 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         // wording — asserted on the raw bytes, because a consumer's `jq` reads
         // bytes and not a decoded array.
         self::assertSame(
-            '{"result":null,"error":{"type":"installation",'
+            '{"schema":1,"result":null,"error":{"type":"installation",'
             . '"message":"sugarcrush: cannot find composer autoload.php"}}' . "\n",
             $stdout,
         );
@@ -570,7 +570,7 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
             if (!is_array($token) || $token[0] !== T_CONSTANT_ENCAPSED_STRING) {
                 continue;
             }
-            if (str_starts_with(substr($token[1], 1), '{"result"')) {
+            if (str_starts_with(substr($token[1], 1), '{"schema":1,"result"')) {
                 $literal = $token[1];
             }
         }

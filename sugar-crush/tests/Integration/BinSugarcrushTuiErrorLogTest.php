@@ -48,7 +48,7 @@ final class BinSugarcrushTuiErrorLogTest extends TestCase
     {
         $code = self::binCode();
         $install = strpos($code, self::INSTALL);
-        $program = strpos($code, '$finalModel = (new Program(Bootstrap::app(');
+        $program = strpos($code, '$program = new Program(Bootstrap::app(');
 
         self::assertIsInt($install);
         self::assertIsInt($program);
@@ -152,13 +152,15 @@ final class BinSugarcrushTuiErrorLogTest extends TestCase
     private static function displayBlock(string $code): string
     {
         $install = strpos($code, self::INSTALL);
-        $program = strpos($code, '$finalModel = (new Program(Bootstrap::app(');
+        $program = strpos($code, '$program = new Program(Bootstrap::app(');
         self::assertIsInt($install);
         self::assertIsInt($program);
 
         $block = trim(substr($code, $install + \strlen(self::INSTALL), $program - $install - \strlen(self::INSTALL)));
         self::assertStringStartsWith('if ($tuiErrorLog !== null) {', $block, 'the TUI display_errors block is gone from bin/sugarcrush');
-        self::assertStringEndsWith('}', $block);
+        // '});' since the rv-devops terminal-recovery guard joined the window: the slice
+        // now ends on the shutdown registration, not on the display if-block's brace.
+        self::assertStringEndsWith('});', $block);
 
         return $block;
     }

@@ -420,7 +420,11 @@ final class ContainedPathInventoryTest extends TestCase
      * the root or not, so nothing is admitted or refused on its answer.
      * `SessionPicker`'s one (`renderFooter()`, audit B1/B3) abbreviates a
      * session's recorded cwd to `~` for display, like `TuiErrorLog`'s; nothing
-     * is admitted or refused on its answer.
+     * is admitted or refused on its answer. `AgentPresetRegistry`'s one
+     * (`isBundledPresetPath()`, agents-qa) asks whether a preset resolves inside the
+     * package's own bundled tree — `$bundled` is `__DIR__`-derived, and a FALSE answer
+     * only routes the file through the stricter user-audit; nothing untrusted sits on
+     * the compared-with side.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -428,6 +432,7 @@ final class ContainedPathInventoryTest extends TestCase
 
         $this->assertSame(
             [
+                'Agents/AgentPresetRegistry.php' => 1,
                 'Agents/WorktreeManager.php' => 2,
                 'Chat.php' => 1,
                 'Diagnostics/TuiErrorLog.php' => 1,
@@ -443,7 +448,7 @@ final class ContainedPathInventoryTest extends TestCase
             $counts,
         );
 
-        unset($counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php']);
+        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php']);
         $this->assertSame(9, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(5, $counts, 'files still holding one');
     }

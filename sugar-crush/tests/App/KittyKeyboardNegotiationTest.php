@@ -142,8 +142,16 @@ final class KittyKeyboardNegotiationTest extends TestCase
         $this->assertGreaterThan($runAt, $popAt, 'the pop must FOLLOW run(), beside teardown, not precede it');
         $this->assertSame(
             1,
+            substr_count($bin, 'fwrite(STDOUT, Ansi::popKittyKeyboard());'),
+            'exactly one STANDALONE pop after run() balances the single push',
+        );
+        $this->assertSame(
+            2,
             substr_count($bin, 'popKittyKeyboard'),
-            'exactly one pop balances exactly one push',
+            'the second mention is the shutdown guard\'s recovery byte-set (the launch-restore '
+            . 'fix); it is disarmed by $terminalWasRun = false on the normal path, so the normal '
+            . 'path pays the pop once and only the exception path pays it twice - both spellings '
+            . 'are idempotent OFF sequences',
         );
     }
 }

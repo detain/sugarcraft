@@ -52,12 +52,14 @@ final class ProviderErrorCopyTest extends TestCase
 
     public function testTheMissingKeySentenceGrowsItsEnvironmentHintBehindAnUntouchedPrefix(): void
     {
+        $caught = null;
         try {
             (new ProviderFactory())->create(['type' => 'openai', 'model' => 'gpt-5-mini']);
-            $this->fail('a keyless openai config must refuse');
         } catch (\RuntimeException $e) {
-            $message = $e->getMessage();
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'a keyless openai config must refuse');
+        $message = $caught->getMessage();
 
         $this->assertStringStartsWith(
             "Provider type 'openai' requires 'apiKey' to be set",
@@ -78,13 +80,15 @@ final class ProviderErrorCopyTest extends TestCase
         ];
 
         foreach ($expectations as $type => [$key, $env]) {
+            $caught = null;
             try {
                 (new ProviderFactory())->create(['type' => $type]);
-                $this->fail("{$type} with nothing set must refuse");
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString("requires '{$key}' to be set", $e->getMessage());
-                $this->assertStringContainsString($env, $e->getMessage(), "{$type}: the hint must name a variable the config arm really reads");
+                $caught = $e;
             }
+            $this->assertNotNull($caught, "{$type} with nothing set must refuse");
+            $this->assertStringContainsString("requires '{$key}' to be set", $caught->getMessage());
+            $this->assertStringContainsString($env, $caught->getMessage(), "{$type}: the hint must name a variable the config arm really reads");
         }
     }
 
@@ -92,16 +96,18 @@ final class ProviderErrorCopyTest extends TestCase
     {
         // `custom` requires 'name'; no environment variable feeds it, and an
         // invented hint would be worse than none.
+        $caught = null;
         try {
             (new ProviderFactory())->create(['type' => 'custom', 'baseUrl' => 'http://x', 'model' => 'm']);
-            $this->fail('custom without a name must refuse');
         } catch (\RuntimeException $e) {
-            $this->assertSame(
-                "Provider type 'custom' requires 'name' to be set",
-                $e->getMessage(),
-                'no hint in the map means the message stays exactly as it was'
-            );
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'custom without a name must refuse');
+        $this->assertSame(
+            "Provider type 'custom' requires 'name' to be set",
+            $caught->getMessage(),
+            'no hint in the map means the message stays exactly as it was'
+        );
     }
 
     // =========================================================================

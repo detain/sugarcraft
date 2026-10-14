@@ -952,7 +952,10 @@ final class BinSugarcrushDispatchTest extends TestCase
 
         $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
         $this->assertSame('', $result['stdout'], 'the alt-screen was entered before the policy was read');
-        $this->assertStringContainsString('not usable JSON', $result['stderr']);
+        // The no-tty pre-flight (rv-qa-1) refuses this fully-piped launch BEFORE the config is
+        // even read, which is an even earlier stop of the same invariant — the screen is never
+        // taken. The policy-specific refusal stays pinned by the one-shot JSON sibling above.
+        $this->assertStringContainsString('needs a terminal', $result['stderr']);
     }
 
     /**
@@ -2250,7 +2253,9 @@ final class BinSugarcrushDispatchTest extends TestCase
         $result = $this->runBin(['--permission-mode', 'nonsense'], []);
 
         $this->assertSame(2, $result['status']);
-        $this->assertStringContainsString('--permission-mode', $result['stderr']);
+        // Same re-pinning as the unusable-policy TUI test: fully piped, the no-tty pre-flight
+        // refuses first; the flag's own message stays pinned by the -p one-shot test above.
+        $this->assertStringContainsString('needs a terminal', $result['stderr']);
     }
 
     /**

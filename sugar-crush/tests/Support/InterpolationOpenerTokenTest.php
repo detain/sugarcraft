@@ -201,6 +201,14 @@ final class InterpolationOpenerTokenTest extends TestCase
             . 'argument, never token_get_all() output, so no PHP opener token can reach it: '
             . 'the gap is in the selection, not in the walker.',
         ],
+        'tests/Permissions/ShellSubjectToolsCompletenessTest.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'rosterSiteBody() counts the raw \'{\'/\'}\' CHARACTERS of php_strip_whitespace() '
+            . 'output to slice a method body. Its input is comment-stripped TEXT, never '
+            . 'token_get_all() output, so no PHP opener token can reach it: the gap is in the '
+            . 'selection, not in the walker — the same family as the Awk/Sed rows.',
+        ],
         'src/Permissions/SedCommand.php' => [
             'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
             'reason' =>
