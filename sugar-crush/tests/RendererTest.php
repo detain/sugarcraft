@@ -1636,9 +1636,11 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('allow once', $out);
         // The `a` row names what it would remember (SessionPermissionMemo).
         $this->assertStringContainsString('always allow Bash(git status *) (this session)', $out);
+        // `p` is the same scope with a future: it saves to config.
+        $this->assertStringContainsString('always allow Bash(git status *) (save to config)', $out);
         // Wrapped across two rows at this width; read as one line.
         $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip($out)));
-        $this->assertStringContainsString('(this session) e edit what "always" allows', $flat, '`e` edits it first');
+        $this->assertStringContainsString('(this session) p always allow Bash(git status *) (save to config) e edit what "always" allows', $flat, '`p` saves what `a` remembers, `e` edits it first');
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
 

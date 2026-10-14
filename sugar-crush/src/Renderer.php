@@ -603,11 +603,15 @@ final class Renderer
      * `a` names what it remembers (`always allow Bash(git status *)`) and
      * answers at once; `e` edits that before it is remembered. Both rows are
      * left out for a question nothing can remember, and `e` for a tool whose
-     * only scope is the tool itself.
+     * only scope is the tool itself. `p` is `a` written down — the same scope
+     * saved to `permissionRules` so it outlives the session — and is left out
+     * when no configured rule reproduces that scope
+     * ({@see \SugarCraft\Crush\Chat::permissionPersistScope()}).
      */
     private const PERMISSION_OPTIONS = [
         ['y', 'tui.permission.allow_once'],
         ['a', 'tui.permission.always_scope'],
+        ['p', 'tui.permission.persist_scope'],
         ['e', 'tui.permission.edit_scope'],
         ['n / Esc', 'tui.permission.reject'],
         ['r', 'tui.permission.reject_with_note'],
@@ -6466,7 +6470,7 @@ final class Renderer
             );
         }
 
-        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope, $chat->permissionEditableScope() !== null);
+        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope, $chat->permissionEditableScope() !== null, $chat->permissionPersistScope());
 
         $lines[] = '';
         foreach ($options as $option) {
@@ -6539,7 +6543,7 @@ final class Renderer
      *
      * @return list<array{0: string, 1: string, 2?: array<string, int|string>}>
      */
-    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null, bool $editable = false): array
+    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null, bool $editable = false, ?string $persistScope = null): array
     {
         $askUser = \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME;
         $planExit = \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME;
@@ -6576,13 +6580,19 @@ final class Renderer
                 // the modal says why above the keys instead.
                 $alwaysScope === null => array_values(array_filter(
                     self::PERMISSION_OPTIONS,
-                    static fn (array $row): bool => $row[0] !== 'a' && $row[0] !== 'e',
+                    static fn (array $row): bool => $row[0] !== 'a' && $row[0] !== 'p' && $row[0] !== 'e',
                 )),
                 default => array_values(array_map(
-                    static fn (array $row): array => $row[0] !== 'a'
-                        ? $row
-                        : ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]],
-                    array_filter(self::PERMISSION_OPTIONS, static fn (array $row): bool => $editable || $row[0] !== 'e'),
+                    static fn (array $row): array => match ($row[0]) {
+                        'a' => ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]],
+                        'p' => ['p', 'tui.permission.persist_scope', ['scope' => self::permissionVisibleOneLine((string) $persistScope)]],
+                        default => $row,
+                    },
+                    array_filter(
+                        self::PERMISSION_OPTIONS,
+                        static fn (array $row): bool => ($editable || $row[0] !== 'e')
+                            && ($persistScope !== null || $row[0] !== 'p'),
+                    ),
                 )),
             },
         };

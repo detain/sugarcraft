@@ -336,11 +336,15 @@ final class KeyBindingRegistryTest extends TestCase
      * launch chord (crush-media W3.10): `media.open_form` (`Ctrl+D`) — the
      * first row of the `Media form` context; the frame's own keys are painted
      * help, not registry rows, until W3.4 gives it more chords.
+     *
+     * 143 -> 144 live (144 all), 14 groups, with the permission modal's `p`:
+     * `permission.persist` — `a`'s scope also written to `permissionRules`
+     * so the grant outlives the session.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(143, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(143, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(144, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(144, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(14, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

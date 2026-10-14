@@ -1506,6 +1506,41 @@ final class KeyBindingDriftTest extends TestCase
                     'the row must say what the key does',
                 );
             },
+            // `p` is `a` with a future: the same answer, the same session
+            // grant, plus a write of the scope to the user's
+            // `permissionRules`. This chat has no settings write door, so
+            // the transcript must SAY the save did not happen — the grant
+            // itself still rides on, exactly as `a` left it.
+            'permission.persist' => function (array $k): void {
+                $blocked = $this->blockedOnTheGate();
+                $this->assertSame('Bash(make clean *)', $blocked->permissionPersistScope());
+
+                [$granted, $cmd] = $blocked->update($k[0]);
+                $this->assertNull($granted->pendingPermission(), "'p' answers the prompt on its own — no confirm box");
+                $this->assertSame(
+                    ['rule:Bash(make clean)' => true, 'rule:Bash(make clean *)' => true],
+                    $granted->permissionGrants(),
+                    'the session half is identical to `a`',
+                );
+                $saved = false;
+                foreach ($granted->history as $row) {
+                    if (\str_contains((string) $row?->content, 'not saved')) {
+                        $saved = true;
+                        break;
+                    }
+                }
+                $this->assertTrue(
+                    $saved,
+                    'and the save half reports why it did not land',
+                );
+                $this->reapReleasedBatch($cmd);
+
+                $this->assertStringStartsWith(
+                    'Allow calls like this one',
+                    KeyBindingRegistry::byId('permission.persist')?->description ?? '',
+                    'the row must say what the key does',
+                );
+            },
             // `e` opens the scope editor prefilled with what `a` would
             // remember; Enter saves the edited scope and allows the call.
             'permission.edit' => function (array $k): void {

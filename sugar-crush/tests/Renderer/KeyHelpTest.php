@@ -1128,7 +1128,10 @@ final class KeyHelpTest extends TestCase
         // The generation form's launch chord (crush-media W3.10) declared
         // `media.open_form` under a fourteenth heading — one row, one header
         // and one separator more: 170 lines, 142 -> 145, fitting at 100x175.
-        foreach ([[100, 30, 145], [100, 175, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // The permission modal's `p` declared `permission.persist`: one row
+        // under a heading it already had: 171 lines, 145 -> 146, fitting at
+        // 100x176.
+        foreach ([[100, 30, 146], [100, 176, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1192,8 +1195,9 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 175 rows, not 80: the list is 170 content lines now (143 live
-            // rows, 14 headers, 13 separators; 167 before `media.open_form` and its fourteenth heading, 156 before `/new`'s nine folder-picker keys, 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 176 rows, not 80: the list is 171 content lines now (144 live
+            // rows, 14 headers, 13 separators; 170 before `permission.persist`,
+            // 167 before `media.open_form` and its fourteenth heading, 156 before `/new`'s nine folder-picker keys, 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1202,7 +1206,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 175))),
+                Width::of($this->footer($this->chat('', $cols, 176))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

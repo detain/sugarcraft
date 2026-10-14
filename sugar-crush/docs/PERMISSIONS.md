@@ -823,6 +823,17 @@ situations, not two:
     modal names the scope on the `a` row (`a always allow Bash(git status
     *) (this session)`, `this exact command`, or `this exact command without
     the leading cd`).
+  - `p` **saves the scope for good**: the same answer as `a`, plus its
+    patterns written to `permissionRules` in `config.json`, so the next launch
+    allows the same calls without asking. It is offered only where a
+    configured rule reproduces the grant — a **per-part pipeline** scope
+    (`npm test *`, `tail *`) and an **exact-call** grant have no rule form, so
+    on those `p` is just another key and the modal leaves its row out. The
+    saved rules land **after** any you wrote by hand, and rules are
+    first-match-wins, so a `deny` you wrote still refuses what `p` saves. The
+    session grant `a` records rides along, so it is live this turn too; a save
+    that cannot land (no write door, a value the launch would not load whole)
+    is reported in the transcript and never fatal.
   - `e` **edits the scope** before it is remembered: the draft box is
     prefilled with what `a` would remember — one pattern, or for a per-part
     grant a **comma-separated list** (`npm test *, tail *`; a comma followed

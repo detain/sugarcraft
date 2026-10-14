@@ -688,6 +688,14 @@ final class KeyBindingRegistry
             // `Bash(git status *)`, a pipeline each segment, an edit that
             // path). It answers at once; the modal's `a` row names the scope.
             KeyBinding::new('permission.always', 'a', Lang::t('keys.permission.always'), $c),
+            // `p` is `a` with a future: the same scope, also written to the
+            // user's `permissionRules` so the next launch answers it too
+            // ({@see \SugarCraft\Crush\Chat::persistPermissionRules()}). It is
+            // offered only where a rule reproduces the grant — a pipeline's
+            // per-part scope and an exact-call grant have no rule form — so
+            // like `a` on a question that cannot be remembered, `p` is just
+            // another key that is not an answer there.
+            KeyBinding::new('permission.persist', 'p', Lang::t('keys.permission.persist'), $c),
             // ...and `e` edits that scope before it is remembered.
             KeyBinding::new('permission.edit', 'e', Lang::t('keys.permission.edit'), $c),
             KeyBinding::new('permission.deny', 'n', Lang::t('keys.permission.deny'), $c),

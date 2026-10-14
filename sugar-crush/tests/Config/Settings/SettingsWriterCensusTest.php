@@ -119,6 +119,12 @@ final class SettingsWriterCensusTest extends TestCase
             // sd.presets key, the sanctioned SettingsWriter path, the form
             // itself never names the writer (the W3.9 separation law holds).
             'App/App.php::openMediaForm->write' => 1,
+            // The permission modal's `p`: the same scope `a` remembers, also
+            // written to the user's `permissionRules` so it outlives the
+            // session. One write of exactly that key, through the sanctioned
+            // SettingsWriter path — the session grant it rides on is already
+            // recorded, so a refused save is reported, never fatal.
+            'Chat.php::persistPermissionRules->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             // crush-media W5.7: /rendermode writes the chosen render mode
             // through the sanctioned writer — the one command that mutates a

@@ -4307,9 +4307,14 @@ final class Chat implements Model
      * one still outstanding. Dispatching the whole parked batch off one
      * answer would run calls the user was never even shown.
      *
+     * @param bool $persist `p`: the same Always answer, plus its patterns
+     *                      written to the user's `permissionRules` so the
+     *                      grant outlives the session
+     *                      ({@see persistPermissionRules()}).
+     *
      * @return array{0:Chat,1:?\Closure}
      */
-    private function answerPermission(PermissionReply $reply, string $note = '', ?string $scope = null): array
+    private function answerPermission(PermissionReply $reply, string $note = '', ?string $scope = null, bool $persist = false): array
     {
         $request = $this->pendingPermission;
         if ($request === null) {
@@ -4329,6 +4334,12 @@ final class Chat implements Model
                 )
                 : $this->permissionAlwaysScope();
         }
+        // `p` saves exactly what `a` would remember, so the write happens on
+        // this answer's own patterns — read BEFORE the prompt comes down,
+        // while the question that is up still describes the call.
+        $persistPatterns = $persist && $reply === PermissionReply::Always
+            ? $this->permissionPersistPatterns()
+            : [];
         $rememberedNotice = $remembered === null ? [] : [Message::notice(Lang::t('chat.permission.remembered', [
             'scope' => $remembered,
         ]))];
@@ -4373,8 +4384,13 @@ final class Chat implements Model
                 $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
             }
             $ask->reply($reply, $note === '' ? null : $note);
-            if ($remembers && $rememberedNotice !== []) {
-                $cleared['history'] = [...$this->history, ...$rememberedNotice];
+            if ($remembers) {
+                $notice = $persist && $persistPatterns !== []
+                    ? [Message::notice($this->persistPermissionRules($persistPatterns))]
+                    : $rememberedNotice;
+                if ($notice !== []) {
+                    $cleared['history'] = [...$this->history, ...$notice];
+                }
             }
 
             // P-E2: a delegated run's question leaves a ui-only row saying
@@ -4464,8 +4480,11 @@ final class Chat implements Model
             if ($answeredAsk !== null) {
                 $grants = self::rememberNative($grants, $request->toolCall, $answeredAsk, $this->projectRoot(), $scope);
                 $cleared['permissionGrants'] = $grants;
-                if ($answeredAsk->isRememberable() && $rememberedNotice !== []) {
-                    $cleared['history'] = [...$this->history, ...$rememberedNotice];
+                $nativeNotice = $persist && $persistPatterns !== []
+                    ? [Message::notice($this->persistPermissionRules($persistPatterns))]
+                    : $rememberedNotice;
+                if ($answeredAsk->isRememberable() && $nativeNotice !== []) {
+                    $cleared['history'] = [...$this->history, ...$nativeNotice];
                 }
             }
         }
@@ -4538,7 +4557,11 @@ final class Chat implements Model
      * had already read (user report 2026-10-05). `e` opens the scope editor
      * instead ({@see PermissionPromptStage::EditingScope}). A question that
      * cannot be remembered offers no `a`, so there `a` disarms like any other
-     * key that is not an answer.
+     * key that is not an answer. `p` answers at once too, like `a` — the same
+     * scope also written to the user's `permissionRules` — and is offered only
+     * where a configured rule reproduces the grant
+     * ({@see permissionPersistScope()}); where it is not, `p` disarms like any
+     * other key that is not an answer.
      *
      * ── MEASURED, one `KeyMsg(Char, c)` per character, at a `bash` prompt ──
      *
@@ -4555,6 +4578,7 @@ final class Chat implements Model
      *   | `yes` / `Y`    | 1st        | `y`  | approved once                  |
      *   | `no` / `nay`   | 1st        | `n`  | denied                         |
      *   | `a` / `also`   | 1st        | `a`  | ALWAYS, for the named scope    |
+     *   | `p` / `please` | 1st        | `p`  | ALWAYS + saved rule (offered)  |
      *
      * Not one of the six slash commands reaches an answer at all.
      *
@@ -4569,16 +4593,19 @@ final class Chat implements Model
      *
      * ── THE RESIDUAL, stated rather than apologised for ──
      *
-     * A message that BEGINS with `y`, `n` or `a` still answers on its first
-     * keystroke — `yes`, `no`, `nay`, `also` above. That is not a hole in the arm rule,
-     * it is the rule working: those keys ARE the answers, and the first
-     * keystroke is the only one at which the prompt has no evidence to the
-     * contrary. Closing it needs an Enter-to-commit modal (type the letter,
-     * press Enter), which was weighed and rejected: it taxes every single
-     * answer to the common question in order to catch a message that happens to
-     * open with one of three letters. `a` is the persistent one, and it is
-     * recoverable too: the transcript row it leaves names the grant and
-     * `/permissions revoke` takes it back.
+     * A message that BEGINS with `y`, `n`, `a` or `p` still answers on its
+     * first keystroke — `yes`, `no`, `nay`, `also`, `please` above. That is
+     * not a hole in the arm rule, it is the rule working: those keys ARE the
+     * answers, and the first keystroke is the only one at which the prompt has
+     * no evidence to the contrary. Closing it needs an Enter-to-commit modal
+     * (type the letter, press Enter), which was weighed and rejected: it taxes
+     * every single answer to the common question in order to catch a message
+     * that happens to open with one of four letters. `a` is the
+     * session-persistent one and `p` the on-disk one; both are recoverable:
+     * the transcript row `a` leaves names the grant and `/permissions revoke`
+     * takes it back, and the row `p` leaves names the file whose
+     * `permissionRules` the settings editor edits — or says the save did not
+     * land, and then `p` was only ever an `a`.
      *
      * All of it is pinned keystroke-for-keystroke by
      * KeyHelpTest::testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt() and
@@ -4692,6 +4719,17 @@ final class Chat implements Model
         // not an answer — the arm rule below disarms on it.
         if ($isChar && $rune === 'a' && $question === null && $this->permissionAlwaysScope() !== null) {
             return $this->answerPermission(PermissionReply::Always);
+        }
+
+        // `p` is `a` with a future: the same scope, written to the user's
+        // `permissionRules` so the next launch answers it too
+        // ({@see persistPermissionRules()}). It is offered only where a
+        // configured rule reproduces the grant — the `a` row's pipeline parts
+        // and exact-call grants have no rule form
+        // ({@see permissionPersistPatterns()}), and there `p` is just another
+        // key that is not an answer, so the arm rule below disarms on it.
+        if ($isChar && $rune === 'p' && $question === null && $this->permissionPersistScope() !== null) {
+            return $this->answerPermission(PermissionReply::Always, '', null, true);
         }
 
         // `e` opens the scope editor on what `a` would remember, so the user
@@ -4952,6 +4990,141 @@ final class Chat implements Model
         }
 
         return null;
+    }
+
+    /**
+     * The {@see \SugarCraft\Crush\Permissions\PermissionRule} patterns `p`
+     * would save for the question that is up — the same scope `a` remembers,
+     * kept only where a CONFIGURED rule reproduces the grant. Two shapes do
+     * not survive that translation and are dropped here, which is what takes
+     * the `p` row off the modal:
+     *
+     *  - a PER-PART pipeline grant (`npm test | tail` → `Bash(npm test *)` +
+     *    `Bash(tail *)`): session rules cover such a line part by part
+     *    ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::coversBySegments()}),
+     *    but a configured `Allow` rule fires only when EVERY command of the
+     *    line matches IT, so saving the parts would write rules that never
+     *    answer the next launch's question about the same pipeline;
+     *  - an EXACT-call grant (a launcher, a destructive command, a
+     *    subject-less tool): there is no rule form for "this exact call", and
+     *    the tool as a whole is never granted ({@see rememberNative()}).
+     *
+     * The test is the configured path's own: the whole set is saved only
+     * when at least one of its rules matches the FULL call as written —
+     * true for a single command (whose bare `Tool(x)` rule matches, and whose
+     * `Tool(x *)` sibling then rides along to cover the prefixed calls the
+     * session grant covers), false for a pipeline's parts.
+     *
+     * @return list<string>
+     */
+    private function permissionPersistPatterns(): array
+    {
+        $request = $this->pendingPermission;
+        if ($request === null) {
+            return [];
+        }
+        [$tool, $arguments] = $request->pendingAsk !== null
+            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
+            : [$request->toolCall->name, $request->toolCall->arguments];
+        // Chat's own tool path remembers a subject-less tool as the EXACT
+        // call ({@see rememberNative()}), which no rule expresses — the
+        // engine path's whole-tool grant does translate, and stays.
+        if ($request->pendingAsk === null && \SugarCraft\Crush\Permissions\PermissionRule::subjectArgumentName($tool) === null) {
+            return [];
+        }
+        $root = $this->projectRoot();
+
+        $patterns = \SugarCraft\Crush\Permissions\SessionPermissionMemo::patternsFor($tool, $arguments, $root);
+        if ($patterns === []) {
+            return [];
+        }
+
+        $full = new ToolCall($tool, $arguments);
+        foreach ($patterns as $pattern) {
+            $rule = new \SugarCraft\Crush\Permissions\PermissionRule($pattern, \SugarCraft\Crush\Permissions\PermissionAction::Allow);
+            if ($rule->matches($full, true, $root)) {
+                return $patterns;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * What `p` would save, as the modal names it — {@see permissionAlwaysScope()}
+     * when that scope is one a configured rule reproduces
+     * ({@see permissionPersistPatterns()}), null when `p` has nothing to offer
+     * (no `a` on this question, or its grant does not survive the rule
+     * translation).
+     */
+    public function permissionPersistScope(): ?string
+    {
+        $scope = $this->permissionAlwaysScope();
+
+        return $scope !== null && $this->permissionPersistPatterns() !== [] ? $scope : null;
+    }
+
+    /**
+     * Append $patterns to the user's `permissionRules` in `config.json`,
+     * through the workspace's {@see \SugarCraft\Crush\Config\Settings\SettingsWriter}
+     * — the settings editor's own write door, so the schema's validation of
+     * the key (refusing a value the launch would not load whole) is this
+     * write's validation too. Existing entries ride in front of the new ones:
+     * rules are first-match-wins, so a `deny` the user wrote keeps refusing
+     * what `p` saves, and the grant only answers questions the mode would
+     * have asked anyway. An entry already there is not written twice.
+     *
+     * Returns the notice the transcript shows — where it landed, or why it
+     * did not. A failed save is REPORTED, never fatal, exactly as a model
+     * choice that cannot be persisted still switches for the session: the
+     * session grant `p` rides on has already been recorded.
+     *
+     * @param list<string> $patterns
+     */
+    private function persistPermissionRules(array $patterns): string
+    {
+        $scope = implode(', ', $patterns);
+        $writer = $this->workspace?->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class);
+        if (!$writer instanceof \SugarCraft\Crush\Config\Settings\SettingsWriter) {
+            return Lang::t('chat.permission.not_persisted', [
+                'scope' => $scope,
+                'error' => self::reportField('this session has no settings write door'),
+            ]);
+        }
+
+        try {
+            $config = $writer->current(\SugarCraft\Crush\Config\Settings\SettingsTier::You);
+            $existing = $config['permissionRules'] ?? [];
+            $existing = \is_array($existing)
+                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
+                : [];
+            $have = [];
+            foreach ($existing as $rule) {
+                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
+                    $have[$rule['pattern']] = true;
+                }
+            }
+
+            $next = $existing;
+            foreach ($patterns as $pattern) {
+                if (!isset($have[$pattern])) {
+                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
+                }
+            }
+            $path = $next === $existing
+                ? (string) $writer->targetPath(\SugarCraft\Crush\Config\Settings\SettingsTier::You)
+                : $writer->write(\SugarCraft\Crush\Config\Settings\SettingsTier::You, ['permissionRules' => $next]);
+
+            return Lang::t('chat.permission.persisted', [
+                'scope' => $scope,
+                'path' => self::reportField($path),
+            ]);
+        } catch (\Throwable $e) {
+            return Lang::t('chat.permission.not_persisted', [
+                'scope' => $scope,
+                'error' => self::reportField($e->getMessage()),
+            ]);
+        }
     }
 
     /**

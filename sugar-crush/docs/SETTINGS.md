@@ -1158,8 +1158,11 @@ tier — and saves it through `Config\Settings\SettingsWriter`, a write door of
 its own. It is **not** `Chat`'s config-change door, so that door still carries
 exactly `provider` and `theme`; `SettingsWriterCensusTest` pins who may write
 `config.json` at all, and who saves through the writer: this view (its save and
-its trust action), `/model`'s model choice, and the server's `settings.set`,
-which is the web UI's settings form. That form is generated from the same
+its trust action), `/model`'s model choice, the server's `settings.set` — the
+web UI's settings form — and the permission modal's `p`, which appends the
+scope it saves to `permissionRules` (see
+[`PERMISSIONS.md`](PERMISSIONS.md#ask-needs-somewhere-to-ask)). That form
+is generated from the same
 schema as this view and shows the same things — each field's tier, where its
 value comes from, the environment or flag lock, when a change applies, and the
 save preview — but it may write only the cosmetic, tuning and narrowing keys,
