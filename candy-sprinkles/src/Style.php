@@ -106,9 +106,33 @@ final class Style
      */
     private ?array $borderSgrMemo = null;
 
+    /**
+     * Process-ambient default colour profile consulted by {@see new()}.
+     * `null` — the resting state — keeps the historical TrueColor default
+     * byte-for-byte for every library that never negotiates one. A host
+     * application that has resolved its terminal's real capability (the
+     * NO_COLOR / CLICOLOR_FORCE / TERM=dumb family) calls
+     * {@see setDefaultProfile()} once at startup so every Style minted
+     * afterwards renders within that capability instead of emitting
+     * escapes the terminal cannot honour.
+     */
+    private static ?ColorProfile $defaultProfile = null;
+
+    /** Pin the ambient profile for styles created by {@see new()} from now on; `null` restores TrueColor. */
+    public static function setDefaultProfile(?ColorProfile $profile): void
+    {
+        self::$defaultProfile = $profile;
+    }
+
+    /** The ambient profile currently in force, or `null` when none was negotiated. */
+    public static function getDefaultProfile(): ?ColorProfile
+    {
+        return self::$defaultProfile;
+    }
+
     public static function new(): self
     {
-        return new self();
+        return new self(profile: self::$defaultProfile ?? ColorProfile::TrueColor);
     }
 
     /**

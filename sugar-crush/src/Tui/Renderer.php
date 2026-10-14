@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
@@ -271,6 +272,67 @@ final class Renderer
     }
 
     /**
+     * Whether the process-ambient colour profile has been negotiated this
+     * process ({@see applyAmbientColorProfile()}). One-shot like the size
+     * cache above: capability does not change mid-session, and re-reading
+     * the environment on every frame would let a stray putenv() repaint the
+     * whole UI.
+     */
+    private static bool $colorProfileApplied = false;
+
+    /**
+     * Resolve the terminal's real colour capability once and pin it as the
+     * ambient default for every {@see Style} this process mints afterwards.
+     *
+     * Until rv-devops-1/rv-a11y-M1 only PaneFrame's border glyphs consulted
+     * candy-core's detection ladder, so `NO_COLOR=1` still shipped full
+     * `38;2;r;g;b` sweeps in the rest of the frame. The single ladder lives
+     * in {@see ColorProfile::detect()} — this method only decides WHEN to
+     * consult it, it never re-implements the WHAT.
+     */
+    public static function applyAmbientColorProfile(): void
+    {
+        if (self::$colorProfileApplied) {
+            return;
+        }
+        self::$colorProfileApplied = true;
+
+        $profile = self::negotiateColorProfile(null, stream_isatty(STDOUT));
+        if ($profile !== null) {
+            Style::setDefaultProfile($profile);
+        }
+    }
+
+    /**
+     * The capability decision behind {@see applyAmbientColorProfile()},
+     * factored out so tests can drive the ladder without a real tty.
+     *
+     * A piped stdout answers `null` — "leave the ambient alone" — which
+     * keeps every redirected/captured frame on the historical TrueColor
+     * bytes the whole snapshot corpus was recorded against. That is the
+     * same law PaneFrame's NoTty-on-pipe doc pins; the difference is only
+     * which side of the Style default it is expressed from.
+     *
+     * @param ?array<string,string> $env environment override for tests; null reads the process env
+     * @return ?ColorProfile null = no negotiation (keep Style's TrueColor default)
+     */
+    public static function negotiateColorProfile(?array $env = null, bool $stdoutIsTty = true): ?ColorProfile
+    {
+        if (!$stdoutIsTty) {
+            return null;
+        }
+
+        return ColorProfile::detect($env);
+    }
+
+    /** Test seam mirroring {@see resetSizeCache()}: clears the one-shot and restores the TrueColor resting state. */
+    public static function resetColorProfileCacheForTesting(): void
+    {
+        self::$colorProfileApplied = false;
+        Style::setDefaultProfile(null);
+    }
+
+    /**
      * Zone registry for the shell CHROME — today the menu bar's titles and
      * the open menu's dropdown rows (crush_feat.md §8, whose E-list wired
      * session tabs, panes, tool rows and the palette but never the bar).
@@ -529,6 +591,10 @@ final class Renderer
      */
     public static function renderView(App $a, ?int $cols = null, ?int $rows = null): View
     {
+        // First frame of the process negotiates the colour capability; every
+        // Style::new() below then renders within it (rv-devops-1).
+        self::applyAmbientColorProfile();
+
         if ($cols === null || $rows === null || $cols <= 0 || $rows <= 0) {
             $size = self::getTerminalSize();
             $cols = ($cols !== null && $cols > 0) ? $cols : $size['cols'];
