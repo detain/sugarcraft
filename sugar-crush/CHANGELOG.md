@@ -114,6 +114,52 @@ happen to share the numbers 1–4.
   only inside that checkout, and the destructive clean step was replaced by
   "stop and report". Eight built-ins ship today.
 
+### Notices, keyboard, length-stops, sharded CI (2026-09)
+
+- **`/notices` full view.** Launch notices, narrowed permission-grant warnings
+  and dropped rows are capped and clipped in the transcript; `/notices`
+  restates every one of them in full.
+- **Kitty keyboard negotiation.** SugarCrush now asks the terminal to
+  disambiguate modified keys, so Ctrl+Enter and Shift+Enter arrive as
+  themselves — Enter submits, the modified forms insert a newline.
+- **Length-stops are said out loud.** When a provider stops a reply at its
+  output-token limit, the transcript says so instead of ending mid-sentence,
+  and `maxOutputTokens` (user tier) caps the ceiling explicitly.
+- **Coverage runs sharded.** The CI coverage job now splits the suite into
+  shards that each write clover output, merged line-wise into one artifact —
+  the same union `coverage.xml` consumers always read.
+### Media generation, bypass mode, PtyRun (2026-10)
+
+- **Image and video generation.** `GenerateImage` and `GenerateVideo` drive
+  Stable-Diffusion-webui-family servers (A1111/SD.Next `sdapi` and
+  SGLang-Diffusion), with capability discovery, a tabbed media form
+  (txt2img/img2img/inpaint presets, video frames/fps/cfg ladder), render-mode
+  selection, PNG-parameter round-trip via `/sendto`, and playback through
+  `/play`. `docs/MEDIA.md` is the home page.
+- **Media over the wire.** `tool.finished` carries media refs (never bytes);
+  the serve RPC gains `generate.submit`, `generate.status` and `media.fetch`,
+  and the web UI renders `MediaCard`s from them.
+- **`/rendermode`.** One command switches the terminal graphics ladder
+  (kitty, iTerm2, sixel, chafa, halfblock) mid-session.
+- **Bypass-permissions is switchable mid-session.** `/permissions mode
+  bypass-permissions` now works from inside a live session (it used to be a
+  launch-only mode); deny rules, the destructive-command floor and explicit
+  user refusals still stand, and sub-agents inherit the mode.
+- **`PtyRun`.** A built-in tool that drives real interactive programs over a
+  pseudo-terminal — send keystrokes, wait, match expected output — with the
+  same permission binding as `Bash`: a rule naming either shell tool governs
+  both.
+- **Provider endpoints are configurable (landing this release).** A
+  `providers` map in your `~/.sugar-crush/config.json` or a project
+  `.sugar-crush/config.json` is honoured, and `OPENAI_BASE_URL` redirects the
+  OpenAI-shaped built-ins — OpenRouter, DeepSeek or a self-hosted server work
+  without a checkout edit; `docs/ENVIRONMENT.md` carries the contract.
+- **Right-border drift fixed.** The width table now scores Unicode 16.0
+  `Emoji_Presentation` codepoints (✅ and friends) as two cells, so frames
+  with emoji in thinking/progress lines stop overflowing their right border.
+- **Suite era moved from ~21.1k to 22.4k tests** across the media campaign and
+  the tooling above; figures are pinned per release by the drift guards.
+
 ### Wave 1 — provider correctness, context, skills, CLI (2026-08)
 
 - **Provider/wire fixes** — corrected streaming tool-call parsing; added

@@ -331,6 +331,22 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   Ctrl+P (which persists to `config.json`).
 - **`doctor` FAILs on provider.** The configured name is not one this install
   knows. `models` lists the valid ones.
+- **`401 Unauthorized` (or "key rejected") mid-request.** The endpoint refused
+  the credential. The variable that feeds it is the vendor's own name —
+  `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and so on — or the `apiKey` of the
+  provider block you declared; a raw HTTP dump with no env-var name means the
+  key reached the wire and the server said no. Run `sugarcrush doctor` — it
+  reports which provider resolves and whether its key is present (never the
+  value). A stale copy exported in an old shell is the usual culprit.
+- **`Connection refused` naming a URL.** Nothing is listening at that endpoint.
+  The URL printed in the error is the one actually dialed: a self-hosted
+  server (SGLang and friends) needs to be up at that address, and the address
+  itself comes from `OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL` or the
+  `baseUrl` of your `providers` block — see
+  [`ENVIRONMENT.md`](ENVIRONMENT.md#variables-read-from-any-config-file).
+- **`Unknown provider type: X`.** The name is matched case-sensitively, so
+  `SUGARCRUSH_PROVIDER=OpenAI` is not `openai`. `sugarcrush models` lists
+  every selectable name; pick from that list verbatim.
 - **Streaming shows nothing until the end.** Fixed — if you still see it, the
   install predates the fix. The streaming backend's read loop used to run to
   completion inside one ReactPHP `futureTick`, so the event loop was blocked for
@@ -527,6 +543,17 @@ bubblewrap, allow its user namespaces, or set `bashSandbox` back to `off`. See
 | a stray line is painted inside a frame | not an `error_log()` line — in the TUI those go to the log file, or the null device as the last resort, never the terminal (see [Where diagnostics go](#where-diagnostics-go)). A direct stderr write can still do it: a construction-time notice that landed after the alt screen came up; the content is also readable from `Bootstrap::projectTierRefusals()` / `skillSkips()` |
 | a delegated `Task` shows nothing until it is done (live agent updates need ext-pcntl) | check `php -m \| grep pcntl`. Without ext-pcntl the whole turn runs on the UI thread (`EngineBackend::completeAsync()` falls back to a blocking call), so a sub-agent's dashboard row and the live line under its `Task` row fill in only when the turn returns (with the run's real outcome; nothing is shown as live that was not), and parallel `Task` calls run one after another. With ext-pcntl, parallel members report live through a per-member datagram relay; see "Sub-agent activity relay" in [ARCHITECTURE](ARCHITECTURE.md) |
 | `--help`, a subcommand, or a one-shot opened the TUI | it should not — `--help`, `--version`, all five subcommands **and** the `-p`/`run` one-shot are dispatched before `Program::run()`. This has been a real bug before, and flag order was enough to cause it: `--output-format json run` once parsed to `promptRequested=false` and fell through into the blocking full-screen TUI (`Cli\ArgvParser` line 175 records it). File a bug with the **exact** argv, order included |
+
+## Automating sugar-crush (CI, expect-style harnesses)
+
+- **Key input comes from `/dev/tty` when a controlling terminal exists.** That
+  is by design — a redirected stdin should not starve the person at the
+  keyboard — but it breaks the naive PTY harness: under `script -qec 'sugarcrush' out.log`
+  the app renders into the log and stays deaf to everything typed into the
+  pty slave, because the slave is not its controlling terminal. Launch the
+  process detached from any ctty instead (`setsid`, or `start_new_session` in
+  a Python harness over a bare `openpty`), and inject keys on the pty master
+  — that is the shape the test suite itself drives.
 
 ## Session store problems
 

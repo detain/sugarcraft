@@ -267,7 +267,7 @@ and skill registry live inside the hosted chat's backend.
 This is also where a real hazard lives: `App` carries skill methods
 (`applySkillsToSystemPrompt()`, `dispatchSkill()`) that **no production caller
 reaches**, so `context: fork` and a skill's `model:` are honoured there and
-nowhere the CLI goes. See [`SKILLS.md`](SKILLS.md#the-context-field-is-not-live-on-the-cli-path).
+nowhere the CLI goes. See [`SKILLS.md`](SKILLS.md#the-context-field-today).
 
 ---
 
@@ -1157,6 +1157,46 @@ every other field kept).
 chat transcript), `Pane`/`SplitLayout`/`MultiplexerSplitPane`,
 `SessionTabs`, `AgentOutputPane`/`AgentStatusBar`/`AgentViewPane`,
 `KeyboardHandler`, `DiffGutter`, `StallDetector`, `TerminalBackground`.
+
+### The screen, zone by zone
+
+The frame top to bottom (this is the map the key bindings and click zones are
+written against; the zone names are the live `*_ZONE_PREFIX` constants):
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ menu bar            L1 titles `menu:`, items `menuitem:`,     │  ← dropdowns
+│                     pane tabs `panetab:`                      │
+├──────────────────────────────────────────────────────────────┤
+│ session tabs `tab:` — one row per open session                │  ← L2
+├───────────────────────────────┬──────────────────────────────┤
+│ transcript / active pane      │ docked side panes `pane:`     │  ← content band
+│ (chat, tool rows `toolcall:`,│ dividers `divider:`           │    when ≥80 cols
+│  agent tiles `agent-line:`)   │ `stackdiv:` `splitdiv:`       │    and agents live
+├───────────────────────────────┴──────────────────────────────┤
+│ agent strip — live sub-agent one-liners                       │
+│ input line (caret; palette `picker-item:` opens over it)      │
+│ status bar — provider, mode, cost so far                      │
+└──────────────────────────────────────────────────────────────┘
+   overlays (modal, keyboard takes over while up):
+   • command palette  Ctrl+P / Ctrl+K     rows = `picker-item:`
+   • sessions overlay  /sessions           rows `session-row:`, verbs `session-act:`
+   • media form / settings editor — full-band modals with their own tab order
+```
+
+Keyboard focus order and meaning:
+
+- **Tab** (`shell.pane-next`) cycles the highlighted **docked pane**; a pane's
+  border marks it focused. While the transcript holds focus, typing goes to
+  the input; navigation keys move through panes first.
+- **menu bar** holds the drop-down titles; **pane tabs** select a docked pane
+  by name (Agents, Todo, Background, Workflows, Memory); **session tabs**
+  switch whole sessions.
+- **dividers** between panes are grab targets: dragging one resizes the
+  panes either side; grabbing a pane's header or its `panetab:` row drags the
+  pane to a new dock position.
+- **overlays** intercept every key while open — Esc closes the top-most one;
+  the palette's rows are arrow-key navigable before Enter picks.
 
 Two invariants the layer depends on, both of which have been broken before:
 

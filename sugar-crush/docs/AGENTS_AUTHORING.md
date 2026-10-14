@@ -33,7 +33,7 @@ Two foreign conventions are also imported, badged with a `SkillSource`
 per-tool `allow`/`ask`/`deny` rules are collapsed into tool lists on import, and
 anything ambiguous is recorded on `warnings()`.
 
-#### Foreign agent presets do NOT resolve the way foreign skills do
+### Foreign agent presets do NOT resolve the way foreign skills do
 
 Two axes, and **both** point the opposite way from the skills side. This is not a
 doc simplification; `ForeignAgentPresetRegistry`'s own doc-block

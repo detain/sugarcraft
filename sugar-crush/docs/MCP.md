@@ -254,7 +254,7 @@ transport the rest of the way:
 - **Session.** A `Mcp-Session-Id` on the `initialize` reply is echoed on every
   later request, starting with `notifications/initialized` (an id-less POST the
   server answers 202). A 404 to a request that carried the id means the server
-  forgot the session: the client re-initializes once and resends; a second
+  forgot the session: the client re-initialises once and resends; a second
   failure is reported, not looped. `stop()` ends the session with a
   best-effort HTTP `DELETE` carrying the id — a 405 or a dead host does not
   fail a shutdown — and `isUp()` then answers false until `start()` runs a

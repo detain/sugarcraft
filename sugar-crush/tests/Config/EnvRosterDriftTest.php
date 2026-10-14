@@ -1308,4 +1308,131 @@ final class EnvRosterDriftTest extends TestCase
             \rmdir(\dirname($deep));
         }
     }
+
+    /**
+     * rv-devops-3 (fix lane f-docs, 2026-10-14): THE OS-VARIABLE ROSTER,
+     * PINNED BOTH DIRECTIONS.
+     *
+     * Everything else in this class speaks the `SUGAR_?CRUSH_*` alphabet — the
+     * scanner's and the table scrape's alike — so an OS variable could sit
+     * read-but-undocumented (or documented-but-renamed) with no oracle at all.
+     * That is exactly how `LANG`, `DISPLAY`, `CDPATH` and `TMPDIR` lived
+     * untabulated while the page opened with "every environment variable".
+     *
+     * These names churn rarely, so the remedy is a hardcoded roster plus two
+     * set comparisons: every pinned name has a row in the page's "OS
+     * variables" table, and every name the table carries is pinned. The third
+     * leg asks that each pinned name still appears as a quoted string literal
+     * in `src/` — a floor, not a proof: it cannot see WHICH call shape reads
+     * it (the locale trio is read through a `foreach` over exactly these
+     * literals, which no call-shape scanner could follow), but it reddens the
+     * moment a name is renamed or its last read deleted, which is the drift
+     * class a roster like this can actually catch.
+     *
+     * @var list<string>
+     */
+    private const OS_ENV_ROSTER = [
+        'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_MESSAGES',
+        'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'COLORFGBG',
+        'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR',
+    ];
+
+    public function testTheOsEnvironmentRosterIsPinnedInBothDirections(): void
+    {
+        $pinned = self::OS_ENV_ROSTER;
+        sort($pinned);
+        $documented = $this->osTableNames();
+
+        $this->assertSame(
+            [],
+            array_values(array_diff($pinned, $documented)),
+            'the pinned OS roster names variables docs/ENVIRONMENT.md no longer tabulates — '
+            . 'the page lost rows it promised, or the roster needs the same judgment the rows do',
+        );
+        $this->assertSame(
+            [],
+            array_values(array_diff($documented, $pinned)),
+            'docs/ENVIRONMENT.md tabulates OS variables the pinned roster does not carry — '
+            . 'add them to OS_ENV_ROSTER deliberately, not silently',
+        );
+
+        $literals = $this->srcStringLiterals();
+        $unseen = [];
+        foreach ($pinned as $name) {
+            if (!\in_array($name, $literals, true)) {
+                $unseen[] = $name;
+            }
+        }
+        $this->assertSame(
+            [],
+            $unseen,
+            'pinned OS variables with no quoted literal anywhere in src/ — the reads moved, '
+            . 'renamed, or died; the table rows are now promises nothing keeps',
+        );
+    }
+
+    /**
+     * All backticked upper-case names in the FIRST column of the page's
+     * "OS variables" table, across the section only — the scrape is bounded
+     * between the heading and the next `##` so an app-tier row elsewhere on
+     * the page can never leak into this oracle (or vice versa).
+     *
+     * @return list<string>
+     */
+    private function osTableNames(): array
+    {
+        $page = self::read(self::ENVIRONMENT_DOC);
+        $start = strpos($page, "## OS variables\n");
+        $this->assertNotFalse($start, 'the "OS variables" section heading moved — this oracle is now blind');
+        $rest = substr($page, $start);
+        $end = strpos(substr($rest, 3), "\n## ");
+        $section = $end === false ? $rest : substr($rest, 0, $end + 3);
+
+        $names = [];
+        foreach (explode("\n", $section) as $line) {
+            if (preg_match('/^\|\s*(.+?)\s\|/', $line, $cell) !== 1) {
+                continue;
+            }
+            if (preg_match_all('/`([A-Z][A-Z0-9_]*)`/', $cell[1], $found) >= 1) {
+                foreach ($found[1] as $name) {
+                    $names[$name] = true;
+                }
+            }
+        }
+
+        $list = array_keys($names);
+        sort($list);
+        $this->assertGreaterThan(10, \count($list), 'the OS-table scrape found almost nothing — table syntax changed and this oracle compares against an empty-ish set');
+
+        return $list;
+    }
+
+    /**
+     * Every fully-quoted upper-case string literal in `src/`, token-scanned
+     * (comments and identifiers excluded by construction — a name that only
+     * survives in prose is not a read).
+     *
+     * @return list<string>
+     */
+    private function srcStringLiterals(): array
+    {
+        $root = \dirname(__DIR__, 2) . '/src';
+        $found = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+            foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
+                if (\is_array($token) && $token[0] === T_CONSTANT_ENCAPSED_STRING) {
+                    $value = trim($token[1], "\"'");
+                    if ($value !== '' && preg_match('/^[A-Z][A-Z0-9_]*$/', $value) === 1) {
+                        $found[$value] = true;
+                    }
+                }
+            }
+        }
+
+        return array_keys($found);
+    }
 }
