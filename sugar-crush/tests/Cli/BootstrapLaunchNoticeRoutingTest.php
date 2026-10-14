@@ -14,14 +14,14 @@ use SugarCraft\Crush\Skills\SkillLoader;
 
 /**
  * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
- * migrated ONE caller onto it. This file is the guard for the other twenty-three.
+ * migrated ONE caller onto it. This file is the guard for the other twenty-six.
  *
  * HOW THAT NUMBER IS OBTAINED — not by `grep`, which overstates it by roughly
  * double because the identifier is mostly prose in `Bootstrap.php`'s
  * doc-blocks. `Bootstrap.php` holds TWENTY-SEVEN calls to the seam by a token scan
  * (`token_get_all()`, whitespace and comments stripped, T_STRING of that name
  * both preceded by `::` and followed by `(`); one of them is round 39's, so
- * this file guards the other twenty-two. Re-derive it in one command:
+ * this file guards the other twenty-six. Re-derive it in one command:
  * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest`,
  * which also fails on this sentence by name if the count moves.
  *
@@ -36,7 +36,7 @@ use SugarCraft\Crush\Skills\SkillLoader;
  * aggregate drain as the twenty-first, and E172 (round 70) routed the
  * command-file skip aggregate as the twenty-second, and the audit 15d-02
  * follow-up routed the unreadable-memory-note aggregate as the twenty-third,
- * so "the other" is twenty-two and not twenty-one. WHY THE
+ * so on that writing "the other" stood at twenty-two and not twenty-one. WHY THE
  * HISTORY STILL EARNS ITS PLACE: it records that this file's scope GROWS with
  * the seam — a reader who adds a further call site and does not add a case
  * here has left it unguarded, and the ordinals are what make that obligation

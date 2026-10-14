@@ -815,7 +815,7 @@ files (E172), the unreadable memory notes, the instruction files and enabled
 skill bodies the system prompt leaves out for budget (audit R1), a nonsense
 `maxToolSteps` or `maxOutputTokens` (audit R12) and the empty tool set — the
 reports that can raise several rows share one call site:
-**twenty-four** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+**twenty-seven** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
 src/Cli/Bootstrap.php`, which agrees with the token scan in
 `BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare
 identifier does **not** — it reports roughly double, because most occurrences in

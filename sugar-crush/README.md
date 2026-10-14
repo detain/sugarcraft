@@ -1131,7 +1131,10 @@ checkout setting it to 1 would delete yesterday's conversations; `testCommand` a
 a shell command auto-test runs at the end of a turn that edited a file, the
 second switches that run on;
 `provider`, because it decides which host every prompt in the session is sent
-to; `instructions`, because it decides which files become authoritative
+to;
+`providers`, for the same host-and-bill reason — each entry pins a provider's base URL
+and key material, so a checkout choosing them would route the operator's paid traffic
+through an endpoint it picked; `instructions`, because it decides which files become authoritative
 system-prompt text; `disabledRules`, because its value is a list of names
 pointing at the operator's own rule packs, so a project-tier one would let a
 checkout choose which of the operator's instructions go silent — a different
