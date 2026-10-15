@@ -32,7 +32,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 2.1 | Verify splitsh-lite multi-prefix history continuity (local experiment) | ✅ 592bca963 |
 | 2.2 | `sync-sugarcraft.yml` reads `tools/renames.json` (single-prefix split + legacy-ref preservation per 2.1 verdict) | ✅ 0b6d99af2 |
 | 2.3 | `gen-docs.php` emits redirect stubs for old slugs | ✅ 6f1ef69a0 (regen 6b3a7c618) |
-| 2.4 | `scripts/rename-remote.sh` (GitHub) + `scripts/packagist.sh` (Packagist) helpers | ✅ 022c0651a |
+| 2.4 | `scripts/rename-remote.sh` (GitHub) + `scripts/packagist.sh` (Packagist) helpers | ✅ 022c0651a (review-fixed 2026-10-15: real Packagist API shape) |
 | 2.5 | Create the `candy-gifview` GitHub repo + Packagist package | ☐ |
 | 3 | Batch A — pilot (3 renames) | ☐ |
 | 4 | Batch B — apps (12 renames) | ☐ |
@@ -738,13 +738,23 @@ candy-mouse and candy-forms). Commit: `gen-docs: redirect stubs for renamed pack
    Joe Huss, pushes, then runs `gh repo archive "sugarcraft/<slug>" --yes`.
    Topics: `gh repo edit sugarcraft/<new> --add-topic <x>` — topics are set from the lib's composer `keywords` that are valid GitHub topics
    (lowercase, `[a-z0-9-]`, ≤50 chars). Remove any topic that equals the old slug.
-2. `scripts/packagist.sh` (bash). `create` and `update` read `PACKAGIST_TOKEN` from the environment and exit 2 if it's unset; `check` needs no
-   token. **Never echo the token** (no `set -x`).
-   Subcommands:
-   - `create <slug>` → `curl -sS -XPOST -H "Authorization: Bearer detain:$PACKAGIST_TOKEN" -H 'Content-Type: application/json'
-     https://packagist.org/api/create-package -d "{\"repository\":\"https://github.com/sugarcraft/<slug>\"}"`. Print the HTTP code and response body.
-     (Needs the MAIN token; this is an "unsafe" endpoint.)
-   - `update <slug>` → same, but `POST https://packagist.org/api/update-package`.
+ 2. `scripts/packagist.sh` (bash). `create` and `update` read `PACKAGIST_TOKEN` and `PACKAGIST_USERNAME` from the environment and exit 2 if
+    either is unset; `check` needs no credentials. **Never echo the token** (no `set -x`); everything printed is additionally piped through a
+    token-masker.
+    Subcommands (corrected 2026-10-15 review round — the original prescription struck through below used a `Bearer` header, a flat
+    `{"repository":"<url>"}` body and a JSON `POST /api/create-package` endpoint, none of which Packagist accepts; the corrected shape is
+    PROVEN by this repo's own CI, `.github/workflows/sync-sugarcraft.yml:248-251`, which pings `update-package` successfully on every
+    split-repo push):
+    - `create <slug>` → register via the canonical maintainer form endpoint: `curl -sS -XPOST --max-time 20
+      "https://packagist.org/api/packages/_update.json?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_TOKEN"
+      --data-urlencode "packages[sugarcraft/<slug>]=https://github.com/sugarcraft/<slug>"`. Print the HTTP code and the masked response body.
+      (Needs the MAIN token; this is an "unsafe" endpoint.)
+      ~~`curl -sS -XPOST -H "Authorization: Bearer detain:$PACKAGIST_TOKEN" -H 'Content-Type: application/json'
+      https://packagist.org/api/create-package -d "{\"repository\":\"https://github.com/sugarcraft/<slug>\"}"`~~ (wrong — kept for history)
+    - `update <slug>` → `curl -sS -XPOST --max-time 20 -H 'content-type: application/json'
+      "https://packagist.org/api/update-package?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_TOKEN"
+      -d "{\"repository\":{\"url\":\"https://github.com/sugarcraft/<slug>\"}}"` — request assembly byte-matches the CI call.
+      ~~same, but `POST https://packagist.org/api/update-package` with the Bearer/flat-body shape above~~ (wrong — kept for history)
    - `check <slug>` → `curl -sS https://repo.packagist.org/p2/sugarcraft/<slug>~dev.json` and print whether a `dev-master` version exists and the
      `source.reference` SHA it points at.
    - Packagist has **no API to abandon a package**. Abandoning is a manual web-UI action — see Phase 10.
@@ -764,7 +774,8 @@ candy-mouse and candy-forms). Commit: `gen-docs: redirect stubs for renamed pack
    `gh run watch <id> -R detain/sugarcraft --exit-status`.
 2. Set the default branch to master if needed: `scripts/set-org-default-master.sh` (read it first), or
    `gh repo edit sugarcraft/candy-gifview --default-branch master` once `master` exists.
-3. `PACKAGIST_TOKEN=<from Part A rule 7> scripts/packagist.sh create candy-gifview`, then `scripts/packagist.sh check candy-gifview` (repeat
+ 3. `PACKAGIST_TOKEN=<from Part A rule 7> PACKAGIST_USERNAME=<packagist account, corrected 2026-10-15: required by the script since step 2.4
+    review round> scripts/packagist.sh create candy-gifview`, then `scripts/packagist.sh check candy-gifview` (repeat
    until dev-master appears, up to ~10 min).
 4. GitHub → Packagist webhook: renamed repos keep theirs, but a **new** repo has none. The sync workflow pings `update-package` on every push,
    so this is covered. Note it in the commit anyway.

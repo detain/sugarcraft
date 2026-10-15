@@ -5,9 +5,10 @@
 #       Rename sugarcraft/<old> to sugarcraft/<new>, refresh description +
 #       homepage + topics from the monorepo metadata, and print the verified
 #       repo record. Idempotent: when <old> already redirects to <new> the
-#       script detects it and exits 0 without touching anything. If <new> is
-#       taken by an UNRELATED repo the script exits 2 and refuses (Part of
-#       Procedure R2 — run BEFORE the local rename-lib.php pass).
+#       rename is skipped but description/homepage/topics are re-synced so a
+#       partial earlier run converges (ratified in the step 2.4 review round).
+#       If <new> is taken by an UNRELATED repo the script exits 2 and refuses
+#       (Part of Procedure R2 — run BEFORE the local rename-lib.php pass).
 #
 #   scripts/rename-remote.sh --archive <slug> <successor>
 #       Replace sugarcraft/<slug>'s README.md with a "has moved" notice
@@ -55,8 +56,8 @@ current_repo_name() { # echoes the real name a slug resolves to (follows renames
     gh repo view "$ORG/$1" --json name -q .name 2>/dev/null || true
 }
 
-sync_topics() { # <new-slug> <composer-json-path>
-    local new="$1" composer="$2"
+sync_topics() { # <new-slug> <composer-json-path> <old-slug>
+    local new="$1" composer="$2" old="$3"
     local keywords
     keywords="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); if (!is_array($j)) { exit(1); } foreach ($j["keywords"] ?? [] as $k) { echo $k, "\n"; }' "$composer")" ||
         fail "could not read keywords from $composer"
@@ -75,15 +76,14 @@ sync_topics() { # <new-slug> <composer-json-path>
 
     # Drop the stale old-slug topic in its own call, and only when it is
     # actually set — gh errors on removing an absent topic.
-    if printf '%s\n' "$existing" | grep -qxF "$OLD_SLUG"; then
-        gh repo edit "$ORG/$new" --remove-topic "$OLD_SLUG"
+    if printf '%s\n' "$existing" | grep -qxF "$old"; then
+        gh repo edit "$ORG/$new" --remove-topic "$old"
     fi
     gh repo edit "$ORG/$new" "${add_args[@]}"
 }
 
 cmd_rename() {
     local old="$1" new="$2"
-    OLD_SLUG="$old" # used by sync_topics for the stale-topic removal
 
     local old_name
     old_name="$(current_repo_name "$old")"
@@ -98,6 +98,11 @@ cmd_rename() {
         if gh repo view "$ORG/$new" --json name >/dev/null 2>&1; then
             echo "sugarcraft/$new already exists (and is not sugarcraft/$old) — refusing to clobber it" >&2
             exit 2
+        fi
+        # Review MINOR-2: <old> may itself be a redirect to a THIRD canonical
+        # name X (double rename happened earlier); say so before touching X.
+        if [ "$old_name" != "$old" ]; then
+            echo "rename-remote: sugarcraft/$old already redirects to sugarcraft/$old_name — renaming that chain target to $new"
         fi
         gh repo rename "$new" -R "$ORG/$old" --yes
     fi
@@ -118,7 +123,7 @@ cmd_rename() {
     else
         fail "no $old/composer.json (nor $new/) under $REPO_ROOT — cannot derive topics; run from the monorepo checkout"
     fi
-    sync_topics "$new" "$composer"
+    sync_topics "$new" "$composer" "$old"
 
     echo "verified record:"
     gh repo view "$ORG/$new" --json name,url,description
