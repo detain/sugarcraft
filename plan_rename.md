@@ -30,7 +30,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 1.3 | Split candy-flip → lib (stays candy-flip for now) + new app `candy-gifview` | ✅ 4d6f81799 |
 | 1.4 | Normalize bin names of apps that keep their name | ✅ eab5b7ec3 |
 | 2.1 | Verify splitsh-lite multi-prefix history continuity (local experiment) | ✅ 592bca963 |
-| 2.2 | `sync-sugarcraft.yml` reads `tools/renames.json` (multi-prefix split) | ☐ |
+| 2.2 | `sync-sugarcraft.yml` reads `tools/renames.json` (single-prefix split + legacy-ref preservation per 2.1 verdict) | ✅ 0b6d99af2 |
 | 2.3 | `gen-docs.php` emits redirect stubs for old slugs | ☐ |
 | 2.4 | `scripts/rename-remote.sh` (GitHub) + `scripts/packagist.sh` (Packagist) helpers | ☐ |
 | 2.5 | Create the `candy-gifview` GitHub repo + Packagist package | ☐ |
