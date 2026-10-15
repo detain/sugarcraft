@@ -14,11 +14,18 @@
 #   PACKAGIST_USERNAME=<your Packagist account — same value CI reads from the
 #                   PACKAGIST_USERNAME secret> \
 #   bash scripts/packagist.sh create <slug>
-# Auth rides the QUERY STRING (?username=..&apiToken=..), exactly like the
-# proven call in .github/workflows/sync-sugarcraft.yml (runs every push) —
-# Packagist does not accept a Bearer header. Never echo the token (this script
-# must never be run under `set -x`); everything printed is additionally piped
-# through mask_tokens() as defense in depth. check needs no credentials.
+# Auth shapes differ per endpoint (both live-proven):
+#   create  — `Authorization: Bearer <username>:<token>` header to
+#             POST /api/create-package (proven HTTP 202 for candy-gifview
+#             2026-10-15; the old maintainer-form route /api/packages/
+#             _update.json was REMOVED upstream and answers HTML 404).
+#             The token never rides the URL.
+#   update  — QUERY STRING (?username=..&apiToken=..), exactly like the
+#             proven call in .github/workflows/sync-sugarcraft.yml
+#             (runs every push).
+# Never echo the token (this script must never be run under `set -x`);
+# everything printed is additionally piped through mask_tokens() as defense
+# in depth. check needs no credentials.
 #
 # NOTE: Packagist has NO abandon API — abandoning old names is a manual
 # web-UI action (plan Phase 10).
@@ -80,9 +87,14 @@ report() { # <label> <http_code> <body_file>
     esac
 }
 
-# create <slug> — register the repo with Packagist via the canonical
-# maintainer form endpoint (packages/_update.json), authenticated through the
-# query string like the proven CI call.
+# create <slug> — register the repo with Packagist via the live create
+# endpoint (POST /api/create-package, flat JSON {"repository":<url>}),
+# authenticated with an `Authorization: Bearer <username>:<token>` header —
+# the shape proven HTTP 202 {"status":"success"} for sugarcraft/candy-gifview
+# on 2026-10-15 (step 2.5). The previously prescribed maintainer form endpoint
+# /api/packages/_update.json has been REMOVED upstream (HTML 404), so this is
+# the only working registration route. The token rides the header only, never
+# the URL.
 cmd_create() { # <slug>
     local slug="$1"
     require_creds
@@ -93,9 +105,11 @@ cmd_create() { # <slug>
     trap "rm -f '$body_file'" EXIT
 
     http_code="$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 20 -XPOST \
-        "$API_BASE/packages/_update.json?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
-        --data-urlencode "packages[$ORG/$slug]=https://github.com/$ORG/$slug")" ||
-        fail "curl to $API_BASE/packages/_update.json failed (network?)"
+        -H 'content-type: application/json' \
+        -H "Authorization: Bearer ${PACKAGIST_USERNAME}:${PACKAGIST_TOKEN}" \
+        "$API_BASE/create-package" \
+        -d "{\"repository\":\"https://github.com/$ORG/$slug\"}")" ||
+        fail "curl to $API_BASE/create-package failed (network?)"
 
     report "create (register) for $ORG/$slug" "$http_code" "$body_file"
 }

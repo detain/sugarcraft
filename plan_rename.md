@@ -741,16 +741,22 @@ candy-mouse and candy-forms). Commit: `gen-docs: redirect stubs for renamed pack
  2. `scripts/packagist.sh` (bash). `create` and `update` read `PACKAGIST_TOKEN` and `PACKAGIST_USERNAME` from the environment and exit 2 if
     either is unset; `check` needs no credentials. **Never echo the token** (no `set -x`); everything printed is additionally piped through a
     token-masker.
-    Subcommands (corrected 2026-10-15 review round — the original prescription struck through below used a `Bearer` header, a flat
-    `{"repository":"<url>"}` body and a JSON `POST /api/create-package` endpoint, none of which Packagist accepts; the corrected shape is
-    PROVEN by this repo's own CI, `.github/workflows/sync-sugarcraft.yml:248-251`, which pings `update-package` successfully on every
+    Subcommands (re-corrected 2026-10-15 by the step-2.5 LIVE run, which overruled the earlier review round: that round's `create` shape
+    targeted `api/packages/_update.json`, which Packagist has since REMOVED upstream — it answers HTML 404. The original
+    `Bearer` + flat `{"repository":"<url>"}` + `POST /api/create-package` shape is instead LIVE-PROVEN: registering
+    sugarcraft/candy-gifview returned HTTP 202 `{"status":"success"}` with auth as an
+    `Authorization: Bearer <username>:<token>` HEADER (token never rides the URL). `update` keeps the query-string shape, still
+    PROVEN by this repo's own CI, `.github/workflows/sync-sugarcraft.yml`, which pings `update-package` successfully on every
     split-repo push):
-    - `create <slug>` → register via the canonical maintainer form endpoint: `curl -sS -XPOST --max-time 20
-      "https://packagist.org/api/packages/_update.json?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_TOKEN"
-      --data-urlencode "packages[sugarcraft/<slug>]=https://github.com/sugarcraft/<slug>"`. Print the HTTP code and the masked response body.
+    - `create <slug>` → register via the live create endpoint: `curl -sS -XPOST --max-time 20
+      -H "Authorization: Bearer $PACKAGIST_USERNAME:$PACKAGIST_TOKEN" -H 'content-type: application/json'
+      https://packagist.org/api/create-package -d "{\"repository\":\"https://github.com/sugarcraft/<slug>\"}"`.
+      Print the HTTP code and the masked response body.
       (Needs the MAIN token; this is an "unsafe" endpoint.)
-      ~~`curl -sS -XPOST -H "Authorization: Bearer detain:$PACKAGIST_TOKEN" -H 'Content-Type: application/json'
-      https://packagist.org/api/create-package -d "{\"repository\":\"https://github.com/sugarcraft/<slug>\"}"`~~ (wrong — kept for history)
+      ~~`curl -sS -XPOST --max-time 20
+      "https://packagist.org/api/packages/_update.json?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_TOKEN"
+      --data-urlencode "packages[sugarcraft/<slug>]=https://github.com/sugarcraft/<slug>"`~~ (maintainer form endpoint —
+      REMOVED upstream, HTML 404 as of the 2.5 live run 2026-10-15; kept for history)
     - `update <slug>` → `curl -sS -XPOST --max-time 20 -H 'content-type: application/json'
       "https://packagist.org/api/update-package?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_TOKEN"
       -d "{\"repository\":{\"url\":\"https://github.com/sugarcraft/<slug>\"}}"` — request assembly byte-matches the CI call.
@@ -871,7 +877,7 @@ First, once per session, run `grep -A1 packagist /home/sites/mystage/auth_login_
 `export PACKAGIST_TOKEN='<token>'` in the same shell command chain that uses it (shell state doesn't persist between tool calls). Don't paste it
 anywhere else.
 ```sh
-export PACKAGIST_TOKEN='<token>' && cd /home/sites/sugarcraft && bash scripts/packagist.sh create <new>
+export PACKAGIST_TOKEN='<token>' PACKAGIST_USERNAME='<packagist account>' && cd /home/sites/sugarcraft && bash scripts/packagist.sh create <new>
 bash scripts/packagist.sh check <new>     # no token needed; repeat until dev-master shows the pushed SHA
 ```
 Then append `<old> → <new>` to `prompt_kit/briefs/rename-packagist-abandon-checklist.md` (the human abandons in the UI — Phase 10). Set `status` to
