@@ -23,7 +23,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 0.1 | Baseline snapshot | ✅ 39493799f |
 | 0.2 | `tools/renames.json` (the authoritative map) | ✅ cf1a635dc |
 | 0.3 | `tools/rename-lib.php` (mechanical rename tool) + tests | ✅ 91e1f148f, b71d77525 |
-| 0.4 | `tools/check-rename-residue.php` + tests | ☐ |
+| 0.4 | `tools/check-rename-residue.php` + tests | ✅ 2399ad4cb |
 | 0.5 | `LegacyEnv` + `LegacyPaths` helpers in candy-core | ☐ |
 | 1.1 | Merge candy-zone into candy-mouse | ☐ |
 | 1.2 | Fold sugar-prompt into candy-forms | ☐ |
