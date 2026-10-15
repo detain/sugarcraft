@@ -24,7 +24,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 0.2 | `tools/renames.json` (the authoritative map) | ✅ cf1a635dc |
 | 0.3 | `tools/rename-lib.php` (mechanical rename tool) + tests | ✅ 91e1f148f, b71d77525 |
 | 0.4 | `tools/check-rename-residue.php` + tests | ✅ 2399ad4cb |
-| 0.5 | `LegacyEnv` + `LegacyPaths` helpers in candy-core | ☐ |
+| 0.5 | `LegacyEnv` + `LegacyPaths` helpers in candy-core | ✅ bedb32a0f |
 | 1.1 | Merge candy-zone into candy-mouse | ☐ |
 | 1.2 | Fold sugar-prompt into candy-forms | ☐ |
 | 1.3 | Split candy-flip → lib (stays candy-flip for now) + new app `candy-gifview` | ☐ |
