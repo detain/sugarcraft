@@ -507,6 +507,11 @@ Environment variables:
                           server starts. Unset, 0 or any other value keeps
                           MCP enabled — unlike the flag-style variables,
                           only these three words count.
+   SUGARCRUSH_REDUCED_MOTION
+                          1, true or yes (case-insensitive) pins the agent
+                          spinner to one static frame — for motion-sensitive
+                          and reduced-motion users. Read once at launch;
+                          there is no settings key.
    SUGARCRUSH_SD_BASE_URL Base URL of the A1111-style (sdapi) Stable
                           Diffusion server the media transport dials.
                           Precedence: an explicit code override, then this
