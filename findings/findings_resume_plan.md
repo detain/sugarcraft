@@ -231,7 +231,7 @@ For each phase:
 
 #### 0.18 🔴 candy-flappy: Score fires at wrong x position (Item 1.1)
 
-**Plan:** `findings/plan_honey-flap.md` — Item 1.1
+**Plan:** `findings/plan_candy-flappy.md` — Item 1.1
 **Issue:** `Game.php:273` fires score at x=7, not x=8
 **Fix:** Change from `> 7` to `> 8` (or whatever the correct threshold is per game mechanics)
 **Files:** `candy-flappy/src/Game.php:273`

@@ -104,33 +104,33 @@ candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 
 | # | Title | Description | Why it matters | Source repo | Implementation ideas | Complexity | Impact |
 |---|-------|-------------|----------------|------------|---------------------|------------|--------|
-| 1 | Wing animation | Bird glyph changes based on velocity direction | Provides visual feedback for rising vs falling — core to the Flappy Bird feel | `docs/repo_map/sugarcraft_honey-flap.md:606` | Track `velocity.y` sign in Bird; render `>` (rising) vs `<` (falling) vs `-` (flap frame); alternate glyph every 2-3 ticks during flap recovery | Low | High |
+| 1 | Wing animation | Bird glyph changes based on velocity direction | Provides visual feedback for rising vs falling — core to the Flappy Bird feel | `docs/repo_map/sugarcraft_candy-flappy.md:606` | Track `velocity.y` sign in Bird; render `>` (rising) vs `<` (falling) vs `-` (flap frame); alternate glyph every 2-3 ticks during flap recovery | Low | High |
 
 ### High
 
 | # | Title | Description | Why it matters | Source repo | Implementation ideas | Complexity | Impact |
 |---|-------|-------------|----------------|------------|---------------------|------------|--------|
-| 2 | Audio feedback | Play sounds on flap/score/crash | Classic Flappy Bird had distinct sounds for each action; completes the arcade feel | `docs/repo_map/sugarcraft_honey-flap.md:606` | Use `exec('printf \\a')` for terminal bell on flap, distinct sequences for score (+1 point sound) and crash; platform via `candy-pty` for cross-platform | Low | High |
-| 3 | Pause/resume | Space bar toggles pause when alive | Allows player to take a break mid-game without losing progress | `docs/repo_map/sugarcraft_honey-flap.md:612` | Add `paused` field to Game; when paused, `update(TickMsg)` returns `[self, null]` (no advance); render "PAUSED" overlay; 'p' key toggles | Low | Medium |
+| 2 | Audio feedback | Play sounds on flap/score/crash | Classic Flappy Bird had distinct sounds for each action; completes the arcade feel | `docs/repo_map/sugarcraft_candy-flappy.md:606` | Use `exec('printf \\a')` for terminal bell on flap, distinct sequences for score (+1 point sound) and crash; platform via `candy-pty` for cross-platform | Low | High |
+| 3 | Pause/resume | Space bar toggles pause when alive | Allows player to take a break mid-game without losing progress | `docs/repo_map/sugarcraft_candy-flappy.md:612` | Add `paused` field to Game; when paused, `update(TickMsg)` returns `[self, null]` (no advance); render "PAUSED" overlay; 'p' key toggles | Low | Medium |
 
 ### Medium
 
 | # | Title | Description | Why it matters | Source repo | Implementation ideas | Complexity | Impact |
 |---|-------|-------------|----------------|------------|---------------------|------------|--------|
-| 4 | Death animation | Show bird rotation + fall when crashing | Makes crash more satisfying/legible; common in Flappy Bird clones | `docs/repo_map/sugarcraft_honey-flap.md:612` | Add `Bird::die(): self` that starts a fall animation; track `deathTickCount`; render bird glyph rotated ( `/` then `|` then `\`) over 10-15 frames as it falls off screen | Medium | Medium |
-| 5 | Mutable physics variant | Add `ProjectileMutable` for zero-allocation per-tick | Game loop creates new `Projectile` every tick (30/sec); a mutable variant could reduce GC pressure | `docs/repo_map/sugarcraft_honey-flap.md:611` | Add `Projectile::updateInPlace(self): void` that mutates position/velocity fields; candy-flappy's `Bird::tick()` would call this instead of creating new instance | Medium | Medium |
-| 6 | High score API | Optional HTTP POST to submit scores to a leaderboard endpoint | Enables competitive play across sessions/users | `docs/repo_map/sugarcraft_honey-flap.md:612` | Add `Game::submitScore(int $score): ?Closure` that returns a Cmd doing HTTP POST to configurable endpoint; store endpoint in config file | Medium | Medium |
-| 7 | Pipe variety | Different pipe colors, moving obstacles, wind gusts | Increases visual interest and gameplay variety | `docs/repo_map/sugarcraft_honey-flap.md:615` | Add `PipeStyle` enum (green/yellow/red); randomly select style per pipe; wind gusts would apply horizontal force to bird via `Projectile::applyForce()` | High | Low |
+| 4 | Death animation | Show bird rotation + fall when crashing | Makes crash more satisfying/legible; common in Flappy Bird clones | `docs/repo_map/sugarcraft_candy-flappy.md:612` | Add `Bird::die(): self` that starts a fall animation; track `deathTickCount`; render bird glyph rotated ( `/` then `|` then `\`) over 10-15 frames as it falls off screen | Medium | Medium |
+| 5 | Mutable physics variant | Add `ProjectileMutable` for zero-allocation per-tick | Game loop creates new `Projectile` every tick (30/sec); a mutable variant could reduce GC pressure | `docs/repo_map/sugarcraft_candy-flappy.md:611` | Add `Projectile::updateInPlace(self): void` that mutates position/velocity fields; candy-flappy's `Bird::tick()` would call this instead of creating new instance | Medium | Medium |
+| 6 | High score API | Optional HTTP POST to submit scores to a leaderboard endpoint | Enables competitive play across sessions/users | `docs/repo_map/sugarcraft_candy-flappy.md:612` | Add `Game::submitScore(int $score): ?Closure` that returns a Cmd doing HTTP POST to configurable endpoint; store endpoint in config file | Medium | Medium |
+| 7 | Pipe variety | Different pipe colors, moving obstacles, wind gusts | Increases visual interest and gameplay variety | `docs/repo_map/sugarcraft_candy-flappy.md:615` | Add `PipeStyle` enum (green/yellow/red); randomly select style per pipe; wind gusts would apply horizontal force to bird via `Projectile::applyForce()` | High | Low |
 
 ### Low
 
 | # | Title | Description | Why it matters | Source repo | Implementation ideas | Complexity | Impact |
 |---|-------|-------------|----------------|------------|---------------------|------------|--------|
-| 8 | Particle trail | Render trailing dots when bird is moving fast | Visual flourish that makes fast movement more legible | `docs/repo_map/sugarcraft_honey-flap.md:607` | Track last 3-5 bird positions; render small `·` glyphs at those positions with decreasing opacity | Low | Low |
-| 9 | Verlet integration | Upgrade from Euler to Verlet for better numerical stability | Euler integration accumulates error; Verlet is more stable for game physics | `docs/repo_map/sugarcraft_honey-flap.md:618` | Add `ProjectileVerlet` class: stores current + previous position, computes velocity as `pos - prevPos`; `update()` becomes position update only | High | Medium |
-| 10 | Multiplayer | Local two-player via split-screen or networked via WebSocket | Extends game beyond single-player experience | `docs/repo_map/sugarcraft_honey-flap.md:618` | Split-screen: render two birds at different columns; networked: use ReactPHP WebSocket for real-time multi-player sync | High | Low |
-| 11 | Physics-based level elements | Moving platforms, bouncy pads, wind zones | Demonstrates honey-bounce versatility beyond simple projectile | `docs/repo_map/sugarcraft_honey-flap.md:619` | Add `BouncyPad` class that applies upward force on collision; `WindZone` applies horizontal acceleration; both implement `PhysicsBody` interface | Medium | Low |
-| 12 | Particle system | Explosion on crash, confetti on new high score | Visual celebration for key moments | `docs/repo_map/sugarcraft_honey-flap.md:620` | On crash: spawn 8-12 particles at bird position with random velocity vectors; render as `*` glyphs; on high score: spawn confetti from top of screen | Medium | Low |
+| 8 | Particle trail | Render trailing dots when bird is moving fast | Visual flourish that makes fast movement more legible | `docs/repo_map/sugarcraft_candy-flappy.md:607` | Track last 3-5 bird positions; render small `·` glyphs at those positions with decreasing opacity | Low | Low |
+| 9 | Verlet integration | Upgrade from Euler to Verlet for better numerical stability | Euler integration accumulates error; Verlet is more stable for game physics | `docs/repo_map/sugarcraft_candy-flappy.md:618` | Add `ProjectileVerlet` class: stores current + previous position, computes velocity as `pos - prevPos`; `update()` becomes position update only | High | Medium |
+| 10 | Multiplayer | Local two-player via split-screen or networked via WebSocket | Extends game beyond single-player experience | `docs/repo_map/sugarcraft_candy-flappy.md:618` | Split-screen: render two birds at different columns; networked: use ReactPHP WebSocket for real-time multi-player sync | High | Low |
+| 11 | Physics-based level elements | Moving platforms, bouncy pads, wind zones | Demonstrates honey-bounce versatility beyond simple projectile | `docs/repo_map/sugarcraft_candy-flappy.md:619` | Add `BouncyPad` class that applies upward force on collision; `WindZone` applies horizontal acceleration; both implement `PhysicsBody` interface | Medium | Low |
+| 12 | Particle system | Explosion on crash, confetti on new high score | Visual celebration for key moments | `docs/repo_map/sugarcraft_candy-flappy.md:620` | On crash: spawn 8-12 particles at bird position with random velocity vectors; render as `*` glyphs; on high score: spawn confetti from top of screen | Medium | Low |
 
 ---
 
@@ -357,4 +357,4 @@ candy-flappy is a **well-architected, production-ready** package that demonstrat
 ---
 
 *Report generated: 2026-05-28*
-*Source files: `docs/repo_map/sugarcraft_honey-flap.md`, `candy-flappy/src/*.php`, `candy-flappy/tests/*.php`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/rasjonell_dashbrew.md`, `docs/repo_map/ratatui_ratatui.md`, `docs/repo_map/pterm_pterm.md`, `docs/repo_map/blacktop_go-termimg.md`, `docs/repo_map/charmbracelet_glow.md`*
+*Source files: `docs/repo_map/sugarcraft_candy-flappy.md`, `candy-flappy/src/*.php`, `candy-flappy/tests/*.php`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/rasjonell_dashbrew.md`, `docs/repo_map/ratatui_ratatui.md`, `docs/repo_map/pterm_pterm.md`, `docs/repo_map/blacktop_go-termimg.md`, `docs/repo_map/charmbracelet_glow.md`*
