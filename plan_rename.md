@@ -21,7 +21,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | Step | Title | Status |
 |---|---|---|
 | 0.1 | Baseline snapshot | ✅ 39493799f |
-| 0.2 | `tools/renames.json` (the authoritative map) | ☐ |
+| 0.2 | `tools/renames.json` (the authoritative map) | ✅ cf1a635dc |
 | 0.3 | `tools/rename-lib.php` (mechanical rename tool) + tests | ☐ |
 | 0.4 | `tools/check-rename-residue.php` + tests | ☐ |
 | 0.5 | `LegacyEnv` + `LegacyPaths` helpers in candy-core | ☐ |
