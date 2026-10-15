@@ -10,13 +10,14 @@
 set -euo pipefail
 unset GITHUB_TOKEN
 ORG="sugarcraft"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 declare -A DESCRIPTIONS=(
     [candy-core]="Elm-architecture TUI runtime — port of charmbracelet/bubbletea on the SugarCraft stack."
     [candy-sprinkles]="Declarative styling + layout — port of charmbracelet/lipgloss on the SugarCraft stack."
     [honey-bounce]="Damped spring physics + Newtonian projectile sim — port of charmbracelet/harmonica."
     [candy-mouse]="Mouse-zone tracker — port of lrstanley/bubblezone on the SugarCraft stack."
-    [sugar-bits]="Fourteen pre-built TUI components — port of charmbracelet/bubbles."
+    [sugar-bits]="Seventeen pre-built TUI components — port of charmbracelet/bubbles on the SugarCraft stack."
     [sugar-charts]="Terminal charts — port of NimbleMarkets/ntcharts on the SugarCraft stack."
     [candy-forms]="Interactive form library — port of charmbracelet/huh on the SugarCraft stack."
     [candy-shell]="Composer-installable CLI of TUI primitives — port of charmbracelet/gum."
@@ -42,6 +43,50 @@ declare -A DESCRIPTIONS=(
     [candy-top]="btop-style terminal system monitor — port of aristocratos/btop on the SugarCraft stack."
     [honey-flap]="Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack."
 )
+
+# plan_rename.md step 2.4: offline metadata mode — print one description and
+# exit (no gh, no network). rename-remote.sh uses it during Procedure R2,
+# BEFORE rename-lib.php (R3) has rewritten this map's keys, so an unknown key
+# is resolved through the old->new pairs in tools/renames.json, then the
+# monorepo <dir>/composer.json description as last resort.
+if [ "${1:-}" = "--print-description" ]; then
+    [ "$#" -eq 2 ] || { echo "usage: $(basename "$0") --print-description <slug>" >&2; exit 1; }
+    slug="$2"
+    if [ -n "${DESCRIPTIONS[$slug]:-}" ]; then
+        printf '%s\n' "${DESCRIPTIONS[$slug]}"
+        exit 0
+    fi
+    old="$(php -r '
+        $file = $argv[1];
+        $wanted = $argv[2];
+        if (!is_file($file)) { exit(0); }
+        $j = json_decode(file_get_contents($file), true);
+        foreach ($j["entries"] ?? [] as $e) {
+            if (($e["new"] ?? null) === $wanted && !empty($e["old"])) { echo $e["old"]; break; }
+        }
+    ' "$SCRIPT_DIR/../tools/renames.json" "$slug")" || old=""
+    if [ -n "$old" ] && [ -n "${DESCRIPTIONS[$old]:-}" ]; then
+        printf '%s\n' "${DESCRIPTIONS[$old]}"
+        exit 0
+    fi
+    # The map predates several libs; fall back to the monorepo composer.json
+    # description (the metadata SSOT per R4.2) for the new or old slug's dir.
+    local_dir=""
+    if [ -f "$SCRIPT_DIR/../$slug/composer.json" ]; then
+        local_dir="$SCRIPT_DIR/../$slug"
+    elif [ -n "$old" ] && [ -f "$SCRIPT_DIR/../$old/composer.json" ]; then
+        local_dir="$SCRIPT_DIR/../$old"
+    fi
+    if [ -n "$local_dir" ]; then
+        composer_desc="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); echo $j["description"] ?? "";' "$local_dir/composer.json")"
+        if [ -n "$composer_desc" ]; then
+            printf '%s\n' "$composer_desc"
+            exit 0
+        fi
+    fi
+    echo "bootstrap-org-repos: no description for '$slug' (DESCRIPTIONS, renames.json old->new, or composer.json all missed)" >&2
+    exit 1
+fi
 
 # Default topic set for every repo — the sync-sugarcraft workflow
 # expects these to exist so each push doesn't have to re-tag.
