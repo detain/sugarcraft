@@ -59,3 +59,66 @@ Commit `1239d87a8` `candy-top: NTFS-safe fixture paths (colon dirs)`.
   (Tests: 4, Failures: 1), restore md5 ea75390e clean.
 - Full suite: OK 2111T/107,871A exit0 (baseline 2110T +1 new test; A within
   +-54 wobble).
+
+## T4 — PHPStan (CI family 4) — DONE (verdict: ALL PRE-EXISTING, nothing to fix)
+
+CI shape reproduced exactly: `php candy-core/vendor/bin/phpstan analyse
+--level=5 --no-progress -c candy-core/phpstan.neon` from repo root (candy-core
+is the only phpstan.neon lib affected in 40a4919fc..92ee5eaf5 — candy-palette/
+vcr/vt untouched in the range, candy-gifview has no phpstan.neon so CI never
+analyses it). Result: 10 errors, 4 files:
+  InputReader.php:471 smallerOrEqual.alwaysTrue
+  Program.php:1234 unset.offset
+  Util/AtomicJsonFile.php:309 class.notFound (ClosedResource)
+  Util/Width.php:348 closure.unusedUse x5, :349 identical.alwaysTrue, :352 deadCode.unreachable
+Discriminated as pre-existing by TWO methods: (1) git blame — every offending
+line traces to 1df355903/e4c36bff8/3ec7bd421, all ancestors of 40a4919fc;
+(2) worktree checkout of 40a4919fc + same phpstan run reproduces the SAME 10
+errors at the SAME line:col. ZERO campaign-introduced findings — LegacyEnv.php
+and LegacyPaths.php are clean under level 5; gifview Cli.php is outside every
+phpstan matrix. Per law: recorded, not fixed, no baseline widening, no skips.
+RECOMMEND minting this as a separate pre-campaign candy-core debt item (owner
+call — it predates the rename era and only surfaced now because the chain
+re-touched candy-core inside the diff window).
+
+## T5 — CI families via live logs (run 38764012635, master @92ee5eaf5) — DONE
+
+Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcraft`):
+
+- F1 Windows checkout (11 jobs): FIXED-pending-push — log shows exactly
+  `error: invalid path 'candy-top/tests/fixtures/.../intel_vpu/0000:00:0b.0/device'`
+  exit 128; cured by 143b615bd (git ls-files colon sweep empty at tip).
+- F2 candy-core census (Test 8.3/8.4 + Coverage): FIXED — CI failure names the
+  exact site `candy-gifview/src/Cli.php::SizeIoctl::query(1)` @CensusTest:627;
+  cured by 52b0ce279.
+- F3 macOS candy-core (2F): PRE-EXISTING-RECORDED — f1 =
+  ProgramRuntimeTeardownTest::testPendingEscapeFlushDoesNotFireAfterRun
+  ("the ESC flush fired after run() returned"), the known macOS timing flake
+  (rename-2.5 NOTES family 3); f2 = the F2 census site (fixed by T1).
+- F4 PHPStan 8.3+8.4 candy-core: PRE-EXISTING-RECORDED — see T4 block; all 10
+  errors reproduce identically at 40a4919fc; zero campaign-introduced; no
+  baseline widening performed. Recommend minting a pre-campaign candy-core
+  debt item.
+- F5 candy-mines DifficultyStatsTest::testSaveLeavesNoTempArtifacts:
+  PRE-EXISTING-RECORDED — byte-matches rename-baseline.md catalog item 1
+  (180T/820A/1F + warnings); cross-reference only per brief.
+- F6 candy-top BorderBatteryTest::testAppShrinksTheClockForThePresentBattery
+  (140 === 52): PRE-EXISTING-RECORDED — campaign touched neither the test nor
+  FrameBuilder (git log 40a4919fc..HEAD empty for both). NEW ROOT-CAUSE LEAD:
+  the $budget() closure preg-requires the literal `17:13:20` spelling produced
+  by `%X`; a CI locale rendering %X 12-hour makes the preg miss and
+  mb_strlen fall back to the full 140-cell row — exactly the CI-vs-local
+  divergence. Suggested follow-up (not taken; outside T5 remit): pin the test
+  config to `%H:%M:%S` or setlocale in-test.
+- F7 sugar-dash WeatherModuleTest+PersistenceTest residue pair:
+  PRE-EXISTING-RECORDED — byte-matches rename-baseline.md catalog item 2
+  (AtomicJsonFile temp-residue family).
+- F8 sugar-crush DoctorExtensionProbesTest::testTheManifestDeclaresBothExtensionsAnd
+  CarriesNoRepositoriesBlock + ReelDependencyTest::testTheManifestCarriesTheRequire
+  WithoutAPathRepo: NEEDS-OWNER-RULING — both read the WORKING-TREE
+  sugar-crush/composer.json, which CI's `check-path-repos.php --fix`
+  deliberately injects before install (green locally, red in CI by design
+  tension). Two legitimate cure shapes exist — (a) tests read the committed
+  blob (`git show HEAD:sugar-crush/composer.json`), or (b) the injection step
+  is scoped out of these manifests — choosing between them is a policy call
+  the owner must make. Nothing disabled or skipped.
