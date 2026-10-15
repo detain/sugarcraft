@@ -222,7 +222,12 @@ final class RenameLib
         $movedState = !$noMove && !$oldExists && $newExists;
 
         $tracked = self::trackedPaths($root);
-        $problems = self::preflight($root, $d, $noMove || $movedState, $movedState, $tracked);
+        // With --no-move the target namespace legitimately exists — that is
+        // the premise of the fold/merge and external-consumer flows the flag
+        // exists for (Step 1.2: folding sugar-prompt into the live
+        // SugarCraft\Forms namespace). The collision scan guards the in-flight
+        // `git mv` path only, so the moved-state suppression widens to noMove.
+        $problems = self::preflight($root, $d, $noMove || $movedState, $movedState || $noMove, $tracked);
         if ($problems !== []) {
             foreach ($problems as $problem) {
                 fwrite(STDERR, "rename-lib: preflight: $problem\n");
@@ -780,7 +785,8 @@ final class RenameLib
      * Step 0.3 preflight. $skipDirCheck silences the <old>/<new> directory
      * shape rules (--no-move); $movedState additionally silences the
      * namespace-collision scan, because in the moved state the target
-     * namespace legitimately exists — it is what the first run wrote.
+     * namespace legitimately exists — it is what the first run wrote, and
+     * under --no-move it is what the fold/merge target already is (Step 1.2).
      *
      * @param array<string, mixed> $d
      * @param list<string>         $tracked
