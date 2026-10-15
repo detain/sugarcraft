@@ -23,9 +23,10 @@ use PHPUnit\Framework\TestCase;
  *
  * The ten cases from Step 0.3's test list map onto the ten test* methods below
  * (R1, R3 boundaries, PROTECT, R2, R4, R5, @rename-keep, path moves with
- * binary/ansi byte preservation, C.3 exclusions, dry-run inertness); two extra
- * methods pin the idempotent re-run and the preflight refusals, and one pins
- * the --verbose matched-line dump.
+ * binary/ansi byte preservation, C.3 exclusions, dry-run inertness); the
+ * remaining methods pin the C.2 underscore-joined doc paths, the idempotent
+ * re-run, that a sentinel-tagged redirect stub keeps its name across re-runs,
+ * the preflight refusals, and the --verbose matched-line dump.
  */
 final class RenameLibTest extends TestCase
 {
@@ -355,6 +356,38 @@ final class RenameLibTest extends TestCase
         foreach ($this->trackedPaths($root) as $path) {
             $this->assertStringNotContainsString('candy-shine', $path, "leftover old-slug path after idempotent run: $path");
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Case 11b — a self-tagged @rename-keep file keeps its NAME across the
+    // idempotent re-run (gen-docs redirect stubs live at the old slug on
+    // purpose; moving them would collide with the renamed page).
+    // (Pilot honey-flap finding, Phase 3 Batch A.)
+    // ------------------------------------------------------------------
+
+    public function testKeepSentinelStubsAreNeverPathMoved(): void
+    {
+        $root = $this->shineRepo();
+        $first = $this->runTool($root, 'candy-shine');
+        $this->assertSame(0, $first['rc'], $first['out']);
+        $this->git($root, 'add -A');
+        $this->git($root, 'commit -qm renamed');
+
+        // The campaign's generated redirect stub, exactly as gen-docs writes
+        // it: old-name path, every old-slug line sentinel-tagged.
+        $this->writeFile($root, 'docs/lib/candy-shine.html', <<<'HTML'
+            <!doctype html><title>Moved: candy-shine is now sugar-markdown</title> <!-- @rename-keep: a moved-stub must name the old slug -->
+            <link rel="canonical" href="sugar-markdown.html">
+            HTML . "\n");
+        $this->git($root, 'add -A');
+        $this->git($root, 'commit -qm stub');
+
+        $second = $this->runTool($root, 'candy-shine');
+        $this->assertSame(0, $second['rc'], $second['out']);
+        $this->assertStringContainsString('already renamed — clean no-op', $second['out']);
+        $tracked = $this->trackedPaths($root);
+        $this->assertContains('docs/lib/candy-shine.html', $tracked, 'the sentinel-tagged stub must keep its name');
+        $this->assertSame('', $this->porcelain($root));
     }
 
     // ------------------------------------------------------------------

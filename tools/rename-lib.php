@@ -244,6 +244,14 @@ final class RenameLib
         if (!$noMove) {
             $prefix = $d['old'] . '/';
             foreach ($scanSet as $path) {
+                if (self::keepsItsName("$root/$path")) {
+                    // The file's own content declares @rename-keep: it stays
+                    // exactly as it is, name included (gen-docs redirect stubs
+                    // are the canonical case — their whole purpose is to carry
+                    // the old slug). The idempotent re-run must not try to
+                    // move them onto the already-existing new-name page.
+                    continue;
+                }
                 if ($oldExists && !$movedState && str_starts_with($path, $prefix)) {
                     // The whole-directory git mv carries the file; its INNER
                     // segments (bin/sugarcrush, docs/<old>-spec.md) still get
@@ -715,6 +723,24 @@ final class RenameLib
         $new = implode('/', $segments);
 
         return $new === $path ? null : $new;
+    }
+
+    /**
+     * True when a file's own content carries the `@rename-keep` sentinel
+     * anywhere — the file (name included) is deliberate and must not be
+     * moved by the path plan. Unreadable files fall through to planning
+     * (fail toward visible conflict, not silent skip). Pilot honey-flap
+     * finding, Phase 3: the idempotent re-run collided a gen-docs redirect
+     * stub (self-tagged) with the live new-name page.
+     */
+    public static function keepsItsName(string $absolutePath): bool
+    {
+        if (!is_file($absolutePath)) {
+            return false;
+        }
+        $contents = @file_get_contents($absolutePath);
+
+        return \is_string($contents) && str_contains($contents, self::KEEP_SENTINEL);
     }
 
     /**
