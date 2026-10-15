@@ -378,7 +378,7 @@ because research adds three items the PTY plan did not call out:)
 - Window auto-resize on SIGWINCH (§3.5 P5) — route through `\SugarCraft\Pty\SignalForwarder`.
 - Help/status bar (§3.6 P6).
 
-### candy-mines
+### candy-minesweeper
 
 - **Chord clicks** (HIGH).
 - Timer precision: `microtime(true)` (HIGH).

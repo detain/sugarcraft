@@ -60,8 +60,8 @@ _All items in this section have been resolved by the completion of steps 20–40
   - candy-serve: added Subscriptions for graceful shutdown in GitDaemon
   - Branch ai/async-adopters merged to master; Commit SHA: 30ea7afa
 
-- [RESOLVED | 2026-05-31 | step-32 | coder] candy-tetris + candy-mines: adopt candy-buffer + candy-mouse + candy-testing — MERGED PR #911:
-  - candy-tetris: Buffer-based playfield rendering; candy-mines: Buffer-based minefield
+- [RESOLVED | 2026-05-31 | step-32 | coder] candy-tetris + candy-minesweeper: adopt candy-buffer + candy-mouse + candy-testing — MERGED PR #911:
+  - candy-tetris: Buffer-based playfield rendering; candy-minesweeper: Buffer-based minefield
   - Branch ai/games-shared merged to master
 
 - [RESOLVED | 2026-05-31 | step-30 | coder] Ecosystem audit: adoption opportunity matrix for 19 remaining libs — MERGED PR #909:

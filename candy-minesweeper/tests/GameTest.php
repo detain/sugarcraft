@@ -1,0 +1,734 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Minesweeper\Tests;
+
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Minesweeper\Board;
+use SugarCraft\Minesweeper\Cell;
+use SugarCraft\Minesweeper\Difficulty;
+use SugarCraft\Minesweeper\Game;
+use SugarCraft\Minesweeper\Renderer;
+use SugarCraft\Minesweeper\Stats;
+use SugarCraft\Minesweeper\Stats\DifficultyStats;
+use PHPUnit\Framework\TestCase;
+
+final class GameTest extends TestCase
+{
+    private static function key(KeyType $t, string $rune = ''): KeyMsg
+    {
+        return new KeyMsg($t, $rune);
+    }
+
+    public function testCursorStartsAtOrigin(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+        $this->assertSame(0, $g->cursorX);
+        $this->assertSame(0, $g->cursorY);
+    }
+
+    public function testArrowKeysMoveCursor(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Right));
+        [$g, ] = $g->update(self::key(KeyType::Right));
+        [$g, ] = $g->update(self::key(KeyType::Down));
+        $this->assertSame(2, $g->cursorX);
+        $this->assertSame(1, $g->cursorY);
+    }
+
+    public function testCursorClampsAtBoardEdges(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        for ($i = 0; $i < 10; $i++) {
+            [$g, ] = $g->update(self::key(KeyType::Right));
+        }
+        $this->assertSame(2, $g->cursorX);
+    }
+
+    public function testHjklVimMovement(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'l'));
+        [$g, ] = $g->update(self::key(KeyType::Char, 'j'));
+        $this->assertSame(1, $g->cursorX);
+        $this->assertSame(1, $g->cursorY);
+    }
+
+    public function testFlagToggle(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertTrue($g->board->cell(0, 0)->flagged);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertFalse($g->board->cell(0, 0)->flagged);
+    }
+
+    public function testRevealOnFirstClickPlacesMines(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        $this->assertTrue($g->board->minesPlaced);
+        $this->assertTrue($g->board->cell(0, 0)->revealed);
+    }
+
+    public function testQuitProducesQuitCmd(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [, $cmd] = $g->update(self::key(KeyType::Char, 'q'));
+        $this->assertNotNull($cmd);
+    }
+
+    public function testEscalsoQuits(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [, $cmd] = $g->update(self::key(KeyType::Escape));
+        $this->assertNotNull($cmd);
+    }
+
+    public function testRestartResetsBoard(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));      // reveals + places mines
+        [$g, ] = $g->update(self::key(KeyType::Char, 'r'));  // restart
+        $this->assertFalse($g->board->minesPlaced);
+        $this->assertSame(0, $g->cursorX);
+        $this->assertSame(0, $g->cursorY);
+    }
+
+    public function testNonKeyMessagesAreIgnored(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        $msg = new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24);
+        [$next, $cmd] = $g->update($msg);
+        $this->assertSame($g, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testViewIncludesStatusLine(): void
+    {
+        $g = Game::start(4, 4, 2, static fn(int $_max): int => 0);
+        $view = $g->view();
+        $this->assertStringContainsString('mines: 2', $view);
+    }
+
+    public function testWithDifficultyCreatesCorrectBoard(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY);
+        $this->assertSame(9, $g->board->width);
+        $this->assertSame(9, $g->board->height);
+        $this->assertSame(10, $g->board->mineCount);
+    }
+
+    public function testWithDifficultyMedium(): void
+    {
+        $g = Game::withDifficulty(Difficulty::MEDIUM);
+        $this->assertSame(16, $g->board->width);
+        $this->assertSame(16, $g->board->height);
+        $this->assertSame(40, $g->board->mineCount);
+    }
+
+    public function testWithDifficultyExpert(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EXPERT);
+        $this->assertSame(30, $g->board->width);
+        $this->assertSame(16, $g->board->height);
+        $this->assertSame(99, $g->board->mineCount);
+    }
+
+    public function testWithCustomCreatesCorrectBoard(): void
+    {
+        $g = Game::withCustom(7, 5, 8);
+        $this->assertSame(7, $g->board->width);
+        $this->assertSame(5, $g->board->height);
+        $this->assertSame(8, $g->board->mineCount);
+    }
+
+    public function testDifficultyReturnsCorrectEnum(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY);
+        $this->assertSame(Difficulty::EASY, $g->difficulty());
+
+        $g = Game::withDifficulty(Difficulty::MEDIUM);
+        $this->assertSame(Difficulty::MEDIUM, $g->difficulty());
+
+        $g = Game::withDifficulty(Difficulty::EXPERT);
+        $this->assertSame(Difficulty::EXPERT, $g->difficulty());
+    }
+
+    public function testDifficultyReturnsNullForCustomSize(): void
+    {
+        $g = Game::withCustom(7, 5, 8);
+        $this->assertNull($g->difficulty());
+    }
+
+    public function testTimerStartsOnFirstReveal(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
+        $this->assertNull($g->startedAt);
+        $this->assertNull($g->elapsed());
+
+        // First reveal
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        $this->assertNotNull($g->startedAt);
+    }
+
+    public function testElapsedReturnsNullBeforeFirstReveal(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY);
+        $this->assertNull($g->elapsed());
+    }
+
+    public function testStatsStartsEmpty(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY);
+        $stats = $g->stats();
+        $this->assertSame(0, $stats->gamesPlayed(Difficulty::EASY));
+    }
+
+    public function testRecordResultUpdatesStatsOnWin(): void
+    {
+        // Test that recordResult correctly updates stats when called with a win
+        $g = Game::withDifficulty(Difficulty::EASY);
+
+        // Manually trigger a win state by modifying the board (not possible with immutable design)
+        // Instead, test that recordResult updates stats for a known win condition
+        // by creating a game that we can verify has isWon=true
+        $rand = static fn(int $_max): int => 0;
+        $g = Game::withDifficulty(Difficulty::EASY, $rand);
+
+        // Reveal cells - if we happen to win, great. If not, we still test the stats mechanism.
+        for ($i = 0; $i < 20; $i++) {
+            [$g, ] = $g->update(self::key(KeyType::Space));
+        }
+
+        // Record result with known elapsed time - verify stats mechanism works
+        $g = $g->recordResult(42);
+        $stats = $g->stats();
+
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+        // Win count depends on whether we actually won
+        if ($g->board->isWon()) {
+            $this->assertSame(1, $stats->wins(Difficulty::EASY));
+            $this->assertSame(42, $stats->bestTime(Difficulty::EASY));
+            $this->assertEqualsWithDelta(100.0, $stats->winRate(Difficulty::EASY), 0.01);
+        } else {
+            $this->assertSame(0, $stats->wins(Difficulty::EASY));
+            $this->assertNull($stats->bestTime(Difficulty::EASY));
+            $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::EASY), 0.01);
+        }
+    }
+
+    public function testRecordResultUpdatesStatsOnLoss(): void
+    {
+        $rand = static fn(int $_max): int => 0;
+        $g = Game::withDifficulty(Difficulty::EASY, $rand);
+
+        // First reveal (safe)
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        // Find and hit a mine
+        for ($y = 0; $y < 9; $y++) {
+            for ($x = 0; $x < 9; $x++) {
+                $cell = $g->board->cell($x, $y);
+                if ($cell !== null && $cell->mine && !$cell->revealed) {
+                    // Move to that cell and reveal
+                    while ($g->cursorX !== $x) {
+                        [$g, ] = $g->update($g->cursorX < $x ? self::key(KeyType::Right) : self::key(KeyType::Left));
+                    }
+                    while ($g->cursorY !== $y) {
+                        [$g, ] = $g->update($g->cursorY < $y ? self::key(KeyType::Down) : self::key(KeyType::Up));
+                    }
+                    [$g, ] = $g->update(self::key(KeyType::Space));
+                    break 2;
+                }
+            }
+        }
+
+        if (!$g->board->exploded) {
+            $this->markTestSkipped('Could not trigger explosion with deterministic rand');
+        }
+
+        // update() auto-records the loss on the explosion transition — calling
+        // recordResult() again here would double-count the game.
+        $stats = $g->stats();
+
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $stats->wins(Difficulty::EASY));
+        $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::EASY), 0.01);
+    }
+
+    public function testBestTimeOnlyUpdatesOnWin(): void
+    {
+        // Test the stats mechanism directly with Stats class
+        $stats = new Stats();
+        $stats = $stats->withGame(Difficulty::EASY, true, 100);
+        $this->assertSame(100, $stats->bestTime(Difficulty::EASY));
+
+        // Recording a loss with time should not update best time
+        $stats = $stats->withGame(Difficulty::EASY, false, null);
+        $this->assertSame(100, $stats->bestTime(Difficulty::EASY));
+
+        // Recording a win with worse time should not update best time
+        $stats = $stats->withGame(Difficulty::EASY, true, 200);
+        $this->assertSame(100, $stats->bestTime(Difficulty::EASY));
+
+        // Recording a win with better time should update best time
+        $stats = $stats->withGame(Difficulty::EASY, true, 50);
+        $this->assertSame(50, $stats->bestTime(Difficulty::EASY));
+    }
+
+    public function testWinRateCalculation(): void
+    {
+        $stats = new \SugarCraft\Minesweeper\Stats();
+        $stats = $stats->withGame(Difficulty::EASY, true, 30);
+        $stats = $stats->withGame(Difficulty::EASY, true, 40);
+        $stats = $stats->withGame(Difficulty::EASY, false, null);
+        $stats = $stats->withGame(Difficulty::EASY, false, null);
+
+        $this->assertSame(4, $stats->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(2, $stats->wins(Difficulty::EASY));
+        $this->assertEqualsWithDelta(50.0, $stats->winRate(Difficulty::EASY), 0.01);
+    }
+
+    public function testTimerUsesMicrotimePrecision(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
+
+        // Before first reveal, elapsed is null.
+        $this->assertNull($g->elapsed());
+
+        // First reveal starts the timer.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        $this->assertNotNull($g->startedAt);
+
+        // Elapsed should be a float with sub-second precision.
+        $elapsed = $g->elapsed();
+        $this->assertNotNull($elapsed);
+        $this->assertIsFloat($elapsed);
+
+        // After a short wait, elapsed should have increased (sub-second delta).
+        usleep(50000); // 50ms
+        $elapsed2 = $g->elapsed();
+        $this->assertNotNull($elapsed2);
+        $this->assertGreaterThan($elapsed, $elapsed2);
+    }
+
+    public function testRecordResultAcceptsFloatElapsed(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        // Record result with a float elapsed time.
+        $g = $g->recordResult(12.345);
+        $stats = $g->stats();
+
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+    }
+
+    // ─── W15: update() wires recordResult() into the win/lose transition ─────
+
+    /**
+     * Build a 9×9 EASY board that is exactly one safe reveal away from a win,
+     * with the cursor on the last unrevealed safe cell (8,8). The target has a
+     * non-zero adjacent count so revealing it does not cascade. Presets are
+     * required because recordResult() only records for recognised difficulties.
+     */
+    private static function nearWinEasyGame(?string $statsPath = null): Game
+    {
+        // 10 mines placed off the target (8,8); (7,7) makes the target adj>0.
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '7,7'];
+        $rows = [];
+        $revealedCount = 0;
+        for ($y = 0; $y < 9; $y++) {
+            $row = [];
+            for ($x = 0; $x < 9; $x++) {
+                $isMine   = in_array("$x,$y", $mineSet, true);
+                $isTarget = ($x === 8 && $y === 8);
+                $revealed = !$isMine && !$isTarget;
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                // Target adj=1 so floodReveal stops after the single cell.
+                $row[] = new Cell($isMine, $revealed, false, $isTarget ? 1 : 0);
+            }
+            $rows[] = $row;
+        }
+        // 81 cells − 10 mines − 1 unrevealed target = 70 revealed safe cells.
+        $board = new Board(9, 9, 10, $rows, true, false, $revealedCount, 0);
+
+        return new Game(
+            board: $board,
+            cursorX: 8,
+            cursorY: 8,
+            rand: static fn(int $_max): int => 0,
+            startedAt: microtime(true),
+            statsPath: $statsPath,
+        );
+    }
+
+    public function testUpdateRecordsWinTransition(): void
+    {
+        $g = self::nearWinEasyGame();
+        $this->assertFalse($g->board->isWon(), 'sanity: game not yet won');
+        $this->assertSame(0, $g->stats()->gamesPlayed(Difficulty::EASY));
+
+        // Revealing the last safe cell wins — update() must record it.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        $this->assertTrue($g->board->isWon(), 'sanity: reveal should win the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->wins(Difficulty::EASY));
+        $this->assertNotNull($g->stats()->bestTime(Difficulty::EASY), 'a win must record a best time');
+    }
+
+    public function testUpdateRecordsLossTransition(): void
+    {
+        // 9×9 EASY board with a mine under the cursor at (0,0).
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '0,1'];
+        $rows = [];
+        for ($y = 0; $y < 9; $y++) {
+            $row = [];
+            for ($x = 0; $x < 9; $x++) {
+                $row[] = new Cell(in_array("$x,$y", $mineSet, true), false, false, 0);
+            }
+            $rows[] = $row;
+        }
+        $board = new Board(9, 9, 10, $rows, true, false, 0, 0);
+        $g = new Game($board, 0, 0, static fn(int $_max): int => 0, microtime(true));
+
+        // Revealing the mine explodes — update() must record the loss.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        $this->assertTrue($g->board->exploded, 'sanity: reveal should explode the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $g->stats()->wins(Difficulty::EASY));
+    }
+
+    public function testUpdateDoesNotRecordTwiceAfterGameEnds(): void
+    {
+        $g = self::nearWinEasyGame();
+        [$g, ] = $g->update(self::key(KeyType::Space));   // win, records once
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+
+        // Further keys on a finished board must not re-record.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+    }
+
+    public function testRestartPreservesAccumulatedStats(): void
+    {
+        $g = self::nearWinEasyGame();
+        [$g, ] = $g->update(self::key(KeyType::Space));   // win recorded
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+
+        // Restart must carry the session tally (and stats path) forward.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'r'));
+        $this->assertFalse($g->board->minesPlaced, 'sanity: restart resets the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+    }
+
+    public function testUpdatePersistsStatsToDiskOnGameOver(): void
+    {
+        $path = sys_get_temp_dir() . '/candy-minesweeper-w15-' . bin2hex(random_bytes(4)) . '.json';
+        try {
+            $g = self::nearWinEasyGame($path);
+            $this->assertFileDoesNotExist($path, 'sanity: no stats file before the game ends');
+
+            [$g, ] = $g->update(self::key(KeyType::Space));   // win → persisted
+
+            $this->assertFileExists($path, 'winning game must write the opt-in stats file');
+            $loaded = DifficultyStats::load($path)?->stats();
+            $this->assertNotNull($loaded);
+            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::EASY));
+            $this->assertSame(1, $loaded->wins(Difficulty::EASY));
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
+    // ─── Chord key ─────────────────────────────────────────────────────────
+
+    /**
+     * 'c' key chords at cursor position: a satisfied revealed number with
+     * correctly-flagged neighbours must reveal the remaining neighbours.
+     */
+    public function testChordKeyChordsAtCursor(): void
+    {
+        // Build a 3×3 board by hand (fresh Cell for each position to avoid aliasing):
+        //   Row 0: [adj=0, flagged-mine, adj=1]
+        //   Row 1: [adj=1, revealed@adj=1, unrevealed-safe]
+        //   Row 2: [adj=0, adj=1, adj=0]
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(true, false, true, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, true, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 1);
+        // Cursor starts at (1,1) — on the satisfied revealed number.
+        $game = new Game($board, 1, 1, static fn(int $_max): int => 0);
+
+        $this->assertFalse($game->board->cell(1, 2)->revealed);
+
+        // Press 'c' to chord at cursor (1,1).
+        [$g, ] = $game->update(self::key(KeyType::Char, 'c'));
+        $this->assertTrue($g->board->cell(1, 2)->revealed, 'Chord must reveal the unflagged neighbour');
+        // The flagged mine — rows[0][1], i.e. cell(x=1, y=0) — must stay unrevealed.
+        $this->assertFalse($g->board->cell(1, 0)->revealed);
+    }
+
+    // ─── Mouse click helpers ────────────────────────────────────────────────
+
+    private static function mouseClick(int $x, int $y, MouseButton $btn): MouseClickMsg
+    {
+        return new MouseClickMsg($x, $y, $btn, MouseAction::Press);
+    }
+
+    // ─── Left-click reveals ─────────────────────────────────────────────────
+
+    public function testLeftClickRevealsResolvedCell(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+
+        // Move to top-left and reveal to place mines.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'h'));  // left (cursor 0,0)
+        [$g, ] = $g->update(self::key(KeyType::Char, 'k'));  // up (cursor 0,0)
+        [$g, ] = $g->update(self::key(KeyType::Space));      // reveal at cursor
+
+        // Find an unrevealed safe cell to click (hardcoding coordinates is
+        // fragile with a deterministic rand=0 — scan instead).
+        $targetX = null;
+        $targetY = null;
+        $b = $g->board;
+        for ($y = 0; $y < $b->height && $targetX === null; $y++) {
+            for ($x = 0; $x < $b->width; $x++) {
+                $cell = $b->cell($x, $y);
+                if ($cell !== null && !$cell->revealed && !$cell->mine) {
+                    $targetX = $x;
+                    $targetY = $y;
+                    break;
+                }
+            }
+        }
+        $this->assertNotNull($targetX, 'Should have found an unrevealed safe cell');
+        $this->assertNotNull($targetY);
+
+        // Compute terminal coords for interior cell (targetX, targetY).
+        // Border: 1 col/row, padding(0,1): 1 col each side → interior starts at x=3, y=2.
+        $tx = $targetX + 3;
+        $ty = $targetY + 2;
+
+        // Left-click at that terminal position.
+        [$next, ] = $g->update(self::mouseClick($tx, $ty, MouseButton::Left));
+
+        $this->assertTrue($next->board->cell($targetX, $targetY)->revealed,
+            'Left-click must reveal the resolved cell');
+        $this->assertSame($targetX, $next->cursorX);
+        $this->assertSame($targetY, $next->cursorY);
+    }
+
+    // ─── Right-click flags ─────────────────────────────────────────────────
+
+    public function testRightClickTogglesFlag(): void
+    {
+        // Use a hand-built board with a known safe cell to flag.
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(true, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, true, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 1);
+        $g = new Game($board, 2, 2, static fn(int $_max): int => 0);  // cursor at (2,2) — safe, unrevealed
+
+        $this->assertFalse($g->board->cell(2, 2)->revealed);
+        $this->assertFalse($g->board->cell(2, 2)->mine);
+
+        // Terminal coords for interior cell (2,2): x=5, y=4
+        [$next, ] = $g->update(self::mouseClick(5, 4, MouseButton::Right));
+
+        $this->assertTrue($next->board->cell(2, 2)->flagged,
+            'Right-click must flag the resolved safe cell');
+    }
+
+    // ─── Middle-click chords ───────────────────────────────────────────────
+
+    public function testMiddleClickChords(): void
+    {
+        // Build a board where (1,1) is a satisfied revealed number with one flagged neighbour.
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(true, false, true, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, true, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 1);
+        $g = new Game($board, 1, 1, static fn(int $_max): int => 0);  // cursor on (1,1) — satisfied
+
+        // Terminal coords for interior (1,1): x=4, y=3
+        [$next, ] = $g->update(self::mouseClick(4, 3, MouseButton::Middle));
+
+        $this->assertTrue($next->board->cell(1, 2)->revealed,
+            'Middle-click chord must reveal the unflagged neighbour (1,2)');
+        // The flagged mine — rows[0][1], i.e. cell(x=1, y=0) — stays unrevealed.
+        $this->assertFalse($next->board->cell(1, 0)->revealed);
+    }
+
+    // ─── Click outside board no-ops ────────────────────────────────────────
+
+    public function testClickOutsideBoardIsNoop(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        $originalExploded = $g->board->exploded;
+        $originalRevealedCount = $g->board->revealedCount;
+
+        // Click at (1,1) which is outside the interior (interior starts at 3,2 for 3×3).
+        [$next, ] = $g->update(self::mouseClick(1, 1, MouseButton::Left));
+
+        $this->assertSame($originalExploded, $next->board->exploded);
+        $this->assertSame($originalRevealedCount, $next->board->revealedCount);
+    }
+
+    // ─── Mouse ignored after game over ─────────────────────────────────────
+
+    public function testMouseIgnoredAfterGameOver(): void
+    {
+        // Create a board in the exploded state.
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(false, true, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, true, 1);  // exploded=true
+        $g = new Game($board, 2, 2, static fn(int $_max): int => 0);
+
+        $this->assertTrue($g->board->exploded);
+
+        // Any click should be a no-op.
+        [$next, ] = $g->update(self::mouseClick(5, 4, MouseButton::Left));
+
+        $this->assertSame($g->board->exploded, $next->board->exploded);
+        $this->assertSame($g->board->revealedCount, $next->board->revealedCount);
+    }
+
+    // ─── M3: the shipped default shape records (STANDARD preset) ────────────
+
+    /**
+     * Near-win fixture on the DEFAULT 10×10/12 shape — one unrevealed safe
+     * cell (9,9) with adj=1 (mine at (8,8)), so the final reveal lands the
+     * win in one step. 12 mines: all of row 0 plus (8,8) and (7,7).
+     */
+    private static function nearWinStandardGame(?string $statsPath = null): Game
+    {
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '8,8', '7,7'];
+        $rows = [];
+        $revealedCount = 0;
+        for ($y = 0; $y < 10; $y++) {
+            $row = [];
+            for ($x = 0; $x < 10; $x++) {
+                $isMine   = in_array("$x,$y", $mineSet, true);
+                $isTarget = ($x === 9 && $y === 9);
+                $revealed = !$isMine && !$isTarget;
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                $row[] = new Cell($isMine, $revealed, false, $isTarget ? 1 : 0);
+            }
+            $rows[] = $row;
+        }
+        // 100 cells − 12 mines − 1 unrevealed target = 87 revealed safe cells.
+        $board = new Board(10, 10, 12, $rows, true, false, $revealedCount, 0);
+
+        return new Game(
+            board: $board,
+            cursorX: 9,
+            cursorY: 9,
+            rand: static fn(int $_max): int => 0,
+            startedAt: microtime(true),
+            statsPath: $statsPath,
+        );
+    }
+
+    public function testDefaultGameShapeIsTheStandardPreset(): void
+    {
+        $this->assertSame(Difficulty::STANDARD, Game::start()->difficulty());
+    }
+
+    public function testWinOnDefaultShapeRecordsStandardStats(): void
+    {
+        $g = self::nearWinStandardGame();
+        $this->assertFalse($g->board->isWon(), 'sanity: one cell short of the win');
+
+        [$g, ] = $g->update(self::key(KeyType::Space));   // reveal the last safe cell
+
+        $this->assertTrue($g->board->isWon(), 'sanity: board won');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::STANDARD));
+        $this->assertSame(1, $g->stats()->wins(Difficulty::STANDARD));
+    }
+
+    public function testDefaultShapeLossRecordsStandardGame(): void
+    {
+        // An unrevealed MINE as the target cell: revealing it explodes and
+        // must still tally one STANDARD game, zero wins. One other safe cell
+        // stays hidden so the board is NOT already won before the reveal —
+        // a finished board would short-circuit update() to r/q only.
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '8,8', '9,9'];
+        $rows = [];
+        $revealedCount = 0;
+        for ($y = 0; $y < 10; $y++) {
+            $row = [];
+            for ($x = 0; $x < 10; $x++) {
+                $isMine = in_array("$x,$y", $mineSet, true);
+                $revealed = !$isMine && !($x === 0 && $y === 9);
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                $row[] = new Cell($isMine, $revealed, false, 0);
+            }
+            $rows[] = $row;
+        }
+        $board = new Board(10, 10, 12, $rows, true, false, $revealedCount, 0);
+        $g = new Game(
+            board: $board,
+            cursorX: 9,
+            cursorY: 9,
+            rand: static fn(int $_max): int => 0,
+            startedAt: microtime(true),
+        );
+
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        $this->assertTrue($g->board->exploded, 'sanity: reveal should explode the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::STANDARD));
+        $this->assertSame(0, $g->stats()->wins(Difficulty::STANDARD));
+    }
+
+    public function testDefaultShapeWinPersistsStandardBucketToDisk(): void
+    {
+        $path = sys_get_temp_dir() . '/candy-minesweeper-m3-' . bin2hex(random_bytes(4)) . '.json';
+        try {
+            $g = self::nearWinStandardGame($path);
+            [$g, ] = $g->update(self::key(KeyType::Space));   // win → persisted
+
+            $loaded = DifficultyStats::load($path)?->stats();
+            $this->assertNotNull($loaded);
+            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::STANDARD));
+            $this->assertSame(1, $loaded->wins(Difficulty::STANDARD));
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+}

@@ -57,7 +57,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
   - **[pattern:sugar-bits:cmd-tick-vs-subscriptions]** Timer, Stopwatch, and AnimatedProgress in sugar-bits use `Cmd::tick()` for animation/subscription updates, NOT the `subscriptions()` pattern. `subscriptions()` is for event-stream sources (keyboard, mouse, resize) that are driven by the program's main loop. `Cmd::tick()` is for time-based ticking where the component controls its own interval. When adding new time-driven components to sugar-bits, use `Cmd::tick()` and return `null` from `subscriptions()` — do not mix the two patterns.
 
- - **[pattern:candy-core:undo-action-type]** `UndoActionType` enum (Delete / Move / Rename / Copy / Custom) replaces 4+ ad-hoc `str_starts_with($desc, 'delete ')` / `str_starts_with($desc, 'move ')` detection schemes that existed in super-candy, candy-mines, and candy-tetris. Consumers migrate in steps 25 and 32. Mirrors: `docs/repo_map_update.md §345.8`.
+ - **[pattern:candy-core:undo-action-type]** `UndoActionType` enum (Delete / Move / Rename / Copy / Custom) replaces 4+ ad-hoc `str_starts_with($desc, 'delete ')` / `str_starts_with($desc, 'move ')` detection schemes that existed in super-candy, candy-minesweeper, and candy-tetris. Consumers migrate in steps 25 and 32. Mirrors: `docs/repo_map_update.md §345.8`.
 
  - **[pattern:new-factory-required]** All new SugarCraft classes MUST provide a `::new(): self` factory method. This is a de facto standard with 3,000+ uses across the monorepo. The factory MAY include validation (e.g., `Stopwatch::new()` validates interval > 0), but MUST return `new self()` for no-arg construction. Canonical: `candy-sprinkles/src/Style.php::new()`, `sugar-bits/src/Stopwatch/Stopwatch.php::new()`.
 

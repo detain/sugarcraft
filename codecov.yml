@@ -119,8 +119,8 @@ flag_management:
     - name: sugar-tick
       paths: ["sugar-tick/src/**"]
       carryforward: true
-    - name: candy-mines
-      paths: ["candy-mines/src/**"]
+    - name: candy-minesweeper
+      paths: ["candy-minesweeper/src/**"]
       carryforward: true
     - name: candy-flip
       paths: ["candy-flip/src/**"]
@@ -391,12 +391,12 @@ component_management:
         - "sugar-tick/src/**"
       flag_regexes:
         - "^sugar-tick$"
-    - component_id: candy-mines
-      name: candy-mines
+    - component_id: candy-minesweeper
+      name: candy-minesweeper
       paths:
-        - "candy-mines/src/**"
+        - "candy-minesweeper/src/**"
       flag_regexes:
-        - "^candy-mines$"
+        - "^candy-minesweeper$"
     - component_id: candy-flip
       name: candy-flip
       paths:

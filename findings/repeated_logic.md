@@ -123,7 +123,7 @@ interface Model
 - `candy-files/src/Manager.php`
 - `candy-forms/src/Form.php`, `Viewport.php`, `TextInput.php`, `ItemList.php`, `TextArea.php`, `FilePicker.php`, `Cursor.php`, `Spinner.php`
 - `candy-flip/src/Player.php`
-- `candy-mines/src/Game.php`
+- `candy-minesweeper/src/Game.php`
 - `candy-tetris/src/Game.php`, `VsGame.php`
 - `candy-mosaic/src/AnimationDriver.php`
 - `candy-query/src/App.php`
@@ -254,7 +254,7 @@ throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'));
 // sugar-bits/src/Table/Table.php:L66
 throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'));
 
-// candy-mines/src/Board.php:L36
+// candy-minesweeper/src/Board.php:L36
 throw new \InvalidArgumentException(Lang::t('board.too_small'));
 ```
 

@@ -113,7 +113,7 @@ final class Clamp
 - `candy-forms/src/Viewport/Viewport.php:L57` — `throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'))`
 - `sugar-charts/src/Heatmap/Heatmap.php:L55` — `throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'))`
 - `sugar-bits/src/Table/Table.php:L66` — `throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'))`
-- `candy-mines/src/Board.php:L36` — `throw new \InvalidArgumentException(Lang::t('board.too_small'))`
+- `candy-minesweeper/src/Board.php:L36` — `throw new \InvalidArgumentException(Lang::t('board.too_small'))`
 
 **Implementation:**
 

@@ -36,7 +36,7 @@ The 8 shared packages:
 | Step | Primary libs | Shared packages to adopt |
 |------|-------------|--------------------------|
 | Step 31 | candy-pty | candy-async, candy-input |
-| Step 32 | candy-tetris, candy-mines | candy-buffer, candy-input, candy-async |
+| Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
 | Step 33 | sugar-skate, sugar-wishlist, sugar-stash | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-calendar, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, sugar-post, candy-serve | candy-buffer, candy-async, candy-testing |
@@ -70,7 +70,7 @@ The 8 shared packages:
 
 ---
 
-### candy-mines
+### candy-minesweeper
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -217,7 +217,7 @@ The 8 shared packages:
 | candy-buffer | Renderer.php composes video frames via string concat — Buffer would enable per-cell frame diff | M |
 | candy-async | Player.php uses Timer loops for playback — CancellationToken would simplify seek/pause | M |
 
-**Notes:** candy-flip is a GIF/frame player with dithering. Frame rendering is a direct Buffer use case. See also candy-tetris/candy-mines which share the same buffer-adoption pattern.
+**Notes:** candy-flip is a GIF/frame player with dithering. Frame rendering is a direct Buffer use case. See also candy-tetris/candy-minesweeper which share the same buffer-adoption pattern.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-mines, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, sugar-stash (buffer+mouse), sugar-calendar (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
 
 ---

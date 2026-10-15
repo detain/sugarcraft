@@ -187,7 +187,7 @@ that are tiny but together justify a PR.
 - jesseduffield/lazygit → sugar-stash
 - jorgerojas26/lazysql → candy-query
 - Rtarun3606k/TakaTime → sugar-tick
-- maxpaulus43/go-sweep → candy-mines
+- maxpaulus43/go-sweep → candy-minesweeper
 - namzug16/gifterm → candy-flip
 - kbrgl/flapioca → candy-flappy
 

@@ -1,0 +1,52 @@
+{
+    "name": "sugarcraft/candy-minesweeper",
+    "description": "Minesweeper TUI \u2014 port of maxpaulus43/go-sweep on the SugarCraft stack.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "game",
+        "minesweeper",
+        "sugarcraft",
+        "go-sweep"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-minesweeper.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-minesweeper/issues",
+        "source": "https://github.com/sugarcraft/candy-minesweeper",
+        "docs": "https://sugarcraft.github.io/lib/candy-minesweeper.html"
+    },
+    "bin": [
+        "bin/candy-minesweeper"
+    ],
+    "require": {
+        "php": ">=8.3",
+        "sugarcraft/candy-buffer": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Minesweeper\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Minesweeper\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

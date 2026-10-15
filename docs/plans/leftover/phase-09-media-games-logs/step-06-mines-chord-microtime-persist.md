@@ -1,6 +1,6 @@
-# Step 09.06 — candy-mines chord clicks + microtime precision + difficulty persistence
+# Step 09.06 — candy-minesweeper chord clicks + microtime precision + difficulty persistence
 
-**Source:** `leftover_updates_later.md` candy-mines HIGH
+**Source:** `leftover_updates_later.md` candy-minesweeper HIGH
 **Branch:** `ai/mines-chord-micro-persist`
 
 ## Deliverable
@@ -14,9 +14,9 @@
 
 **Modify:**
 
-- `candy-mines/src/Board.php` — `chord(int $x, int $y): self`.
-- `candy-mines/src/Timer.php` — microtime.
-- `candy-mines/src/Stats/DifficultyStats.php` — atomic JSON
+- `candy-minesweeper/src/Board.php` — `chord(int $x, int $y): self`.
+- `candy-minesweeper/src/Timer.php` — microtime.
+- `candy-minesweeper/src/Stats/DifficultyStats.php` — atomic JSON
   persistence (Homedash pattern from step 03.12).
 
 ## Tests
@@ -25,7 +25,7 @@
 
 ## Acceptance
 
-- `cd candy-mines && vendor/bin/phpunit` green.
+- `cd candy-minesweeper && vendor/bin/phpunit` green.
 
 ---
 

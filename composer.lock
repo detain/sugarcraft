@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "89de4886f18e4a3f87f02041376c8626",
+    "content-hash": "0e4d1b552387167dcb53a4442aebe390",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4525,12 +4525,12 @@
             }
         },
         {
-            "name": "sugarcraft/candy-mines",
+            "name": "sugarcraft/candy-minesweeper",
             "version": "dev-master",
             "dist": {
                 "type": "path",
-                "url": "candy-mines",
-                "reference": "798a11947f0b0177de258098339fd574a6002d3f"
+                "url": "candy-minesweeper",
+                "reference": "0a3121746c4bae5329c21fc342b8cec0e678a27e"
             },
             "require": {
                 "php": ">=8.3",
@@ -4544,17 +4544,17 @@
                 "sugarcraft/candy-testing": "dev-master"
             },
             "bin": [
-                "bin/candy-mines"
+                "bin/candy-minesweeper"
             ],
             "type": "project",
             "autoload": {
                 "psr-4": {
-                    "SugarCraft\\Mines\\": "src/"
+                    "SugarCraft\\Minesweeper\\": "src/"
                 }
             },
             "autoload-dev": {
                 "psr-4": {
-                    "SugarCraft\\Mines\\Tests\\": "tests/"
+                    "SugarCraft\\Minesweeper\\Tests\\": "tests/"
                 }
             },
             "license": [
@@ -4568,18 +4568,18 @@
                 }
             ],
             "description": "Minesweeper TUI — port of maxpaulus43/go-sweep on the SugarCraft stack.",
-            "homepage": "https://sugarcraft.github.io/lib/candy-mines.html",
+            "homepage": "https://sugarcraft.github.io/lib/candy-minesweeper.html",
             "keywords": [
                 "game",
+                "go-sweep",
                 "minesweeper",
-                "sugarcraft",
                 "sugarcraft",
                 "tui"
             ],
             "support": {
-                "issues": "https://github.com/sugarcraft/candy-mines/issues",
-                "source": "https://github.com/sugarcraft/candy-mines",
-                "docs": "https://sugarcraft.github.io/lib/candy-mines.html"
+                "issues": "https://github.com/sugarcraft/candy-minesweeper/issues",
+                "source": "https://github.com/sugarcraft/candy-minesweeper",
+                "docs": "https://sugarcraft.github.io/lib/candy-minesweeper.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8597,7 +8597,7 @@
         "sugarcraft/candy-lister": 20,
         "sugarcraft/candy-log": 20,
         "sugarcraft/candy-metrics": 20,
-        "sugarcraft/candy-mines": 20,
+        "sugarcraft/candy-minesweeper": 20,
         "sugarcraft/candy-mold": 20,
         "sugarcraft/candy-mosaic": 20,
         "sugarcraft/candy-mouse": 20,

@@ -393,7 +393,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `Tape/Msg/Migration/Matcher/Hook/Encode/Render` (≈24 → split), **3.9e** root files.
 - **3.10** `candy-wish`(35,med, core+pty) → **3.10a** `Middleware/*` (14), **3.10b** `Channel/*`
   (11), **3.10c** `Transport/*`+root (≈10).
-- **3.11** `candy-mines`(9,high, buffer+core+mouse+sprinkles), `candy-flip`(9,med,
+- **3.11** `candy-minesweeper`(9,high, buffer+core+mouse+sprinkles), `candy-flip`(9,med,
   core+pty+sprinkles; **WeakMap→SplObjectStorage**).
 
 ### Phase 4 — Components
@@ -480,7 +480,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-freeze | high | 10 | ctor-promotion, enum, match, mixed, new-in-init, php8-strfn |
 | candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union |
 | candy-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
-| candy-mines | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |
+| candy-minesweeper | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |
 | candy-mosaic | high | 25 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, php8-strfn; gd/mbstring |
 | candy-pty | high | 42 | FFI, ctor-promotion, match, mixed, new-in-init, nullsafe |
 | candy-query | high | 14 | enum-with-methods, ctor-promotion, match, mixed, named-args; pdo_sqlite |

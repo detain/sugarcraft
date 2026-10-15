@@ -1,6 +1,6 @@
-# Step 09.07 — candy-mines O(1) win detection + board serialization + custom difficulty UI
+# Step 09.07 — candy-minesweeper O(1) win detection + board serialization + custom difficulty UI
 
-**Source:** `leftover_updates_later.md` candy-mines MEDIUM
+**Source:** `leftover_updates_later.md` candy-minesweeper MEDIUM
 **Branch:** `ai/mines-win-serialize-custom`
 
 ## Deliverable
@@ -14,13 +14,13 @@
 
 **Modify:**
 
-- `candy-mines/src/Board.php` — track `revealedCount` field; win check
+- `candy-minesweeper/src/Board.php` — track `revealedCount` field; win check
   becomes `revealedCount === totalSafeCells`.
 - Add `serialize(): string`, `unserialize(string)`.
 
 **Create:**
 
-- `candy-mines/src/Ui/CustomDifficulty.php` — form for rows/cols/mines.
+- `candy-minesweeper/src/Ui/CustomDifficulty.php` — form for rows/cols/mines.
 
 ## Tests
 
@@ -28,7 +28,7 @@
 
 ## Acceptance
 
-- `cd candy-mines && vendor/bin/phpunit` green.
+- `cd candy-minesweeper && vendor/bin/phpunit` green.
 
 ---
 

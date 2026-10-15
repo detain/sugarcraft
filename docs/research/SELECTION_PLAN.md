@@ -206,12 +206,12 @@
 - **Effort**: 1 hour
 - **Research**: `libraries/candy-freeze-research.md`
 
-### candy-mines
+### candy-minesweeper
 
 ### [ ] Add chord clicks (middle-click on revealed numbers)
 
 - **Effort**: 2-3 hours
-- **Research**: `libraries/candy-mines-research.md`
+- **Research**: `libraries/candy-minesweeper-research.md`
 
 ---
 
@@ -439,7 +439,7 @@ All 45 research documents available at:
 | candy-lister | 15KB |
 | candy-log | 17KB |
 | candy-metrics | 20KB |
-| candy-mines | 15KB |
+| candy-minesweeper | 15KB |
 | candy-mold | 18KB |
 | candy-mosaic | 24KB |
 | candy-palette | 15KB |

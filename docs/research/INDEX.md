@@ -78,7 +78,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **candy-tetris** | [research/libraries/candy-tetris-research.md](libraries/candy-tetris-research.md) | 1. Full SRS, 2. T-Spin detection, 3. B2B bonus |
-| **candy-mines** | [research/libraries/candy-mines-research.md](libraries/candy-mines-research.md) | 1. Chord clicks, 2. Win detection, 3. Timer precision |
+| **candy-minesweeper** | [research/libraries/candy-minesweeper-research.md](libraries/candy-minesweeper-research.md) | 1. Chord clicks, 2. Win detection, 3. Timer precision |
 | **honey-bounce** | [research/libraries/honey-bounce-research.md](libraries/honey-bounce-research.md) | 1. SpringConfig presets, 2. CubicBezier, 3. SpringChain |
 | **candy-flappy** | [research/libraries/candy-flappy-research.md](libraries/candy-flappy-research.md) | 1. Bird rotation, 2. Collision tests, 3. Variable gap |
 | **candy-flip** | [research/libraries/candy-flip-research.md](libraries/candy-flip-research.md) | 1. imagecreatefromstring, 2. Frame timing, 3. Floyd-Steinberg |
@@ -123,7 +123,7 @@ To implement an item:
 | 17 | sugar-skate | Levenshtein suggestions | 1h | [link](libraries/sugar-skate-research.md) |
 | 18 | candy-flip | imagecreatefromstring | 1-2h | [link](libraries/candy-flip-research.md) |
 | 19 | candy-flip | Per-frame timing | 3-4h | [link](libraries/candy-flip-research.md) |
-| 20 | sugar-mines | Chord clicks | 2-3h | [link](libraries/candy-mines-research.md) |
+| 20 | sugar-mines | Chord clicks | 2-3h | [link](libraries/candy-minesweeper-research.md) |
 
 ---
 
@@ -166,7 +166,7 @@ To implement an item:
 ### Games
 
 - **candy-tetris**: Full SRS, T-Spin detection, B2B bonus
-- **candy-mines**: Chord clicks, improved win detection
+- **candy-minesweeper**: Chord clicks, improved win detection
 - **honey-bounce**: SpringConfig presets, CubicBezier, SpringChain
 - **candy-flappy**: Bird rotation, collision tests
 

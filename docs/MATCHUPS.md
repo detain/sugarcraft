@@ -94,7 +94,7 @@ called out in the table below.
 | **SugarStash** (`sugar-stash/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
 | **CandyQuery** (`candy-query/`) | 🟢 ready | SQLite/MySQL/PostgreSQL browser TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
 | **SugarTick** (`sugar-tick/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL on disk. |
-| **CandyMines** (`candy-mines/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
+| **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF + .ansi-art viewer CLI (ext-gd via candy-flip) — port of gifterm. |
 | **SugarReel** (`sugar-reel/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
 | **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
@@ -166,7 +166,7 @@ reference projects supplied the ideas, not the code.
 | CandyLister (candy-lister/) | [bubblelister](https://github.com/treilik/bubblelister) |
 | CandyLog (candy-log/) | [log](https://github.com/charmbracelet/log) |
 | CandyMetrics (candy-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
-| CandyMines (candy-mines/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
+| CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
 | CandyMold (candy-mold/) | none — first-party |
 | CandyMouse (candy-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | CandyMosaic (candy-mosaic/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |

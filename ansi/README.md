@@ -1131,192 +1131,192 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-layout-9-tc-s-2.ansi` | 52x15 | truecolor | 106 | Mason's datum tools: brass plumb bob on its line with deviation mark beside a spirit level, bubble off-centre on granite |
 <!-- END candy-layout SLOTS -->
 
-<!-- BEGIN candy-mines SLOTS -->
-### candy-mines — slot series
+<!-- BEGIN candy-minesweeper SLOTS -->
+### candy-minesweeper — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-mines-1-16-l-1.ansi` | 140x33 | 16 | 17 | Full TUI screen — giant block banner, live 24x9 board with classic number colors, stats/keys side panel |
-| `candy-mines-1-16-l-2.ansi` | 144x36 | 16 | 15 | Five-row candy-colored block banner over a vast 23x14 minefield with numbers, flags and timer footer |
-| `candy-mines-1-16-m-1.ansi` | 80x18 | 16 | 16 | Game-over frame — 16x6 board with exploded red cell, BOOM status, debris and retry legend |
-| `candy-mines-1-16-m-2.ansi` | 88x18 | 16 | 13 | Twilight sky bands with block-letter CANDY MINES title over a gridded perspective minefield with flags |
-| `candy-mines-1-16-s-1.ansi` | 52x11 | 16 | 13 | Mini minesweeper grid with glowing 3x3 safe ring around cursor cell, flag and timer HUD line |
-| `candy-mines-1-16-s-2.ansi` | 66x12 | 16 | 14 | Dusk ridge scene — half-block candy hills planted with flags, mine-glint field, blockletter wordmark |
-| `candy-mines-1-256-l-1.ansi` | 160x35 | 256 | 28 | Arcade attract-mode marquee — double-size rainbow title, six rows of marching candy mines, high scores |
-| `candy-mines-1-256-l-2.ansi` | 170x41 | 256 | 36 | Expert-field perspective — 30-column grid receding to a dusk horizon, mine silhouettes and distant flags |
-| `candy-mines-1-256-m-1.ansi` | 80x19 | 256 | 32 | Attract loading screen — gradient block title, board strips, dig progress meter, keybind and preset rows |
-| `candy-mines-1-256-m-2.ansi` | 86x21 | 256 | 33 | Flood-fill cascade study — concentric rings fading from the smiley first-click cell outward to hidden cells |
-| `candy-mines-1-256-s-1.ansi` | 64x7 | 256 | 29 | Loading splash — rainbow CANDY MINES lettering, gradient progress bar 62%, spinner and status rows |
-| `candy-mines-1-256-s-2.ansi` | 50x11 | 256 | 26 | Glass jar packed with seven candy-colored mines, flag stopper, product-label footer |
-| `candy-mines-1-tc-l-1.ansi` | 200x47 | truecolor | 67 | Sunset panorama — smooth sky gradient with sun disc, neon CANDY MINES sign, glowing candy-mine field below |
-| `candy-mines-1-tc-l-2.ansi` | 190x29 | truecolor | 49 | Candy-mine factory floor — gauges, braille-steam pipes, mine press, gradient-candy conveyor, hazard stripes and crates |
-| `candy-mines-1-tc-m-1.ansi` | 88x23 | truecolor | 331 | Radial sugar-detonation blast — white-core to night-edge truecolor fireball, shockwave and BOOM caption |
-| `candy-mines-1-tc-m-2.ansi` | 82x22 | truecolor | 112 | Victory screen — dusk gradient with confetti, huge rainbow YOU·WIN blocks, best-times and wordmark |
-| `candy-mines-1-tc-s-1.ansi` | 58x9 | truecolor | 10 | Neon chord-mode card — layered glow wordmark, [c] keycap, cyan/magenta night palette |
-| `candy-mines-1-tc-s-2.ansi` | 66x13 | truecolor | 178 | Chevron candy-stripe ribbon in smooth truecolor gradients with HUD fragments between the folds |
-| `candy-mines-10-16-l-1.ansi` | 150x28 | 16 | 8 | metropolitan interchange survey - five-line network map with joint digits, departure board and ledger |
-| `candy-mines-10-16-l-2.ansi` | 150x30 | 16 | 16 | solved box-lid jigsaw sheet - 8x4 tabbed pieces, digits count rattling nut pockets in touching pieces |
-| `candy-mines-10-16-m-1.ansi` | 82x19 | 16 | 14 | quilt patch census - 4x3 block with charcoal squares, open patches number their sooty neighbours |
-| `candy-mines-10-16-m-2.ansi` | 86x19 | 16 | 8 | celtic-cross tarot spread of five - digits count reversed cards lying beside each one |
-| `candy-mines-10-16-s-1.ansi` | 60x10 | 16 | 8 | film-strip continuity reel No.7 - sprocketed frames tally continuity errors in touching frames |
-| `candy-mines-10-16-s-2.ansi` | 62x13 | 16 | 8 | own-goal adjacency league table - NEIGHBOURS column tallies OG in the rows touching each team |
-| `candy-mines-10-256-l-1.ansi` | 150x30 | 256 | 26 | bedspread census - 8x4 fabric patches tally sooty neighbours with fibre ledger footer |
-| `candy-mines-10-256-l-2.ansi` | 150x29 | 256 | 20 | grand tableau of twelve tarot cards - reversal adjacency digits, three-column ledger and house rules |
-| `candy-mines-10-256-m-1.ansi` | 89x19 | 256 | 16 | clapperboard continuity log - striped slate, scene blooming census and take-log annexe |
-| `candy-mines-10-256-m-2.ansi` | 85x21 | 256 | 15 | pitch zone census - striped grass six-by-four, each zone numbers touching own-goal zones |
-| `candy-mines-10-256-s-1.ansi` | 60x11 | 256 | 11 | metro line strip - central/riverside/circle with segment digits for interchanges served |
-| `candy-mines-10-256-s-2.ansi` | 68x14 | 256 | 17 | jigsaw box lid - eight regions, safe pieces number the nuts rattling under touching pieces |
-| `candy-mines-10-tc-l-1.ansi` | 150x29 | truecolor | 22 | twin projector reels cast gradient beams over a 16-frame blooper adjacency board and take log |
-| `candy-mines-10-tc-l-2.ansi` | 160x30 | truecolor | 157 | full twelve-team own-goal standings - gradient header, heat-block neighbour tallies, league-office notes |
-| `candy-mines-10-tc-m-1.ansi` | 86x21 | truecolor | 12 | truecolour metro network - four lines, superscript digits at interchanges, transfer ledger |
-| `candy-mines-10-tc-m-2.ansi` | 86x19 | truecolor | 56 | solved side of the puzzle lid - 5x3 gradient pieces with tabs, hidden nut pockets tallied |
-| `candy-mines-10-tc-s-1.ansi` | 56x14 | truecolor | 17 | nine-patch quilt block - charcoal wool squares glow, light patches count touching soot |
-| `candy-mines-10-tc-s-2.ansi` | 60x11 | truecolor | 11 | three-card tarot spread - the reversed Tower between two upright neighbours, digits count reversals beside |
-| `candy-mines-2-16-l-1.ansi` | 150x34 | 16 | 10 | expert board with difficulty sidebar and mine/time HUD status strip |
-| `candy-mines-2-16-l-2.ansi` | 140x32 | 16 | 10 | starry night minefield landscape with chain-reaction field note |
-| `candy-mines-2-16-m-1.ansi` | 86x20 | 16 | 7 | chord-reveal before/after comparison panels with [c] key callout |
-| `candy-mines-2-16-m-2.ansi` | 88x22 | 16 | 10 | partially cleared foggy field, centered wordmark over hidden mines |
-| `candy-mines-2-16-s-1.ansi` | 66x13 | 16 | 7 | block letter CANDY MINES wordmark over flag and number legend row |
-| `candy-mines-2-16-s-2.ansi` | 58x12 | 16 | 9 | rounded cell-legend box mapping hidden, flag, mine and counts 1-8 |
-| `candy-mines-2-256-l-1.ansi` | 172x40 | 256 | 25 | cell zoo of every revealed state in zoomed 256-color panels |
-| `candy-mines-2-256-l-2.ansi` | 160x36 | 256 | 29 | difficulty stats dashboard with bar charts and best-time LED board |
-| `candy-mines-2-256-m-1.ansi` | 84x18 | 256 | 15 | adjacent-count spectrum of glyphs 1-8 beside a sample field |
-| `candy-mines-2-256-m-2.ansi` | 88x24 | 256 | 17 | flood-reveal cascade pouring diagonally across the grid |
-| `candy-mines-2-256-s-1.ansi` | 56x10 | 256 | 7 | session HUD strip with mines-left counter in a bordered box |
-| `candy-mines-2-256-s-2.ansi` | 50x14 | 256 | 10 | DEFUSED seal badge with wordmark woven into candy stripes |
-| `candy-mines-2-tc-l-1.ansi` | 200x44 | truecolor | 341 | neon corridor of gradient jawbreaker orbs receding to the last cell |
-| `candy-mines-2-tc-l-2.ansi` | 190x46 | truecolor | 493 | sugar caldera landscape with spilled mine cart under gradient sky |
-| `candy-mines-2-tc-m-1.ansi` | 86x24 | truecolor | 97 | four-beat storyboard of a doomed click, smooth explosion gradient |
-| `candy-mines-2-tc-m-2.ansi` | 86x24 | truecolor | 757 | night-shift aurora counting the minefield over a centered wordmark |
-| `candy-mines-2-tc-s-1.ansi` | 54x12 | truecolor | 184 | gradient candy-swirl bomb paired with block CANDY MINES wordmark |
-| `candy-mines-2-tc-s-2.ansi` | 64x14 | truecolor | 201 | block CANDY MINES wordmark on a truecolor candy glaze |
-| `candy-mines-3-16-l-1.ansi` | 138x28 | 16 | 6 | field archaeology: board as dig cross-section with find ledger |
-| `candy-mines-3-16-l-2.ansi` | 150x28 | 16 | 7 | speedrun HUD: world-record-pace board with splits and meters |
-| `candy-mines-3-16-m-1.ansi` | 80x21 | 16 | 6 | chord mechanics three-panel diagram: survey, match, stroke |
-| `candy-mines-3-16-m-2.ansi` | 78x18 | 16 | 7 | hall of fame best-times table from stats.json |
-| `candy-mines-3-16-s-1.ansi` | 56x14 | 16 | 6 | endgame deduction puzzle №7: the 1-2-1 mirror proof |
-| `candy-mines-3-16-s-2.ansi` | 58x15 | 16 | 6 | 50/50 tragedy: two veils, one mine, coin-flip death card |
-| `candy-mines-3-256-l-1.ansi` | 186x38 | 256 | 12 | the dig contract: survey, extraction crews, shift ledger |
-| `candy-mines-3-256-l-2.ansi` | 150x29 | 256 | 13 | night court: the 50/50 on trial before a jury of constraints |
-| `candy-mines-3-256-m-1.ansi` | 84x18 | 256 | 12 | probability map: per-cell P(mine) with deduction readout |
-| `candy-mines-3-256-m-2.ansi` | 88x18 | 256 | 9 | live speedrun splits vs PB ghost with pace sparks |
-| `candy-mines-3-256-s-1.ansi` | 50x14 | 256 | 15 | the chord key: shaded 256-grey keycap stamped c |
-| `candy-mines-3-256-s-2.ansi` | 64x9 | 256 | 11 | mine-density gauge bars for easy, medium, expert realms |
-| `candy-mines-3-256-s-3.ansi` | 54x7 | 256 | 7 | flag ticker LED mine counter panel |
-| `candy-mines-3-tc-l-1.ansi` | 150x30 | truecolor | 168 | strata excavation: smooth earth bands over the expert site |
-| `candy-mines-3-tc-l-2.ansi` | 160x28 | truecolor | 75 | risk heatmap: green-to-red P(mine) engine view of the board |
-| `candy-mines-3-tc-m-1.ansi` | 86x18 | truecolor | 17 | chord mechanics in glow panels with violet gradients |
-| `candy-mines-3-tc-m-2.ansi` | 88x18 | truecolor | 47 | hall-of-fame podium in gold, silver, bronze gradients |
-| `candy-mines-3-tc-s-1.ansi` | 62x7 | truecolor | 76 | rainbow CandyMines wordmark with glowing mines |
-| `candy-mines-3-tc-s-2.ansi` | 52x7 | truecolor | 35 | live neon timer strip with PB delta on dark glass |
-| `candy-mines-3-tc-s-3.ansi` | 65x11 | truecolor | 13 | flood-fill bloom: first click opening a zero plaza |
-| `candy-mines-4-16-l-1.ansi` | 138x28 | 16 | 8 | orchestral first-click symphony: conductor score of numbered mine motifs |
-| `candy-mines-4-16-l-2.ansi` | 136x28 | 16 | 6 | botanic garden cadastral survey: flower beds report buried treasure chests |
-| `candy-mines-4-16-m-1.ansi` | 84x24 | 16 | 6 | detective noir interrogation log: Det. Licorice grills suspect cell 7 |
-| `candy-mines-4-16-m-2.ansi` | 80x18 | 16 | 9 | lighthouse keeper vs storm: beam rows sweep mined sea of number buoys |
-| `candy-mines-4-16-s-1.ansi` | 45x14 | 16 | 8 | candy-mine ore cart No.12 hauling number cubes 3-1-7-5-2 along candy rails |
-| `candy-mines-4-16-s-2.ansi` | 41x12 | 16 | 5 | weather bulletin: 990mb mine low hovering over cell D7 with detonation risk field |
-| `candy-mines-4-256-l-1.ansi` | 148x38 | 256 | 19 | weather radar scope of mine pressure systems: phosphor rings, cell blobs and sweep log |
-| `candy-mines-4-256-l-2.ansi` | 168x30 | 256 | 28 | garden panorama at golden hour: bloom rows, a treasure chest and sundial on gradient sky |
-| `candy-mines-4-256-m-1.ansi` | 86x22 | 256 | 19 | detective corkboard evidence wall: suspect cell photos stitched by red adjacency string |
-| `candy-mines-4-256-m-2.ansi` | 86x20 | 256 | 20 | noir office window at 2AM: rain on glass, blinds, buzzing CANDY MINES neon sign |
-| `candy-mines-4-256-s-1.ansi` | 50x12 | 256 | 11 | mine-pressure barometer dial with needle pinned in the red and a green-to-red scale |
-| `candy-mines-4-256-s-2.ansi` | 53x11 | 256 | 10 | wooden treasure chest of ore coins with adjacency numbers spilling onto garden soil |
-| `candy-mines-4-tc-l-1.ansi` | 198x43 | truecolor | 309 | lighthouse keeper storm epic: purple clouds, rain, numbered mine buoys, cream beam with wordmark |
-| `candy-mines-4-tc-l-2.ansi` | 210x45 | truecolor | 304 | orchestra in three colour sections under a rainbow crescendo, conductor cueing the first click |
-| `candy-mines-4-tc-m-1.ansi` | 86x23 | truecolor | 132 | rain-lashed noir office window: pink-blue CANDY MINES neon, blinds and suspect file |
-| `candy-mines-4-tc-m-2.ansi` | 84x21 | truecolor | 114 | truecolor radar disc with fading sweep wedge, pressure blob readouts and station log |
-| `candy-mines-4-tc-s-1.ansi` | 64x13 | truecolor | 132 | gold-rimmed lucky coin stamped No.7 glowing on a purple mine-shaft dark |
-| `candy-mines-4-tc-s-2.ansi` | 61x9 | truecolor | 58 | stage-clearance ticket with green-to-red mine risk gradient bar and 15% odds |
-| `candy-mines-5-16-l-1.ansi` | 150x28 | 16 | 10 | grand hall chess endgame with chandeliers, scoreboard, arbiter and spectators |
-| `candy-mines-5-16-l-2.ansi` | 132x36 | 16 | 8 | submarine bridge plot table: sonar scope with rings and contacts, gauge panel |
-| `candy-mines-5-16-m-1.ansi` | 88x19 | 16 | 10 | chess endgame parlour board: king and mine-pawns versus the night side |
-| `candy-mines-5-16-m-2.ansi` | 78x21 | 16 | 5 | spider-web telegraph with numbered dew-drop nodes around a zero hub |
-| `candy-mines-5-16-s-1.ansi` | 62x11 | 16 | 7 | bees sweeping a hexagonal comb-minefield of numbered cells and patrol lanes |
-| `candy-mines-5-16-s-2.ansi` | 54x10 | 16 | 7 | pocket sonar dial ringing arcs over dark water with numbered contacts |
-| `candy-mines-5-256-l-1.ansi` | 181x40 | 256 | 27 | vertical descent column through five depth zones, each band gradient-lit with mines, cables, wrecks |
-| `candy-mines-5-256-l-2.ansi` | 168x33 | 256 | 22 | night-shift sugar works panorama: seven stations, conveyor verdicts, inquest table, shift board |
-| `candy-mines-5-256-m-1.ansi` | 82x18 | 256 | 24 | diving bell descending a gradient water column onto a mine-strewn seabed |
-| `candy-mines-5-256-m-2.ansi` | 86x20 | 256 | 18 | night shift candy factory QC line under a moon, glass hovering over lane four |
-| `candy-mines-5-256-s-1.ansi` | 61x7 | 256 | 14 | quality-control gate inspecting numbered sweets riding a candy conveyor |
-| `candy-mines-5-256-s-2.ansi` | 46x9 | 256 | 19 | aurora ribbons over a frozen numbered lake read like a depth gauge |
-| `candy-mines-5-tc-l-1.ansi` | 190x33 | truecolor | 2050 | truecolor aurora night over a frozen numbered lake, survey grid drilled in the ice |
-| `candy-mines-5-tc-l-2.ansi` | 190x29 | truecolor | 579 | abyss patrol submarine sweeping a lamp cone over a numbered minefield on the trench floor |
-| `candy-mines-5-tc-m-1.ansi` | 86x21 | truecolor | 728 | truecolor aurora curtains over a fjord ridge with numbered ice floes below |
-| `candy-mines-5-tc-m-2.ansi` | 88x18 | truecolor | 263 | electric storm battering a tilted honeycomb of numbered cells, bees fleeing |
-| `candy-mines-5-tc-s-1.ansi` | 60x6 | truecolor | 46 | diving bell riding a chain over a truecolor gradient depth scale to 140 fathoms |
-| `candy-mines-5-tc-s-2.ansi` | 62x5 | truecolor | 13 | baker's tray of number-frosted cookies with sprinkles and crumbs |
-| `candy-mines-6-16-l-1.ansi` | 150x34 | 16 | 11 | celestial atlas of numbered star-clusters, guide stars and a comet tail |
-| `candy-mines-6-16-l-2.ansi` | 138x32 | 16 | 11 | library stack shelves where call-slip numbers count hidden volumes |
-| `candy-mines-6-16-m-1.ansi` | 82x22 | 16 | 11 | seismic survey line of numbered geophone stakes over hidden reflectors |
-| `candy-mines-6-16-m-2.ansi` | 78x20 | 16 | 11 | circuit board fab panel of solder pads with numbered via adjacency |
-| `candy-mines-6-16-s-1.ansi` | 58x13 | 16 | 11 | archaeology dig grid where brushes reveal numbered relics in turf squares |
-| `candy-mines-6-16-s-2.ansi` | 58x12 | 16 | 11 | cheese factory wheels with numbered hole-counts and rind cracks |
-| `candy-mines-6-256-l-1.ansi` | 160x36 | 256 | 14 | clockwork movement workshop of numbered gear teeth and hidden pins |
-| `candy-mines-6-256-l-2.ansi` | 144x33 | 256 | 14 | desert caravan route of numbered oasis wells between dune cairns |
-| `candy-mines-6-256-m-1.ansi` | 84x20 | 256 | 12 | vineyard harvest rows with numbered stone counts hidden between vines |
-| `candy-mines-6-256-m-2.ansi` | 88x22 | 256 | 14 | board-game theater map where numbered sectors count hidden garrisons |
-| `candy-mines-6-256-s-1.ansi` | 58x10 | 256 | 12 | coin mint press line of planchet counters with numbered strike adjacency |
-| `candy-mines-6-256-s-2.ansi` | 56x12 | 256 | 13 | postal sorting wall of numbered pigeonholes routing hidden parcels |
-| `candy-mines-6-tc-l-1.ansi` | 168x38 | truecolor | 17 | prism spectrum lab where numbered facets tag hidden emission lines |
-| `candy-mines-6-tc-l-2.ansi` | 176x36 | truecolor | 17 | kaleidoscope mirror chamber with numbered glass-chip segments |
-| `candy-mines-6-tc-m-1.ansi` | 86x22 | truecolor | 15 | candy theme-park ferris wheel with numbered lit gondolas |
-| `candy-mines-6-tc-m-2.ansi` | 84x20 | truecolor | 15 | observatory dome sweep plotting numbered radio/optical sources |
-| `candy-mines-6-tc-s-1.ansi` | 52x8 | truecolor | 11 | meteor shower watch with numbered streaks radiating from a point |
-| `candy-mines-6-tc-s-2.ansi` | 56x11 | truecolor | 13 | fish-market ice beds with numbered crates of hidden catches |
-| `candy-mines-7-16-l-1.ansi` | 125x28 | 16 | 7 | archaeologist trench grid brushing numbered pot-sherd adjacency |
-| `candy-mines-7-16-l-2.ansi` | 125x30 | 16 | 6 | lifeguard tower beach grid counting shark fins by each float |
-| `candy-mines-7-16-m-1.ansi` | 77x18 | 16 | 7 | avalanche forecast slope of numbered snow patches under flagged cornices |
-| `candy-mines-7-16-m-2.ansi` | 74x18 | 16 | 6 | shepherds rolling hill ledger counting wolf dens in adjacent hollows |
-| `candy-mines-7-16-s-1.ansi` | 61x9 | 16 | 6 | garden gnome patrol lawn grid counting gopher-hole adjacency |
-| `candy-mines-7-256-l-1.ansi` | 124x28 | 256 | 18 | bakers layer cake core test with numbered skewers counting fudge pockets |
-| `candy-mines-7-256-l-2.ansi` | 194x28 | 256 | 8 | steam manifold valve board with nameplates counting hidden drips |
-| `candy-mines-7-256-m-1.ansi` | 78x18 | 256 | 14 | fireworks magazine rack where crate digits count dud shells |
-| `candy-mines-7-256-m-2.ansi` | 80x19 | 256 | 13 | mailbox route where pavement digits count spider webs in boxes |
-| `candy-mines-7-256-s-1.ansi` | 65x7 | 256 | 11 | clover field census counting bee stings hidden under each bloom |
-| `candy-mines-7-256-s-2.ansi` | 62x9 | 256 | 10 | knight tour over a checkered board reading mined square adjacency |
-| `candy-mines-7-tc-l-1.ansi` | 132x28 | truecolor | 28 | skybridge glass panels stamped with hidden crack counts over the city |
-| `candy-mines-7-tc-l-2.ansi` | 133x28 | truecolor | 25 | tidepool transect counting hermit crabs beneath numbered anemones |
-| `candy-mines-7-tc-m-1.ansi` | 80x18 | truecolor | 20 | meteor fall field survey with numbered craters counting glass shards |
-| `candy-mines-7-tc-m-2.ansi` | 78x18 | truecolor | 16 | golden hour corn rows with furrow digits counting hidden crows |
-| `candy-mines-7-tc-s-1.ansi` | 65x10 | truecolor | 17 | night fish count by lantern glow with numbered net stakes |
-| `candy-mines-7-tc-s-2.ansi` | 66x9 | truecolor | 13 | harbor buoy line with numbered anchors fouling adjacent floats |
-| `candy-mines-8-16-l-1.ansi` | 153x29 | 16 | 8 | glassblower's gob-blank yield ledger, seed digits counting bubbles caught mid-blow |
-| `candy-mines-8-16-l-2.ansi` | 153x29 | 16 | 7 | weaver's loom draft grid, each tie marking the count of broken warp ends nearby |
-| `candy-mines-8-16-m-1.ansi` | 85x20 | 16 | 8 | chocolatier's gilded praline matrix, squares counting hazelnuts hidden in adjacent cups |
-| `candy-mines-8-16-m-2.ansi` | 85x20 | 16 | 8 | reef-quadrat transect tallying anemone heads around each cleared sand square |
-| `candy-mines-8-16-s-1.ansi` | 69x15 | 16 | 8 | pyrotechnician safety-inspection grid, tray digits count live shells touching each cell |
-| `candy-mines-8-16-s-2.ansi` | 69x15 | 16 | 8 | bosun's knot pegboard where each pin tallies the cord crossings in its ring |
-| `candy-mines-8-256-l-1.ansi` | 153x29 | 256 | 11 | fair-isle knitting chart where stitch cells count the dropped ladders touching them |
-| `candy-mines-8-256-l-2.ansi` | 153x29 | 256 | 12 | geiger dose-grid survey, pip cells counting hot grains enclosed along the afterburn line |
-| `candy-mines-8-256-m-1.ansi` | 85x20 | 256 | 12 | apothecary bottle shelf where amber-drop digits count the caustic tinctures within reach |
-| `candy-mines-8-256-m-2.ansi` | 85x20 | 256 | 12 | numismatist assay cabinet, coin tray cells ringing the counterfeits in the neighbouring pockets |
-| `candy-mines-8-256-s-1.ansi` | 69x15 | 256 | 13 | mycologist spore-survey grid, clear squares counting toxic toadstool caps nearby |
-| `candy-mines-8-256-s-2.ansi` | 69x15 | 256 | 13 | printmaker's halftone screen, dot cells counting hidden ink wells they cluster over |
-| `candy-mines-8-tc-l-1.ansi` | 153x29 | truecolor | 313 | EOD render field with truecolor tiles, numbers counting live rounds fed by adjacent wire |
-| `candy-mines-8-tc-l-2.ansi` | 153x29 | truecolor | 256 | tidepool census transect of grazed-shell counts glowing teal around each tagged snail |
-| `candy-mines-8-tc-m-1.ansi` | 85x20 | truecolor | 109 | potters kiln shelf glowing with crawl-crack counts beneath each numbered bisque square |
-| `candy-mines-8-tc-m-2.ansi` | 85x20 | truecolor | 120 | radar scope sweep of green echo cells counting folding contacts in adjacent arcs |
-| `candy-mines-8-tc-s-1.ansi` | 69x15 | truecolor | 55 | crystal-growth tray glowing with lattice counts of inclusions at each seed point |
-| `candy-mines-8-tc-s-2.ansi` | 69x15 | truecolor | 62 | stained-glass rose window of lead joints, each pane number counting the shards it braces |
-| `candy-mines-9-16-l-5.ansi` | 150x30 | 16 | 7 | ATC approach-control sector board, radar cells counting concealed contacts nearby |
-| `candy-mines-9-16-l-6.ansi` | 144x28 | 16 | 5 | 30-min astrophoto exposure grid, tile cells counting satellite streaks they cross |
-| `candy-mines-9-16-m-3.ansi` | 84x22 | 16 | 5 | orchard frost-warning plot, blossom cells counting chilled blooms on the fringe |
-| `candy-mines-9-16-m-4.ansi` | 86x20 | 16 | 5 | site-safety near-miss ledger, hard-hat zones each numbering the hazards beside them |
-| `candy-mines-9-16-s-2.ansi` | 64x12 | 16 | 5 | links golf front-nine scorecard, each hole cell tallying sand bunkers it touches |
-| `candy-mines-9-256-l-11.ansi` | 156x32 | 256 | 14 | telecom route CS-9 in gradient light, spans glowing with their repeater-fault counts |
-| `candy-mines-9-256-l-12.ansi` | 160x30 | 256 | 16 | approach-control scope sweep, phosphor sectors ringing the hidden contacts they screen |
-| `candy-mines-9-256-m-10.ansi` | 86x20 | 256 | 13 | links golf front-nine in colour, fairway cells shading the bunkers they abut |
-| `candy-mines-9-256-m-9.ansi` | 84x22 | 256 | 5 | philatelic sheet audit, stamp cells tallying forged issues in the adjacent perforations |
-| `candy-mines-9-256-s-7.ansi` | 62x14 | 256 | 9 | ore-drift mine coaster trestle, drop cells numbering loaded cars between stations |
-| `candy-mines-9-256-s-8.ansi` | 64x13 | 256 | 8 | CCTV wall of masked subjects, frame cells counting faces lingering in neighbours |
-| `candy-mines-9-tc-l-17.ansi` | 168x34 | truecolor | 9 | CCTV wall in night-vision colour grade, masked frames counting subjects across the room |
-| `candy-mines-9-tc-l-18.ansi` | 180x32 | truecolor | 45 | approach-control radar in full-colour sweep, contact blooms lighting each sector's hidden count |
-| `candy-mines-9-tc-m-15.ansi` | 86x22 | truecolor | 9 | drift mine coaster lit by ore-lamp hues, drop cells numbered in mineral colour |
-| `candy-mines-9-tc-m-16.ansi` | 84x20 | truecolor | 5 | philatelic sheet in true colour, gum-toned stamps marking forgery counts beside them |
-| `candy-mines-9-tc-s-13.ansi` | 60x13 | truecolor | 29 | orchard frost plot rendered in dew-lit colour, blossoms glowing against the cold counts |
-| `candy-mines-9-tc-s-14.ansi` | 64x12 | truecolor | 7 | site-safety ledger under warning-lamp glow, zones tinted by their near-miss density |
-<!-- END candy-mines SLOTS -->
+| `candy-minesweeper-1-16-l-1.ansi` | 140x33 | 16 | 17 | Full TUI screen — giant block banner, live 24x9 board with classic number colors, stats/keys side panel |
+| `candy-minesweeper-1-16-l-2.ansi` | 144x36 | 16 | 15 | Five-row candy-colored block banner over a vast 23x14 minefield with numbers, flags and timer footer |
+| `candy-minesweeper-1-16-m-1.ansi` | 80x18 | 16 | 16 | Game-over frame — 16x6 board with exploded red cell, BOOM status, debris and retry legend |
+| `candy-minesweeper-1-16-m-2.ansi` | 88x18 | 16 | 13 | Twilight sky bands with block-letter CANDY MINES title over a gridded perspective minefield with flags |
+| `candy-minesweeper-1-16-s-1.ansi` | 52x11 | 16 | 13 | Mini minesweeper grid with glowing 3x3 safe ring around cursor cell, flag and timer HUD line |
+| `candy-minesweeper-1-16-s-2.ansi` | 66x12 | 16 | 14 | Dusk ridge scene — half-block candy hills planted with flags, mine-glint field, blockletter wordmark |
+| `candy-minesweeper-1-256-l-1.ansi` | 160x35 | 256 | 28 | Arcade attract-mode marquee — double-size rainbow title, six rows of marching candy mines, high scores |
+| `candy-minesweeper-1-256-l-2.ansi` | 170x41 | 256 | 36 | Expert-field perspective — 30-column grid receding to a dusk horizon, mine silhouettes and distant flags |
+| `candy-minesweeper-1-256-m-1.ansi` | 80x19 | 256 | 32 | Attract loading screen — gradient block title, board strips, dig progress meter, keybind and preset rows |
+| `candy-minesweeper-1-256-m-2.ansi` | 86x21 | 256 | 33 | Flood-fill cascade study — concentric rings fading from the smiley first-click cell outward to hidden cells |
+| `candy-minesweeper-1-256-s-1.ansi` | 64x7 | 256 | 29 | Loading splash — rainbow CANDY MINES lettering, gradient progress bar 62%, spinner and status rows |
+| `candy-minesweeper-1-256-s-2.ansi` | 50x11 | 256 | 26 | Glass jar packed with seven candy-colored mines, flag stopper, product-label footer |
+| `candy-minesweeper-1-tc-l-1.ansi` | 200x47 | truecolor | 67 | Sunset panorama — smooth sky gradient with sun disc, neon CANDY MINES sign, glowing candy-mine field below |
+| `candy-minesweeper-1-tc-l-2.ansi` | 190x29 | truecolor | 49 | Candy-mine factory floor — gauges, braille-steam pipes, mine press, gradient-candy conveyor, hazard stripes and crates |
+| `candy-minesweeper-1-tc-m-1.ansi` | 88x23 | truecolor | 331 | Radial sugar-detonation blast — white-core to night-edge truecolor fireball, shockwave and BOOM caption |
+| `candy-minesweeper-1-tc-m-2.ansi` | 82x22 | truecolor | 112 | Victory screen — dusk gradient with confetti, huge rainbow YOU·WIN blocks, best-times and wordmark |
+| `candy-minesweeper-1-tc-s-1.ansi` | 58x9 | truecolor | 10 | Neon chord-mode card — layered glow wordmark, [c] keycap, cyan/magenta night palette |
+| `candy-minesweeper-1-tc-s-2.ansi` | 66x13 | truecolor | 178 | Chevron candy-stripe ribbon in smooth truecolor gradients with HUD fragments between the folds |
+| `candy-minesweeper-10-16-l-1.ansi` | 150x28 | 16 | 8 | metropolitan interchange survey - five-line network map with joint digits, departure board and ledger |
+| `candy-minesweeper-10-16-l-2.ansi` | 150x30 | 16 | 16 | solved box-lid jigsaw sheet - 8x4 tabbed pieces, digits count rattling nut pockets in touching pieces |
+| `candy-minesweeper-10-16-m-1.ansi` | 82x19 | 16 | 14 | quilt patch census - 4x3 block with charcoal squares, open patches number their sooty neighbours |
+| `candy-minesweeper-10-16-m-2.ansi` | 86x19 | 16 | 8 | celtic-cross tarot spread of five - digits count reversed cards lying beside each one |
+| `candy-minesweeper-10-16-s-1.ansi` | 60x10 | 16 | 8 | film-strip continuity reel No.7 - sprocketed frames tally continuity errors in touching frames |
+| `candy-minesweeper-10-16-s-2.ansi` | 62x13 | 16 | 8 | own-goal adjacency league table - NEIGHBOURS column tallies OG in the rows touching each team |
+| `candy-minesweeper-10-256-l-1.ansi` | 150x30 | 256 | 26 | bedspread census - 8x4 fabric patches tally sooty neighbours with fibre ledger footer |
+| `candy-minesweeper-10-256-l-2.ansi` | 150x29 | 256 | 20 | grand tableau of twelve tarot cards - reversal adjacency digits, three-column ledger and house rules |
+| `candy-minesweeper-10-256-m-1.ansi` | 89x19 | 256 | 16 | clapperboard continuity log - striped slate, scene blooming census and take-log annexe |
+| `candy-minesweeper-10-256-m-2.ansi` | 85x21 | 256 | 15 | pitch zone census - striped grass six-by-four, each zone numbers touching own-goal zones |
+| `candy-minesweeper-10-256-s-1.ansi` | 60x11 | 256 | 11 | metro line strip - central/riverside/circle with segment digits for interchanges served |
+| `candy-minesweeper-10-256-s-2.ansi` | 68x14 | 256 | 17 | jigsaw box lid - eight regions, safe pieces number the nuts rattling under touching pieces |
+| `candy-minesweeper-10-tc-l-1.ansi` | 150x29 | truecolor | 22 | twin projector reels cast gradient beams over a 16-frame blooper adjacency board and take log |
+| `candy-minesweeper-10-tc-l-2.ansi` | 160x30 | truecolor | 157 | full twelve-team own-goal standings - gradient header, heat-block neighbour tallies, league-office notes |
+| `candy-minesweeper-10-tc-m-1.ansi` | 86x21 | truecolor | 12 | truecolour metro network - four lines, superscript digits at interchanges, transfer ledger |
+| `candy-minesweeper-10-tc-m-2.ansi` | 86x19 | truecolor | 56 | solved side of the puzzle lid - 5x3 gradient pieces with tabs, hidden nut pockets tallied |
+| `candy-minesweeper-10-tc-s-1.ansi` | 56x14 | truecolor | 17 | nine-patch quilt block - charcoal wool squares glow, light patches count touching soot |
+| `candy-minesweeper-10-tc-s-2.ansi` | 60x11 | truecolor | 11 | three-card tarot spread - the reversed Tower between two upright neighbours, digits count reversals beside |
+| `candy-minesweeper-2-16-l-1.ansi` | 150x34 | 16 | 10 | expert board with difficulty sidebar and mine/time HUD status strip |
+| `candy-minesweeper-2-16-l-2.ansi` | 140x32 | 16 | 10 | starry night minefield landscape with chain-reaction field note |
+| `candy-minesweeper-2-16-m-1.ansi` | 86x20 | 16 | 7 | chord-reveal before/after comparison panels with [c] key callout |
+| `candy-minesweeper-2-16-m-2.ansi` | 88x22 | 16 | 10 | partially cleared foggy field, centered wordmark over hidden mines |
+| `candy-minesweeper-2-16-s-1.ansi` | 66x13 | 16 | 7 | block letter CANDY MINES wordmark over flag and number legend row |
+| `candy-minesweeper-2-16-s-2.ansi` | 58x12 | 16 | 9 | rounded cell-legend box mapping hidden, flag, mine and counts 1-8 |
+| `candy-minesweeper-2-256-l-1.ansi` | 172x40 | 256 | 25 | cell zoo of every revealed state in zoomed 256-color panels |
+| `candy-minesweeper-2-256-l-2.ansi` | 160x36 | 256 | 29 | difficulty stats dashboard with bar charts and best-time LED board |
+| `candy-minesweeper-2-256-m-1.ansi` | 84x18 | 256 | 15 | adjacent-count spectrum of glyphs 1-8 beside a sample field |
+| `candy-minesweeper-2-256-m-2.ansi` | 88x24 | 256 | 17 | flood-reveal cascade pouring diagonally across the grid |
+| `candy-minesweeper-2-256-s-1.ansi` | 56x10 | 256 | 7 | session HUD strip with mines-left counter in a bordered box |
+| `candy-minesweeper-2-256-s-2.ansi` | 50x14 | 256 | 10 | DEFUSED seal badge with wordmark woven into candy stripes |
+| `candy-minesweeper-2-tc-l-1.ansi` | 200x44 | truecolor | 341 | neon corridor of gradient jawbreaker orbs receding to the last cell |
+| `candy-minesweeper-2-tc-l-2.ansi` | 190x46 | truecolor | 493 | sugar caldera landscape with spilled mine cart under gradient sky |
+| `candy-minesweeper-2-tc-m-1.ansi` | 86x24 | truecolor | 97 | four-beat storyboard of a doomed click, smooth explosion gradient |
+| `candy-minesweeper-2-tc-m-2.ansi` | 86x24 | truecolor | 757 | night-shift aurora counting the minefield over a centered wordmark |
+| `candy-minesweeper-2-tc-s-1.ansi` | 54x12 | truecolor | 184 | gradient candy-swirl bomb paired with block CANDY MINES wordmark |
+| `candy-minesweeper-2-tc-s-2.ansi` | 64x14 | truecolor | 201 | block CANDY MINES wordmark on a truecolor candy glaze |
+| `candy-minesweeper-3-16-l-1.ansi` | 138x28 | 16 | 6 | field archaeology: board as dig cross-section with find ledger |
+| `candy-minesweeper-3-16-l-2.ansi` | 150x28 | 16 | 7 | speedrun HUD: world-record-pace board with splits and meters |
+| `candy-minesweeper-3-16-m-1.ansi` | 80x21 | 16 | 6 | chord mechanics three-panel diagram: survey, match, stroke |
+| `candy-minesweeper-3-16-m-2.ansi` | 78x18 | 16 | 7 | hall of fame best-times table from stats.json |
+| `candy-minesweeper-3-16-s-1.ansi` | 56x14 | 16 | 6 | endgame deduction puzzle №7: the 1-2-1 mirror proof |
+| `candy-minesweeper-3-16-s-2.ansi` | 58x15 | 16 | 6 | 50/50 tragedy: two veils, one mine, coin-flip death card |
+| `candy-minesweeper-3-256-l-1.ansi` | 186x38 | 256 | 12 | the dig contract: survey, extraction crews, shift ledger |
+| `candy-minesweeper-3-256-l-2.ansi` | 150x29 | 256 | 13 | night court: the 50/50 on trial before a jury of constraints |
+| `candy-minesweeper-3-256-m-1.ansi` | 84x18 | 256 | 12 | probability map: per-cell P(mine) with deduction readout |
+| `candy-minesweeper-3-256-m-2.ansi` | 88x18 | 256 | 9 | live speedrun splits vs PB ghost with pace sparks |
+| `candy-minesweeper-3-256-s-1.ansi` | 50x14 | 256 | 15 | the chord key: shaded 256-grey keycap stamped c |
+| `candy-minesweeper-3-256-s-2.ansi` | 64x9 | 256 | 11 | mine-density gauge bars for easy, medium, expert realms |
+| `candy-minesweeper-3-256-s-3.ansi` | 54x7 | 256 | 7 | flag ticker LED mine counter panel |
+| `candy-minesweeper-3-tc-l-1.ansi` | 150x30 | truecolor | 168 | strata excavation: smooth earth bands over the expert site |
+| `candy-minesweeper-3-tc-l-2.ansi` | 160x28 | truecolor | 75 | risk heatmap: green-to-red P(mine) engine view of the board |
+| `candy-minesweeper-3-tc-m-1.ansi` | 86x18 | truecolor | 17 | chord mechanics in glow panels with violet gradients |
+| `candy-minesweeper-3-tc-m-2.ansi` | 88x18 | truecolor | 47 | hall-of-fame podium in gold, silver, bronze gradients |
+| `candy-minesweeper-3-tc-s-1.ansi` | 62x7 | truecolor | 76 | rainbow CandyMinesweeper wordmark with glowing mines |
+| `candy-minesweeper-3-tc-s-2.ansi` | 52x7 | truecolor | 35 | live neon timer strip with PB delta on dark glass |
+| `candy-minesweeper-3-tc-s-3.ansi` | 65x11 | truecolor | 13 | flood-fill bloom: first click opening a zero plaza |
+| `candy-minesweeper-4-16-l-1.ansi` | 138x28 | 16 | 8 | orchestral first-click symphony: conductor score of numbered mine motifs |
+| `candy-minesweeper-4-16-l-2.ansi` | 136x28 | 16 | 6 | botanic garden cadastral survey: flower beds report buried treasure chests |
+| `candy-minesweeper-4-16-m-1.ansi` | 84x24 | 16 | 6 | detective noir interrogation log: Det. Licorice grills suspect cell 7 |
+| `candy-minesweeper-4-16-m-2.ansi` | 80x18 | 16 | 9 | lighthouse keeper vs storm: beam rows sweep mined sea of number buoys |
+| `candy-minesweeper-4-16-s-1.ansi` | 45x14 | 16 | 8 | candy-mine ore cart No.12 hauling number cubes 3-1-7-5-2 along candy rails |
+| `candy-minesweeper-4-16-s-2.ansi` | 41x12 | 16 | 5 | weather bulletin: 990mb mine low hovering over cell D7 with detonation risk field |
+| `candy-minesweeper-4-256-l-1.ansi` | 148x38 | 256 | 19 | weather radar scope of mine pressure systems: phosphor rings, cell blobs and sweep log |
+| `candy-minesweeper-4-256-l-2.ansi` | 168x30 | 256 | 28 | garden panorama at golden hour: bloom rows, a treasure chest and sundial on gradient sky |
+| `candy-minesweeper-4-256-m-1.ansi` | 86x22 | 256 | 19 | detective corkboard evidence wall: suspect cell photos stitched by red adjacency string |
+| `candy-minesweeper-4-256-m-2.ansi` | 86x20 | 256 | 20 | noir office window at 2AM: rain on glass, blinds, buzzing CANDY MINES neon sign |
+| `candy-minesweeper-4-256-s-1.ansi` | 50x12 | 256 | 11 | mine-pressure barometer dial with needle pinned in the red and a green-to-red scale |
+| `candy-minesweeper-4-256-s-2.ansi` | 53x11 | 256 | 10 | wooden treasure chest of ore coins with adjacency numbers spilling onto garden soil |
+| `candy-minesweeper-4-tc-l-1.ansi` | 198x43 | truecolor | 309 | lighthouse keeper storm epic: purple clouds, rain, numbered mine buoys, cream beam with wordmark |
+| `candy-minesweeper-4-tc-l-2.ansi` | 210x45 | truecolor | 304 | orchestra in three colour sections under a rainbow crescendo, conductor cueing the first click |
+| `candy-minesweeper-4-tc-m-1.ansi` | 86x23 | truecolor | 132 | rain-lashed noir office window: pink-blue CANDY MINES neon, blinds and suspect file |
+| `candy-minesweeper-4-tc-m-2.ansi` | 84x21 | truecolor | 114 | truecolor radar disc with fading sweep wedge, pressure blob readouts and station log |
+| `candy-minesweeper-4-tc-s-1.ansi` | 64x13 | truecolor | 132 | gold-rimmed lucky coin stamped No.7 glowing on a purple mine-shaft dark |
+| `candy-minesweeper-4-tc-s-2.ansi` | 61x9 | truecolor | 58 | stage-clearance ticket with green-to-red mine risk gradient bar and 15% odds |
+| `candy-minesweeper-5-16-l-1.ansi` | 150x28 | 16 | 10 | grand hall chess endgame with chandeliers, scoreboard, arbiter and spectators |
+| `candy-minesweeper-5-16-l-2.ansi` | 132x36 | 16 | 8 | submarine bridge plot table: sonar scope with rings and contacts, gauge panel |
+| `candy-minesweeper-5-16-m-1.ansi` | 88x19 | 16 | 10 | chess endgame parlour board: king and mine-pawns versus the night side |
+| `candy-minesweeper-5-16-m-2.ansi` | 78x21 | 16 | 5 | spider-web telegraph with numbered dew-drop nodes around a zero hub |
+| `candy-minesweeper-5-16-s-1.ansi` | 62x11 | 16 | 7 | bees sweeping a hexagonal comb-minefield of numbered cells and patrol lanes |
+| `candy-minesweeper-5-16-s-2.ansi` | 54x10 | 16 | 7 | pocket sonar dial ringing arcs over dark water with numbered contacts |
+| `candy-minesweeper-5-256-l-1.ansi` | 181x40 | 256 | 27 | vertical descent column through five depth zones, each band gradient-lit with mines, cables, wrecks |
+| `candy-minesweeper-5-256-l-2.ansi` | 168x33 | 256 | 22 | night-shift sugar works panorama: seven stations, conveyor verdicts, inquest table, shift board |
+| `candy-minesweeper-5-256-m-1.ansi` | 82x18 | 256 | 24 | diving bell descending a gradient water column onto a mine-strewn seabed |
+| `candy-minesweeper-5-256-m-2.ansi` | 86x20 | 256 | 18 | night shift candy factory QC line under a moon, glass hovering over lane four |
+| `candy-minesweeper-5-256-s-1.ansi` | 61x7 | 256 | 14 | quality-control gate inspecting numbered sweets riding a candy conveyor |
+| `candy-minesweeper-5-256-s-2.ansi` | 46x9 | 256 | 19 | aurora ribbons over a frozen numbered lake read like a depth gauge |
+| `candy-minesweeper-5-tc-l-1.ansi` | 190x33 | truecolor | 2050 | truecolor aurora night over a frozen numbered lake, survey grid drilled in the ice |
+| `candy-minesweeper-5-tc-l-2.ansi` | 190x29 | truecolor | 579 | abyss patrol submarine sweeping a lamp cone over a numbered minefield on the trench floor |
+| `candy-minesweeper-5-tc-m-1.ansi` | 86x21 | truecolor | 728 | truecolor aurora curtains over a fjord ridge with numbered ice floes below |
+| `candy-minesweeper-5-tc-m-2.ansi` | 88x18 | truecolor | 263 | electric storm battering a tilted honeycomb of numbered cells, bees fleeing |
+| `candy-minesweeper-5-tc-s-1.ansi` | 60x6 | truecolor | 46 | diving bell riding a chain over a truecolor gradient depth scale to 140 fathoms |
+| `candy-minesweeper-5-tc-s-2.ansi` | 62x5 | truecolor | 13 | baker's tray of number-frosted cookies with sprinkles and crumbs |
+| `candy-minesweeper-6-16-l-1.ansi` | 150x34 | 16 | 11 | celestial atlas of numbered star-clusters, guide stars and a comet tail |
+| `candy-minesweeper-6-16-l-2.ansi` | 138x32 | 16 | 11 | library stack shelves where call-slip numbers count hidden volumes |
+| `candy-minesweeper-6-16-m-1.ansi` | 82x22 | 16 | 11 | seismic survey line of numbered geophone stakes over hidden reflectors |
+| `candy-minesweeper-6-16-m-2.ansi` | 78x20 | 16 | 11 | circuit board fab panel of solder pads with numbered via adjacency |
+| `candy-minesweeper-6-16-s-1.ansi` | 58x13 | 16 | 11 | archaeology dig grid where brushes reveal numbered relics in turf squares |
+| `candy-minesweeper-6-16-s-2.ansi` | 58x12 | 16 | 11 | cheese factory wheels with numbered hole-counts and rind cracks |
+| `candy-minesweeper-6-256-l-1.ansi` | 160x36 | 256 | 14 | clockwork movement workshop of numbered gear teeth and hidden pins |
+| `candy-minesweeper-6-256-l-2.ansi` | 144x33 | 256 | 14 | desert caravan route of numbered oasis wells between dune cairns |
+| `candy-minesweeper-6-256-m-1.ansi` | 84x20 | 256 | 12 | vineyard harvest rows with numbered stone counts hidden between vines |
+| `candy-minesweeper-6-256-m-2.ansi` | 88x22 | 256 | 14 | board-game theater map where numbered sectors count hidden garrisons |
+| `candy-minesweeper-6-256-s-1.ansi` | 58x10 | 256 | 12 | coin mint press line of planchet counters with numbered strike adjacency |
+| `candy-minesweeper-6-256-s-2.ansi` | 56x12 | 256 | 13 | postal sorting wall of numbered pigeonholes routing hidden parcels |
+| `candy-minesweeper-6-tc-l-1.ansi` | 168x38 | truecolor | 17 | prism spectrum lab where numbered facets tag hidden emission lines |
+| `candy-minesweeper-6-tc-l-2.ansi` | 176x36 | truecolor | 17 | kaleidoscope mirror chamber with numbered glass-chip segments |
+| `candy-minesweeper-6-tc-m-1.ansi` | 86x22 | truecolor | 15 | candy theme-park ferris wheel with numbered lit gondolas |
+| `candy-minesweeper-6-tc-m-2.ansi` | 84x20 | truecolor | 15 | observatory dome sweep plotting numbered radio/optical sources |
+| `candy-minesweeper-6-tc-s-1.ansi` | 52x8 | truecolor | 11 | meteor shower watch with numbered streaks radiating from a point |
+| `candy-minesweeper-6-tc-s-2.ansi` | 56x11 | truecolor | 13 | fish-market ice beds with numbered crates of hidden catches |
+| `candy-minesweeper-7-16-l-1.ansi` | 125x28 | 16 | 7 | archaeologist trench grid brushing numbered pot-sherd adjacency |
+| `candy-minesweeper-7-16-l-2.ansi` | 125x30 | 16 | 6 | lifeguard tower beach grid counting shark fins by each float |
+| `candy-minesweeper-7-16-m-1.ansi` | 77x18 | 16 | 7 | avalanche forecast slope of numbered snow patches under flagged cornices |
+| `candy-minesweeper-7-16-m-2.ansi` | 74x18 | 16 | 6 | shepherds rolling hill ledger counting wolf dens in adjacent hollows |
+| `candy-minesweeper-7-16-s-1.ansi` | 61x9 | 16 | 6 | garden gnome patrol lawn grid counting gopher-hole adjacency |
+| `candy-minesweeper-7-256-l-1.ansi` | 124x28 | 256 | 18 | bakers layer cake core test with numbered skewers counting fudge pockets |
+| `candy-minesweeper-7-256-l-2.ansi` | 194x28 | 256 | 8 | steam manifold valve board with nameplates counting hidden drips |
+| `candy-minesweeper-7-256-m-1.ansi` | 78x18 | 256 | 14 | fireworks magazine rack where crate digits count dud shells |
+| `candy-minesweeper-7-256-m-2.ansi` | 80x19 | 256 | 13 | mailbox route where pavement digits count spider webs in boxes |
+| `candy-minesweeper-7-256-s-1.ansi` | 65x7 | 256 | 11 | clover field census counting bee stings hidden under each bloom |
+| `candy-minesweeper-7-256-s-2.ansi` | 62x9 | 256 | 10 | knight tour over a checkered board reading mined square adjacency |
+| `candy-minesweeper-7-tc-l-1.ansi` | 132x28 | truecolor | 28 | skybridge glass panels stamped with hidden crack counts over the city |
+| `candy-minesweeper-7-tc-l-2.ansi` | 133x28 | truecolor | 25 | tidepool transect counting hermit crabs beneath numbered anemones |
+| `candy-minesweeper-7-tc-m-1.ansi` | 80x18 | truecolor | 20 | meteor fall field survey with numbered craters counting glass shards |
+| `candy-minesweeper-7-tc-m-2.ansi` | 78x18 | truecolor | 16 | golden hour corn rows with furrow digits counting hidden crows |
+| `candy-minesweeper-7-tc-s-1.ansi` | 65x10 | truecolor | 17 | night fish count by lantern glow with numbered net stakes |
+| `candy-minesweeper-7-tc-s-2.ansi` | 66x9 | truecolor | 13 | harbor buoy line with numbered anchors fouling adjacent floats |
+| `candy-minesweeper-8-16-l-1.ansi` | 153x29 | 16 | 8 | glassblower's gob-blank yield ledger, seed digits counting bubbles caught mid-blow |
+| `candy-minesweeper-8-16-l-2.ansi` | 153x29 | 16 | 7 | weaver's loom draft grid, each tie marking the count of broken warp ends nearby |
+| `candy-minesweeper-8-16-m-1.ansi` | 85x20 | 16 | 8 | chocolatier's gilded praline matrix, squares counting hazelnuts hidden in adjacent cups |
+| `candy-minesweeper-8-16-m-2.ansi` | 85x20 | 16 | 8 | reef-quadrat transect tallying anemone heads around each cleared sand square |
+| `candy-minesweeper-8-16-s-1.ansi` | 69x15 | 16 | 8 | pyrotechnician safety-inspection grid, tray digits count live shells touching each cell |
+| `candy-minesweeper-8-16-s-2.ansi` | 69x15 | 16 | 8 | bosun's knot pegboard where each pin tallies the cord crossings in its ring |
+| `candy-minesweeper-8-256-l-1.ansi` | 153x29 | 256 | 11 | fair-isle knitting chart where stitch cells count the dropped ladders touching them |
+| `candy-minesweeper-8-256-l-2.ansi` | 153x29 | 256 | 12 | geiger dose-grid survey, pip cells counting hot grains enclosed along the afterburn line |
+| `candy-minesweeper-8-256-m-1.ansi` | 85x20 | 256 | 12 | apothecary bottle shelf where amber-drop digits count the caustic tinctures within reach |
+| `candy-minesweeper-8-256-m-2.ansi` | 85x20 | 256 | 12 | numismatist assay cabinet, coin tray cells ringing the counterfeits in the neighbouring pockets |
+| `candy-minesweeper-8-256-s-1.ansi` | 69x15 | 256 | 13 | mycologist spore-survey grid, clear squares counting toxic toadstool caps nearby |
+| `candy-minesweeper-8-256-s-2.ansi` | 69x15 | 256 | 13 | printmaker's halftone screen, dot cells counting hidden ink wells they cluster over |
+| `candy-minesweeper-8-tc-l-1.ansi` | 153x29 | truecolor | 313 | EOD render field with truecolor tiles, numbers counting live rounds fed by adjacent wire |
+| `candy-minesweeper-8-tc-l-2.ansi` | 153x29 | truecolor | 256 | tidepool census transect of grazed-shell counts glowing teal around each tagged snail |
+| `candy-minesweeper-8-tc-m-1.ansi` | 85x20 | truecolor | 109 | potters kiln shelf glowing with crawl-crack counts beneath each numbered bisque square |
+| `candy-minesweeper-8-tc-m-2.ansi` | 85x20 | truecolor | 120 | radar scope sweep of green echo cells counting folding contacts in adjacent arcs |
+| `candy-minesweeper-8-tc-s-1.ansi` | 69x15 | truecolor | 55 | crystal-growth tray glowing with lattice counts of inclusions at each seed point |
+| `candy-minesweeper-8-tc-s-2.ansi` | 69x15 | truecolor | 62 | stained-glass rose window of lead joints, each pane number counting the shards it braces |
+| `candy-minesweeper-9-16-l-5.ansi` | 150x30 | 16 | 7 | ATC approach-control sector board, radar cells counting concealed contacts nearby |
+| `candy-minesweeper-9-16-l-6.ansi` | 144x28 | 16 | 5 | 30-min astrophoto exposure grid, tile cells counting satellite streaks they cross |
+| `candy-minesweeper-9-16-m-3.ansi` | 84x22 | 16 | 5 | orchard frost-warning plot, blossom cells counting chilled blooms on the fringe |
+| `candy-minesweeper-9-16-m-4.ansi` | 86x20 | 16 | 5 | site-safety near-miss ledger, hard-hat zones each numbering the hazards beside them |
+| `candy-minesweeper-9-16-s-2.ansi` | 64x12 | 16 | 5 | links golf front-nine scorecard, each hole cell tallying sand bunkers it touches |
+| `candy-minesweeper-9-256-l-11.ansi` | 156x32 | 256 | 14 | telecom route CS-9 in gradient light, spans glowing with their repeater-fault counts |
+| `candy-minesweeper-9-256-l-12.ansi` | 160x30 | 256 | 16 | approach-control scope sweep, phosphor sectors ringing the hidden contacts they screen |
+| `candy-minesweeper-9-256-m-10.ansi` | 86x20 | 256 | 13 | links golf front-nine in colour, fairway cells shading the bunkers they abut |
+| `candy-minesweeper-9-256-m-9.ansi` | 84x22 | 256 | 5 | philatelic sheet audit, stamp cells tallying forged issues in the adjacent perforations |
+| `candy-minesweeper-9-256-s-7.ansi` | 62x14 | 256 | 9 | ore-drift mine coaster trestle, drop cells numbering loaded cars between stations |
+| `candy-minesweeper-9-256-s-8.ansi` | 64x13 | 256 | 8 | CCTV wall of masked subjects, frame cells counting faces lingering in neighbours |
+| `candy-minesweeper-9-tc-l-17.ansi` | 168x34 | truecolor | 9 | CCTV wall in night-vision colour grade, masked frames counting subjects across the room |
+| `candy-minesweeper-9-tc-l-18.ansi` | 180x32 | truecolor | 45 | approach-control radar in full-colour sweep, contact blooms lighting each sector's hidden count |
+| `candy-minesweeper-9-tc-m-15.ansi` | 86x22 | truecolor | 9 | drift mine coaster lit by ore-lamp hues, drop cells numbered in mineral colour |
+| `candy-minesweeper-9-tc-m-16.ansi` | 84x20 | truecolor | 5 | philatelic sheet in true colour, gum-toned stamps marking forgery counts beside them |
+| `candy-minesweeper-9-tc-s-13.ansi` | 60x13 | truecolor | 29 | orchard frost plot rendered in dew-lit colour, blossoms glowing against the cold counts |
+| `candy-minesweeper-9-tc-s-14.ansi` | 64x12 | truecolor | 7 | site-safety ledger under warning-lamp glow, zones tinted by their near-miss density |
+<!-- END candy-minesweeper SLOTS -->
 
 <!-- BEGIN candy-mosaic SLOTS -->
 ### candy-mosaic — slot series

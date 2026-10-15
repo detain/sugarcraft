@@ -208,7 +208,7 @@ final class Config
         // Reject non-scalar field shapes BEFORE the (string)/(int) casts below.
         // Without these guards a nested array (e.g. `name: [foo]`) would silently
         // cast to the literal "Array", smuggling `ssh user@Array` into the argv —
-        // the same silent-cast footgun the candy-mines Board scalar-shape guards
+        // the same silent-cast footgun the candy-minesweeper Board scalar-shape guards
         // close. isset() already excludes null, so the optional fields are only
         // checked when actually present.
         self::assertScalar('name', $row['name']);

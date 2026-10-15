@@ -6163,9 +6163,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-16-l-1.ansi": {
-        "name": "candy-mines-1-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-16-l-1.ansi": {
+        "name": "candy-minesweeper-1-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "140x33",
         "width": 140,
         "height": 33,
@@ -6177,9 +6177,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-1-16-l-2.ansi": {
-        "name": "candy-mines-1-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-16-l-2.ansi": {
+        "name": "candy-minesweeper-1-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "144x36",
         "width": 144,
         "height": 36,
@@ -6191,9 +6191,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-1-16-m-1.ansi": {
-        "name": "candy-mines-1-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-16-m-1.ansi": {
+        "name": "candy-minesweeper-1-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -6205,9 +6205,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-1-16-m-2.ansi": {
-        "name": "candy-mines-1-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-16-m-2.ansi": {
+        "name": "candy-minesweeper-1-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -6219,9 +6219,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-1-16-s-1.ansi": {
-        "name": "candy-mines-1-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-16-s-1.ansi": {
+        "name": "candy-minesweeper-1-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "52x11",
         "width": 52,
         "height": 11,
@@ -6231,9 +6231,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-1-16-s-2.ansi": {
-        "name": "candy-mines-1-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-16-s-2.ansi": {
+        "name": "candy-minesweeper-1-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -6243,9 +6243,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-1-256-l-1.ansi": {
-        "name": "candy-mines-1-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-256-l-1.ansi": {
+        "name": "candy-minesweeper-1-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "160x35",
         "width": 160,
         "height": 35,
@@ -6255,9 +6255,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-mines/candy-mines-1-256-l-2.ansi": {
-        "name": "candy-mines-1-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-256-l-2.ansi": {
+        "name": "candy-minesweeper-1-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "170x41",
         "width": 170,
         "height": 41,
@@ -6267,9 +6267,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-256-m-1.ansi": {
-        "name": "candy-mines-1-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-256-m-1.ansi": {
+        "name": "candy-minesweeper-1-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "80x19",
         "width": 80,
         "height": 19,
@@ -6279,9 +6279,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-256-m-2.ansi": {
-        "name": "candy-mines-1-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-256-m-2.ansi": {
+        "name": "candy-minesweeper-1-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -6291,9 +6291,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-256-s-1.ansi": {
-        "name": "candy-mines-1-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-256-s-1.ansi": {
+        "name": "candy-minesweeper-1-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x7",
         "width": 64,
         "height": 7,
@@ -6303,9 +6303,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-256-s-2.ansi": {
-        "name": "candy-mines-1-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-256-s-2.ansi": {
+        "name": "candy-minesweeper-1-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "50x11",
         "width": 50,
         "height": 11,
@@ -6315,9 +6315,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-tc-l-1.ansi": {
-        "name": "candy-mines-1-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-tc-l-1.ansi": {
+        "name": "candy-minesweeper-1-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "200x47",
         "width": 200,
         "height": 47,
@@ -6327,9 +6327,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-mines/candy-mines-1-tc-l-2.ansi": {
-        "name": "candy-mines-1-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-tc-l-2.ansi": {
+        "name": "candy-minesweeper-1-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "190x29",
         "width": 190,
         "height": 29,
@@ -6339,9 +6339,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-tc-m-1.ansi": {
-        "name": "candy-mines-1-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-tc-m-1.ansi": {
+        "name": "candy-minesweeper-1-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -6351,9 +6351,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-tc-m-2.ansi": {
-        "name": "candy-mines-1-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-tc-m-2.ansi": {
+        "name": "candy-minesweeper-1-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -6363,9 +6363,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-tc-s-1.ansi": {
-        "name": "candy-mines-1-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-tc-s-1.ansi": {
+        "name": "candy-minesweeper-1-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "58x9",
         "width": 58,
         "height": 9,
@@ -6375,9 +6375,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-1-tc-s-2.ansi": {
-        "name": "candy-mines-1-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-1-tc-s-2.ansi": {
+        "name": "candy-minesweeper-1-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -6387,9 +6387,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-16-l-1.ansi": {
-        "name": "candy-mines-2-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-16-l-1.ansi": {
+        "name": "candy-minesweeper-2-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -6399,9 +6399,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-mines/candy-mines-2-16-l-2.ansi": {
-        "name": "candy-mines-2-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-16-l-2.ansi": {
+        "name": "candy-minesweeper-2-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "140x32",
         "width": 140,
         "height": 32,
@@ -6411,9 +6411,9 @@
         "rating": 6,
         "tags": []
     },
-    "candy-mines/candy-mines-2-16-m-1.ansi": {
-        "name": "candy-mines-2-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-16-m-1.ansi": {
+        "name": "candy-minesweeper-2-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -6423,9 +6423,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-mines/candy-mines-2-16-m-2.ansi": {
-        "name": "candy-mines-2-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-16-m-2.ansi": {
+        "name": "candy-minesweeper-2-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -6435,9 +6435,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-2-16-s-1.ansi": {
-        "name": "candy-mines-2-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-16-s-1.ansi": {
+        "name": "candy-minesweeper-2-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -6447,9 +6447,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-2-16-s-2.ansi": {
-        "name": "candy-mines-2-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-16-s-2.ansi": {
+        "name": "candy-minesweeper-2-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -6459,9 +6459,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-2-256-l-1.ansi": {
-        "name": "candy-mines-2-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-256-l-1.ansi": {
+        "name": "candy-minesweeper-2-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "172x40",
         "width": 172,
         "height": 40,
@@ -6471,9 +6471,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-256-l-2.ansi": {
-        "name": "candy-mines-2-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-256-l-2.ansi": {
+        "name": "candy-minesweeper-2-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "160x36",
         "width": 160,
         "height": 36,
@@ -6483,9 +6483,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-256-m-1.ansi": {
-        "name": "candy-mines-2-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-256-m-1.ansi": {
+        "name": "candy-minesweeper-2-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -6495,9 +6495,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-256-m-2.ansi": {
-        "name": "candy-mines-2-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-256-m-2.ansi": {
+        "name": "candy-minesweeper-2-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -6507,9 +6507,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-256-s-1.ansi": {
-        "name": "candy-mines-2-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-256-s-1.ansi": {
+        "name": "candy-minesweeper-2-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -6519,9 +6519,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-256-s-2.ansi": {
-        "name": "candy-mines-2-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-256-s-2.ansi": {
+        "name": "candy-minesweeper-2-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "50x14",
         "width": 50,
         "height": 14,
@@ -6531,9 +6531,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-tc-l-1.ansi": {
-        "name": "candy-mines-2-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-tc-l-1.ansi": {
+        "name": "candy-minesweeper-2-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -6543,9 +6543,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-tc-l-2.ansi": {
-        "name": "candy-mines-2-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-tc-l-2.ansi": {
+        "name": "candy-minesweeper-2-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "190x46",
         "width": 190,
         "height": 46,
@@ -6555,9 +6555,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-tc-m-1.ansi": {
-        "name": "candy-mines-2-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-tc-m-1.ansi": {
+        "name": "candy-minesweeper-2-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -6567,9 +6567,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-tc-m-2.ansi": {
-        "name": "candy-mines-2-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-tc-m-2.ansi": {
+        "name": "candy-minesweeper-2-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -6579,9 +6579,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-tc-s-1.ansi": {
-        "name": "candy-mines-2-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-tc-s-1.ansi": {
+        "name": "candy-minesweeper-2-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -6591,9 +6591,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-2-tc-s-2.ansi": {
-        "name": "candy-mines-2-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-2-tc-s-2.ansi": {
+        "name": "candy-minesweeper-2-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -6603,9 +6603,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-16-l-1.ansi": {
-        "name": "candy-mines-3-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-16-l-1.ansi": {
+        "name": "candy-minesweeper-3-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "138x28",
         "width": 138,
         "height": 28,
@@ -6615,9 +6615,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-3-16-l-2.ansi": {
-        "name": "candy-mines-3-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-16-l-2.ansi": {
+        "name": "candy-minesweeper-3-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -6627,9 +6627,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-mines/candy-mines-3-16-m-1.ansi": {
-        "name": "candy-mines-3-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-16-m-1.ansi": {
+        "name": "candy-minesweeper-3-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "80x21",
         "width": 80,
         "height": 21,
@@ -6639,9 +6639,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-3-16-m-2.ansi": {
-        "name": "candy-mines-3-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-16-m-2.ansi": {
+        "name": "candy-minesweeper-3-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "78x18",
         "width": 78,
         "height": 18,
@@ -6653,9 +6653,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-3-16-s-1.ansi": {
-        "name": "candy-mines-3-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-16-s-1.ansi": {
+        "name": "candy-minesweeper-3-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -6665,9 +6665,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-3-16-s-2.ansi": {
-        "name": "candy-mines-3-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-16-s-2.ansi": {
+        "name": "candy-minesweeper-3-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -6677,9 +6677,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-l-1.ansi": {
-        "name": "candy-mines-3-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-l-1.ansi": {
+        "name": "candy-minesweeper-3-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "186x38",
         "width": 186,
         "height": 38,
@@ -6689,9 +6689,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-l-2.ansi": {
-        "name": "candy-mines-3-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-l-2.ansi": {
+        "name": "candy-minesweeper-3-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x29",
         "width": 150,
         "height": 29,
@@ -6701,9 +6701,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-m-1.ansi": {
-        "name": "candy-mines-3-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-m-1.ansi": {
+        "name": "candy-minesweeper-3-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -6713,9 +6713,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-m-2.ansi": {
-        "name": "candy-mines-3-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-m-2.ansi": {
+        "name": "candy-minesweeper-3-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -6725,9 +6725,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-s-1.ansi": {
-        "name": "candy-mines-3-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-s-1.ansi": {
+        "name": "candy-minesweeper-3-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "50x14",
         "width": 50,
         "height": 14,
@@ -6737,9 +6737,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-s-2.ansi": {
-        "name": "candy-mines-3-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-s-2.ansi": {
+        "name": "candy-minesweeper-3-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x9",
         "width": 64,
         "height": 9,
@@ -6749,9 +6749,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-256-s-3.ansi": {
-        "name": "candy-mines-3-256-s-3.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-256-s-3.ansi": {
+        "name": "candy-minesweeper-3-256-s-3.ansi",
+        "category": "candy-minesweeper",
         "resolution": "54x7",
         "width": 54,
         "height": 7,
@@ -6761,9 +6761,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-l-1.ansi": {
-        "name": "candy-mines-3-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-l-1.ansi": {
+        "name": "candy-minesweeper-3-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -6773,9 +6773,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-l-2.ansi": {
-        "name": "candy-mines-3-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-l-2.ansi": {
+        "name": "candy-minesweeper-3-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -6785,9 +6785,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-m-1.ansi": {
-        "name": "candy-mines-3-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-m-1.ansi": {
+        "name": "candy-minesweeper-3-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -6797,9 +6797,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-m-2.ansi": {
-        "name": "candy-mines-3-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-m-2.ansi": {
+        "name": "candy-minesweeper-3-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -6809,21 +6809,21 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-s-1.ansi": {
-        "name": "candy-mines-3-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-s-1.ansi": {
+        "name": "candy-minesweeper-3-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "62x7",
         "width": 62,
         "height": 7,
         "depth": "truecolor",
         "colors": 76,
-        "description": "rainbow CandyMines wordmark with glowing mines",
+        "description": "rainbow CandyMinesweeper wordmark with glowing mines",
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-s-2.ansi": {
-        "name": "candy-mines-3-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-s-2.ansi": {
+        "name": "candy-minesweeper-3-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "52x7",
         "width": 52,
         "height": 7,
@@ -6833,9 +6833,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-3-tc-s-3.ansi": {
-        "name": "candy-mines-3-tc-s-3.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-3-tc-s-3.ansi": {
+        "name": "candy-minesweeper-3-tc-s-3.ansi",
+        "category": "candy-minesweeper",
         "resolution": "65x11",
         "width": 65,
         "height": 11,
@@ -6845,9 +6845,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-16-l-1.ansi": {
-        "name": "candy-mines-4-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-16-l-1.ansi": {
+        "name": "candy-minesweeper-4-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "138x28",
         "width": 138,
         "height": 28,
@@ -6859,9 +6859,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-4-16-l-2.ansi": {
-        "name": "candy-mines-4-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-16-l-2.ansi": {
+        "name": "candy-minesweeper-4-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "136x28",
         "width": 136,
         "height": 28,
@@ -6871,9 +6871,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-mines/candy-mines-4-16-m-1.ansi": {
-        "name": "candy-mines-4-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-16-m-1.ansi": {
+        "name": "candy-minesweeper-4-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -6883,9 +6883,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-4-16-m-2.ansi": {
-        "name": "candy-mines-4-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-16-m-2.ansi": {
+        "name": "candy-minesweeper-4-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -6897,9 +6897,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-4-16-s-1.ansi": {
-        "name": "candy-mines-4-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-16-s-1.ansi": {
+        "name": "candy-minesweeper-4-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "45x14",
         "width": 45,
         "height": 14,
@@ -6911,9 +6911,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-4-16-s-2.ansi": {
-        "name": "candy-mines-4-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-16-s-2.ansi": {
+        "name": "candy-minesweeper-4-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "41x12",
         "width": 41,
         "height": 12,
@@ -6925,9 +6925,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-4-256-l-1.ansi": {
-        "name": "candy-mines-4-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-256-l-1.ansi": {
+        "name": "candy-minesweeper-4-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "148x38",
         "width": 148,
         "height": 38,
@@ -6937,9 +6937,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-256-l-2.ansi": {
-        "name": "candy-mines-4-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-256-l-2.ansi": {
+        "name": "candy-minesweeper-4-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "168x30",
         "width": 168,
         "height": 30,
@@ -6949,9 +6949,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-256-m-1.ansi": {
-        "name": "candy-mines-4-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-256-m-1.ansi": {
+        "name": "candy-minesweeper-4-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -6961,9 +6961,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-256-m-2.ansi": {
-        "name": "candy-mines-4-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-256-m-2.ansi": {
+        "name": "candy-minesweeper-4-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -6973,9 +6973,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-256-s-1.ansi": {
-        "name": "candy-mines-4-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-256-s-1.ansi": {
+        "name": "candy-minesweeper-4-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "50x12",
         "width": 50,
         "height": 12,
@@ -6985,9 +6985,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-256-s-2.ansi": {
-        "name": "candy-mines-4-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-256-s-2.ansi": {
+        "name": "candy-minesweeper-4-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "53x11",
         "width": 53,
         "height": 11,
@@ -6997,9 +6997,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-tc-l-1.ansi": {
-        "name": "candy-mines-4-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-tc-l-1.ansi": {
+        "name": "candy-minesweeper-4-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "198x43",
         "width": 198,
         "height": 43,
@@ -7009,9 +7009,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-tc-l-2.ansi": {
-        "name": "candy-mines-4-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-tc-l-2.ansi": {
+        "name": "candy-minesweeper-4-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "210x45",
         "width": 210,
         "height": 45,
@@ -7021,9 +7021,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-tc-m-1.ansi": {
-        "name": "candy-mines-4-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-tc-m-1.ansi": {
+        "name": "candy-minesweeper-4-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -7033,9 +7033,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-tc-m-2.ansi": {
-        "name": "candy-mines-4-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-tc-m-2.ansi": {
+        "name": "candy-minesweeper-4-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -7045,9 +7045,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-tc-s-1.ansi": {
-        "name": "candy-mines-4-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-tc-s-1.ansi": {
+        "name": "candy-minesweeper-4-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -7057,9 +7057,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-4-tc-s-2.ansi": {
-        "name": "candy-mines-4-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-4-tc-s-2.ansi": {
+        "name": "candy-minesweeper-4-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "61x9",
         "width": 61,
         "height": 9,
@@ -7069,9 +7069,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-16-l-1.ansi": {
-        "name": "candy-mines-5-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-16-l-1.ansi": {
+        "name": "candy-minesweeper-5-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -7083,9 +7083,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-5-16-l-2.ansi": {
-        "name": "candy-mines-5-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-16-l-2.ansi": {
+        "name": "candy-minesweeper-5-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "132x36",
         "width": 132,
         "height": 36,
@@ -7097,9 +7097,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-5-16-m-1.ansi": {
-        "name": "candy-mines-5-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-16-m-1.ansi": {
+        "name": "candy-minesweeper-5-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -7109,9 +7109,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-5-16-m-2.ansi": {
-        "name": "candy-mines-5-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-16-m-2.ansi": {
+        "name": "candy-minesweeper-5-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "78x21",
         "width": 78,
         "height": 21,
@@ -7121,9 +7121,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-5-16-s-1.ansi": {
-        "name": "candy-mines-5-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-16-s-1.ansi": {
+        "name": "candy-minesweeper-5-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -7135,9 +7135,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-5-16-s-2.ansi": {
-        "name": "candy-mines-5-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-16-s-2.ansi": {
+        "name": "candy-minesweeper-5-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "54x10",
         "width": 54,
         "height": 10,
@@ -7149,9 +7149,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-5-256-l-1.ansi": {
-        "name": "candy-mines-5-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-256-l-1.ansi": {
+        "name": "candy-minesweeper-5-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "181x40",
         "width": 181,
         "height": 40,
@@ -7161,9 +7161,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-256-l-2.ansi": {
-        "name": "candy-mines-5-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-256-l-2.ansi": {
+        "name": "candy-minesweeper-5-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "168x33",
         "width": 168,
         "height": 33,
@@ -7173,9 +7173,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-256-m-1.ansi": {
-        "name": "candy-mines-5-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-256-m-1.ansi": {
+        "name": "candy-minesweeper-5-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "82x18",
         "width": 82,
         "height": 18,
@@ -7185,9 +7185,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-256-m-2.ansi": {
-        "name": "candy-mines-5-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-256-m-2.ansi": {
+        "name": "candy-minesweeper-5-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -7197,9 +7197,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-256-s-1.ansi": {
-        "name": "candy-mines-5-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-256-s-1.ansi": {
+        "name": "candy-minesweeper-5-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "61x7",
         "width": 61,
         "height": 7,
@@ -7209,9 +7209,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-256-s-2.ansi": {
-        "name": "candy-mines-5-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-256-s-2.ansi": {
+        "name": "candy-minesweeper-5-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "46x9",
         "width": 46,
         "height": 9,
@@ -7221,9 +7221,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-tc-l-1.ansi": {
-        "name": "candy-mines-5-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-tc-l-1.ansi": {
+        "name": "candy-minesweeper-5-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "190x33",
         "width": 190,
         "height": 33,
@@ -7233,9 +7233,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-tc-l-2.ansi": {
-        "name": "candy-mines-5-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-tc-l-2.ansi": {
+        "name": "candy-minesweeper-5-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "190x29",
         "width": 190,
         "height": 29,
@@ -7245,9 +7245,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-tc-m-1.ansi": {
-        "name": "candy-mines-5-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-tc-m-1.ansi": {
+        "name": "candy-minesweeper-5-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -7257,9 +7257,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-tc-m-2.ansi": {
-        "name": "candy-mines-5-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-tc-m-2.ansi": {
+        "name": "candy-minesweeper-5-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -7269,9 +7269,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-tc-s-1.ansi": {
-        "name": "candy-mines-5-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-tc-s-1.ansi": {
+        "name": "candy-minesweeper-5-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "60x6",
         "width": 60,
         "height": 6,
@@ -7281,9 +7281,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-5-tc-s-2.ansi": {
-        "name": "candy-mines-5-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-5-tc-s-2.ansi": {
+        "name": "candy-minesweeper-5-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "62x5",
         "width": 62,
         "height": 5,
@@ -7293,9 +7293,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-16-l-1.ansi": {
-        "name": "candy-mines-6-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-16-l-1.ansi": {
+        "name": "candy-minesweeper-6-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -7305,9 +7305,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-6-16-l-2.ansi": {
-        "name": "candy-mines-6-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-16-l-2.ansi": {
+        "name": "candy-minesweeper-6-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "138x32",
         "width": 138,
         "height": 32,
@@ -7317,9 +7317,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-6-16-m-1.ansi": {
-        "name": "candy-mines-6-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-16-m-1.ansi": {
+        "name": "candy-minesweeper-6-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -7329,9 +7329,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-6-16-m-2.ansi": {
-        "name": "candy-mines-6-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-16-m-2.ansi": {
+        "name": "candy-minesweeper-6-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "78x20",
         "width": 78,
         "height": 20,
@@ -7341,9 +7341,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-6-16-s-1.ansi": {
-        "name": "candy-mines-6-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-16-s-1.ansi": {
+        "name": "candy-minesweeper-6-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -7353,9 +7353,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-6-16-s-2.ansi": {
-        "name": "candy-mines-6-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-16-s-2.ansi": {
+        "name": "candy-minesweeper-6-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -7365,9 +7365,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-6-256-l-1.ansi": {
-        "name": "candy-mines-6-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-256-l-1.ansi": {
+        "name": "candy-minesweeper-6-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "160x36",
         "width": 160,
         "height": 36,
@@ -7377,9 +7377,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-256-l-2.ansi": {
-        "name": "candy-mines-6-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-256-l-2.ansi": {
+        "name": "candy-minesweeper-6-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "144x33",
         "width": 144,
         "height": 33,
@@ -7389,9 +7389,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-256-m-1.ansi": {
-        "name": "candy-mines-6-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-256-m-1.ansi": {
+        "name": "candy-minesweeper-6-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -7401,9 +7401,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-256-m-2.ansi": {
-        "name": "candy-mines-6-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-256-m-2.ansi": {
+        "name": "candy-minesweeper-6-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -7413,9 +7413,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-256-s-1.ansi": {
-        "name": "candy-mines-6-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-256-s-1.ansi": {
+        "name": "candy-minesweeper-6-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -7425,9 +7425,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-256-s-2.ansi": {
-        "name": "candy-mines-6-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-256-s-2.ansi": {
+        "name": "candy-minesweeper-6-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -7437,9 +7437,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-tc-l-1.ansi": {
-        "name": "candy-mines-6-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-tc-l-1.ansi": {
+        "name": "candy-minesweeper-6-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "168x38",
         "width": 168,
         "height": 38,
@@ -7449,9 +7449,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-tc-l-2.ansi": {
-        "name": "candy-mines-6-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-tc-l-2.ansi": {
+        "name": "candy-minesweeper-6-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
@@ -7461,9 +7461,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-tc-m-1.ansi": {
-        "name": "candy-mines-6-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-tc-m-1.ansi": {
+        "name": "candy-minesweeper-6-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -7473,9 +7473,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-tc-m-2.ansi": {
-        "name": "candy-mines-6-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-tc-m-2.ansi": {
+        "name": "candy-minesweeper-6-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -7485,9 +7485,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-tc-s-1.ansi": {
-        "name": "candy-mines-6-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-tc-s-1.ansi": {
+        "name": "candy-minesweeper-6-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "52x8",
         "width": 52,
         "height": 8,
@@ -7497,9 +7497,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-6-tc-s-2.ansi": {
-        "name": "candy-mines-6-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-6-tc-s-2.ansi": {
+        "name": "candy-minesweeper-6-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "56x11",
         "width": 56,
         "height": 11,
@@ -7509,9 +7509,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-16-l-1.ansi": {
-        "name": "candy-mines-7-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-16-l-1.ansi": {
+        "name": "candy-minesweeper-7-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "125x28",
         "width": 125,
         "height": 28,
@@ -7523,9 +7523,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-7-16-l-2.ansi": {
-        "name": "candy-mines-7-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-16-l-2.ansi": {
+        "name": "candy-minesweeper-7-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "125x30",
         "width": 125,
         "height": 30,
@@ -7537,9 +7537,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-7-16-m-1.ansi": {
-        "name": "candy-mines-7-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-16-m-1.ansi": {
+        "name": "candy-minesweeper-7-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "77x18",
         "width": 77,
         "height": 18,
@@ -7549,9 +7549,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-7-16-m-2.ansi": {
-        "name": "candy-mines-7-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-16-m-2.ansi": {
+        "name": "candy-minesweeper-7-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "74x18",
         "width": 74,
         "height": 18,
@@ -7563,9 +7563,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mines/candy-mines-7-16-s-1.ansi": {
-        "name": "candy-mines-7-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-16-s-1.ansi": {
+        "name": "candy-minesweeper-7-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "61x9",
         "width": 61,
         "height": 9,
@@ -7575,9 +7575,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-7-256-l-1.ansi": {
-        "name": "candy-mines-7-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-256-l-1.ansi": {
+        "name": "candy-minesweeper-7-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "124x28",
         "width": 124,
         "height": 28,
@@ -7587,9 +7587,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-256-l-2.ansi": {
-        "name": "candy-mines-7-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-256-l-2.ansi": {
+        "name": "candy-minesweeper-7-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "194x28",
         "width": 194,
         "height": 28,
@@ -7599,9 +7599,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-256-m-1.ansi": {
-        "name": "candy-mines-7-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-256-m-1.ansi": {
+        "name": "candy-minesweeper-7-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "78x18",
         "width": 78,
         "height": 18,
@@ -7611,9 +7611,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-256-m-2.ansi": {
-        "name": "candy-mines-7-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-256-m-2.ansi": {
+        "name": "candy-minesweeper-7-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "80x19",
         "width": 80,
         "height": 19,
@@ -7623,9 +7623,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-256-s-1.ansi": {
-        "name": "candy-mines-7-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-256-s-1.ansi": {
+        "name": "candy-minesweeper-7-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "65x7",
         "width": 65,
         "height": 7,
@@ -7635,9 +7635,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-256-s-2.ansi": {
-        "name": "candy-mines-7-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-256-s-2.ansi": {
+        "name": "candy-minesweeper-7-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "62x9",
         "width": 62,
         "height": 9,
@@ -7647,9 +7647,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-tc-l-1.ansi": {
-        "name": "candy-mines-7-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-tc-l-1.ansi": {
+        "name": "candy-minesweeper-7-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "132x28",
         "width": 132,
         "height": 28,
@@ -7659,9 +7659,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-tc-l-2.ansi": {
-        "name": "candy-mines-7-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-tc-l-2.ansi": {
+        "name": "candy-minesweeper-7-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "133x28",
         "width": 133,
         "height": 28,
@@ -7671,9 +7671,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-tc-m-1.ansi": {
-        "name": "candy-mines-7-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-tc-m-1.ansi": {
+        "name": "candy-minesweeper-7-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -7683,9 +7683,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-tc-m-2.ansi": {
-        "name": "candy-mines-7-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-tc-m-2.ansi": {
+        "name": "candy-minesweeper-7-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "78x18",
         "width": 78,
         "height": 18,
@@ -7695,9 +7695,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-tc-s-1.ansi": {
-        "name": "candy-mines-7-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-tc-s-1.ansi": {
+        "name": "candy-minesweeper-7-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "65x10",
         "width": 65,
         "height": 10,
@@ -7707,9 +7707,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-7-tc-s-2.ansi": {
-        "name": "candy-mines-7-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-7-tc-s-2.ansi": {
+        "name": "candy-minesweeper-7-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "66x9",
         "width": 66,
         "height": 9,
@@ -7719,9 +7719,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-16-l-1.ansi": {
-        "name": "candy-mines-8-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-16-l-1.ansi": {
+        "name": "candy-minesweeper-8-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -7731,9 +7731,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-8-16-l-2.ansi": {
-        "name": "candy-mines-8-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-16-l-2.ansi": {
+        "name": "candy-minesweeper-8-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -7743,9 +7743,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-8-16-m-1.ansi": {
-        "name": "candy-mines-8-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-16-m-1.ansi": {
+        "name": "candy-minesweeper-8-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -7755,9 +7755,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-8-16-m-2.ansi": {
-        "name": "candy-mines-8-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-16-m-2.ansi": {
+        "name": "candy-minesweeper-8-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -7767,9 +7767,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-8-16-s-1.ansi": {
-        "name": "candy-mines-8-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-16-s-1.ansi": {
+        "name": "candy-minesweeper-8-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "69x15",
         "width": 69,
         "height": 15,
@@ -7779,9 +7779,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mines/candy-mines-8-16-s-2.ansi": {
-        "name": "candy-mines-8-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-16-s-2.ansi": {
+        "name": "candy-minesweeper-8-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "69x15",
         "width": 69,
         "height": 15,
@@ -7791,9 +7791,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-8-256-l-1.ansi": {
-        "name": "candy-mines-8-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-256-l-1.ansi": {
+        "name": "candy-minesweeper-8-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -7803,9 +7803,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-256-l-2.ansi": {
-        "name": "candy-mines-8-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-256-l-2.ansi": {
+        "name": "candy-minesweeper-8-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -7815,9 +7815,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-256-m-1.ansi": {
-        "name": "candy-mines-8-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-256-m-1.ansi": {
+        "name": "candy-minesweeper-8-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -7827,9 +7827,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-256-m-2.ansi": {
-        "name": "candy-mines-8-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-256-m-2.ansi": {
+        "name": "candy-minesweeper-8-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -7839,9 +7839,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-256-s-1.ansi": {
-        "name": "candy-mines-8-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-256-s-1.ansi": {
+        "name": "candy-minesweeper-8-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "69x15",
         "width": 69,
         "height": 15,
@@ -7851,9 +7851,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-256-s-2.ansi": {
-        "name": "candy-mines-8-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-256-s-2.ansi": {
+        "name": "candy-minesweeper-8-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "69x15",
         "width": 69,
         "height": 15,
@@ -7863,9 +7863,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-tc-l-1.ansi": {
-        "name": "candy-mines-8-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-tc-l-1.ansi": {
+        "name": "candy-minesweeper-8-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -7875,9 +7875,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-tc-l-2.ansi": {
-        "name": "candy-mines-8-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-tc-l-2.ansi": {
+        "name": "candy-minesweeper-8-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -7887,9 +7887,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-tc-m-1.ansi": {
-        "name": "candy-mines-8-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-tc-m-1.ansi": {
+        "name": "candy-minesweeper-8-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -7899,9 +7899,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-tc-m-2.ansi": {
-        "name": "candy-mines-8-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-tc-m-2.ansi": {
+        "name": "candy-minesweeper-8-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -7911,9 +7911,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-tc-s-1.ansi": {
-        "name": "candy-mines-8-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-tc-s-1.ansi": {
+        "name": "candy-minesweeper-8-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "69x15",
         "width": 69,
         "height": 15,
@@ -7923,9 +7923,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-8-tc-s-2.ansi": {
-        "name": "candy-mines-8-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-8-tc-s-2.ansi": {
+        "name": "candy-minesweeper-8-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "69x15",
         "width": 69,
         "height": 15,
@@ -7935,9 +7935,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-16-l-5.ansi": {
-        "name": "candy-mines-9-16-l-5.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-16-l-5.ansi": {
+        "name": "candy-minesweeper-9-16-l-5.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -7947,9 +7947,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-9-16-l-6.ansi": {
-        "name": "candy-mines-9-16-l-6.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-16-l-6.ansi": {
+        "name": "candy-minesweeper-9-16-l-6.ansi",
+        "category": "candy-minesweeper",
         "resolution": "144x28",
         "width": 144,
         "height": 28,
@@ -7959,9 +7959,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-9-16-m-3.ansi": {
-        "name": "candy-mines-9-16-m-3.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-16-m-3.ansi": {
+        "name": "candy-minesweeper-9-16-m-3.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -7971,9 +7971,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mines/candy-mines-9-16-m-4.ansi": {
-        "name": "candy-mines-9-16-m-4.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-16-m-4.ansi": {
+        "name": "candy-minesweeper-9-16-m-4.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -7983,9 +7983,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-9-16-s-2.ansi": {
-        "name": "candy-mines-9-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-16-s-2.ansi": {
+        "name": "candy-minesweeper-9-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -7995,9 +7995,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-9-256-l-11.ansi": {
-        "name": "candy-mines-9-256-l-11.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-256-l-11.ansi": {
+        "name": "candy-minesweeper-9-256-l-11.ansi",
+        "category": "candy-minesweeper",
         "resolution": "156x32",
         "width": 156,
         "height": 32,
@@ -8007,9 +8007,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-256-l-12.ansi": {
-        "name": "candy-mines-9-256-l-12.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-256-l-12.ansi": {
+        "name": "candy-minesweeper-9-256-l-12.ansi",
+        "category": "candy-minesweeper",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -8019,9 +8019,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-256-m-9.ansi": {
-        "name": "candy-mines-9-256-m-9.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-256-m-9.ansi": {
+        "name": "candy-minesweeper-9-256-m-9.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -8031,9 +8031,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-256-m-10.ansi": {
-        "name": "candy-mines-9-256-m-10.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-256-m-10.ansi": {
+        "name": "candy-minesweeper-9-256-m-10.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -8043,9 +8043,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-256-s-7.ansi": {
-        "name": "candy-mines-9-256-s-7.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-256-s-7.ansi": {
+        "name": "candy-minesweeper-9-256-s-7.ansi",
+        "category": "candy-minesweeper",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -8055,9 +8055,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-256-s-8.ansi": {
-        "name": "candy-mines-9-256-s-8.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-256-s-8.ansi": {
+        "name": "candy-minesweeper-9-256-s-8.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -8067,9 +8067,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-tc-l-17.ansi": {
-        "name": "candy-mines-9-tc-l-17.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-tc-l-17.ansi": {
+        "name": "candy-minesweeper-9-tc-l-17.ansi",
+        "category": "candy-minesweeper",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -8079,9 +8079,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-tc-l-18.ansi": {
-        "name": "candy-mines-9-tc-l-18.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-tc-l-18.ansi": {
+        "name": "candy-minesweeper-9-tc-l-18.ansi",
+        "category": "candy-minesweeper",
         "resolution": "180x32",
         "width": 180,
         "height": 32,
@@ -8091,9 +8091,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-tc-m-15.ansi": {
-        "name": "candy-mines-9-tc-m-15.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-tc-m-15.ansi": {
+        "name": "candy-minesweeper-9-tc-m-15.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -8103,9 +8103,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-tc-m-16.ansi": {
-        "name": "candy-mines-9-tc-m-16.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-tc-m-16.ansi": {
+        "name": "candy-minesweeper-9-tc-m-16.ansi",
+        "category": "candy-minesweeper",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -8115,9 +8115,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-tc-s-13.ansi": {
-        "name": "candy-mines-9-tc-s-13.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-tc-s-13.ansi": {
+        "name": "candy-minesweeper-9-tc-s-13.ansi",
+        "category": "candy-minesweeper",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -8127,9 +8127,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-9-tc-s-14.ansi": {
-        "name": "candy-mines-9-tc-s-14.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-9-tc-s-14.ansi": {
+        "name": "candy-minesweeper-9-tc-s-14.ansi",
+        "category": "candy-minesweeper",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -8139,9 +8139,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-16-l-1.ansi": {
-        "name": "candy-mines-10-16-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-16-l-1.ansi": {
+        "name": "candy-minesweeper-10-16-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -8151,9 +8151,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-10-16-l-2.ansi": {
-        "name": "candy-mines-10-16-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-16-l-2.ansi": {
+        "name": "candy-minesweeper-10-16-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -8163,9 +8163,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-10-16-m-1.ansi": {
-        "name": "candy-mines-10-16-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-16-m-1.ansi": {
+        "name": "candy-minesweeper-10-16-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -8175,9 +8175,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-10-16-m-2.ansi": {
-        "name": "candy-mines-10-16-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-16-m-2.ansi": {
+        "name": "candy-minesweeper-10-16-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -8187,9 +8187,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-10-16-s-1.ansi": {
-        "name": "candy-mines-10-16-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-16-s-1.ansi": {
+        "name": "candy-minesweeper-10-16-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -8199,9 +8199,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-10-16-s-2.ansi": {
-        "name": "candy-mines-10-16-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-16-s-2.ansi": {
+        "name": "candy-minesweeper-10-16-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -8211,9 +8211,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-10-256-l-1.ansi": {
-        "name": "candy-mines-10-256-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-256-l-1.ansi": {
+        "name": "candy-minesweeper-10-256-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -8223,9 +8223,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-256-l-2.ansi": {
-        "name": "candy-mines-10-256-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-256-l-2.ansi": {
+        "name": "candy-minesweeper-10-256-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x29",
         "width": 150,
         "height": 29,
@@ -8235,9 +8235,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-256-m-1.ansi": {
-        "name": "candy-mines-10-256-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-256-m-1.ansi": {
+        "name": "candy-minesweeper-10-256-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "89x19",
         "width": 89,
         "height": 19,
@@ -8247,9 +8247,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-256-m-2.ansi": {
-        "name": "candy-mines-10-256-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-256-m-2.ansi": {
+        "name": "candy-minesweeper-10-256-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "85x21",
         "width": 85,
         "height": 21,
@@ -8259,9 +8259,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-256-s-1.ansi": {
-        "name": "candy-mines-10-256-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-256-s-1.ansi": {
+        "name": "candy-minesweeper-10-256-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -8271,9 +8271,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-256-s-2.ansi": {
-        "name": "candy-mines-10-256-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-256-s-2.ansi": {
+        "name": "candy-minesweeper-10-256-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "68x14",
         "width": 68,
         "height": 14,
@@ -8283,9 +8283,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-tc-l-1.ansi": {
-        "name": "candy-mines-10-tc-l-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-tc-l-1.ansi": {
+        "name": "candy-minesweeper-10-tc-l-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "150x29",
         "width": 150,
         "height": 29,
@@ -8295,9 +8295,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-tc-l-2.ansi": {
-        "name": "candy-mines-10-tc-l-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-tc-l-2.ansi": {
+        "name": "candy-minesweeper-10-tc-l-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -8307,9 +8307,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-tc-m-1.ansi": {
-        "name": "candy-mines-10-tc-m-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-tc-m-1.ansi": {
+        "name": "candy-minesweeper-10-tc-m-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -8319,9 +8319,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-tc-m-2.ansi": {
-        "name": "candy-mines-10-tc-m-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-tc-m-2.ansi": {
+        "name": "candy-minesweeper-10-tc-m-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -8331,9 +8331,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-tc-s-1.ansi": {
-        "name": "candy-mines-10-tc-s-1.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-tc-s-1.ansi": {
+        "name": "candy-minesweeper-10-tc-s-1.ansi",
+        "category": "candy-minesweeper",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -8343,9 +8343,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mines/candy-mines-10-tc-s-2.ansi": {
-        "name": "candy-mines-10-tc-s-2.ansi",
-        "category": "candy-mines",
+    "candy-minesweeper/candy-minesweeper-10-tc-s-2.ansi": {
+        "name": "candy-minesweeper-10-tc-s-2.ansi",
+        "category": "candy-minesweeper",
         "resolution": "60x11",
         "width": 60,
         "height": 11,

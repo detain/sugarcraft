@@ -89,18 +89,18 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 4: candy-tetris, candy-mines, candy-flip, candy-lister
+### Group 4: candy-tetris, candy-minesweeper, candy-flip, candy-lister
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-tetris | 117 ✓ | APPROVE | 0 | 3 | 2 | 0 |
-| candy-mines | 91 ✓ | APPROVE | 0 | 1 | 3 | 0 |
+| candy-minesweeper | 91 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-flip | 53 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | candy-lister | 39 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 
 **candy-tetris** — Full Tetris with SRS, T-Spin, VS mode. Issues: `Das::withKeyDown()` ignores state parameter; `Ansi::sgr()` with 4 args in ghost rendering; VS Computer moves on every tick not own schedule.
 
-**candy-mines** — Minesweeper. Issue: `Renderer::status()` type annotation says `?int` but `Game::elapsed()` returns `?float` — type mismatch at runtime.
+**candy-minesweeper** — Minesweeper. Issue: `Renderer::status()` type annotation says `?int` but `Game::elapsed()` returns `?float` — type mismatch at runtime.
 
 **candy-flip** — GIF decoder. Issues: LZW sub-block parsing fails on `0x80` byte (valid length byte misidentified as control); `FloydSteinberg::dither()` calls `imagecolorat()` 3× per pixel instead of once.
 
@@ -306,7 +306,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### Medium Priority (Next Sprint)
 
 5. **`TickMsg` base class for game packages**
-   - candy-tetris, candy-mines, candy-flappy all define structurally identical tick marker classes
+   - candy-tetris, candy-minesweeper, candy-flappy all define structurally identical tick marker classes
    - Extract to `SugarCraft\Core\Msg\TickMsg`
 
 6. **`TestCase` base + `StreamHelper` trait** (improvements.md §4.3)
@@ -377,7 +377,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | sugar-charts | OHLC multi-series, Scatter per-point styling | MEDIUM |
 | sugar-stickers | FlexBox tests, sticky header/footer | MEDIUM |
 | candy-tetris | T-Spin Twist rule (beyond 3-corner) | LOW |
-| candy-mines | Chord-click keyboard binding | LOW |
+| candy-minesweeper | Chord-click keyboard binding | LOW |
 | sugar-flip | GIF frame cap of 256 not configurable | LOW |
 | sugar-boxer | maxWidth/maxHeight enforcement | LOW |
 
@@ -445,7 +445,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### Medium Term (Next Month)
 
 14. **[EXTRACT]** Create `SugarCraft\Core\I18n\LangFactory` and migrate 33 Lang.php files
-15. **[EXTRACT]** Extract `TickMsg` base class from candy-tetris/candy-mines/candy-flappy
+15. **[EXTRACT]** Extract `TickMsg` base class from candy-tetris/candy-minesweeper/candy-flappy
 16. **[EXTRACT]** Create `SugarCraft\Core\Tests\TestCase` base + `StreamHelper` trait
 17. **[DOCS]** Add CALIBER_LEARNINGS.md to sugar-calendar
 18. **[FIX]** sugar-skate: Replace reflection in YamlImporter with public method
@@ -565,7 +565,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 1 | candy-core, candy-shell, candy-sprinkles, candy-shine, candy-serve | 1,638 | ✅ All pass |
 | 2 | candy-query, candy-mold, candy-kit, candy-freeze | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
-| 4 | candy-tetris, candy-mines, candy-flip, candy-lister | 300 | ✅ All pass |
+| 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, sugar-skate, sugar-stash | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-calendar, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |

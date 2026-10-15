@@ -154,7 +154,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyTesting** | candy + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
 | **CandyInput** | candy + input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
 | **CandyMouse** | candy + mouse = self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |
-| **CandyMines** | candy + mines = Minesweeper. clear. |
+| **CandyMinesweeper** | plain descriptive — took this name in the 2026-10 rename; the “candy + mines” wordplay retired with it. |
 | **CandyLister** | candy + lister = scrollable tree/list view component. literal. |
 | **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |
 | **CandyQuery** | candy + query = terminal SQL browser. multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. |

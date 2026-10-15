@@ -6,7 +6,7 @@
 
 ## Goal
 
-Enhance `candy-core` with the foundation primitives §326.1 calls for: `ProgramOptions::builder()` (16-param ctor → builder), `Program::withLogger()`, `Program::withExceptionHandler()`, exposed `$lastFrameDuration` (enables adaptive framerate per §387), `ProgressReporter` interface (§345.10), and `UndoActionType` enum (§345.8 — replaces string-based undo routing across super-candy/candy-mines/candy-tetris).
+Enhance `candy-core` with the foundation primitives §326.1 calls for: `ProgramOptions::builder()` (16-param ctor → builder), `Program::withLogger()`, `Program::withExceptionHandler()`, exposed `$lastFrameDuration` (enables adaptive framerate per §387), `ProgressReporter` interface (§345.10), and `UndoActionType` enum (§345.8 — replaces string-based undo routing across super-candy/candy-minesweeper/candy-tetris).
 
 Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoActionType), §345.10 (ProgressReporter), §387.10 (god-class precursor).
 

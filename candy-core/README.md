@@ -576,7 +576,7 @@ $reporter = new SilentProgressReporter();
 
 ## UndoActionType
 
-Typed enum replacing ad-hoc string-prefix detection for undo routing (`str_starts_with($desc, 'delete ')` patterns in super-candy / candy-mines / candy-tetris):
+Typed enum replacing ad-hoc string-prefix detection for undo routing (`str_starts_with($desc, 'delete ')` patterns in super-candy / candy-minesweeper / candy-tetris):
 
 ```php
 use SugarCraft\Core\Undo\UndoActionType;
