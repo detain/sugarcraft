@@ -891,6 +891,11 @@ Phase 11. Its auto-update will start failing (the repo now declares a different 
 
 ## Phase 3 — Batch A (pilot): honey-flap, candy-mines, sugar-calendar
 
+Entry status: `honey-flap` → `candy-flappy` R1–R8 ✅ (renamed 611322309, doc-paths d985eb232,
+remote-done d8238ad4f; split continuity verified — legacy/honey-flap ref + honey-flap-final tag live).
+**R9 HELD**: Packagist token source `/home/sites/mystage/auth_login_credentials.txt` no longer exists
+on this box; `scripts/packagist.sh create candy-flappy` ready to run the moment credentials are re-supplied.
+
 Run Procedure R for each of the three. Extra checks for this pilot batch, because it's validating the tooling:
 - After the first entry (`honey-flap` → `candy-flappy`), read the full `git show --stat` and spot-check 10 changed files by eye. Confirm the
   multi-prefix sync produced a continuous history (R8). If anything is off, fix the TOOL (with a test) before continuing — don't hand-patch around it.

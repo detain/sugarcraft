@@ -86,3 +86,36 @@ CLAUDE.md · PROJECT_NAMES.md.
    requires a clean tree; R7 lands everything else). Tracked in FINDING B above.
 5. Deferred art/icon redraws recorded in prompt_kit/briefs/rename-followups.md
    (99/144 wordmarks, play.gif, 🐝 emoji in docs/_data).
+
+## R8 — push, sync, CI, continuity (2026-10-15 22:0x-22:3xZ)
+Monorepo chain 5254bdbd2..d985eb232 pushed to origin detain/sugarcraft (no
+force). Sync run 38814100346 SUCCESS: split-push candy-flappy →
+sugarcraft/candy-flappy new head e166e660. CONTINUITY (2.1 guard) verified via
+`git ls-remote https://github.com/sugarcraft/candy-flappy`: <!-- @rename-keep -->
+refs/heads/master + refs/heads/legacy/honey-flap + tag honey-flap-final <!-- @rename-keep -->
+all present (legacy head 29667bf6 = pre-rename split history preserved before
+the first force-push). Old repo URL 301-redirects to new (R2). VHS demos run
+38814100396 SUCCESS on d985eb232 (renamed tape renders). CI run 38814100284
+(full matrix, force_all) FINAL: candy-flappy Test 8.3 + Test 8.4 + Coverage ALL
+SUCCESS. Red set = pre-existing 2.5-NOTES families {PHPStan 8.3/8.4 candy-core,
+Windows 8.3/8.4 candy-forms, candy-mines 8.3/8.4/Cov, candy-top 8.3/8.4/Cov,
+sugar-dash 8.3/8.4/Cov} (sugar-crush greens this round) + ONE extra:
+macOS · 8.3 · candy-core, log-identified as
+ProgramRuntimeTeardownTest::testPendingEscapeFlushDoesNotFireAfterRun — the
+documented intermittent ESC-flush timing flake family (baseline 5254bdbd2 ran
+green on the same job; candy-core sources untouched by the rename). Not chased.
+status=remote-done commit d8238ad4f.
+
+## R9 — BLOCKED: Packagist credentials gone (honest stop)
+The plan-mandated token source `/home/sites/mystage/auth_login_credentials.txt`
+no longer exists (owner removed /home/sites/mystage mid-2026-10); no PACKAGIST_*
+env, no packagist entry in ~/.composer/auth.json, no copy found under /home.
+`scripts/packagist.sh` itself is FIXED and ready (c2539ca8a live
+create-package Bearer shape). Per brief's network-auth rule: stopped at last
+committed state; renames.json stays `remote-done` (NOT faked to packagist-done).
+Prep landed instead: prompt_kit/briefs/rename-packagist-abandon-checklist.md
+created with the honey-flap entry; <!-- @rename-keep -->
+tracker line added under plan Phase 3. Remaining R9 when the owner re-supplies
+PACKAGIST_TOKEN (username detain): `bash scripts/packagist.sh create candy-flappy`
+→ `check candy-flappy` until dev-master shows the split SHA → status=packagist-done
+commit `rename: candy-flappy published`.
