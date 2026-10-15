@@ -597,6 +597,15 @@ echo $action->type->value;   // 'delete'
 echo $action->label;          // 'delete foo'
 ```
 
+## Renamed packages
+
+When a package in this monorepo is renamed, apps should keep working for users who still set old env vars or have data in old directories. Two shims in `SugarCraft\Core\Util` cover that:
+
+- `LegacyEnv::import(['SUGARCRUSH_' => 'CANDY_CODE_'])` <!-- @rename-keep --> — copies every env var set under a pre-rename prefix onto the new prefix, never overwriting a var the user already set under the new name, and returns the imported old names (sorted) so the app can print a deprecation notice. Call it at the very top of `bin/<app>`, right after the autoloader.
+- `LegacyPaths::migrate($oldDir, $newDir)` — one-time atomic move of a pre-rename data/config directory (parents created 0700); returns a human-readable notice, and never merges when the new path already exists.
+
+Every line that spells an old name must carry the `@rename-keep` marker, or `tools/check-rename-residue.php` will flag it.
+
 ## Test
 
 ```sh
