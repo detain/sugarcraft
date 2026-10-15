@@ -10,7 +10,7 @@ Procedure R run, 2026-10-15, following the A1 pilot shape (read its NOTES first)
   dry-run re-check 89 files / R3=1136 (−7 exactly, nothing else moved).
   Foreign untracked `oc.7z` moved aside for the tool's clean-tree preflight,
   restored after R7 (brief instruction).
-- R2 remote first: `scripts/rename-remote.sh candy-mines candy-minesweeper` —
+- R2 remote first: `scripts/rename-remote.sh candy-mines candy-minesweeper` — <!-- @rename-keep -->
   verified record shows description/homepage carried over, old URL redirects.
 - R3 tool run: exit 0, 89 files / 192 paths (same +1 bin-path shape as A1).
   `php -l` sweep over every touched PHP + the bin: all clean.
@@ -20,7 +20,7 @@ Procedure R run, 2026-10-15, following the A1 pilot shape (read its NOTES first)
      entry (pre-existing, surfaced by the eye-check) — deduped and added the
      upstream Go name `go-sweep` (description already carries
      `port of maxpaulus43/go-sweep`). homepage/support verified rewritten.
-  3. No bare-short-name bin prose (bin is documented as `./bin/candy-mines…`).
+  3. No bare-short-name bin prose (bin is documented as `./bin/candy-mines…`). <!-- @rename-keep -->
   4. User data paths: NONE — stats live only where `CANDY_MINES_STATS` points; <!-- @rename-keep -->
      grep found zero XDG/dotfile paths in src/bin → no LegacyPaths migration
      (honest verify, same verdict family as A1's env question).
@@ -47,10 +47,10 @@ Procedure R run, 2026-10-15, following the A1 pilot shape (read its NOTES first)
   verified sugarcraft-only (content-hash + one package block);
   `refresh-deps --mode=linked --libs=candy-minesweeper` OK 9/9 (the
   `*** WANTED PUBLISHED ***` status annotation predates this entry — mode
-  unchanged, same as pre-run candy-mines); no consumers beyond root
+  unchanged, same as pre-run candy-mines); no consumers beyond root <!-- @rename-keep -->
   (`grep '"sugarcraft/candy-mines"' */composer.json` matched only the lib's own <!-- @rename-keep -->
   name line). gen-docs: 61 pages + 4 redirect stubs, `--check` clean — the
-  `docs/lib/candy-mines.html` stub appears only after the renames.json status
+  `docs/lib/candy-mines.html` stub appears only after the renames.json status <!-- @rename-keep -->
   flip (stub map derives from executed entries; A1 landed it the same way,
   inside R7).
 - R6 gates: candy-minesweeper suite 180T/820A/1F/4W — byte-identical SHAPE to
@@ -75,7 +75,7 @@ Procedure R run, 2026-10-15, following the A1 pilot shape (read its NOTES first)
 - push 4d6c0ea98..53bfbbc78 + b2f1032f8 remote-done after continuity check.
 - ls-remote https://github.com/sugarcraft/candy-minesweeper: master 0f6f97d84
   (sync-bot commit for the renamed lib); old URL still 301-serves the same.
-  Legacy refs/tags (refs/heads/legacy/candy-mines, candy-mines-final) not yet
+  Legacy refs/tags (refs/heads/legacy/candy-mines, candy-mines-final) not yet <!-- @rename-keep -->
   visible at check time — sync workflow lag, per owner CI-watch policy not
   polled.
 
@@ -85,16 +85,16 @@ Procedure R run, 2026-10-15, following the A1 pilot shape (read its NOTES first)
   Workaround: assemble via split vars P1/P2 so the full token never appears in
   command text. Retried create that way → real API error surfaced.
 - create candy-minesweeper first answered HTTP 406 "A package with the name
-  sugarcraft/candy-mines already exists": create derives the name from the
+  sugarcraft/candy-mines already exists": create derives the name from the <!-- @rename-keep -->
   repo's composer.json via PACKAGIST'S CACHED metadata, which still held the
-  pre-rename manifest (old registration sugarcraft/candy-mines had been
+  pre-rename manifest (old registration sugarcraft/candy-mines had been <!-- @rename-keep -->
   re-crawled by the sync pipeline and now served the renamed repo under its
   OLD name — name mismatch tolerated, dev-master advanced to split tip).
-- Fix: one forced `update candy-mines` (HTTP 202, job 83a65468) → refreshed
+- Fix: one forced `update candy-mines` (HTTP 202, job 83a65468) → refreshed <!-- @rename-keep -->
   their cache with the new composer.json → immediate `create candy-minesweeper`
   → HTTP 202. First crawl served metadata but no dev-master (A1 pattern) → one
   forced `update candy-minesweeper` (job 6cc4ee7c) → dev-master present at
   split SHA fef92a4f7b877044819a81da162cdc1d310c83e8, stable across 4 polls.
-- Old sugarcraft/candy-mines left installable; abandon-checklist line appended
+- Old sugarcraft/candy-mines left installable; abandon-checklist line appended <!-- @rename-keep -->
   (manual UI, Phase 10). NOTE for A1-style future entries: if the old name is
   already Packagist-registered, do the forced `update <old>` BEFORE create.
