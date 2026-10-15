@@ -59,6 +59,6 @@
 
     {"batch":"1","kind":"merge","old":"candy-zone","new":"candy-mouse","ns_old":"Zone","ns_new":"Mouse\\Zones","type":"lib","bins":{},"github":"archive","status":"renamed"},
     {"batch":"1","kind":"fold","old":"sugar-prompt","new":"candy-forms","ns_old":"Prompt","ns_new":"Forms","type":"lib","bins":{},"github":"archive","status":"renamed"},
-    {"batch":"1","kind":"create","old":null,"new":"candy-gifview","ns_old":null,"ns_new":"GifView","type":"app","bins":{},"github":"create","status":"renamed"}
+    {"batch":"1","kind":"create","old":null,"new":"candy-gifview","ns_old":null,"ns_new":"GifView","type":"app","bins":{},"github":"create","status":"packagist-done"}
   ]
 }
