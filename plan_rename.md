@@ -903,6 +903,16 @@ remote-done d8238ad4f, R9 packagist-done 2026-10-15 (create HTTP 202, forced re-
 split SHA e166e660e3a756dede36e644316fd7567f495019). Split continuity verified: `refs/heads/master` +
 `refs/heads/legacy/honey-flap` + tag `honey-flap-final` live.
 
+`candy-mines` → `candy-minesweeper` ✅ **R1–R9 complete** — tag-prep 0153a9fdc, R7 53bfbbc78 (281 files),
+remote-done 95e6a5e36, R9 packagist-done 2026-10-15 commit 68e40d0c4 (create initially 406'd on the old registration's
+stale cached composer.json — cured by one forced `update candy-mines` then create HTTP 202; one forced `update
+candy-minesweeper` indexed dev-master = split SHA fef92a4f7b877044819a81da162cdc1d310c83e8). Suite 180T/820A/1F/4W
+identical to documented baseline shape (pre-existing DifficultyStatsTest::testSaveLeavesNoTempArtifacts + 4 warnings, NOT
+fixed per brief). LegacyEnv shim CANDY_MINES_STATS→CANDY_MINESWEEPER_STATS shipped + behavior-verified; no
+LegacyPaths migration minted — stats persist ONLY where the env var points (zero XDG/dotfile paths in src/bin,
+grep-verified — see rename-3-A2/NOTES.md). Split continuity verified: `refs/heads/master` +
+`refs/heads/legacy/candy-mines` + tag `candy-mines-final` live.
+
 Run Procedure R for each of the three. Extra checks for this pilot batch, because it's validating the tooling:
 - After the first entry (`honey-flap` → `candy-flappy`), read the full `git show --stat` and spot-check 10 changed files by eye. Confirm the
   multi-prefix sync produced a continuous history (R8). If anything is off, fix the TOOL (with a test) before continuing — don't hand-patch around it.
