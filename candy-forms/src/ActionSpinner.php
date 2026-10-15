@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Prompt;
+namespace SugarCraft\Forms;
 
-use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
+use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\TtyDetect;
@@ -12,7 +12,7 @@ use SugarCraft\Core\Util\TtyDetect;
 /**
  * Blocking "loading" prompt with a spinner. Mirrors huh's
  * `huh.NewSpinner().Title(...).Action(fn).Run()` — schedules a
- * worker callable, animates a {@see BitsSpinner} while it runs, and
+ * worker callable, animates a {@see \SugarCraft\Forms\Spinner\Style} frame sequence while it runs, and
  * returns once the action completes.
  *
  * This is **not** a Bubble Tea Model — it's a tiny driver that spins
@@ -51,7 +51,7 @@ use SugarCraft\Core\Util\TtyDetect;
  * Usage:
  *
  * ```php
- * Spinner::new()
+ * ActionSpinner::new()
  *     ->withTitle('Crunching numbers...')
  *     ->withStyle(SpinnerStyle::dot())
  *     ->withAction(static function () {
@@ -60,10 +60,10 @@ use SugarCraft\Core\Util\TtyDetect;
  *     ->run();
  * ```
  *
- * @note Spinner instances are not reusable after run() completes.
- *       Create a new Spinner for each action.
+ * @note ActionSpinner instances are not reusable after run() completes.
+ *       Create a new ActionSpinner for each action.
  */
-final class Spinner
+final class ActionSpinner
 {
     use Mutable;
 
@@ -93,7 +93,7 @@ final class Spinner
 
     /**
      * @inheritDoc
-     * Spinner has a no-arg constructor, so we override mutate() to manually
+     * ActionSpinner has a no-arg constructor, so we override mutate() to manually
      * clone and set properties instead of passing them as constructor args.
      */
     protected function mutate(array $changes): static

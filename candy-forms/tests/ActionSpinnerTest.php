@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Prompt\Tests;
+namespace SugarCraft\Forms\Tests;
 
-use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
-use SugarCraft\Prompt\Spinner;
+use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
+use SugarCraft\Forms\ActionSpinner;
 use PHPUnit\Framework\TestCase;
 
-final class SpinnerTest extends TestCase
+final class ActionSpinnerTest extends TestCase
 {
     public function testNoOpWithoutAction(): void
     {
         // Without an action, run() returns immediately and doesn't error.
-        Spinner::new()->withTitle('idle')->run();
+        ActionSpinner::new()->withTitle('idle')->run();
         $this->assertTrue(true);
     }
 
     public function testRunInvokesAction(): void
     {
         $ran = false;
-        $s = Spinner::new()
+        $s = ActionSpinner::new()
             ->withTitle('working')
             ->withStyle(SpinnerStyle::line())
             ->withAction(function () use (&$ran) {
@@ -42,7 +42,7 @@ final class SpinnerTest extends TestCase
 
     public function testWithersAreImmutable(): void
     {
-        $a = Spinner::new();
+        $a = ActionSpinner::new();
         $b = $a->withTitle('x');
         $this->assertNotSame($a, $b);
     }
@@ -56,7 +56,7 @@ final class SpinnerTest extends TestCase
         // mutations are not visible to the parent. Demonstrate the
         // documented out-of-band communication pattern (tempfile).
         $tmp = tempnam(sys_get_temp_dir(), 'spinner_test_');
-        $s = Spinner::new()
+        $s = ActionSpinner::new()
             ->withTitle('working')
             ->withStyle(SpinnerStyle::line())
             ->withAction(static function () use ($tmp) {
@@ -73,7 +73,7 @@ final class SpinnerTest extends TestCase
         if (function_exists('pcntl_fork') === FALSE) {
             $this->markTestSkipped('pcntl required');
         }
-        $s = Spinner::new()
+        $s = ActionSpinner::new()
             ->withTitle('failing')
             ->withStyle(SpinnerStyle::line())
             ->withAction(static function () {
@@ -85,8 +85,8 @@ final class SpinnerTest extends TestCase
 
     public function testWithStyleSetsStyle(): void
     {
-        $s = Spinner::new()->withStyle(SpinnerStyle::line());
-        $this->assertNotSame(Spinner::new(), $s);
+        $s = ActionSpinner::new()->withStyle(SpinnerStyle::line());
+        $this->assertNotSame(ActionSpinner::new(), $s);
         // Style should be changed - verify by running (animation uses style->interval)
         $s->withAction(static function (): void {})->run();
         $this->assertTrue(true);
@@ -94,11 +94,11 @@ final class SpinnerTest extends TestCase
 
     public function testWithStyleChainsFromOtherWither(): void
     {
-        $s = Spinner::new()
+        $s = ActionSpinner::new()
             ->withTitle('test')
             ->withStyle(SpinnerStyle::dot())
             ->withAction(static function (): void {});
-        $this->assertNotSame(Spinner::new(), $s);
+        $this->assertNotSame(ActionSpinner::new(), $s);
         $s->run();
         $this->assertTrue(true);
     }
@@ -110,7 +110,7 @@ final class SpinnerTest extends TestCase
         }
         // Use tempfile to detect action execution (forked child can't share memory)
         $tmp = tempnam(sys_get_temp_dir(), 'spinner_empty_title_');
-        $s = Spinner::new()
+        $s = ActionSpinner::new()
             ->withStyle(SpinnerStyle::line())
             ->withAction(static function () use ($tmp): void {
                 file_put_contents($tmp, 'ran');
@@ -127,7 +127,7 @@ final class SpinnerTest extends TestCase
             $this->markTestSkipped('pcntl required');
         }
         $tmp = tempnam(sys_get_temp_dir(), 'spinner_chained_');
-        $s = Spinner::new()
+        $s = ActionSpinner::new()
             ->withTitle('step1')
             ->withStyle(SpinnerStyle::line())
             ->withTitle('step2')

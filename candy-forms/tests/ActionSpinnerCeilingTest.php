@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Prompt\Tests;
+namespace SugarCraft\Forms\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Prompt\Spinner;
+use SugarCraft\Forms\ActionSpinner;
 
 /**
  * E711 (round 82): the forked spinner action is lifetime-bounded.
  *
- * Before this, `Spinner::run()`'s spin loop exited only on "child reaped" —
+ * Before this, `ActionSpinner::run()`'s spin loop exited only on "child reaped" —
  * a wedged worker spun forever with no wall-clock ceiling. These fixtures
  * wedge a REAL child (pcntl is not optional here) with a self-cap so every
  * failure mode is a late red rather than a hang.
  */
-final class SpinnerCeilingTest extends TestCase
+final class ActionSpinnerCeilingTest extends TestCase
 {
     /** Seconds a wedged fixture child lives before exiting on its own. */
     private const CHILD_SELF_CAP_SECONDS = 8.0;
@@ -47,7 +47,7 @@ final class SpinnerCeilingTest extends TestCase
         // no orphan). Neuter the ceiling check and this goes red only after
         // the child's self-cap lets the old loop reap it — late, but loud.
         $pidFile = $this->tempDir . '/child-pid';
-        $spinner = Spinner::new()
+        $spinner = ActionSpinner::new()
             ->withTitle('wedged')
             ->withMaxRuntimeSeconds(0.3)
             ->withAction(static function () use ($pidFile): void {
@@ -84,7 +84,7 @@ final class SpinnerCeilingTest extends TestCase
         // ladder that jumped straight to KILL would shred any cooperative
         // cleanup and still satisfy test #1's message.
         $marker = $this->tempDir . '/term-seen';
-        $spinner = Spinner::new()
+        $spinner = ActionSpinner::new()
             ->withMaxRuntimeSeconds(0.3)
             ->withAction(static function () use ($marker): void {
                 \pcntl_async_signals(TRUE);
@@ -112,7 +112,7 @@ final class SpinnerCeilingTest extends TestCase
         // The bound must not bite normal work — ceiling 30s, action done
         // in well under one. Guards against an always-fire regression.
         $flag = $this->tempDir . '/done';
-        $spinner = Spinner::new()
+        $spinner = ActionSpinner::new()
             ->withMaxRuntimeSeconds(30.0)
             ->withAction(static function () use ($flag): void {
                 \file_put_contents($flag, 'ran');
@@ -134,7 +134,7 @@ final class SpinnerCeilingTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('positive finite');
 
-        Spinner::new()->withMaxRuntimeSeconds($seconds);
+        ActionSpinner::new()->withMaxRuntimeSeconds($seconds);
     }
 
     /**
@@ -152,12 +152,12 @@ final class SpinnerCeilingTest extends TestCase
 
     public function testTheDefaultCeilingIsTheDocumentedLifetimeBound(): void
     {
-        $reflected = new \ReflectionProperty(Spinner::class, 'maxRuntimeSeconds');
+        $reflected = new \ReflectionProperty(ActionSpinner::class, 'maxRuntimeSeconds');
 
-        self::assertSame(600.0, Spinner::MAX_RUNTIME_SECONDS);
+        self::assertSame(600.0, ActionSpinner::MAX_RUNTIME_SECONDS);
         // The instance default is the constant (name-derived reflection:
         // the value lives on a fresh instance, not on a mutate() clone).
-        $fresh = Spinner::new();
+        $fresh = ActionSpinner::new();
         self::assertSame(600.0, $reflected->getValue($fresh));
         self::assertSame(3.0, $reflected->getValue($fresh->withMaxRuntimeSeconds(3.0)), 'the setter rides mutate() like every other field');
         self::assertSame(600.0, $reflected->getValue($fresh), 'fluent setter leaves the original alone');
