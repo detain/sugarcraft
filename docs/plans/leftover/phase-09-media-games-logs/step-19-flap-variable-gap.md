@@ -1,6 +1,6 @@
-# Step 09.19 — honey-flap variable pipe-gap height
+# Step 09.19 — candy-flappy variable pipe-gap height
 
-**Source:** `leftover_updates_later.md` honey-flap §5.2
+**Source:** `leftover_updates_later.md` candy-flappy §5.2
 **Branch:** `ai/flap-variable-gap`
 
 ## Deliverable
@@ -12,16 +12,16 @@ Today gap is constant.
 
 **Modify:**
 
-- `honey-flap/src/PipeGenerator.php` — gap-height varies (smaller as
+- `candy-flappy/src/PipeGenerator.php` — gap-height varies (smaller as
   score increases, with a floor).
 
 ## Tests
 
-- `honey-flap/tests/PipeGeneratorTest.php`.
+- `candy-flappy/tests/PipeGeneratorTest.php`.
 
 ## Acceptance
 
-- `cd honey-flap && vendor/bin/phpunit` green.
+- `cd candy-flappy && vendor/bin/phpunit` green.
 
 ---
 

@@ -98,7 +98,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-gifview.png" width="48" alt=""> | **[CandyGifView](candy-gifview/)** | Terminal GIF + .ansi-art viewer — the candy-flip CLI: sizes to the viewport, plays in the alternate screen (solid 24-bit blocks or a luminance ramp). |
 | <img src="media/icons/candy-top.png" width="48" alt=""> | **[CandyTop](candy-top/)** | Terminal system monitor — per-core CPU with frequencies, temperatures and battery, memory, disks, network, and process boxes with braille graphs and gradient meters; multi-menu navigation, presets, 43 themes with btop-compatible config; Linux `/proc` + `/sys` and FreeBSD collectors, container/VM tags. |
 | <img src="media/icons/sugar-reel.png" width="48" alt=""> | **[SugarReel](sugar-reel/)** | Terminal video player — pipes mp4 (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty (GIF via ext-gd, no ffmpeg). |
-| <img src="media/icons/honey-flap.png" width="48" alt=""> | **[HoneyFlap](honey-flap/)** | Flappy-Bird-style game — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate. |
+| <img src="media/icons/candy-flappy.png" width="48" alt=""> | **[CandyFlappy](candy-flappy/)** | Flappy-Bird-style game — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate. |
 
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.

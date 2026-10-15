@@ -1,0 +1,11 @@
+{
+    "title": "CandyFlappy — SugarCraft",
+    "description": "CandyFlappy: Flappy-Bird in your terminal.",
+    "ogTitle": "CandyFlappy — SugarCraft",
+    "ogDescription": "Flappy-Bird in your terminal.",
+    "emoji": "🐝",
+    "displayName": "CandyFlappy",
+    "tagline": "Flappy-Bird in your terminal",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/kbrgl/flapioca\" style=\"color: inherit;\">kbrgl/flapioca</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">flappy</span>\n          <span class=\"tag-chip\">honeybounce</span>\n          <span class=\"tag-chip\">physics</span>"
+}

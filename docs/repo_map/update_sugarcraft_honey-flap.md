@@ -1,8 +1,8 @@
-# SugarCraft/honey-flap — Ecosystem Update Report
+# SugarCraft/candy-flappy — Ecosystem Update Report
 
 ## Overview
 
-honey-flap is a Flappy Bird-style arcade game that demonstrates HoneyBounce projectile physics in a TUI context. It ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP, running on the SugarCraft stack. The package is production-ready (🟢 v1) with 28 passing tests, a VHS demo, and full documentation.
+candy-flappy is a Flappy Bird-style arcade game that demonstrates HoneyBounce projectile physics in a TUI context. It ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP, running on the SugarCraft stack. The package is production-ready (🟢 v1) with 28 passing tests, a VHS demo, and full documentation.
 
 **Biggest opportunities:**
 
@@ -23,7 +23,7 @@ honey-flap is a Flappy Bird-style arcade game that demonstrates HoneyBounce proj
 ### Current Architecture
 
 ```
-honey-flap/src/
+candy-flappy/src/
 ├── Game.php          # TEA Model: world state + init/update/view + game loop (265 lines)
 ├── Bird.php          # Wraps HoneyBounce Projectile — physics-based vertical motion (71 lines)
 ├── Pipe.php          # Single-column pipe pair with centred gap (45 lines)
@@ -31,9 +31,9 @@ honey-flap/src/
 ├── Renderer.php      # Pure view: ANSI-styled playfield + border + HUD (83 lines)
 └── TickMsg.php       # Frame-tick message (30 fps via Cmd::tick) (17 lines)
 
-honey-flap/tests/     # 28 tests across 5 test files
-honey-flap/examples/  # play.php — run via `php examples/play.php`
-honey-flap/bin/       # honey-flap CLI entry point (composer bin)
+candy-flappy/tests/     # 28 tests across 5 test files
+candy-flappy/examples/  # play.php — run via `php examples/play.php`
+candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 ```
 
 ### Features
@@ -91,10 +91,10 @@ honey-flap/bin/       # honey-flap CLI entry point (composer bin)
 
 **Rationale for priority assignments:**
 
-- **P0**: Bubble Tea is the upstream framework; understanding its Cmd/Tick/Subscription patterns is essential for comparing honey-flap's game loop architecture
+- **P0**: Bubble Tea is the upstream framework; understanding its Cmd/Tick/Subscription patterns is essential for comparing candy-flappy's game loop architecture
 - **P1**: VHS provides the demo recording infrastructure used by the SugarCraft ecosystem
 - **P2**: Dashbrew, Ratatui, and pterm all demonstrate sophisticated rendering patterns potentially applicable to game development
-- **P3**: Low relevance for honey-flap specifically; more relevant to general TUI component development
+- **P3**: Low relevance for candy-flappy specifically; more relevant to general TUI component development
 
 ---
 
@@ -118,7 +118,7 @@ honey-flap/bin/       # honey-flap CLI entry point (composer bin)
 | # | Title | Description | Why it matters | Source repo | Implementation ideas | Complexity | Impact |
 |---|-------|-------------|----------------|------------|---------------------|------------|--------|
 | 4 | Death animation | Show bird rotation + fall when crashing | Makes crash more satisfying/legible; common in Flappy Bird clones | `docs/repo_map/sugarcraft_honey-flap.md:612` | Add `Bird::die(): self` that starts a fall animation; track `deathTickCount`; render bird glyph rotated ( `/` then `|` then `\`) over 10-15 frames as it falls off screen | Medium | Medium |
-| 5 | Mutable physics variant | Add `ProjectileMutable` for zero-allocation per-tick | Game loop creates new `Projectile` every tick (30/sec); a mutable variant could reduce GC pressure | `docs/repo_map/sugarcraft_honey-flap.md:611` | Add `Projectile::updateInPlace(self): void` that mutates position/velocity fields; honey-flap's `Bird::tick()` would call this instead of creating new instance | Medium | Medium |
+| 5 | Mutable physics variant | Add `ProjectileMutable` for zero-allocation per-tick | Game loop creates new `Projectile` every tick (30/sec); a mutable variant could reduce GC pressure | `docs/repo_map/sugarcraft_honey-flap.md:611` | Add `Projectile::updateInPlace(self): void` that mutates position/velocity fields; candy-flappy's `Bird::tick()` would call this instead of creating new instance | Medium | Medium |
 | 6 | High score API | Optional HTTP POST to submit scores to a leaderboard endpoint | Enables competitive play across sessions/users | `docs/repo_map/sugarcraft_honey-flap.md:612` | Add `Game::submitScore(int $score): ?Closure` that returns a Cmd doing HTTP POST to configurable endpoint; store endpoint in config file | Medium | Medium |
 | 7 | Pipe variety | Different pipe colors, moving obstacles, wind gusts | Increases visual interest and gameplay variety | `docs/repo_map/sugarcraft_honey-flap.md:615` | Add `PipeStyle` enum (green/yellow/red); randomly select style per pipe; wind gusts would apply horizontal force to bird via `Projectile::applyForce()` | High | Low |
 
@@ -138,7 +138,7 @@ honey-flap/bin/       # honey-flap CLI entry point (composer bin)
 
 ### Current approach vs external
 
-| Aspect | honey-flap | External approach | Why external better | Tradeoffs | Applicability |
+| Aspect | candy-flappy | External approach | Why external better | Tradeoffs | Applicability |
 |--------|-----------|-------------------|-------------------|----------|---------------|
 | Physics integration | Euler: `newPos = pos + vel * dt; newVel = vel + acc * dt` | Verlet: stores `pos(t-1)` and computes `vel = pos(t) - pos(t-1)` | Verlet is more numerically stable, no velocity storage needed, symmetric for collision | More complex to implement; Euler is sufficient at 30fps | Medium — would require new `ProjectileVerlet` class |
 | Rendering | Immediate-mode string concatenation per frame | Ratatui: buffer diffing (only changed cells written) | Buffer diffing reduces terminal I/O by 10-100× for mostly-static frames | Would require refactoring Renderer to build buffer then diff | Low — game is already fully dynamic per frame |
@@ -193,20 +193,20 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 ## Documentation / Cookbook Opportunities
 
-1. **"Building a physics-based TUI game" tutorial**: Walking through honey-flap's architecture, explaining how HoneyBounce physics integrates with a TEA model. Would cover:
+1. **"Building a physics-based TUI game" tutorial**: Walking through candy-flappy's architecture, explaining how HoneyBounce physics integrates with a TEA model. Would cover:
    - Designing the physics layer (honey-bounce)
    - Wrapping physics state in a Model (Game)
    - Building a pure view (Renderer)
    - Writing deterministic tests with PRNG injection
 
-2. **"Porting Go TEA apps to PHP" guide**: Using honey-flap (ported from flapioca) as a case study. Covers:
+2. **"Porting Go TEA apps to PHP" guide**: Using candy-flappy (ported from flapioca) as a case study. Covers:
    - Mapping Go structs to PHP classes
    - Translating goroutine-based commands to ReactPHP callbacks
    - Handling mutable vs immutable state differences
 
-3. **"Physics comparison: Euler vs Verlet" explainer**: Demonstrates the numerical difference between Euler and Verlet integration with visualizations. Could use honey-flap's Bird as the example, showing trajectory divergence over 1000+ frames.
+3. **"Physics comparison: Euler vs Verlet" explainer**: Demonstrates the numerical difference between Euler and Verlet integration with visualizations. Could use candy-flappy's Bird as the example, showing trajectory divergence over 1000+ frames.
 
-4. **"Adding sound to TUI games" how-to**: Using honey-flap's (future) audio support as the example, covering:
+4. **"Adding sound to TUI games" how-to**: Using candy-flappy's (future) audio support as the example, covering:
    - Platform-independent sound via `exec('printf \\a')`
    - Using candy-pty for more sophisticated audio
    - Timing sounds with the game loop
@@ -248,9 +248,9 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 ## Ecosystem / Integration Opportunities
 
-1. **Publish `honey-flap` as a standalone Composer package**: Currently it lives in the monorepo. Publishing to packagist.org would increase visibility and allow non-monorepo PHP projects to use it as a demo/showcase for SugarCraft physics.
+1. **Publish `candy-flappy` as a standalone Composer package**: Currently it lives in the monorepo. Publishing to packagist.org would increase visibility and allow non-monorepo PHP projects to use it as a demo/showcase for SugarCraft physics.
 
-2. **Add `honey-flap` to SugarCraft website**: Create a demo page on sugarcraft.example.com that renders the game in a live terminal emulator (using go-termimg-style protocols or a web-based terminal). This could be powered by candy-mosaic for the fallback rendering.
+2. **Add `candy-flappy` to SugarCraft website**: Create a demo page on sugarcraft.example.com that renders the game in a live terminal emulator (using go-termimg-style protocols or a web-based terminal). This could be powered by candy-mosaic for the fallback rendering.
 
 3. **Create `honey-bounce` game examples package**: A new `honey-games` package (or `sugar-games`) that ports multiple physics-based games (Flappy Bird, Angry Birds-style slingshot, space invaders with gravity) demonstrating honey-bounce versatility.
 
@@ -264,19 +264,19 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 ### Relevant discussions from upstream (kbrgl/flapioca)
 
-- **No physics**: flapioca uses integer stepping for bird position (just `Cursor.Y++` each tick). honey-flap's physics-first approach is a meaningful improvement. No upstream issues directly, but the approach was validated by the upstream's simplicity.
+- **No physics**: flapioca uses integer stepping for bird position (just `Cursor.Y++` each tick). candy-flappy's physics-first approach is a meaningful improvement. No upstream issues directly, but the approach was validated by the upstream's simplicity.
 
-- **Discussion on tick rate**: flapioca runs at 5 Hz. honey-flap runs at 30 Hz (6× more granular). This is a deliberate design choice that trades off per-frame CPU time for smoother physics. The ReactPHP event loop handles this naturally.
+- **Discussion on tick rate**: flapioca runs at 5 Hz. candy-flappy runs at 30 Hz (6× more granular). This is a deliberate design choice that trades off per-frame CPU time for smoother physics. The ReactPHP event loop handles this naturally.
 
 ### Lessons from ecosystem analysis
 
-1. **Bubble Tea's Cmd pattern is the right abstraction**: The `Cmd::tick()` pattern used in honey-flap mirrors Bubble Tea's `tea.Every()` / `tea.Tick()`. This was validated by the Bubble Tea documentation (`docs/repo_map/charmbracelet_bubbletea.md:100-112`) which shows the same pattern.
+1. **Bubble Tea's Cmd pattern is the right abstraction**: The `Cmd::tick()` pattern used in candy-flappy mirrors Bubble Tea's `tea.Every()` / `tea.Tick()`. This was validated by the Bubble Tea documentation (`docs/repo_map/charmbracelet_bubbletea.md:100-112`) which shows the same pattern.
 
-2. **PRNG injection is a SugarCraft convention**: Both honey-flap and dashbrew (via different mechanisms) achieve deterministic tests. honey-flap uses `Closure(int): int` injection; dashbrew uses explicit seed in config. The injection approach is cleaner.
+2. **PRNG injection is a SugarCraft convention**: Both candy-flappy and dashbrew (via different mechanisms) achieve deterministic tests. candy-flappy uses `Closure(int): int` injection; dashbrew uses explicit seed in config. The injection approach is cleaner.
 
-3. **Immutable state is the right default**: Every framework analyzed (Bubble Tea, Ratatui, pterm) eventually converges on immutable state for testability. honey-flap's `with*()` pattern and new-instance-per-mutation is the correct approach.
+3. **Immutable state is the right default**: Every framework analyzed (Bubble Tea, Ratatui, pterm) eventually converges on immutable state for testability. candy-flappy's `with*()` pattern and new-instance-per-mutation is the correct approach.
 
-4. **Buffer diffing matters at scale**: Ratatui's immediate-mode rendering with buffer diffing (`docs/repo_map/ratatui_ratatui.md:95-109`) is highly efficient for complex UIs but less critical for games (which redraw everything each frame). honey-flap's current approach is appropriate for its use case.
+4. **Buffer diffing matters at scale**: Ratatui's immediate-mode rendering with buffer diffing (`docs/repo_map/ratatui_ratatui.md:95-109`) is highly efficient for complex UIs but less critical for games (which redraw everything each frame). candy-flappy's current approach is appropriate for its use case.
 
 ---
 
@@ -330,7 +330,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 ## Final Strategic Assessment
 
-honey-flap is a **well-architected, production-ready** package that demonstrates the SugarCraft stack's capability for physics-based TUI games. Its use of HoneyBounce for projectile physics is a genuine differentiator — no other Flappy Bird clone in the TUI ecosystem uses real physics simulation.
+candy-flappy is a **well-architected, production-ready** package that demonstrates the SugarCraft stack's capability for physics-based TUI games. Its use of HoneyBounce for projectile physics is a genuine differentiator — no other Flappy Bird clone in the TUI ecosystem uses real physics simulation.
 
 **Key differentiators from upstream (flapioca):**
 
@@ -340,9 +340,9 @@ honey-flap is a **well-architected, production-ready** package that demonstrates
 - High score persistence
 - Comprehensive test suite with deterministic PRNG
 
-**Areas where honey-flap could lead the ecosystem:**
+**Areas where candy-flappy could lead the ecosystem:**
 
-1. Physics-based game development — honey-flap + honey-bounce establishes a pattern for physics TUI games in PHP
+1. Physics-based game development — candy-flappy + honey-bounce establishes a pattern for physics TUI games in PHP
 2. Sound integration — adding audio feedback to TUI games is underexplored in the SugarCraft ecosystem
 3. Performance optimization — mutable physics variant would be a first for the ecosystem
 
@@ -352,9 +352,9 @@ honey-flap is a **well-architected, production-ready** package that demonstrates
 - Limited community awareness (single upstream source)
 - No benchmark suite for performance regression detection
 
-**Bottom line:** honey-flap is a flagship demonstration package that should be promoted as the canonical example of physics-based TUI game development in PHP. Its architecture is sound, its tests are comprehensive, and its approach to physics integration is unique in the TUI game space.
+**Bottom line:** candy-flappy is a flagship demonstration package that should be promoted as the canonical example of physics-based TUI game development in PHP. Its architecture is sound, its tests are comprehensive, and its approach to physics integration is unique in the TUI game space.
 
 ---
 
 *Report generated: 2026-05-28*
-*Source files: `docs/repo_map/sugarcraft_honey-flap.md`, `honey-flap/src/*.php`, `honey-flap/tests/*.php`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/rasjonell_dashbrew.md`, `docs/repo_map/ratatui_ratatui.md`, `docs/repo_map/pterm_pterm.md`, `docs/repo_map/blacktop_go-termimg.md`, `docs/repo_map/charmbracelet_glow.md`*
+*Source files: `docs/repo_map/sugarcraft_honey-flap.md`, `candy-flappy/src/*.php`, `candy-flappy/tests/*.php`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/rasjonell_dashbrew.md`, `docs/repo_map/ratatui_ratatui.md`, `docs/repo_map/pterm_pterm.md`, `docs/repo_map/blacktop_go-termimg.md`, `docs/repo_map/charmbracelet_glow.md`*

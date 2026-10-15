@@ -40,7 +40,7 @@ The 8 shared packages:
 | Step 33 | sugar-skate, sugar-wishlist, sugar-stash | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-calendar, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, sugar-post, candy-serve | candy-buffer, candy-async, candy-testing |
-| Step 36 | candy-flip, candy-kit, honey-bounce, honey-flap | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
+| Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
 
 ---
@@ -243,7 +243,7 @@ The 8 shared packages:
 
 ---
 
-### honey-flap
+### candy-flappy
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -251,7 +251,7 @@ The 8 shared packages:
 | candy-input | Game.php uses raw key bytes — SymbolicKey decode via candy-input would standardize controls | S |
 | candy-async | Game loop uses Timer for gravity/collision ticks — CancellationToken would simplify pause/restart | S |
 
-**Notes:** honey-flap is a Flappy Bird clone. Classic cell-grid game — Buffer would replace string-based rendering. Game loop uses manual tick timing, well-suited for candy-async cancellation.
+**Notes:** candy-flappy is a Flappy Bird clone. Classic cell-grid game — Buffer would replace string-based rendering. Game loop uses manual tick timing, well-suited for candy-async cancellation.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-mines, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), honey-flap (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-mines, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, sugar-stash (buffer+mouse), sugar-calendar (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
 
 ---

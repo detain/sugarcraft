@@ -74,7 +74,7 @@
         "sugarcraft/candy-vt": "dev-master",
         "sugarcraft/candy-wish": "dev-master",
         "sugarcraft/honey-bounce": "dev-master",
-        "sugarcraft/honey-flap": "dev-master",
+        "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-bits": "dev-master",
         "sugarcraft/sugar-boxer": "dev-master",
         "sugarcraft/sugar-calendar": "dev-master",
@@ -349,7 +349,7 @@
         },
         {
             "type": "path",
-            "url": "honey-flap",
+            "url": "candy-flappy",
             "options": {
                 "symlink": true
             }

@@ -275,7 +275,7 @@ src/
 
 **Improvement:** An `AnimationFramebudget` that separates logical updates (gravity tick, lock delay countdown) from visual interpolation (spring-eased ghost piece position).
 
-**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:248-264` — honey-flap separates physics from rendering.
+**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:248-264` — candy-flappy separates physics from rendering.
 
 ## 4. Separate Display State from Game Logic
 
@@ -346,7 +346,7 @@ How to extend `Computer.php` with custom heuristics or integrate ML-trained weig
 
 How to use honey-bounce for ghost piece animation, particles, and camera shake — with copy-paste code snippets.
 
-**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:266-301` — honey-flap integration example.
+**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:266-301` — candy-flappy integration example.
 
 ---
 
@@ -497,7 +497,7 @@ The Elm Architecture is well-understood in the Go ecosystem with extensive examp
 
 ## From honey-bounce
 
-The physics library is production-validated in `honey-flap` (Flappy Bird clone). The `REDUCE_MOTION` accessibility support is already built into `Spring::update()`.
+The physics library is production-validated in `candy-flappy` (Flappy Bird clone). The `REDUCE_MOTION` accessibility support is already built into `Spring::update()`.
 
 **Key lesson:** Frame-rate independence via `Spring::fps(60)` returning `1.0/60` deltaTime ensures consistent simulation across platforms.
 

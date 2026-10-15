@@ -1,14 +1,14 @@
-# SugarCraft/honey-flap
+# SugarCraft/candy-flappy
 
 ## Metadata
 
-- **Package**: `sugarcraft/honey-flap`
+- **Package**: `sugarcraft/candy-flappy`
 
 - **Upstream**: [kbrgl/flapioca](https://github.com/kbrgl/flapioca) (72 stars, Go)
 
 - **Language**: PHP 8.3+
 
-- **Namespace**: `SugarCraft\Flap`
+- **Namespace**: `SugarCraft\Flappy`
 
 - **Status**: 🟢 v1 ready (public API + tests + docs + demo)
 
@@ -16,14 +16,14 @@
 
 ## Overview
 
-honey-flap is a Flappy Bird-inspired terminal game that ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP using the SugarCraft stack. The bird's vertical motion is powered by **HoneyBounce projectile physics** (gravity + upward velocity kick on flap), pipes scroll left at a fixed cell rate, and collision is per-cell. Difficulty scales with score via shrinking pipe gaps.
+candy-flappy is a Flappy Bird-inspired terminal game that ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP using the SugarCraft stack. The bird's vertical motion is powered by **HoneyBounce projectile physics** (gravity + upward velocity kick on flap), pipes scroll left at a fixed cell rate, and collision is per-cell. Difficulty scales with score via shrinking pipe gaps.
 
 The library demonstrates the clean separation between physics (honey-bounce) and TUI rendering (candy-core) — a Flappy Bird clone is effectively a physics consumer with ANSI output.
 
 ## Architecture
 
 ```
-honey-flap/src/
+candy-flappy/src/
 ├── Game.php          # TEA Model: world state + init/update/view + game loop
 ├── Bird.php          # Wraps HoneyBounce Projectile — physics-based vertical motion
 ├── Pipe.php          # Single-column pipe pair with centred gap
@@ -31,18 +31,18 @@ honey-flap/src/
 ├── Renderer.php      # Pure view: ANSI-styled playfield + border + HUD
 └── TickMsg.php       # Frame-tick message (30 fps via Cmd::tick)
 
-honey-flap/tests/
+candy-flappy/tests/
 ├── GameTest.php         # 9 tests: init, flap, tick, quit, restart, crash, PRNG
 ├── BirdTest.php         # 4 tests: spawn, gravity, flap, row rounding
 ├── PipeTest.php         # 4 tests: tick, collision, off-screen
 ├── PipeGeneratorTest.php # 6 tests: gap scaling, floor, determinism
 └── RendererTest.php     # 5 tests: output structure, crash state
 
-honey-flap/examples/
+candy-flappy/examples/
 └── play.php            # Run: php examples/play.php
 
-honey-flap/bin/
-└── honey-flap          # CLI entry point (composer bin)
+candy-flappy/bin/
+└── candy-flappy          # CLI entry point (composer bin)
 ```
 
 ### Design Principles
@@ -98,7 +98,7 @@ honey-flap/bin/
 
 ### Source Files
 
-- **Bird.php**: `honey-flap/src/Bird.php:22-71`
+- **Bird.php**: `candy-flappy/src/Bird.php:22-71`
 
 - **Projectile.php**: `honey-bounce/src/Projectile.php:36-120`
 
@@ -109,7 +109,7 @@ honey-flap/bin/
 The bird uses a `Projectile` with these parameters:
 
 ```php
-// honey-flap/src/Bird.php:33-44
+// candy-flappy/src/Bird.php:33-44
 public static function spawn(int $x, float $y): self
 {
     return new self(
@@ -169,7 +169,7 @@ public function flap(): self
 }
 ```
 
-**Key insight**: `flap()` doesn't add to velocity — it **replaces** it with a fixed upward kick. The upstream flapioca uses the same trick with an ad-hoc accumulator. honey-flap expresses it cleanly as projectile state.
+**Key insight**: `flap()` doesn't add to velocity — it **replaces** it with a fixed upward kick. The upstream flapioca uses the same trick with an ad-hoc accumulator. candy-flappy expresses it cleanly as projectile state.
 
 ### Gravity Tuning
 
@@ -177,7 +177,7 @@ public function flap(): self
 
 - Real-world gravity: 9.81 m/s²
 
-- honey-flap gravity: 70 cells/sec² ≈ 7.1× real-world (tuned for 30 fps gameplay)
+- candy-flappy gravity: 70 cells/sec² ≈ 7.1× real-world (tuned for 30 fps gameplay)
 
 - At 30 fps: `vel += 70 * (1/30) ≈ 2.33` cells/sec per frame
 
@@ -187,7 +187,7 @@ public function flap(): self
 
 ## Game Loop Architecture
 
-### Source File: `honey-flap/src/Game.php:143-183`
+### Source File: `candy-flappy/src/Game.php:143-183`
 
 ### Initialization (Game.php:143-146)
 
@@ -270,13 +270,13 @@ The game runs **forever** via recursive `Cmd::tick` scheduling. Each `TickMsg` t
 
 - **flapioca**: `tea.Tick(time.Second/5, ...)` = 5 Hz tick rate (200ms per frame)
 
-- **honey-flap**: `Cmd::tick(0.033, ...)` ≈ 30 Hz tick rate (33ms per frame)
+- **candy-flappy**: `Cmd::tick(0.033, ...)` ≈ 30 Hz tick rate (33ms per frame)
 
-honey-flap is 6× more granular, giving smoother physics and more responsive controls.
+candy-flappy is 6× more granular, giving smoother physics and more responsive controls.
 
 ## Collision Detection
 
-### Source File: `honey-flap/src/Pipe.php:31-39`
+### Source File: `candy-flappy/src/Pipe.php:31-39`
 
 ```php
 public function collides(int $col, int $row): bool
@@ -331,7 +331,7 @@ Pipe collision: per-pipe check with bird at column `BIRD_COL` (8) and row `bird.
 
 ## Rendering
 
-### Source File: `honey-flap/src/Renderer.php:18-82`
+### Source File: `candy-flappy/src/Renderer.php:18-82`
 
 Renderer is a **pure view function** — no state, no side effects:
 
@@ -404,18 +404,18 @@ When crashed:
 
 ## Comparison with Upstream (kbrgl/flapioca)
 
-| Aspect | flapioca (Go) | honey-flap (PHP) | Advantage |
+| Aspect | flapioca (Go) | candy-flappy (PHP) | Advantage |
 |--------|--------------|-----------------|------------|
 | Framework | Bubble Tea | candy-core (ReactPHP) | Both use TEA pattern |
-| Physics | Integer increment | HoneyBounce Projectile | honey-flap |
-| Bird motion | `Cursor.Y++` each tick | Projectile with gravity + flap kick | honey-flap |
-| Gravity | None (integer stepping) | 70 cells/sec² | honey-flap |
-| Tick rate | 5 Hz | 30 Hz | honey-flap |
-| Difficulty scaling | None | Gap shrinks 6→3 every 5 points | honey-flap |
-| High score persistence | None | JSON to ~/.config | honey-flap |
-| Test determinism | N/A | PRNG injection | honey-flap |
-| Pipe gap | Fixed aperture (5) | Score-dependent (3–6) | honey-flap |
-| State model | Mutable struct | Immutable with() pattern | honey-flap |
+| Physics | Integer increment | HoneyBounce Projectile | candy-flappy |
+| Bird motion | `Cursor.Y++` each tick | Projectile with gravity + flap kick | candy-flappy |
+| Gravity | None (integer stepping) | 70 cells/sec² | candy-flappy |
+| Tick rate | 5 Hz | 30 Hz | candy-flappy |
+| Difficulty scaling | None | Gap shrinks 6→3 every 5 points | candy-flappy |
+| High score persistence | None | JSON to ~/.config | candy-flappy |
+| Test determinism | N/A | PRNG injection | candy-flappy |
+| Pipe gap | Fixed aperture (5) | Score-dependent (3–6) | candy-flappy |
+| State model | Mutable struct | Immutable with() pattern | candy-flappy |
 
 ### Key Upstream File: `internal/model.go`
 
@@ -442,7 +442,7 @@ func (o *Obstacle) Collides(l Location) bool {
 }
 ```
 
-**honey-flap** (`honey-flap/src/Pipe.php:31-39`):
+**candy-flappy** (`candy-flappy/src/Pipe.php:31-39`):
 ```php
 public function collides(int $col, int $row): bool
 {
@@ -455,13 +455,13 @@ public function collides(int $col, int $row): bool
 }
 ```
 
-Both use the same algorithm (column check + gap boundary check). honey-flap uses `intdiv()` for integer gap halves; flapioca uses integer division implicitly. Minor implementation difference only.
+Both use the same algorithm (column check + gap boundary check). candy-flappy uses `intdiv()` for integer gap halves; flapioca uses integer division implicitly. Minor implementation difference only.
 
 ## Innovation Analysis
 
 ### 1. Physics Integration Pattern
 
-honey-flap demonstrates a **physics-as-a-service** pattern:
+candy-flappy demonstrates a **physics-as-a-service** pattern:
 - `honey-bounce/Projectile` is a pure kinematics engine (no rendering, no collision)
 
 - `Game` is a physics consumer that wraps physics state in a TEA Model
@@ -487,7 +487,7 @@ return Renderer::render($this);  // ANSI output
 
 ### 2. PRNG Injection for Deterministic Tests
 
-**Source**: `honey-flap/src/Game.php:35-36, 52-55, 75-78`
+**Source**: `candy-flappy/src/Game.php:35-36, 52-55, 75-78`
 
 ```php
 private \Closure $rand;
@@ -517,7 +517,7 @@ public function testDeterministicWithSeededRand(): void
 
 ### 3. Difficulty Curve via Gap Shrinkage
 
-**Source**: `honey-flap/src/PipeGenerator.php:33-38`
+**Source**: `candy-flappy/src/PipeGenerator.php:33-38`
 
 ```php
 public static function gapHeightForScore(int $score): int
@@ -532,7 +532,7 @@ The gap shrinks by 1 cell every 5 points, starting at 6, floor at 3. This create
 
 ### 4. Immurable Game State
 
-**Source**: `honey-flap/src/Game.php:229-248`
+**Source**: `candy-flappy/src/Game.php:229-248`
 
 Every state transition returns a new `Game` instance. The previous state is preserved for:
 - Debugging / replay
@@ -586,12 +586,12 @@ public function testCellsAboveAndBelowGapCollide(): void
 
 | File | Purpose |
 |------|---------|
-| `honey-flap/src/Game.php` | TEA Model: 265 lines, all game state + logic |
-| `honey-flap/src/Bird.php` | HoneyBounce Projectile wrapper: 71 lines |
-| `honey-flap/src/Pipe.php` | Pipe obstacle: 45 lines |
-| `honey-flap/src/PipeGenerator.php` | Pipe factory + difficulty scaling: 56 lines |
-| `honey-flap/src/Renderer.php` | Pure ANSI view: 83 lines |
-| `honey-flap/src/TickMsg.php` | Frame-tick message: 17 lines |
+| `candy-flappy/src/Game.php` | TEA Model: 265 lines, all game state + logic |
+| `candy-flappy/src/Bird.php` | HoneyBounce Projectile wrapper: 71 lines |
+| `candy-flappy/src/Pipe.php` | Pipe obstacle: 45 lines |
+| `candy-flappy/src/PipeGenerator.php` | Pipe factory + difficulty scaling: 56 lines |
+| `candy-flappy/src/Renderer.php` | Pure ANSI view: 83 lines |
+| `candy-flappy/src/TickMsg.php` | Frame-tick message: 17 lines |
 | `honey-bounce/src/Projectile.php` | Euler-integrated physics: 120 lines |
 | `honey-bounce/src/Spring.php` | Damped spring oscillator: 144 lines |
 | `honey-bounce/src/Point.php` | 3D immutable point: 41 lines |
@@ -645,7 +645,7 @@ public function testCellsAboveAndBelowGapCollide(): void
 
 - **High score**: None
 
-- **Verdict**: honey-flap is a strict superset with physics, 6× faster tick, difficulty scaling
+- **Verdict**: candy-flappy is a strict superset with physics, 6× faster tick, difficulty scaling
 
 ### Other TUI Games in Ecosystem
 
@@ -654,7 +654,7 @@ The SugarCraft monorepo contains other game-related ports:
 
 - **sugar-crush**: Match-3 game (no physics)
 
-honey-flap is unique in its use of honey-bounce physics for game motion — all other games use integer-grid movement only.
+candy-flappy is unique in its use of honey-bounce physics for game motion — all other games use integer-grid movement only.
 
 ## Potential Enhancements
 

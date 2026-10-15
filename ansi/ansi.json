@@ -20623,9 +20623,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-16-l-1.ansi": {
-        "name": "honey-flap-1-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-16-l-1.ansi": {
+        "name": "candy-flappy-1-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "132x30",
         "width": 132,
         "height": 30,
@@ -20635,9 +20635,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-1-16-l-2.ansi": {
-        "name": "honey-flap-1-16-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-16-l-2.ansi": {
+        "name": "candy-flappy-1-16-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "130x28",
         "width": 130,
         "height": 28,
@@ -20647,9 +20647,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-1-16-m-1.ansi": {
-        "name": "honey-flap-1-16-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-16-m-1.ansi": {
+        "name": "candy-flappy-1-16-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -20659,9 +20659,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-1-16-s-1.ansi": {
-        "name": "honey-flap-1-16-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-16-s-1.ansi": {
+        "name": "candy-flappy-1-16-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
@@ -20671,9 +20671,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-1-256-l-1.ansi": {
-        "name": "honey-flap-1-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-256-l-1.ansi": {
+        "name": "candy-flappy-1-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "140x32",
         "width": 140,
         "height": 32,
@@ -20683,9 +20683,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-256-l-2.ansi": {
-        "name": "honey-flap-1-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-256-l-2.ansi": {
+        "name": "candy-flappy-1-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "136x30",
         "width": 136,
         "height": 30,
@@ -20695,9 +20695,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-256-m-1.ansi": {
-        "name": "honey-flap-1-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-256-m-1.ansi": {
+        "name": "candy-flappy-1-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -20707,9 +20707,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-256-m-2.ansi": {
-        "name": "honey-flap-1-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-256-m-2.ansi": {
+        "name": "candy-flappy-1-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "80x23",
         "width": 80,
         "height": 23,
@@ -20719,9 +20719,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-256-s-1.ansi": {
-        "name": "honey-flap-1-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-256-s-1.ansi": {
+        "name": "candy-flappy-1-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -20731,9 +20731,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-256-s-2.ansi": {
-        "name": "honey-flap-1-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-256-s-2.ansi": {
+        "name": "candy-flappy-1-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "58x8",
         "width": 58,
         "height": 8,
@@ -20743,9 +20743,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-tc-l-1.ansi": {
-        "name": "honey-flap-1-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-tc-l-1.ansi": {
+        "name": "candy-flappy-1-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "168x38",
         "width": 168,
         "height": 38,
@@ -20755,9 +20755,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-tc-l-2.ansi": {
-        "name": "honey-flap-1-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-tc-l-2.ansi": {
+        "name": "candy-flappy-1-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "170x36",
         "width": 170,
         "height": 36,
@@ -20767,9 +20767,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-tc-m-1.ansi": {
-        "name": "honey-flap-1-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-tc-m-1.ansi": {
+        "name": "candy-flappy-1-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -20779,9 +20779,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-tc-m-2.ansi": {
-        "name": "honey-flap-1-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-tc-m-2.ansi": {
+        "name": "candy-flappy-1-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -20791,9 +20791,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-tc-s-1.ansi": {
-        "name": "honey-flap-1-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-tc-s-1.ansi": {
+        "name": "candy-flappy-1-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "66x10",
         "width": 66,
         "height": 10,
@@ -20803,9 +20803,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-1-tc-s-2.ansi": {
-        "name": "honey-flap-1-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-1-tc-s-2.ansi": {
+        "name": "candy-flappy-1-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "62x9",
         "width": 62,
         "height": 9,
@@ -20815,9 +20815,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-16-l-1.ansi": {
-        "name": "honey-flap-2-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-16-l-1.ansi": {
+        "name": "candy-flappy-2-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -20827,9 +20827,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-2-16-m-1.ansi": {
-        "name": "honey-flap-2-16-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-16-m-1.ansi": {
+        "name": "candy-flappy-2-16-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -20839,9 +20839,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-2-16-m-2.ansi": {
-        "name": "honey-flap-2-16-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-16-m-2.ansi": {
+        "name": "candy-flappy-2-16-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -20851,9 +20851,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-2-16-s-2.ansi": {
-        "name": "honey-flap-2-16-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-16-s-2.ansi": {
+        "name": "candy-flappy-2-16-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "62x6",
         "width": 62,
         "height": 6,
@@ -20863,9 +20863,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-l-1.ansi": {
-        "name": "honey-flap-2-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-l-1.ansi": {
+        "name": "candy-flappy-2-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "180x40",
         "width": 180,
         "height": 40,
@@ -20875,9 +20875,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-l-2.ansi": {
-        "name": "honey-flap-2-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-l-2.ansi": {
+        "name": "candy-flappy-2-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "170x32",
         "width": 170,
         "height": 32,
@@ -20887,9 +20887,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-m-1.ansi": {
-        "name": "honey-flap-2-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-m-1.ansi": {
+        "name": "candy-flappy-2-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -20899,9 +20899,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-m-2.ansi": {
-        "name": "honey-flap-2-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-m-2.ansi": {
+        "name": "candy-flappy-2-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "78x18",
         "width": 78,
         "height": 18,
@@ -20911,9 +20911,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-s-1.ansi": {
-        "name": "honey-flap-2-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-s-1.ansi": {
+        "name": "candy-flappy-2-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "52x8",
         "width": 52,
         "height": 8,
@@ -20923,9 +20923,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-s-2.ansi": {
-        "name": "honey-flap-2-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-s-2.ansi": {
+        "name": "candy-flappy-2-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -20935,9 +20935,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-256-s-3.ansi": {
-        "name": "honey-flap-2-256-s-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-256-s-3.ansi": {
+        "name": "candy-flappy-2-256-s-3.ansi",
+        "category": "candy-flappy",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -20947,9 +20947,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-l-1.ansi": {
-        "name": "honey-flap-2-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-l-1.ansi": {
+        "name": "candy-flappy-2-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -20959,9 +20959,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-l-2.ansi": {
-        "name": "honey-flap-2-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-l-2.ansi": {
+        "name": "candy-flappy-2-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "190x36",
         "width": 190,
         "height": 36,
@@ -20971,9 +20971,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-m-1.ansi": {
-        "name": "honey-flap-2-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-m-1.ansi": {
+        "name": "candy-flappy-2-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -20983,9 +20983,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-m-2.ansi": {
-        "name": "honey-flap-2-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-m-2.ansi": {
+        "name": "candy-flappy-2-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -20995,9 +20995,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-s-1.ansi": {
-        "name": "honey-flap-2-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-s-1.ansi": {
+        "name": "candy-flappy-2-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "50x7",
         "width": 50,
         "height": 7,
@@ -21007,9 +21007,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-s-2.ansi": {
-        "name": "honey-flap-2-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-s-2.ansi": {
+        "name": "candy-flappy-2-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "55x14",
         "width": 55,
         "height": 14,
@@ -21019,9 +21019,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-2-tc-s-3.ansi": {
-        "name": "honey-flap-2-tc-s-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-2-tc-s-3.ansi": {
+        "name": "candy-flappy-2-tc-s-3.ansi",
+        "category": "candy-flappy",
         "resolution": "59x12",
         "width": 59,
         "height": 12,
@@ -21031,9 +21031,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-16-l-1.ansi": {
-        "name": "honey-flap-3-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-16-l-1.ansi": {
+        "name": "candy-flappy-3-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -21043,9 +21043,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-3-16-l-2.ansi": {
-        "name": "honey-flap-3-16-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-16-l-2.ansi": {
+        "name": "candy-flappy-3-16-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "156x30",
         "width": 156,
         "height": 30,
@@ -21055,9 +21055,9 @@
         "rating": 3,
         "tags": []
     },
-    "honey-flap/honey-flap-3-16-m-1.ansi": {
-        "name": "honey-flap-3-16-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-16-m-1.ansi": {
+        "name": "candy-flappy-3-16-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -21067,9 +21067,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-3-16-m-2.ansi": {
-        "name": "honey-flap-3-16-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-16-m-2.ansi": {
+        "name": "candy-flappy-3-16-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -21079,9 +21079,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-3-16-s-1.ansi": {
-        "name": "honey-flap-3-16-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-16-s-1.ansi": {
+        "name": "candy-flappy-3-16-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -21091,9 +21091,9 @@
         "rating": 3,
         "tags": []
     },
-    "honey-flap/honey-flap-3-16-s-2.ansi": {
-        "name": "honey-flap-3-16-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-16-s-2.ansi": {
+        "name": "candy-flappy-3-16-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -21103,9 +21103,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-l-1.ansi": {
-        "name": "honey-flap-3-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-l-1.ansi": {
+        "name": "candy-flappy-3-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "180x36",
         "width": 180,
         "height": 36,
@@ -21115,9 +21115,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-l-2.ansi": {
-        "name": "honey-flap-3-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-l-2.ansi": {
+        "name": "candy-flappy-3-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "170x30",
         "width": 170,
         "height": 30,
@@ -21127,9 +21127,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-m-1.ansi": {
-        "name": "honey-flap-3-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-m-1.ansi": {
+        "name": "candy-flappy-3-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -21139,9 +21139,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-m-2.ansi": {
-        "name": "honey-flap-3-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-m-2.ansi": {
+        "name": "candy-flappy-3-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "86x25",
         "width": 86,
         "height": 25,
@@ -21151,9 +21151,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-s-1.ansi": {
-        "name": "honey-flap-3-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-s-1.ansi": {
+        "name": "candy-flappy-3-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -21163,9 +21163,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-s-2.ansi": {
-        "name": "honey-flap-3-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-s-2.ansi": {
+        "name": "candy-flappy-3-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -21175,9 +21175,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-256-s-3.ansi": {
-        "name": "honey-flap-3-256-s-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-256-s-3.ansi": {
+        "name": "candy-flappy-3-256-s-3.ansi",
+        "category": "candy-flappy",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -21187,9 +21187,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-l-1.ansi": {
-        "name": "honey-flap-3-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-l-1.ansi": {
+        "name": "candy-flappy-3-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -21199,9 +21199,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-l-2.ansi": {
-        "name": "honey-flap-3-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-l-2.ansi": {
+        "name": "candy-flappy-3-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "210x42",
         "width": 210,
         "height": 42,
@@ -21211,9 +21211,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-l-3.ansi": {
-        "name": "honey-flap-3-tc-l-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-l-3.ansi": {
+        "name": "candy-flappy-3-tc-l-3.ansi",
+        "category": "candy-flappy",
         "resolution": "205x38",
         "width": 205,
         "height": 38,
@@ -21223,9 +21223,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-m-1.ansi": {
-        "name": "honey-flap-3-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-m-1.ansi": {
+        "name": "candy-flappy-3-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "88x26",
         "width": 88,
         "height": 26,
@@ -21235,9 +21235,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-m-2.ansi": {
-        "name": "honey-flap-3-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-m-2.ansi": {
+        "name": "candy-flappy-3-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -21247,9 +21247,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-s-1.ansi": {
-        "name": "honey-flap-3-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-s-1.ansi": {
+        "name": "candy-flappy-3-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "64x9",
         "width": 64,
         "height": 9,
@@ -21259,9 +21259,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-3-tc-s-2.ansi": {
-        "name": "honey-flap-3-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-3-tc-s-2.ansi": {
+        "name": "candy-flappy-3-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -21271,9 +21271,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-16-l-1.ansi": {
-        "name": "honey-flap-4-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-16-l-1.ansi": {
+        "name": "candy-flappy-4-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -21283,9 +21283,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-4-16-l-2.ansi": {
-        "name": "honey-flap-4-16-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-16-l-2.ansi": {
+        "name": "candy-flappy-4-16-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "156x28",
         "width": 156,
         "height": 28,
@@ -21295,9 +21295,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-4-16-m-1.ansi": {
-        "name": "honey-flap-4-16-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-16-m-1.ansi": {
+        "name": "candy-flappy-4-16-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -21307,9 +21307,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-4-16-m-2.ansi": {
-        "name": "honey-flap-4-16-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-16-m-2.ansi": {
+        "name": "candy-flappy-4-16-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -21319,9 +21319,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-4-16-s-1.ansi": {
-        "name": "honey-flap-4-16-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-16-s-1.ansi": {
+        "name": "candy-flappy-4-16-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "62x8",
         "width": 62,
         "height": 8,
@@ -21331,9 +21331,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-4-16-s-2.ansi": {
-        "name": "honey-flap-4-16-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-16-s-2.ansi": {
+        "name": "candy-flappy-4-16-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "63x10",
         "width": 63,
         "height": 10,
@@ -21343,9 +21343,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-l-1.ansi": {
-        "name": "honey-flap-4-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-l-1.ansi": {
+        "name": "candy-flappy-4-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "168x30",
         "width": 168,
         "height": 30,
@@ -21355,9 +21355,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-l-2.ansi": {
-        "name": "honey-flap-4-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-l-2.ansi": {
+        "name": "candy-flappy-4-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "170x30",
         "width": 170,
         "height": 30,
@@ -21367,9 +21367,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-m-1.ansi": {
-        "name": "honey-flap-4-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-m-1.ansi": {
+        "name": "candy-flappy-4-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -21379,9 +21379,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-m-2.ansi": {
-        "name": "honey-flap-4-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-m-2.ansi": {
+        "name": "candy-flappy-4-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -21391,9 +21391,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-m-3.ansi": {
-        "name": "honey-flap-4-256-m-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-m-3.ansi": {
+        "name": "candy-flappy-4-256-m-3.ansi",
+        "category": "candy-flappy",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -21403,9 +21403,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-s-1.ansi": {
-        "name": "honey-flap-4-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-s-1.ansi": {
+        "name": "candy-flappy-4-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "66x9",
         "width": 66,
         "height": 9,
@@ -21415,9 +21415,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-256-s-2.ansi": {
-        "name": "honey-flap-4-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-256-s-2.ansi": {
+        "name": "candy-flappy-4-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "60x7",
         "width": 60,
         "height": 7,
@@ -21427,9 +21427,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-l-1.ansi": {
-        "name": "honey-flap-4-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-l-1.ansi": {
+        "name": "candy-flappy-4-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "186x38",
         "width": 186,
         "height": 38,
@@ -21439,9 +21439,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-l-2.ansi": {
-        "name": "honey-flap-4-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-l-2.ansi": {
+        "name": "candy-flappy-4-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -21451,9 +21451,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-l-3.ansi": {
-        "name": "honey-flap-4-tc-l-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-l-3.ansi": {
+        "name": "candy-flappy-4-tc-l-3.ansi",
+        "category": "candy-flappy",
         "resolution": "172x32",
         "width": 172,
         "height": 32,
@@ -21463,9 +21463,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-m-1.ansi": {
-        "name": "honey-flap-4-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-m-1.ansi": {
+        "name": "candy-flappy-4-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -21475,9 +21475,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-m-2.ansi": {
-        "name": "honey-flap-4-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-m-2.ansi": {
+        "name": "candy-flappy-4-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -21487,9 +21487,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-s-1.ansi": {
-        "name": "honey-flap-4-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-s-1.ansi": {
+        "name": "candy-flappy-4-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "64x8",
         "width": 64,
         "height": 8,
@@ -21499,9 +21499,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-4-tc-s-2.ansi": {
-        "name": "honey-flap-4-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-4-tc-s-2.ansi": {
+        "name": "candy-flappy-4-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "63x10",
         "width": 63,
         "height": 10,
@@ -21511,9 +21511,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-16-l-1.ansi": {
-        "name": "honey-flap-5-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-16-l-1.ansi": {
+        "name": "candy-flappy-5-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -21523,9 +21523,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-5-16-m-1.ansi": {
-        "name": "honey-flap-5-16-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-16-m-1.ansi": {
+        "name": "candy-flappy-5-16-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -21535,9 +21535,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-5-256-l-1.ansi": {
-        "name": "honey-flap-5-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-256-l-1.ansi": {
+        "name": "candy-flappy-5-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "168x30",
         "width": 168,
         "height": 30,
@@ -21547,9 +21547,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-256-l-2.ansi": {
-        "name": "honey-flap-5-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-256-l-2.ansi": {
+        "name": "candy-flappy-5-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "164x30",
         "width": 164,
         "height": 30,
@@ -21559,9 +21559,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-256-m-1.ansi": {
-        "name": "honey-flap-5-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-256-m-1.ansi": {
+        "name": "candy-flappy-5-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -21571,9 +21571,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-256-m-2.ansi": {
-        "name": "honey-flap-5-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-256-m-2.ansi": {
+        "name": "candy-flappy-5-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -21583,9 +21583,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-256-s-1.ansi": {
-        "name": "honey-flap-5-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-256-s-1.ansi": {
+        "name": "candy-flappy-5-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "60x8",
         "width": 60,
         "height": 8,
@@ -21595,9 +21595,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-256-s-2.ansi": {
-        "name": "honey-flap-5-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-256-s-2.ansi": {
+        "name": "candy-flappy-5-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "58x9",
         "width": 58,
         "height": 9,
@@ -21607,9 +21607,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-tc-l-1.ansi": {
-        "name": "honey-flap-5-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-tc-l-1.ansi": {
+        "name": "candy-flappy-5-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "180x40",
         "width": 180,
         "height": 40,
@@ -21619,9 +21619,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-tc-l-2.ansi": {
-        "name": "honey-flap-5-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-tc-l-2.ansi": {
+        "name": "candy-flappy-5-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -21631,9 +21631,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-tc-m-1.ansi": {
-        "name": "honey-flap-5-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-tc-m-1.ansi": {
+        "name": "candy-flappy-5-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -21643,9 +21643,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-tc-m-2.ansi": {
-        "name": "honey-flap-5-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-tc-m-2.ansi": {
+        "name": "candy-flappy-5-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -21655,9 +21655,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-tc-s-1.ansi": {
-        "name": "honey-flap-5-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-tc-s-1.ansi": {
+        "name": "candy-flappy-5-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "54x8",
         "width": 54,
         "height": 8,
@@ -21667,9 +21667,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-5-tc-s-2.ansi": {
-        "name": "honey-flap-5-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-5-tc-s-2.ansi": {
+        "name": "candy-flappy-5-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "52x10",
         "width": 52,
         "height": 10,
@@ -21679,9 +21679,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-16-m-2.ansi": {
-        "name": "honey-flap-6-16-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-16-m-2.ansi": {
+        "name": "candy-flappy-6-16-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "85x21",
         "width": 85,
         "height": 21,
@@ -21691,9 +21691,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-6-16-s-1.ansi": {
-        "name": "honey-flap-6-16-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-16-s-1.ansi": {
+        "name": "candy-flappy-6-16-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "51x14",
         "width": 51,
         "height": 14,
@@ -21703,9 +21703,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-6-256-l-1.ansi": {
-        "name": "honey-flap-6-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-256-l-1.ansi": {
+        "name": "candy-flappy-6-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "156x30",
         "width": 156,
         "height": 30,
@@ -21715,9 +21715,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-256-l-2.ansi": {
-        "name": "honey-flap-6-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-256-l-2.ansi": {
+        "name": "candy-flappy-6-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "153x30",
         "width": 153,
         "height": 30,
@@ -21727,9 +21727,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-256-m-1.ansi": {
-        "name": "honey-flap-6-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-256-m-1.ansi": {
+        "name": "candy-flappy-6-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -21739,9 +21739,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-256-m-2.ansi": {
-        "name": "honey-flap-6-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-256-m-2.ansi": {
+        "name": "candy-flappy-6-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "72x20",
         "width": 72,
         "height": 20,
@@ -21751,9 +21751,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-256-s-1.ansi": {
-        "name": "honey-flap-6-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-256-s-1.ansi": {
+        "name": "candy-flappy-6-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "46x9",
         "width": 46,
         "height": 9,
@@ -21763,9 +21763,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-256-s-2.ansi": {
-        "name": "honey-flap-6-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-256-s-2.ansi": {
+        "name": "candy-flappy-6-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "50x8",
         "width": 50,
         "height": 8,
@@ -21775,9 +21775,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-tc-l-1.ansi": {
-        "name": "honey-flap-6-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-tc-l-1.ansi": {
+        "name": "candy-flappy-6-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "160x32",
         "width": 160,
         "height": 32,
@@ -21787,9 +21787,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-tc-l-2.ansi": {
-        "name": "honey-flap-6-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-tc-l-2.ansi": {
+        "name": "candy-flappy-6-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "158x38",
         "width": 158,
         "height": 38,
@@ -21799,9 +21799,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-tc-m-1.ansi": {
-        "name": "honey-flap-6-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-tc-m-1.ansi": {
+        "name": "candy-flappy-6-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -21811,21 +21811,21 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-tc-m-2.ansi": {
-        "name": "honey-flap-6-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-tc-m-2.ansi": {
+        "name": "candy-flappy-6-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x19",
         "width": 84,
         "height": 19,
         "depth": "truecolor",
         "colors": 15,
-        "description": "Bee satellite pass: star gradient, HoneyFlap-6 with solar wings and dish, light beam onto hex comb terrain",
+        "description": "Bee satellite pass: star gradient, CandyFlappy-6 with solar wings and dish, light beam onto hex comb terrain",
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-tc-s-1.ansi": {
-        "name": "honey-flap-6-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-tc-s-1.ansi": {
+        "name": "candy-flappy-6-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "42x12",
         "width": 42,
         "height": 12,
@@ -21835,9 +21835,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-tc-s-2.ansi": {
-        "name": "honey-flap-6-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-6-tc-s-2.ansi": {
+        "name": "candy-flappy-6-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "52x6",
         "width": 52,
         "height": 6,
@@ -21847,9 +21847,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-256-l-1.ansi": {
-        "name": "honey-flap-7-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-256-l-1.ansi": {
+        "name": "candy-flappy-7-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "190x34",
         "width": 190,
         "height": 34,
@@ -21859,9 +21859,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-256-l-2.ansi": {
-        "name": "honey-flap-7-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-256-l-2.ansi": {
+        "name": "candy-flappy-7-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "180x32",
         "width": 180,
         "height": 32,
@@ -21871,9 +21871,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-256-m-1.ansi": {
-        "name": "honey-flap-7-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-256-m-1.ansi": {
+        "name": "candy-flappy-7-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -21883,9 +21883,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-256-m-2.ansi": {
-        "name": "honey-flap-7-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-256-m-2.ansi": {
+        "name": "candy-flappy-7-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -21895,9 +21895,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-256-s-1.ansi": {
-        "name": "honey-flap-7-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-256-s-1.ansi": {
+        "name": "candy-flappy-7-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -21907,9 +21907,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-256-s-2.ansi": {
-        "name": "honey-flap-7-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-256-s-2.ansi": {
+        "name": "candy-flappy-7-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -21919,9 +21919,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-tc-l-1.ansi": {
-        "name": "honey-flap-7-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-tc-l-1.ansi": {
+        "name": "candy-flappy-7-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "200x36",
         "width": 200,
         "height": 36,
@@ -21931,9 +21931,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-tc-l-2.ansi": {
-        "name": "honey-flap-7-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-tc-l-2.ansi": {
+        "name": "candy-flappy-7-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "188x38",
         "width": 188,
         "height": 38,
@@ -21943,9 +21943,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-tc-m-1.ansi": {
-        "name": "honey-flap-7-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-tc-m-1.ansi": {
+        "name": "candy-flappy-7-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -21955,9 +21955,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-tc-m-2.ansi": {
-        "name": "honey-flap-7-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-tc-m-2.ansi": {
+        "name": "candy-flappy-7-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -21967,9 +21967,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-tc-s-1.ansi": {
-        "name": "honey-flap-7-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-tc-s-1.ansi": {
+        "name": "candy-flappy-7-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -21979,9 +21979,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-7-tc-s-2.ansi": {
-        "name": "honey-flap-7-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-7-tc-s-2.ansi": {
+        "name": "candy-flappy-7-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -21991,9 +21991,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-16-l-1.ansi": {
-        "name": "honey-flap-8-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-16-l-1.ansi": {
+        "name": "candy-flappy-8-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -22003,9 +22003,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-8-16-m-2.ansi": {
-        "name": "honey-flap-8-16-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-16-m-2.ansi": {
+        "name": "candy-flappy-8-16-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -22015,9 +22015,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-8-16-s-2.ansi": {
-        "name": "honey-flap-8-16-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-16-s-2.ansi": {
+        "name": "candy-flappy-8-16-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -22027,9 +22027,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-8-256-l-1.ansi": {
-        "name": "honey-flap-8-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-256-l-1.ansi": {
+        "name": "candy-flappy-8-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "158x38",
         "width": 158,
         "height": 38,
@@ -22039,9 +22039,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-256-l-2.ansi": {
-        "name": "honey-flap-8-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-256-l-2.ansi": {
+        "name": "candy-flappy-8-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "196x44",
         "width": 196,
         "height": 44,
@@ -22051,9 +22051,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-256-m-1.ansi": {
-        "name": "honey-flap-8-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-256-m-1.ansi": {
+        "name": "candy-flappy-8-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "82x24",
         "width": 82,
         "height": 24,
@@ -22063,9 +22063,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-256-m-2.ansi": {
-        "name": "honey-flap-8-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-256-m-2.ansi": {
+        "name": "candy-flappy-8-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -22075,9 +22075,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-256-s-1.ansi": {
-        "name": "honey-flap-8-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-256-s-1.ansi": {
+        "name": "candy-flappy-8-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -22087,9 +22087,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-256-s-2.ansi": {
-        "name": "honey-flap-8-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-256-s-2.ansi": {
+        "name": "candy-flappy-8-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -22099,9 +22099,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-tc-l-1.ansi": {
-        "name": "honey-flap-8-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-tc-l-1.ansi": {
+        "name": "candy-flappy-8-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "156x40",
         "width": 156,
         "height": 40,
@@ -22111,9 +22111,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-tc-l-2.ansi": {
-        "name": "honey-flap-8-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-tc-l-2.ansi": {
+        "name": "candy-flappy-8-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "200x46",
         "width": 200,
         "height": 46,
@@ -22123,9 +22123,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-tc-m-1.ansi": {
-        "name": "honey-flap-8-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-tc-m-1.ansi": {
+        "name": "candy-flappy-8-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -22135,9 +22135,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-tc-m-2.ansi": {
-        "name": "honey-flap-8-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-tc-m-2.ansi": {
+        "name": "candy-flappy-8-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -22147,9 +22147,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-tc-s-1.ansi": {
-        "name": "honey-flap-8-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-tc-s-1.ansi": {
+        "name": "candy-flappy-8-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -22159,9 +22159,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-8-tc-s-2.ansi": {
-        "name": "honey-flap-8-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-8-tc-s-2.ansi": {
+        "name": "candy-flappy-8-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -22171,9 +22171,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-16-l-2.ansi": {
-        "name": "honey-flap-9-16-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-16-l-2.ansi": {
+        "name": "candy-flappy-9-16-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -22183,9 +22183,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-9-256-l-1.ansi": {
-        "name": "honey-flap-9-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-256-l-1.ansi": {
+        "name": "candy-flappy-9-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "156x32",
         "width": 156,
         "height": 32,
@@ -22195,9 +22195,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-256-l-2.ansi": {
-        "name": "honey-flap-9-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-256-l-2.ansi": {
+        "name": "candy-flappy-9-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "168x36",
         "width": 168,
         "height": 36,
@@ -22207,9 +22207,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-256-m-1.ansi": {
-        "name": "honey-flap-9-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-256-m-1.ansi": {
+        "name": "candy-flappy-9-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -22219,9 +22219,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-256-m-2.ansi": {
-        "name": "honey-flap-9-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-256-m-2.ansi": {
+        "name": "candy-flappy-9-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "82x24",
         "width": 82,
         "height": 24,
@@ -22231,9 +22231,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-256-s-1.ansi": {
-        "name": "honey-flap-9-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-256-s-1.ansi": {
+        "name": "candy-flappy-9-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -22243,9 +22243,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-256-s-2.ansi": {
-        "name": "honey-flap-9-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-256-s-2.ansi": {
+        "name": "candy-flappy-9-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
@@ -22255,9 +22255,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-tc-l-1.ansi": {
-        "name": "honey-flap-9-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-tc-l-1.ansi": {
+        "name": "candy-flappy-9-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "176x40",
         "width": 176,
         "height": 40,
@@ -22267,9 +22267,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-tc-l-2.ansi": {
-        "name": "honey-flap-9-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-tc-l-2.ansi": {
+        "name": "candy-flappy-9-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "184x42",
         "width": 184,
         "height": 42,
@@ -22279,9 +22279,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-tc-m-1.ansi": {
-        "name": "honey-flap-9-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-tc-m-1.ansi": {
+        "name": "candy-flappy-9-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -22291,9 +22291,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-tc-m-2.ansi": {
-        "name": "honey-flap-9-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-tc-m-2.ansi": {
+        "name": "candy-flappy-9-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -22303,9 +22303,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-tc-s-1.ansi": {
-        "name": "honey-flap-9-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-tc-s-1.ansi": {
+        "name": "candy-flappy-9-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -22315,9 +22315,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-tc-s-2.ansi": {
-        "name": "honey-flap-9-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-9-tc-s-2.ansi": {
+        "name": "candy-flappy-9-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -22327,9 +22327,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-16-l-1.ansi": {
-        "name": "honey-flap-10-16-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-16-l-1.ansi": {
+        "name": "candy-flappy-10-16-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -22339,9 +22339,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-10-16-m-2.ansi": {
-        "name": "honey-flap-10-16-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-16-m-2.ansi": {
+        "name": "candy-flappy-10-16-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "80x19",
         "width": 80,
         "height": 19,
@@ -22351,9 +22351,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-10-16-s-1.ansi": {
-        "name": "honey-flap-10-16-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-16-s-1.ansi": {
+        "name": "candy-flappy-10-16-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "56x11",
         "width": 56,
         "height": 11,
@@ -22363,9 +22363,9 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-l-1.ansi": {
-        "name": "honey-flap-10-256-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-l-1.ansi": {
+        "name": "candy-flappy-10-256-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -22375,9 +22375,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-l-2.ansi": {
-        "name": "honey-flap-10-256-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-l-2.ansi": {
+        "name": "candy-flappy-10-256-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "185x38",
         "width": 185,
         "height": 38,
@@ -22387,9 +22387,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-l-3.ansi": {
-        "name": "honey-flap-10-256-l-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-l-3.ansi": {
+        "name": "candy-flappy-10-256-l-3.ansi",
+        "category": "candy-flappy",
         "resolution": "195x41",
         "width": 195,
         "height": 41,
@@ -22399,9 +22399,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-m-1.ansi": {
-        "name": "honey-flap-10-256-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-m-1.ansi": {
+        "name": "candy-flappy-10-256-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -22411,9 +22411,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-m-2.ansi": {
-        "name": "honey-flap-10-256-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-m-2.ansi": {
+        "name": "candy-flappy-10-256-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -22423,9 +22423,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-s-1.ansi": {
-        "name": "honey-flap-10-256-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-s-1.ansi": {
+        "name": "candy-flappy-10-256-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -22435,9 +22435,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-s-2.ansi": {
-        "name": "honey-flap-10-256-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-s-2.ansi": {
+        "name": "candy-flappy-10-256-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -22447,9 +22447,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-256-s-3.ansi": {
-        "name": "honey-flap-10-256-s-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-256-s-3.ansi": {
+        "name": "candy-flappy-10-256-s-3.ansi",
+        "category": "candy-flappy",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -22459,9 +22459,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-l-1.ansi": {
-        "name": "honey-flap-10-tc-l-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-l-1.ansi": {
+        "name": "candy-flappy-10-tc-l-1.ansi",
+        "category": "candy-flappy",
         "resolution": "200x42",
         "width": 200,
         "height": 42,
@@ -22471,9 +22471,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-l-2.ansi": {
-        "name": "honey-flap-10-tc-l-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-l-2.ansi": {
+        "name": "candy-flappy-10-tc-l-2.ansi",
+        "category": "candy-flappy",
         "resolution": "205x44",
         "width": 205,
         "height": 44,
@@ -22483,9 +22483,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-m-1.ansi": {
-        "name": "honey-flap-10-tc-m-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-m-1.ansi": {
+        "name": "candy-flappy-10-tc-m-1.ansi",
+        "category": "candy-flappy",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -22495,9 +22495,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-m-2.ansi": {
-        "name": "honey-flap-10-tc-m-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-m-2.ansi": {
+        "name": "candy-flappy-10-tc-m-2.ansi",
+        "category": "candy-flappy",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -22507,9 +22507,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-m-3.ansi": {
-        "name": "honey-flap-10-tc-m-3.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-m-3.ansi": {
+        "name": "candy-flappy-10-tc-m-3.ansi",
+        "category": "candy-flappy",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -22519,9 +22519,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-s-1.ansi": {
-        "name": "honey-flap-10-tc-s-1.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-s-1.ansi": {
+        "name": "candy-flappy-10-tc-s-1.ansi",
+        "category": "candy-flappy",
         "resolution": "64x9",
         "width": 64,
         "height": 9,
@@ -22531,9 +22531,9 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-10-tc-s-2.ansi": {
-        "name": "honey-flap-10-tc-s-2.ansi",
-        "category": "honey-flap",
+    "candy-flappy/candy-flappy-10-tc-s-2.ansi": {
+        "name": "candy-flappy-10-tc-s-2.ansi",
+        "category": "candy-flappy",
         "resolution": "58x13",
         "width": 58,
         "height": 13,

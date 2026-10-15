@@ -58,10 +58,10 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-33 sugar-skate + sugar-wishlist + sugar-stash: adopted candy-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-calendar + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 sugar-tick + sugar-post + candy-serve: adopted candy-async (PR #915)
-- step-36 candy-flip + candy-kit + honey-bounce + honey-flap: adopted candy-testing (PR #916)
+- step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-mines, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, honey-flap).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-mines, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).

@@ -1,7 +1,7 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
 Sourced from 11 update docs: candy-kit, candy-flip, sugar-post, candy-query,
-candy-mines, candy-tetris, candy-mold, honey-flap, super-candy, sugar-tick.
+candy-mines, candy-tetris, candy-mold, candy-flappy, super-candy, sugar-tick.
 
 ---
 

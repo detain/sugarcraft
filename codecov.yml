@@ -143,8 +143,8 @@ flag_management:
     - name: candy-fuzzy
       paths: ["candy-fuzzy/src/**"]
       carryforward: true
-    - name: honey-flap
-      paths: ["honey-flap/src/**"]
+    - name: candy-flappy
+      paths: ["candy-flappy/src/**"]
       carryforward: true
     - name: candy-hermit
       paths: ["candy-hermit/src/**"]
@@ -439,12 +439,12 @@ component_management:
         - "candy-fuzzy/src/**"
       flag_regexes:
         - "^candy-fuzzy$"
-    - component_id: honey-flap
-      name: honey-flap
+    - component_id: candy-flappy
+      name: candy-flappy
       paths:
-        - "honey-flap/src/**"
+        - "candy-flappy/src/**"
       flag_regexes:
-        - "^honey-flap$"
+        - "^candy-flappy$"
     - component_id: candy-hermit
       name: candy-hermit
       paths:

@@ -136,7 +136,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyServe** | candy + serve = self-hostable Git server. |
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
 | **SugarStash** | stash = the git verb. clever. |
-| **HoneyFlap** | honey (bee) + flap = Flappy clone. ✓✓ |
+| **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |
 | **CandyMold** | candy + mold = the project skeleton you pour into. ✓✓ |
 | **CandyMosaic** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |
 | **CandyVt**     | candy + vt = virtual terminal emulator. "vt" is the established term. |
@@ -231,7 +231,7 @@ vocabulary above — these three remain reserved as the safe defaults.
 |---|---|---|
 | **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyShell), markdown (CandyShine) |
 | **Sugar-** | components / data / forms / apps | components (SugarBits), charts (SugarCharts) |
-| **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (HoneyFlap) |
+| **Honey-** | math / physics / motion | spring physics (HoneyBounce); the Flappy clone left this prefix family in the 2026-10 rename (now CandyFlappy) |
 
 `Candy-` (Files) is the naming for the file manager (formerly SuperCandy).
 Don't mint new prefixes without a discussion in this file.

@@ -138,7 +138,7 @@ interface Model
 - `sugar-dash/src/Modules/*` (multiple)
 
 **honey-* libs (2):**
-- `honey-flap/src/Game.php`
+- `candy-flappy/src/Game.php`
 
 ### Key Insight
 

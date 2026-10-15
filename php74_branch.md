@@ -402,7 +402,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   **4.1d** `Vim/Viewport/TextArea/Scrollbar`+root (≈18 → a/b).
 - **4.2** `candy-hermit`(7,med, ansi+pty+sprinkles), `candy-freeze`(10,high,
   ansi+buffer+core+shine+sprinkles).
-- **4.3** `honey-bounce`(12,high, core+palette; enum‑with‑methods), then `honey-flap`(6,low,
+- **4.3** `honey-bounce`(12,high, core+palette; enum‑with‑methods), then `candy-flappy`(6,low,
   core+sprinkles+honey‑bounce).
 - **4.4** `candy-shell`(41,med, core+forms+fuzzy+pty+shine+sprinkles; symfony console→^5.4,
   src attributes) → **4.4a** `Command/` (13→a/b), **4.4b** `Model/` (8), **4.4c** `Attribute/`
@@ -527,7 +527,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void |
 | candy-mold | low | 1 | ctor-promotion, match, readonly |
 | candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly | <!-- @rename-keep historical provenance -->
-| honey-flap | low | 6 | ctor-promotion, named-args, readonly |
+| candy-flappy | low | 6 | ctor-promotion, named-args, readonly |
 | sugar-boxer | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |
 | sugar-calendar | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |
 | sugar-crumbs | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |

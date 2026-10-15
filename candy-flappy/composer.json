@@ -1,0 +1,53 @@
+{
+    "name": "sugarcraft/candy-flappy",
+    "description": "Flappy-Bird-style game \u2014 port of kbrgl/flapioca on the SugarCraft stack.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "game",
+        "flappy",
+        "flapioca",
+        "honeybounce",
+        "physics",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-flappy.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-flappy/issues",
+        "source": "https://github.com/sugarcraft/candy-flappy",
+        "docs": "https://sugarcraft.github.io/lib/candy-flappy.html"
+    },
+    "bin": [
+        "bin/candy-flappy"
+    ],
+    "require": {
+        "php": ">=8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/honey-bounce": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Flappy\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Flappy\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -80,7 +80,7 @@ To implement an item:
 | **candy-tetris** | [research/libraries/candy-tetris-research.md](libraries/candy-tetris-research.md) | 1. Full SRS, 2. T-Spin detection, 3. B2B bonus |
 | **candy-mines** | [research/libraries/candy-mines-research.md](libraries/candy-mines-research.md) | 1. Chord clicks, 2. Win detection, 3. Timer precision |
 | **honey-bounce** | [research/libraries/honey-bounce-research.md](libraries/honey-bounce-research.md) | 1. SpringConfig presets, 2. CubicBezier, 3. SpringChain |
-| **honey-flap** | [research/libraries/honey-flap-research.md](libraries/honey-flap-research.md) | 1. Bird rotation, 2. Collision tests, 3. Variable gap |
+| **candy-flappy** | [research/libraries/candy-flappy-research.md](libraries/candy-flappy-research.md) | 1. Bird rotation, 2. Collision tests, 3. Variable gap |
 | **candy-flip** | [research/libraries/candy-flip-research.md](libraries/candy-flip-research.md) | 1. imagecreatefromstring, 2. Frame timing, 3. Floyd-Steinberg |
 
 ### Utilities
@@ -168,7 +168,7 @@ To implement an item:
 - **candy-tetris**: Full SRS, T-Spin detection, B2B bonus
 - **candy-mines**: Chord clicks, improved win detection
 - **honey-bounce**: SpringConfig presets, CubicBezier, SpringChain
-- **honey-flap**: Bird rotation, collision tests
+- **candy-flappy**: Bird rotation, collision tests
 
 ---
 

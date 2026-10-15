@@ -209,7 +209,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 10: sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, honey-flap, super-candy
+### Group 10: sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
@@ -217,7 +217,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | sugar-readline | 139 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | sugar-wishlist | 70 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | honey-bounce | 121 ✓ | APPROVE | 0 | 3 | 2 | 0 |
-| honey-flap | 31 ✓ | APPROVE | 0 | 2 | 2 | 0 |
+| candy-flappy | 31 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | super-candy | 187 ✓ | REQUEST_CHANGES | 0 | 4 | 5 | 0 |
 
 **sugar-boxer** — Box renderer. Issues: `Node::with()` uses `0 ?: $existing` pattern so `0` values can't be set; `maxWidth`/`maxHeight` stored but never used.
@@ -228,7 +228,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **honey-bounce** — Physics library. Issues: `SpringChain::tick()` mutates internal array elements in-place; `CubicBezier::easeInOutCirc()` has duplicate control points (same as `easeInOutExpo` — copy-paste error from CSS spec); `SpringConfig` has public mutable properties.
 
-**honey-flap** — Flappy Bird. Issues: Score detection has fragile timing dependency on `BIRD_COL - 1`; `saveHighScore()` returns `true` on write failure; `Bird` constants (FLAP_KICK=-22.0, GRAVITY=70.0) are magic numbers.
+**candy-flappy** — Flappy Bird. Issues: Score detection has fragile timing dependency on `BIRD_COL - 1`; `saveHighScore()` returns `true` on write failure; `Bird` constants (FLAP_KICK=-22.0, GRAVITY=70.0) are magic numbers.
 
 **super-candy** — File manager. Issues: `Manager` at 915 lines is a god object; `Renderer::render()` has unreadable 200+ char ternary; constructor has 14 parameters; `reverseAction()` uses fragile string prefix matching; `@` error suppression in `FsLister`.
 
@@ -306,7 +306,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### Medium Priority (Next Sprint)
 
 5. **`TickMsg` base class for game packages**
-   - candy-tetris, candy-mines, honey-flap all define structurally identical tick marker classes
+   - candy-tetris, candy-mines, candy-flappy all define structurally identical tick marker classes
    - Extract to `SugarCraft\Core\Msg\TickMsg`
 
 6. **`TestCase` base + `StreamHelper` trait** (improvements.md §4.3)
@@ -360,7 +360,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **Constructor bloat** | MEDIUM | super-candy (14), sugar-stash (22) | DTO/value object refactor needed |
 | **Static singletons** | LOW | candy-mouse, candy-forms | Inject via constructor or clear test cleanup |
 | **Inconsistent mutability** | LOW | Multiple packages | Some classes readonly, some not in same package |
-| **Magic numbers** | LOW | honey-flap, candy-tetris | Comments explaining gameplay constants |
+| **Magic numbers** | LOW | candy-flappy, candy-tetris | Comments explaining gameplay constants |
 | **@ suppression** | LOW | super-candy, candy-pty | Use explicit error handling |
 
 ---
@@ -439,13 +439,13 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 9. **[REFACTOR]** sugar-boxer: Fix `with()` to use `null` sentinel so `0` values can be set
 10. **[REFACTOR]** sugar-crumbs: Fix `NavStack::updateTop()` and `setItems()` to return clones
 11. **[REFACTOR]** sugar-readline: Make `Highlight::highlight()` throw unsupported exception instead of silently returning no styling
-12. **[CLEANUP]** honey-flap: Fix `saveHighScore()` to return false on write failure
-13. **[CLEANUP]** honey-flap: Fix score detection to not rely on exact tick timing
+12. **[CLEANUP]** candy-flappy: Fix `saveHighScore()` to return false on write failure
+13. **[CLEANUP]** candy-flappy: Fix score detection to not rely on exact tick timing
 
 ### Medium Term (Next Month)
 
 14. **[EXTRACT]** Create `SugarCraft\Core\I18n\LangFactory` and migrate 33 Lang.php files
-15. **[EXTRACT]** Extract `TickMsg` base class from candy-tetris/candy-mines/honey-flap
+15. **[EXTRACT]** Extract `TickMsg` base class from candy-tetris/candy-mines/candy-flappy
 16. **[EXTRACT]** Create `SugarCraft\Core\Tests\TestCase` base + `StreamHelper` trait
 17. **[DOCS]** Add CALIBER_LEARNINGS.md to sugar-calendar
 18. **[FIX]** sugar-skate: Replace reflection in YamlImporter with public method
@@ -481,7 +481,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 2. **honey-bounce**: Fix `easeInOutCirc` duplicate value (1 line change)
 3. **sugar-glow**: Read version from `composer.json` instead of hardcoding
 4. **sugar-readline**: Make `Highlight::highlight()` throw `BadMethodCallException`
-5. **honey-flap**: Make `saveHighScore()` return `false` when `file_put_contents()` fails
+5. **candy-flappy**: Make `saveHighScore()` return `false` when `file_put_contents()` fails
 6. **candy-tetris**: Add `escapeshellarg()` to `Repo::branches()` path
 7. **sugar-tick**: Add `close()` method to SqliteBackend (even if a no-op)
 8. **sugar-calendar**: Add `CALIBER_LEARNINGS.md` (copy from another package)
@@ -571,7 +571,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 7 | sugar-calendar, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
 | 9 | sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
-| 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, honey-flap, super-candy | 583 | ⚠️ multiple issues |
+| 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 
 ---

@@ -229,12 +229,12 @@ For each phase:
 **Files:** `sugar-reel/src/AudioPlayer.php:145-152`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.18 🔴 honey-flap: Score fires at wrong x position (Item 1.1)
+#### 0.18 🔴 candy-flappy: Score fires at wrong x position (Item 1.1)
 
 **Plan:** `findings/plan_honey-flap.md` — Item 1.1
 **Issue:** `Game.php:273` fires score at x=7, not x=8
 **Fix:** Change from `> 7` to `> 8` (or whatever the correct threshold is per game mechanics)
-**Files:** `honey-flap/src/Game.php:273`
+**Files:** `candy-flappy/src/Game.php:273`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---

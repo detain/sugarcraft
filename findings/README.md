@@ -21,7 +21,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **35+ mutate() re-implementations** — every with*() builder duplicates the same 4-line pattern
 - **AsyncOps duplication** — candy-async's AsyncOps reproduced in candy-buffer, sugar-dash, others
 - **Clamping logic** — min/max clamping copied across 10+ projects with no shared utility
-- **Style object allocation** — hot-render loops creating Style chains per-frame (candy-mold, honey-flap)
+- **Style object allocation** — hot-render loops creating Style chains per-frame (candy-mold, candy-flappy)
 - **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-serve, candy-shell)
 - **array_map over children** — double/triple iteration over same child array (sugar-boxer, sugar-table)
 - **WeakMap/registry patterns** — per-project implementations instead of shared candy-core utility
@@ -49,7 +49,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-gallery | FFI buffer not explicitly freed | FFIDecoder.php | C memory must be explicitly free()'d — leak |
 | sugar-stickers | UTF-8 multibyte corruption in sanitize | Column.php:112, FlexBox.php:302 | Bytes 0x80-0x9F stripped — corrupts CJK text |
 | sugar-boxer | Division by zero in distribute() | SugarBoxer.php:792 | 0/0 = NaN when all weights are zero |
-| honey-flap | Collision/scoring frame mismatch | Game.php:273, Pipe.php:33 | Score increments one frame before collision fires |
+| candy-flappy | Collision/scoring frame mismatch | Game.php:273, Pipe.php:33 | Score increments one frame before collision fires |
 | candy-serve | Hardcoded LFS bearer token | LFSHandler.php:200 | "lfs-token" placeholder in all LFS responses |
 | candy-serve | Path traversal in SSH repo lookup | SSHServer.php:97 | Regex allows .. in repo path |
 
@@ -77,8 +77,8 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-spark | Empty data set produces invalid output | Sparkline.php:42 | No guard for empty $data |
 | sugar-toast | Viewport overflow not handled | Toast.php | Toast wider than terminal width overflows |
 | sugar-toast | Auto-dismiss timer not cancellable | Toast.php | Cannot extend or cancel dismiss timer |
-| honey-flap | Non-atomic high score writes | Game.php:165 | Crash mid-write corrupts scores file |
-| honey-flap | Rand closure exception not caught | Game.php:262 | Broken injected closure crashes game with no recovery |
+| candy-flappy | Non-atomic high score writes | Game.php:165 | Crash mid-write corrupts scores file |
+| candy-flappy | Rand closure exception not caught | Game.php:262 | Broken injected closure crashes game with no recovery |
 | candy-vcr | FrameStream mutation during iteration | TapeToGif.php:104 | Public properties mutated by generator mid-iteration |
 | candy-vcr | Negative dt not validated | RelativeFormat.php:201 | Timestamps can go backwards |
 | sugar-readline | History search O(n) — no indexing | History.php | 10K+ history entries = slow Ctrl+R |
@@ -101,7 +101,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-gallery | 3 HIGH, 6 MED, 2 LOW | Path traversal, FFI memory, no format fallback |
 | candy-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
 | candy-mold | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |
-| honey-flap | 2 HIGH, 3 MED, 5 LOW | Collision off-by-one, non-atomic file I/O |
+| candy-flappy | 2 HIGH, 3 MED, 5 LOW | Collision off-by-one, non-atomic file I/O |
 | sugar-stickers | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |
 | sugar-crush | 2 HIGH, 3 MED, 2 LOW | EOF buffer drain, mouse coordinate off-by-one |
 | sugar-readline | 0 HIGH, 5 MED, 6 LOW | Unbounded history, blocking save, Vi cursor off-by-one |
@@ -139,7 +139,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 ### 3. Performance Optimization
 
-- Cache Style objects in hot render loops (candy-mold, honey-flap, candy-shine)
+- Cache Style objects in hot render loops (candy-mold, candy-flappy, candy-shine)
 - Pre-compute visible column indices before row iteration (sugar-stickers, sugar-table)
 - Add caching to SmithWatermanMatcher in fuzzy filter (candy-shell, sugar-crush)
 - Use array rewind + single-pass iteration instead of multiple array_map passes
@@ -148,7 +148,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 - Most libs are PHP 8.3+ fully compatible
 - No uses of deprecated features detected
-- Consider `readonly class` for immutable value objects (Bird, Pipe, TickMsg in honey-flap, etc.)
+- Consider `readonly class` for immutable value objects (Bird, Pipe, TickMsg in candy-flappy, etc.)
 - Consider first-class callable syntax (ClassName::method) where closures only invoke constructors
 
 ### 5. Missing Features Priority
@@ -176,7 +176,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - `README.md` — this file (collation of all findings)
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
 - `candy-ansi.md` through `candy-mouse.md` — 34 candy-* project audits
-- `honey-bounce.md`, `honey-flap.md` — 2 honey-* project audits
+- `honey-bounce.md`, `candy-flappy.md` — 2 honey-* project audits
 - `sugar-bits.md` through `sugar-wishlist.md` — 22 sugar-* project audits (incl. `sugar-skate.md`, first-ever audit, 2026-09-15, E719)
 - `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08
 

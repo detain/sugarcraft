@@ -2202,172 +2202,172 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-tetris-9-tc-s-3.ansi` | 56x15 | truecolor | 80 | lava lamp flow test: gradient wax rising as O, T and I blobs through magenta-to-amber liquor |
 <!-- END candy-tetris SLOTS -->
 
-<!-- BEGIN honey-flap SLOTS -->
-### honey-flap — slot series
+<!-- BEGIN candy-flappy SLOTS -->
+### candy-flappy — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `honey-flap-1-16-l-1.ansi` | 132x30 | 16 | 13 | Grand meadow panorama: five gate columns with gap arrows, twin sun halo, swarm, flower belt, wide logo |
-| `honey-flap-1-16-l-2.ansi` | 130x28 | 16 | 18 | Honey express: night stars, striped hive tower, beeline dotted path into a hex portal |
-| `honey-flap-1-16-m-1.ansi` | 80x22 | 16 | 13 | Full game screen: clouds, three pipe gates with mouths, bee, HUD, flowers, footer block logo |
-| `honey-flap-1-16-s-1.ansi` | 60x16 | 16 | 13 | Small 16-color gate run: two green pipes, gold bee threading the gap, block logo on grass |
-| `honey-flap-1-256-l-1.ansi` | 140x32 | 256 | 29 | Golden corridor: banded sunset, five dark gates, bee silhouette with spark trail, pillar of light on honey ground |
-| `honey-flap-1-256-l-2.ansi` | 136x30 | 256 | 21 | Honeyfall: giant labeled jar pouring a wobbling stream into a rippled pool with floating comb cells |
-| `honey-flap-1-256-m-1.ansi` | 84x24 | 256 | 24 | Sunset run over water: ringed amber sun, black gates, shimmering reflection bands |
-| `honey-flap-1-256-m-2.ansi` | 80x23 | 256 | 19 | Inside the comb: amber hex-wall cave, full honey cells, rippling pool below glowing title |
-| `honey-flap-1-256-s-1.ansi` | 64x12 | 256 | 18 | Banded dusk sky, ringed setting sun, black pipe silhouettes and gradient gold block title |
-| `honey-flap-1-256-s-2.ansi` | 58x8 | 256 | 13 | Loading screen: hex-cell nectar progress bar at 80 percent, bee hovering over flower row |
-| `honey-flap-1-tc-l-1.ansi` | 168x38 | truecolor | 81 | Flight home at dusk: radiant sun, tinted clouds, hive castle windows, mist, flowered slope, hero bee and shadowed logo |
-| `honey-flap-1-tc-l-2.ansi` | 170x36 | truecolor | 169 | Nectar nebula: starfield and nebula haze, giant glowing hex portal, rainbow wing trail, ringed planet, spectrum block title |
-| `honey-flap-1-tc-m-1.ansi` | 86x24 | truecolor | 78 | Truecolor dawn: layered hill silhouettes, glowing sun, shaded green gates, sparkle trail bee |
-| `honey-flap-1-tc-m-2.ansi` | 82x22 | truecolor | 77 | Flower rush: teal sky into meadow of colored blossoms, diving bee with fading nectar trail |
-| `honey-flap-1-tc-s-1.ansi` | 66x10 | truecolor | 167 | Truecolor radial sun glow with light rays, gold bee cresting the flare, warm gradient logo |
-| `honey-flap-1-tc-s-2.ansi` | 62x9 | truecolor | 67 | Violet night glide: cratered moon, starfield, fading wing-blur arcs trailing the bee |
-| `honey-flap-10-16-l-1.ansi` | 150x32 | 16 | 14 | trampoline hall panorama: seven bays of coloured nets, bounce arcs, striped pads |
-| `honey-flap-10-16-m-2.ansi` | 80x19 | 16 | 11 | penny-farthing courier on the hill road, satchel of pollen parcels |
-| `honey-flap-10-16-s-1.ansi` | 56x11 | 16 | 8 | foxglove bell-tower row: five purple spikes rung with gold bells, bumblebee pollination run |
-| `honey-flap-10-256-l-1.ansi` | 190x40 | 256 | 32 | storm drain epic: rain canyon perspective, five paper hulls, manhole vortex |
-| `honey-flap-10-256-l-2.ansi` | 185x38 | 256 | 32 | orchard ladder into the blossom cloud: giant cherry canopy of pink light |
-| `honey-flap-10-256-l-3.ansi` | 195x41 | 256 | 39 | haystack fort at golden hour: pyramided bales, long shadows, haul-train line |
-| `honey-flap-10-256-m-1.ansi` | 84x22 | 256 | 32 | dusk foxglove row in full bloom, glowing bells and pollen trail under a gold bee |
-| `honey-flap-10-256-m-2.ansi` | 84x23 | 256 | 26 | night fair carousel of flower-horses on brass poles under a striped canopy |
-| `honey-flap-10-256-s-1.ansi` | 60x12 | 256 | 11 | tether-drift mini plate: suited bee floating free of a hex resupply pod, planet rim below |
-| `honey-flap-10-256-s-2.ansi` | 62x12 | 256 | 20 | monsoon market alley strip: striped awnings, rain needles, puddle shine |
-| `honey-flap-10-256-s-3.ansi` | 60x12 | 256 | 18 | 3m springboard over a pool of liquid amber, bee mid-pike, ripple rings |
-| `honey-flap-10-tc-l-1.ansi` | 200x42 | truecolor | 137 | tether-drift epic: astronaut bee drifting from hex pod K-7 over the world's limb |
-| `honey-flap-10-tc-l-2.ansi` | 205x44 | truecolor | 74 | grand carousel of flower-horses: striped dome, motion ghosts, calliope night |
-| `honey-flap-10-tc-m-1.ansi` | 88x24 | truecolor | 30 | trampoline park interior: four multicolour nets, bees on dotted bounce parabolas |
-| `honey-flap-10-tc-m-2.ansi` | 86x21 | truecolor | 38 | foghorn station in a truecolor gale: slant rain, swell, sound rings off the horn |
-| `honey-flap-10-tc-m-3.ansi` | 86x22 | truecolor | 78 | amber pool dive plate: tiled deck, flexing board, depth bands into molten gold |
-| `honey-flap-10-tc-s-1.ansi` | 64x9 | truecolor | 17 | penny-farthing courier: big-wheel bee with parcel satchel, warm speedlines |
-| `honey-flap-10-tc-s-2.ansi` | 58x13 | truecolor | 25 | orchard ladder leaning into a truecolor blossom cloud, petals adrift |
-| `honey-flap-2-16-l-1.ansi` | 160x34 | 16 | 8 | full arcade frame: playfield, rounded border, trail arc |
-| `honey-flap-2-16-m-1.ansi` | 84x22 | 16 | 8 | meadow panorama with sun, flowers and three pipes |
-| `honey-flap-2-16-m-2.ansi` | 80x20 | 16 | 8 | game-over score card on honeycomb wallpaper |
-| `honey-flap-2-16-s-2.ansi` | 62x6 | 16 | 6 | double-line HUD card with mini pipes and flight trail |
-| `honey-flap-2-256-l-1.ansi` | 180x40 | 256 | 18 | nocturne hive skyline with glowing comb windows and moon |
-| `honey-flap-2-256-l-2.ansi` | 170x32 | 256 | 22 | arcade cabinet bezel, gradient screen and joystick |
-| `honey-flap-2-256-m-1.ansi` | 88x24 | 256 | 19 | dusk meadow gradient with low sun and pipe silhouettes |
-| `honey-flap-2-256-m-2.ansi` | 78x18 | 256 | 8 | flap physics chart with sawtooth arcs and kick labels |
-| `honey-flap-2-256-s-1.ansi` | 52x8 | 256 | 6 | amber gradient pour bar with dripping honey drops |
-| `honey-flap-2-256-s-2.ansi` | 54x12 | 256 | 8 | difficulty ruler mapping gap heights 6/5/4/3 to score |
-| `honey-flap-2-256-s-3.ansi` | 56x10 | 256 | 5 | honey-flow equalizer of falling amber droplets |
-| `honey-flap-2-tc-l-1.ansi` | 200x44 | truecolor | 107 | grand meadow panorama: sun, clouds, flowers, banner |
-| `honey-flap-2-tc-l-2.ansi` | 190x36 | truecolor | 73 | vignette game-over scene with cracked hex and score panel |
-| `honey-flap-2-tc-m-1.ansi` | 86x22 | truecolor | 22 | dark-to-amber pipe corridor with light shaft through gap |
-| `honey-flap-2-tc-m-2.ansi` | 84x24 | truecolor | 108 | glowing truecolor hex comb field, filled bonus cells |
-| `honey-flap-2-tc-s-1.ansi` | 50x7 | truecolor | 80 | warm amber wave field with drifting wordmark |
-| `honey-flap-2-tc-s-2.ansi` | 55x14 | truecolor | 64 | radial sun disc with bee flying sunward |
-| `honey-flap-2-tc-s-3.ansi` | 59x12 | truecolor | 52 | score-18 block digits in glow halo with sparks |
-| `honey-flap-3-16-l-1.ansi` | 150x34 | 16 | 7 | arcade marquee poster: block wordmark, gauntlet band, scoreboard strip |
-| `honey-flap-3-16-l-2.ansi` | 156x30 | 16 | 8 | eight-panel training montage strip with physics footnotes |
-| `honey-flap-3-16-m-1.ansi` | 86x22 | 16 | 7 | gap gauntlet ramp: six gates shrinking from 8 to 3 cells with score bands |
-| `honey-flap-3-16-m-2.ansi` | 84x24 | 16 | 8 | training reel storyboard, six framed takes from first flap to gold run |
-| `honey-flap-3-16-s-1.ansi` | 64x14 | 16 | 7 | trainer's strip: four chalkboard panels of the bee's first flaps |
-| `honey-flap-3-16-s-2.ansi` | 56x12 | 16 | 7 | flower-power pickup card with hex blossom and grace meter |
-| `honey-flap-3-256-l-1.ansi` | 180x36 | 256 | 14 | day/night terminator map: one run crossing into the dark meridian |
-| `honey-flap-3-256-l-2.ansi` | 170x30 | 256 | 17 | bloom-field pickup meadow over honeycomb ground with score bubbles |
-| `honey-flap-3-256-m-1.ansi` | 88x24 | 256 | 22 | four-season run panels: spring lift to winter heavy air |
-| `honey-flap-3-256-m-2.ansi` | 86x25 | 256 | 12 | night-migration star chart with dashed hive route and compass |
-| `honey-flap-3-256-s-1.ansi` | 66x14 | 256 | 7 | free-body diagram: flap-kick up vector vs gravity down vector |
-| `honey-flap-3-256-s-2.ansi` | 62x11 | 256 | 11 | terminal-velocity speedometer with 53 c/s clamp marker |
-| `honey-flap-3-256-s-3.ansi` | 58x12 | 256 | 8 | autumn crosswind card: gust arrows drifting the bee left |
-| `honey-flap-3-tc-l-1.ansi` | 200x40 | truecolor | 82 | gap gauntlet epic: ten narrowing glowing gates plus difficulty ramp chart |
-| `honey-flap-3-tc-l-2.ansi` | 210x42 | truecolor | 117 | night-migratory navigation: aurora ribbons, named constellations, compass rose |
-| `honey-flap-3-tc-l-3.ansi` | 205x38 | truecolor | 195 | four-seasons panorama with bee crossing gradients from bloom to snow |
-| `honey-flap-3-tc-m-1.ansi` | 88x26 | truecolor | 41 | flight-path physics chart: scalloped parabola with velocity arrows at gates |
-| `honey-flap-3-tc-m-2.ansi` | 86x22 | truecolor | 122 | summer squall run: slanted rain over glowing hex gates |
-| `honey-flap-3-tc-s-1.ansi` | 64x9 | truecolor | 494 | spring-run banner with pollen drift and gradient sky |
-| `honey-flap-3-tc-s-2.ansi` | 60x13 | truecolor | 41 | night-leg mini compass heading 042 under star gradient |
-| `honey-flap-4-16-l-1.ansi` | 150x30 | 16 | 8 | Full flight-deck panel: overhead switches, airspeed/attitude/altitude screens, yoke |
-| `honey-flap-4-16-l-2.ansi` | 156x28 | 16 | 7 | Gate architecture triptych: Doric drums, Gothic arch, modern hex curtain-wall |
-| `honey-flap-4-16-m-1.ansi` | 86x20 | 16 | 7 | Bee-airline cockpit POV: windscreen gates, gauge column, annunciators, yoke |
-| `honey-flap-4-16-m-2.ansi` | 80x20 | 16 | 6 | Gate architecture era I Doric: fluted columns, triglyphs, stylobate, pass bar |
-| `honey-flap-4-16-s-1.ansi` | 62x8 | 16 | 7 | Wind-tunnel rig run strip: bee model, flow arrows, manometers, PASS verdict |
-| `honey-flap-4-16-s-2.ansi` | 63x10 | 16 | 5 | HONEY FLAP block wordmark plate, BEE AIRLINE tagline, honeycomb row |
-| `honey-flap-4-256-l-1.ansi` | 168x30 | 256 | 21 | Wind-tunnel hall: intake bell, honeycomb settling, test section, fan, deck |
-| `honey-flap-4-256-l-2.ansi` | 170x30 | 256 | 12 | Grand pollination network chart: seven hives, dotted legs, legend, courier log |
-| `honey-flap-4-256-m-1.ansi` | 84x22 | 256 | 10 | Wind-tunnel cross-section: fan, contraction, streamlines, manometer bank |
-| `honey-flap-4-256-m-2.ansi` | 82x20 | 256 | 12 | Pollination delivery route chart: compass, hives, dotted legs, forage stops |
-| `honey-flap-4-256-m-3.ansi` | 80x18 | 256 | 5 | Flight-data recorder chart roll: altitude trace, gate ticks, flap events |
-| `honey-flap-4-256-s-1.ansi` | 66x9 | 256 | 14 | Slow-mo wing-beat film frames t=0-125ms, vortex rings, lift curve |
-| `honey-flap-4-256-s-2.ansi` | 60x7 | 256 | 18 | Storm-front advisory ticker: front band, rain, crossing progress bar |
-| `honey-flap-4-tc-l-1.ansi` | 186x38 | truecolor | 423 | Storm-front crossing panorama: wordmark in clouds, twin bolts, shrinking gaps |
-| `honey-flap-4-tc-l-2.ansi` | 176x34 | truecolor | 302 | Trophy hall: marble columns, banners, gradient wordmark, scored podiums 312/96/64 |
-| `honey-flap-4-tc-l-3.ansi` | 172x32 | truecolor | 295 | Wing-beat analysis film plate: 10 strobe frames with sprockets and notes |
-| `honey-flap-4-tc-m-1.ansi` | 86x22 | truecolor | 39 | Storm-front crossing: darkening sky gradient, rain curtain, lightning, HUD |
-| `honey-flap-4-tc-m-2.ansi` | 84x20 | truecolor | 111 | Trophy shelf: gold/silver/bronze cups, 5x5 digit scores on a wood plank |
-| `honey-flap-4-tc-s-1.ansi` | 64x8 | truecolor | 76 | Truecolor wing-beat tunnel cam: gradient wings, blur trail, lift/drag bars |
-| `honey-flap-4-tc-s-2.ansi` | 63x10 | truecolor | 107 | HONEY FLAP gold-to-coral gradient wordmark with honeycomb band |
-| `honey-flap-5-16-l-1.ansi` | 150x34 | 16 | 6 | Top-down garden hedge maze (generated) with seven nectar waypoints and solved dotted route |
-| `honey-flap-5-16-m-1.ansi` | 84x22 | 16 | 8 | Aviary wire panel: diamond mesh wall, three hanging tube feeders, perch row, visiting bee |
-| `honey-flap-5-256-l-1.ansi` | 168x30 | 256 | 23 | Grand aviary dome interior: mesh cupola, seven feeders at varying drop heights, perch beams, weaving bee |
-| `honey-flap-5-256-l-2.ansi` | 164x30 | 256 | 26 | Honey rapids epic: waterfall plunge, seven eddying boulders, raft on dashed line, carved wordmark |
-| `honey-flap-5-256-m-1.ansi` | 86x24 | 256 | 13 | Honey rapid bend: diagonal gold flow with foam banks, three boulders, raft, eddy line |
-| `honey-flap-5-256-m-2.ansi` | 82x20 | 256 | 15 | Crew time clock board: 22:00 dial, bee clock-out row, moth clock-in row, shift legend |
-| `honey-flap-5-256-s-1.ansi` | 60x8 | 256 | 9 | Honey tide line strip: sinuous gold shoreline, foam beads, four stranded droplets on sand |
-| `honey-flap-5-256-s-2.ansi` | 58x9 | 256 | 17 | Moth-bee night-shift handoff: dusk-to-ink gradient, lamp token 22 passed between them |
-| `honey-flap-5-tc-l-1.ansi` | 180x40 | truecolor | 108 | Sunflower cathedral POV: converging stalks, god rays, pollen motes, hero bee, gradient wordmark |
-| `honey-flap-5-tc-l-2.ansi` | 176x34 | truecolor | 109 | Night-shift handoff panorama: dusk half with clock-out gate, star half with lanterns and moths, shared log bench |
-| `honey-flap-5-tc-m-1.ansi` | 86x24 | truecolor | 82 | Sunflower gorge: six shaded stalks with heads, warm sky gradient, bee trailing nectar dots |
-| `honey-flap-5-tc-m-2.ansi` | 84x22 | truecolor | 97 | Honey tide pool: rock shelf, shimmering basin, amber slick, stranded droplets, sugar anemones |
-| `honey-flap-5-tc-s-1.ansi` | 54x8 | truecolor | 111 | Truecolor nectar waypoint beacon: radial honey glow, diamond node, four satellite sparks |
-| `honey-flap-5-tc-s-2.ansi` | 52x10 | truecolor | 19 | Truecolor hanging glass feeder closeup: sky gradient, honey fill line, rose ports, bee inbound |
-| `honey-flap-6-16-m-2.ansi` | 85x21 | 16 | 8 | Ground telemetry station: big dish carrying the wordmark, mast, 0600 waveform strip, flower feed readouts |
-| `honey-flap-6-16-s-1.ansi` | 51x14 | 16 | 7 | Airshow flypast: loop-the-loop trace drawn between two brick smokestacks, striped bases |
-| `honey-flap-6-256-l-1.ansi` | 156x30 | 256 | 15 | Bootcamp graduation parade: banded dawn sky, banner row, gold/silver/bronze podium, 7-row bee parade grid |
-| `honey-flap-6-256-l-2.ansi` | 153x30 | 256 | 14 | Ice derby panorama: polar sky bands, shore shacks, hex grids of holes, tents, trophy wall, standings board |
-| `honey-flap-6-256-m-1.ansi` | 86x22 | 256 | 14 | Dandelion bomber run: fluff-puff side profile over banded sky, open bay, two waves of seed parachutes |
-| `honey-flap-6-256-m-2.ansi` | 72x20 | 256 | 10 | Bootcamp barbed-wire crawl: lane clock at 0602, two wire rows, mud lane with crawling bees, graduate banner |
-| `honey-flap-6-256-s-1.ansi` | 46x9 | 256 | 7 | Envelope paper-plane duel: bee ace vs moth bandit, crossing dotted courses, stamps and a mid-air SPLAT |
-| `honey-flap-6-256-s-2.ansi` | 50x8 | 256 | 7 | Winter comb-lake ice-fishing closeup: cut hexagonal hole, dipping float, bent rod, snowfall strip |
-| `honey-flap-6-tc-l-1.ansi` | 160x32 | truecolor | 172 | Night duel climax: star gradient + haloed moon, bee ace and moth bandit contrails converging on envelope burst |
-| `honey-flap-6-tc-l-2.ansi` | 158x38 | truecolor | 76 | Dawn bomber mission: sunrise gradient, three staggered dandelion bombers, falling seed trails, flower meadow |
-| `honey-flap-6-tc-m-1.ansi` | 86x18 | truecolor | 216 | Aerial refueling scene: gradient sky, sun, cloud decks, tanker paying out hose to receiver on amber flow |
-| `honey-flap-6-tc-m-2.ansi` | 84x19 | truecolor | 15 | Bee satellite pass: star gradient, HoneyFlap-6 with solar wings and dish, light beam onto hex comb terrain |
-| `honey-flap-6-tc-s-1.ansi` | 42x12 | truecolor | 8 | Ejection from the dandelion bomber: fluff fuselage bursts, seat+bee on red-to-amber plume, pollen parachute |
-| `honey-flap-6-tc-s-2.ansi` | 52x6 | truecolor | 12 | Aerial refueling closeup: tanker nozzle, shimmering amber honey stream, drogue cone and receiver probe contact |
-| `honey-flap-7-256-l-1.ansi` | 190x34 | 256 | 16 | suspension bridge under construction, catenary cable and hangers |
-| `honey-flap-7-256-l-2.ansi` | 180x32 | 256 | 10 | wind-farm turbines on receding ridgelines, spinning rotors |
-| `honey-flap-7-256-m-1.ansi` | 80x24 | 256 | 10 | mountaineer rope-ladder climb between serac towers, ice axe |
-| `honey-flap-7-256-m-2.ansi` | 86x22 | 256 | 14 | cable gondola cars crossing a valley mast-to-mast at sunset |
-| `honey-flap-7-256-s-1.ansi` | 64x13 | 256 | 16 | knight-bee joust between castle gate pylons, bunting, lance clash |
-| `honey-flap-7-256-s-2.ansi` | 60x12 | 256 | 14 | mail plane dropping chute parcels over snow-capped alpine pass |
-| `honey-flap-7-tc-l-1.ansi` | 200x36 | truecolor | 49 | roman aqueduct carrying flowing honey across arches at dusk |
-| `honey-flap-7-tc-l-2.ansi` | 188x38 | truecolor | 55 | abyss trench dive, anglerfish lure, coral fans, light shafts |
-| `honey-flap-7-tc-m-1.ansi` | 84x23 | truecolor | 32 | crystal cavern stalactites and stalagmites, glowing bee flight |
-| `honey-flap-7-tc-m-2.ansi` | 82x21 | truecolor | 31 | canyon zipline, rider trolley on cable over a river far below |
-| `honey-flap-7-tc-s-1.ansi` | 58x12 | truecolor | 25 | bee blacksmith, glowing bellows between forge pillars, sparks |
-| `honey-flap-7-tc-s-2.ansi` | 64x13 | truecolor | 20 | ski slalom carving down a waffle-gate slope, red/blue gates |
-| `honey-flap-8-16-l-1.ansi` | 150x36 | 16 | 6 | shepherd guiding sheep through dry-stone stiles on the fell |
-| `honey-flap-8-16-m-2.ansi` | 84x22 | 16 | 7 | sawmill cutting timber through spiked guide fences |
-| `honey-flap-8-16-s-2.ansi` | 54x12 | 16 | 7 | synchronised swimming routine through striped nose-cones |
-| `honey-flap-8-256-l-1.ansi` | 158x38 | 256 | 12 | pyrotechnic show: leaping past mortar racks and starbursts |
-| `honey-flap-8-256-l-2.ansi` | 196x44 | 256 | 12 | drone light-show waltz weaving a luminous night grid |
-| `honey-flap-8-256-m-1.ansi` | 82x24 | 256 | 12 | letterpress composing stick: lead sorts as flying gates |
-| `honey-flap-8-256-m-2.ansi` | 86x22 | 256 | 12 | orchestra pit: baton beats rising as velvet curtain gates |
-| `honey-flap-8-256-s-1.ansi` | 56x13 | 256 | 12 | weaver's loom: shuttle darting between taut warp gates |
-| `honey-flap-8-256-s-2.ansi` | 58x12 | 256 | 12 | clockmaker threading a ticking brass escapement wheel |
-| `honey-flap-8-tc-l-1.ansi` | 156x40 | truecolor | 45 | old reading room: threading a lantern between oak stacks |
-| `honey-flap-8-tc-l-2.ansi` | 200x46 | truecolor | 52 | vineyard dresser pruning past taut wire trellises |
-| `honey-flap-8-tc-m-1.ansi` | 84x23 | truecolor | 28 | punt pole through mossy canal bridge arches on low water |
-| `honey-flap-8-tc-m-2.ansi` | 88x22 | truecolor | 27 | cold data hall: bee weaving a glowing fibre cable rack |
-| `honey-flap-8-tc-s-1.ansi` | 54x13 | truecolor | 18 | postal sort room: bee sorting parcels through brass slots |
-| `honey-flap-8-tc-s-2.ansi` | 58x12 | truecolor | 18 | seamstress spooling thread between bobbin gate posts |
-| `honey-flap-9-16-l-2.ansi` | 160x34 | 16 | 8 | autumn gust funneling leaf eddies through fence gaps |
-| `honey-flap-9-256-l-1.ansi` | 156x32 | 256 | 26 | tumbleweed blowing through a ghost-town boardwalk |
-| `honey-flap-9-256-l-2.ansi` | 168x36 | 256 | 28 | dawn ferry wake V with gulls and a distant dinghy |
-| `honey-flap-9-256-m-1.ansi` | 86x23 | 256 | 39 | seaplane skimming between lit buoys at dusk |
-| `honey-flap-9-256-m-2.ansi` | 82x24 | 256 | 21 | paper lanterns rising on a diagonal over a night field |
-| `honey-flap-9-256-s-1.ansi` | 62x13 | 256 | 17 | koinobori carp streamers on a pole in banded sky |
-| `honey-flap-9-256-s-2.ansi` | 64x10 | 256 | 22 | skateboarder grinding a rail through cone line, spark trail |
-| `honey-flap-9-tc-l-1.ansi` | 176x40 | truecolor | 160 | monarch migration pouring through a sunlit mountain notch |
-| `honey-flap-9-tc-l-2.ansi` | 184x42 | truecolor | 169 | dawn balloon ascent over a patchwork furrowed field |
-| `honey-flap-9-tc-m-1.ansi` | 84x23 | truecolor | 53 | trapeze release between two striped carousel tents |
-| `honey-flap-9-tc-m-2.ansi` | 88x24 | truecolor | 40 | ski jumper in-run, flight arc and judges panel |
-| `honey-flap-9-tc-s-1.ansi` | 58x13 | truecolor | 40 | hummingbird hovering at three glowing red feeders |
-| `honey-flap-9-tc-s-2.ansi` | 52x12 | truecolor | 31 | samara helicopter seeds spinning through a fence gap |
-<!-- END honey-flap SLOTS -->
+| `candy-flappy-1-16-l-1.ansi` | 132x30 | 16 | 13 | Grand meadow panorama: five gate columns with gap arrows, twin sun halo, swarm, flower belt, wide logo |
+| `candy-flappy-1-16-l-2.ansi` | 130x28 | 16 | 18 | Honey express: night stars, striped hive tower, beeline dotted path into a hex portal |
+| `candy-flappy-1-16-m-1.ansi` | 80x22 | 16 | 13 | Full game screen: clouds, three pipe gates with mouths, bee, HUD, flowers, footer block logo |
+| `candy-flappy-1-16-s-1.ansi` | 60x16 | 16 | 13 | Small 16-color gate run: two green pipes, gold bee threading the gap, block logo on grass |
+| `candy-flappy-1-256-l-1.ansi` | 140x32 | 256 | 29 | Golden corridor: banded sunset, five dark gates, bee silhouette with spark trail, pillar of light on honey ground |
+| `candy-flappy-1-256-l-2.ansi` | 136x30 | 256 | 21 | Honeyfall: giant labeled jar pouring a wobbling stream into a rippled pool with floating comb cells |
+| `candy-flappy-1-256-m-1.ansi` | 84x24 | 256 | 24 | Sunset run over water: ringed amber sun, black gates, shimmering reflection bands |
+| `candy-flappy-1-256-m-2.ansi` | 80x23 | 256 | 19 | Inside the comb: amber hex-wall cave, full honey cells, rippling pool below glowing title |
+| `candy-flappy-1-256-s-1.ansi` | 64x12 | 256 | 18 | Banded dusk sky, ringed setting sun, black pipe silhouettes and gradient gold block title |
+| `candy-flappy-1-256-s-2.ansi` | 58x8 | 256 | 13 | Loading screen: hex-cell nectar progress bar at 80 percent, bee hovering over flower row |
+| `candy-flappy-1-tc-l-1.ansi` | 168x38 | truecolor | 81 | Flight home at dusk: radiant sun, tinted clouds, hive castle windows, mist, flowered slope, hero bee and shadowed logo |
+| `candy-flappy-1-tc-l-2.ansi` | 170x36 | truecolor | 169 | Nectar nebula: starfield and nebula haze, giant glowing hex portal, rainbow wing trail, ringed planet, spectrum block title |
+| `candy-flappy-1-tc-m-1.ansi` | 86x24 | truecolor | 78 | Truecolor dawn: layered hill silhouettes, glowing sun, shaded green gates, sparkle trail bee |
+| `candy-flappy-1-tc-m-2.ansi` | 82x22 | truecolor | 77 | Flower rush: teal sky into meadow of colored blossoms, diving bee with fading nectar trail |
+| `candy-flappy-1-tc-s-1.ansi` | 66x10 | truecolor | 167 | Truecolor radial sun glow with light rays, gold bee cresting the flare, warm gradient logo |
+| `candy-flappy-1-tc-s-2.ansi` | 62x9 | truecolor | 67 | Violet night glide: cratered moon, starfield, fading wing-blur arcs trailing the bee |
+| `candy-flappy-10-16-l-1.ansi` | 150x32 | 16 | 14 | trampoline hall panorama: seven bays of coloured nets, bounce arcs, striped pads |
+| `candy-flappy-10-16-m-2.ansi` | 80x19 | 16 | 11 | penny-farthing courier on the hill road, satchel of pollen parcels |
+| `candy-flappy-10-16-s-1.ansi` | 56x11 | 16 | 8 | foxglove bell-tower row: five purple spikes rung with gold bells, bumblebee pollination run |
+| `candy-flappy-10-256-l-1.ansi` | 190x40 | 256 | 32 | storm drain epic: rain canyon perspective, five paper hulls, manhole vortex |
+| `candy-flappy-10-256-l-2.ansi` | 185x38 | 256 | 32 | orchard ladder into the blossom cloud: giant cherry canopy of pink light |
+| `candy-flappy-10-256-l-3.ansi` | 195x41 | 256 | 39 | haystack fort at golden hour: pyramided bales, long shadows, haul-train line |
+| `candy-flappy-10-256-m-1.ansi` | 84x22 | 256 | 32 | dusk foxglove row in full bloom, glowing bells and pollen trail under a gold bee |
+| `candy-flappy-10-256-m-2.ansi` | 84x23 | 256 | 26 | night fair carousel of flower-horses on brass poles under a striped canopy |
+| `candy-flappy-10-256-s-1.ansi` | 60x12 | 256 | 11 | tether-drift mini plate: suited bee floating free of a hex resupply pod, planet rim below |
+| `candy-flappy-10-256-s-2.ansi` | 62x12 | 256 | 20 | monsoon market alley strip: striped awnings, rain needles, puddle shine |
+| `candy-flappy-10-256-s-3.ansi` | 60x12 | 256 | 18 | 3m springboard over a pool of liquid amber, bee mid-pike, ripple rings |
+| `candy-flappy-10-tc-l-1.ansi` | 200x42 | truecolor | 137 | tether-drift epic: astronaut bee drifting from hex pod K-7 over the world's limb |
+| `candy-flappy-10-tc-l-2.ansi` | 205x44 | truecolor | 74 | grand carousel of flower-horses: striped dome, motion ghosts, calliope night |
+| `candy-flappy-10-tc-m-1.ansi` | 88x24 | truecolor | 30 | trampoline park interior: four multicolour nets, bees on dotted bounce parabolas |
+| `candy-flappy-10-tc-m-2.ansi` | 86x21 | truecolor | 38 | foghorn station in a truecolor gale: slant rain, swell, sound rings off the horn |
+| `candy-flappy-10-tc-m-3.ansi` | 86x22 | truecolor | 78 | amber pool dive plate: tiled deck, flexing board, depth bands into molten gold |
+| `candy-flappy-10-tc-s-1.ansi` | 64x9 | truecolor | 17 | penny-farthing courier: big-wheel bee with parcel satchel, warm speedlines |
+| `candy-flappy-10-tc-s-2.ansi` | 58x13 | truecolor | 25 | orchard ladder leaning into a truecolor blossom cloud, petals adrift |
+| `candy-flappy-2-16-l-1.ansi` | 160x34 | 16 | 8 | full arcade frame: playfield, rounded border, trail arc |
+| `candy-flappy-2-16-m-1.ansi` | 84x22 | 16 | 8 | meadow panorama with sun, flowers and three pipes |
+| `candy-flappy-2-16-m-2.ansi` | 80x20 | 16 | 8 | game-over score card on honeycomb wallpaper |
+| `candy-flappy-2-16-s-2.ansi` | 62x6 | 16 | 6 | double-line HUD card with mini pipes and flight trail |
+| `candy-flappy-2-256-l-1.ansi` | 180x40 | 256 | 18 | nocturne hive skyline with glowing comb windows and moon |
+| `candy-flappy-2-256-l-2.ansi` | 170x32 | 256 | 22 | arcade cabinet bezel, gradient screen and joystick |
+| `candy-flappy-2-256-m-1.ansi` | 88x24 | 256 | 19 | dusk meadow gradient with low sun and pipe silhouettes |
+| `candy-flappy-2-256-m-2.ansi` | 78x18 | 256 | 8 | flap physics chart with sawtooth arcs and kick labels |
+| `candy-flappy-2-256-s-1.ansi` | 52x8 | 256 | 6 | amber gradient pour bar with dripping honey drops |
+| `candy-flappy-2-256-s-2.ansi` | 54x12 | 256 | 8 | difficulty ruler mapping gap heights 6/5/4/3 to score |
+| `candy-flappy-2-256-s-3.ansi` | 56x10 | 256 | 5 | honey-flow equalizer of falling amber droplets |
+| `candy-flappy-2-tc-l-1.ansi` | 200x44 | truecolor | 107 | grand meadow panorama: sun, clouds, flowers, banner |
+| `candy-flappy-2-tc-l-2.ansi` | 190x36 | truecolor | 73 | vignette game-over scene with cracked hex and score panel |
+| `candy-flappy-2-tc-m-1.ansi` | 86x22 | truecolor | 22 | dark-to-amber pipe corridor with light shaft through gap |
+| `candy-flappy-2-tc-m-2.ansi` | 84x24 | truecolor | 108 | glowing truecolor hex comb field, filled bonus cells |
+| `candy-flappy-2-tc-s-1.ansi` | 50x7 | truecolor | 80 | warm amber wave field with drifting wordmark |
+| `candy-flappy-2-tc-s-2.ansi` | 55x14 | truecolor | 64 | radial sun disc with bee flying sunward |
+| `candy-flappy-2-tc-s-3.ansi` | 59x12 | truecolor | 52 | score-18 block digits in glow halo with sparks |
+| `candy-flappy-3-16-l-1.ansi` | 150x34 | 16 | 7 | arcade marquee poster: block wordmark, gauntlet band, scoreboard strip |
+| `candy-flappy-3-16-l-2.ansi` | 156x30 | 16 | 8 | eight-panel training montage strip with physics footnotes |
+| `candy-flappy-3-16-m-1.ansi` | 86x22 | 16 | 7 | gap gauntlet ramp: six gates shrinking from 8 to 3 cells with score bands |
+| `candy-flappy-3-16-m-2.ansi` | 84x24 | 16 | 8 | training reel storyboard, six framed takes from first flap to gold run |
+| `candy-flappy-3-16-s-1.ansi` | 64x14 | 16 | 7 | trainer's strip: four chalkboard panels of the bee's first flaps |
+| `candy-flappy-3-16-s-2.ansi` | 56x12 | 16 | 7 | flower-power pickup card with hex blossom and grace meter |
+| `candy-flappy-3-256-l-1.ansi` | 180x36 | 256 | 14 | day/night terminator map: one run crossing into the dark meridian |
+| `candy-flappy-3-256-l-2.ansi` | 170x30 | 256 | 17 | bloom-field pickup meadow over honeycomb ground with score bubbles |
+| `candy-flappy-3-256-m-1.ansi` | 88x24 | 256 | 22 | four-season run panels: spring lift to winter heavy air |
+| `candy-flappy-3-256-m-2.ansi` | 86x25 | 256 | 12 | night-migration star chart with dashed hive route and compass |
+| `candy-flappy-3-256-s-1.ansi` | 66x14 | 256 | 7 | free-body diagram: flap-kick up vector vs gravity down vector |
+| `candy-flappy-3-256-s-2.ansi` | 62x11 | 256 | 11 | terminal-velocity speedometer with 53 c/s clamp marker |
+| `candy-flappy-3-256-s-3.ansi` | 58x12 | 256 | 8 | autumn crosswind card: gust arrows drifting the bee left |
+| `candy-flappy-3-tc-l-1.ansi` | 200x40 | truecolor | 82 | gap gauntlet epic: ten narrowing glowing gates plus difficulty ramp chart |
+| `candy-flappy-3-tc-l-2.ansi` | 210x42 | truecolor | 117 | night-migratory navigation: aurora ribbons, named constellations, compass rose |
+| `candy-flappy-3-tc-l-3.ansi` | 205x38 | truecolor | 195 | four-seasons panorama with bee crossing gradients from bloom to snow |
+| `candy-flappy-3-tc-m-1.ansi` | 88x26 | truecolor | 41 | flight-path physics chart: scalloped parabola with velocity arrows at gates |
+| `candy-flappy-3-tc-m-2.ansi` | 86x22 | truecolor | 122 | summer squall run: slanted rain over glowing hex gates |
+| `candy-flappy-3-tc-s-1.ansi` | 64x9 | truecolor | 494 | spring-run banner with pollen drift and gradient sky |
+| `candy-flappy-3-tc-s-2.ansi` | 60x13 | truecolor | 41 | night-leg mini compass heading 042 under star gradient |
+| `candy-flappy-4-16-l-1.ansi` | 150x30 | 16 | 8 | Full flight-deck panel: overhead switches, airspeed/attitude/altitude screens, yoke |
+| `candy-flappy-4-16-l-2.ansi` | 156x28 | 16 | 7 | Gate architecture triptych: Doric drums, Gothic arch, modern hex curtain-wall |
+| `candy-flappy-4-16-m-1.ansi` | 86x20 | 16 | 7 | Bee-airline cockpit POV: windscreen gates, gauge column, annunciators, yoke |
+| `candy-flappy-4-16-m-2.ansi` | 80x20 | 16 | 6 | Gate architecture era I Doric: fluted columns, triglyphs, stylobate, pass bar |
+| `candy-flappy-4-16-s-1.ansi` | 62x8 | 16 | 7 | Wind-tunnel rig run strip: bee model, flow arrows, manometers, PASS verdict |
+| `candy-flappy-4-16-s-2.ansi` | 63x10 | 16 | 5 | HONEY FLAP block wordmark plate, BEE AIRLINE tagline, honeycomb row |
+| `candy-flappy-4-256-l-1.ansi` | 168x30 | 256 | 21 | Wind-tunnel hall: intake bell, honeycomb settling, test section, fan, deck |
+| `candy-flappy-4-256-l-2.ansi` | 170x30 | 256 | 12 | Grand pollination network chart: seven hives, dotted legs, legend, courier log |
+| `candy-flappy-4-256-m-1.ansi` | 84x22 | 256 | 10 | Wind-tunnel cross-section: fan, contraction, streamlines, manometer bank |
+| `candy-flappy-4-256-m-2.ansi` | 82x20 | 256 | 12 | Pollination delivery route chart: compass, hives, dotted legs, forage stops |
+| `candy-flappy-4-256-m-3.ansi` | 80x18 | 256 | 5 | Flight-data recorder chart roll: altitude trace, gate ticks, flap events |
+| `candy-flappy-4-256-s-1.ansi` | 66x9 | 256 | 14 | Slow-mo wing-beat film frames t=0-125ms, vortex rings, lift curve |
+| `candy-flappy-4-256-s-2.ansi` | 60x7 | 256 | 18 | Storm-front advisory ticker: front band, rain, crossing progress bar |
+| `candy-flappy-4-tc-l-1.ansi` | 186x38 | truecolor | 423 | Storm-front crossing panorama: wordmark in clouds, twin bolts, shrinking gaps |
+| `candy-flappy-4-tc-l-2.ansi` | 176x34 | truecolor | 302 | Trophy hall: marble columns, banners, gradient wordmark, scored podiums 312/96/64 |
+| `candy-flappy-4-tc-l-3.ansi` | 172x32 | truecolor | 295 | Wing-beat analysis film plate: 10 strobe frames with sprockets and notes |
+| `candy-flappy-4-tc-m-1.ansi` | 86x22 | truecolor | 39 | Storm-front crossing: darkening sky gradient, rain curtain, lightning, HUD |
+| `candy-flappy-4-tc-m-2.ansi` | 84x20 | truecolor | 111 | Trophy shelf: gold/silver/bronze cups, 5x5 digit scores on a wood plank |
+| `candy-flappy-4-tc-s-1.ansi` | 64x8 | truecolor | 76 | Truecolor wing-beat tunnel cam: gradient wings, blur trail, lift/drag bars |
+| `candy-flappy-4-tc-s-2.ansi` | 63x10 | truecolor | 107 | HONEY FLAP gold-to-coral gradient wordmark with honeycomb band |
+| `candy-flappy-5-16-l-1.ansi` | 150x34 | 16 | 6 | Top-down garden hedge maze (generated) with seven nectar waypoints and solved dotted route |
+| `candy-flappy-5-16-m-1.ansi` | 84x22 | 16 | 8 | Aviary wire panel: diamond mesh wall, three hanging tube feeders, perch row, visiting bee |
+| `candy-flappy-5-256-l-1.ansi` | 168x30 | 256 | 23 | Grand aviary dome interior: mesh cupola, seven feeders at varying drop heights, perch beams, weaving bee |
+| `candy-flappy-5-256-l-2.ansi` | 164x30 | 256 | 26 | Honey rapids epic: waterfall plunge, seven eddying boulders, raft on dashed line, carved wordmark |
+| `candy-flappy-5-256-m-1.ansi` | 86x24 | 256 | 13 | Honey rapid bend: diagonal gold flow with foam banks, three boulders, raft, eddy line |
+| `candy-flappy-5-256-m-2.ansi` | 82x20 | 256 | 15 | Crew time clock board: 22:00 dial, bee clock-out row, moth clock-in row, shift legend |
+| `candy-flappy-5-256-s-1.ansi` | 60x8 | 256 | 9 | Honey tide line strip: sinuous gold shoreline, foam beads, four stranded droplets on sand |
+| `candy-flappy-5-256-s-2.ansi` | 58x9 | 256 | 17 | Moth-bee night-shift handoff: dusk-to-ink gradient, lamp token 22 passed between them |
+| `candy-flappy-5-tc-l-1.ansi` | 180x40 | truecolor | 108 | Sunflower cathedral POV: converging stalks, god rays, pollen motes, hero bee, gradient wordmark |
+| `candy-flappy-5-tc-l-2.ansi` | 176x34 | truecolor | 109 | Night-shift handoff panorama: dusk half with clock-out gate, star half with lanterns and moths, shared log bench |
+| `candy-flappy-5-tc-m-1.ansi` | 86x24 | truecolor | 82 | Sunflower gorge: six shaded stalks with heads, warm sky gradient, bee trailing nectar dots |
+| `candy-flappy-5-tc-m-2.ansi` | 84x22 | truecolor | 97 | Honey tide pool: rock shelf, shimmering basin, amber slick, stranded droplets, sugar anemones |
+| `candy-flappy-5-tc-s-1.ansi` | 54x8 | truecolor | 111 | Truecolor nectar waypoint beacon: radial honey glow, diamond node, four satellite sparks |
+| `candy-flappy-5-tc-s-2.ansi` | 52x10 | truecolor | 19 | Truecolor hanging glass feeder closeup: sky gradient, honey fill line, rose ports, bee inbound |
+| `candy-flappy-6-16-m-2.ansi` | 85x21 | 16 | 8 | Ground telemetry station: big dish carrying the wordmark, mast, 0600 waveform strip, flower feed readouts |
+| `candy-flappy-6-16-s-1.ansi` | 51x14 | 16 | 7 | Airshow flypast: loop-the-loop trace drawn between two brick smokestacks, striped bases |
+| `candy-flappy-6-256-l-1.ansi` | 156x30 | 256 | 15 | Bootcamp graduation parade: banded dawn sky, banner row, gold/silver/bronze podium, 7-row bee parade grid |
+| `candy-flappy-6-256-l-2.ansi` | 153x30 | 256 | 14 | Ice derby panorama: polar sky bands, shore shacks, hex grids of holes, tents, trophy wall, standings board |
+| `candy-flappy-6-256-m-1.ansi` | 86x22 | 256 | 14 | Dandelion bomber run: fluff-puff side profile over banded sky, open bay, two waves of seed parachutes |
+| `candy-flappy-6-256-m-2.ansi` | 72x20 | 256 | 10 | Bootcamp barbed-wire crawl: lane clock at 0602, two wire rows, mud lane with crawling bees, graduate banner |
+| `candy-flappy-6-256-s-1.ansi` | 46x9 | 256 | 7 | Envelope paper-plane duel: bee ace vs moth bandit, crossing dotted courses, stamps and a mid-air SPLAT |
+| `candy-flappy-6-256-s-2.ansi` | 50x8 | 256 | 7 | Winter comb-lake ice-fishing closeup: cut hexagonal hole, dipping float, bent rod, snowfall strip |
+| `candy-flappy-6-tc-l-1.ansi` | 160x32 | truecolor | 172 | Night duel climax: star gradient + haloed moon, bee ace and moth bandit contrails converging on envelope burst |
+| `candy-flappy-6-tc-l-2.ansi` | 158x38 | truecolor | 76 | Dawn bomber mission: sunrise gradient, three staggered dandelion bombers, falling seed trails, flower meadow |
+| `candy-flappy-6-tc-m-1.ansi` | 86x18 | truecolor | 216 | Aerial refueling scene: gradient sky, sun, cloud decks, tanker paying out hose to receiver on amber flow |
+| `candy-flappy-6-tc-m-2.ansi` | 84x19 | truecolor | 15 | Bee satellite pass: star gradient, CandyFlappy-6 with solar wings and dish, light beam onto hex comb terrain |
+| `candy-flappy-6-tc-s-1.ansi` | 42x12 | truecolor | 8 | Ejection from the dandelion bomber: fluff fuselage bursts, seat+bee on red-to-amber plume, pollen parachute |
+| `candy-flappy-6-tc-s-2.ansi` | 52x6 | truecolor | 12 | Aerial refueling closeup: tanker nozzle, shimmering amber honey stream, drogue cone and receiver probe contact |
+| `candy-flappy-7-256-l-1.ansi` | 190x34 | 256 | 16 | suspension bridge under construction, catenary cable and hangers |
+| `candy-flappy-7-256-l-2.ansi` | 180x32 | 256 | 10 | wind-farm turbines on receding ridgelines, spinning rotors |
+| `candy-flappy-7-256-m-1.ansi` | 80x24 | 256 | 10 | mountaineer rope-ladder climb between serac towers, ice axe |
+| `candy-flappy-7-256-m-2.ansi` | 86x22 | 256 | 14 | cable gondola cars crossing a valley mast-to-mast at sunset |
+| `candy-flappy-7-256-s-1.ansi` | 64x13 | 256 | 16 | knight-bee joust between castle gate pylons, bunting, lance clash |
+| `candy-flappy-7-256-s-2.ansi` | 60x12 | 256 | 14 | mail plane dropping chute parcels over snow-capped alpine pass |
+| `candy-flappy-7-tc-l-1.ansi` | 200x36 | truecolor | 49 | roman aqueduct carrying flowing honey across arches at dusk |
+| `candy-flappy-7-tc-l-2.ansi` | 188x38 | truecolor | 55 | abyss trench dive, anglerfish lure, coral fans, light shafts |
+| `candy-flappy-7-tc-m-1.ansi` | 84x23 | truecolor | 32 | crystal cavern stalactites and stalagmites, glowing bee flight |
+| `candy-flappy-7-tc-m-2.ansi` | 82x21 | truecolor | 31 | canyon zipline, rider trolley on cable over a river far below |
+| `candy-flappy-7-tc-s-1.ansi` | 58x12 | truecolor | 25 | bee blacksmith, glowing bellows between forge pillars, sparks |
+| `candy-flappy-7-tc-s-2.ansi` | 64x13 | truecolor | 20 | ski slalom carving down a waffle-gate slope, red/blue gates |
+| `candy-flappy-8-16-l-1.ansi` | 150x36 | 16 | 6 | shepherd guiding sheep through dry-stone stiles on the fell |
+| `candy-flappy-8-16-m-2.ansi` | 84x22 | 16 | 7 | sawmill cutting timber through spiked guide fences |
+| `candy-flappy-8-16-s-2.ansi` | 54x12 | 16 | 7 | synchronised swimming routine through striped nose-cones |
+| `candy-flappy-8-256-l-1.ansi` | 158x38 | 256 | 12 | pyrotechnic show: leaping past mortar racks and starbursts |
+| `candy-flappy-8-256-l-2.ansi` | 196x44 | 256 | 12 | drone light-show waltz weaving a luminous night grid |
+| `candy-flappy-8-256-m-1.ansi` | 82x24 | 256 | 12 | letterpress composing stick: lead sorts as flying gates |
+| `candy-flappy-8-256-m-2.ansi` | 86x22 | 256 | 12 | orchestra pit: baton beats rising as velvet curtain gates |
+| `candy-flappy-8-256-s-1.ansi` | 56x13 | 256 | 12 | weaver's loom: shuttle darting between taut warp gates |
+| `candy-flappy-8-256-s-2.ansi` | 58x12 | 256 | 12 | clockmaker threading a ticking brass escapement wheel |
+| `candy-flappy-8-tc-l-1.ansi` | 156x40 | truecolor | 45 | old reading room: threading a lantern between oak stacks |
+| `candy-flappy-8-tc-l-2.ansi` | 200x46 | truecolor | 52 | vineyard dresser pruning past taut wire trellises |
+| `candy-flappy-8-tc-m-1.ansi` | 84x23 | truecolor | 28 | punt pole through mossy canal bridge arches on low water |
+| `candy-flappy-8-tc-m-2.ansi` | 88x22 | truecolor | 27 | cold data hall: bee weaving a glowing fibre cable rack |
+| `candy-flappy-8-tc-s-1.ansi` | 54x13 | truecolor | 18 | postal sort room: bee sorting parcels through brass slots |
+| `candy-flappy-8-tc-s-2.ansi` | 58x12 | truecolor | 18 | seamstress spooling thread between bobbin gate posts |
+| `candy-flappy-9-16-l-2.ansi` | 160x34 | 16 | 8 | autumn gust funneling leaf eddies through fence gaps |
+| `candy-flappy-9-256-l-1.ansi` | 156x32 | 256 | 26 | tumbleweed blowing through a ghost-town boardwalk |
+| `candy-flappy-9-256-l-2.ansi` | 168x36 | 256 | 28 | dawn ferry wake V with gulls and a distant dinghy |
+| `candy-flappy-9-256-m-1.ansi` | 86x23 | 256 | 39 | seaplane skimming between lit buoys at dusk |
+| `candy-flappy-9-256-m-2.ansi` | 82x24 | 256 | 21 | paper lanterns rising on a diagonal over a night field |
+| `candy-flappy-9-256-s-1.ansi` | 62x13 | 256 | 17 | koinobori carp streamers on a pole in banded sky |
+| `candy-flappy-9-256-s-2.ansi` | 64x10 | 256 | 22 | skateboarder grinding a rail through cone line, spark trail |
+| `candy-flappy-9-tc-l-1.ansi` | 176x40 | truecolor | 160 | monarch migration pouring through a sunlit mountain notch |
+| `candy-flappy-9-tc-l-2.ansi` | 184x42 | truecolor | 169 | dawn balloon ascent over a patchwork furrowed field |
+| `candy-flappy-9-tc-m-1.ansi` | 84x23 | truecolor | 53 | trapeze release between two striped carousel tents |
+| `candy-flappy-9-tc-m-2.ansi` | 88x24 | truecolor | 40 | ski jumper in-run, flight arc and judges panel |
+| `candy-flappy-9-tc-s-1.ansi` | 58x13 | truecolor | 40 | hummingbird hovering at three glowing red feeders |
+| `candy-flappy-9-tc-s-2.ansi` | 52x12 | truecolor | 31 | samara helicopter seeds spinning through a fence gap |
+<!-- END candy-flappy SLOTS -->
 
 <!-- BEGIN honey-bounce SLOTS -->
 ### honey-bounce — slot series

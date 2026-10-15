@@ -22,7 +22,7 @@ HoneyBounce is a pure-math PHP library providing two complementary animation pri
 
 2. **Newtonian Projectile Simulation** — Euler-integrated 3D point/vector-based projectile motion with configurable gravity
 
-Unlike UI-focused animation libraries, honey-bounce is **framework-agnostic** — it solves the physics equations and returns numbers; consumers decide how to render them. This makes it suitable for TUIs (candy-core), game physics (honey-flap/Flappy Bird clone), particle effects, or any context requiring smooth, physically-grounded motion.
+Unlike UI-focused animation libraries, honey-bounce is **framework-agnostic** — it solves the physics equations and returns numbers; consumers decide how to render them. This makes it suitable for TUIs (candy-core), game physics (candy-flappy/Flappy Bird clone), particle effects, or any context requiring smooth, physically-grounded motion.
 
 The library extends its upstream (harmonica) with significant ergonomic improvements: spring presets modeled after UIKit's tension/friction constants, `SpringChain` for sequenced animations, `SpringCollection` for multi-spring management, WCAG `REDUCE_MOTION` accessibility support, and a complete `Easing`/`CubicBezier` curve library for tweening.
 
@@ -260,7 +260,7 @@ candy-core (TUI runtime)
     └── candy-palette (color detection, Probe::reducedMotion())
             └── honey-bounce (depends on both)
 
-honey-flap (Flappy Bird game)
+candy-flappy (Flappy Bird game)
     └── candy-core
     └── candy-sprinkles
     └── honey-bounce ← Bird uses Projectile for vertical motion
@@ -286,9 +286,9 @@ if (Probe::reducedMotion()) {
 
 This provides WCAG 2.1 compliance at the physics layer — any consumer using `Spring::update()` gets reduced-motion support automatically.
 
-### honey-flap: Production Integration Example
+### candy-flappy: Production Integration Example
 
-**Source**: `honey-flap/src/Bird.php`
+**Source**: `candy-flappy/src/Bird.php`
 
 The Flappy Bird clone uses `Projectile` for vertical bird motion:
 
@@ -392,7 +392,7 @@ $value = $ease->evaluate($t);
 
 1. **O(1) per-frame updates**: After constructor precomputes coefficients, `Spring::update()` is 4 multiplies + 2 adds. Projectile is 6 multiplies + 6 adds (negligible).
 
-2. **No GC pressure per frame**: Immutable `Projectile::update()` creates a new instance — in tight game loops (honey-flap at 30 FPS), this generates garbage. For performance-critical use cases, consider a mutable variant or object pooling.
+2. **No GC pressure per frame**: Immutable `Projectile::update()` creates a new instance — in tight game loops (candy-flappy at 30 FPS), this generates garbage. For performance-critical use cases, consider a mutable variant or object pooling.
 
 3. **Precomputed coefficients**: The heavy math (exp, sqrt, sin, cos) happens once at construction, not per frame.
 
@@ -460,7 +460,7 @@ $value = $ease->evaluate($t);
 
 8. **Y-up/Y-down flexibility**: `Gravity::standard()` vs `Gravity::standardYDown()` matches any coordinate convention
 
-9. **Production validated**: Powers `honey-flap` Flappy Bird clone; harmonica powers TUI animations in bubbletea
+9. **Production validated**: Powers `candy-flappy` Flappy Bird clone; harmonica powers TUI animations in bubbletea
 
 ## Weaknesses
 
@@ -547,5 +547,5 @@ $value = $ease->evaluate($t);
 | `honey-bounce/examples/spring.php` | Three damping regimes demo |
 | `honey-bounce/examples/projectile.php` | 2D projectile arc demo |
 | `honey-bounce/examples/particle.php` | Multi-particle system demo |
-| `honey-flap/src/Bird.php` | Real-world integration: Projectile for game physics |
+| `candy-flappy/src/Bird.php` | Real-world integration: Projectile for game physics |
 | `candy-palette/src/Probe.php` | `REDUCE_MOTION` detection implementation |

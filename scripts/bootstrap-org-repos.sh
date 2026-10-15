@@ -41,7 +41,7 @@ declare -A DESCRIPTIONS=(
     [candy-flip]="ASCII GIF viewer — port of namzug16/gifterm on the SugarCraft stack."
     [candy-gifview]="Terminal GIF + .ansi-art viewer — port of gifterm."
     [candy-top]="btop-style terminal system monitor — port of aristocratos/btop on the SugarCraft stack."
-    [honey-flap]="Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack."
+    [candy-flappy]="Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack."
 )
 
 # plan_rename.md step 2.4: offline metadata mode — print one description and

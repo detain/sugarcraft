@@ -454,7 +454,7 @@ All 45 research documents available at:
 | candy-wish | 24KB |
 | candy-mouse | 14KB |
 | honey-bounce | 25KB |
-| honey-flap | 11KB |
+| candy-flappy | 11KB |
 | sugar-bits | 26KB |
 | sugar-boxer | 16KB |
 | sugar-calendar | 19KB |

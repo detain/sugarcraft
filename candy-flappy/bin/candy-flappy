@@ -1,0 +1,46 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-flappy: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\LegacyPaths;
+use SugarCraft\Flappy\Game;
+
+// One-time migration of the pre-rename high-score directory (plan_rename.md R4.4).
+// Mirrors Game::getDefaultConfigDir()'s base resolution (XDG_CONFIG_HOME, then
+// HOME/.config); when neither resolves the migration is skipped silently — Game
+// will raise its own fail-closed error when it next needs the path.
+$legacyConfigBase = (static function (): string {
+    $xdg = getenv('XDG_CONFIG_HOME');
+    if ($xdg !== false && $xdg !== '') {
+        return $xdg;
+    }
+    $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+
+    return $home === '' ? '' : $home . '/.config';
+})();
+if ($legacyConfigBase !== '') {
+    $legacyNotice = LegacyPaths::migrate(
+        $legacyConfigBase . '/.honey-flap', // @rename-keep
+        $legacyConfigBase . '/.candy-flappy'
+    );
+    if ($legacyNotice !== null) {
+        fwrite(STDERR, "candy-flappy: {$legacyNotice}\n");
+    }
+}
+
+(new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();

@@ -447,7 +447,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Reduced-motion support (§1.2) — read env / `Probe::reducedMotion()`.
 - Gesture-driven springs (P3 deferred).
 
-### honey-flap
+### candy-flappy
 
 - Variable pipe-gap height (§5.2).
 

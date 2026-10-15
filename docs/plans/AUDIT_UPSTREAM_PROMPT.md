@@ -189,7 +189,7 @@ that are tiny but together justify a PR.
 - Rtarun3606k/TakaTime → sugar-tick
 - maxpaulus43/go-sweep → candy-mines
 - namzug16/gifterm → candy-flip
-- kbrgl/flapioca → honey-flap
+- kbrgl/flapioca → candy-flappy
 
 Verify against current MATCHUPS.md — the list above may have grown.
 Use MATCHUPS.md as the source of truth.

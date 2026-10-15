@@ -329,7 +329,7 @@ honey-bounce/src/
 2. **Physics visualization**: ASCII art showing each damping regime's behavior over time
 3. **Preset comparison table**: Visual reference for which preset to use when ( Gentle = modal dialogs, Wobbly = notifications, Stiff = sliders, etc.)
 4. **Game physics tutorial**: Build a simple bouncing ball game using Projectile + collision detection
-5. **Integration examples**: honey-bounce + candy-core (TUI animation), honey-bounce + honey-flap (game physics)
+5. **Integration examples**: honey-bounce + candy-core (TUI animation), honey-bounce + candy-flappy (game physics)
 
 # UX / TUI Improvements
 
@@ -348,7 +348,7 @@ honey-bounce/src/
 # Ecosystem / Integration Opportunities
 
 1. **honey-bounce + candy-core**: Animation system for TUI components — animated buttons, spring-based list reordering
-2. **honey-bounce + honey-flap**: Already exists — Flappy Bird clone using Projectile for vertical motion
+2. **honey-bounce + candy-flappy**: Already exists — Flappy Bird clone using Projectile for vertical motion
 3. **honey-bounce + sugar-charts**: Animated chart transitions with spring-based easing
 4. **Publish as standalone package**: When SugarCraft reaches v1.0, publish `honey-bounce` separately to Packagist as `sugarcraft/honey-bounce`
 5. **Particle effects system**: Using confettysh as reference, build particle system on top of honey-bounce physics
@@ -468,7 +468,7 @@ Second, the lack of animation completion callbacks is a notable ergonomic gap co
 Third, the mutable `Projectile` allocation pattern creates garbage in tight game loops. Adding a `ProjectileMutable` variant with in-place updates would enable high-performance particle systems without GC pressure.
 
 **Ecosystem positioning:**
-`honey-bounce` fills the physics/animation layer in SugarCraft's stack, sitting below `candy-core` (TUI runtime) and alongside `honey-flap` (game physics consumer). Its physics-first approach is correct — consumers handle rendering, enabling use in TUIs, games, or any animation context. The library's independence from terminal dependencies is a strength that should be preserved.
+`honey-bounce` fills the physics/animation layer in SugarCraft's stack, sitting below `candy-core` (TUI runtime) and alongside `candy-flappy` (game physics consumer). Its physics-first approach is correct — consumers handle rendering, enabling use in TUIs, games, or any animation context. The library's independence from terminal dependencies is a strength that should be preserved.
 
 **Recommended strategic direction:**
 

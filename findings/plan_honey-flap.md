@@ -4,22 +4,22 @@ phase: 1
 updated: 2026-06-30
 ---
 
-# Implementation Plan: honey-flap Audit Fixes
+# Implementation Plan: candy-flappy Audit Fixes
 
 ## Goal
 
-Address all 12 findings from the honey-flap audit, covering bug fixes, performance improvements, PHP 8.3+ compatibility, and security enhancements.
+Address all 12 findings from the candy-flappy audit, covering bug fixes, performance improvements, PHP 8.3+ compatibility, and security enhancements.
 
 ## Context & Decisions
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| Scoring fires at x=7, collision at x=8 | Off-by-one bug causes score increment one frame before visual collision | `honey-flap.md:1-19` |
-| Pre-create Style objects as statics | 4,320 allocations/frame at 60×18 playfield is wasteful | `honey-flap.md:38-49` |
-| Use atomic rename for high score writes | `file_put_contents` direct write risks corruption on crash | `honey-flap.md:53-63` |
-| Add `@var` annotation for Closure type | Docblock specifies `\Closure(int): int` but type hint is just `\Closure` | `honey-flap.md:23-32` |
-| PHP 8.3 `readonly` classes for immutable types | Engine-level enforcement of immutability | `honey-flap.md:123-128` |
-| First-class callable `TickMsg::new` | PHP 8.3 syntax, cleaner than `static fn()` | `honey-flap.md:114-119` |
+| Scoring fires at x=7, collision at x=8 | Off-by-one bug causes score increment one frame before visual collision | `candy-flappy.md:1-19` |
+| Pre-create Style objects as statics | 4,320 allocations/frame at 60×18 playfield is wasteful | `candy-flappy.md:38-49` |
+| Use atomic rename for high score writes | `file_put_contents` direct write risks corruption on crash | `candy-flappy.md:53-63` |
+| Add `@var` annotation for Closure type | Docblock specifies `\Closure(int): int` but type hint is just `\Closure` | `candy-flappy.md:23-32` |
+| PHP 8.3 `readonly` classes for immutable types | Engine-level enforcement of immutability | `candy-flappy.md:123-128` |
+| First-class callable `TickMsg::new` | PHP 8.3 syntax, cleaner than `static fn()` | `candy-flappy.md:114-119` |
 
 ## Phase 1: HIGH Severity Fixes [PENDING]
 
@@ -286,7 +286,7 @@ Address all 12 findings from the honey-flap audit, covering bug fixes, performan
 ## Phase 6: Testing & Verification [PENDING]
 
 - [ ] 6.1 Run Existing Test Suite
-  - **Command:** `cd honey-flap && composer install && vendor/bin/phpunit`
+  - **Command:** `cd candy-flappy && composer install && vendor/bin/phpunit`
   - **Conditions for Success:** All tests pass before and after changes
 
 - [ ] 6.2 Add New Tests for Bug Fixes
@@ -315,6 +315,6 @@ Address all 12 findings from the honey-flap audit, covering bug fixes, performan
 
 ## Notes
 
-- 2026-06-30: Initial plan created from audit findings `honey-flap.md`
+- 2026-06-30: Initial plan created from audit findings `candy-flappy.md`
 - All source locations verified against actual code during investigation
 - Tests at `tests/GameTest.php` provide existing coverage patterns to follow

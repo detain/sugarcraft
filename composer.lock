@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "84f57dcf8e5d34411c5ad4525da8baaa",
+    "content-hash": "89de4886f18e4a3f87f02041376c8626",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3683,6 +3683,69 @@
             }
         },
         {
+            "name": "sugarcraft/candy-flappy",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-flappy",
+                "reference": "b5d00d6b2e138d8b450f5945c804757bb7e5bee9"
+            },
+            "require": {
+                "php": ">=8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/honey-bounce": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "bin": [
+                "bin/candy-flappy"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Flappy\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Flappy\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack.",
+            "homepage": "https://sugarcraft.github.io/lib/candy-flappy.html",
+            "keywords": [
+                "flapioca",
+                "flappy",
+                "game",
+                "honeybounce",
+                "physics",
+                "sugarcraft",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-flappy/issues",
+                "source": "https://github.com/sugarcraft/candy-flappy",
+                "docs": "https://sugarcraft.github.io/lib/candy-flappy.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-flip",
             "version": "dev-master",
             "dist": {
@@ -5645,69 +5708,6 @@
                 "issues": "https://github.com/sugarcraft/honey-bounce/issues",
                 "source": "https://github.com/sugarcraft/honey-bounce",
                 "docs": "https://sugarcraft.github.io/lib/honey-bounce.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/honey-flap",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "honey-flap",
-                "reference": "c5b16767e9d7bc6d2f682a4a8c66bd99f19f82e4"
-            },
-            "require": {
-                "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/honey-bounce": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "bin": [
-                "bin/honey-flap"
-            ],
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Flap\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Flap\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack.",
-            "homepage": "https://sugarcraft.github.io/lib/honey-flap.html",
-            "keywords": [
-                "flappy",
-                "game",
-                "honeybounce",
-                "physics",
-                "sugarcraft",
-                "sugarcraft",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/honey-flap/issues",
-                "source": "https://github.com/sugarcraft/honey-flap",
-                "docs": "https://sugarcraft.github.io/lib/honey-flap.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8585,6 +8585,7 @@
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
+        "sugarcraft/candy-flappy": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
@@ -8614,7 +8615,6 @@
         "sugarcraft/candy-vt": 20,
         "sugarcraft/candy-wish": 20,
         "sugarcraft/honey-bounce": 20,
-        "sugarcraft/honey-flap": 20,
         "sugarcraft/sugar-bits": 20,
         "sugarcraft/sugar-boxer": 20,
         "sugarcraft/sugar-calendar": 20,
