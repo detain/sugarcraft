@@ -113,10 +113,14 @@ trait TmpTree
             \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($items as $item) {
-            if ($item->isDir()) {
-                \rmdir($item->getPathname());
-            } else {
+            // A symlink to a directory ALSO reports isDir(), and rmdir()
+            // cannot remove a link — it must be unlinked itself. The
+            // iterator does not descend links (no FOLLOW_SYMLINKS), so
+            // link targets outside the tree survive the sweep.
+            if ($item->isLink() || !$item->isDir()) {
                 \unlink($item->getPathname());
+            } else {
+                \rmdir($item->getPathname());
             }
         }
         \rmdir($dir);

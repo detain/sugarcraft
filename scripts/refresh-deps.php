@@ -41,7 +41,13 @@ declare(strict_types=1);
  * WHAT NEVER CHANGES. Per-lib manifests reference siblings as `dev-master` and
  * carry NO `repositories[]` block: a path url is a hard fatal for anyone
  * cloning the split repo. Linked mode's injected manifests are scratch and are
- * restored via `git checkout --` in a `finally`, even on fatal. The root
+ * byte-restored from a pre-injection snapshot in a `finally`, even on fatal —
+ * deliberately NOT via `git checkout --`, which restores from the INDEX and
+ * silently clobbers UNCOMMITTED manifest edits. The rename campaign proved the
+ * hazard on the honey-flap pilot (2026-10-15) @rename-keep: Procedure R's `git mv` stages
+ * the pre-rename bytes at the new path, the rewriter's edits sit unstaged on
+ * top, and a checkout at R5 rolled R3's composer.json rewrite back mid-flight.
+ * The root
  * manifest is the ONE exception — the monorepo root is what `../<lib>`
  * resolves against, so its repositories[] is permanent and its composer.lock
  * is tracked and SHOULD be committed.
@@ -61,10 +67,25 @@ declare(strict_types=1);
  *   php scripts/refresh-deps.php --status           # which mode is each lib in?
  *   php scripts/refresh-deps.php --dry-run
  *
+ * Environment:
+ *   SUGARCRAFT_REFRESH_ROOT  target repository root; defaults to the monorepo
+ *     containing scripts/. Mirrors SUGARCRAFT_RENAME_ROOT in
+ *     tools/rename-lib.php — the documented hook that lets the fixture suites
+ *     point this script at throwaway mini-repos.
+ *
  * Exit 0 only if every targeted lib ends in the requested state.
  */
 
-$root = \dirname(__DIR__);
+$root = \getenv('SUGARCRAFT_REFRESH_ROOT');
+if (!\is_string($root) || $root === '') {
+    $root = \dirname(__DIR__);
+}
+$resolvedRoot = \realpath($root);
+if ($resolvedRoot === false || !\is_dir($resolvedRoot)) {
+    \fwrite(\STDERR, "refresh-deps: root is not a directory: {$root}\n");
+    exit(2);
+}
+$root = $resolvedRoot;
 \chdir($root);
 
 $opts = ['root' => false, 'verify' => false, 'dry' => false, 'libs' => null,
@@ -250,10 +271,40 @@ if ($opts['dry']) {
     exit(0);
 }
 
-$restore = static function () use ($root): void {
+/**
+ * Exact bytes of every first-level lib manifest (`<lib>/composer.json`),
+ * captured immediately BEFORE linked mode injects its scratch repositories[]
+ * blocks. Empty until taken; the restore closure is then byte-precise about
+ * what it discards.
+ *
+ * @var array<string, string>
+ */
+$scratchSnapshot = [];
+
+/** @return array<string, string> path => bytes, for every first-level lib manifest */
+$takeScratchSnapshot = static function () use ($root): array {
+    $bytes = [];
+    foreach (\glob("{$root}/*/composer.json") ?: [] as $f) {
+        if (\is_file($f)) {
+            $bytes[$f] = (string) \file_get_contents($f);
+        }
+    }
+
+    return $bytes;
+};
+
+$restore = static function () use (&$scratchSnapshot): void {
     // Scratch manifests, always discarded — a repositories[] block in a
-    // published lib manifest is a hard fatal in a split-repo clone.
-    \exec('git -C ' . \escapeshellarg($root) . " checkout -- '*/composer.json' 2>/dev/null");
+    // published lib manifest is a hard fatal in a split-repo clone. Writing
+    // the captured bytes back (never `git checkout --`) keeps this discard
+    // orthogonal to whatever else is uncommitted in a manifest, which is
+    // exactly the state a Procedure R rename is in when R5 runs.
+    foreach ($scratchSnapshot as $file => $bytes) {
+        if ((string) @\file_get_contents($file) !== $bytes) {
+            \file_put_contents($file, $bytes);
+        }
+    }
+    $scratchSnapshot = [];
 };
 
 /**
@@ -473,6 +524,7 @@ if ($opts['mode'] === 'published') {
     \fwrite(\STDOUT, "Updating from Packagist (siblings = published dev-master)...\n");
     $updateLibs($targets, $root, $failed);
 } else {
+$scratchSnapshot = $takeScratchSnapshot();
 try {
     foreach ($targets as $lib) {
         $purged = $purgeStaleSiblings($lib);
