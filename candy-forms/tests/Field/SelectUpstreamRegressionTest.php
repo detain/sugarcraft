@@ -8,14 +8,14 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Forms\Field\Select;
 
 /**
- * Sentinel tests anchoring sugar-prompt Select against two known
+ * Sentinel tests anchoring candy-forms Select against two known
  * upstream huh issues so a future port can't regress quietly.
  *
  *   - #679 — "Select doesn't render elements before selected when
  *            Value is set" (programmatic default placement).
  *   - #749 — "Cursor visibility navigating multiline options".
  *
- * The current sugar-prompt Select does not yet expose `withValue()`
+ * The current candy-forms Select does not yet expose `withValue()`
  * (programmatic default) or multiline-option support; these tests
  * pin the current rendering invariants. When the corresponding port
  * lands, these tests should be expanded — not deleted.

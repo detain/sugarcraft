@@ -140,13 +140,13 @@ interactive TUI.
 | Item | Effort | Notes |
 |---|---|---|
 | **Bubble Tea-style Model** with `state` enum (`Idle` / `PickingFile` / `Sending`) | 1 d | candy-core Model/Update/View already exists |
-| **Form fields** (from / to / subject / body textarea) using `sugar-prompt` TextInput + Textarea | 1 d | textarea component already in sugar-prompt; check coverage |
+| **Form fields** (from / to / subject / body textarea) using `candy-forms` TextInput + Textarea | 1 d | textarea component already in candy-forms; check coverage |
 | **CC/BCC toggle** (show on user request — matches Pop) | ½ d | keybinding `c` to reveal |
 | **Filepicker** for attachments | 1 d | use existing `super-candy` Picker, or build a thin wrapper |
 | **Send spinner** during transport | ½ d | candy-sprinkles Spinner already available |
 | **Markdown body → HTML** preview & send | 1 d | use `sugar-glow` for render |
-| **Help bar** with key hints | ½ d | candy-sprinkles HelpBar or sugar-prompt help |
-| **TUI tests** — model snapshot + scripted-input view tests | 1 d | follow `sugar-prompt/tests/` pattern |
+| **Help bar** with key hints | ½ d | candy-sprinkles HelpBar or candy-forms help |
+| **TUI tests** — model snapshot + scripted-input view tests | 1 d | follow `candy-forms/tests/` pattern |
 | **VHS tape** for README GIF | ½ d | `.vhs/compose.tape` |
 | **Docs** (README, `docs/lib/sugar-post.html`, end-user docs feature grid) | 1 d | — |
 
@@ -181,7 +181,7 @@ roadmap).
 - `MATCHUPS.md` row stays 🟢; only sub-status moves from "library
   surface complete" to "library surface + TUI complete."
 - No dependency churn — sugar-post stays on `candy-core` and gains
-  `sugar-prompt` / `sugar-glow` / `candy-sprinkles` (all already
+  `candy-forms` / `sugar-glow` / `candy-sprinkles` (all already
   monorepo siblings).
 
 ### Risks
@@ -436,7 +436,7 @@ src/Tui/
     View.php
     KeyMap.php
 src/Tui/Field/
-    FormField.php (composes sugar-prompt TextInput / Textarea)
+    FormField.php (composes candy-forms TextInput / Textarea)
 tests/Tui/
     ModelStateTest.php
     UpdateTest.php

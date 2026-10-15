@@ -16,7 +16,7 @@ body:
         - candy-mouse (mouse zones)
         - sugar-bits (components)
         - sugar-charts (charts)
-        - sugar-prompt (forms)
+        - candy-forms (forms)
         - candy-shell (CLI)
         - candy-shine (Markdown)
         - candy-kit (CLI helpers)

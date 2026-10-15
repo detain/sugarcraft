@@ -24,7 +24,7 @@ From `repo_map/php-tui_php-tui.md`:
 | `honey-bounce` | Layout, Constraint, CassowaryConstraintSolver |
 | `sugar-bits` | ParagraphWidget, ParagraphRenderer |
 | `sugar-charts` | ChartWidget, BarChartWidget, SparklineWidget, TableWidget |
-| `sugar-prompt` | ListWidget, TabsWidget, ScrollbarWidget |
+| `candy-forms` | ListWidget, TabsWidget, ScrollbarWidget |
 | `candy-shine` | GaugeWidget, CanvasWidget, image rendering |
 
 ---

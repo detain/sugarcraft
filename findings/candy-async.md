@@ -390,7 +390,7 @@ And several libs correctly depend on `candy-async`:
 - candy-serve (Subscription/Subscriptions for cleanup)
 - sugar-post (CancellationToken, AsyncOps for SMTP)
 - sugar-tick (CancellationSource, CancellationToken)
-- sugar-prompt, sugar-reel, sugar-query
+- candy-forms, sugar-reel, sugar-query
 
 ---
 

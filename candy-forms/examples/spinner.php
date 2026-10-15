@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Blocking Spinner — `Prompt\Spinner` schedules a worker callable,
- * animates a SugarBits Spinner on STDERR while it runs, then returns.
+ * Blocking ActionSpinner — `SugarCraft\Forms\ActionSpinner` schedules a
+ * worker callable, animates a spinner on STDERR while it runs, then returns.
  * Mirrors huh's `huh.NewSpinner().Title(...).Action(fn).Run()`.
  *
  *   php examples/spinner.php
@@ -12,12 +12,12 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
-use SugarCraft\Prompt\Spinner;
+use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
+use SugarCraft\Forms\ActionSpinner;
 
 echo "Starting work...\n";
 
-Spinner::new()
+ActionSpinner::new()
     ->withTitle('Crunching numbers')
     ->withStyle(SpinnerStyle::dot())
     ->withAction(static function (): void {

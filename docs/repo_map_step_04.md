@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-testing-new`
 **Depends on:** step-00 ✅ (independent — testing tooling)
-**Blocks:** step-15 (candy-forms uses it), step-16 (sugar-prompt uses it), step-28 (golden-file rollout)
+**Blocks:** step-15 (candy-forms uses it), step-16 (candy-forms uses it), step-28 (golden-file rollout)
 
 ## Goal
 

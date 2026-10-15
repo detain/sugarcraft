@@ -231,7 +231,7 @@ Individual widget extensions map to leaf libraries:
 - `sugar-bits`: `ParagraphWidget`, `ParagraphRenderer` (text rendering)
 - `candy-sprinkles`: `BlockWidget` (borders, titles, padding)
 - `sugar-charts`: `ChartWidget`, `BarChartWidget`, `SparklineWidget`, `TableWidget`
-- `sugar-prompt`: `ListWidget`, `TabsWidget`, `ScrollbarWidget`
+- `candy-forms`: `ListWidget`, `TabsWidget`, `ScrollbarWidget`
 - `candy-shine`: `GaugeWidget`, `CanvasWidget`, image rendering
 
 ## Analysis

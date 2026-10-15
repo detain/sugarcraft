@@ -2,11 +2,11 @@
 
 **Branch:** `ai/candy-async-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-23 (candy-forms / sugar-prompt / candy-core migrate to candy-async)
+**Blocks:** step-23 (candy-forms / candy-forms / candy-core migrate to candy-async)
 
 ## Goal
 
-Create the `candy-async` foundation package — unifies the fragmented ReactPHP usage across candy-core (`exec()` that blocks), candy-forms / sugar-prompt (async suggestions but no cancellation), and others. Provides a `Cancellable` token, `Subscription` lifecycle, and small `AsyncOps` helpers around ReactPHP's event loop. Consumers in step-23 swap their ad-hoc usage for these.
+Create the `candy-async` foundation package — unifies the fragmented ReactPHP usage across candy-core (`exec()` that blocks), candy-forms / candy-forms (async suggestions but no cancellation), and others. Provides a `Cancellable` token, `Subscription` lifecycle, and small `AsyncOps` helpers around ReactPHP's event loop. Consumers in step-23 swap their ad-hoc usage for these.
 
 Reference: `docs/repo_map_update.md` §369.6 (consolidation of async patterns), §387.5 (ReactPHP reinvention).
 
@@ -80,7 +80,7 @@ Reference: `docs/repo_map_update.md` §369.6 (consolidation of async patterns), 
   ## Summary
   - New foundation lib candy-async unifies ReactPHP usage across the monorepo.
   - Provides Cancellable tokens, Subscriptions composition, AsyncOps (withTimeout, retry, debounce, throttle).
-  - Consumers (candy-core, candy-forms, sugar-prompt) migrate in step-23.
+  - Consumers (candy-core, candy-forms, candy-forms) migrate in step-23.
 
   ## Test plan
   - [x] vendor/bin/phpunit in candy-async (≥95% coverage)

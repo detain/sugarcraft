@@ -8,7 +8,7 @@
 
 Migrate `candy-forms` (Form + 7 field types: TextInput, TextArea, Select, MultiSelect, Confirm, Note, FilePicker) onto: candy-buffer (cell rendering), candy-layout (form/field sizing), candy-testing (snapshot infrastructure — replace any per-test ad-hoc fixtures), candy-fuzzy (Select / MultiSelect filter delegates to candy-fuzzy). candy-forms keeps its own FuzzyMatcher as the back-compat shim added in step-7.
 
-Reference: §369.1 (merge candy-forms + sugar-prompt testing utilities → candy-testing), §387.1 (fuzzy reinvention).
+Reference: §369.1 (merge candy-forms + candy-forms testing utilities → candy-testing), §387.1 (fuzzy reinvention).
 
 ## Files expected to be modified
 
@@ -24,7 +24,7 @@ Reference: §369.1 (merge candy-forms + sugar-prompt testing utilities → candy
 - [ ] All existing candy-forms tests pass; converted-to-golden tests use candy-testing helpers.
 - [ ] Select/MultiSelect filter UX unchanged (same candidate ordering); match highlights newly visible via candy-fuzzy indices.
 - [ ] Renderers (TextInput, TextArea, Select view) byte-equivalent to before (snapshot tests assert).
-- [ ] No regression in any candy-forms dependent (sugar-prompt is the main one).
+- [ ] No regression in any candy-forms dependent (candy-forms is the main one).
 - [ ] ≥95 % coverage maintained.
 - [ ] `git status` clean on master.
 
@@ -35,7 +35,7 @@ Reference: §369.1 (merge candy-forms + sugar-prompt testing utilities → candy
 3. **Migrate renderers next**: TextInput + TextArea render through candy-buffer. Build a Buffer, paint glyphs, render to ANSI via Buffer's toAnsi() (or a temporary string-render fallback if buffer toAnsi isn't there yet — append a `Need Buffer::toAnsi()` to `docs/repo_map_updates.md` for step-26 to address).
 4. **Convert tests**: replace ad-hoc fixture loaders with `\SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi(...)`. Goldens live in `tests/fixtures/`.
 5. **Form layout**: if a Form is built with `withConstraints([...])`, route through candy-layout's `LayoutSolver`. Otherwise keep the existing greedy-vertical default.
-6. Run phpunit in candy-forms + sugar-prompt + affected-libs.
+6. Run phpunit in candy-forms + candy-forms + affected-libs.
 
 ## Tester brief
 
@@ -61,7 +61,7 @@ Reference: §369.1 (merge candy-forms + sugar-prompt testing utilities → candy
 
   ## Test plan
   - [x] vendor/bin/phpunit in candy-forms (≥95% coverage, golden fixtures in place)
-  - [x] vendor/bin/phpunit in sugar-prompt (dependent — unchanged)
+  - [x] vendor/bin/phpunit in candy-forms (dependent — unchanged)
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_15.md, docs/repo_map_update.md §369.1, §387.1

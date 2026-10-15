@@ -248,8 +248,8 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-crush/48-crush-bot.ansi` | 64x18 | 312 | chrome robot agent with glowing amber eyes and mint heart-core crushing a glowing seam of sugar crystals, lime-cyan-violet "s u g a r - c r u s h" wordmark, "terminal AI coding agent" caption |
 | `sugar-crush/49-crush-agent.ansi` | 66x20 | 29 | sugar-crush window with traffic-light titlebar: rose-pink robot and speech bubble, ⚙ Read/Edit/Run tool log, green 22-assertions tick, "> crush this bug" prompt, keybinding footer |
 | `sugar-crush/49-swirl-crush.ansi` | 56x19 | 268 | giant rainbow-swirl lollipop among floating code braces and dot-stars, green-to-violet SUGAR/CRUSH block letters, "the terminal AI agent" and "crush the code · sweeten the terminal" captions |
+| `sugar-crush/50-candy-forms.ansi` | 52x9 | 16 | Warm berry boot splash: `php bin/sugarcrush` streams 52 candy libraries loading and ends on a pink block cursor |
 | `sugar-crush/50-crush-bot.ansi` | 62x17 | 42 | Confection-bot robot waving a swirl lollipop beside a live sugar-crush chat pane (tool calls, 60% sugar meter, cursor) over a pink-violet SUGARCRUSH wordmark |
-| `sugar-crush/50-sugar-prompt.ansi` | 52x9 | 16 | Warm berry boot splash: `php bin/sugarcrush` streams 52 candy libraries loading and ends on a pink block cursor |
 
 
 <!-- BEGIN sugarcraft SLOTS -->

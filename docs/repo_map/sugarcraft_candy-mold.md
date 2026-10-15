@@ -343,7 +343,7 @@ The Python TUI framework with reactive state, CSS styling, 40+ widgets. The **te
 
 7. **Bin entry point is minimal** — The Go template's `main.go` includes explicit error handling with `fmt.Println(err); os.Exit(1)`. candy-mold's `bin/start` delegates all error handling to `Program::run()` silently.
 
-8. **No integration with sugar-bits components** — The README's "common next steps" table mentions `sugar-bits` Spinner, `sugar-prompt` Group, etc., but the scaffold itself uses only raw `Style` from `candy-sprinkles`. A version that embeds a `Spinner` from `sugar-bits` would show the component model.
+8. **No integration with sugar-bits components** — The README's "common next steps" table mentions `sugar-bits` Spinner, `candy-forms` Group, etc., but the scaffold itself uses only raw `Style` from `candy-sprinkles`. A version that embeds a `Spinner` from `sugar-bits` would show the component model.
 
 9. **Tests do not use data providers** — The 7 tests are explicit individual methods. Using `@dataProvider` for the key-type → expected-count matrix would reduce boilerplate.
 
@@ -361,7 +361,7 @@ The README's "common next steps" table maps developer intents to SugarCraft libr
 | Show a spinner while loading | `sugar-bits` | `use SugarCraft\Bits\Spinner; $spinner = new Spinner();` |
 | Render Markdown help text | `candy-shine` | `use SugarCraft\Shine\Renderer; echo (new Renderer())->render($md);` |
 | Tail a log into scrollable pane | `sugar-bits` | `use SugarCraft\Bits\Viewport;` |
-| Build a multi-page wizard | `sugar-prompt` | `use SugarCraft\Prompt\Group;` |
+| Build a multi-page wizard | `candy-forms` | `use SugarCraft\Forms\Group;` |
 | Plot a sparkline | `sugar-charts` | `use SugarCraft\Charts\Sparkline;` |
 | Make it `ssh`-accessible | `candy-wish` | `use SugarCraft\Wish\Wish;` |
 

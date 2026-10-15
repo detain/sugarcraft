@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-forms",
-    "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits and sugar-prompt.",
+    "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits, with the interactive huh-style form engine folded in.",
     "type": "library",
     "license": "MIT",
     "keywords": [

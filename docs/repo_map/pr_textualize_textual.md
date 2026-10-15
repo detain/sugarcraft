@@ -44,7 +44,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Content, Text, Span, Style | `candy-shine/` | ✅ Mapped |
 | markdown, MarkdownViewer | `candy-shine/` | ✅ Mapped |
 | Tree, DirectoryTree | `candy-lister/` | ✅ Mapped |
-| Select, OptionList, SelectionList | `sugar-prompt/` | ✅ Mapped |
+| Select, OptionList, SelectionList | `candy-forms/` | ✅ Mapped |
 | Input, TextArea, MaskedInput | `candy-forms/` | ✅ Mapped |
 | DataTable | `sugar-table/` | ✅ Mapped |
 | sparkline, ProgressBar | `sugar-charts/` | ✅ Mapped |

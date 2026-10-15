@@ -13,11 +13,11 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Prompt\Field\Confirm;
-use SugarCraft\Prompt\Field\Input;
-use SugarCraft\Prompt\Field\Select;
-use SugarCraft\Prompt\Form;
-use SugarCraft\Prompt\Group;
+use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Form;
+use SugarCraft\Forms\Group;
 
 // Group 1 always asks the gating question.
 $gate = Group::new(

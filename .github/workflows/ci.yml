@@ -543,7 +543,7 @@ jobs:
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
 
       # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
-      # lives).  Downstream libs (sugar-prompt, sugar-bits, candy-shell,
+      # lives).  Downstream libs (candy-forms, sugar-bits, candy-shell,
       # candy-shine): run full suite — any failures there are pre-existing and
       # unrelated to the x/windows changes.
       - name: Run tests

@@ -16,7 +16,7 @@ use SugarCraft\Bits\ItemList\StringItem;
 $items = array_map(
     fn(string $s) => new StringItem($s),
     ['SugarCraft', 'CandySprinkles', 'HoneyBounce', 'CandyMouse',
-     'SugarBits', 'SugarCharts', 'SugarPrompt', 'CandyShell',
+     'SugarBits', 'SugarCharts', 'CandyForms', 'CandyShell',
      'CandyShine', 'CandyKit', 'CandyFreeze', 'SugarGlow',
      'SugarSpark', 'CandyWish', 'SugarWishlist', 'CandyMetrics'],
 );

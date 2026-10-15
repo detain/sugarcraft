@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Prompt\Field\Text;
+use SugarCraft\Forms\Field\Text;
 
 $field = Text::new('notes')
     ->withTitle('Release notes')

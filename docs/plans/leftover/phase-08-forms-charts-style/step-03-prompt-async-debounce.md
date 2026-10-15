@@ -1,6 +1,6 @@
-# Step 08.03 — sugar-prompt async debounced suggestions
+# Step 08.03 — candy-forms async debounced suggestions
 
-**Source:** `leftover_updates_later.md` sugar-prompt §3.3
+**Source:** `leftover_updates_later.md` candy-forms §3.3
 **Branch:** `ai/prompt-async-debounce`
 
 ## Deliverable
@@ -12,17 +12,17 @@ types, then fetch.
 
 **Modify:**
 
-- `sugar-prompt/src/Select.php` and `sugar-prompt/src/TextInput.php` —
+- `candy-forms/src/Select.php` and `candy-forms/src/TextInput.php` —
   `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`.
 - Uses candy-core's `WorkerPool` (step 06.04) for the async fetch.
 
 ## Tests
 
-- `sugar-prompt/tests/AsyncSuggestionsTest.php`.
+- `candy-forms/tests/AsyncSuggestionsTest.php`.
 
 ## Acceptance
 
-- `cd sugar-prompt && vendor/bin/phpunit --filter Async` green.
+- `cd candy-forms && vendor/bin/phpunit --filter Async` green.
 
 ## Notes
 

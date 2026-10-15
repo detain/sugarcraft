@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1b80426c5df82141928b18d8e373c770",
+    "content-hash": "8127ee2fe593efc07ed103ae49a2d18a",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3808,7 +3808,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-forms",
-                "reference": "aa9fc820d114938e858d6cf883a83e8b2d200bc6"
+                "reference": "09dd04800a3203256a6f2d8a0e4d2e1728fc1a37"
             },
             "require": {
                 "php": "^8.3",
@@ -3844,7 +3844,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits and sugar-prompt.",
+            "description": "Form library (port of charmbracelet/huh) and foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits.",
             "homepage": "https://github.com/sugarcraft/candy-forms",
             "keywords": [
                 "forms",
@@ -4596,15 +4596,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mouse",
-                "reference": "dfe5f719d32e8b795a5be2902830ab9592774ec6"
+                "reference": "308696552796256b741de92b003d982b06eb21aa"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "phpunit/phpunit": "^10.5"
             },
             "type": "library",
             "autoload": {
@@ -4627,7 +4626,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Mouse hit-testing (Mark/Scan/Get) plus the bubblezone-style zone manager (hover, click/double/triple-click, drag tracking) under SugarCraft\\Mouse\\Zones.",
+            "description": "Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus ZoneClickTracker for press/release deduplication. No external Manager wiring needed.",
             "homepage": "https://github.com/sugarcraft/candy-mouse",
             "keywords": [
                 "bubblezone",
@@ -6507,72 +6506,6 @@
             "support": {
                 "issues": "https://github.com/sugarcraft/sugar-post/issues",
                 "source": "https://github.com/sugarcraft/sugar-post"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/sugar-prompt",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-prompt",
-                "reference": "af2326843817ad25c3b84db2486361855348da9e"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-forms": "dev-master",
-                "sugarcraft/candy-fuzzy": "dev-master",
-                "sugarcraft/sugar-bits": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Prompt\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Prompt\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/huh — interactive form library (Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, Date, Slider, Color) with multi-page Group support, 7 stock themes, and form-level KeyMap override per binding.",
-            "homepage": "https://github.com/sugarcraft/sugar-prompt",
-            "keywords": [
-                "cli",
-                "confirm",
-                "file-picker",
-                "form",
-                "huh",
-                "input",
-                "multi-select",
-                "prompt",
-                "select",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-prompt/issues",
-                "source": "https://github.com/sugarcraft/sugar-prompt",
-                "docs": "https://sugarcraft.github.io/lib/sugar-prompt.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8630,7 +8563,6 @@
         "sugarcraft/sugar-glow": 20,
         "sugarcraft/sugar-mcp": 20,
         "sugarcraft/sugar-post": 20,
-        "sugarcraft/sugar-prompt": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-skate": 20,

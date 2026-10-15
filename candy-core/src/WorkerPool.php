@@ -538,7 +538,7 @@ PHP;
      * Grace-poll, SIGTERM, poll, SIGKILL — the bounded reap ladder.
      *
      * A per-package copy of the tree's house pattern (sugar-crush
-     * ProcessReaper, sugar-prompt BoundedReaper — sugar-reel and sugar-dash
+     * ProcessReaper, candy-forms BoundedReaper — sugar-reel and sugar-dash
      * folded their copies onto this package's {@see Util\Proc\BoundedShutdown}):
      * candy-core is a foundation library
      * and may not depend on any of them for one helper. After this returns,

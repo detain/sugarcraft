@@ -126,7 +126,6 @@ stands; it is not a precedent that apps default to `Candy-`.
 |---|---|
 | **SugarCraft** | umbrella brand — vague is correct here, it's the meta |
 | **HoneyBounce** | honey is sticky / springy; bounce = spring physics. ✓✓ |
-| **SugarPrompt** | sugar + prompt = forms. clear. |
 | **SugarCharts** | sugar + charts = charts. literal. |
 | **SugarTable** | sugar + table = data table. literal. |
 | **SugarCalendar** | sugar + calendar = date picker. literal. |
@@ -144,12 +143,12 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. "vcr" carries the cassette / playback metaphor for free. |
 | **CandyFlip**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). "flip" carries the frame-by-frame animation metaphor for free. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
-| **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits and sugar-prompt. |
+| **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits. |
 | **CandyFocus** | candy + focus = focus management. dependency-free focus ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dash first used here. |
 | **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
 | **CandyFuzzy** | candy + fuzzy = fuzzy string matching with scored matched indices. extracted from candy-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type). |
 | **CandyBuffer** | candy + buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |
-| **CandyAsync** | candy + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across candy-core, candy-forms, sugar-prompt, candy-wish. |
+| **CandyAsync** | candy + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across candy-core, candy-forms, candy-wish. |
 | **CandyLayout** | candy + layout = constraint-based layout solver. Implements the Cassowary constraint system (Badros & Borning, 2001) behind a LayoutSolver interface: CassowarySolver (simplex) + GreedySolver (5-phase fallback from candy-sprinkles). |
 | **CandyTesting** | candy + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
 | **CandyInput** | candy + input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
@@ -230,7 +229,7 @@ vocabulary above — these three remain reserved as the safe defaults.
 | Prefix | Meaning | Example uses |
 |---|---|---|
 | **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyShell), markdown (CandyShine) |
-| **Sugar-** | components / data / forms / apps | components (SugarBits), forms (SugarPrompt), charts (SugarCharts) |
+| **Sugar-** | components / data / forms / apps | components (SugarBits), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (HoneyFlap) |
 
 `Candy-` (Files) is the naming for the file manager (formerly SuperCandy).

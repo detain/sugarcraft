@@ -777,7 +777,7 @@ $completion = match ($shell) {
 
 **Stars:** ~2,800 | **Language:** Go
 
-Maps to `sugar-prompt` (not yet fully implemented in SugarCraft). huh provides:
+Maps to `candy-forms` (not yet fully implemented in SugarCraft). huh provides:
 - Multi-field forms with pages (Groups)
 
 - Dynamic reactivity via `*Func()` methods with binding invalidation

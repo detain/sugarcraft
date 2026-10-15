@@ -514,11 +514,11 @@ If implementing concurrent search, add tests for correctness (same results as se
 
 # Ecosystem / Integration Opportunities
 
-## 1. Integration with sugar-prompt
+## 1. Integration with candy-forms
 
-Wire candy-lister as the completion list for sugar-prompt's fuzzy autocomplete. FuzzyMatch is already used in Prompt.
+Wire candy-lister as the completion list for candy-forms's fuzzy autocomplete. FuzzyMatch is already used in Prompt.
 
-**Source:** `docs/repo_map/sugarcraft_sugar-prompt.md` (FuzzyMatcher in Prompt), `docs/repo_map/charmbracelet_bubbles.md` (List with fuzzy filter)
+**Source:** `docs/repo_map/sugarcraft_candy-forms-huh.md` (FuzzyMatcher in the former Prompt façade), `docs/repo_map/charmbracelet_bubbles.md` (List with fuzzy filter)
 
 ## 2. Integration with sugar-table
 

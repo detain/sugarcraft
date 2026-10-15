@@ -174,9 +174,9 @@
 | key | `SugarCraft\Forms\Key\Key` | 🟢 |
 | cursor | `SugarCraft\Forms\Cursor\Cursor` | 🟢 |
 
-### sugar-prompt (charmbracelet/huh)
+### candy-forms (charmbracelet/huh)
 
-Note: `charmbracelet/huh` is a separate form library that builds on bubbles. SugarCraft maps `huh` → `sugar-prompt` (MATCHUPS.md row 34). Bubbles components (TextInput, TextArea, List, etc.) provide the primitive widgets that huh combines into a form framework.
+Note: `charmbracelet/huh` is a separate form library that builds on bubbles. SugarCraft maps `huh` → `candy-forms` (MATCHUPS.md row 34). Bubbles components (TextInput, TextArea, List, etc.) provide the primitive widgets that huh combines into a form framework.
 
 ### candy-forms extraction
 

@@ -32,7 +32,7 @@ Per `repo_map/charmbracelet_bubbles.md`:
 | key | `SugarCraft\Forms\Key\Key` | 🟢 |
 | cursor | `SugarCraft\Forms\Cursor\Cursor` | 🟢 |
 
-**Note**: `charmbracelet/huh` (form framework built on bubbles) maps to `sugar-prompt` (MATCHUPS.md row 34).
+**Note**: `charmbracelet/huh` (form framework built on bubbles) maps to `candy-forms` (MATCHUPS.md row 34).
 
 ---
 
@@ -883,10 +883,10 @@ $truncated = mb_strimwidth($plain, 0, $maxWidth, '...');
 - Performance is critical - every ms matters over SSH
 - SugarCraft should prioritize performance optimization
 
-### 3. Form Framework Layer (huh→sugar-prompt)
+### 3. Form Framework Layer (huh→candy-forms)
 
 - Users want high-level forms, not just primitives
-- sugar-prompt (huh port) addresses this
+- candy-forms (huh port) addresses this
 - Consider higher-level abstractions on top of candy-forms
 
 ### 4. Real Cursor + Virtual Cursor

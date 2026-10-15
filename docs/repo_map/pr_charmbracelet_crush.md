@@ -23,7 +23,7 @@ From the first-pass analysis (`repo_map/charmbracelet_crush.md`), SugarCraft map
 |---|---|---|
 | `internal/shell` | `candy-shell` | Exists |
 | `internal/lsp` | `candy-core` (future) | Not implemented |
-| `internal/agent/tools` | `sugar-bits`, `sugar-prompt` | Partial |
+| `internal/agent/tools` | `sugar-bits`, `candy-forms` | Partial |
 | `internal/ui` | `candy-shine`, `sugar-charts` | Partial |
 | `internal/skills` | (none yet) | Not implemented |
 | `internal/hooks` | (none yet) | Not implemented |

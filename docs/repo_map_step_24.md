@@ -1,12 +1,12 @@
 # Step 24 — Vim mode consolidation
 
 **Branch:** `ai/vim-mode-shared`
-**Depends on:** step-15 (candy-forms migrated), step-16 (sugar-prompt migrated), step-14 (sugar-bits migrated), step-21 (sugar-readline migrated)
+**Depends on:** step-15 (candy-forms migrated), step-16 (candy-forms migrated), step-14 (sugar-bits migrated), step-21 (sugar-readline migrated)
 **Blocks:** —
 
 ## Goal
 
-Consolidate the 4 independent vim-mode implementations (candy-forms TextInput, sugar-prompt, sugar-bits, sugar-readline) behind a single `VimKeyHandler`. Today each lib has its own `vimMode` / `vimNormalMode` flags and keybinding tables — same feature, 4 codepaths.
+Consolidate the 4 independent vim-mode implementations (candy-forms TextInput, candy-forms, sugar-bits, sugar-readline) behind a single `VimKeyHandler`. Today each lib has its own `vimMode` / `vimNormalMode` flags and keybinding tables — same feature, 4 codepaths.
 
 Reference: `docs/repo_map_update.md` §387.7.
 
@@ -19,7 +19,7 @@ Reference: `docs/repo_map_update.md` §387.7.
 ## Files expected to be modified
 
 - `candy-forms/src/TextInput/TextInput.php` — `vimMode`/`vimNormalMode` flags route through `VimKeyHandler::handle($keyMsg, $vimState)` returning `?VimAction`.
-- `sugar-prompt/composer.json` + relevant source files — depend on candy-forms; use `VimKeyHandler`.
+- `candy-forms/composer.json` + relevant source files — depend on candy-forms; use `VimKeyHandler`.
 - `sugar-bits/composer.json` (already has candy-forms? confirm) + source — same.
 - `sugar-readline/composer.json` + source — same.
 
@@ -44,7 +44,7 @@ Reference: `docs/repo_map_update.md` §387.7.
 ## Tester brief
 
 - Port each existing vim-mode test (in each lib) to the new handler — they should all still pass.
-- Add a cross-lib parity test: same `KeyMsg('w')` in normal mode produces a `CursorWord` action in candy-forms TextInput AND sugar-prompt AND sugar-bits AND sugar-readline.
+- Add a cross-lib parity test: same `KeyMsg('w')` in normal mode produces a `CursorWord` action in candy-forms TextInput AND candy-forms AND sugar-bits AND sugar-readline.
 
 ## Scribe brief
 
@@ -57,13 +57,13 @@ Reference: `docs/repo_map_update.md` §387.7.
 - **PR body**:
   ```
   ## Summary
-  - VimKeyHandler lives in candy-forms (canonical impl); sugar-prompt, sugar-bits, sugar-readline delegate to it.
+  - VimKeyHandler lives in candy-forms (canonical impl); candy-forms, sugar-bits, sugar-readline delegate to it.
   - 4 independent vim-mode codepaths collapsed to 1.
   - Per-lib vimMode opt-in flag preserved; consumers control whether to enable vim.
   - VimAction enum is the single extension point — new bindings benefit all 4 libs.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-forms / sugar-prompt / sugar-bits / sugar-readline
+  - [x] vendor/bin/phpunit in candy-forms / candy-forms / sugar-bits / sugar-readline
   - [x] Cross-lib parity test for shared bindings
   - [x] php tools/check-path-repos.php
 

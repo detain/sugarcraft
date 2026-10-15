@@ -192,8 +192,6 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 ecosystem. Consumer migration is **complete** — no duplicate scoring core
 remains outside this library:
 
-- **`sugar-prompt`** — `SugarCraft\Prompt\Fuzzy\FuzzyMatcher` is a
-  `class_alias` to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`.
 - **`candy-forms`** — `SugarCraft\Forms\Fuzzy\FuzzyMatcher` is a
   `@deprecated` shim whose former hand-rolled DP core was removed; every score
   now delegates to `SmithWatermanMatcher` with the default `ScoringProfile`

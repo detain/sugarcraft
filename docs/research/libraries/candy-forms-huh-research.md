@@ -1,4 +1,4 @@
-# sugar-prompt Research: Terminal Form/Input Libraries Comparison
+# candy-forms Research: Terminal Form/Input Libraries Comparison
 
 **Date:** 2026-05-13
 **Status:** Research Complete
@@ -8,13 +8,13 @@
 
 ## Executive Summary
 
- sugar-prompt has a solid foundation mirroring charmbracelet/huh. Several patterns from other ecosystems can meaningfully improve UX: **fuzzy autocomplete**, **inline validation helpers**, **debounced async suggestions**, **multi-select vim-mode navigation**, and **cross-field validation**. Most improvements are medium-effort (1-3 days) and can be implemented incrementally.
+ candy-forms has a solid foundation mirroring charmbracelet/huh. Several patterns from other ecosystems can meaningfully improve UX: **fuzzy autocomplete**, **inline validation helpers**, **debounced async suggestions**, **multi-select vim-mode navigation**, and **cross-field validation**. Most improvements are medium-effort (1-3 days) and can be implemented incrementally.
 
 ---
 
 ## 1. Existing Implementation Analysis
 
-**Source:** `/home/sites/sugarcraft/sugar-prompt/src/`
+**Source:** `/home/sites/sugarcraft/candy-forms/src/`
 
 ### Current Strengths
 
@@ -54,7 +54,7 @@
 **Recommendation:** Add built-in validator classes (>Required, >Email, >MinLength, >MaxLength, >Pattern) mirroring ratatui-form's approach. Also support cross-field validation via a Form-level `validateAll(array<string,mixed> $values): ?string` callback.
 
 ```php
-// Proposed sugar-prompt validator interface
+// Proposed candy-forms validator interface
 interface Validator {
     public function validate(mixed $value): ?string; // null = valid, string = error
 }
@@ -182,7 +182,7 @@ public function withAsyncSuggestions(
 | Library | Inline Error | Error Summary | Styled |
 |---------|--------------|---------------|--------|
 | **huh** | `! error` line | `WithErrorSummary()` | Yes (theme) |
-| **sugar-prompt** | `! error` line | `withErrorSummary()` | Partial |
+| **candy-forms** | `! error` line | `withErrorSummary()` | Partial |
 | **textual-wtf** | Below input | Tab red indicator | CSS classes |
 | **prompt-toolkit** | `move_cursor_to_end` option | No | Via validator |
 | **tty-prompt** | Custom messages hash | No | No |
@@ -215,12 +215,12 @@ private function renderErrorSummary(Theme $theme): string {
 | Library | Next/Prev | Submit | Abort | Custom |
 |---------|-----------|--------|-------|--------|
 | **huh** | Tab/Shift+Tab, ↑↓ | Enter | Esc, Ctrl+C | No |
-| **sugar-prompt** | Same | Enter | Esc, Ctrl+C | `withKeyMap()` |
+| **candy-forms** | Same | Enter | Esc, Ctrl+C | `withKeyMap()` |
 | **inquire** | ↑↓/jk, Tab | Enter | Esc | Limited |
 | **tty-prompt** | ↑↓, Enter | Enter | Esc | No |
 | **inquirer.js** | ↑↓, Tab | Enter | Esc | No |
 
-**Key Finding:** sugar-prompt's `KeyMap` is already more flexible than most. Consider adding commonly-requested bindings: `j`/`k` for vim-style navigation.
+**Key Finding:** candy-forms's `KeyMap` is already more flexible than most. Consider adding commonly-requested bindings: `j`/`k` for vim-style navigation.
 
 ```php
 // Enhanced default KeyMap with vim hints:
@@ -255,7 +255,7 @@ public static function default(): self {
 
 ```php
 // src/Validator/Validator.php
-namespace SugarCraft\Prompt\Validator;
+namespace SugarCraft\Forms\Validator;
 
 interface Validator {
     /** Returns null if valid, error message string if invalid */
@@ -349,7 +349,7 @@ Input::new('email')
 
 ```php
 // src/Util/FuzzyMatcher.php
-namespace SugarCraft\Prompt\Util;
+namespace SugarCraft\Forms\Util;
 
 final class FuzzyMatcher {
     /**

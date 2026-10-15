@@ -11645,7 +11645,7 @@ Pick order u1(2) → u2 → u3, ZERO conflicts except the ONE predicted: `TextIn
 
 ### Gates (all plain-pipe, linked vendors via refresh-deps --mode=linked, weld tree)
 
-dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · sugar-prompt **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`.
+dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · candy-forms **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`.
 
 ### ROUND-85 WAVE-2 + CLOSE (2026-09-17) — u4 (E741 + E736 F2) + u6 (E731 COMP-2 (b)) welded; two umbrellas CLOSED; census 3 → 1 (E736 sole survivor); OPERATOR DECISION POINT
 
@@ -14292,7 +14292,7 @@ palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4
   UNCHANGED (20,273-line differential byte-identical); vt 948/12,735 ×2. The brief's fix commit `514159c27` was
   PHANTOM — the pins shipped inside the single commit (rv-x6 confirms "single commit, tree clean").
   x4 `904627c56` → pick `871107869` — forms 5.6/5.7/5.8 Date/Slider/Color fields (27 en.php keys — lane report's
-  "29" was false-as-stated; no committed claim to correct), sugar-prompt alias shims; rv MINOR-2 (README rows)
+  "29" was false-as-stated; no committed claim to correct), candy-forms alias shims; rv MINOR-2 (README rows)
   folded at weld companion. x5 `22110c1c9` → pick `6e83c1675` — forms 5.13/5.14 TextArea selection + OSC52
   clipboard cmds + ItemList MouseMsg mapping; crush-side unroutability (rv-x5 MINOR-1) minted as §E744.
 - **Phantom'd (branch absent / zero-commits / object absent from every store — reviewer + weld disk audits agree):**
@@ -14311,7 +14311,7 @@ palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4
   weld time — this brief carried four phantom SHAs and a stale shine baseline (brief said 534/1588; disk:
   zero shine diff base..tip, measured 352/704).
 - **Companion `e2ac4fc7e`:** rv-x6 NIT folds (Buffer docblock rejects→floors; plan 6.4 de-numeral :86/:102),
-  sugar-prompt README Date/Slider/Color field-table rows, §E743/§E744 backlog+triage mints. (c) x5
+  candy-forms README Date/Slider/Color field-table rows, §E743/§E744 backlog+triage mints. (c) x5
   empty-list moveCursor identity pin SKIPPED (rv MINOR-2, behaviorally neutral).
 - **FLOOR:** tests 12,027 EXACT-CARRY 5th consecutive round; assertions RE-PINNED 170,392→**170,422**
   (serial refresh from junit; two green serials measured 170,454/170,422 — intra-band ±50 tree-scan census

@@ -1,6 +1,6 @@
-# Step 08.04 — sugar-prompt MultiSelect vim keys + Form validateAll + Select enum mode + errorSummary
+# Step 08.04 — candy-forms MultiSelect vim keys + Form validateAll + Select enum mode + errorSummary
 
-**Source:** `leftover_updates_later.md` sugar-prompt §3.4-§3.6 + §2.4
+**Source:** `leftover_updates_later.md` candy-forms §3.4-§3.6 + §2.4
 **Branch:** `ai/prompt-misc`
 
 ## Deliverable
@@ -16,10 +16,10 @@ Four small features bundled:
 
 **Modify:**
 
-- `sugar-prompt/src/MultiSelect.php`.
-- `sugar-prompt/src/Form.php` — `validateAll`.
-- `sugar-prompt/src/Select.php` — enum mode.
-- `sugar-prompt/src/Theme.php` (or canonical Theme from step 02.01) —
+- `candy-forms/src/MultiSelect.php`.
+- `candy-forms/src/Form.php` — `validateAll`.
+- `candy-forms/src/Select.php` — enum mode.
+- `candy-forms/src/Theme.php` (or canonical Theme from step 02.01) —
   `errorSummary` slot.
 
 ## Tests
@@ -28,7 +28,7 @@ Four small features bundled:
 
 ## Acceptance
 
-- `cd sugar-prompt && vendor/bin/phpunit` green.
+- `cd candy-forms && vendor/bin/phpunit` green.
 
 ---
 

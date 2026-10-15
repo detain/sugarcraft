@@ -229,7 +229,7 @@ public function Blur(): self
 **Source repo:** `textualize_textual.md` — DateSelect combines Input + dropdown calendar
 **Implementation ideas:**
 
-- Compose DatePicker with text input in sugar-prompt style
+- Compose DatePicker with text input in candy-forms style
 - Reveal calendar on input focus
 - Validate typed dates against constraints
 
@@ -563,12 +563,12 @@ Use PHPStan or custom property testing for edge cases:
 
 # Ecosystem / Integration Opportunities
 
-## 1. Integration with sugar-prompt (Form Library)
+## 1. Integration with candy-forms (Form Library)
 
 DatePicker as a form field:
 
 ```php
-use SugarCraft\Prompt\Form;
+use SugarCraft\Forms\Form;
 use SugarCraft\Calendar\DatePicker;
 
 $form = new Form();

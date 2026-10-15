@@ -1,8 +1,8 @@
-# Code Review: sugar-prompt
+# Code Review: candy-forms
 
 ## Summary
 
-`sugar-prompt` is almost entirely a backward-compatibility facade / re-export layer over `candy-forms` (`SugarCraft\Forms\*`). Of the 21 PHP source files in `src/`, **20 are `class_alias` re-exports** pointing to `candy-forms`, `candy-fuzzy`, or other foundation packages. Only one file contains any real implementation logic:
+`candy-forms` is almost entirely a backward-compatibility facade / re-export layer over `candy-forms` (`SugarCraft\Forms\*`). Of the 21 PHP source files in `src/`, **20 are `class_alias` re-exports** pointing to `candy-forms`, `candy-fuzzy`, or other foundation packages. Only one file contains any real implementation logic:
 
 - **`src/Spinner.php`** (193 lines) — A blocking "loading spinner" that uses `pcntl_fork` to run an action in a child process while animating a spinner on the parent.
 
@@ -212,9 +212,9 @@ If a user wants to run multiple sequential spinner actions, they must create mul
 
 The entire rationale of the Spinner is that the action's return value cannot cross the fork boundary. But there's no ergonomic way to retrieve results. The caller must use tempfile/pipe/database out-of-band. A `SpinnerResult` class that wraps the communication channel would make this easier.
 
-### 17. sugar-prompt adds no value over candy-forms directly
+### 17. candy-forms adds no value over candy-forms directly
 
-Since all 20 re-exported classes are deprecated `class_alias` calls pointing to `candy-forms`, using `SugarCraft\Prompt\*` over `SugarCraft\Forms\*` provides zero additional functionality. The deprecation notices (which are not actually triggered — only doc-comments say "deprecated") offer no migration path.
+Since all 20 re-exported classes are deprecated `class_alias` calls pointing to `candy-forms`, using `SugarCraft\Forms\*` over `SugarCraft\Forms\*` provides zero additional functionality. The deprecation notices (which are not actually triggered — only doc-comments say "deprecated") offer no migration path.
 
 **Consideration:** Either:
 - Actually trigger `E_USER_DEPRECATED` in the aliases so migration is enforced
@@ -232,11 +232,11 @@ Since all 20 re-exported classes are deprecated `class_alias` calls pointing to 
 ```php
 <?php
 declare(strict_types=1);
-namespace SugarCraft\Prompt\Field;
+namespace SugarCraft\Forms\Field;
 class_alias(\SugarCraft\Forms\Field\X::class, X::class);
 ```
 
-This is not "duplicated logic to refactor" in the traditional sense (you can't factor out a class_alias call), but it represents a maintenance burden: every new class added to `candy-forms` requires a corresponding re-export file in `sugar-prompt`. The `AliasResolutionTest` tests verify the mapping stays correct, but there is no code generation — manual synchronization is required.
+This is not "duplicated logic to refactor" in the traditional sense (you can't factor out a class_alias call), but it represents a maintenance burden: every new class added to `candy-forms` requires a corresponding re-export file in `candy-forms`. The `AliasResolutionTest` tests verify the mapping stays correct, but there is no code generation — manual synchronization is required.
 
 ### 19. The wither pattern (`withX()` → clone + set + return) is repeated identically in Spinner
 
@@ -272,9 +272,9 @@ private function mutate(callable $fn): self {
 
 ### 20. No CI verification that all candy-forms classes are re-exported
 
-The `AliasResolutionTest` tests the current set of known aliases, but there is no automated check that `sugar-prompt` re-exports every public class from `candy-forms`. If `candy-forms` adds a new field type or validator, `sugar-prompt` silently falls out of sync.
+The `AliasResolutionTest` tests the current set of known aliases, but there is no automated check that `candy-forms` re-exports every public class from `candy-forms`. If `candy-forms` adds a new field type or validator, `candy-forms` silently falls out of sync.
 
-**Recommendation:** Add a test that enumerates all classes in `SugarCraft\Forms\*` namespaces and asserts each has a corresponding alias in `SugarCraft\Prompt\*`.
+**Recommendation:** Add a test that enumerates all classes in `SugarCraft\Forms\*` namespaces and asserts each has a corresponding alias in `SugarCraft\Forms\*`.
 
 ### 21. Spinner requires pcntl but has undocumented fallback
 
@@ -350,7 +350,7 @@ The Spinner writes ANSI escape codes to STDERR. There is no variant that writes 
 | 14 | Missing | No `Spinner::withTimeout()` | Add timeout support via `pcntl_alarm` or loop check |
 | 15 | Missing | No sequential/composable spinner | Add `Spinner::then()` composer or `SequentialSpinner` |
 | 16 | Missing | No way to retrieve spinner action result | Add `SpinnerResult` wrapper or document tempfile pattern |
-| 17 | Missing | sugar-prompt adds no value over candy-forms directly | Consider triggering `E_USER_DEPRECATED` or removing re-export layer |
+| 17 | Missing | candy-forms adds no value over candy-forms directly | Consider triggering `E_USER_DEPRECATED` or removing re-export layer |
 | 18 | Duplicated | 20 identical class_alias boilerplate files | Consider code generation from candy-forms manifests |
 | 19 | Duplicated | wither pattern boilerplate in Spinner | Use `mutate()` helper for consistency with codebase |
 | 20 | Compatibility | No CI verification that all candy-forms classes are re-exported | Add automated alias coverage test |

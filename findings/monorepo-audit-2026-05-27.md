@@ -19,7 +19,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 4. **`with()` methods that can't set `0` values** (candy-boxer, sugar-bits) due to `?: ` sentinel pattern
 5. **God classes** (super-candy/Manager at 915 lines, sugar-stash/App at 1201 lines)
 6. **Inverted dependency** (candy-shell → sugar-*) per prior improvements.md
-7. **Incomplete candy-forms extraction** leaving sugar-prompt as a facade with no implementation
+7. **Incomplete candy-forms extraction** leaving candy-forms as a facade with no implementation
 
 **Test Suite Status:** 7,633+ tests across 48 packages. Two packages have failing tests: sugar-post (2 failures due to missing Lang base class in path-repo symlink).
 
@@ -149,20 +149,20 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 7: sugar-calendar, sugar-glow, sugar-prompt, sugar-toast
+### Group 7: sugar-calendar, sugar-glow, candy-forms, sugar-toast
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-calendar | 70 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | sugar-glow | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
-| sugar-prompt | 299 ✓ | REQUEST_CHANGES | 1 | 1 | 3 | 0 |
+| candy-forms | 299 ✓ | REQUEST_CHANGES | 1 | 1 | 3 | 0 |
 | sugar-toast | 99 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 
 **sugar-calendar** — Date picker. Issues: `EventStore` uses `time()` (second precision) instead of `microtime(true)`; missing `CALIBER_LEARNINGS.md`; `firstOfViewMonth()` can return false but callers don't consistently handle it.
 
 **sugar-glow** — Markdown viewer. Issues: `Application::VERSION` hardcoded as `'0.1.0'` instead of reading from composer; `ChromaJsonHighlighter` regex tokenizer is explicitly a proof-of-concept (matches any word followed by `(` as function); theme JSON structure mismatch with GlamourTheme::fromJson().
 
-**sugar-prompt** — **Critical Architecture Issue**: This package is a facade with no real implementation. All source files except `Spinner.php` are `class_alias()` stubs redirecting to `SugarCraft\Forms\*` (candy-forms). Tests pass because they test candy-forms, not sugar-prompt's own code. **This package should be either documented as a facade or the actual implementation moved here.**
+**candy-forms** — **Critical Architecture Issue**: This package is a facade with no real implementation. All source files except `Spinner.php` are `class_alias()` stubs redirecting to `SugarCraft\Forms\*` (candy-forms). Tests pass because they test candy-forms, not candy-forms's own code. **This package should be either documented as a facade or the actual implementation moved here.**
 
 **sugar-toast** — Notifications. Issues: Animation duration is explicit stub (honey-bounce deferred — no visual effect); action buttons rendered but no keyboard mechanism to trigger them; out-of-bounds toasts silently clipped; `HistoryLog` lost in stateless usage pattern.
 
@@ -243,13 +243,13 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - Affects: sugar-post (2 test failures), candy-mosaic (test failures)
    - Fix: `cd <package> && composer reinstall`
 
-2. **sugar-prompt is a facade with no implementation**
+2. **candy-forms is a facade with no implementation**
    - All source files except `Spinner.php` are `class_alias()` to `SugarCraft\Forms\*` (candy-forms)
-   - Tests test candy-forms, not sugar-prompt
+   - Tests test candy-forms, not candy-forms
    - Architectural concern: which package "owns" the implementation?
 
 3. **candy-shell dependency inversion** (documented in improvements.md §2.1, partially resolved)
-   - candy-shell (foundation) depends on sugar-bits, sugar-prompt (leaf)
+   - candy-shell (foundation) depends on sugar-bits, candy-forms (leaf)
    - Resolved via candy-forms extraction but extraction still 🟡 in progress
 
 ### 🟠 Major Cross-Cutting Anti-Patterns
@@ -296,7 +296,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - Add CI check: `tools/check-path-repos.php` already exists (enhanced in PR #880)
 
 3. **Complete candy-forms extraction**
-   - sugar-prompt's facade-with-no-implementation is confusing
+   - candy-forms's facade-with-no-implementation is confusing
    - Either document it as a facade re-export package or move implementation here
 
 4. **Standardize `with()` sentinel pattern**
@@ -358,7 +358,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **Path-repo symlinks** | MEDIUM | sugar-post, candy-mosaic | composer reinstall needed |
 | **Inverted dependencies** | MEDIUM | candy-shell | Fixed via candy-forms extraction (in progress) |
 | **Constructor bloat** | MEDIUM | super-candy (14), sugar-stash (22) | DTO/value object refactor needed |
-| **Static singletons** | LOW | candy-mouse, sugar-prompt | Inject via constructor or clear test cleanup |
+| **Static singletons** | LOW | candy-mouse, candy-forms | Inject via constructor or clear test cleanup |
 | **Inconsistent mutability** | LOW | Multiple packages | Some classes readonly, some not in same package |
 | **Magic numbers** | LOW | honey-flap, candy-tetris | Comments explaining gameplay constants |
 | **@ suppression** | LOW | super-candy, candy-pty | Use explicit error handling |
@@ -370,7 +370,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Package | Missing/Incomplete Feature | Priority |
 |---------|---------------------------|----------|
 | candy-vcr | `PhpGifEncoder` pure-PHP GIF encoding | HIGH |
-| sugar-prompt | Real implementation (facade only) | HIGH |
+| candy-forms | Real implementation (facade only) | HIGH |
 | sugar-readline | `Highlight::highlight()` implementation | HIGH |
 | sugar-toast | Animation duration (honey-bounce deferred) | MEDIUM |
 | sugar-glow | Complete glamour v2 property support | MEDIUM |
@@ -399,7 +399,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### ❌ What's Broken
 
 1. **Immutability claims vs reality** — candy-lister/Model, sugar-tick/Milestone mutate
-2. **Facade packages** — sugar-prompt has no real code
+2. **Facade packages** — candy-forms has no real code
 3. **Stub features** — sugar-readline/Highlight, sugar-toast/animation do nothing
 4. **Path-repo dependency graph** — still has gaps (despite fixes in PR #880)
 5. **Layer inversion** — candy-shell still partially depends on leaf libs (candy-forms extraction in progress)
@@ -455,7 +455,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### Long Term (Post 1.0)
 
 21. **[EXTRACT]** Create `candy-term` foundation lib for raw mode / terminal control
-22. **[ARCHITECT]** sugar-prompt: Decide if it's a facade or move implementation here
+22. **[ARCHITECT]** candy-forms: Decide if it's a facade or move implementation here
 23. **[REFACTOR]** Replace string-based action detection in super-candy/reverseAction with proper types
 24. **[POLISH]** Standardize all composer.json to `^8.3` PHP constraint
 25. **[POLISH]** Add self-reference to repositories[] in packages missing it
@@ -465,7 +465,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ## High-Risk Areas
 
 1. **sugar-post / candy-mosaic test failures** — broken composer setup, affects CI
-2. **sugar-prompt facade** — unclear ownership of Form implementation
+2. **candy-forms facade** — unclear ownership of Form implementation
 3. **super-candy Manager** (915 lines) — high bug risk, hard to modify safely
 4. **sugar-stash App** (1201 lines) — same god class issue
 5. **candy-vcr PhpGifEncoder** — stub in public API that throws
@@ -490,7 +490,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Long-Term Strategic Improvements
 
-1. **Publish candy-forms to Packagist** — complete the extraction from sugar-bits/sugar-prompt
+1. **Publish candy-forms to Packagist** — complete the extraction from sugar-bits/candy-forms
 2. **Establish `sugarcraft/` Packagist namespace** — currently some packages use `sugarcore/`
 3. **PHP 8.4 adoption** — the codebase targets 8.3+ but hasn't used PHP 8.4 features
 4. **phpstan level 9** — only candy-core has phpstan configured
@@ -505,7 +505,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Current | Suggestion | Rationale |
 |---------|------------|-----------|
-| sugar-prompt + candy-forms | Consolidate into candy-forms | sugar-prompt is a facade; candy-forms is the implementation |
+| candy-forms + candy-forms | Consolidate into candy-forms | candy-forms is a facade; candy-forms is the implementation |
 | honey-bounce.SpringChain mutation | Refactor to return new instances | Consistency with immutable pattern |
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
 | sugar-stickers/Table vs sugar-table/Table | Rename sugar-stickers Table to SimpleTable | Two different packages, same class name, confuses |
@@ -568,7 +568,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 4 | candy-tetris, candy-mines, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, sugar-skate, sugar-stash | 1,190 | ⚠️ stash 2 skipped |
-| 7 | sugar-calendar, sugar-glow, sugar-prompt, sugar-toast | 534 | ⚠️ prompt arch concern |
+| 7 | sugar-calendar, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
 | 9 | sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, honey-flap, super-candy | 583 | ⚠️ multiple issues |

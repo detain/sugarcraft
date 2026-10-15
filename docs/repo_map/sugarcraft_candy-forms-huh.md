@@ -1,10 +1,10 @@
-# SugarCraft / sugar-prompt
+# SugarCraft / candy-forms
 
 ## Metadata
 
-- **Library:** `sugar-prompt`
-- **Composer package:** `sugarcraft/sugar-prompt`
-- **Namespace:** `SugarCraft\Prompt` (re-export from `SugarCraft\Forms`)
+- **Library:** `candy-forms`
+- **Composer package:** `sugarcraft/candy-forms`
+- **Namespace:** `SugarCraft\Forms` (re-export from `SugarCraft\Forms`)
 - **Status:** 🟢 v1 ready
 - **Upstream sources:** `charmbracelet/huh` (primary), `charmbracelet/bubbles` (widget layer)
 - **Depends on:** `sugarcraft/candy-core`, `sugarcraft/candy-forms`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-bits`
@@ -12,16 +12,16 @@
 
 ## Overview
 
-**`sugar-prompt`** is a PHP port of `charmbracelet/huh` — a form library for building interactive multi-page terminal forms. It provides Note, Input, Confirm, Select, MultiSelect, Text, and FilePicker field types with multi-page Group support, 6 built-in themes, and a form-level `KeyMap` override per binding.
+**`candy-forms`** is a PHP port of `charmbracelet/huh` — a form library for building interactive multi-page terminal forms. It provides Note, Input, Confirm, Select, MultiSelect, Text, and FilePicker field types with multi-page Group support, 6 built-in themes, and a form-level `KeyMap` override per binding.
 
-**Critical architectural note:** `sugar-prompt` is a deprecated backward-compatibility re-export layer. The actual implementation lives in **`candy-forms`** (`SugarCraft\Forms\*` namespace). The `sugar-prompt/src/` files are thin `class_alias()` wrappers:
+**Critical architectural note:** `candy-forms` is a deprecated backward-compatibility re-export layer. The actual implementation lives in **`candy-forms`** (`SugarCraft\Forms\*` namespace). The `candy-forms/src/` files are thin `class_alias()` wrappers:
 
 ```php
-// sugar-prompt/src/Form.php
+// candy-forms/src/Form.php
 class_alias(\SugarCraft\Forms\Form::class, Form::class);
 ```
 
-This means the canonical source of truth for `sugar-prompt`'s features is `candy-forms/`. All field implementations, the `Form` compositor, the `Field` interface, and the `Theme` system are defined in `candy-forms/src/` and re-exported under `SugarCraft\Prompt\*` for upstream API compatibility.
+This means the canonical source of truth for `candy-forms`'s features is `candy-forms/`. All field implementations, the `Form` compositor, the `Field` interface, and the `Theme` system are defined in `candy-forms/src/` and re-exported under `SugarCraft\Forms\*` for upstream API compatibility.
 
 ---
 
@@ -30,7 +30,7 @@ This means the canonical source of truth for `sugar-prompt`'s features is `candy
 ### Directory Structure
 
 ```
-sugar-prompt/          ← thin backward-compat re-export layer
+candy-forms/          ← thin backward-compat re-export layer
 ├── src/
 │   ├── Form.php       — class_alias(\SugarCraft\Forms\Form::class)
 │   ├── Group.php      — class_alias(\SugarCraft\Forms\Group::class)
@@ -300,13 +300,13 @@ All fields track focus state. `focus()` returns `[$newField, ?Cmd]` where the `C
 - `Theme` stylesheet
 - `KeyMap`, `HasDynamicLabels`, `HasHideFunc`, `FuzzyMatcher`, validators
 
-**sugar-prompt** (status 🟢) is the `charmbracelet/huh` analog — a thin re-export layer that maps the `SugarCraft\Forms` namespace to `SugarCraft\Prompt` and adds the upstream-mirroring API surface. The relationship is:
+**candy-forms** (status 🟢) is the `charmbracelet/huh` analog — a thin re-export layer that maps the `SugarCraft\Forms` namespace to `SugarCraft\Forms` and adds the upstream-mirroring API surface. The relationship is:
 
-- `sugar-prompt` = `candy-forms` + backward-compat re-exports
-- `sugar-prompt`'s `composer.json` depends on `sugarcraft/candy-forms`
-- When `candy-forms` reaches 🟢, `sugar-prompt` will likely be deprecated entirely in favor of direct `SugarCraft\Forms\*` usage
+- `candy-forms` = `candy-forms` + backward-compat re-exports
+- `candy-forms`'s `composer.json` depends on `sugarcraft/candy-forms`
+- When `candy-forms` reaches 🟢, `candy-forms` will likely be deprecated entirely in favor of direct `SugarCraft\Forms\*` usage
 
-The naming reflects the upstream mapping: `huh` → `sugar-prompt` (form library) while `bubbles` → `sugar-bits` + `candy-forms` (widget primitives).
+The naming reflects the upstream mapping: `huh` → `candy-forms` (form library) while `bubbles` → `sugar-bits` + `candy-forms` (widget primitives).
 
 ---
 
@@ -314,9 +314,9 @@ The naming reflects the upstream mapping: `huh` → `sugar-prompt` (form library
 
 ### charmbracelet/huh (primary upstream, ~4.9k stars)
 
-`huh` is the Go reference implementation that `sugar-prompt` ports. Key architectural comparisons:
+`huh` is the Go reference implementation that `candy-forms` ports. Key architectural comparisons:
 
-| Feature | huh | sugar-prompt/candy-forms | Notes |
+| Feature | huh | candy-forms/candy-forms | Notes |
 |---|---|---|---|
 | Form + Groups + Fields | 🟢 | 🟢 | Identical hierarchy |
 | Input/Text/Select/etc. | 🟢 | 🟢 | All 7 field types present |
@@ -333,7 +333,7 @@ The naming reflects the upstream mapping: `huh` → `sugar-prompt` (form library
 
 ### charmbracelet/bubbles (widget layer, ~2k stars)
 
-Bubbles provides 14 primitives. sugar-prompt uses several as wrapped widgets:
+Bubbles provides 14 primitives. candy-forms uses several as wrapped widgets:
 
 | Bubbles | candy-forms | Used by |
 |---|---|---|
@@ -347,9 +347,9 @@ Bubbles provides 14 primitives. sugar-prompt uses several as wrapped widgets:
 
 ### charmbracelet/gum (CLI tool, ~8.7k stars)
 
-Gum wraps huh/bubbles into shell commands. SugarCraft would need a `CandyShell` CLI wrapper to be equivalent. The gum commands map to sugar-prompt fields:
+Gum wraps huh/bubbles into shell commands. SugarCraft would need a `CandyShell` CLI wrapper to be equivalent. The gum commands map to candy-forms fields:
 
-| gum command | sugar-prompt field |
+| gum command | candy-forms field |
 |---|---|
 | `gum input` | `Field\Input` |
 | `gum write` | `Field\Text` |
@@ -363,7 +363,7 @@ Gum wraps huh/bubbles into shell commands. SugarCraft would need a `CandyShell` 
 
 PromptKit is a BubbleTea-based prompt library. Key differences:
 
-| Feature | PromptKit | sugar-prompt/candy-forms |
+| Feature | PromptKit | candy-forms/candy-forms |
 |---|---|---|
 | Generic type-safe selections | 🟢 Go generics | 🔶 PHP `BackedEnum` coercion |
 | Template rendering | 🟢 `text/template` | N/A (direct ANSI concat) |
@@ -375,7 +375,7 @@ PromptKit is a BubbleTea-based prompt library. Key differences:
 
 The only other PHP-native TUI form library in the comparison. Key architectural differences:
 
-| Feature | cli-menu | sugar-prompt/candy-forms |
+| Feature | cli-menu | candy-forms/candy-forms |
 |---|---|---|
 | Event loop | Blocking `while` loop | Bubble Tea `Model::update()` pattern |
 | ReactPHP compatibility | None | Native (async suggestions) |
@@ -388,13 +388,13 @@ The only other PHP-native TUI form library in the comparison. Key architectural 
 
 ### KevM/bubbleo (Go, navigation)
 
-Bubbleo provides vim-style area navigation. The `consumes()` pattern in sugar-prompt solves the same key-routing problem — preventing the Form from stealing keys that inner widgets need.
+Bubbleo provides vim-style area navigation. The `consumes()` pattern in candy-forms solves the same key-routing problem — preventing the Form from stealing keys that inner widgets need.
 
 ---
 
 ## What Remains Incomplete
 
-As a 🟢 v1-ready package, sugar-prompt has no major gaps. Remaining minor items in candy-forms (which sugar-prompt re-exports):
+As a 🟢 v1-ready package, candy-forms has no major gaps. Remaining minor items in candy-forms (which candy-forms re-exports):
 
 ### TextArea Soft-wrap
 
@@ -412,13 +412,13 @@ Component render outputs (`\x1b[...m` ANSI bytes) need golden file assertions. C
 
 ## Innovation Points (SugarCraft Extensions over Upstream)
 
-1. **Async suggestions via ReactPHP** — Upstream huh uses synchronous callbacks; sugar-prompt uses `Loop::addTimer()` debounce + `Deferred` promises for genuine async autocomplete.
+1. **Async suggestions via ReactPHP** — Upstream huh uses synchronous callbacks; candy-forms uses `Loop::addTimer()` debounce + `Deferred` promises for genuine async autocomplete.
 
 2. **Vim mode in TextInput** — Full vim keybindings (`h/l/w/b/0/$/i/a/A/x/u`) in a TUI text input. Not present in upstream bubbles/huh.
 
 3. **Smith-Waterman fuzzy matching** — Custom implementation with adjacent bonus scoring (`+5` for consecutive matches), providing better ranking than simple substring matching.
 
-4. **Per-form KeyMap rebinding** — Mirrors the long-requested huh #272 feature. sugar-prompt has `Form::withKeyMap()` for arbitrary rebinding of next/prev/submit/abort without forking the runtime.
+4. **Per-form KeyMap rebinding** — Mirrors the long-requested huh #272 feature. candy-forms has `Form::withKeyMap()` for arbitrary rebinding of next/prev/submit/abort without forking the runtime.
 
 5. **Per-group theme overrides** — When `Group::withTheme()` is set, `Form::activeTheme()` returns the group override, enabling per-page styling variations. Not in upstream huh.
 
@@ -450,7 +450,7 @@ Component render outputs (`\x1b[...m` ANSI bytes) need golden file assertions. C
 
 ### Relative to Upstream Repos
 
-| Aspect | sugar-prompt Advantage | Disadvantage |
+| Aspect | candy-forms Advantage | Disadvantage |
 |---|---|---|
 | **PHP ecosystem** | Usable from any PHP 8.3+ project | Not usable from Go/other langs |
 | **Bubble Tea pattern** | `Model::init/update/view` + `Msg`/`Cmd` | Not idiomatic PHP (ReactPHP prefers async) |
@@ -497,26 +497,26 @@ Component render outputs (`\x1b[...m` ANSI bytes) need golden file assertions. C
 - `/home/sites/sugarcraft/candy-forms/src/HasHideFunc.php` — 38 lines — Runtime visibility predicate
 - `/home/sites/sugarcraft/candy-forms/src/Fuzzy/FuzzyMatcher.php` — 115 lines — Smith-Waterman scorer
 
-### sugar-prompt Re-exports
+### candy-forms Re-exports
 
-- `/home/sites/sugarcraft/sugar-prompt/src/Form.php` — `class_alias(\SugarCraft\Forms\Form::class, Form::class)`
-- `/home/sites/sugarcraft/sugar-prompt/src/Group.php` — `class_alias(\SugarCraft\Forms\Group::class, Group::class)`
-- `/home/sites/sugarcraft/sugar-prompt/src/Field/Field.php` — `class_alias(\SugarCraft\Forms\Field\Field::class, Field::class)`
+- `/home/sites/sugarcraft/candy-forms/src/Form.php` — `class_alias(\SugarCraft\Forms\Form::class, Form::class)`
+- `/home/sites/sugarcraft/candy-forms/src/Group.php` — `class_alias(\SugarCraft\Forms\Group::class, Group::class)`
+- `/home/sites/sugarcraft/candy-forms/src/Field/Field.php` — `class_alias(\SugarCraft\Forms\Field\Field::class, Field::class)`
 
 ### Examples
 
-- `/home/sites/sugarcraft/sugar-prompt/examples/burger.php` — Canonical burger order form
-- `/home/sites/sugarcraft/sugar-prompt/examples/multi-page-form.php` — Multi-page form with conditional Group hide
+- `/home/sites/sugarcraft/candy-forms/examples/burger.php` — Canonical burger order form
+- `/home/sites/sugarcraft/candy-forms/examples/multi-page-form.php` — Multi-page form with conditional Group hide
 
 ### Tests
 
-- `/home/sites/sugarcraft/sugar-prompt/tests/FormTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/Field/InputTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/Field/SelectTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/Field/MultiSelectTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/Field/ConfirmTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/Field/NoteTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/Field/FilePickerFieldTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/AsyncSuggestionsTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/KeyMapTest.php`
-- `/home/sites/sugarcraft/sugar-prompt/tests/ThemeTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/FormTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/Field/InputTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/Field/SelectTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/Field/MultiSelectTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/Field/ConfirmTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/Field/NoteTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/Field/FilePickerFieldTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/AsyncSuggestionsTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/KeyMapTest.php`
+- `/home/sites/sugarcraft/candy-forms/tests/ThemeTest.php`

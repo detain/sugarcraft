@@ -418,7 +418,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `sugar-skate`(8,med), `sugar-spark`(8,med), `sugar-stickers`(7,med), `sugar-wishlist`(6,med),
   `sugar-post`(7,high), `sugar-stash`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
   `sugar-veil`(7,high) — one step each (all small), in dependency order.
-- **5.3** `sugar-prompt`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
+- **5.3** `candy-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
 - **5.4** `sugar-glow`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →
   a/b), `sugar-crush`(20,high, buffer+core+shine+sprinkles; attributes, MCP) → a/b.
@@ -531,7 +531,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-boxer | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |
 | sugar-calendar | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |
 | sugar-crumbs | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |
-| sugar-prompt | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
+| candy-forms | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
 
 *`candy-ansi` fiber appears in audit; confirm at step time — may be a feature‑detected path.*
 

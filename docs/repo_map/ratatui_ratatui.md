@@ -192,7 +192,7 @@ pub struct Buffer {
 | `ratatui-widgets` (Block, Paragraph, List, Table, Chart, Gauge, etc.) | `sugar-bits` | Component library - all the visual widgets |
 | `ratatui-crossterm` backend | `candy-shell` | Terminal I/O and backend abstraction |
 | `Layout` + Cassowary constraints | `candy-shine` | Layout system for positioning |
-| `Stylize` trait | `sugar-prompt` | Text styling helpers (Stylize trait mirrors styled() pattern) |
+| `Stylize` trait | `candy-forms` | Text styling helpers (Stylize trait mirrors styled() pattern) |
 | `ratatui-macros` | `sugar-bits` (likely) | Declarative macros for boilerplate |
 | `Terminal::draw` + `Frame` pattern | `candy-core` (Model) | The terminal draw loop mirrors the Model::view() pattern |
 | `StatefulWidget` + State types | `candy-core` (State) | Stateful widgets with `*State` types mirror React state |

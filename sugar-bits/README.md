@@ -60,7 +60,7 @@ Spinner.
 
 `TextInput` vim mode (Insert/Normal/Visual/VisualLine keybindings) is
 powered by `candy-forms`'s shared `VimKeyHandler` — the same handler
-backing `sugar-prompt` and `sugar-readline`. Adding a new binding to the
+backing `candy-forms` and `sugar-readline`. Adding a new binding to the
 `VimAction` enum benefits all three libs at once. The per-lib opt-in flag
 `withVimMode(true)` is preserved; consumers control whether vim mode is
 enabled.

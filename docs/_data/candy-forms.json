@@ -1,11 +1,11 @@
 {
     "title": "SugarCraft — CandyForms",
-    "description": "CandyForms: Foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.",
+    "description": "CandyForms: Form library (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.",
     "ogTitle": "SugarCraft — CandyForms",
-    "ogDescription": "Foundation lib for form and input primitives — the raw component implementations that sugar-bits and sugar-prompt re-export.",
+    "ogDescription": "Form engine (port of charmbracelet/huh) plus the raw component implementations that sugar-bits re-exports — Groups, themes, validators, fuzzy / async suggestions.",
     "emoji": "🍬",
     "displayName": "CandyForms",
-    "tagline": "Foundation lib for form and input primitives",
+    "tagline": "Interactive forms + foundation form primitives",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip\">foundation</span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">inputs</span>\n          <span class=\"tag-chip\">leaf-package</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/huh\" style=\"color: inherit;\">charmbracelet/huh</a></span>\n          <span class=\"tag-chip\">foundation</span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">inputs</span>\n          <span class=\"tag-chip\">wizards</span>\n          <span class=\"tag-chip\">validation</span>"
 }

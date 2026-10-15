@@ -26,8 +26,8 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 
 | gum command | SugarCraft lib | Status | Notes |
 |---|---|---|---|
-| `gum input` | `sugar-prompt` / `candy-forms` | 🟢 / 🟡 | Text input via TextInput field |
-| `gum write` | `sugar-prompt` / `candy-forms` | 🟢 / 🟡 | Multi-line textarea via TextArea field |
+| `gum input` | `candy-forms` / `candy-forms` | 🟢 / 🟡 | Text input via TextInput field |
+| `gum write` | `candy-forms` / `candy-forms` | 🟢 / 🟡 | Multi-line textarea via TextArea field |
 | `gum filter` | `sugar-filter` (planned) | 🔴 | Fuzzy list filter, same fuzzy algorithm (`sahilm/fuzzy`) |
 | `gum choose` | `sugar-choose` (planned) | 🔴 | Item selector grid with vim-style navigation |
 | `gum confirm` | `candy-forms` | 🟡 | Yes/no confirmation via Confirm field |
@@ -342,7 +342,7 @@ From `repo_map/charmbracelet_gum.md`:
 **PR**: #598 (merged, then reverted, then re-merged)
 **Feature**: `gum choose` with `--label-delimiter` for key:value pairs
 **Status**: Working in v0.14+
-**Relevance**: 🟢 DONE — sugar-prompt/sugar-choose should support this
+**Relevance**: 🟢 DONE — candy-forms/sugar-choose should support this
 
 ### I. Select All / Deselect All
 

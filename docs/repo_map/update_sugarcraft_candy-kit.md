@@ -696,7 +696,7 @@ pterm's `TextPrinter` interface with 8 formatting methods provides API consisten
 
 Textual's command palette uses fuzzy search with custom `Provider` system for extensible commands.
 
-**Lesson:** SugarCraft could add a `CommandPalette` component to sugar-prompt or candy-kit.
+**Lesson:** SugarCraft could add a `CommandPalette` component to candy-forms or candy-kit.
 
 **Relevance:** Future interactive CLI enhancement.
 

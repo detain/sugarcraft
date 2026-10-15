@@ -6,13 +6,13 @@
 - **Composer package:** `sugarcraft/candy-forms`
 - **Namespace:** `SugarCraft\Forms`
 - **Status:** 🟡 in progress (extraction in progress, gaps tracked)
-- **Upstream sources:** Extracted from `sugar-bits` + `sugar-prompt`
+- **Upstream sources:** Extracted from `sugar-bits` + `candy-forms`
 - **Depends on:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`
 - **PHP minimum:** `^8.3`
 
 ## Overview
 
-`candy-forms` is the foundational library for form primitive widgets in the SugarCraft monorepo. It provides the low-level building blocks (TextInput, TextArea, ItemList, Viewport, FilePicker) and the `Field` interface + `Form` compositor that compose into the higher-level `sugar-prompt` (which maps to upstream `charmbracelet/huh`). The package status is 🟡 because the extraction from `sugar-bits` and `sugar-prompt` was in progress at the time of this analysis, with some surface area already shipped but gaps remaining in tests and demos.
+`candy-forms` is the foundational library for form primitive widgets in the SugarCraft monorepo. It provides the low-level building blocks (TextInput, TextArea, ItemList, Viewport, FilePicker) and the `Field` interface + `Form` compositor that compose into the higher-level `candy-forms` (which maps to upstream `charmbracelet/huh`). The package status is 🟡 because the extraction from `sugar-bits` and `candy-forms` was in progress at the time of this analysis, with some surface area already shipped but gaps remaining in tests and demos.
 
 ---
 
@@ -262,7 +262,7 @@ Key gaps vs bubbles:
 
 ### charmbracelet/huh
 
-`huh` is a form library that builds on bubbles. `candy-forms` is the extraction of huh's form primitives plus some additional primitives. The mapping in MATCHUPS.md (`huh` → `sugar-prompt`) was intended for the full form library; `candy-forms` provides the foundation that `sugar-prompt` will use.
+`huh` is a form library that builds on bubbles. `candy-forms` is the extraction of huh's form primitives plus some additional primitives. The mapping in MATCHUPS.md (`huh` → `candy-forms`) was intended for the full form library; `candy-forms` provides the foundation that `candy-forms` will use.
 
 | huh Feature | candy-forms Status |
 |---|---|

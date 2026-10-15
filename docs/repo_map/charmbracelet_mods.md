@@ -168,7 +168,7 @@ SugarCraft is a PHP monorepo of TUI library ports from the Charmbracelet ecosyst
 | **Lipgloss (styling)** | `candy-shine` | Terminal styling library - `lipgloss` port |
 | **Viewport scrolling** | `candy-shell` components | Textarea/viewport components |
 | **Glamour (markdown rendering)** | `sugar-bits` (rendering) | Markdown/ANSI rendering |
-| **Streaming LLM client** | Not yet ported | Could be `sugar-prompt` or new `sugar-llm` |
+| **Streaming LLM client** | Not yet ported | Could be `candy-forms` or new `sugar-llm` |
 | **Conversation caching** | Not yet ported | Could be `candy-sprinkles` (caching utilities) |
 | **MCP client integration** | Not yet ported | Could be `sugar-mcp` or `honey-mcp` |
 | **Interactive forms (huh)** | `candy-shell` input | `huh` form library port |
@@ -178,7 +178,7 @@ SugarCraft is a PHP monorepo of TUI library ports from the Charmbracelet ecosyst
 
 ### Specific Mapping Candidates:
 
-- **`sugar-prompt`**: A hypothetical LL client port would handle OpenAI/Anthropic API calls with streaming
+- **`candy-forms`**: A hypothetical LL client port would handle OpenAI/Anthropic API calls with streaming
 - **`sugar-charts`**: If mods had data visualization, but currently doesn't
 - **`candy-shell`**: The `tea.Model` / `Update` / `View` pattern is fully implemented
 - **`honey-bounce`**: Animation/spinner timing patterns for loading states

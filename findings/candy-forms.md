@@ -170,7 +170,7 @@ Critical issues: deprecated FuzzyMatcher still actively used; async suggestions 
 
 2. **ItemList uses `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`** but `FuzzyMatcher` (the internal one) uses its own Smith-Waterman implementation. Two different fuzzy matching implementations in the same library — may produce different ranking results for the same query/candidates.
 
-3. **candy-forms depends on candy-async, candy-buffer, candy-core, candy-fuzzy, candy-layout, candy-sprinkles** — This is a heavy dependency. The lib is labeled "Foundation lib for form primitives" in composer.json but pulls in layout, fuzzy, async, etc. If other libs (like sugar-bits or sugar-prompt) also use candy-forms as a base, the dependency graph needs careful management.
+3. **candy-forms depends on candy-async, candy-buffer, candy-core, candy-fuzzy, candy-layout, candy-sprinkles** — This is a heavy dependency. The lib is labeled "Foundation lib for form primitives" in composer.json but pulls in layout, fuzzy, async, etc. If other libs (like sugar-bits or candy-forms) also use candy-forms as a base, the dependency graph needs careful management.
 
 4. **FuzzyMatcher is not multibyte-safe** — This is a correctness bug for non-ASCII input. Systems processing Japanese/Chinese filenames or emoji in file paths will get incorrect fuzzy matching results.
 

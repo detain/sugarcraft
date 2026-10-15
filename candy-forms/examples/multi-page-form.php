@@ -11,13 +11,13 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Core\Program;
-use SugarCraft\Prompt\Field\Confirm;
-use SugarCraft\Prompt\Field\Input;
-use SugarCraft\Prompt\Field\Note;
-use SugarCraft\Prompt\Field\Select;
-use SugarCraft\Prompt\Form;
-use SugarCraft\Prompt\Group;
-use SugarCraft\Prompt\Theme;
+use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Field\Note;
+use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Form;
+use SugarCraft\Forms\Group;
+use SugarCraft\Forms\Theme;
 
 $form = Form::groups(
     Group::new(

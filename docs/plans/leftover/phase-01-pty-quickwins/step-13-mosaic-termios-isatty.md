@@ -61,7 +61,7 @@ WezTerm detection bug (bundle)
   "WezTerm is also iTerm2" classification, this breaks them. Verify
   with `grep -rn "TERM_PROGRAM=WezTerm" /home/sites/sugarcraft` first.
 - TtyDetect goes in candy-core because other consumers (sugar-bits,
-  sugar-prompt, candy-log) will want it without taking a direct
+  candy-forms, candy-log) will want it without taking a direct
   candy-pty dep. candy-core already depends on candy-pty.
 
 ---

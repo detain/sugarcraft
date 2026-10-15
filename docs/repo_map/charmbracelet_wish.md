@@ -171,7 +171,7 @@ Wish is an SSH server framework — it doesn't map 1:1 to any single SugarCraft 
 
 | Wish Component | SugarCraft Equivalent | Notes |
 |---|---|---|
-| `bubbletea.Middleware` (serve TUI over SSH) | `sugar-bits`, `sugar-prompt` | PHP TUI libraries would need SSH transport layer to achieve same result. SugarCraft TUIs currently run in terminal only. |
+| `bubbletea.Middleware` (serve TUI over SSH) | `sugar-bits`, `candy-forms` | PHP TUI libraries would need SSH transport layer to achieve same result. SugarCraft TUIs currently run in terminal only. |
 | `git.Middleware` (git server with hooks) | `candy-core` (process execution) | Git operations could be wired through SugarCraft's shell/process abstractions, but no direct git server equivalent. |
 | `logging.Middleware` (connection logging) | `(none)` | No SSH server library in SugarCraft — no logging middleware equivalent. |
 | `ratelimiter.Middleware` (per-IP throttling) | `(none)` | No SSH-level rate limiting; could be implemented per-request in API layer but not equivalent. |
@@ -181,7 +181,7 @@ Wish is an SSH server framework — it doesn't map 1:1 to any single SugarCraft 
 | `Cmd` / PTY execution helper | `candy-pty` (FFI/syscall PTY wrappers) | `candy-pty` wraps terminal I/O; `Cmd` is the SSH-wrapped version of the same concept. |
 | `WithAuthorizedKeys` (public key auth) | `SugarCraft\Core\Auth` | Auth by SSH key vs password — different credential systems but same conceptual job. |
 
-**Overall:** Wish = SSH transport + Bubble Tea integration + Git server + middleware toolkit. The closest SugarCraft analogue for the *TUI-over-transport* concept is `sugar-bits` / `sugar-prompt`, but without an SSH transport layer these can't be served remotely. If SugarCraft ever adds a network/TUI bridge, `wish/bubbletea` would be the canonical upstream reference.
+**Overall:** Wish = SSH transport + Bubble Tea integration + Git server + middleware toolkit. The closest SugarCraft analogue for the *TUI-over-transport* concept is `sugar-bits` / `candy-forms`, but without an SSH transport layer these can't be served remotely. If SugarCraft ever adds a network/TUI bridge, `wish/bubbletea` would be the canonical upstream reference.
 
 ## Analysis
 

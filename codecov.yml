@@ -61,8 +61,6 @@ flag_management:
     - name: sugar-charts
       paths: ["sugar-charts/src/**"]
       carryforward: true
-    - name: sugar-prompt
-      paths: ["sugar-prompt/src/**"]
       carryforward: true
     - name: candy-shell
       paths: ["candy-shell/src/**"]
@@ -276,12 +274,6 @@ component_management:
         - "sugar-charts/src/**"
       flag_regexes:
         - "^sugar-charts$"
-    - component_id: sugar-prompt
-      name: sugar-prompt
-      paths:
-        - "sugar-prompt/src/**"
-      flag_regexes:
-        - "^sugar-prompt$"
     - component_id: candy-shell
       name: candy-shell
       paths:

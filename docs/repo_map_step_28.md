@@ -1,12 +1,12 @@
 # Step 28 — Golden-file snapshot rollout via candy-testing
 
 **Branch:** `ai/golden-file-rollout`
-**Depends on:** step-04 (candy-testing exists), step-15/16/17/18 (candy-forms / sugar-prompt / sugar-charts / sugar-table use candy-testing for some tests already)
+**Depends on:** step-04 (candy-testing exists), step-15/16/17/18 (candy-forms / candy-forms / sugar-charts / sugar-table use candy-testing for some tests already)
 **Blocks:** —
 
 ## Goal
 
-Roll out candy-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `candy-forms`, `sugar-prompt`, `sugar-bits`, `sugar-charts`, `sugar-table`, `sugar-glow`, `candy-vt`, `candy-vcr`, `candy-shine`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
+Roll out candy-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `candy-forms`, `candy-forms`, `sugar-bits`, `sugar-charts`, `sugar-table`, `sugar-glow`, `candy-vt`, `candy-vcr`, `candy-shine`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
 
 Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakness across 8+ libs).
 
@@ -49,7 +49,7 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 - **PR body**:
   ```
   ## Summary
-  - candy-forms, sugar-prompt, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, candy-shine all gain assertGoldenAnsi-backed golden-file tests.
+  - candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, candy-shine all gain assertGoldenAnsi-backed golden-file tests.
   - Closes the ecosystem's most-cited weakness: "no snapshot tests for ANSI rendering" (§19/§149).
   - UPDATE_GOLDENS=1 phpunit workflow documented.
   - Tests are additive; existing tests preserved.

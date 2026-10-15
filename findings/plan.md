@@ -114,7 +114,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | Lib | Phase | Items | Key Fix |
 |-----|-------|-------|---------|
 | sugar-post | P1 | 3 | Attachment silent failure; unchecked fwrite(); @ suppression on fgets() |
-| sugar-prompt | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
+| candy-forms | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
 | candy-log | P1 | 2 | Log level filtering; Handler interface consistency |
 | sugar-stash | P1 | 2 | Path-repo closure check (verify candy-fuzzy is clean) |
 | candy-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
@@ -180,7 +180,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 ### Group E Source Plans
 
 - `findings/plan_sugar-post.md` — Phase 1 (Attachment silent failure, unchecked fwrite)
-- `findings/plan_sugar-prompt.md` — Phase 1 ($pid uninitialized on fork failure)
+- `findings/plan_candy-forms-huh.md` — Phase 1 ($pid uninitialized on fork failure)
 - `findings/plan_candy-log.md` — Phase 1 (log level filtering, handler consistency)
 - `findings/plan_sugar-stash.md` — Phase 1 (path-repo closure verification)
 - `findings/plan_candy-testing.md` — Phase 1 (TapeRecorder Dracula theme bug)

@@ -41,7 +41,7 @@ Existing ReactPHP versions pinned:
 - `react/promise: ^3.3` (candy-core, candy-mosaic, sugar-crush, super-candy)
 - `react/promise-timer: ^1.9` (candy-wish)
 
-Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async):
+Roadmap for step-23 (candy-forms/candy-forms/candy-core migrate to candy-async):
 - Replace `Loop::addTimer` debounce with `AsyncOps::debounce()` in Input.php, Select.php
 - Replace manual 30s timeout in AsyncMiddleware.php with `AsyncOps::withTimeout()`
 - WorkerPool.php cancellation via CancellationToken

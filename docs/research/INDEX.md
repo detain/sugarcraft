@@ -34,7 +34,7 @@ To implement an item:
 |---------|--------------|-------------------|
 | **sugar-dash** | [research/libraries/sugar-dash-research.md](libraries/sugar-dash-research.md) | 1. Constraint layout, 2. StatefulWidget separation, 3. Reactive props |
 | **sugar-bits** | [research/libraries/sugar-bits-research.md](libraries/sugar-bits-research.md) | 1. validate_on timing, 2. restrict regex, 3. Table sorting/filtering |
-| **sugar-prompt** | [research/libraries/sugar-prompt-research.md](libraries/sugar-prompt-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
+| **candy-forms** | [research/libraries/candy-forms-research.md](libraries/candy-forms-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
 | **sugar-table** | [research/libraries/sugar-table-research.md](libraries/sugar-table-research.md) | 1. StyleFunc, 2. Flex columns, 3. Viewport virtualization |
 | **sugar-charts** | [research/libraries/sugar-charts-research.md](libraries/sugar-charts-research.md) | 1. Nice ticks, 2. Streaming, 3. Area fill |
 | **sugar-veil** | [research/libraries/sugar-veil-research.md](libraries/sugar-veil-research.md) | 1. Backdrop, 2. Animation, 3. Border chrome |
@@ -144,7 +144,7 @@ To implement an item:
 
 ### Input & Forms
 
-- **sugar-prompt**: Built-in validators, vim keys, fuzzy suggestions
+- **candy-forms**: Built-in validators, vim keys, fuzzy suggestions
 - **sugar-readline**: History persistence, auto-suggest, vi mode
 - **sugar-bits**: validate_on timing, restrict regex, table sorting
 - **sugar-calendar**: Date range picker, event store, localization

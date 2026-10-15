@@ -20,12 +20,12 @@ From `repo_map/charmbracelet_pop.md` (first pass):
 
 | pop feature | SugarCraft lib | Notes |
 |---|---|---|
-| TUI sequential field navigation | `sugar-prompt` | Multi-step keybinding flow closest structural match |
+| TUI sequential field navigation | `candy-forms` | Multi-step keybinding flow closest structural match |
 | Bubble Tea `Model` with `State` enum | `sugar-bits` / `candy-core` | Mirrors `Model::init/update/view` contract |
 | Lipgloss styling | `sugar-shine` | Terminal color/style wrapping |
 | File picker for attachments | `sugar-bits` | `List`/`Delegate` patterns |
 | Markdown → ANSI rendering | `sugar-bits` via `candy-shine` | Snapshot-testing SGR bytes approach |
-| Keymap struct with `key.Binding` fields | `sugar-prompt` / `candy-core` | Direct pattern reuse |
+| Keymap struct with `key.Binding` fields | `candy-forms` / `candy-core` | Direct pattern reuse |
 | CLI flag parsing (Cobra) | N/A | App-level only |
 | Email sending (SMTP/Resend) | N/A | Would require net-new `sugar-mail` |
 
@@ -370,7 +370,7 @@ Request for pre-existing content files and HTML template customization. This wou
 
 2. **Delivery backends drift without shared rendering** — When Resend and SMTP paths evolved independently, markdown rendering diverged. A single `Renderer` interface used by all backends prevents this.
 
-3. **State machine is the right abstraction for TUIs** — Pop's `State` enum approach is well-regarded and portable. SugarCraft's `sugar-prompt` uses a similar step-based pattern.
+3. **State machine is the right abstraction for TUIs** — Pop's `State` enum approach is well-regarded and portable. SugarCraft's `candy-forms` uses a similar step-based pattern.
 
 4. **CLI-first design enables scripting** — The `pop < message.md --from ... --to ...` pattern is powerful. SugarCraft's libraries should be CLI-friendly even when the primary interface is TUI.
 
@@ -430,7 +430,7 @@ Request for pre-existing content files and HTML template customization. This wou
 | Factory methods (`::new()`, `::ansi()`) | Not named as factories but `NewModel()` exists | SugarCraft naming convention is clearer |
 | Snapshot testing for renderers | Not used (no tests) | SugarCraft's SGR byte snapshot approach is sound |
 | Env-var defaults for scripting | Well-established (`POP_FROM`, etc.) | SugarCraft should match this pattern |
-| State machine for TUI navigation | `State` enum + `Update`/`View` | SugarCraft's `sugar-prompt` uses similar pattern |
+| State machine for TUI navigation | `State` enum + `Update`/`View` | SugarCraft's `candy-forms` uses similar pattern |
 | Dual delivery dispatch | Runtime `DeliveryMethod` enum | SugarCraft could use strategy pattern |
 
 ---

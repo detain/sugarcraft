@@ -1,6 +1,6 @@
 # Overview
 
-`candy-forms` is the foundational library for form primitive widgets in the SugarCraft monorepo. It provides low-level building blocks (TextInput, TextArea, ItemList, Viewport, FilePicker) and the `Field` interface + `Form` compositor that compose into higher-level prompt libraries. Status is 🟡 (in progress) with extraction from `sugar-bits` + `sugar-prompt` underway but gaps remaining in tests and demos.
+`candy-forms` is the foundational library for form primitive widgets in the SugarCraft monorepo. It provides low-level building blocks (TextInput, TextArea, ItemList, Viewport, FilePicker) and the `Field` interface + `Form` compositor that compose into higher-level prompt libraries. Status is 🟡 (in progress) with extraction from `sugar-bits` + `candy-forms` underway but gaps remaining in tests and demos.
 
 **Biggest opportunity areas:**
 
@@ -624,9 +624,9 @@ Viewport and FilePicker use terminal dimensions. No tests for resize events mid-
 
 # Ecosystem / Integration Opportunities
 
-## 1. sugar-prompt Integration
+## 1. candy-forms Integration
 
-`sugar-prompt` (huh equivalent) should be the primary consumer of candy-forms. Currently class_alias shims point back. Ensure `sugar-prompt` properly tests the full form flow.
+`candy-forms` (huh equivalent) should be the primary consumer of candy-forms. Currently class_alias shims point back. Ensure `candy-forms` properly tests the full form flow.
 
 ## 2. sugar-bits Integration
 
@@ -792,4 +792,4 @@ Against `textualize/textual` (Python): Python's ecosystem advantage (Rich librar
 
 5. Expand README with comprehensive examples and cookbook
 
-Once these are addressed, candy-forms will be a production-ready, fully-tested form primitive library with clear separation from leaf libs (`sugar-bits`, `sugar-prompt`).
+Once these are addressed, candy-forms will be a production-ready, fully-tested form primitive library with clear separation from leaf libs (`sugar-bits`, `candy-forms`).

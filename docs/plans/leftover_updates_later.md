@@ -306,7 +306,7 @@ because research adds three items the PTY plan did not call out:)
 - Auto-sizing/content-aware dimensions (§4.5).
 - Border chrome (§4.6) — must compose `candy-sprinkles` Border.
 
-### sugar-prompt
+### candy-forms
 
 - Built-in validators: Required, Email, MinLength, MaxLength, Pattern (§3.1 P1).
 - Fuzzy autocomplete `withFuzzySuggestions()` (§3.2 P2).
@@ -355,7 +355,7 @@ because research adds three items the PTY plan did not call out:)
 - VS Code / chroma JSON theme compatibility (§4.1.3).
 - Font embedding in SVG via base64 TTF (§4.2.1).
 - Line highlighting (§4.3.2).
-- Interactive TUI customization (§4.3.3) — depends on sugar-prompt features.
+- Interactive TUI customization (§4.3.3) — depends on candy-forms features.
 
 ### candy-flip
 

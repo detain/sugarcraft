@@ -1,10 +1,10 @@
-# sugar-prompt Update Report
+# candy-forms Update Report
 
 ## Overview
 
-**sugar-prompt** is a 🟢 v1-ready PHP port of `charmbracelet/huh` — a form library for building interactive multi-page terminal forms. It provides Input, Text, Select, MultiSelect, Confirm, Note, and FilePicker field types with multi-page Group support, 6 built-in themes, and full key rebinding via `KeyMap`.
+**candy-forms** is a 🟢 v1-ready PHP port of `charmbracelet/huh` — a form library for building interactive multi-page terminal forms. It provides Input, Text, Select, MultiSelect, Confirm, Note, and FilePicker field types with multi-page Group support, 6 built-in themes, and full key rebinding via `KeyMap`.
 
-**Critical architectural note:** `sugar-prompt` is a deprecated backward-compatibility re-export layer. The actual implementation lives in **`candy-forms`** (`SugarCraft\Forms\*` namespace). The `sugar-prompt/src/` files are thin `class_alias()` wrappers pointing to `candy-forms` — making candy-forms the canonical source of truth.
+**Critical architectural note:** `candy-forms` is a deprecated backward-compatibility re-export layer. The actual implementation lives in **`candy-forms`** (`SugarCraft\Forms\*` namespace). The `candy-forms/src/` files are thin `class_alias()` wrappers pointing to `candy-forms` — making candy-forms the canonical source of truth.
 
 **Biggest opportunity areas:**
 
@@ -25,7 +25,7 @@
 
 ### Current Architecture
 
-The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/src/`:
+The implementation lives in `candy-forms/src/` with re-exports in `candy-forms/src/`:
 
 **Core Components:**
 
@@ -109,7 +109,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Description:** No golden file assertions exist for ANSI SGR byte output. Every `view()` method needs a corresponding test asserting exact `\x1b[...m` bytes.
 - **Why it matters:** Without snapshot tests, any rendering regression is silent. Forms render complex multi-line ANSI output — regressions in color codes, cursor positioning, or layout break user-facing demos.
 - **Source repo:** `charmbracelet/huh` (upstream has comprehensive tests)
-- **Source reference:** `sugar-prompt` tests currently only test logic, not rendering
+- **Source reference:** `candy-forms` tests currently only test logic, not rendering
 - **Implementation ideas:** Use `vendor/bin/phpunit --snapshot-update` pattern. Store expected SGR bytes in `tests/snapshots/` per field type per theme.
 - **Estimated complexity:** Medium — requires writing all snapshots first, then CI enforcement
 - **Expected impact:** High — enables confident refactoring of any `view()` method
@@ -303,7 +303,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 **Current:** Mixed short-form (`title()`, `desc()`) and long-form (`withTitle()`, `withDescription()`)
 **Improvement:** Standardize on `with*()` for consistency; short-forms as aliases
 
-**Reference:** `sugarcraft_sugar-prompt.md` notes this in README
+**Reference:** `sugarcraft_candy-forms-huh.md` notes this in README
 
 ### 2. Error Accumulation
 
@@ -329,7 +329,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - Progress indication in breadcrumb style
 - Data validation across group boundaries
 
-**Reference:** `sugarcraft_sugar-prompt.md` — "Multi-group (wizard) flow"
+**Reference:** `sugarcraft_candy-forms-huh.md` — "Multi-group (wizard) flow"
 
 ### 2. Async Autocomplete with ReactPHP
 
@@ -337,7 +337,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - Loading states
 - Error handling for network failures
 
-**Reference:** `sugarcraft_sugar-prompt.md` — "Async Suggestions" section
+**Reference:** `sugarcraft_candy-forms-huh.md` — "Async Suggestions" section
 
 ### 3. Custom Theme Creation
 
@@ -402,16 +402,16 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 **Current:** Some tests require syscalls
 **Improvement:** `requirePtySyscalls()` gating for FFI-dependent tests
 
-**Reference:** `sugarcraft_sugar-prompt.md` — "FFI tests gate on `requirePtySyscalls()`"
+**Reference:** `sugarcraft_candy-forms-huh.md` — "FFI tests gate on `requirePtySyscalls()`"
 
 ---
 
 ## Ecosystem / Integration Opportunities
 
-### 1. Gum CLI Wrapper (`sugar-prompt` → `gum`-equivalent)
+### 1. Gum CLI Wrapper (`candy-forms` → `gum`-equivalent)
 
-- **Current:** `sugar-prompt` is a library, not a CLI
-- **Opportunity:** `candy-shell` could provide `sugar` CLI wrapping sugar-prompt fields
+- **Current:** `candy-forms` is a library, not a CLI
+- **Opportunity:** `candy-shell` could provide `sugar` CLI wrapping candy-forms fields
 - **Reference:** `charmbracelet_gum.md` — 13 commands mapping to form fields
 
 ### 2. PHPStorm/IDE Plugin for Form Building
@@ -438,8 +438,8 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 
 - **Summary:** Feature request for per-form KeyMap rebinding
 - **Status:** Implemented in huh
-- **Relevance:** sugar-prompt already has this via `Form::withKeyMap()`
-- **Lessons:** This was highly requested; sugar-prompt should emphasize it in docs
+- **Relevance:** candy-forms already has this via `Form::withKeyMap()`
+- **Lessons:** This was highly requested; candy-forms should emphasize it in docs
 
 ### charmbracelet/huh — Dynamic Labels (*Func pattern)
 
@@ -520,15 +520,15 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 
 ## Final Strategic Assessment
 
-sugar-prompt is a mature, well-architected form library that successfully ports the charmbracelet/huh design to PHP. Its strengths—immutable field state, clean `consumes()` key routing, ReactPHP async integration, and Smith-Waterman fuzzy matching—represent genuine innovations over the upstream Go implementation in several areas.
+candy-forms is a mature, well-architected form library that successfully ports the charmbracelet/huh design to PHP. Its strengths—immutable field state, clean `consumes()` key routing, ReactPHP async integration, and Smith-Waterman fuzzy matching—represent genuine innovations over the upstream Go implementation in several areas.
 
 The most critical gaps are testing-related: **snapshot tests** and **FuzzyMatcher indices** are both high-impact, medium-complexity items that should be addressed immediately. These directly impact developer confidence and user-facing UX respectively.
 
 The medium-term roadmap should focus on UX polish: **auto-pagination**, **common prefix auto-complete**, and **history persistence** are all low-risk improvements that significantly enhance the CLI user experience. The **Closable interface** is a simple addition that enables important embedded use cases.
 
-The most ambitious architectural opportunities—**buffer diffing** and **Cassowary layout**—would bring SugarCraft's rendering infrastructure to parity with ratatui and php-tui. However, these belong in `candy-core` (renderer) and `candy-shine` (layout) respectively, not directly in sugar-prompt. Their value to sugar-prompt is indirect—better rendering for all fields.
+The most ambitious architectural opportunities—**buffer diffing** and **Cassowary layout**—would bring SugarCraft's rendering infrastructure to parity with ratatui and php-tui. However, these belong in `candy-core` (renderer) and `candy-shine` (layout) respectively, not directly in candy-forms. Their value to candy-forms is indirect—better rendering for all fields.
 
-The strategic positioning of sugar-prompt is strong: it's the canonical form library for the SugarCraft ecosystem, living atop the foundational `candy-forms` layer. As the ecosystem matures, sugar-prompt will benefit from improvements in all dependent libraries. The deprecation path (direct `SugarCraft\Forms\*` usage) is already clear, making sugar-prompt a stable API surface for users.
+The strategic positioning of candy-forms is strong: it's the canonical form library for the SugarCraft ecosystem, living atop the foundational `candy-forms` layer. As the ecosystem matures, candy-forms will benefit from improvements in all dependent libraries. The deprecation path (direct `SugarCraft\Forms\*` usage) is already clear, making candy-forms a stable API surface for users.
 
 **Key recommendations:**
 

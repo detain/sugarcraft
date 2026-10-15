@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-fuzzy-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-14 (sugar-bits uses it), step-15 (candy-forms uses it), step-16 (sugar-prompt uses it), step-19 (candy-shell uses it)
+**Blocks:** step-14 (sugar-bits uses it), step-15 (candy-forms uses it), step-16 (candy-forms uses it), step-19 (candy-shell uses it)
 
 ## Goal
 
@@ -29,7 +29,7 @@ Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matche
 - **Deprecation shims** (NOT removal — that's later steps):
   - `candy-forms/src/Fuzzy/FuzzyMatcher.php` — add `@deprecated since 1.x; use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` docblock. Keep behavior identical.
   - `candy-lister/src/FuzzyMatch.php` — same shim.
-  - `sugar-prompt/src/Fuzzy/FuzzyMatcher.php` — already a `class_alias` to candy-forms; leave untouched.
+  - `candy-forms/src/Fuzzy/FuzzyMatcher.php` — already a `class_alias` to candy-forms; leave untouched.
 
 ## Acceptance criteria
 
@@ -41,7 +41,7 @@ Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matche
 - [ ] Existing usages of `candy-forms\Fuzzy\FuzzyMatcher` still work (back-compat shim) until consumers migrate in steps 15/16/19.
 - [ ] **Depends on**: nothing else in `sugarcraft/*`. Leaf package.
 - [ ] ≥95 % coverage.
-- [ ] All existing candy-forms / candy-lister / sugar-prompt tests still pass.
+- [ ] All existing candy-forms / candy-lister / candy-forms tests still pass.
 - [ ] `git status` clean on master.
 
 ## Coder brief
@@ -53,7 +53,7 @@ Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matche
 5. **Implement SahilmMatcher** per Researcher findings.
 6. **Highlighter** helper: takes a MatchResult + a styler `callable(string $matched): string` and returns the candidate with matched runs styled. Pure presentation — no terminal coupling.
 7. **Back-compat shim**: in `candy-forms/src/Fuzzy/FuzzyMatcher.php`, keep the class but mark deprecated; internally delegate to `\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Same for `candy-lister/src/FuzzyMatch.php`. **Add `path-repo-closure`** for candy-forms + candy-lister to require candy-fuzzy.
-8. Run phpunit in candy-fuzzy + candy-forms + candy-lister + sugar-prompt + check-path-repos.
+8. Run phpunit in candy-fuzzy + candy-forms + candy-lister + candy-forms + check-path-repos.
 
 ## Tester brief
 
@@ -87,7 +87,7 @@ Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matche
   ## Test plan
   - [x] vendor/bin/phpunit in candy-fuzzy (≥95% coverage)
   - [x] Golden parity vs candy-forms FuzzyMatcher (all existing fixtures preserved)
-  - [x] vendor/bin/phpunit in candy-forms / candy-lister / sugar-prompt — all green (shims working)
+  - [x] vendor/bin/phpunit in candy-forms / candy-lister / candy-forms — all green (shims working)
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_07.md, docs/repo_map_update.md §345.3, §387.1

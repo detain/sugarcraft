@@ -28,7 +28,7 @@ const ROOT = __DIR__ . '/..';
 
 /** Per-job lib pools (hand-maintained — opt-in for OS-specific runners). */
 const WINDOWS_LIBS = [
-    'candy-core', 'sugar-prompt', 'sugar-bits', 'candy-shell', 'candy-shine',
+    'candy-core', 'candy-forms', 'sugar-bits', 'candy-shell', 'candy-shine',
 ];
 const MACOS_LIBS = [
     // candy-pty held out of the macOS pool. The split-job debug

@@ -14,10 +14,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Prompt\Field\Confirm;
-use SugarCraft\Prompt\Field\MultiSelect;
-use SugarCraft\Prompt\Field\Select;
-use SugarCraft\Prompt\Form;
+use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\Forms\Field\MultiSelect;
+use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Form;
 
 $form = Form::new(
     Select::new('bun')

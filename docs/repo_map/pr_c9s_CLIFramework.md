@@ -33,7 +33,7 @@
 
 From `repo_map/c9s_CLIFramework.md`:
 - **Primary:** `candy-shell` (framework/command hierarchy)
-- **Secondary:** `sugar-prompt` (Prompter, Chooser)
+- **Secondary:** `candy-forms` (Prompter, Chooser)
 - **Tertiary:** `candy-shine` (Formatter, Logger), `sugar-bits` (Table, ProgressBar, utilities)
 
 ### First-Pass Assessment

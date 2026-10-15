@@ -20,7 +20,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 | Merge `candy-files/src/AsyncOps` into `candy-async/src/AsyncOps` | Both implement the same `Deferred` + `futureTick` pattern; file operations could reuse async utilities | `ref:repeated_logic.md` Finding #5 |
 | Document `::new()` factory as required pattern | 3,042 call sites = de facto standard; CALIBER_LEARNINGS.md should explicitly require it for all new classes | `ref:repeated_logic.md` Finding #6 |
 | Keep Model interface, i18n, Width, Ansi as-is | Already well-centralized with 92/41/736/700+ lines of well-tested code; no duplication detected | `ref:repeated_logic.md` Findings #2, #3, #7, #10 |
-| Keep Validator interface in candy-forms | Already well-structured and re-exported from sugar-prompt; only low duplication outside forms context | `ref:repeated_logic.md` Finding #8 |
+| Keep Validator interface in candy-forms | Already well-structured and re-exported from candy-forms; only low duplication outside forms context | `ref:repeated_logic.md` Finding #8 |
 
 ---
 
@@ -366,7 +366,7 @@ Update the entry to explicitly list when local override IS required:
 If evaluation recommends promotion:
 1. Move `Validator` interface + implementations to `candy-core/src/Validator/`
 2. Update `candy-forms/composer.json` to depend on `candy-core`
-3. Update re-export in `sugar-prompt`
+3. Update re-export in `candy-forms`
 
 If evaluation recommends keeping as-is:
 - Document in CALIBER_LEARNINGS.md that Validator lives in candy-forms and is the standard for input validation
@@ -389,7 +389,7 @@ If evaluation recommends keeping as-is:
 | Medium | 4.1 Mutable trait guidance | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 1.3 ::new() factory contract | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 4.2 AsyncOps ADR | Create ADR document | docs/adr/001-asyncops-consolidation.md |
-| Low | 5.1 Validator evaluation | Investigate and decide | candy-core, candy-forms, sugar-prompt |
+| Low | 5.1 Validator evaluation | Investigate and decide | candy-core, candy-forms, candy-forms |
 
 ---
 

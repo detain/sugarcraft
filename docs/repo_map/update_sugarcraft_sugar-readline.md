@@ -1,6 +1,6 @@
 # Overview
 
-`sugar-readline` is a pure-PHP interactive line-editing prompt library that ports the Go `erikgeiser/promptkit` ecosystem. It provides five prompt types (Text, Confirmation, Selection, MultiSelect, Textarea) driven by a clean state-machine model where every input handler returns a new immutable instance. As a 🟢 v1-ready package with zero external dependencies, it is the lightweight alternative to the full form framework `sugar-prompt`/`candy-forms`.
+`sugar-readline` is a pure-PHP interactive line-editing prompt library that ports the Go `erikgeiser/promptkit` ecosystem. It provides five prompt types (Text, Confirmation, Selection, MultiSelect, Textarea) driven by a clean state-machine model where every input handler returns a new immutable instance. As a 🟢 v1-ready package with zero external dependencies, it is the lightweight alternative to the full form framework `candy-forms`/`candy-forms`.
 
 **Biggest opportunity areas:** Style system overhaul (replace hardcoded ANSI codes with proper Style objects), input driver integration (currently prompts have no way to read actual terminal input), cursor blink animation, mouse support, soft-wrap in Textarea, and a built-in Help component.
 
@@ -480,7 +480,7 @@ $prompt = TextPrompt::new('Enter code: ')
     ->withHighlight(new SugarGlowHighlight('php'));
 ```
 
-## 2. sugar-prompt / candy-forms Bridge
+## 2. candy-forms / candy-forms Bridge
 
 sugar-readline prompts could serve as low-level inputs for `candy-forms` field types:
 ```php
@@ -621,7 +621,7 @@ $prompt = TextPrompt::new('Search: ')
 
 # Final Strategic Assessment
 
-`sugar-readline` occupies a valuable niche in the SugarCraft ecosystem as the **lightweight, single-shot prompt library** — complementary to, not competitive with, the full form framework `sugar-prompt`/`candy-forms`. Its pure-PHP, dependency-free design is a significant engineering achievement that makes it trivially embeddable.
+`sugar-readline` occupies a valuable niche in the SugarCraft ecosystem as the **lightweight, single-shot prompt library** — complementary to, not competitive with, the full form framework `candy-forms`/`candy-forms`. Its pure-PHP, dependency-free design is a significant engineering achievement that makes it trivially embeddable.
 
 The most critical gap is **input handling** — the library cannot read actual terminal input today. This is the single blocker preventing real-world usage. Fixing this requires either creating a new `candy-readline` input driver package or clearly documenting how to wire `candy-vt` into these prompts.
 

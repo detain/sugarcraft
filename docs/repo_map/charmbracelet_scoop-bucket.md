@@ -64,7 +64,7 @@ depends?      array?   — optional Scoop dependencies
 
 | Scoop Manifest | SugarCraft Library | Rationale |
 |---|---|---|
-| `charm-gum.json` | `sugar-bits` (TUI components) | Gum is a tool for "glamorous shell scripts" — builds interactive TUI prompts with spinners, confirmation, input fields, and selection menus. SugarCraft ports: `sugar-prompt` (input/selection patterns), `sugar-spinner` |
+| `charm-gum.json` | `sugar-bits` (TUI components) | Gum is a tool for "glamorous shell scripts" — builds interactive TUI prompts with spinners, confirmation, input fields, and selection menus. SugarCraft ports: `candy-forms` (input/selection patterns), `sugar-spinner` |
 | `vhs.json` | `sugar-bits` + `candy-shine` | VHS records terminal sessions as GIFs — maps to `sugar-bits` view rendering + `candy-shine` (animation/frame composition) |
 | `glow.json` | `sugar-bits` (markdown rendering) | Glow renders markdown in the terminal with ANSI styling — SugarCraft has no direct markdown renderer; `sugar-bits` component layer could host a Bubbletea-based markdown view |
 | `mods.json` | **none** | AI on the command line — SugarCraft has no AI/LLM integration lib; this would be a new leaf lib if ported |

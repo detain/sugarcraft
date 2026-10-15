@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Prompt\Field\MultiSelect;
+use SugarCraft\Forms\Field\MultiSelect;
 
 $field = MultiSelect::new('toppings')
     ->withTitle('Toppings')

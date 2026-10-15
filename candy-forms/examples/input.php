@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Prompt\Field\Input;
+use SugarCraft\Forms\Field\Input;
 
 $field = Input::new('email')
     ->withTitle('Email')

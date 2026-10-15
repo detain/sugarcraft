@@ -510,7 +510,7 @@ final class Required implements Validator
 
 ### Key Insight
 
-The validator interface is **defined in candy-forms and re-exported from sugar-prompt** for backward compatibility. This is a clean pattern but only used within forms/prompt contexts, not across the broader monorepo.
+The validator interface is **defined in candy-forms and re-exported from candy-forms** for backward compatibility. This is a clean pattern but only used within forms/prompt contexts, not across the broader monorepo.
 
 ---
 

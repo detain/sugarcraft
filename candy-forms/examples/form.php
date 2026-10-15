@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Static render of a whole CandyForms form — the pieces sugar-bits and
- * sugar-prompt re-export. One {@see Form} composes an {@see Input}
+ * candy-forms re-export. One {@see Form} composes an {@see Input}
  * (pre-filled), a {@see Select} (options with one highlighted), and a
  * {@see Confirm} (Yes / No toggle), then echoes the styled `view()`.
  *
