@@ -26,7 +26,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 0.4 | `tools/check-rename-residue.php` + tests | ✅ 2399ad4cb |
 | 0.5 | `LegacyEnv` + `LegacyPaths` helpers in candy-core | ✅ bedb32a0f |
 | 1.1 | Merge candy-zone into candy-mouse | ✅ 6eb05734f |
-| 1.2 | Fold sugar-prompt into candy-forms | ☐ |
+| 1.2 | Fold sugar-prompt into candy-forms | ✅ 682e6c0f7 |
 | 1.3 | Split candy-flip → lib (stays candy-flip for now) + new app `candy-gifview` | ☐ |
 | 1.4 | Normalize bin names of apps that keep their name | ☐ |
 | 2.1 | Verify splitsh-lite multi-prefix history continuity (local experiment) | ☐ |
