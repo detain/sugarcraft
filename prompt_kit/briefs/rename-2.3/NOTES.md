@@ -1,7 +1,7 @@
 # Step 2.3 — gen-docs redirect stubs — NOTES
 
 Verdict: DONE. Commits (master, never pushed): A `6f1ef69a0` (gen-docs.php + GenDocsTest.php),
-B `6b3a7c618` (committed regen: docs/lib/candy-zone.html, docs/lib/sugar-prompt.html),
+B `6b3a7c618` (committed regen: docs/lib/candy-zone.html, docs/lib/sugar-prompt.html), <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
 C = tracker commit updating plan_rename.md row 2.3 → ✅.
 
 ## What was implemented (plan Part "Step 2.3", all 4 numbered items)
@@ -17,24 +17,24 @@ C = tracker commit updating plan_rename.md row 2.3 → ✅.
    failure polarities name the stub; live `_data` page wins over a stub (warning, stub skipped);
    `--extract` skips stubs (no phantom `_data` minting).
 4. `docs/sitemap.xml`: gen-docs never writes it (grep `sitemap` in the tool → 0 refs) and it
-   contains 0 hits for candy-zone/sugar-prompt — requirement satisfied by non-action.
+   contains 0 hits for candy-zone/sugar-prompt — requirement satisfied by non-action. <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
 
 ## Key decision — chain semantics ("same logic as step 2.2")
 Step 2.2's `prefixes_for` walks renames.json WITHOUT a status filter (git history: pending
 entries are future facts). For URL redirects that reading is refuted by the plan's own
-**Done when**: "stubs for candy-zone and sugar-prompt exist now, pointing at candy-mouse and
+**Done when**: "stubs for candy-zone and sugar-prompt exist now, pointing at candy-mouse and <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
 candy-forms" — while `candy-mouse→sugar-mouse` and `candy-forms→sugar-forms` sit pending in the
 map. So `resolve_final_slug()` follows **executed (status ≠ pending) hops only**: every stub
 lands on a page that exists today, and when a later batch executes candy-mouse→sugar-mouse the
-candy-zone stub automatically re-targets two hops ahead (test `renamesFixture()` pins exactly
+candy-zone stub automatically re-targets two hops ahead (test `renamesFixture()` pins exactly <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
 this with a pending tail). Cycle → `RuntimeException` (fail-loud; authored-data defect, no
 silent depth cap).
 
 ## Deviations / brief corrections
 - **The brief's premise "docs/index.html already contains HTML-comment redirect markers for
-  candy-zone and sugar-prompt" is FALSE against the tree** — `grep -c '<!--' docs/index.html` = 0,
+  candy-zone and sugar-prompt" is FALSE against the tree** — `grep -c '<!--' docs/index.html` = 0, <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
   and steps 1.1/1.2 (plan lines 540, 588) prescribed retargeting the tile links themselves
-  (verified in `git show 6eb05734f -- docs/index.html`: the candy-zone icon link became the
+  (verified in `git show 6eb05734f -- docs/index.html`: the candy-zone icon link became the <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
   candy-mouse link; no markers were ever added). Plan step 2.3 says nothing about index markers.
   Therefore NO marker emission was added; verification #3 is satisfied the other allowed way:
   **index.html is byte-identical after regen** (`git show 6b3a7c618 --stat` = only the two stubs;

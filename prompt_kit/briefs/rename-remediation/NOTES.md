@@ -122,3 +122,19 @@ Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcra
   blob (`git show HEAD:sugar-crush/composer.json`), or (b) the injection step
   is scoped out of these manifests — choosing between them is a policy call
   the owner must make. Nothing disabled or skipped.
+
+## Finish gates — ALL GREEN at tip (this block's commit)
+
+- tools/tests: OK 422T/1434A (exact baseline) via `candy-core/vendor/bin/phpunit
+  --no-configuration tools/tests/` — includes GenDocsTest stub-byte pins, green
+  without test edits (sentinel placed inside <body> so the page still ends
+  `</body></html>`; title-line sentinel passes the contains-string needles).
+- `php tools/check-path-repos.php --no-lib-path-repos` rc0.
+- `php tools/check-rename-residue.php --all-done` was rc1 at base with 15
+  findings on the two batch-1 renamed entries (candy-zone→candy-mouse, <!-- @rename-keep: naming the cured slugs is the record -->
+  sugar-prompt→candy-forms): 4 lines in the two docs/lib MOVED redirect stubs <!-- @rename-keep: naming the cured slugs is the record -->
+  (intentional old-slug naming) + 11 lines in the rename-2.3/2.4 brief notes
+  (historical record). Cured with the tool's own law — `@rename-keep` line
+  markers: generator-side in stub_html() (so regeneration re-emits them and
+  gen-docs --check stays green; verified rc0) and line-wise in the two briefs.
+  Now 0 findings, rc0. No rule widened, nothing excluded, no baseline touched.

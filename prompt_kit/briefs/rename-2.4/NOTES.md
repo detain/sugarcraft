@@ -67,7 +67,7 @@ registered on Packagist (authoring-only per step 2.4; real actions start at
   rc2, missing-old rc1, bad-slug rc1, stale-topic removal fires exactly one
   `--remove-topic <old>` when seeded. Archive flow vs local bare repo:
   README == plan move-notice byte-for-byte, commit author/committer
-  Joe Huss <detain@interserver.net>, subject "candy-zone: moved to
+  Joe Huss <detain@interserver.net>, subject "candy-zone: moved to <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
   sugarcraft/sugar-mouse", repo marked archived, successor-missing rc1,
   re-run rc0.
 - Packagist via curl stubs: request assembly proven (URL, JSON payload,

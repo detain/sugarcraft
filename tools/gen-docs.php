@@ -388,12 +388,12 @@ function resolve_final_slug(string $start, array $entries): string
 function stub_html(string $old, string $new): string
 {
     return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\n"
-        . "<title>Moved: $old is now $new</title>\n"
+        . "<title>Moved: $old is now $new</title> <!-- @rename-keep: a moved-stub must name the old slug -->\n"
         . "<link rel=\"canonical\" href=\"https://sugarcraft.github.io/lib/$new.html\">\n"
         . "<meta name=\"robots\" content=\"noindex\">\n"
         . "<meta http-equiv=\"refresh\" content=\"0; url=$new.html\">\n"
         . "</head><body><p><code>sugarcraft/$old</code> was renamed to "
-        . "<a href=\"$new.html\"><code>sugarcraft/$new</code></a>.</p></body></html>\n";
+        . "<a href=\"$new.html\"><code>sugarcraft/$new</code></a>.</p><!-- @rename-keep: old slug kept on purpose --></body></html>\n";
 }
 
 // ---------------------------------------------------------------------------
