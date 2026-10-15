@@ -464,6 +464,9 @@ final class ProtectFilesHookTest extends TestCase
             // Step 0.14-c's boundaries: the public half and the lookalikes.
             'the public ssh key' => ['Read', ['file_path' => '/home/u/.ssh/id_ed25519.pub']],
             'cat id_rsa.pub' => ['Bash', ['command' => 'cat ~/.ssh/id_rsa.pub']],
+            // rv1014 MINOR-2: the .public spelling of the shared half.
+            'the .public ssh key' => ['Read', ['file_path' => '/home/u/.ssh/id_ed25519.public']],
+            'cat id_ed25519.public' => ['Bash', ['command' => 'cat ~/.ssh/id_ed25519.public']],
             'jq property .key' => ['Bash', ['command' => "jq '.key' data.json"]],
             'a .keys file is another name' => ['Read', ['file_path' => 'config/server.keys']],
             'keyboard source' => ['Read', ['file_path' => 'src/keyboard.php']],

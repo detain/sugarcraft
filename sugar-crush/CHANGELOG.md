@@ -9,8 +9,9 @@ truth going forward.
 
 ## Fixed (2026-10-14 review wave)
 
-A 15-persona review pass (docs, PHP, TUI, DevOps, end-user, accessibility,
-copy, newcomer, security, QA) whose findings were fixed across six lanes:
+A broad multi-persona review (covering documentation, code, terminal UX,
+operations, security, accessibility and first-run experience) whose findings
+were fixed in six grouped changes:
 
 - **Two-press destructive keys.** On the Agents dashboard, bare `s` (stop
   every run) now arms with a countdown and fires only on a second press

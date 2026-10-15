@@ -103,9 +103,11 @@ final class ProtectFilesCredentialStoresTest extends TestCase
     }
 
     /**
-     * The `.pub` exception carries into the directory arm: the public half of
-     * an identity exists to be shared, exactly as the `id_*` arm decided before
-     * rv-sec-2 widened the directory.
+     * The `.pub`/`.public` exception carries into the directory arm: the public
+     * half of an identity exists to be shared, exactly as the `id_*` arm
+     * decided before rv-sec-2 widened the directory. rv-sec-2's re-review
+     * (MINOR-2) added the `.public` spelling — some toolchains ship
+     * `id_ed25519.public` next to `id_ed25519`, and it is the same shared half.
      */
     public function testPublicKeysInsideTheSshDirectoryStayReadable(): void
     {
@@ -113,8 +115,13 @@ final class ProtectFilesCredentialStoresTest extends TestCase
 
         $this->assertTrue($hook->execute(self::context('Read', ['file_path' => '/home/u/.ssh/id_ed25519.pub']))->isAllowed());
         $this->assertTrue($hook->execute(self::context('Bash', ['command' => 'cat ~/.ssh/id_rsa.pub']))->isAllowed());
+        // The .public spelling of the same shared half (rv1014 MINOR-2).
+        $this->assertTrue($hook->execute(self::context('Read', ['file_path' => '/home/u/.ssh/id_ed25519.public']))->isAllowed());
+        $this->assertTrue($hook->execute(self::context('Bash', ['command' => 'cat ~/.ssh/id_rsa.public']))->isAllowed());
         // A .pub-looking name with more after it is not the public half.
         $this->assertTrue($hook->execute(self::context('Bash', ['command' => 'cat ~/.ssh/id_rsa.pub.bak']))->isDenied());
+        // Nor is a .public-prefixed tail — `public_key` is its own word.
+        $this->assertTrue($hook->execute(self::context('Bash', ['command' => 'cat ~/.ssh/id_rsa.public_key']))->isDenied());
     }
 
     /**
@@ -127,7 +134,7 @@ final class ProtectFilesCredentialStoresTest extends TestCase
     {
         $stores = [
             '/(?<![\w.-])\.aws\/credentials/i',
-            '/(?<![\w.-])\.ssh(?:\/(?!\S*\.pub(?![\w.-]))|$)/i',
+            '/(?<![\w.-])\.ssh(?:\/(?!\S*\.(?:pub|public)(?![\w.-]))|$)/i',
             '/(?<![\w.-])\.config\/gcloud(?![\w.-])/i',
             '/(?<![\w.-])[._]netrc\b/i',
             '/(?<![\w.-])\.npmrc\b/i',

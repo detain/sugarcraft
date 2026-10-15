@@ -46,13 +46,14 @@ final class AgentLiveRegistry
      * renderer, the activity line) indexes {@see SPINNER} by
      * {@see spinnerFrame()} — zeroing the index makes them all static at once.
      *
-     * THE LAUNCH WIRE-UP IS OWED by the CLI lane, deliberately not read here:
-     * the environment name `SUGARCRUSH_REDUCED_MOTION` (values `1`, `true`,
-     * `yes`, like this app's other truthy env reads) must be tabulated in
-     * docs/ENVIRONMENT.md and the help roster in the same change that reads
-     * it, or the env-roster drift guard reddens — so the getenv call, the doc
-     * row, and the help entry land together on that side. The one-liner:
-     * `AgentLiveRegistry::setStaticSpinner(in_array(strtolower((string) getenv('SUGARCRUSH_REDUCED_MOTION')), ['1', 'true', 'yes'], true));`
+     * THE LAUNCH WIRE-UP LANDED (rv1014 FX1): `Bootstrap::chat()` reads
+     * `SUGARCRUSH_REDUCED_MOTION` (values `1`, `true`, `yes`, like this app's
+     * other truthy env reads) exactly once on the shared launch funnel and
+     * calls {@see self::setStaticSpinner()} with the verdict — the same change
+     * tabulated the variable in docs/ENVIRONMENT.md, as the env-roster drift
+     * guard demands. The read stays OUT of this class: a library-state holder
+     * that sniffed its own environment could not be driven from tests that
+     * want a deterministic answer.
      */
     private static bool $staticSpinner = false;
 

@@ -98,7 +98,8 @@ final readonly class ProtectFilesHook implements HookInterface
      *    judged, so the same search through it still works.
      *  - SSH identities `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (and
      *    their `_sk`/suffixed variants such as `id_rsa_work`), EXCEPT the
-     *    `.pub` half, which exists to be shared.
+     *    `.pub`/`.public` half, which exists to be shared. Two fixed-length
+     *    lookbehinds carry the pair — PCRE refuses a variable-length one.
      *
      * CREDENTIAL-STORE FILES (rv-sec-2): the SDK/tool keychains that hold real
      * credentials under names nobody thought to give `.env`, `.pem` or `id_*`.
@@ -116,9 +117,10 @@ final readonly class ProtectFilesHook implements HookInterface
      *    key named `deploy_key` matches none of the identity patterns above.
      *    The arm requires a `/` or end-of-word after `.ssh`, so
      *    `.ssh-known_hosts` style names and `.sshfoo/` are other things; the
-     *    identity arm's `.pub` exception carries into the directory arm via a
-     *    lookahead, so `~/.ssh/id_ed25519.pub` stays readable exactly as it was
-     *    before (the `.pub` half exists to be shared), while every other name
+     *    identity arm's `.pub`/`.public` exception carries into the directory
+     *    arm via a lookahead, so `~/.ssh/id_ed25519.pub` stays readable exactly
+     *    as it was before (the shared half exists to be shared, under either
+     *    spelling), while every other name
      *    under the directory — `config`, `authorized_keys`, `deploy_key` — is
      *    refused.
      *  - `~/.config/gcloud/` — Google ADC (`google/cloud-ai-platform` is a
@@ -137,11 +139,11 @@ final readonly class ProtectFilesHook implements HookInterface
     public const DEFAULT_PROTECTED_PATTERNS = [
         '/(?<![\w.-])\.env(?:rc)?(?![\w\/-])(?!(?:\.[\w-]+)*\.(?:example|sample|dist|template|tpl)(?![\w.-]))/',
         '/[\w*?-]\.(?:pem|key)(?![\w.-])/i',
-        '/(?<![\w.-])id_(?:rsa|dsa|ecdsa|ed25519)[\w.-]*(?<!\.pub)(?![\w.-])/',
+        '/(?<![\w.-])id_(?:rsa|dsa|ecdsa|ed25519)[\w.-]*(?<!\.pub)(?<!\.public)(?![\w.-])/',
         '/\.git\/config\b/',
         '/(^|\/)config\/[^\s]*\.php\b/',
         '/(?<![\w.-])\.aws\/credentials/i',
-        '/(?<![\w.-])\.ssh(?:\/(?!\S*\.pub(?![\w.-]))|$)/i',
+        '/(?<![\w.-])\.ssh(?:\/(?!\S*\.(?:pub|public)(?![\w.-]))|$)/i',
         '/(?<![\w.-])\.config\/gcloud(?![\w.-])/i',
         '/(?<![\w.-])[._]netrc\b/i',
         '/(?<![\w.-])\.npmrc\b/i',

@@ -1423,6 +1423,16 @@ final class Bootstrap
         // with the first one's mode.
         self::applyMediaRenderMode($userConfig);
 
+        // rv1014 FX1 (carries rv-a11y-4): the reduced-motion switch lands on the
+        // same launch funnel, one line, before any frame can index the spinner.
+        // Truthy vocabulary `1`/`true`/`yes` case-insensitively, like the app's
+        // other truthy env reads; unset or any other word leaves the spinner
+        // animating. Gated inside AgentLiveRegistry so every drawing surface
+        // goes static at once (see {@see \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::$staticSpinner}).
+        \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::setStaticSpinner(
+            \in_array(strtolower((string) getenv('SUGARCRUSH_REDUCED_MOTION')), ['1', 'true', 'yes'], true),
+        );
+
         // The session this window runs in, opened on the workspace's ONE store:
         // seedSession() is what makes /sessions, the tab strip, /branch and the
         // auto-title call reachable at all on a real run (crush_feat.md §5 E1).

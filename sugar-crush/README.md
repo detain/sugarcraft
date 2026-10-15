@@ -60,6 +60,7 @@ under [`docs/`](docs/) for the full detail.
 
 | Page | Topic |
 |---|---|
+| [`docs/README.md`](docs/README.md) | The docs index — every page below, grouped, with reading-order notes |
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Every settings key, the four file tiers plus the session tier, the settings view (its project-shared tier and narrow layout included), when a change applies |
 | [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Every environment variable, including provider credentials and the shell-out backends |
 | [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | The six permission modes, plan mode, `AskUser` and `PlanExit`, the `auto` classifier and its reviewer, rules (and how they bind `ApplyPatch`), read-only shell lines that run unasked, per-part "always" grants and `/permissions`, the four `trustedProject*` keys, the Bash sandbox |
@@ -77,6 +78,7 @@ under [`docs/`](docs/) for the full detail.
 | [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
+| [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear |
 | [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) | The browser UI that `sugarcrush serve` hosts |
 
 ## Install
@@ -1820,8 +1822,8 @@ says so on stderr.
 
 ### Running in CI and containers
 
-A bare interactive launch with no terminal on stdin or stdout is refused with
-exit `2` rather than rendering into a pipe — an unattended run should say so
+A bare interactive launch where neither stdin nor stdout is a terminal is
+refused with exit `2` rather than rendering into a pipe — an unattended run should say so
 explicitly, and that is what `-p` (or `run`) is for: one prompt in, text or
 `--output-format json` out, exit codes as above. `sugarcrush serve` is the
 long-running shape: the WebSocket/HTTP server behind the web UI, headless by
