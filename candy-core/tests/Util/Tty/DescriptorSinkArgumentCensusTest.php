@@ -183,6 +183,16 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . '`2>err.log`. See RendererAdaptiveSizeDescriptorTest in candy-flip.',
         ],
 
+        // ---- candy-gifview ------------------------------------------------
+        'candy-gifview/src/Cli.php::SizeIoctl::query(1)' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'CORRECT. viewportCells(). The literal 1 is STDOUT\'s descriptor -- the site '
+            . 'arrived verbatim from candy-flip\'s old bin in the rename campaign step 1.3 '
+            . 'with the `(int) STDOUT` cast (resource id 2, i.e. STDERR) already replaced, '
+            . 'behind a core `stream_isatty(STDOUT)` gate. See BinSizeQueryPolarityTest in '
+            . 'candy-gifview, the app-package twin of the candy-flip pin above.',
+        ],
+
         // ---- candy-pty ---------------------------------------------------
         'candy-pty/src/Posix/PosixTermios.php::posix_isatty($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
