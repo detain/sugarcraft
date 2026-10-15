@@ -125,6 +125,9 @@ flag_management:
     - name: candy-flip
       paths: ["candy-flip/src/**"]
       carryforward: true
+    - name: candy-gifview
+      paths: ["candy-gifview/src/**"]
+      carryforward: true
     - name: sugar-reel
       paths: ["sugar-reel/src/**"]
       carryforward: true
@@ -400,6 +403,12 @@ component_management:
         - "candy-flip/src/**"
       flag_regexes:
         - "^candy-flip$"
+    - component_id: candy-gifview
+      name: candy-gifview
+      paths:
+        - "candy-gifview/src/**"
+      flag_regexes:
+        - "^candy-gifview$"
     - component_id: sugar-reel
       name: sugar-reel
       paths:

@@ -32,13 +32,6 @@ final class LangTest extends TestCase
         $this->assertSame('candy-flip: ext-gd is required', $result);
     }
 
-    public function testTranslateCliUsage(): void
-    {
-        $result = Lang::t('cli.usage');
-        $this->assertStringContainsString('usage:', $result);
-        $this->assertStringContainsString('candy-flip', $result);
-    }
-
     public function testParameterInterpolation(): void
     {
         $result = Lang::t('decoder.grid_too_large', ['max' => '100000']);

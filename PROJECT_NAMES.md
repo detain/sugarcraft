@@ -115,7 +115,7 @@ assembles them, which is exactly the `Sugar-` "components / apps" role.
 **For `Candy-`**, the AGENTS.md naming line gives `Candy-` to
 "foundation / **system**", and a system monitor is about as literally
 "system" as a package gets (it reads `/proc` and `/sys`, not user data);
-`Candy-` apps already exist (CandyFiles, CandyQuery, CandyFlip). The ruling
+`Candy-` apps already exist (CandyFiles, CandyQuery, CandyGifView). The ruling
 stands; it is not a precedent that apps default to `Candy-`.
 
 ---
@@ -142,6 +142,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyVt**     | candy + vt = virtual terminal emulator. "vt" is the established term. |
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. "vcr" carries the cassette / playback metaphor for free. |
 | **CandyFlip**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). "flip" carries the frame-by-frame animation metaphor for free. |
+| **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/candy-flip`, split into its own package (rename campaign step 1.3). "view" states the app role beside the CandyFlip toolkit. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
 | **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits. |
 | **CandyFocus** | candy + focus = focus management. dependency-free focus ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dash first used here. |

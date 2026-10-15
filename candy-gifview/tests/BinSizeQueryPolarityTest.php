@@ -1,26 +1,30 @@
 <?php
 
 /**
- * Pins for the descriptor `bin/candy-flip` hands to the size ioctl, and for
- * the tty gate in front of it.
+ * Pins for the descriptor the viewer hands to the size ioctl, and for the tty
+ * gate in front of it.
  *
- * The bug these guard: the bin ran `SizeIoctl::query((int) STDOUT)` behind a
- * `posix_isatty(STDOUT)` check. An `(int)` cast of a PHP stream yields its
- * RESOURCE ID, not its file descriptor — measured, PHP 8.3.6, `(int) STDOUT`
- * is 2, and descriptor 2 is STDERR. The gate correctly noticed that STDOUT
- * was a terminal, then asked the kernel about STDERR: `php candy-flip demo.gif
- * 2>err.log` — a routine invocation — died with `RuntimeException: Cannot
- * query size of non-tty fd` on a live terminal. Renderer::withAdaptiveSize()
- * carried exactly this defect and is pinned by RendererAdaptiveSizeDescriptorTest;
- * the bin was the sibling that never got the fix.
+ * The bug these guard (inherited with the bin when the viewer CLI split out of
+ * candy-flip, rename campaign step 1.3): the old `bin/candy-flip` ran
+ * `SizeIoctl::query((int) STDOUT)` behind a `posix_isatty(STDOUT)` check. An
+ * `(int)` cast of a PHP stream yields its RESOURCE ID, not its file descriptor
+ * — measured, PHP 8.3.6, `(int) STDOUT` is 2, and descriptor 2 is STDERR. The
+ * gate correctly noticed that STDOUT was a terminal, then asked the kernel
+ * about STDERR: `php candy-gifview demo.gif 2>err.log` — a routine
+ * invocation — died with `RuntimeException: Cannot query size of non-tty fd`
+ * on a live terminal. Renderer::withAdaptiveSize() carried exactly this defect
+ * and is pinned by RendererAdaptiveSizeDescriptorTest in candy-flip; the bin
+ * was the sibling that never got the fix.
  *
- * The bin now spells descriptor 1 as the literal and gates with core
- * `stream_isatty(STDOUT)`, which drops the process's only ext-posix symbol.
+ * The size query now lives in `src/Cli.php::viewportCells()`, spelling
+ * descriptor 1 as the literal and gating with core `stream_isatty(STDOUT)`,
+ * which keeps the process's only ext-posix symbol out of the app. The bin is a
+ * shim; both files are scanned.
  */
 
 declare(strict_types=1);
 
-namespace SugarCraft\Flip\Tests;
+namespace SugarCraft\GifView\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Posix\PosixPtySystem;
@@ -28,7 +32,8 @@ use SugarCraft\Pty\Posix\PosixPtyPair;
 
 final class BinSizeQueryPolarityTest extends TestCase
 {
-    private const BIN = __DIR__ . '/../bin/candy-flip';
+    private const BIN = __DIR__ . '/../bin/candy-gifview';
+    private const CLI = __DIR__ . '/../src/Cli.php';
 
     /** The SizeIoctl failure wording the pre-fix shape emitted on stderr. */
     private const NON_TTY_MESSAGE = 'Cannot query size of non-tty fd';
@@ -57,25 +62,29 @@ final class BinSizeQueryPolarityTest extends TestCase
         $this->artifacts = [];
     }
 
-    private static function binSource(): string
+    /** @return array<string, string> label => source text */
+    private static function scanTargets(): array
     {
-        $contents = file_get_contents(self::BIN);
-        self::assertIsString($contents, 'the bin must exist next to the lib');
+        $bin = file_get_contents(self::BIN);
+        self::assertIsString($bin, 'the bin must exist next to the app');
+        $cli = file_get_contents(self::CLI);
+        self::assertIsString($cli, 'Cli.php must exist');
 
-        return $contents;
+        return ['bin/candy-gifview' => $bin, 'src/Cli.php' => $cli];
     }
 
     /**
      * Every `(int)` cast applied to a standard stream — the bug's exact shape.
      *
      * Read from the TOKEN stream rather than the raw text on purpose: this
-     * class's comments quote `(int) STDOUT` to explain why it is wrong, and a
-     * plain text scan would accuse the documentation of the defect it
-     * documents. Comments carry no tokens here, so they cannot offend.
+     * class's comments — and Cli.php's docblocks — quote `(int) STDOUT` to
+     * explain why it is wrong, and a plain text scan would accuse the
+     * documentation of the defect it documents. Comments carry no tokens here,
+     * so they cannot offend.
      *
-     * @return list<string> "line (int) NAME" for each offender
+     * @return list<string> "file line N: (int) NAME" for each offender
      */
-    private static function streamCasts(string $source): array
+    private static function streamCasts(string $label, string $source): array
     {
         $found  = [];
         $tokens = \token_get_all($source);
@@ -95,7 +104,7 @@ final class BinSizeQueryPolarityTest extends TestCase
                     && $next[0] === T_STRING
                     && \in_array(\strtoupper($next[1]), ['STDIN', 'STDOUT', 'STDERR'], true)
                 ) {
-                    $found[] = "line {$cast[2]}: (int) {$next[1]}";
+                    $found[] = "$label line {$cast[2]}: (int) {$next[1]}";
                 }
                 break;
             }
@@ -104,34 +113,45 @@ final class BinSizeQueryPolarityTest extends TestCase
         return $found;
     }
 
-    public function testTheBinCarriesNoStreamToIntCasts(): void
+    public function testBinAndCliCarryNoStreamToIntCasts(): void
     {
+        $offenders = [];
+        foreach (self::scanTargets() as $label => $source) {
+            $offenders = array_merge($offenders, self::streamCasts($label, $source));
+        }
+
         $this->assertSame(
             [],
-            self::streamCasts(self::binSource()),
+            $offenders,
             'an (int) cast of a stream yields the resource id, never the fd',
         );
     }
 
-    public function testTheBinQueriesDescriptorOneBehindACoreIsattyGate(): void
+    public function testCliQueriesDescriptorOneBehindACoreIsattyGate(): void
     {
-        $source = self::binSource();
+        $cli = self::scanTargets()['src/Cli.php'];
 
         $this->assertStringContainsString(
             'SizeIoctl::query(1)',
-            $source,
+            $cli,
             'STDOUT\'s descriptor is the literal 1; anything else is guessing',
         );
         $this->assertStringContainsString(
             'stream_isatty(STDOUT)',
-            $source,
+            $cli,
             'the tty gate must be core stream_isatty, not the ext-posix twin',
         );
-        $this->assertStringNotContainsString(
-            'posix_isatty',
-            $source,
-            'the bin is the lib\'s only production surface; ext-posix stays out of it',
-        );
+    }
+
+    public function testNeitherSurfaceReachesForExtPosix(): void
+    {
+        foreach (self::scanTargets() as $label => $source) {
+            $this->assertStringNotContainsString(
+                'posix_isatty',
+                $source,
+                "the viewer's production surfaces stay ext-posix free ($label)",
+            );
+        }
     }
 
     public function testCastingTheStdoutResourceIsNotItsDescriptor(): void
@@ -186,7 +206,7 @@ final class BinSizeQueryPolarityTest extends TestCase
 
         $gif = $this->gifFixture();
 
-        $errLog = tempnam(sys_get_temp_dir(), 'sc_flip_bin_errlog_');
+        $errLog = tempnam(sys_get_temp_dir(), 'sc_gifview_bin_errlog_');
         $this->assertIsString($errLog);
         $this->artifacts[] = $errLog;
 
@@ -213,7 +233,7 @@ final class BinSizeQueryPolarityTest extends TestCase
         $this->assertStringNotContainsString(
             self::NON_TTY_MESSAGE,
             $stderr,
-            'the bin asked the kernel for a size on a non-terminal fd — the (int) STDOUT '
+            'the viewer asked the kernel for a size on a non-terminal fd — the (int) STDOUT '
                 . 'cast is back, or the gate moved off descriptor 1',
         );
     }
@@ -234,7 +254,7 @@ final class BinSizeQueryPolarityTest extends TestCase
      */
     private function gifFixture(): string
     {
-        $path = tempnam(sys_get_temp_dir(), 'sc_flip_bin_') . '.gif';
+        $path = tempnam(sys_get_temp_dir(), 'sc_gifview_bin_') . '.gif';
         $this->artifacts[] = $path;
 
         if (\extension_loaded('gd')) {

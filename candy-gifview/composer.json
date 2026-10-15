@@ -1,0 +1,57 @@
+{
+    "name": "sugarcraft/candy-gifview",
+    "description": "Terminal GIF and .ansi-art viewer (gifterm port) \u2014 the command-line front end of sugarcraft/candy-flip.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "cli",
+        "gif",
+        "ansi-art",
+        "ascii-art",
+        "gifterm",
+        "viewer",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-gifview.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-gifview/issues",
+        "source": "https://github.com/sugarcraft/candy-gifview",
+        "docs": "https://sugarcraft.github.io/lib/candy-gifview.html"
+    },
+    "bin": [
+        "bin/candy-gifview"
+    ],
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-flip": "dev-master",
+        "sugarcraft/candy-pty": "dev-master"
+    },
+    "suggest": {
+        "ext-gd": "Required to decode GIF animations (via sugarcraft/candy-flip); ANSI art playback needs neither."
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\GifView\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\GifView\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

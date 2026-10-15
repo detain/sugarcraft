@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SugarCraft — terminal UIs for PHP</title>
-    <meta name="description" content="SugarCraft — 39 libraries and 21 apps (60 packages) for building beautiful terminal UIs in PHP. MVC-style Model–Update–View runtime, declarative styling, charts, forms, SSH-served apps. Composer-installable. PHP 8.3+. Async on ReactPHP.">
+    <meta name="description" content="SugarCraft — 40 libraries and 21 apps (61 packages) for building beautiful terminal UIs in PHP. MVC-style Model–Update–View runtime, declarative styling, charts, forms, SSH-served apps. Composer-installable. PHP 8.3+. Async on ReactPHP.">
     <meta property="og:title" content="SugarCraft — terminal UIs for PHP">
-    <meta property="og:description" content="39 libraries and 21 apps for building beautiful terminal UIs in PHP. Composer-installable, fiber-driven, async on ReactPHP.">
+    <meta property="og:description" content="40 libraries and 21 apps for building beautiful terminal UIs in PHP. Composer-installable, fiber-driven, async on ReactPHP.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sugarcraft.github.io/">
     <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
@@ -21,7 +21,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "SugarCraft",
-        "description": "39 libraries and 21 apps (60 packages) for building beautiful terminal user interfaces in PHP — MVC-style Model–Update–View runtime, styling, charts, forms, SSH-served apps.",
+        "description": "40 libraries and 21 apps (61 packages) for building beautiful terminal user interfaces in PHP — MVC-style Model–Update–View runtime, styling, charts, forms, SSH-served apps.",
         "url": "https://sugarcraft.github.io/",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "PHP 8.3+",
@@ -64,8 +64,8 @@
         <img class="hero-banner" src="img/social-preview.png" alt="SugarCraft — sweet to build, fun to use">
         <h1>Terminal UIs that taste like candy.</h1>
         <p class="tag">
-            SugarCraft is a PHP-native TUI ecosystem — thirty-nine
-            libraries and twenty-one apps (sixty packages total). MVC-style
+            SugarCraft is a PHP-native TUI ecosystem — forty
+            libraries and twenty-one apps (sixty-one packages total). MVC-style
             Model–Update–View runtime, declarative styling, animation, charts,
             forms, SSH-served apps, telemetry, file managers, an AI chat shell.
             Composer-installable, PHP 8.3+, fibers, async on ReactPHP.
@@ -86,7 +86,7 @@
         </div>
 
         <div class="stats">
-            <div class="stat"><span class="num">39</span><span class="label">libraries</span></div>
+            <div class="stat"><span class="num">40</span><span class="label">libraries</span></div>
             <div class="stat"><span class="num">21</span><span class="label">apps</span></div>
             <div class="stat"><span class="num">281</span><span class="label">VHS demos</span></div>
             <div class="stat"><span class="num">PHP 8.3+</span><span class="label">fibers / ReactPHP</span></div>
@@ -159,7 +159,8 @@
             <a href="lib/candy-query.html"    title="CandyQuery — SQLite browser"><img src="img/icons/candy-query.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-tick.html"     title="SugarTick — time tracker"><img src="img/icons/sugar-tick.png" alt="" aria-hidden="true"></a>
             <a href="lib/candy-mines.html"    title="CandyMines — minesweeper"><img src="img/icons/candy-mines.png" alt="" aria-hidden="true"></a>
-            <a href="lib/candy-flip.html"     title="CandyFlip — gif viewer"><img src="img/icons/candy-flip.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-flip.html"     title="CandyFlip — animation toolkit"><img src="img/icons/candy-flip.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-gifview.html"    title="CandyGifView — gif viewer CLI"><img src="img/icons/candy-gifview.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-reel.html"     title="SugarReel — video player"><img src="img/icons/sugar-reel.png" alt="" aria-hidden="true"></a>
             <a href="lib/candy-top.html"      title="CandyTop — system monitor"><img src="img/icons/candy-top.png" alt="" aria-hidden="true"></a>
             <a href="lib/honey-flap.html"     title="HoneyFlap — flappy bird"><img src="img/icons/honey-flap.png" alt="" aria-hidden="true"></a>
@@ -181,7 +182,7 @@
 
 <section class="section" id="libraries" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Thirty-nine libraries, one ecosystem.</h2>
+        <h2>Forty libraries, one ecosystem.</h2>
         <p class="lede">
             Each library has its own composer package, README, examples, and
             PHPUnit suite. Pull just the ones you need — or grab the umbrella
@@ -866,7 +867,19 @@
                     <h3>CandyFlip</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-flip">GitHub →</span>
                 </div>
-                <p class="summary">ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or a luminance-ramp ASCII rendering.</p>
+                <p class="summary">ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, .ansi art playback. Viewer CLI: candy-gifview.</p>
+            </a>
+
+            <a class="lib-card" href="lib/candy-gifview.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-gifview.png" alt="" aria-hidden="true">
+                    <h3>CandyGifView</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-gifview">GitHub →</span>
+                </div>
+                <p class="summary">Terminal GIF + .ansi-art viewer CLI — sizes to the viewport, plays in the alternate screen (24-bit blocks or luminance ramp) on top of candy-flip. Port of gifterm.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-reel.html">
@@ -1124,9 +1137,14 @@
                 <span class="demo-caption">Minesweeper, flood-fill + flag</span>
             </a>
             <a class="demo-card" href="lib/candy-flip.html">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-flip/.vhs/play.gif" alt="CandyFlip ASCII gif viewer">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-flip/.vhs/play.gif" alt="CandyFlip animation toolkit">
                 <h3>CandyFlip</h3>
-                <span class="demo-caption">ASCII GIF viewer</span>
+                <span class="demo-caption">ANSI/GIF animation toolkit</span>
+            </a>
+            <a class="demo-card" href="lib/candy-gifview.html">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="CandyGifView terminal gif viewer">
+                <h3>CandyGifView</h3>
+                <span class="demo-caption">GIF + .ansi-art viewer CLI</span>
             </a>
             <a class="demo-card" href="lib/honey-flap.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/honey-flap/.vhs/play.gif" alt="HoneyFlap flappy bird">

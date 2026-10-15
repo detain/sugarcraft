@@ -13,15 +13,20 @@
 
 ![demo](.vhs/play.gif)
 
-ANSI/GIF animation viewer on the SugarCraft stack for PHP 8.3+. Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate. It also plays back `.ansi` ANSI-art documents — parse, catalog, and timer-free frame pacing (see [ANSI art playback](#ansi-art-playback-ansiart-artlibrary-artloop) below); `.ansi` playback needs no GD at all.
+ANSI/GIF animation toolkit on the SugarCraft stack for PHP 8.3+. Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate. It also plays back `.ansi` ANSI-art documents — parse, catalog, and timer-free frame pacing (see [ANSI art playback](#ansi-art-playback-ansiart-artlibrary-artloop) below); `.ansi` playback needs no GD at all.
 
 ```bash
 composer require sugarcraft/candy-flip
-candy-flip my-animation.gif         # solid-block preset (default)
-candy-flip my-animation.gif density # ASCII luminance ramp
 ```
 
-## Keys
+Want a ready-made viewer command? [`sugarcraft/candy-gifview`](../candy-gifview/) is the CLI front end built on this library:
+
+```bash
+candy-gifview my-animation.gif         # solid-block preset (default)
+candy-gifview my-animation.gif density # ASCII luminance ramp
+```
+
+## Player keys
 
 | Key                | Action                              |
 |--------------------|-------------------------------------|

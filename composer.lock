@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8127ee2fe593efc07ed103ae49a2d18a",
+    "content-hash": "84f57dcf8e5d34411c5ad4525da8baaa",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3688,7 +3688,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flip",
-                "reference": "8f0714a52f8d4737c820566d63b2a83d4e9a420e"
+                "reference": "05bfce5cd05c8ed5bfde60319bcfc4892c123ac1"
             },
             "require": {
                 "php": "^8.3",
@@ -3702,10 +3702,7 @@
             "suggest": {
                 "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
             },
-            "bin": [
-                "bin/candy-flip"
-            ],
-            "type": "project",
+            "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Flip\\": "src/"
@@ -3726,7 +3723,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "ANSI/GIF animation viewer — ASCII GIF playback (gifterm port) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop).",
+            "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
             "homepage": "https://sugarcraft.github.io/lib/candy-flip.html",
             "keywords": [
                 "ansi-art",
@@ -3808,7 +3805,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-forms",
-                "reference": "09dd04800a3203256a6f2d8a0e4d2e1728fc1a37"
+                "reference": "b9c528afaf2f45103175aa26c9067faf641efc4e"
             },
             "require": {
                 "php": "^8.3",
@@ -3844,7 +3841,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Form library (port of charmbracelet/huh) and foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits.",
+            "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits, with the interactive huh-style form engine folded in.",
             "homepage": "https://github.com/sugarcraft/candy-forms",
             "keywords": [
                 "forms",
@@ -3977,6 +3974,73 @@
                 "issues": "https://github.com/sugarcraft/candy-fuzzy/issues",
                 "source": "https://github.com/sugarcraft/candy-fuzzy",
                 "docs": "https://github.com/sugarcraft/candy-fuzzy/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-gifview",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-gifview",
+                "reference": "be4339b415b8961d71826265a8aeeb366a9d7b54"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-flip": "dev-master",
+                "sugarcraft/candy-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "suggest": {
+                "ext-gd": "Required to decode GIF animations (via sugarcraft/candy-flip); ANSI art playback needs neither."
+            },
+            "bin": [
+                "bin/candy-gifview"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\GifView\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\GifView\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal GIF and .ansi-art viewer (gifterm port) — the command-line front end of sugarcraft/candy-flip.",
+            "homepage": "https://sugarcraft.github.io/lib/candy-gifview.html",
+            "keywords": [
+                "ansi-art",
+                "ascii-art",
+                "cli",
+                "gif",
+                "gifterm",
+                "sugarcraft",
+                "tui",
+                "viewer"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-gifview/issues",
+                "source": "https://github.com/sugarcraft/candy-gifview",
+                "docs": "https://sugarcraft.github.io/lib/candy-gifview.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8526,6 +8590,7 @@
         "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-freeze": 20,
         "sugarcraft/candy-fuzzy": 20,
+        "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-hermit": 20,
         "sugarcraft/candy-kit": 20,
         "sugarcraft/candy-lister": 20,

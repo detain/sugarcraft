@@ -1,7 +1,7 @@
 {
     "name": "sugarcraft/candy-flip",
-    "description": "ANSI/GIF animation viewer — ASCII GIF playback (gifterm port) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop).",
-    "type": "project",
+    "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
+    "type": "library",
     "license": "MIT",
     "keywords": [
         "tui",
@@ -25,9 +25,6 @@
         "source": "https://github.com/sugarcraft/candy-flip",
         "docs": "https://sugarcraft.github.io/lib/candy-flip.html"
     },
-    "bin": [
-        "bin/candy-flip"
-    ],
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",

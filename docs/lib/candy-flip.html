@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyFlip — SugarCraft</title>
-<meta name="description" content="CandyFlip: ASCII GIF viewer.">
+<meta name="description" content="CandyFlip: ANSI/GIF animation toolkit.">
 <meta property="og:title" content="CandyFlip — SugarCraft">
-<meta property="og:description" content="ASCII GIF viewer.">
+<meta property="og:description" content="ANSI/GIF animation toolkit — GIF decode, frame playback, .ansi art. CLI: candy-gifview.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-flip.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-flip.html">
 <meta property="og:type" content="website">
@@ -32,13 +32,13 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All 21 apps</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-flip.png" alt="CandyFlip">
       <div>
         <h2>🎞 CandyFlip</h2>
-        <p class="detail-sub">ASCII GIF viewer</p>
+        <p class="detail-sub">ANSI/GIF animation toolkit</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/namzug16/gifterm" style="color: inherit;">namzug16/gifterm</a></span>
           <span class="tag-chip">gif</span>
@@ -56,8 +56,10 @@
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flip</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">candy-flip my-animation.gif         # solid blocks (default)
-candy-flip my-animation.gif density # luminance ramp</code></pre>
+    <pre class="code"><code class="language-shell"># The ready-made viewer CLI is a separate app package:
+#   composer require sugarcraft/candy-gifview
+#   candy-gifview my-animation.gif         # solid blocks (default)
+#   candy-gifview my-animation.gif density # luminance ramp</code></pre>
     <pre class="code"><code class="language-php">// Programmatic:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;

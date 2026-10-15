@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CandyGifView — SugarCraft</title>
+<meta name="description" content="CandyGifView: Terminal GIF and .ansi-art viewer.">
+<meta property="og:title" content="CandyGifView — SugarCraft">
+<meta property="og:description" content="Terminal GIF and .ansi-art viewer CLI on top of candy-flip.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-gifview.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-gifview.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-gifview.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-gifview.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All 21 apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-gifview.png" alt="CandyGifView">
+      <div>
+        <h2>📽 CandyGifView</h2>
+        <p class="detail-sub">Terminal GIF and .ansi-art viewer</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">inspired by <a href="https://github.com/namzug16/gifterm" style="color: inherit;">namzug16/gifterm</a></span>
+          <span class="tag-chip">gif</span>
+          <span class="tag-chip">ansi-art</span>
+          <span class="tag-chip">viewer</span>
+          <span class="tag-chip">cli</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-gifview"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-gifview" alt="CandyGifView code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">The terminal GIF + <code>.ansi</code>-art viewer: point it at a file and it sizes to your viewport, decodes via <a href="lib/candy-flip.html">candy-flip</a>, and plays the animation in the alternate screen — full-cell 24-bit blocks or a luminance-density ramp, toggled live. This is the command that used to ship as <code>bin/candy-flip</code>, split into its own app package.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-gifview</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-shell">candy-gifview my-animation.gif         # solid 24-bit blocks (default)
+candy-gifview my-animation.gif density # luminance-density ramp
+
+# keys while playing
+#   Space   pause / resume
+#   Left/Right  step frames
+#   d       toggle solid <-> density
+#   q / Esc quit</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>One-command viewer</strong><span><code>candy-gifview file.gif</code> — no flags to learn; an optional second argument picks the render preset.</span></div>
+      <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate (descriptor 1, never the cast resource id) and reserves a row, so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
+      <div class="feature"><strong>Alternate screen</strong><span>Runs the candy-flip <code>Player</code> inside a candy-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
+      <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>` .:-=+*#%@`</code> density ramp without losing your frame position.</span></div>
+      <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
+      <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a two-line shim, and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
+      <div class="feature"><strong>Localized</strong><span>Usage and autoload-probe messages ship in sixteen locales via the candy-core i18n lookup.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-gifview">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-gifview/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-gifview/tree/master/examples">Runnable examples</a></li>
+      <li>Decode + playback engine: <a href="lib/candy-flip.html">sugarcraft/candy-flip</a>.</li>
+      <li>Originally inspired by <a href="https://github.com/namzug16/gifterm">gifterm</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Cli</td><td>main(argv, stdout, stderr, play)</td><td>Parse args, decode, wire the Player, run the Program; returns the exit code</td></tr>
+<tr><td>Cli</td><td>viewportCells()</td><td>TTY-sized cell grid (cols, rows-1) behind a stream_isatty gate, 60×24 fallback</td></tr>
+<tr><td>Lang</td><td>t(key, params)</td><td>Localized CLI messages (namespace <code>gifview</code>)</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="View">
+                <h3>View</h3>
+                <span class="demo-caption">Synthetic gif played through the viewer CLI, both presets.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-gifview">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-gifview/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

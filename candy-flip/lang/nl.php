@@ -17,6 +17,4 @@ return [
     'decoder.truncated'        => 'candy-flip: afgebroken GIF',
     'decoder.screen_too_large' => 'candy-flip: GIF-schermafmetingen overschrijden maximum ({max} pixels)',
     'decoder.screen_too_small' => 'candy-flip: GIF-schermafmetingen moeten positief zijn',
-    'cli.usage'                => 'Gebruik: candy-flip <gif> [solid|density]',
-    'cli.no_autoload'          => 'candy-flip: kan composer autoload.php niet vinden',
 ];

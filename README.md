@@ -72,6 +72,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-table.png" width="48" alt=""> | **[SugarTable](sugar-table/)** | Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows/cols. |
 | <img src="media/icons/sugar-diff.png" width="48" alt=""> | **[SugarDiff](sugar-diff/)** | Unified-diff engine — LCS line diff, `diff -u` hunks, writer + line-number scanner. Extracted from sugar-crush. |
 | <img src="media/icons/sugar-mcp.png" width="48" alt=""> | **[SugarMcp](sugar-mcp/)** | Model Context Protocol (MCP) client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing. Extracted from sugar-crush. |
+| <img src="media/icons/candy-flip.png" width="48" alt=""> | **[CandyFlip](candy-flip/)** | ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, `.ansi` art playback; the viewer CLI lives in candy-gifview. |
 
 ## Apps built on the stack
 
@@ -94,7 +95,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-query.png" width="48" alt=""> | **[CandyQuery](candy-query/)** | Terminal SQL browser — SQLite, MySQL and PostgreSQL: schema browsing, row editing, ad-hoc queries, EXPLAIN plans (PDO + `:memory:` test fixtures). |
 | <img src="media/icons/sugar-tick.png" width="48" alt=""> | **[SugarTick](sugar-tick/)** | Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard, no cloud. |
 | <img src="media/icons/candy-mines.png" width="48" alt=""> | **[CandyMines](candy-mines/)** | Minesweeper — first-click safety, recursive flood-fill, flag toggle, win/lose detection, deterministic-RNG injectable. |
-| <img src="media/icons/candy-flip.png" width="48" alt=""> | **[CandyFlip](candy-flip/)** | ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or a luminance-ramp. |
+| <img src="media/icons/candy-gifview.png" width="48" alt=""> | **[CandyGifView](candy-gifview/)** | Terminal GIF + .ansi-art viewer — the candy-flip CLI: sizes to the viewport, plays in the alternate screen (solid 24-bit blocks or a luminance ramp). |
 | <img src="media/icons/candy-top.png" width="48" alt=""> | **[CandyTop](candy-top/)** | Terminal system monitor — per-core CPU with frequencies, temperatures and battery, memory, disks, network, and process boxes with braille graphs and gradient meters; multi-menu navigation, presets, 43 themes with btop-compatible config; Linux `/proc` + `/sys` and FreeBSD collectors, container/VM tags. |
 | <img src="media/icons/sugar-reel.png" width="48" alt=""> | **[SugarReel](sugar-reel/)** | Terminal video player — pipes mp4 (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty (GIF via ext-gd, no ffmpeg). |
 | <img src="media/icons/honey-flap.png" width="48" alt=""> | **[HoneyFlap](honey-flap/)** | Flappy-Bird-style game — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate. |

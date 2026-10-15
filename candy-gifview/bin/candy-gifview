@@ -1,0 +1,20 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-gifview: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+// Two-line shim by design: every branch lives in Cli::main() so the argv
+// handling, decode failures, and viewport sizing are testable in-process.
+exit(\SugarCraft\GifView\Cli::main($argv ?? [], STDOUT, STDERR));

@@ -18,3 +18,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
 - **[pattern:snapshot-testing-assert-golden]** Use `candy-testing`'s `assertGolden*` for any renderable/serializable output — ANSI cell renders via `assertGoldenAnsi`, numeric data via `assertGolden` file equality. This pins canonical output so refactors are intentional rather than accidental regressions.
+
+- **[split:viewer-cli-moved-to-candy-gifview]** Rename campaign step 1.3: `bin/candy-flip` (and its `cli.*` locale keys + `BinSizeQueryPolarityTest`) moved out into the new app package `candy-gifview/` (namespace `SugarCraft\GifView`, CLI logic in testable `Cli::main()`). candy-flip is now `type: library` — decode/Player/Renderer/AnsiArt surface stays here; the descriptor-1 size-query lesson now lives in `candy-gifview/src/Cli.php::viewportCells()` and is pinned in `candy-gifview/tests/`. Do not reintroduce a bin or `cli.*` keys here.
