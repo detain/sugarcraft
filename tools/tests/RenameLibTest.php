@@ -224,6 +224,57 @@ final class RenameLibTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Case 8b — C.2 underscore-JOINED doc paths (findings/plan_<old>.md,
+    // docs/repo_map/sugarcraft_<old>.md) rename even though content R3 stays
+    // strict: inside a filename the underscore is a separator, in text it is
+    // a word character. (Pilot honey-flap finding, Phase 3 Batch A.)
+    // ------------------------------------------------------------------
+
+    public function testUnderscoreJoinedPathsRenameWhileContentStaysStrict(): void
+    {
+        $root = $this->makeRepo([
+            'candy-shine/composer.json' => <<<'JSON'
+                {"name":"sugarcraft/candy-shine","description":"fixture","autoload":{"psr-4":{"SugarCraft\\Shine\\":"src/"}}}
+                JSON . "\n",
+            'candy-shine/src/Shine.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace SugarCraft\Shine;
+
+                final class Shine
+                {
+                }
+                PHP . "\n",
+            'findings/plan_candy-shine.md' => "plan for sugarcraft/candy-shine\n",
+            'docs/repo_map/sugarcraft_candy-shine.md' => "map of sugarcraft/candy-shine\n",
+            'docs/repo_map/update_sugarcraft_candy-shine.md' => "see docs/repo_map/sugarcraft_candy-shine.md\n",
+            'docs/candy-shine_scores.md' => "trailing underscore keeps this sibling alone\n",
+            'docs/misc.md' => <<<'TXT'
+                identifiers stay: foo_candy-shine and $bar_candy-shine and _candy-shine alone too
+                TXT . "\n",
+        ]);
+
+        $run = $this->runTool($root, 'candy-shine');
+        $this->assertSame(0, $run['rc'], $run['out']);
+
+        $tracked = $this->trackedPaths($root);
+        $this->assertContains('findings/plan_sugar-markdown.md', $tracked, 'C.2 names findings/plan_<old>.md as a rename target');
+        $this->assertContains('docs/repo_map/sugarcraft_sugar-markdown.md', $tracked, 'C.2 names the repo_map pair as rename targets');
+        $this->assertContains('docs/repo_map/update_sugarcraft_sugar-markdown.md', $tracked);
+        $this->assertNotContains('findings/plan_candy-shine.md', $tracked);
+
+        // C.1 strictness survives on the content and trailing sides: underscore-
+        // prefixed mentions and slug+underscore siblings are NOT rewritten.
+        $misc = $this->read($root, 'docs/misc.md');
+        $this->assertStringContainsString('foo_candy-shine', $misc);
+        $this->assertStringContainsString('$bar_candy-shine', $misc);
+        $this->assertStringContainsString('_candy-shine', $misc);
+        $this->assertContains('docs/candy-shine_scores.md', $tracked, 'trailing-underscore sibling must not move');
+    }
+
+    // ------------------------------------------------------------------
     // Case 9 — C.3 exclusions (+ untracked .bak decoy, invisible to git).
     // ------------------------------------------------------------------
 

@@ -603,8 +603,17 @@ final class RenameLib
         return $rules;
     }
 
-    /** @param array<string, mixed> $d */
-    public static function r3Pattern(array $d): string
+    /**
+     * @param array<string, mixed> $d
+     * @param bool $pathContext C.2 names underscore-JOINED files as rename
+     *        targets (`findings/plan_<old>.md`, `docs/repo_map/sugarcraft_<old>.md`,
+     *        `docs/repo_map/update_sugarcraft_<old>.md`). Inside a path SEGMENT the
+     *        underscore is a filename separator, not a word character, so the
+     *        lookbehind relaxes to alphanumerics only. Content rules (C.1) stay
+     *        strict — `_` there is a word character and `$a_<old>` style glue must
+     *        never be rewritten. (Pilot honey-flap finding, Phase 3.)
+     */
+    public static function r3Pattern(array $d, bool $pathContext = false): string
     {
         $protect = '';
         foreach ($d['protect'] as $p) {
@@ -613,13 +622,13 @@ final class RenameLib
             }
         }
 
-        return '#(?<![A-Za-z0-9_])' . preg_quote((string) $d['old'], '#') . '(?![A-Za-z0-9_])' . $protect . '#';
+        return '#(?<!' . ($pathContext ? '[A-Za-z0-9]' : '[A-Za-z0-9_]') . ')' . preg_quote((string) $d['old'], '#') . '(?![A-Za-z0-9_])' . $protect . '#';
     }
 
     /** @param array<string, mixed> $d */
-    public static function r4Pattern(array $d): string
+    public static function r4Pattern(array $d, bool $pathContext = false): string
     {
-        return '#(?<![A-Za-z0-9_$>])' . preg_quote((string) $d['compact_old'], '#') . '(?![A-Za-z0-9_])#';
+        return '#(?<!' . ($pathContext ? '[A-Za-z0-9]' : '[A-Za-z0-9_$>]') . ')' . preg_quote((string) $d['compact_old'], '#') . '(?![A-Za-z0-9_])#';
     }
 
     /**
@@ -664,24 +673,24 @@ final class RenameLib
      *
      * @param array<string, mixed> $d
      */
-    public static function rewriteSegment(string $segment, array $d, bool $python, bool $ansiPrefixContext = false): string
+    public static function rewriteSegment(string $segment, array $d, bool $python, bool $ansiPrefixContext = false, bool $pathContext = false): string
     {
         $out = $segment;
         if ($ansiPrefixContext && $out !== (string) $d['new'] && str_starts_with($out, (string) $d['old'])) {
             $out = (string) $d['new'] . substr($out, strlen((string) $d['old']));
         }
         $out = (string) preg_replace_callback(
-            '#(?<![A-Za-z0-9_])' . preg_quote((string) $d['pascal_old'], '#') . '(?![a-z0-9])#',
+            '#(?<!' . ($pathContext ? '[A-Za-z0-9]' : '[A-Za-z0-9_]') . ')' . preg_quote((string) $d['pascal_old'], '#') . '(?![a-z0-9])#',
             static fn(array $m): string => (string) $d['pascal_new'],
             $out,
         );
         $out = (string) preg_replace_callback(
-            self::r3Pattern($d),
+            self::r3Pattern($d, $pathContext),
             static fn(array $m): string => (string) $d['new'],
             $out,
         );
         $out = (string) preg_replace(
-            self::r4Pattern($d),
+            self::r4Pattern($d, $pathContext),
             addcslashes($python ? (string) $d['compact_new'] : (string) $d['new'], '\\$'),
             $out,
         );
@@ -701,7 +710,7 @@ final class RenameLib
         $ansi = ($segments[0] ?? '') === 'ansi';
         $last = count($segments) - 1;
         foreach ($segments as $i => $segment) {
-            $segments[$i] = self::rewriteSegment($segment, $d, $python, $ansi && $i === $last && str_ends_with($segment, '.ansi'));
+            $segments[$i] = self::rewriteSegment($segment, $d, $python, $ansi && $i === $last && str_ends_with($segment, '.ansi'), true);
         }
         $new = implode('/', $segments);
 
