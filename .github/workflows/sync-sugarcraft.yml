@@ -145,20 +145,36 @@ jobs:
 
           # tools/renames.json is the authoritative old->new map (plan_rename.md
           # Part C). Print the pre-rename slug when the lib dir $1 is a rename
-          # target; empty otherwise. The splitsh-lite invocation below must stay
-          # SINGLE-prefix — two plain --prefix flags are a hard parse error in
-          # v1.0.1 and never preserved continuity anyway (measured in
+          # target; empty otherwise. FAILS CLOSED (exit 1) on a missing/corrupt
+          # map or a duplicate `new` claim: an empty answer here silently skips
+          # legacy preservation, so an unreadable map must abort the whole sync
+          # step (set -e) rather than let renamed libs force-push uninspected.
+          # The splitsh-lite invocation below must stay SINGLE-prefix — two
+          # plain --prefix flags are a hard parse error in v1.0.1 and never
+          # preserved continuity anyway (measured in
           # prompt_kit/briefs/rename-2.1/REPORT.md §4, §8), so the map's only
           # use here is naming the legacy preservation refs below.
           old_slug_for() {
             php -r '
-              $entries = json_decode(file_get_contents("tools/renames.json"), true)["entries"];
-              $old = "";
-              foreach ($entries as $e) {
-                if (($e["kind"] ?? "") !== "rename" || ($e["old"] ?? null) === null) continue;
-                if (($e["new"] ?? null) === $argv[1]) $old = $e["old"];
+              if (!is_file("tools/renames.json")) {
+                fwrite(STDERR, "old_slug_for: tools/renames.json is missing — refusing to sync uninspected\n");
+                exit(1);
               }
-              echo $old;
+              $map = json_decode((string) file_get_contents("tools/renames.json"), true);
+              if (!is_array($map) || !isset($map["entries"]) || !is_array($map["entries"])) {
+                fwrite(STDERR, "old_slug_for: tools/renames.json is not a valid renames map — refusing to sync uninspected\n");
+                exit(1);
+              }
+              $matches = [];
+              foreach ($map["entries"] as $e) {
+                if (($e["kind"] ?? "") !== "rename" || ($e["old"] ?? null) === null) continue;
+                if (($e["new"] ?? null) === $argv[1]) $matches[] = $e["old"];
+              }
+              if (count($matches) > 1) {
+                fwrite(STDERR, "old_slug_for: " . count($matches) . " rename entries claim new slug {$argv[1]} (" . implode(", ", $matches) . ") — refusing to guess\n");
+                exit(1);
+              }
+              echo $matches[0] ?? "";
             ' "$1"
           }
 
@@ -196,12 +212,21 @@ jobs:
             # as refs/heads/legacy/<old> + refs/tags/<old>-final before the
             # first force-push that would strand it. Non-renamed libs split as
             # a fast-forward, so the ancestor guard never fires for them and
-            # their sync path is byte-identical to before. A fetch failure
-            # aborts the job here (set -e) — fail closed, never force-push
-            # over an uninspected remote master.
+            # their split/force-push behavior is identical (every lib does pay
+            # one extra local old_slug_for lookup per run — no extra network
+            # calls unless the dir is a rename target). An ls-remote or fetch
+            # failure aborts the job here (set -e + pipefail; note there is
+            # deliberately no `|| true` on ls-remote: a truly empty repo
+            # answers rc=0/empty, so a non-zero exit is an auth/network error
+            # that must NOT masquerade as "nothing to preserve") — fail closed,
+            # never force-push over an uninspected remote master.
+            # Chained renames (A->B->C): the lookup is immediate-predecessor
+            # only, so if both hops land before any intervening sync the A-era
+            # remote chain is preserved as legacy/B — history survives by
+            # reference; the ref name marks the hop, not the era.
             prev=$(old_slug_for "$lib")
             if [ -n "$prev" ]; then
-              remote_tip=$(git ls-remote "$push_url" refs/heads/master | cut -f1 || true)
+              remote_tip=$(git ls-remote "$push_url" refs/heads/master | cut -f1)
               if [ -n "$remote_tip" ]; then
                 git fetch --quiet "$push_url" "$remote_tip"
                 if ! git merge-base --is-ancestor "$remote_tip" "$sha"; then

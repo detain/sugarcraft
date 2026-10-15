@@ -35,8 +35,10 @@ renames.json (`old_slug_for` matches `new == $lib`), so a B→C hop names `legac
 - `status` is deliberately NOT a filter inside the guard: if the dir name equals a rename entry's
   `new`, the dir has already moved (Procedure R7 moves dir + sets status in the same commit), so
   divergence is real regardless of bookkeeping state. Today every guard-relevant lookup returns
-  empty (measured below: "guard fires for zero dirs today") → non-renamed libs execute the
-  byte-identical old path (zero extra network calls, same split, same force-push).
+  empty (measured below: "guard fires for zero dirs today") → non-renamed libs execute the same
+  split + force-push behavior with zero extra network calls; the one per-run cost they do pay is
+  a single local `php -r` lookup via `old_slug_for` (wording qualified per review finding 5 —
+  "byte-identical path" overstated it).
 - Fail-closed: if the `git fetch` of the remote tip errors, `set -e` aborts the job BEFORE the
   force-push — the workflow never force-pushes over an uninspected remote master. (An empty
   ls-remote answer — brand-new/empty split repo, e.g. candy-gifview's first sync — skips the
@@ -97,3 +99,30 @@ renames.json (`old_slug_for` matches `new == $lib`), so a B→C hop names `legac
 - Commit message per conflict-3 above.
 - No remote commands executed (barred by brief); first renamed-lib sync will exercise the new
   path in CI after the corresponding batch's Procedure R push.
+
+## Review round (report: /tmp/opencode/rename-rv-2.2/REVIEW.md — APPROVE-WITH-FIXES)
+
+All five findings applied in the follow-up commit (subject `rename: sync workflow review fixes (2.2 rv)`;
+fix sha = the commit containing this line — tracker row 2.2 intentionally still cites the main commit
+0b6d99af2). Files touched: workflow + this NOTES.md only.
+
+1. MAJOR ls-remote masking — FIXED: `|| true` deleted from the `remote_tip=$(git ls-remote … | cut -f1)`
+   line. Repro with the shipped line extracted verbatim from the YAML: unreachable repo → rc=128,
+   script aborts BEFORE any force-push (fatal "does not appear to be a git repository", no post-assign
+   echo); genuinely empty-but-existing bare repo → rc=0 + empty tip → guard skipped, force-push path
+   proceeds (finding-1 kept path re-proved).
+2. MAJOR fail-open `old_slug_for()` — FIXED: helper now `exit(1)` with a STDERR message on (a) missing
+   tools/renames.json, (b) unparseable JSON, (c) missing/non-array `entries`. Repro in a fixture cwd:
+   all four shapes → rc=1, empty stdout, message `…refusing to sync uninspected`; under the step's
+   `set -e` the `prev=$(old_slug_for "$lib")` assignment kills the job before any push.
+3. MINOR duplicate `new` claims — FIXED: >1 matching rename entry → exit 1
+   (`2 rename entries claim new slug dup (a1, a2) — refusing to guess`, measured in fixture map).
+4. MINOR chained-rename mislabel window — documented: guard comment now states A→B→C collapsing names
+   the A-era chain `legacy/B` (reference survives; ref name marks the hop, not the era).
+5. MINOR NOTES wording — qualified above (one extra local `php -r` per lib per run; push/split
+   behavior and zero extra network calls for non-renamed libs; workflow guard comment aligned too).
+
+Re-verification after fixes: `yaml.safe_load` OK; all 5 extracted run blocks `bash -n` OK; `php -l` on
+the extracted `old_slug_for` snippet OK; regression re-run against the REAL map: `candy-flappy→honey-flap`,
+`sugar-crush→''`, `candy-mouse→''`, and all 61 dirs of `affected-libs --all` still answer empty with
+rc=0 ("fires=0, rc!=0 count=0"). Fresh-file `grep` of the shipped blk4 confirms the no-`|| true` line.
