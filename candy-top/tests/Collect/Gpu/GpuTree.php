@@ -12,9 +12,16 @@ use SugarCraft\Top\Collect\Paths;
  * fd() call makes a real `/proc/<pid>/fd/<n>` symlink to a /dev/dri node
  * (dangling on purpose — the scanner only reads the link text) and its
  * fdinfo file, so rate tests can rewrite counters between samples.
+ *
+ * PCI-address fixture DIRECTORIES are stored filesystem-safe (underscores
+ * where sysfs uses colons, e.g. `0000_00_0b.0`) because NTFS rejects colons
+ * in committed paths; copyDir() restores the literal colon spelling while
+ * materializing, so the production scanners always see real-world names.
  */
 final class GpuTree
 {
+    /** Filesystem-safe stand-in for a sysfs PCI BDF directory name (see class docblock). */
+    private const SAFE_PCI_BDF = '/^[0-9a-f]{4}_[0-9a-f]{2}_[0-9a-f]{2}\.[0-7]$/i';
     private function __construct(
         public readonly string $root,
     ) {
@@ -79,8 +86,19 @@ final class GpuTree
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
-            is_dir("$from/$entry") ? self::copyDir("$from/$entry", "$to/$entry") : copy("$from/$entry", "$to/$entry");
+            $name = self::materializeName($entry);
+            is_dir("$from/$entry") ? self::copyDir("$from/$entry", "$to/$name") : copy("$from/$entry", "$to/$name");
         }
+    }
+
+    /**
+     * Restore the literal colon spelling sysfs uses for PCI BDF directory
+     * names (PciCards::accel() matches it exactly) from the filesystem-safe
+     * fixture form committed for NTFS checkout compatibility.
+     */
+    private static function materializeName(string $entry): string
+    {
+        return preg_match(self::SAFE_PCI_BDF, $entry) === 1 ? strtr($entry, '_', ':') : $entry;
     }
 
     private static function removeDir(string $dir): void

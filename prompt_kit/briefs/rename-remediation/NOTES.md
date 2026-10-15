@@ -37,3 +37,25 @@ Commit (this NOTES' commit) `scripts: packagist.sh create via live create-packag
   re-corrected with the old `_update.json` shape struck through "(REMOVED
   upstream, HTML 404 as of the 2.5 live run 2026-10-15; kept for history)";
   R9 one-liner gains the required PACKAGIST_USERNAME. Tracker row 35 NOT touched.
+
+## T3 — candy-top NTFS-safe fixture paths — DONE
+
+Commit `1239d87a8` `candy-top: NTFS-safe fixture paths (colon dirs)`.
+- Only 8 tracked colon paths existed (all under
+  `candy-top/tests/fixtures/gpu/npu/.../intel_vpu/0000:00:0b.0/`); `git mv`'d
+  the directory to `0000_00_0b.0`. `git ls-files | grep -E ':'` now empty.
+- The path spelling is NOT opaque: PciCards::accel() matches sysfs BDF dirs
+  with a colon-strict regex, and NpuTest pins busId '0000:00:0b.0' — so the
+  literal stays in assertions/content and GpuTree::copyDir() restores `_`->`:`
+  when materializing the temp root (pattern SAFE_PCI_BDF, strict hex-BDF only).
+  candy-top is not in WINDOWS_LIBS, so runtime colon dirs never hit NTFS.
+- No other consumer hardcodes the fixture colon path (repo grep: only
+  assertSame lines + FakeGpu's string constant, both content).
+- Driver-dir arm was dedupe-masked at HEAD (accel0/device duplicates the leaf
+  files; full suite green even with the transform neutered). Added
+  NpuTest::testDriverDirectorySlotIsFoundWithLiteralColonBdf — pins colon
+  materialization + driver-only detection (rm -rf accel subtree, IntelNpu still
+  finds slot). Discriminating: transform neutered -> exactly 1 failure
+  (Tests: 4, Failures: 1), restore md5 ea75390e clean.
+- Full suite: OK 2111T/107,871A exit0 (baseline 2110T +1 new test; A within
+  +-54 wobble).

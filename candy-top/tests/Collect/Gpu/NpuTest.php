@@ -84,4 +84,27 @@ final class NpuTest extends TestCase
             $amd->destroy();
         }
     }
+
+    /**
+     * The fixture stores the PCI slot directory filesystem-safe
+     * (`0000_00_0b.0` — NTFS rejects colons in committed paths, CI family 1),
+     * so GpuTree must hand the scanner the literal sysfs spelling, and
+     * PciCards::accel()'s colon BDF match must find the slot through the
+     * intel_vpu DRIVER directory alone once the accel class entry is gone —
+     * proving the driver-dir arm of the dedupe in
+     * testIntelNpuBusyTimeBecomesUtilization() is live, not decorative.
+     */
+    public function testDriverDirectorySlotIsFoundWithLiteralColonBdf(): void
+    {
+        $colonPath = $this->tree->root . '/sys/bus/pci/drivers/intel_vpu/0000:00:0b.0';
+        $this->assertDirectoryExists($colonPath, 'GpuTree restores the colon BDF when materializing');
+
+        exec('rm -rf ' . escapeshellarg($this->tree->root . '/sys/class/accel'));
+
+        $npu = IntelNpu::detect($this->tree->paths(), fn (): float => $this->now);
+        $this->assertNotNull($npu, 'the driver dir alone is a valid intel_vpu slot');
+        [$snap] = $npu->poll(DrmScan::none());
+        $this->assertCount(1, $snap->npus);
+        $this->assertSame('0000:00:0b.0', $snap->npus[0]->busId);
+    }
 }
