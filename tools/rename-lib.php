@@ -296,7 +296,14 @@ final class RenameLib
 
         $dirMove = !$noMove && !$movedState && $oldExists && !$newExists;
         if ($dryRun) {
-            self::printPlan($d, $dirMove, $pathPlan + $innerPlan, $binsPlan, $contentPlan, $ruleTotals, $verbose, true);
+            // A bin the generic segment pass already plans to move would print
+            // (and count) twice; the execute path self-heals via its existence
+            // check, so only the display needs the dedup.
+            $displayBins = array_values(array_filter(
+                $binsPlan,
+                static fn(array $p): bool => ($innerPlan["{$d['new']}/{$p[0]}"] ?? null) !== "{$d['new']}/{$p[1]}",
+            ));
+            self::printPlan($d, $dirMove, $pathPlan + $innerPlan, $displayBins, $contentPlan, $ruleTotals, $verbose, true);
 
             return 0;
         }

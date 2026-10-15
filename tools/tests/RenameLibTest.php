@@ -268,6 +268,24 @@ final class RenameLibTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Case 10b — the bins map must not print a move the generic segment
+    // pass already planned (dry-run dedup; execute self-heals by existence).
+    // ------------------------------------------------------------------
+
+    public function testDryRunDoesNotDoublePrintTheBinsMove(): void
+    {
+        $root = $this->crushRepo();
+        $run = $this->runTool($root, 'sugar-crush', ['--dry-run']);
+        $this->assertSame(0, $run['rc'], $run['out']);
+        // bin/sugarcrush -> bin/candy-code is reachable by BOTH the R4 segment
+        // pass and the entry's bins map; the plan may name it exactly once.
+        $this->assertSame(
+            1,
+            substr_count($run['out'], 'rename  candy-code/bin/sugarcrush -> candy-code/bin/candy-code')
+        );
+    }
+
+    // ------------------------------------------------------------------
     // Case 11 — second run on the renamed tree is a clean no-op.
     // ------------------------------------------------------------------
 
