@@ -5,7 +5,7 @@
 All phases 0–6 are closed. Phase 0–5 items landed as the commit series
 through `b9c63b74`; the Phase 6 leftovers were re-verified against
 current source on 2026-07-04 and closed by: `a160cefd` (test
-skips/flake), `5f33c4b7` (candy-zone contains, candy-wish StreamHelper
+skips/flake), `5f33c4b7` (candy-mouse contains, candy-wish StreamHelper
 + pid()), `1920988f`/`09546125` (candy-serve auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-shell), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
@@ -1294,7 +1294,7 @@ Same verification as previous phases.
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |
 | `plan_candy-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |
 | `plan_candy-wish.md` | 2.1-2.4, 3.1-3.3 | Double getenv, rate limit atomicity, setTransport consistency, middleware error handling |
-| `plan_candy-zone.md` | 2.1 | Zone::contains() implementation |
+| `plan_candy-mouse-zones.md` | 2.1 | Zone::contains() implementation |
 | `plan_candy-vcr.md` | 2.3, 2.6-2.9, 3.1, 3.3-3.5 | preg_replace error handling, async defers, Glyphs O(1), formatHunk, V1ToV2Migrator |
 
 ### sugar-* libs (remaining low-priority)

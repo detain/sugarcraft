@@ -14,7 +14,7 @@ Reference: `docs/repo_map_update.md` Phase 3 migration; §387.1 (fuzzy reinventi
 
 - `sugar-bits/composer.json` — add `sugarcraft/candy-buffer`, `sugarcraft/candy-layout`, `sugarcraft/candy-mouse`, `sugarcraft/candy-fuzzy` (all via `path-repo-closure`).
 - `sugar-bits/src/Table/Table.php` — render through candy-buffer; layout columns via candy-layout.
-- `sugar-bits/src/Tabs/Tabs.php` — replace any direct candy-zone Manager wiring with candy-mouse Scanner.
+- `sugar-bits/src/Tabs/Tabs.php` — replace any direct candy-mouse Manager wiring with candy-mouse Scanner.
 - `sugar-bits/src/ItemList/ItemList.php` — swap `str_contains` filter for `\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`; expose matched indices for highlight rendering.
 - `sugar-bits/src/FilePicker/FilePicker.php` — candy-mouse for clickable rows; candy-fuzzy for filename filter.
 - Renderers across primitives: emit through candy-buffer where possible, fall back to string composition only if migration is non-trivial (note any deferrals in `docs/repo_map_updates.md`).
@@ -23,7 +23,7 @@ Reference: `docs/repo_map_update.md` Phase 3 migration; §387.1 (fuzzy reinventi
 
 - [ ] All existing `sugar-bits/tests/` continue passing (UI primitives are heavily tested).
 - [ ] ItemList filter shows highlighted match indices in its rendered output (verify with a snapshot test).
-- [ ] Tabs / Table / FilePicker mouse hit-testing works via candy-mouse Scanner — no external candy-zone Manager needed.
+- [ ] Tabs / Table / FilePicker mouse hit-testing works via candy-mouse Scanner — no external candy-mouse Manager needed.
 - [ ] Table column layout uses candy-layout when given mixed Min/Fill/Fixed column specs.
 - [ ] No regression on any primitive's `view()` byte output for existing fixtures.
 - [ ] ≥95 % coverage maintained.

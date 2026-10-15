@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\MouseAction as MouseGeometryAction;
@@ -21,7 +21,7 @@ use SugarCraft\Mouse\Zone as MouseZone;
  * plus {@see contains()}), but delegates the point-in-rect / width / height
  * math to a wrapped {@see \SugarCraft\Mouse\Zone} built from the same bounds.
  * That keeps the geometry engine in exactly one place (candy-mouse) across
- * both zone ports while consumers of candy-zone (sugar-bits, sugar-gallery)
+ * both zone ports while consumers of candy-mouse (sugar-bits, sugar-gallery)
  * keep reading `->id`, `->startCol`, … and passing `MouseMsg`s unchanged.
  */
 final class Zone
@@ -43,9 +43,9 @@ final class Zone
     }
 
     /**
-     * Adapt a candy-mouse {@see \SugarCraft\Mouse\Zone} into a candy-zone Zone,
+     * Adapt a candy-mouse {@see \SugarCraft\Mouse\Zone} into a candy-mouse Zone,
      * preserving id + bounds. Used by {@see Manager::scan()} to store the
-     * SSOT-parsed zones under candy-zone's public type.
+     * SSOT-parsed zones under candy-mouse's public type.
      */
     public static function fromMouseZone(MouseZone $zone): self
     {
@@ -80,7 +80,7 @@ final class Zone
     /**
      * True when the zone has no recorded position — bubblezone returns
      * a zero-valued struct from `Get()` if the id has never been
-     * scanned. CandyZone's `Manager::get()` returns null for the same
+     * scanned. CandyMouse's `Manager::get()` returns null for the same
      * case, but holders of a Zone that was never scanned (e.g. an
      * end-marker arrived without a start) can use `isZero()` to spot
      * the degenerate state without a special-case check at every site.

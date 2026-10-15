@@ -8,7 +8,7 @@
 
 - **Status:** v1 Ready
 
-- **Depends on:** `candy-core` (runtime), `candy-sprinkles` (Border/Style), `candy-zone` (Manager), `honey-bounce` (CubicBezier easing)
+- **Depends on:** `candy-core` (runtime), `candy-sprinkles` (Border/Style), `candy-mouse` (Manager), `honey-bounce` (CubicBezier easing)
 
 - **Namespace:** `SugarCraft\Veil`
 
@@ -27,7 +27,7 @@
 | Backdrop dimming | No | Yes (truecolor opacity blend 0–100) | Yes — new |
 | Auto-size | No | Yes (compute from bordered content) | Yes — new |
 | Border chrome | No | Yes (candy-sprinkles Border) | Yes — new |
-| Click-outside dismiss | No | Yes (candy-zone Manager hit testing) | Yes — new |
+| Click-outside dismiss | No | Yes (candy-mouse Manager hit testing) | Yes — new |
 | UTF-8 multibyte handling | Via `charmbracelet/x/ansi` | Via `mb_str_split` + byte-level replacement | Parity |
 | Immutable pattern | No (Go struct) | Yes (readonly props + mutate()) | Adapted |
 
@@ -47,7 +47,7 @@ SugarCraft\Veil\Veil
 ├── readonly bool $clickOutsideDismiss // Flag for outside-click dismissal
 ├── readonly bool $autoSize            // Compute dims from bordered content
 ├── readonly ?Border $border          // Border chrome wrapper
-├── readonly ?Manager $manager        // candy-zone hit-testing manager
+├── readonly ?Manager $manager        // candy-mouse hit-testing manager
 ```
 
 **Factory:** `Veil::new()` — zero-arg default instance.
@@ -66,7 +66,7 @@ SugarCraft\Veil\Veil
 
 - `withBorder(Border $border): self` — apply terminal border chrome
 
-- `withManager(Manager $manager): self` — inject candy-zone Manager for hit testing
+- `withManager(Manager $manager): self` — inject candy-mouse Manager for hit testing
 
 **Rendering methods:**
 
@@ -398,7 +398,7 @@ return $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 ---
 
-## Integration with candy-core, candy-sprinkles, candy-zone, honey-bounce
+## Integration with candy-core, candy-sprinkles, candy-mouse, honey-bounce
 
 ### candy-core
 
@@ -414,7 +414,7 @@ return $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 - **Style** — `Style::new()->border($border)->render($content)` for `applyBorderChrome()`
 
-### candy-zone
+### candy-mouse
 
 - **Manager** — spatial database for click-outside hit testing (`withManager()` / `isClickOutside()`)
 
@@ -492,7 +492,7 @@ Without `autoSize`, foreground dimensions are measured raw and the border is NOT
 | Animation | No | Yes (Slide/Fade/Scale + CubicBezier) |
 | Backdrop dimming | No | Yes (ANSI SGR) |
 | Border chrome | No | Yes (candy-sprinkles) |
-| Click-outside dismiss | No | Yes (candy-zone) |
+| Click-outside dismiss | No | Yes (candy-mouse) |
 | Auto-size | No | Yes |
 | Z-index | No | Yes (per-Veil int) |
 | Architecture | tea.Model wrapper + standalone Composite() | Standalone string compositor |
@@ -533,7 +533,7 @@ Lipgloss v2 introduced a `Layer`/`Compositor`/`Canvas` system with z-ordering an
 |-------|--------------------------|---------------------|
 | Z-ordering | Yes (z float per Layer) | Yes (int zIndex per Veil) |
 | Hit testing | Yes (Hit(x,y) returns topmost Layer) | Yes (isClickOutside via Manager) |
-| Bounds computation | Yes (Bounds() returns Rectangle) | Via Manager (candy-zone) |
+| Bounds computation | Yes (Bounds() returns Rectangle) | Via Manager (candy-mouse) |
 | Animation | No built-in | Yes (Slide/Fade/Scale) |
 | Position system | Absolute X/Y coordinates | 9 position anchors + offsets |
 | Cell buffer | Yes (Canvas implements uv.Screen) | No (string-based) |
@@ -657,7 +657,7 @@ The `Manager` is injected via `withManager()`, not created internally. This:
 
 3. **No built-in model integration** — unlike upstream bubbletea-overlay's tea.Model wrapper, sugar-veil provides no `Model` interface implementation. Consumers must manually wire update/view cycles.
 
-4. **No hit testing for visual bounds** — `isClickOutside()` relies on an external `Manager` from candy-zone. There is no self-contained click detection that uses the veil's own rendered dimensions.
+4. **No hit testing for visual bounds** — `isClickOutside()` relies on an external `Manager` from candy-mouse. There is no self-contained click detection that uses the veil's own rendered dimensions.
 
 5. **No Z-index collision handling** — when two veils share the same z-index, insertion order determines stacking. There is no explicit tie-breaking.
 
@@ -673,7 +673,7 @@ The `Manager` is injected via `withManager()`, not created internally. This:
 |---------|--------------|
 | `candy-core` | Provides `Model` interface + `MouseMsg` + `Width` + `Ansi` utilities |
 | `candy-sprinkles` | Provides `Border` and `Style` for border chrome |
-| `candy-zone` | Provides `Manager` for spatial hit testing |
+| `candy-mouse` | Provides `Manager` for spatial hit testing |
 | `honey-bounce` | Provides `CubicBezier` easing for animations |
 | `sugar-toast` | Uses sugar-veil pattern for floating notifications |
 | `candy-sprinkles` Layer/Compositor | Related but more sophisticated cell-buffer approach |

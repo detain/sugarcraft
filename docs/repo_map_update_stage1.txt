@@ -138,17 +138,17 @@ The `SubStyleParser` for per-element styles already exists in candy-shell — ju
 
 ## Stage 2 Findings (packages 11-19)
 
-Sources: candy-zone, sugar-charts, sugar-table, candy-wish, candy-mosaic, sugar-glow, candy-log, candy-vt, candy-vcr
+Sources: candy-mouse, sugar-charts, sugar-table, candy-wish, candy-mosaic, sugar-glow, candy-log, candy-vt, candy-vcr
 
 ### 1. Top 3 Most Critical Feature Gaps
 
 #### A. GitHub/GitLab README Fetching — sugar-glow (CRITICAL)
 The defining feature of upstream `charmbracelet/glow` is entirely absent. Users expect `sugar-glow github://owner/repo` to fetch and render remote READMEs. This is the primary reason users choose glow over simple markdown renderers. Implementation is straightforward HTTP integration (GitHub REST API v3 / GitLab API v4) but completely unimplemented.
 
-#### B. Debug Visualization Mode — candy-zone (CRITICAL)
-Upstream issue #7 has been open for years requesting zone boundary visualization. candy-zone has no equivalent — developers cannot validate zone placement or debug hit detection without visible boundaries. Go bubblezone users still implement this manually; PHP can ship it as a built-in feature. `Manager::setDebugVisualization(bool)` + `CANDY_ZONE_DEBUG=1` env var is medium complexity.
+#### B. Debug Visualization Mode — candy-mouse (CRITICAL)
+Upstream issue #7 has been open for years requesting zone boundary visualization. candy-mouse has no equivalent — developers cannot validate zone placement or debug hit detection without visible boundaries. Go bubblezone users still implement this manually; PHP can ship it as a built-in feature. `Manager::setDebugVisualization(bool)` + `CANDY_MOUSE_DEBUG=1` env var is medium complexity.
 
-#### C. Mouse Event Deduplication Helpers — candy-zone (CRITICAL)
+#### C. Mouse Event Deduplication Helpers — candy-mouse (CRITICAL)
 Upstream issue #10: drag operations produce duplicate `MouseDown` events as cursor crosses cell boundaries. Go deferred resolution to BubbleTea v2. PHP can solve this entirely in userland with a `ZoneClickTracker` class that tracks zone+button press/release pairs and fires only once per zone until release. Competitive differentiation over upstream.
 
 ### 2. Top 2 Shared Architectural Weaknesses

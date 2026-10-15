@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
-use SugarCraft\Zone\Manager;
+use SugarCraft\Mouse\Zones\Manager;
 use PHPUnit\Framework\TestCase;
 
 final class ManagerMotionTrackingTest extends TestCase

@@ -6,7 +6,7 @@ namespace SugarCraft\Gallery;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Zone\Manager as ZoneManager;
+use SugarCraft\Mouse\Zones\Manager as ZoneManager;
 
 /**
  * A responsive, 2-D virtualized poster grid for large collections.

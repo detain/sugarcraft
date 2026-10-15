@@ -37,8 +37,7 @@ called out in the table below.
 | **SugarCraft** (`candy-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
 | **CandySprinkles** (`candy-sprinkles/`) | 🟢 ready | Declarative styling + layout. |
 | **HoneyBounce** (`honey-bounce/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
-| **CandyMouse** (`candy-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication — the mouse foundation the rest of the stack builds on. |
-| **CandyZone** (`candy-zone/`) | 🟢 ready | Façade over candy-mouse — Manager plus hover / drag / multi-click trackers and package-level `Zones`. Delegates Mark/Scan to `SugarCraft\Mouse`; not a second take on mouse hit-testing. |
+| **CandyMouse** (`candy-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
 | **SugarBits** (`sugar-bits/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture. |
 | **SugarPrompt** (`sugar-prompt/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color. |
@@ -56,7 +55,7 @@ called out in the table below.
 | **CandyPty** (`candy-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Spawn`, `Child`) remain @deprecated through v1.x. Windows ConPTY planned. |
 | **CandyForms** (`candy-forms/`) | 🟡 in progress | Foundation: form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) — extraction in progress. |
 | **CandyFocus** (`candy-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
-| **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional candy-zone mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
+| **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional candy-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **CandyFuzzy** (`candy-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from candy-forms. |
 | **CandyLayout** (`candy-layout/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
 | **CandyTesting** (`candy-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
@@ -185,7 +184,6 @@ reference projects supplied the ideas, not the code.
 | CandyVcr (candy-vcr/) | [x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) |
 | CandyVt (candy-vt/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
 | CandyWish (candy-wish/) | [wish](https://github.com/charmbracelet/wish) |
-| CandyZone (candy-zone/) | [bubblezone](https://github.com/lrstanley/bubblezone) (via candy-mouse) |
 | HoneyBounce (honey-bounce/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | HoneyFlap (honey-flap/) | [flapioca](https://github.com/kbrgl/flapioca) |
 | SugarBits (sugar-bits/) | [bubbles](https://github.com/charmbracelet/bubbles) |

@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\ClickCounter;
-use SugarCraft\Zone\Manager;
-use SugarCraft\Zone\Msg\DoubleClickMsg;
-use SugarCraft\Zone\Msg\TripleClickMsg;
+use SugarCraft\Mouse\Zones\ClickCounter;
+use SugarCraft\Mouse\Zones\Manager;
+use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
+use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
 use PHPUnit\Framework\TestCase;
 
 final class ClickCounterTest extends TestCase

@@ -75,7 +75,7 @@
 ## Mouse hit-testing
 
 - Mouse hit-testing is self-contained via candy-mouse `Scanner` — no external Manager. `scan($rendered)` registers zones; `hit($col, $row)` queries them.
-- The inert candy-zone `Manager` back-compat shim (`withManager()`/`manager()`) was removed — sugar-veil no longer depends on candy-zone.
+- The inert candy-mouse `Manager` back-compat shim (`withManager()`/`manager()`) was removed — sugar-veil no longer depends on candy-mouse.
 
 ## Buffer diffing
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;

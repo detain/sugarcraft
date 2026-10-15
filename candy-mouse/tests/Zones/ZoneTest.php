@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Zone;
+use SugarCraft\Mouse\Zones\Zone;
 use PHPUnit\Framework\TestCase;
 
 final class ZoneTest extends TestCase

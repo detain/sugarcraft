@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Two clickable "buttons" with mouse-zone tracking. Click on either,
  * watch the bounding-box query report which one was hit.
  *
- *   php examples/buttons.php
+ *   php examples/zones-buttons.php
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -16,7 +16,7 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
-use SugarCraft\Zone\Manager;
+use SugarCraft\Mouse\Zones\Manager;
 
 $mgr = Manager::newGlobal();
 

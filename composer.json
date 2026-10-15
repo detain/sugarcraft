@@ -72,7 +72,6 @@
         "sugarcraft/candy-vcr": "dev-master",
         "sugarcraft/candy-vt": "dev-master",
         "sugarcraft/candy-wish": "dev-master",
-        "sugarcraft/candy-zone": "dev-master",
         "sugarcraft/honey-bounce": "dev-master",
         "sugarcraft/honey-flap": "dev-master",
         "sugarcraft/sugar-bits": "dev-master",
@@ -330,13 +329,6 @@
         {
             "type": "path",
             "url": "candy-wish",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "candy-zone",
             "options": {
                 "symlink": true
             }

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Sentinel;
-use SugarCraft\Zone\Manager;
-use SugarCraft\Zone\Zone;
+use SugarCraft\Mouse\Zones\Manager;
+use SugarCraft\Mouse\Zones\Zone;
 
 /**
  * {@see Manager::scan()} returns a cleaned frame whose visible text must sit

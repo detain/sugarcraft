@@ -1,8 +1,8 @@
-# SugarCraft/candy-zone — Innovation & Comparison Report
+# SugarCraft/candy-mouse — Innovation & Comparison Report
 
 ## Overview
 
-**candy-zone** is the SugarCraft port of [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone), providing mouse-zone tracking for TUI applications. It solves the fundamental problem of determining which interactive region (button, list item, panel) a mouse click landed on, without requiring every component to manually track its own screen position.
+**candy-mouse** is the SugarCraft port of [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone), providing mouse-zone tracking for TUI applications. It solves the fundamental problem of determining which interactive region (button, list item, panel) a mouse click landed on, without requiring every component to manually track its own screen position.
 
 The core insight is elegant: wrap every interactive region in invisible ANSI escape sequence markers, scan the fully-rendered view at the root to record each region's screen coordinates, then simply ask "is this mouse event inside this named zone?" at event-handling time. This shifts the coordinate calculation burden from every component to a single scan pass.
 
@@ -24,19 +24,19 @@ The core insight is elegant: wrap every interactive region in invisible ANSI esc
 
 ### Zone Marking Mechanism
 
-candy-zone uses **APC (Application Program Command)** escape sequences to mark zones:
+candy-mouse uses **APC (Application Program Command)** escape sequences to mark zones:
 
 ```
-Start: ESC _ "candyzone:S:<id>" ESC \
-End:   ESC _ "candyzone:E:<id>" ESC \
+Start: ESC _ "candyzone:S:<id>" ESC \ <!-- @rename-keep legacy wire token / historical log -->
+End:   ESC _ "candyzone:E:<id>" ESC \ <!-- @rename-keep legacy wire token / historical log -->
 ```
 
 Format in `Manager.php` (lines 27-30):
 ```php
 private const APC_PREFIX = "\x1b_";
 private const APC_ST     = "\x1b\\";
-private const TAG_START  = 'candyzone:S:';
-private const TAG_END    = 'candyzone:E:';
+private const TAG_START  = 'candyzone:S:'; <!-- @rename-keep legacy wire token / historical log -->
+private const TAG_END    = 'candyzone:E:'; <!-- @rename-keep legacy wire token / historical log -->
 ```
 
 The `mark()` method (`Manager.php:109-118`) wraps content:
@@ -425,7 +425,7 @@ Tests cover:
 
 ### 6. Prefix Isolation for Nested Components
 
-`Manager::newPrefix()` enables multiple CandyZone-aware components to coexist without ID collisions. The `nested-components.php` example demonstrates two lists both using `"item-0"` without conflict.
+`Manager::newPrefix()` enables multiple CandyMouse-aware components to coexist without ID collisions. The `nested-components.php` example demonstrates two lists both using `"item-0"` without conflict.
 
 ### 7. Integration with candy-core TEA
 
@@ -437,7 +437,7 @@ Tests cover:
 
 ### 1. Only AABB Collision Detection
 
-Like upstream bubblezone, candy-zone uses axis-aligned bounding box collision. For rectangular UI (buttons, list items, panels), this is correct. For organic shapes (circular buttons, ASCII art borders), the empty corners of the bounding box are also clickable — no native support for precise hit testing.
+Like upstream bubblezone, candy-mouse uses axis-aligned bounding box collision. For rectangular UI (buttons, list items, panels), this is correct. For organic shapes (circular buttons, ASCII art borders), the empty corners of the bounding box are also clickable — no native support for precise hit testing.
 
 **Workaround:** Manually pad zones to exclude non-interactive regions, or use a smaller inner zone and accept the outer margin as inert.
 
@@ -499,15 +499,15 @@ While most modern terminals ignore APC sequences, some legacy or minimal termina
 
 ### 7. Iteration-Based Invalidation Not Implemented
 
-Upstream bubblezone uses `time.Now().Nanosecond()` as an iteration marker to automatically evict stale zones from previous renders. candy-zone's `scan()` directly replaces all zone bounds for the same ID — which achieves the same effect but without the automatic stale-zone cleanup for IDs that no longer appear in the view.
+Upstream bubblezone uses `time.Now().Nanosecond()` as an iteration marker to automatically evict stale zones from previous renders. candy-mouse's `scan()` directly replaces all zone bounds for the same ID — which achieves the same effect but without the automatic stale-zone cleanup for IDs that no longer appear in the view.
 
 ---
 
 ## Comparison with Upstream bubblezone (Go)
 
-| Feature | bubblezone (Go) | candy-zone (PHP) |
+| Feature | bubblezone (Go) | candy-mouse (PHP) |
 |---------|-----------------|------------------|
-| Marker format | CSI `\x1B[<num>z` | APC `\x1b_ candyzone:S: <id> \x1b\\` |
+| Marker format | CSI `\x1B[<num>z` | APC `\x1b_ candyzone:S: <id> \x1b\\` | <!-- @rename-keep legacy wire token / historical log -->
 | Zone storage | Goroutine + channel | Synchronous array |
 | Width measurement | `go-runewidth.RuneWidth()` | `Width::string()` from candy-core |
 | ID generation | Atomic `int64` counter | Static `int` counter |
@@ -517,10 +517,10 @@ Upstream bubblezone uses `time.Now().Nanosecond()` as an iteration marker to aut
 | Drag tracking | `NewZoneDragTracker()` | `DragTracker` |
 | Click tracking | `NewZoneClickTracker()` | `ClickCounter` |
 
-**Key architectural difference:** bubblezone uses a background goroutine (`zoneWorker()`) with a channel (`setChan`) to decouple scanning from zone storage. candy-zone computes everything synchronously inside `scan()`. This means:
+**Key architectural difference:** bubblezone uses a background goroutine (`zoneWorker()`) with a channel (`setChan`) to decouple scanning from zone storage. candy-mouse computes everything synchronously inside `scan()`. This means:
 - bubblezone: scan() is non-blocking, zones appear after worker processes them
 
-- candy-zone: scan() returns immediately with complete zone map
+- candy-mouse: scan() returns immediately with complete zone map
 
 For single-threaded PHP, the synchronous approach is actually more natural and avoids concurrency bugs.
 
@@ -538,7 +538,7 @@ widget = self._compositor._spatial_map.hit_test(mouse_x, mouse_y)
 
 This is more sophisticated than bubblezone's flat zone array iteration (O(n)). However, Textual's approach requires the compositor to know the screen position of every widget, which is computed during the layout pass. Textual widgets declare their size via CSS; the layout engine assigns actual coordinates.
 
-**candy-zone advantage:** Marker-based approach works without a layout engine — any rendered string with markers is scannable.
+**candy-mouse advantage:** Marker-based approach works without a layout engine — any rendered string with markers is scannable.
 
 **textual advantage:** O(log n) lookup vs O(n) iteration, plus proper z-ordering for overlapping widgets.
 
@@ -559,7 +559,7 @@ if mouse_pos.x >= block.x && mouse_pos.x < block.x + block.width
 This is the same AABB pattern but **inline** in each widget's event handler — the opposite of bubblezone's centralized marker approach. ratatui apps must implement their own coordinate tracking for nested components.
 
 **ratatui's strength:** No invisible markers needed, simpler for single-component apps.
-**bubblezone/candy-zone strength:** Works without explicit coordinate tracking in components.
+**bubblezone/candy-mouse strength:** Works without explicit coordinate tracking in components.
 
 ---
 
@@ -567,7 +567,7 @@ This is the same AABB pattern but **inline** in each widget's event handler — 
 
 ### candy-core Integration
 
-candy-zone uses `SugarCraft\Core\Msg\MouseMsg` for coordinates:
+candy-mouse uses `SugarCraft\Core\Msg\MouseMsg` for coordinates:
 
 ```php
 use SugarCraft\Core\Msg\MouseMsg;
@@ -593,7 +593,7 @@ $btn = $mgr->mark('btn:ok', Style::new()->padding(0, 2)->border(Border::rounded(
 $clean = $mgr->scan($btn);
 ```
 
-The README explicitly notes: "lipgloss.Width() (CandySprinkles) and CandyZone interact cleanly: scan() strips markers before measurement."
+The README explicitly notes: "lipgloss.Width() (CandySprinkles) and CandyMouse interact cleanly: scan() strips markers before measurement."
 
 ---
 
@@ -765,7 +765,7 @@ The scanner's handling of complex cases (nested ANSI, multi-line zones, wide cha
 
 ## Conclusion
 
-candy-zone is a well-executed, complete port of bubblezone that faithfully replicates the upstream design while adapting to PHP's synchronous execution model. Its marker-based approach elegantly solves the mouse event routing problem without requiring components to track their own screen coordinates. The layered tracker suite (hover, drag, click) provides progressively sophisticated behavior on top of the core `anyInBounds()` primitive.
+candy-mouse is a well-executed, complete port of bubblezone that faithfully replicates the upstream design while adapting to PHP's synchronous execution model. Its marker-based approach elegantly solves the mouse event routing problem without requiring components to track their own screen coordinates. The layered tracker suite (hover, drag, click) provides progressively sophisticated behavior on top of the core `anyInBounds()` primitive.
 
 The main limitations — AABB-only collision detection, no z-ordering for overlapping zones, and O(n) zone iteration — are inherited from upstream and are acceptable tradeoffs for the design's simplicity. The `ext-intl` fallback concern and static facade singleton are addressable improvements.
 

@@ -10,7 +10,7 @@ _Items deferred from step-37 catch-all (PR #917). These libs were audited but no
 |-----|-------------------|
 | **candy-metrics** | AsyncCounter/AsyncGauge use synchronous \Closure callbacks at observe() time — no manual Deferred to replace. Backend is pull-based with synchronous writers (InMemory, Prometheus, StatsD, JSON) with no string-rendering loop for Buffer. No minimal adoption found; revisit if async metric collection patterns are introduced. |
 | **candy-log** | Async hook dispatch (M effort) requires redesigning Hook interface to return futures and wrapping all backends. Buffer adoption touches all formatters. Both are larger than "minimal"; revisit in dedicated async-logging refactor. |
-| **candy-zone** | Uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting candy-mouse for hit-testing is not a drop-in (incompatible Zone abstractions, different MouseMsg types). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored. |
+| **candy-mouse** | Uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting candy-mouse for hit-testing is not a drop-in (incompatible Zone abstractions, different MouseMsg types). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored. |
 | **candy-mold** | TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project. |
 
 _4 items total. All other 19 audited libs from step-30 were successfully migrated in steps 31–36._
@@ -41,7 +41,7 @@ The 8 shared packages:
 | Step 34 | sugar-calendar, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, sugar-post, candy-serve | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, honey-flap | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
-| Step 37 | candy-metrics, candy-log, candy-zone, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
+| Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
 
 ---
 
@@ -103,16 +103,16 @@ The 8 shared packages:
 
 ---
 
-### candy-zone
+### candy-mouse
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-mouse | Manager.php + Zone.php track mouse zones — Zone class is conceptually similar to candy-mouse Zone, but hit-testing is manual | S |
 | candy-buffer | Zone rendering is string-based — Buffer would give cell-level style per zone | S |
 
-**Notes:** candy-zone is a mouse zone-tracking layer. It already has zone concepts similar to candy-mouse but uses a custom Manager. Adopting candy-mouse would standardize the Zone hit-testing API.
+**Notes:** candy-mouse is a mouse zone-tracking layer. It already has zone concepts similar to candy-mouse but uses a custom Manager. Adopting candy-mouse would standardize the Zone hit-testing API.
 
-**Step 37 status:** ⚠️ DEFERRED — candy-zone uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting candy-mouse for hit-testing is not a drop-in (different MouseMsg types, incompatible Zone abstractions). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored.
+**Step 37 status:** ⚠️ DEFERRED — candy-mouse uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting candy-mouse for hit-testing is not a drop-in (different MouseMsg types, incompatible Zone abstractions). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-mines, candy-kit (buffer+layout), candy-zone, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), honey-flap (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-mines, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), honey-flap (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, sugar-stash (buffer+mouse), sugar-calendar (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
 
 ---

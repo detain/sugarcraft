@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Msg;
+namespace SugarCraft\Mouse\Zones\Msg;
 
 use SugarCraft\Core\Msg;
-use SugarCraft\Zone\Zone;
+use SugarCraft\Mouse\Zones\Zone;
 
 /**
  * Emitted when the mouse button is released, ending a drag sequence.

@@ -24,7 +24,7 @@ cd candy-core && composer install && vendor/bin/phpunit
 ```
 
 ```sh
-for d in candy-core candy-sprinkles candy-forms honey-bounce candy-zone sugar-bits sugar-charts candy-shell candy-shine; do
+for d in candy-core candy-sprinkles candy-forms honey-bounce candy-mouse sugar-bits sugar-charts candy-shell candy-shine; do
   (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```

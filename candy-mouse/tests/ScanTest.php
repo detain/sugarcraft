@@ -284,7 +284,7 @@ final class ScanTest extends TestCase
     /**
      * A zone that opens entirely beyond the right edge used to keep its raw
      * startCol while only the endCol was clamped — an inverted bbox
-     * (endCol < startCol, width() = -2) that candy-zone / relative-math
+     * (endCol < startCol, width() = -2) that candy-mouse / relative-math
      * consumers read as negative extents.  Both ends now clamp into
      * [1, width], collapsing the zone to a degenerate single column pinned
      * at the right edge — non-negative by construction.

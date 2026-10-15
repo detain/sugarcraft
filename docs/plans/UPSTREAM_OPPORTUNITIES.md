@@ -78,15 +78,15 @@ No high-comment open issues found. Repo is quiet.
 
 ---
 
-## lrstanley/bubblezone → candy-zone
+## lrstanley/bubblezone → candy-mouse
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-zone | Notes |
+| Upstream | Title | Status in candy-mouse | Notes |
 |---|---|:--:|---|
 | [#51](https://github.com/lrstanley/bubblezone/pull/51) (2026-02-28) | breaking: bubbletea/lipgloss/bubbles v2 | ⚪ | v2 dependency update — no semantic change for zone tracking |
 | [#20](https://github.com/lrstanley/bubblezone/pull/20) (2024-06-09) | use private CSI sequence for marking | 🟡 | Private CSI sequence for marking — verify PHP implementation matches |
-| [#15](https://github.com/lrstanley/bubblezone/pull/15) (2024-06-09) | Add AnyInBoundsAndUpdate | ✅ | SugarCraft\Zone has `anyInBoundsAndUpdate()` |
+| [#15](https://github.com/lrstanley/bubblezone/pull/15) (2024-06-09) | Add AnyInBoundsAndUpdate | ✅ | SugarCraft\Mouse\Zones has `anyInBoundsAndUpdate()` |
 
 ### High-comment open issues
 

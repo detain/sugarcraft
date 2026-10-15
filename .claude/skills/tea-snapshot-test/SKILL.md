@@ -8,7 +8,7 @@ paths:
 ---
 # TEA Snapshot Test
 
-Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes and the `candy-testing` harness. Match the exact structure in `sugar-bits/tests/GoldenRenderTest.php`, `candy-zone/tests/ZoneHoverTrackerTest.php`, and `sugar-charts/tests/FiniteGuardTest.php`.
+Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes and the `candy-testing` harness. Match the exact structure in `sugar-bits/tests/GoldenRenderTest.php`, `candy-mouse/tests/Zones/ZoneHoverTrackerTest.php`, and `sugar-charts/tests/FiniteGuardTest.php`.
 
 ## Critical
 
@@ -57,7 +57,7 @@ Create the baseline once: `cd <slug> && UPDATE_GOLDENS=1 vendor/bin/phpunit --fi
 For grid assertions use `Assertions::assertCellGrid($expected, $buffer)` where `$expected[row][col] = ['rune' => 'a', 'style' => $style]` and `$buffer` is a `SugarCraft\Buffer\Buffer`. For full-terminal parsing (SGR → cells), feed bytes to `SugarCraft\Vt\Terminal` and read cells back (see `candy-pty/tests/Integration/VimSmokeTest.php`). Dimensions are checked first, so size the expected grid to match `$buffer->width()`/`$buffer->height()`. **Verify: expected grid dimensions equal the buffer's.**
 
 ### 5. Behaviour test (`update()`)
-Destructure the tuple; the second element is the optional `Cmd`. Pattern from `candy-zone/tests/ZoneHoverTrackerTest.php`:
+Destructure the tuple; the second element is the optional `Cmd`. Pattern from `candy-mouse/tests/Zones/ZoneHoverTrackerTest.php`:
 ```php
 [$next, $cmd] = $tracker->update($this->move(2, 1));
 $this->assertNotSame($tracker, $next);   // immutability: new instance
@@ -116,9 +116,9 @@ Filter one test with `--filter testName`. If a red looks like a stale-dep artifa
 
 ---
 
-**User says:** "Test the hover tracker's update in candy-zone."
+**User says:** "Test the hover tracker's update in candy-mouse."
 
-**Actions taken:** Mode = behaviour. In `candy-zone/tests/ZoneHoverTrackerTest.php`: `[$next, $cmd] = $tracker->update($this->move(2, 1)); $this->assertNotSame($tracker, $next); $this->assertInstanceOf(HoverMsg::class, $cmd);` and a moved-off case asserting `$cmd === null`.
+**Actions taken:** Mode = behaviour. In `candy-mouse/tests/Zones/ZoneHoverTrackerTest.php`: `[$next, $cmd] = $tracker->update($this->move(2, 1)); $this->assertNotSame($tracker, $next); $this->assertInstanceOf(HoverMsg::class, $cmd);` and a moved-off case asserting `$cmd === null`.
 
 **Result:** Behaviour test proving new-instance immutability + correct `?Cmd`, no `view()` side-effect assertions.
 

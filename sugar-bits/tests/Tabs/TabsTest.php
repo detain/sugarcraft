@@ -372,7 +372,7 @@ final class TabsTest extends TestCase
 
     public function testViewContainsZoneMarkersWhenManagerIsSet(): void
     {
-        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withWidth(200)->withZoneManager($manager);
         $view = $t->view();
         // Zone markers are candy-mouse PUA sentinels: U+E000 <id> U+E001 ...
@@ -392,19 +392,19 @@ final class TabsTest extends TestCase
     {
         $t = $this->tabs();
         $view = $t->view();
-        $this->assertStringNotContainsString('candyzone:', $view);
+        $this->assertStringNotContainsString('candy-mouse:', $view);
     }
 
     public function testMsgZoneInBoundsActivatesMatchingTab(): void
     {
-        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withZoneManager($manager);
         [$t, ] = $t->focus();
 
         // Click on tab-1 (Profile).
-        $zone = new \SugarCraft\Zone\Zone('test-tab-1', 7, 1, 14, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-1', 7, 1, 14, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
-        $msg = new \SugarCraft\Zone\MsgZoneInBounds($zone, $mouse);
+        $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
 
         $this->assertSame(1, $t->active());
@@ -412,13 +412,13 @@ final class TabsTest extends TestCase
 
     public function testMsgZoneInBoundsIgnoredWhenUnfocused(): void
     {
-        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withZoneManager($manager);
         // Not focused.
 
-        $zone = new \SugarCraft\Zone\Zone('test-tab-1', 7, 1, 14, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-1', 7, 1, 14, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
-        $msg = new \SugarCraft\Zone\MsgZoneInBounds($zone, $mouse);
+        $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
 
         $this->assertSame(0, $t->active()); // unchanged
@@ -426,14 +426,14 @@ final class TabsTest extends TestCase
 
     public function testMsgZoneInBoundsOutsideVisibleRangeIgnored(): void
     {
-        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         // Tab 2 is outside the default scroll window when width is small.
         $t = $this->tabs()->withWidth(15)->withZoneManager($manager);
         [$t, ] = $t->focus();
 
-        $zone = new \SugarCraft\Zone\Zone('test-tab-2', 30, 1, 38, 1);
+        $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-2', 30, 1, 38, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(35, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
-        $msg = new \SugarCraft\Zone\MsgZoneInBounds($zone, $mouse);
+        $msg = new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse);
         [$t, ] = $t->update($msg);
 
         $this->assertSame(0, $t->active()); // unchanged — tab-2 not visible
@@ -441,7 +441,7 @@ final class TabsTest extends TestCase
 
     public function testWithZoneManagerReturnsNewInstance(): void
     {
-        $manager = \SugarCraft\Zone\Manager::newPrefix('x');
+        $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('x');
         $t1 = $this->tabs();
         $t2 = $t1->withZoneManager($manager);
         $this->assertNotSame($t1, $t2);

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Msg\ZoneDragEndMsg;
-use SugarCraft\Zone\Msg\ZoneDragMoveMsg;
-use SugarCraft\Zone\Msg\ZoneDragStartMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragEndMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragMoveMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
 
 /**
  * Tracks press → move → release drag sequences within and across zones.

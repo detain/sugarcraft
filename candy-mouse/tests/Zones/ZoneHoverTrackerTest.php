@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Manager;
-use SugarCraft\Zone\Msg\ZoneEnterMsg;
-use SugarCraft\Zone\Msg\ZoneExitMsg;
-use SugarCraft\Zone\Zone;
-use SugarCraft\Zone\ZoneHoverTracker;
+use SugarCraft\Mouse\Zones\Manager;
+use SugarCraft\Mouse\Zones\Msg\ZoneEnterMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
+use SugarCraft\Mouse\Zones\Zone;
+use SugarCraft\Mouse\Zones\ZoneHoverTracker;
 use PHPUnit\Framework\TestCase;
 
 final class ZoneHoverTrackerTest extends TestCase

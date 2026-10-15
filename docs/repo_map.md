@@ -49,7 +49,7 @@
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
 | [KevM/bubbleo](#kevmbubbleo) | Go | 69 | sugar-prompt, sugar-bits, candy-shell |
 | [kojiflowers/php-tui-chart](#kojiflowersphp-tui-chart) | PHP | ~niche | sugar-charts (data parsing only) |
-| [lrstanley/bubblezone](#lrstanleybubblezone) | Go | 880 | candy-zone |
+| [lrstanley/bubblezone](#lrstanleybubblezone) | Go | 880 | candy-mouse |
 | [p-gen/smenu](#p-gensmenu) | C | ~900 | candy-shell |
 | [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-bits, candy-shine, candy-core |
 | [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-bits, candy-shell |
@@ -833,9 +833,9 @@
 **Features:** zone.Mark/Scan/Get pattern, AABB collision detection, atomic prefix ID generation, channel-based concurrent zone storage.
 
 **SugarCraft Mapping:**
-- `candy-zone` → Primary port
+- `candy-mouse` → Primary port
 
-**Note:** Port exists as `candy-zone` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-mouse` (🟢 in MATCHUPS.md).
 
 ---
 

@@ -103,7 +103,7 @@ just scrolled away.
 echo $grid->render(focused: true);     // cursor shown only when the grid is focused
 ```
 
-Pass a [candy-zone](https://github.com/sugarcraft/candy-zone) `Manager` to make
+Pass a [candy-mouse](https://github.com/sugarcraft/candy-mouse) `Manager` to make
 cells mouse-clickable — each is wrapped as zone id `cell:<index>`:
 
 ```php

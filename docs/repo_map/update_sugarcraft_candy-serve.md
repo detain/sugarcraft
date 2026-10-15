@@ -140,7 +140,7 @@ candy-serve/
 - Port the upstream Go TUI to PHP using `candy-core` (Bubble Tea equivalent)
 - Implement `RepoView` component for browsing files and commits
 - Add syntax highlighting via `candy-shine` (Glamour port)
-- Use `candy-zone` for mouse interactions in the TUI
+- Use `candy-mouse` for mouse interactions in the TUI
 - Bridge TUI over SSH using `candy-wish` (if/when it supports serving TUIs)
 
 **Estimated complexity:** Very High (requires implementing a full Bubble Tea-equivalent TUI framework in PHP)

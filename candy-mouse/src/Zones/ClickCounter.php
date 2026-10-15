@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Msg\DoubleClickMsg;
-use SugarCraft\Zone\Msg\TripleClickMsg;
+use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
+use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
 
 /**
  * Tracks rapid successive clicks (double / triple) within a zone.

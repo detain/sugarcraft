@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Msg\DoubleClickMsg;
-use SugarCraft\Zone\Msg\TripleClickMsg;
-use SugarCraft\Zone\Msg\ZoneDragEndMsg;
-use SugarCraft\Zone\Msg\ZoneDragMoveMsg;
-use SugarCraft\Zone\Msg\ZoneDragStartMsg;
-use SugarCraft\Zone\Msg\ZoneEnterMsg;
-use SugarCraft\Zone\Msg\ZoneExitMsg;
-use SugarCraft\Zone\MsgZoneInBounds;
-use SugarCraft\Zone\Zone;
+use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
+use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragEndMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragMoveMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneEnterMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
+use SugarCraft\Mouse\Zones\MsgZoneInBounds;
+use SugarCraft\Mouse\Zones\Zone;
 use PHPUnit\Framework\TestCase;
 
 /**

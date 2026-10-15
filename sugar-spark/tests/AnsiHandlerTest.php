@@ -148,7 +148,7 @@ final class AnsiHandlerTest extends TestCase
         $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);
         $this->assertSame($input, $segments[0]->raw());
-        $this->assertStringContainsString('CandyZone marker', $segments[0]->describe());
+        $this->assertStringContainsString('CandyZone marker', $segments[0]->describe()); // @rename-keep legacy wire token / historical log
     }
 
     public function testParseSosPmSequence(): void

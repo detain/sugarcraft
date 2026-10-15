@@ -54,8 +54,6 @@ flag_management:
     - name: honey-bounce
       paths: ["honey-bounce/src/**"]
       carryforward: true
-    - name: candy-zone
-      paths: ["candy-zone/src/**"]
       carryforward: true
     - name: sugar-bits
       paths: ["sugar-bits/src/**"]
@@ -266,12 +264,6 @@ component_management:
         - "honey-bounce/src/**"
       flag_regexes:
         - "^honey-bounce$"
-    - component_id: candy-zone
-      name: candy-zone
-      paths:
-        - "candy-zone/src/**"
-      flag_regexes:
-        - "^candy-zone$"
     - component_id: sugar-bits
       name: sugar-bits
       paths:

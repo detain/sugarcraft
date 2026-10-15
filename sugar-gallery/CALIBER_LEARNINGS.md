@@ -30,7 +30,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   `synced()` is the single choke point for cursor-clamp + scroll-follow; every
   navigation method routes through it and returns `$this` on a no-op so callers
   can detect "didn't move" by identity. `PosterCard`/`Rail` stay `readonly`.
-- **candy-zone marks survive Layout joins.** Marking each cell `cell:<index>`
+- **candy-mouse marks survive Layout joins.** Marking each cell `cell:<index>`
   *before* `Layout::joinHorizontal/joinVertical` works — the bubblezone-style
   markers are preserved through the joins and resolve correctly after `scan()`
   (verified in PosterGridTest). Mark only real cells (`idx < total`), not the

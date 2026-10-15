@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Mouse\Sentinel;
-use SugarCraft\Zone\Manager;
-use SugarCraft\Zone\Zones;
+use SugarCraft\Mouse\Zones\Manager;
+use SugarCraft\Mouse\Zones\Zones;
 use PHPUnit\Framework\TestCase;
 
 final class ZonesTest extends TestCase

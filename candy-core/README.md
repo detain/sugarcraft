@@ -231,7 +231,7 @@ builds on it. From the same monorepo:
 - **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
 - **CandyShell** — composer-installable CLI of 13 subcommands.
 - **CandyShine** — Markdown → ANSI renderer.
-- **CandyZone** — mouse-zone tracker.
+- **CandyMouse** — mouse-zone tracker.
 - **HoneyBounce** — spring physics + Newtonian projectile sim.
 - **CandyKit** — opinionated CLI presentation helpers.
 - **CandyFreeze** — code → SVG screenshot.

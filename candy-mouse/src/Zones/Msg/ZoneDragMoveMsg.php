@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Msg;
+namespace SugarCraft\Mouse\Zones\Msg;
 
 use SugarCraft\Core\Msg;
-use SugarCraft\Zone\Zone;
+use SugarCraft\Mouse\Zones\Zone;
 
 /**
  * Emitted on every mouse-move event while a drag is in progress.

@@ -11,7 +11,7 @@ namespace SugarCraft\Core\Util;
  * or another process) into a list of {@see Token} records the rest
  * of the stack can dispatch on. It implements the classic
  * VT100/xterm escape-sequence state machine with extensions for
- * APC (used by CandyZone), DCS (used by the XTVERSION reply), SOS
+ * APC (used by CandyMouse), DCS (used by the XTVERSION reply), SOS
  * and PM. A single instance can be reused across calls — incomplete
  * sequences split across read boundaries are buffered internally
  * until the next call brings the rest.

@@ -28,7 +28,7 @@ namespace SugarCraft\Core\Util;
  * - `Osc`      — `$data` is the body between `ESC ]` and the
  *                terminator (ST / BEL).
  * - `Dcs`      — `$data` is the body between `ESC P` and ST.
- * - `Apc`      — `$data` is the body between `ESC _` and ST. CandyZone
+ * - `Apc`      — `$data` is the body between `ESC _` and ST. CandyMouse
  *                uses APC for its zero-width markers.
  * - `Sos`      — `$data` is the body between `ESC X` and ST.
  * - `Pm`       — `$data` is the body between `ESC ^` and ST.

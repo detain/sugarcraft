@@ -448,7 +448,7 @@ $chart = $chart->withColorProfile($profile);
 **Why it matters**: Standard expectation for interactive charts.
 **Source**: Common in all major chart libraries (Chart.js, D3, etc.)
 
-**Proposed**: Add `withTooltips(bool)` to LineChart/Scatter; render tooltip on mouse position using candy-zone mouse tracking.
+**Proposed**: Add `withTooltips(bool)` to LineChart/Scatter; render tooltip on mouse position using candy-mouse mouse tracking.
 
 ## 2. Click-to-Isolate Dataset
 
@@ -644,7 +644,7 @@ echo '{"type": "bar", "data": [["a", 1], ["b", 2]]}' | php bin/chart --width 40 
 ## Experimental Ideas (future)
 
 16. **Radar/spider chart** — polar coordinate math
-17. **Hover tooltips** — requires candy-zone integration
+17. **Hover tooltips** — requires candy-mouse integration
 18. **LAB color interpolation** — perceptual uniformity
 19. **Export to HTML** — non-terminal rendering
 20. **CLI chart generation tool** — quick data visualization

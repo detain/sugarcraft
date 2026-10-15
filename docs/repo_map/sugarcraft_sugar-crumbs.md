@@ -52,7 +52,7 @@ $shell2 = $shell->withPop();  // new Shell instance, $shell unchanged
 ```
 sugar-crumbs
 ├── candy-core (dev-master)   — TUI framework foundation, Width util, Msg types
-└── candy-zone (dev-master)  — Manager for mouse-click zone tracking (optional)
+└── candy-mouse (dev-master)  — Manager for mouse-click zone tracking (optional)
 ```
 
 ---
@@ -172,7 +172,7 @@ Items are kept from **most-recent to oldest** until they fit within `maxWidth`. 
 // Output: "… Medium Parent › Current Page"  (fits within 30 chars)
 ```
 
-**Zone-based mouse handling (via candy-zone `Manager`):**
+**Zone-based mouse handling (via candy-mouse `Manager`):**
 
 When a `Manager` is attached via `withZoneManager()`, each crumb is wrapped in a named APC zone marker:
 
@@ -465,7 +465,7 @@ sugar-crumbs is the navigation primitive for SugarCraft TUI applications. Its fr
 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — Framework sugar-crumbs can integrate with
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-zone.md` — Mouse zone tracking for clickable breadcrumbs
+- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-mouse-zones.md` — Mouse zone tracking for clickable breadcrumbs
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-core.md` — TUI framework foundation
 

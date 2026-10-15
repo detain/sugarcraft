@@ -6,13 +6,13 @@
 
 ## Goal
 
-Migrate `sugar-veil`, `sugar-crumbs`, and `candy-lister` from external candy-zone `Manager` wiring to self-contained candy-mouse `Scanner` per consumer.
+Migrate `sugar-veil`, `sugar-crumbs`, and `candy-lister` from external candy-mouse `Manager` wiring to self-contained candy-mouse `Scanner` per consumer.
 
 Reference: §387.4 (mouse-tracking reinvention), §369.4 (consolidation).
 
 ## Files expected to be modified
 
-- `sugar-veil/composer.json` · `sugar-crumbs/composer.json` · `candy-lister/composer.json` — add `sugarcraft/candy-mouse` via `path-repo-closure`. Keep the existing `sugarcraft/candy-zone` dep — candy-zone's other features (Manager for *other* purposes) may still be needed; only the mouse-tracking surface migrates.
+- `sugar-veil/composer.json` · `sugar-crumbs/composer.json` · `candy-lister/composer.json` — add `sugarcraft/candy-mouse` via `path-repo-closure`. Keep the existing `sugarcraft/candy-mouse` dep — candy-mouse's other features (Manager for *other* purposes) may still be needed; only the mouse-tracking surface migrates.
 - `sugar-veil/src/Veil.php` — replace `Manager $manager` field with own `Scanner`. Update `withManager()` accordingly (keep the method, mark @deprecated, delegate internally).
 - `sugar-crumbs/src/Breadcrumb.php` — same pattern as sugar-veil with `zoneManager` field.
 - `candy-lister/src/` (wherever mouse-tracking happens, if at all) — same.
@@ -48,10 +48,10 @@ Reference: §387.4 (mouse-tracking reinvention), §369.4 (consolidation).
 - **PR body**:
   ```
   ## Summary
-  - Three libs migrate from candy-zone external Manager wiring to candy-mouse self-contained Scanner.
+  - Three libs migrate from candy-mouse external Manager wiring to candy-mouse self-contained Scanner.
   - Each lib owns its Scanner; mouse hit-testing is local.
   - withManager() / withZoneManager() kept as deprecated back-compat wrappers.
-  - No external candy-zone Manager required for mouse-only use cases.
+  - No external candy-mouse Manager required for mouse-only use cases.
 
   ## Test plan
   - [x] vendor/bin/phpunit in sugar-veil / sugar-crumbs / candy-lister (≥95% each)

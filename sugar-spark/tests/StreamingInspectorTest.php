@@ -208,7 +208,7 @@ final class StreamingInspectorTest extends TestCase
         $this->assertCount(1, $segs); // APC sequence only
         $this->assertInstanceOf(SequenceSegment::class, $segs[0]);
         $this->assertSame($input, $segs[0]->raw());
-        $this->assertStringContainsString('CandyZone marker', $segs[0]->describe());
+        $this->assertStringContainsString('CandyZone marker', $segs[0]->describe()); // @rename-keep legacy wire token / historical log
     }
 
     // --- Step 9: streaming matches one-shot for C0, split CSI, APC, underline colon ---

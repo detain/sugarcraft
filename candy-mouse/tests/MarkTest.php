@@ -175,7 +175,7 @@ final class MarkTest extends TestCase
             'tab index'      => ['tab-0'],
             'cell coords'    => ['cell:5:3'],
             'crumb'          => ['crumb-2'],
-            'zone prefix'    => ['candyzone:S:foo'],
+            'zone prefix'    => ['candy-mouse:S:foo'],
             'dotted-under'   => ['a.b_c'],
             'single char'    => ['x'],
             'all classes'    => ['Az9._:-'],

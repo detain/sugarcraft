@@ -45,5 +45,5 @@ echo "── DCS (XTVERSION reply) ───────────────
 printf '\eP>|xterm(367)\e\\' | sugarspark
 echo
 
-echo "── APC (CandyZone marker) ───────────────────────"
+echo "── APC (CandyZone marker) ───────────────────────" # @rename-keep legacy wire token / historical log
 printf '\e_candyzone:S:btn:ok\e\\OK\e_candyzone:E:btn:ok\e\\' | sugarspark

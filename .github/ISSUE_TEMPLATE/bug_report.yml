@@ -13,7 +13,7 @@ body:
         - candy-core (runtime / Util)
         - candy-sprinkles (styling / layout)
         - honey-bounce (spring physics)
-        - candy-zone (mouse zones)
+        - candy-mouse (mouse zones)
         - sugar-bits (components)
         - sugar-charts (charts)
         - sugar-prompt (forms)

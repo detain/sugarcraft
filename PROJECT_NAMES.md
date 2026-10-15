@@ -202,7 +202,7 @@ matching package turns out to be.
 |---|---|
 | **PancakeFlip** | image / video / GIF flipping (CandyFlip alternative) |
 | **PieChart** | another charts library |
-| **CookieClick** | mouse-zone tracker (CandyZone alternative) |
+| **CookieClick** | mouse-zone tracker (CandyMouse alternative) |
 | **BentoBox** | layout (SugarBoxer alternative) |
 | **BentoLauncher** | launcher / picker (SugarWishlist alternative) |
 | **MarshmallowFilter** | fuzzy-finder (CandyHermit alternative) |

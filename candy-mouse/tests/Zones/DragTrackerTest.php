@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\DragTracker;
-use SugarCraft\Zone\Manager;
-use SugarCraft\Zone\Msg\ZoneDragEndMsg;
-use SugarCraft\Zone\Msg\ZoneDragMoveMsg;
-use SugarCraft\Zone\Msg\ZoneDragStartMsg;
+use SugarCraft\Mouse\Zones\DragTracker;
+use SugarCraft\Mouse\Zones\Manager;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragEndMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragMoveMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
 use PHPUnit\Framework\TestCase;
 
 final class DragTrackerTest extends TestCase
@@ -159,7 +159,7 @@ final class DragTrackerTest extends TestCase
         [$tracker] = $tracker->update($this->press(2, 1));
 
         $zone = $tracker->originZone();
-        $this->assertInstanceOf(\SugarCraft\Zone\Zone::class, $zone);
+        $this->assertInstanceOf(\SugarCraft\Mouse\Zones\Zone::class, $zone);
         $this->assertSame('a', $zone->id);
     }
 
@@ -173,7 +173,7 @@ final class DragTrackerTest extends TestCase
         [$tracker] = $tracker->update($this->press(2, 1));
 
         $zone = $tracker->currentZone();
-        $this->assertInstanceOf(\SugarCraft\Zone\Zone::class, $zone);
+        $this->assertInstanceOf(\SugarCraft\Mouse\Zones\Zone::class, $zone);
         $this->assertSame('a', $zone->id);
     }
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -51,7 +51,7 @@ final class Manager
     /**
      * Build a manager that namespaces every id with a unique prefix.
      *
-     * Useful when you compose multiple CandyZone-aware components into
+     * Useful when you compose multiple CandyMouse-aware components into
      * the same Program — each component grabs its own prefixed manager
      * so two `ItemList`s using the literal id `"item-0"` don't collide.
      *
@@ -123,7 +123,7 @@ final class Manager
      *
      * @throws \InvalidArgumentException When `prefix() . $id` contains a byte
      *         outside candy-mouse's `^[A-Za-z0-9._:-]+$` charset (validated by
-     *         Mark::wrap). candy-zone's own prefixes and real consumer ids
+     *         Mark::wrap). candy-mouse's own prefixes and real consumer ids
      *         (`tab-N`, `cell:N`, `item:N`) already comply.
      */
     public function mark(string $id, string $content): string

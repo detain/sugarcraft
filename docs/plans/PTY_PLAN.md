@@ -252,7 +252,7 @@ Documentation parity:
 Only if P0–P5 land on time:
 
 - **Resource pooling** — `PtyPool` for SSH server scenarios (candy-wish) that spawn many short-lived sessions; reuse libc FFI handles across opens. Profile first; only build if measurable.
-- **Pty multiplexing helper** — `MultiPump` that supervises N pumps for split-pane / tmux-like scenarios. Driven by candy-zone if it needs it.
+- **Pty multiplexing helper** — `MultiPump` that supervises N pumps for split-pane / tmux-like scenarios. Driven by candy-mouse if it needs it.
 - **Higher-level Expect-style API** — `Expect::on($pty)->send("login: ")->expect("password:", timeout: 5)->...` for scripting / test fixtures. Modeled on `pexpect` (Python).
 - **`candy-vcr` Recorder tap in `PosixPump`** — add a `?Recorder $recorder = null` field to `PumpOptions`. When set, the pump tees stdin → `recordInputBytes()` and master-read → `recordOutput()` directly, and feeds `WindowSizeMsg` resizes through `recordResize()`. Makes byte-level cassette capture "free" for any pump-based consumer (candy-wish SSH sessions, the Shirley CLI below, REPL fixtures). Acceptance: existing `candy-vcr` round-trip tests pass; new `PumpRecorderTapTest` asserts the tap captures a `bash` session and `Player::play()` reproduces it.
 
@@ -451,5 +451,5 @@ Parity check (manual, end of P5):
 - **Sidecar binary fallback for Windows.** Small Go program using `creack/pty`-equivalent or `pty` crate, talks to PHP over stdio framed messages. Same interface as FFI backend. Avoids ConPTY threading entirely. Cost: Composer post-install download of a per-OS binary.
 - **PECL extension.** `php_pty` extension that wraps `forkpty(3)` / `openpty(3)` natively, skipping FFI. Best perf, deployment burden. Likely never necessary if FFI continues to work.
 - **AIX / Solaris / OpenBSD / FreeBSD ioctl constants.** Currently only Linux + Darwin in `SizeIoctl.php` and the planned `PosixTermios`. Each BSD has slightly different ioctl numbers. Pull from `nix` crate's `ioctl.rs` per-platform files when a user reports needing one.
-- **Pty multiplexer / tmux-style sessions.** `MultiPump` from P6, promoted to a first-class API if `candy-zone` needs it.
+- **Pty multiplexer / tmux-style sessions.** `MultiPump` from P6, promoted to a first-class API if `candy-mouse` needs it.
 - **Expect-style scripting API.** P6 item, if there's demand from `candy-vcr` / `candy-skate`.

@@ -1,6 +1,6 @@
 # Overview
 
-**sugar-veil** is SugarCraft's overlay/modal compositing library — a PHP port of `rmhubbert/bubbletea-overlay` (primary) with overlay patterns from `charmbracelet/lipgloss` v2 Layer/Compositor system. It provides string-based foreground-over-background compositing with positioning, z-index stacking, animations, backdrop dimming, border chrome, and click-outside dismissal via candy-zone.
+**sugar-veil** is SugarCraft's overlay/modal compositing library — a PHP port of `rmhubbert/bubbletea-overlay` (primary) with overlay patterns from `charmbracelet/lipgloss` v2 Layer/Compositor system. It provides string-based foreground-over-background compositing with positioning, z-index stacking, animations, backdrop dimming, border chrome, and click-outside dismissal via candy-mouse.
 
 **Biggest opportunity areas:** Cell-buffer-based rendering (lipgloss v2 Canvas), self-contained mouse hit-testing (bubblezone), proper event/animation tick integration, compositing-based layout primitives.
 
@@ -22,7 +22,7 @@ SugarCraft\Veil\Veil (final class, readonly props)
 ├── clickOutsideDismiss: bool
 ├── autoSize: bool
 ├── border: ?Border (candy-sprinkles)
-├── manager: ?Manager (candy-zone)
+├── manager: ?Manager (candy-mouse)
 └── methods: withBackdrop(), withAnimation(), withZIndex(),
             withClickOutsideDismiss(), withAutoSize(),
             withBorder(), withManager(), composite(), animate()
@@ -42,7 +42,7 @@ SugarCraft\Veil\VeilStack (immutable stack)
 - **Backdrop dimming**: 0-100 maps to 0-3 ANSI SGR `\x1b[2m` passes via `Ansi::FAINT`
 - **Auto-size**: Computes dimensions from border-wrapped content before measuring
 - **Border chrome**: Wraps content via `candy-sprinkles` `Style::border()`
-- **Click-outside dismiss**: Delegates to `candy-zone` `Manager::anyInBounds()`
+- **Click-outside dismiss**: Delegates to `candy-mouse` `Manager::anyInBounds()`
 - **UTF-8 handling**: Byte-level replacement with column tracking for multibyte chars
 - **Framework-agnostic**: `composite(fg, bg, v, h, xOff, yOff)` accepts raw strings
 
@@ -59,7 +59,7 @@ SugarCraft\Veil\VeilStack (immutable stack)
 
 1. **No cell buffer**: String-based O(n*m) character replacement — slow for large overlays
 2. **No true alpha**: FADE animation returns foreground unchanged; terminal limitation
-3. **No self-contained hit testing**: Relies on external candy-zone Manager, not own rendered bounds
+3. **No self-contained hit testing**: Relies on external candy-mouse Manager, not own rendered bounds
 4. **No animation tick**: `animate($progress)` accepts 0-1 float but consumer drives timing
 5. **No layout system**: No proportional sizing, flex/grid, or viewport-aware positioning
 6. **No built-in model integration**: Consumer manually wires update/view cycles
@@ -109,7 +109,7 @@ SugarCraft\Veil\VeilStack (immutable stack)
 
 ### 2. No Self-Contained Mouse Hit Testing
 
-**Title:** `isClickOutside()` requires external candy-zone Manager, not veil's own bounds
+**Title:** `isClickOutside()` requires external candy-mouse Manager, not veil's own bounds
 **Description:** bubblezone uses zero-width ANSI markers (`\x1B[<number>z`) wrapped around content, then a single-pass scanner records coordinates during render. lipgloss v2's `Compositor.Hit(x, y)` returns topmost layer at coordinates.
 **Why it matters:** sugar-veil's `isClickOutside(MouseMsg)` requires the consumer to create and wire a Manager. No self-contained mechanism exists that uses the veil's own rendered dimensions.
 **Source:** `docs/repo_map/lrstanley_bubblezone.md` — Mark/Scan/Get pattern, zero-width ANSI marker technique
@@ -117,7 +117,7 @@ SugarCraft\Veil\VeilStack (immutable stack)
 **Implementation ideas:**
 
 - Option A (bubblezone pattern): `Veil::mark(string $content): string` injects zero-width markers; consumer calls `Veil::scan(string $rendered)` to record bounds; `Veil::hit(int $x, int $y): bool` checks bounds
-- Option B (lipgloss pattern): Integrate with candy-zone's `Manager` as the primary hit-testing backend, add `Veil::bounds(): Rectangle` returning rendered extent
+- Option B (lipgloss pattern): Integrate with candy-mouse's `Manager` as the primary hit-testing backend, add `Veil::bounds(): Rectangle` returning rendered extent
 - Option C: Build lightweight R-tree/spatial map for O(log n) hit testing across multiple veils
 
 **Complexity:** Medium — requires ANSI marker injection + scanning infrastructure
@@ -331,7 +331,7 @@ interface Renderable {
 
 ## 2. Spatial Index for Hit Testing
 
-**Current:** `isClickOutside()` delegates to external candy-zone Manager. For multiple veils, each veil's hit test is O(zones) linear scan.
+**Current:** `isClickOutside()` delegates to external candy-mouse Manager. For multiple veils, each veil's hit test is O(zones) linear scan.
 **External:** bubblezone uses zero-width ANSI markers + iteration-based invalidation + atomic prefix counters.
 
 **Why external is better:** Single-pass scan records all zone bounds during render. O(1) lookup per mouse event via map access.
@@ -668,7 +668,7 @@ Deepen integration with candy-sprinkles:
 - `Veil::withBackgroundStyle(Style)` that applies style to background region
 - Support for lipgloss-style `Style.Inherit()` for layer precedence
 
-## 4. candy-zone Manager as First-Class Dependency
+## 4. candy-mouse Manager as First-Class Dependency
 
 Instead of requiring consumer to create Manager, sugar-veil could:
 
@@ -806,7 +806,7 @@ However, as a **string-overlay utility**, it faces inherent limitations that the
 
 1. **lipgloss v2's Canvas model** (`docs/repo_map/charmbracelet_lipgloss.md`) provides O(1) cell writes, proper Unicode handling per-cell, and damage-tracking partial redraws. sugar-veil's O(n*m) string scanning becomes a bottleneck for large or frequently-animated overlays.
 
-2. **bubblezone's Mark/Scan/Get pattern** (`docs/repo_map/lrstanley_bubblezone.md`) enables self-contained mouse hit testing via zero-width ANSI markers, eliminating the need for external Manager wiring. sugar-veil's reliance on candy-zone is a dependency that other components may not want to introduce.
+2. **bubblezone's Mark/Scan/Get pattern** (`docs/repo_map/lrstanley_bubblezone.md`) enables self-contained mouse hit testing via zero-width ANSI markers, eliminating the need for external Manager wiring. sugar-veil's reliance on candy-mouse is a dependency that other components may not want to introduce.
 
 3. **lipgloss v2's Layer/Compositor system** provides z-sorted layer hierarchy with `Hit()` mouse resolution and `Bounds()` extent computation. sugar-veil's `Compositor` class would fill this gap.
 

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Msg\ZoneEnterMsg;
-use SugarCraft\Zone\Msg\ZoneExitMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneEnterMsg;
+use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
 
 /**
  * Tracks which zone the cursor is in across mouse-move events and

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * event is dispatched against the manager, and `anyInBounds()` returns
  * the matched zone — the model uses that to refocus the list cursor.
  *
- *   php examples/list-default.php
+ *   php examples/zones-list-default.php
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -16,7 +16,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Manager;
+use SugarCraft\Mouse\Zones\Manager;
 
 $items = [
     'Strawberry',

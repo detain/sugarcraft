@@ -15,7 +15,7 @@ use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Mosaic\Scale;
 use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Zone\Manager as ZoneManager;
+use SugarCraft\Mouse\Zones\Manager as ZoneManager;
 
 /**
  * The sugar-gallery × candy-mosaic seam, proved with REAL renders.

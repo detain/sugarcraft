@@ -198,7 +198,7 @@ review for step 03.08 · clean · PR#541
   step 04.02 · PR#566 · sugar-stickers: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
 review for step 04.02 · clean · PR#566
 docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-stickers.html
-step 04.03 · PR#568 · sugar-crumbs: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-zone dep
+step 04.03 · PR#568 · sugar-crumbs: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep
 review for step 04.03 · clean · PR#568
 tests-ci for step 04.03 · clean
 docs for step 04.03 · PR#569 · document withZoneManager() in README + CALIBER_LEARNINGS.md + docs/lib/sugar-crumbs.html
@@ -299,13 +299,13 @@ step 07.07 · PR#631 · candy-vt: BCE (SGR bg erase) + combining-char compositio
 review for step 07.07 · PR#631 · code clean, 467 tests pass; 4 CALIBER_LEARNINGS issues (see Open review findings — 07.07)
 fix for step 07.07 · PR#632 · resolved 4 findings (CALIBER_LEARNINGS: BCE/combining/sync updated + 2 new entries)
 docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + docs/lib/candy-vt.html feature grid + API table
- step 07.08 · PR#634 · candy-zone: ZoneHoverTracker + ZoneEnterMsg/ZoneExitMsg (leftover-rollout step 07.08)
+ step 07.08 · PR#634 · candy-zone: ZoneHoverTracker + ZoneEnterMsg/ZoneExitMsg (leftover-rollout step 07.08) @rename-keep legacy wire token / historical log
  review for step 07.08 · clean · PR#634
  docs for step 07.08 · clean · PR#635
- step 07.09 · PR#636 · candy-zone: DragTracker + ZoneDragStartMsg/ZoneDragMoveMsg/ZoneDragEndMsg (leftover-rollout step 07.09)
+ step 07.09 · PR#636 · candy-zone: DragTracker + ZoneDragStartMsg/ZoneDragMoveMsg/ZoneDragEndMsg (leftover-rollout step 07.09) @rename-keep legacy wire token / historical log
  review for step 07.09 · clean · PR#636
  docs for step 07.09 · clean · PR#637
-  step 07.10 · PR#638 · candy-zone: ClickCounter (DoubleClickMsg/TripleClickMsg) + Manager::setMotionTracking (leftover-rollout step 07.10)
+  step 07.10 · PR#638 · candy-zone: ClickCounter (DoubleClickMsg/TripleClickMsg) + Manager::setMotionTracking (leftover-rollout step 07.10) @rename-keep legacy wire token / historical log
   review for step 07.10 · clean · PR#638
   docs for step 07.10 · PR#639 · document ClickCounter/DoubleClickMsg/TripleClickMsg/setMotionTracking in README + end-user HTML + CALIBER
   step 07.11 · PR#640 · candy-mosaic: QuarterBlockRenderer (░▒▓█ 2×2 pixel rendering) + PixelGrid::fromGdQuarter() + 12 tests (leftover-rollout step 07.11)

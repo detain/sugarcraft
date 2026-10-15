@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "44e71570da194a57bb6c7bcafc8da71a",
+    "content-hash": "1b80426c5df82141928b18d8e373c770",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3688,10 +3688,9 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flip",
-                "reference": "2e08a1e220f5220dfd8352870f1014833310e3fe"
+                "reference": "8f0714a52f8d4737c820566d63b2a83d4e9a420e"
             },
             "require": {
-                "ext-gd": "*",
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
@@ -3699,6 +3698,9 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
                 "sugarcraft/candy-testing": "dev-master"
+            },
+            "suggest": {
+                "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
             },
             "bin": [
                 "bin/candy-flip"
@@ -3724,9 +3726,10 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "ASCII GIF viewer — port of namzug16/gifterm on the SugarCraft stack.",
+            "description": "ANSI/GIF animation viewer — ASCII GIF playback (gifterm port) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop).",
             "homepage": "https://sugarcraft.github.io/lib/candy-flip.html",
             "keywords": [
+                "ansi-art",
                 "ascii-art",
                 "cli",
                 "gif",
@@ -4593,14 +4596,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mouse",
-                "reference": "308696552796256b741de92b003d982b06eb21aa"
+                "reference": "dfe5f719d32e8b795a5be2902830ab9592774ec6"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-sprinkles": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -4623,7 +4627,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus ZoneClickTracker for press/release deduplication. No external Manager wiring needed.",
+            "description": "Mouse hit-testing (Mark/Scan/Get) plus the bubblezone-style zone manager (hover, click/double/triple-click, drag tracking) under SugarCraft\\Mouse\\Zones.",
             "homepage": "https://github.com/sugarcraft/candy-mouse",
             "keywords": [
                 "bubblezone",
@@ -5244,6 +5248,80 @@
             }
         },
         {
+            "name": "sugarcraft/candy-top",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-top",
+                "reference": "516b84013e7f237787c558857296c14e1a455010"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "@dev",
+                "sugarcraft/candy-flip": "@dev",
+                "sugarcraft/candy-sprinkles": "@dev",
+                "sugarcraft/sugar-bits": "@dev",
+                "sugarcraft/sugar-dash": "@dev"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "@dev"
+            },
+            "bin": [
+                "bin/candy-top"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Top\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Top\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal system monitor (btop-style) built on SugarCraft charting libs — PHP TUI port inspired by aristocratos/btop.",
+            "homepage": "https://github.com/sugarcraft/candy-top",
+            "keywords": [
+                "btop",
+                "charts",
+                "dashboard",
+                "monitor",
+                "sugarcraft",
+                "system-monitor",
+                "terminal",
+                "top",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-top/issues",
+                "source": "https://github.com/sugarcraft/candy-top",
+                "docs": "https://sugarcraft.github.io/lib/candy-top.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-vcr",
             "version": "dev-master",
             "dist": {
@@ -5450,66 +5528,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-zone",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-zone",
-                "reference": "522bc1f433d61b06d7ee247dcf2d61840daa1abd"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-mouse": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Zone\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Zone\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of lrstanley/bubblezone — mouse zone tracker for TUI apps.",
-            "homepage": "https://github.com/sugarcraft/candy-zone",
-            "keywords": [
-                "bubblezone",
-                "cli",
-                "click",
-                "mouse",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "zones"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-zone/issues",
-                "source": "https://github.com/sugarcraft/candy-zone",
-                "docs": "https://sugarcraft.github.io/lib/candy-zone.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/honey-bounce",
             "version": "dev-master",
             "dist": {
@@ -5639,14 +5657,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-bits",
-                "reference": "8713ea3e4e2bd9707bc695b29ffccb4744e7c0ec"
+                "reference": "3566a7a1eb7ba8a57408a6513811df7760042948"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-forms": "dev-master",
+                "sugarcraft/candy-mouse": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/candy-zone": "dev-master",
                 "sugarcraft/honey-bounce": "dev-master"
             },
             "require-dev": {
@@ -5949,10 +5967,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "c8c4d5a526652f20b57bdf6e47c1bbcb5d8bb342"
+                "reference": "d61ae27b6c2dc76104b5c10ce73497c09cc123f3"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
+                "ext-intl": "*",
+                "ext-mbstring": "*",
+                "ext-pdo_sqlite": "*",
                 "ext-sqlite3": "*",
                 "google/cloud-ai-platform": "^1.0",
                 "guzzlehttp/guzzle": "^7.12.1",
@@ -5975,6 +5996,7 @@
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-mcp": "dev-master",
+                "sugarcraft/sugar-reel": "@dev",
                 "sugarcraft/sugar-toast": "dev-master",
                 "sugarcraft/sugar-veil": "dev-master",
                 "symfony/yaml": "^7.4"
@@ -5995,13 +6017,6 @@
                 "bin/sugarcrush"
             ],
             "type": "project",
-            "extra": {
-                "sugarcraft": {
-                    "deferred-wiring": {
-                        "sugarcraft/candy-kit": "E453. NOT a stale require and NOT spent: added by commit ddd9560d0 for one named, still-open item - restyling Cli\\Help::screen() with candy-kit's Banner/Section/HelpText. It is unwired because the restyle was costed and deferred, not because nobody remembers why. The colour blocker that costing named is gone: candy-kit's presenters now fall back to Theme::detect() (bffd7e9a8), which downgrades through candy-core's ColorProfile::detect(), so a piped or NO_COLOR --help gets no colour bytes without any guard at the call site. What still stands between this and the wiring is the shape of the help itself: the single `<<<'HELP'` heredoc that IS that method's body (no line count here on purpose - it moves, and the symbol does not) and a HelpTest that asserts line-start regexes any SGR prefix breaks. tools/check-path-repos.php --unused would report it as PRUNE_REQUIRE_AND_REPO without this row and reports DEFERRED_WIRING with it - a CANDIDATE by the tool's own words, and this row is the by-hand confirmation it asks for, in the direction of keeping the dependency. Delete this row when the wiring lands - never to quiet the check."
-                    }
-                }
-            },
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Crush\\": "src/"
@@ -6260,13 +6275,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-gallery",
-                "reference": "70dd773511e6e071ab1a8c96c92c7e56f4efcf64"
+                "reference": "61f6bec3c594ff3b06ce593805686dd87fd8ba6c"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/candy-zone": "dev-master"
+                "sugarcraft/candy-mouse": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -8596,10 +8611,10 @@
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
+        "sugarcraft/candy-top": 20,
         "sugarcraft/candy-vcr": 20,
         "sugarcraft/candy-vt": 20,
         "sugarcraft/candy-wish": 20,
-        "sugarcraft/candy-zone": 20,
         "sugarcraft/honey-bounce": 20,
         "sugarcraft/honey-flap": 20,
         "sugarcraft/sugar-bits": 20,

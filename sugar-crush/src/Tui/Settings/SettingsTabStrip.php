@@ -13,7 +13,8 @@ use SugarCraft\Crush\Theme;
  * scrolled sideways so the active tab is always on it.
  *
  * Local rather than `sugar-bits`' `Tabs` because that one hit-tests through
- * `candy-zone` while this app's clicks run on `candy-mouse`; the strip reports
+ * the `SugarCraft\Mouse\Zones` Manager while this app's clicks run on the
+ * `candy-mouse` Mark/Scan layer; the strip reports
  * each painted tab's column span instead, and the shell records those as
  * `settings:tab:<n>` zones (the `MenuBar` pane-tab pattern).
  */

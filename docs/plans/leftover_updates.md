@@ -447,7 +447,7 @@ slightly different ioctl numbers. Pull from `nix` crate's per-platform
 `ioctl.rs` files when a user reports needing one.
 
 🪦 **`MultiPump` promotion to first-class API** — promoted out of "P6
-stretch" if `candy-zone` (tmux-style panes) starts using it. Profile
+stretch" if `candy-mouse` (tmux-style panes) starts using it. Profile
 first to confirm scaling claims hold up to ~16 concurrent PTYs.
 
 🪦 **Expect-style scripting API expansion** — current `Expect` is a

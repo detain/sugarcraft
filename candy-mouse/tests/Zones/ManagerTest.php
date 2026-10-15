@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone\Tests;
+namespace SugarCraft\Mouse\Tests\Zones;
 
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Sentinel;
-use SugarCraft\Zone\Manager;
-use SugarCraft\Zone\Zone;
+use SugarCraft\Mouse\Zones\Manager;
+use SugarCraft\Mouse\Zones\Zone;
 use PHPUnit\Framework\TestCase;
 
 final class ManagerTest extends TestCase
@@ -483,7 +483,7 @@ final class ManagerTest extends TestCase
 
 final class ZoneRoutingModel implements \SugarCraft\Core\Model
 {
-    public ?\SugarCraft\Zone\MsgZoneInBounds $lastInBoundsHit  = null;
+    public ?\SugarCraft\Mouse\Zones\MsgZoneInBounds $lastInBoundsHit  = null;
     public ?\SugarCraft\Core\Msg\MouseMsg    $lastPlainMouse   = null;
 
     public function init(): ?\Closure { return null; }
@@ -491,7 +491,7 @@ final class ZoneRoutingModel implements \SugarCraft\Core\Model
     public function update(\SugarCraft\Core\Msg $msg): array
     {
         $next = clone $this;
-        if ($msg instanceof \SugarCraft\Zone\MsgZoneInBounds) {
+        if ($msg instanceof \SugarCraft\Mouse\Zones\MsgZoneInBounds) {
             $next->lastInBoundsHit = $msg;
         } elseif ($msg instanceof \SugarCraft\Core\Msg\MouseMsg) {
             $next->lastPlainMouse = $msg;

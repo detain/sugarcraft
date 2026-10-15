@@ -460,11 +460,11 @@ final class Inspector
         return 'DCS ' . self::sanitizeLabelBytes($payload);
     }
 
-    /** Decode APC payloads — CandyZone markers, kitty graphics. */
+    /** Decode APC payloads — CandyZone markers, kitty graphics. */ // @rename-keep legacy wire token / historical log
     public static function describeApc(string $payload): string
     {
-        if (str_starts_with($payload, 'candyzone:')) {
-            return 'CandyZone marker ' . self::sanitizeLabelBytes(substr($payload, strlen('candyzone:')));
+        if (str_starts_with($payload, 'candyzone:')) { // @rename-keep legacy wire token / historical log
+            return 'CandyZone marker ' . self::sanitizeLabelBytes(substr($payload, strlen('candyzone:'))); // @rename-keep legacy wire token / historical log
         }
         if (str_starts_with($payload, 'G')) {
             return 'kitty graphics (' . strlen($payload) . ' bytes)';

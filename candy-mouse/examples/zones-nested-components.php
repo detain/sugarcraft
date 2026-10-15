@@ -8,7 +8,7 @@ declare(strict_types=1);
  * two child components both happen to use the literal id `"item-0"`
  * but the prefixes keep their bounding boxes from colliding.
  *
- *   php examples/nested-components.php
+ *   php examples/zones-nested-components.php
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -16,7 +16,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Zone\Manager;
+use SugarCraft\Mouse\Zones\Manager;
 
 /**
  * @param Manager      $mgr

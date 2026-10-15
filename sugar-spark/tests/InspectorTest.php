@@ -172,10 +172,10 @@ final class InspectorTest extends TestCase
         $this->assertStringContainsString('xterm(367)', $seg->describe());
     }
 
-    public function testApcCandyZoneMarker(): void
+    public function testApcCandyZoneMarker(): void // @rename-keep legacy wire token / historical log
     {
         $seg = Inspector::parse("\x1b_candyzone:S:btn-1\x1b\\")[0];
-        $this->assertStringContainsString('CandyZone marker', $seg->describe());
+        $this->assertStringContainsString('CandyZone marker', $seg->describe()); // @rename-keep legacy wire token / historical log
         $this->assertStringContainsString('S:btn-1',          $seg->describe());
     }
 
@@ -803,7 +803,7 @@ final class InspectorTest extends TestCase
         // describeApc with unknown payload falls to default 'APC' label.
         $out = Inspector::describeApc('unknownpayload');
         $this->assertStringContainsString('APC', $out);
-        $this->assertStringNotContainsString('CandyZone', $out);
+        $this->assertStringNotContainsString('CandyZone', $out); // @rename-keep legacy wire token / historical log
         $this->assertStringNotContainsString('kitty graphics', $out);
     }
 

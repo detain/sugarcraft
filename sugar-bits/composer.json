@@ -38,7 +38,7 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-zone": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
         "sugarcraft/honey-bounce": "dev-master"
     },
     "require-dev": {

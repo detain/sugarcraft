@@ -80,7 +80,7 @@ echo Inspector::report($capturedTerminalOutput);
   iTerm2 (9), taskbar progress (9;4), terminal colour set (10/11/12),
   clipboard (52), reset terminal colour (110/111/112).
 - **DCS** — XTVERSION reply (`>|<term> <ver>`), DECRPSS, sixel.
-- **APC** — CandyZone markers (`candyzone:S/E:<id>`), kitty graphics
+- **APC** — CandyZone markers (`candyzone:S/E:<id>`), kitty graphics <!-- @rename-keep legacy wire token / historical log -->
   (`G…`).
 - **SS3** — F1-F4 / cursor / Home / End.
 - **2-byte ESC** — DECSC / DECRC / keypad mode / index / reverse-index /

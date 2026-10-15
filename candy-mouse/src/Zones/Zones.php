@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Zone;
+namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -20,7 +20,7 @@ use SugarCraft\Core\Msg;
  * shared manager returned by {@see defaultManager()}.
  *
  * ```php
- * use SugarCraft\Zone\Zones;
+ * use SugarCraft\Mouse\Zones\Zones;
  *
  * // mark / scan with the package-level default manager.
  * $rendered = Zones::mark('header', $header)

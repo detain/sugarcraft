@@ -375,7 +375,7 @@ keystone, so they come first within the phase.
 ### Phase 3 — Core‑only & low‑fan‑out foundation
 Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.1** `candy-layout`‑dependent + core‑only singles: `candy-metrics`(13,low),
-  `candy-zone`(14,low), `candy-mouse`(9,med), `candy-mold`(1,low).
+  `candy-zone`(14,low), `candy-mouse`(9,med), `candy-mold`(1,low). <!-- @rename-keep historical provenance -->
 - **3.2** `candy-sprinkles` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
   `Table/Border/Tree/Listing` (10), **3.2c** root color/style files (≈10), **3.2d** remainder.
 - **3.3** `candy-palette`(8,med), `candy-kit`(7,med), `candy-lister`(10,med) — deps core(+sprinkles).
@@ -526,7 +526,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |
 | candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void |
 | candy-mold | low | 1 | ctor-promotion, match, readonly |
-| candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly |
+| candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly | <!-- @rename-keep historical provenance -->
 | honey-flap | low | 6 | ctor-promotion, named-args, readonly |
 | sugar-boxer | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |
 | sugar-calendar | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |

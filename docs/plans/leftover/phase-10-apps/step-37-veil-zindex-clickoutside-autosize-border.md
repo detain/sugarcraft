@@ -6,7 +6,7 @@
 ## Deliverable
 
 - Z-index / stacking (multiple veils, ordered).
-- Click-outside-to-dismiss (consume candy-zone for hit testing).
+- Click-outside-to-dismiss (consume candy-mouse for hit testing).
 - Auto-sizing / content-aware dimensions.
 - Border chrome (consume candy-sprinkles Border family).
 
@@ -16,7 +16,7 @@
 `withClickOutsideDismiss(bool)`, `withAutoSize(bool)`,
 `withBorder(Border)`.
 
-**Modify:** `sugar-veil/composer.json` — add candy-zone + candy-sprinkles.
+**Modify:** `sugar-veil/composer.json` — add candy-mouse + candy-sprinkles.
 
 ## Tests
 

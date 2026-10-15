@@ -1,8 +1,8 @@
 # Overview
 
-**candy-zone** is a complete, production-ready PHP port of lrstanley/bubblezone — providing invisible ANSI APC marker-based mouse zone tracking for TUI applications. It solves the fundamental problem of routing mouse events to the correct UI component without requiring every component to manually track its screen coordinates.
+**candy-mouse** is a complete, production-ready PHP port of lrstanley/bubblezone — providing invisible ANSI APC marker-based mouse zone tracking for TUI applications. It solves the fundamental problem of routing mouse events to the correct UI component without requiring every component to manually track its screen coordinates.
 
-**Ecosystem positioning:** candy-zone sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `candy-sprinkles` (styling system), and `sugar-bits` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
+**Ecosystem positioning:** candy-mouse sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `candy-sprinkles` (styling system), and `sugar-bits` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
 
 **Biggest opportunity areas:**
 
@@ -38,11 +38,11 @@
 
 ### Zone Marking Mechanism
 
-candy-zone uses **APC (Application Program Command)** escape sequences — terminals ignore them for display, making them ideal invisible markers:
+candy-mouse uses **APC (Application Program Command)** escape sequences — terminals ignore them for display, making them ideal invisible markers:
 
 ```
-Start: ESC _ "candyzone:S:<id>" ESC \
-End:   ESC _ "candyzone:E:<id>" ESC \
+Start: ESC _ "candyzone:S:<id>" ESC \ <!-- @rename-keep legacy wire token / historical log -->
+End:   ESC _ "candyzone:E:<id>" ESC \ <!-- @rename-keep legacy wire token / historical log -->
 ```
 
 Format in `Manager.php:27-34`. The `mark()` method (`Manager.php:109-118`) wraps content with these markers. The `scan()` method (`Manager.php:127-234`) is a single-pass state machine that:
@@ -162,11 +162,11 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 5. **Static singleton in Zones facade** — Shared global state makes parallel testing harder. `setDefaultManager(null)` required for teardown.
 
-6. **No debug visualization mode** — Upstream issue #7 (still open after years) requests zone boundary visualization. candy-zone has no equivalent.
+6. **No debug visualization mode** — Upstream issue #7 (still open after years) requests zone boundary visualization. candy-mouse has no equivalent.
 
 7. **No mouse event deduplication** — Drag operations produce duplicate events as cursor crosses cell boundaries (upstream issue #10). No built-in helper to deduplicate.
 
-8. **Non-alt-screen coordinate failure** — Like upstream, candy-zone assumes the scanned view starts at row 1. Without alt-screen, coordinates are wrong and there is no offset parameter.
+8. **Non-alt-screen coordinate failure** — Like upstream, candy-mouse assumes the scanned view starts at row 1. Without alt-screen, coordinates are wrong and there is no offset parameter.
 
 ---
 
@@ -242,7 +242,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 **Why it matters:** Zone boundaries would be calculated incorrectly for content containing emoji with modifiers or other complex grapheme clusters. Silent failure mode — no warning when falling back.
 
-**Source:** candy-zone internal (sugarcraft_candy-zone.md, lines 429-458)
+**Source:** candy-mouse internal (sugarcraft_candy-mouse-zones.md, lines 429-458)
 
 **Implementation ideas:**
 
@@ -289,7 +289,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 **Why it matters:** Overlapping interactive elements are common (panels with buttons, overlays). Users must implement their own deduplication.
 
-**Source:** sugarcraft_candy-zone.md, lines 416-421
+**Source:** sugarcraft_candy-mouse-zones.md, lines 416-421
 
 **Implementation ideas:**
 
@@ -308,7 +308,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 **Title:** Enforce zone requirements at initialization
 
-**Description:** When alt-screen is not enabled or mouse mode is not correctly configured, candy-zone produces silently wrong coordinates. No validation or warning.
+**Description:** When alt-screen is not enabled or mouse mode is not correctly configured, candy-mouse produces silently wrong coordinates. No validation or warning.
 
 **Why it matters:** This is the most common confusion point with bubblezone (issue #11). Users spend hours debugging why hit detection is wrong, only to discover alt-screen was not enabled.
 
@@ -357,11 +357,11 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 **Title:** Replace nanosecond time with monotonic counter for stale zone eviction
 
-**Description:** Upstream uses `time.Now().Nanosecond()` as an iteration marker for stale zone eviction. candy-zone uses direct replacement (same effect). A monotonic counter would be cleaner.
+**Description:** Upstream uses `time.Now().Nanosecond()` as an iteration marker for stale zone eviction. candy-mouse uses direct replacement (same effect). A monotonic counter would be cleaner.
 
 **Why it matters:** Theoretically, rapid re-renders could produce the same nanosecond. Practically unlikely but the approach is inelegant.
 
-**Source:** sugarcraft_candy-zone.md, lines 473-475
+**Source:** sugarcraft_candy-mouse-zones.md, lines 473-475
 
 **Implementation ideas:**
 
@@ -383,7 +383,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 **Why it matters:** Debugging missing zones is difficult when the cause is ID collision.
 
-**Source:** sugarcraft_candy-zone.md, weakness #7
+**Source:** sugarcraft_candy-mouse-zones.md, weakness #7
 
 **Implementation ideas:**
 
@@ -407,7 +407,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 **Why it matters:** This is a known limitation of the ANSI marker approach. Upstream has no solution, only documentation of the padding workaround.
 
-**Source:** sugarcraft_candy-zone.md, lines 410-415
+**Source:** sugarcraft_candy-mouse-zones.md, lines 410-415
 
 **Implementation ideas:**
 
@@ -447,7 +447,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 - Automatic z-ordering
 - More sophisticated but requires layout engine to pre-compute widget positions
 
-### candy-zone (PHP) — Current
+### candy-mouse (PHP) — Current
 
 **Approach:** Synchronous single-pass scan. No background worker. O(n) iteration for `anyInBounds()`.
 
@@ -467,11 +467,11 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 
 **Tradeoffs:**
 
-- Textual's approach requires a layout engine that pre-computes widget positions. candy-zone's marker-based approach works without a layout engine — any rendered string with markers is scannable.
-- The synchronous approach in candy-zone is simpler and avoids concurrency bugs.
+- Textual's approach requires a layout engine that pre-computes widget positions. candy-mouse's marker-based approach works without a layout engine — any rendered string with markers is scannable.
+- The synchronous approach in candy-mouse is simpler and avoids concurrency bugs.
 - For typical TUI apps (<50 zones), O(n) vs O(log n) is not perceptible.
 
-**Applicability to candy-zone:**
+**Applicability to candy-mouse:**
 
 - Adding an optional spatial index would benefit apps with many zones
 - For most SugarCraft apps, the current O(n) approach is fine
@@ -532,7 +532,7 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 - Add `DI` container integration examples for dependency injection
 - Document explicit manager pattern in README
 
-**Source:** sugarcraft_candy-zone.md, weakness #5
+**Source:** sugarcraft_candy-mouse-zones.md, weakness #5
 
 ## 4. Add Zone Lifecycle Hooks
 
@@ -644,7 +644,7 @@ $zone = $manager->zone('my-btn')
 - Add `Manager::setDebugVis(bool)` that changes `mark()` output
 - Debug mode wraps zones in visible box-drawing characters
 - Different colors for different zone types
-- Auto-enable with `CANDY_ZONE_DEBUG=1` environment variable
+- Auto-enable with `CANDY_MOUSE_DEBUG=1` environment variable
 
 **Reference:** upstream issue #7, still open
 
@@ -682,7 +682,7 @@ $zone = $manager->zone('my-btn')
 - Capture zone bounds for complex renderings (CJK, emoji, ANSI sequences)
 - Guard against regressions as scanner evolves
 
-**Reference:** sugarcraft_candy-zone.md recommendation #4
+**Reference:** sugarcraft_candy-mouse-zones.md recommendation #4
 
 ## 2. Fuzz Testing for Scanner
 
@@ -710,11 +710,11 @@ $zone = $manager->zone('my-btn')
 
 ## 1. sugar-bits Integration
 
-**Current:** sugar-bits (button, list, etc. components) doesn't use candy-zone.
+**Current:** sugar-bits (button, list, etc. components) doesn't use candy-mouse.
 
 **Opportunity:**
 
-- Add candy-zone as optional dependency to sugar-bits
+- Add candy-mouse as optional dependency to sugar-bits
 - sugar-bits components automatically wrap themselves in zone markers
 - Provide `WithZone` trait for components that want zone support
 - Simplifies building interactive components
@@ -757,7 +757,7 @@ $zone = $manager->zone('my-btn')
 
 **Summary:** When not using alt-screen mode, zone Y-positions are calculated as if content starts at top of terminal. Real applications may render starting at arbitrary vertical offsets.
 
-**Relevance to candy-zone:** Fundamental architectural constraint. The zero-width ANSI marker approach relies on scanning the full view output and computing absolute coordinates. Any offset in the rendering surface breaks the coordinate system.
+**Relevance to candy-mouse:** Fundamental architectural constraint. The zero-width ANSI marker approach relies on scanning the full view output and computing absolute coordinates. Any offset in the rendering surface breaks the coordinate system.
 
 **Lessons learned:**
 
@@ -773,7 +773,7 @@ $zone = $manager->zone('my-btn')
 
 **Summary:** During drag operations, `MouseDown` events fire repeatedly as the mouse crosses cell boundaries. No built-in mechanism to distinguish intentional clicks from drag artifacts.
 
-**Relevance to candy-zone:** This is critical for good UX. SugarCraft can solve this in userland without waiting for upstream changes. The Go library couldn't solve it without upstream v2 mouse event changes; PHP can provide helpers entirely in user code.
+**Relevance to candy-mouse:** This is critical for good UX. SugarCraft can solve this in userland without waiting for upstream changes. The Go library couldn't solve it without upstream v2 mouse event changes; PHP can provide helpers entirely in user code.
 
 **Lessons learned:**
 
@@ -789,7 +789,7 @@ $zone = $manager->zone('my-btn')
 
 **Summary:** Users request bounds checking validation, incorrect usage detection, and zone boundary visualization during development.
 
-**Relevance to candy-zone:** No debug tooling exists. This is a basic developer experience gap that upstream has not addressed.
+**Relevance to candy-mouse:** No debug tooling exists. This is a basic developer experience gap that upstream has not addressed.
 
 **Lessons learned:**
 
@@ -805,7 +805,7 @@ $zone = $manager->zone('my-btn')
 
 **Summary:** bubblezone v2 may not work with lipgloss v2's canvas/compositor feature. The successor library will have "improved mouse event tracking."
 
-**Relevance to candy-zone:** Signals that the ANSI marker approach has architectural limits. The successor library hints at a more layered, composable approach to mouse tracking — possibly one that doesn't rely on string-scanning ANSI markers.
+**Relevance to candy-mouse:** Signals that the ANSI marker approach has architectural limits. The successor library hints at a more layered, composable approach to mouse tracking — possibly one that doesn't rely on string-scanning ANSI markers.
 
 **Lessons learned:**
 
@@ -822,7 +822,7 @@ $zone = $manager->zone('my-btn')
 
 **Summary:** Textual replaced circular references in DOM with weak references to improve GC performance.
 
-**Relevance to candy-zone:** If SugarCraft's component system holds similar reference cycles (parent→child strong references), could hit GC issues similar to textual's.
+**Relevance to candy-mouse:** If SugarCraft's component system holds similar reference cycles (parent→child strong references), could hit GC issues similar to textual's.
 
 **Lessons learned:**
 
@@ -840,7 +840,7 @@ $zone = $manager->zone('my-btn')
 
 1. **Declare ext-intl as recommended dependency** — Low effort, prevents edge case bugs. Add to `composer.json` suggest section + document.
 
-2. **Add debug visualization mode** — High value, medium effort. `Manager::setDebugVis(bool)` + `CANDY_ZONE_DEBUG=1` env var.
+2. **Add debug visualization mode** — High value, medium effort. `Manager::setDebugVis(bool)` + `CANDY_MOUSE_DEBUG=1` env var.
 
 3. **Add mouse event deduplication helpers** — High value, competitive differentiation. New `ZoneClickTracker` class.
 
@@ -897,13 +897,13 @@ $zone = $manager->zone('my-btn')
 
 # Final Strategic Assessment
 
-candy-zone is a **complete, production-ready port** of bubblezone that faithfully replicates the upstream design while adapting to PHP's synchronous execution model. The marker-based approach elegantly solves mouse event routing without requiring components to track their own screen coordinates. The layered tracker suite (hover, drag, click) provides progressively sophisticated behavior.
+candy-mouse is a **complete, production-ready port** of bubblezone that faithfully replicates the upstream design while adapting to PHP's synchronous execution model. The marker-based approach elegantly solves mouse event routing without requiring components to track their own screen coordinates. The layered tracker suite (hover, drag, click) provides progressively sophisticated behavior.
 
 **Competitive position:**
 
-- Go bubblezone users still implement mouse event deduplication manually — candy-zone can provide this as a built-in helper
-- No debug visualization exists in upstream — candy-zone can add this as a competitive differentiator
-- The APC marker approach is fragile when upstream changes rendering (as happened with lipgloss v2) — candy-zone should keep zone logic strictly isolated
+- Go bubblezone users still implement mouse event deduplication manually — candy-mouse can provide this as a built-in helper
+- No debug visualization exists in upstream — candy-mouse can add this as a competitive differentiator
+- The APC marker approach is fragile when upstream changes rendering (as happened with lipgloss v2) — candy-mouse should keep zone logic strictly isolated
 
 **Architectural concerns:**
 

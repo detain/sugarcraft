@@ -1,8 +1,8 @@
 # Candy-Zone Research: Mouse Zone Tracking Libraries
 
-**Context:** candy-zone tracks mouse zones for TUIs, ported from Go's `lrstanley/bubblezone`. Part of SugarCraft monorepo (PHP 8.3+).
+**Context:** candy-mouse tracks mouse zones for TUIs, ported from Go's `lrstanley/bubblezone`. Part of SugarCraft monorepo (PHP 8.3+).
 
-**Current Implementation:** `/home/sites/sugarcraft/candy-zone/src/` with 4 files: `Manager.php`, `Zone.php`, `MsgZoneInBounds.php`, `Zones.php`.
+**Current Implementation:** `/home/sites/sugarcraft/candy-mouse/src/` with 4 files: `Manager.php`, `Zone.php`, `MsgZoneInBounds.php`, `Zones.php`.
 
 ---
 
@@ -312,12 +312,12 @@ class MouseButton(Enum):
 
 ## 3. Current Candy-Zone Implementation Analysis
 
-**Source:** `/home/sites/sugarcraft/candy-zone/src/`
+**Source:** `/home/sites/sugarcraft/candy-mouse/src/`
 
 ### 3.1 What Works Well
 
 1. **Faithful bubblezone port** — `Manager::scan()` mirrors upstream algorithm exactly
-2. **APC marker handling** — correctly parses `candyzone:S:<id>` and `candyzone:E:<id>`
+2. **APC marker handling** — correctly parses `candyzone:S:<id>` and `candyzone:E:<id>` <!-- @rename-keep legacy wire token / historical log -->
 3. **Grapheme width handling** — `Width::string()` handles CJK characters correctly
 4. **Prefix namespacing** — `Manager::newPrefix()` for component isolation
 5. **Zone facades** — `Zones` class mirrors package-level Go functions
@@ -416,7 +416,7 @@ final class DragTracker
 
 ### Priority 4: Motion Event Mode Toggle
 
-**Problem:** candy-zone assumes all motion events are relevant; no way to filter.
+**Problem:** candy-mouse assumes all motion events are relevant; no way to filter.
 
 **Approach:** Add `setMotionTracking(bool)` to Manager:
 1. When disabled (default), `anyInBounds()` only checks on button events

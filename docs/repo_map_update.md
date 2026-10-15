@@ -64,7 +64,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 **15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-mines, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, honey-flap).
 
 ### Deferred to future plan
-See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-zone, candy-mold — all deferred from step-37 catch-all).
+See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).
 
 ---
 
@@ -159,9 +159,9 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **GitHub/GitLab README fetching in sugar-glow** — The defining feature of upstream `charmbracelet/glow` is entirely absent.
 
-6. **Debug visualization mode in candy-zone** — Upstream issue #7 (open for years) requesting zone boundary visualization. No equivalent in PHP.
+6. **Debug visualization mode in candy-mouse** — Upstream issue #7 (open for years) requesting zone boundary visualization. No equivalent in PHP.
 
-7. **Mouse event deduplication helpers in candy-zone** — Upstream issue #10: drag operations produce duplicate `MouseDown` events. `ZoneClickTracker` class would be competitive differentiation.
+7. **Mouse event deduplication helpers in candy-mouse** — Upstream issue #10: drag operations produce duplicate `MouseDown` events. `ZoneClickTracker` class would be competitive differentiation.
 
 8. **Persistent storage backend** — candy-serve has zero persistence (in-memory only; upstream soft-serve uses SQLite/PostgreSQL). candy-metrics needs HTTP scrape endpoint.
 
@@ -187,7 +187,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **StatefulWidget / Event-Driven separation** — sugar-dash, sugar-crush, sugar-readline, candy-lister mix state and rendering. ratatui/textual separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). Enables testability and multiple views of same data.
 
-3. **Consistent mouse hit-testing infrastructure** — Mouse support relies on external candy-zone Manager wiring rather than bubblezone's self-contained Mark/Scan/Get pattern. No consistent coordinate translation or zone tracking.
+3. **Consistent mouse hit-testing infrastructure** — Mouse support relies on external candy-mouse Manager wiring rather than bubblezone's self-contained Mark/Scan/Get pattern. No consistent coordinate translation or zone tracking.
 
 4. **Async concurrency model consistency** — candy-forms/sugar-prompt have ReactPHP async suggestions but no cancellation. candy-pty has no async concurrency model. candy-shell's `subscriptions()` returns null. The Elm Architecture's `Cmd` pattern is fragmented.
 
@@ -241,7 +241,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 ## Shared UX/TUI Gaps
 
-1. **No debug visualization for zone boundaries** — candy-zone developers cannot validate placement without visible boundaries.
+1. **No debug visualization for zone boundaries** — candy-mouse developers cannot validate placement without visible boundaries.
 
 2. **No mouse event deduplication** — Duplicate MouseDown events on drag operations across zone boundaries.
 
@@ -357,8 +357,8 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 12 | Add input driver for terminal keypress decoding | sugar-readline | Critical | High | Medium | P1 |
 | 13 | Add `charmbracelet/x/ansi` state machine sharing | sugar-spark, candy-hermit, candy-freeze, candy-vt | High | Medium | Low | P1 |
 | 14 | Implement GitHub/GitLab README fetching | sugar-glow | High | Medium | Low | P1 |
-| 15 | Add debug visualization mode | candy-zone | High | Low | Low | P1 |
-| 16 | Add mouse event deduplication helpers | candy-zone | High | Low | Low | P1 |
+| 15 | Add debug visualization mode | candy-mouse | High | Low | Low | P1 |
+| 16 | Add mouse event deduplication helpers | candy-mouse | High | Low | Low | P1 |
 | 17 | Add `ContentGenerator` pattern | sugar-stickers | Medium | Low | Low | P1 |
 | 18 | Fix wide-character overflow handling | sugar-boxer | High | Low | Low | P1 |
 | 19 | Wire MarkLine into LineChart/BarChart | sugar-charts | Medium | Low | Low | P2 |
@@ -384,7 +384,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 7. **Wire `Mosaic::auto()` + `diagnose()` in candy-mosaic** — Eliminate user-facing failures on Windows, SSH, old terminals.
 
-8. **Add `CANDY_ZONE_DEBUG=1` to candy-zone** — Debug visualization mode; competitive differentiation over upstream.
+8. **Add `CANDY_MOUSE_DEBUG=1` to candy-mouse** — Debug visualization mode; competitive differentiation over upstream.
 
 9. **Wire PNG renderer to candy-freeze CLI** — `--format png` flag; closes CLI/API parity gap.
 
@@ -446,7 +446,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **`SugarCraft/Ansi`** — Shared `charmbracelet/x/ansi` state machine port. Consumed by sugar-spark, candy-hermit, candy-freeze, candy-vt.
 
-6. **`SugarCraft/Mouse`** — Shared Mark/Scan/Get pattern for self-contained zone hit-testing. Consumed by candy-zone, sugar-veil, sugar-crumbs, and all zone-aware packages.
+6. **`SugarCraft/Mouse`** — Shared Mark/Scan/Get pattern for self-contained zone hit-testing. Consumed by candy-mouse, sugar-veil, sugar-crumbs, and all zone-aware packages.
 
 7. **`SugarCraft/Input`** — New package with terminal escape sequence decoder (Kitty keyboard protocol, SGR mouse), enabling sugar-readline real-world usage.
 
@@ -484,7 +484,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 3. **Consolidate layout solvers** — 5+ packages each have greedy layout code; a shared `SugarCraft\Layout` would eliminate duplication and enable constraint-based sizing.
 
-4. **Unify mouse hit-testing** — bubblezone-style Mark/Scan/Get should be shared infrastructure, not per-package with external wiring to candy-zone.
+4. **Unify mouse hit-testing** — bubblezone-style Mark/Scan/Get should be shared infrastructure, not per-package with external wiring to candy-mouse.
 
 5. **Consolidate buffer rendering** — 5+ packages have string-composition rendering; shared `Buffer`/`Cell` model enables centralized improvements.
 
@@ -502,7 +502,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 3. **String-based layout** — Every layout-sensitive package manually pads strings; none use constraint specification.
 
-4. **Manual mouse coordinate tracking** — sugar-veil, sugar-crumbs, candy-lister each wire candy-zone Manager independently rather than using self-contained Mark/Scan/Get.
+4. **Manual mouse coordinate tracking** — sugar-veil, sugar-crumbs, candy-lister each wire candy-mouse Manager independently rather than using self-contained Mark/Scan/Get.
 
 5. **ReactPHP async** — candy-forms/sugar-prompt have async suggestions; candy-core has exec() that blocks; inconsistent async models across ecosystem.
 

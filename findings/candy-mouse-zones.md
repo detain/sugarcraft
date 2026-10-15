@@ -1,13 +1,13 @@
-# Audit: candy-zone
+# Audit: candy-mouse
 
-**Library:** SugarCraft/candy-zone  
+**Library:** SugarCraft/candy-mouse  
 **Date:** 2026-06-30  
 
 ---
 
 ## Overview
 
-`candy-zone` provides a zone-based layout system for terminal UIs. Zones are rectangular regions that can be stacked vertically, selected between, and switched interactively. The library ports the `charmbracelet/zone` concept.
+`candy-mouse` provides a zone-based layout system for terminal UIs. Zones are rectangular regions that can be stacked vertically, selected between, and switched interactively. The library ports the `charmbracelet/zone` concept.
 
 ---
 
