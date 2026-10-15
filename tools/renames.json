@@ -1,7 +1,7 @@
 {
   "$comment": "Authoritative old->new package map. See plan_rename.md. status: pending|renamed|remote-done|packagist-done. kind: rename|merge|fold|create.",
   "entries": [
-    {"batch":"A","kind":"rename","old":"honey-flap","new":"candy-flappy","ns_old":"Flap","ns_new":"Flappy","type":"app","bins":{"bin/honey-flap":"bin/candy-flappy"},"status":"renamed"},
+    {"batch":"A","kind":"rename","old":"honey-flap","new":"candy-flappy","ns_old":"Flap","ns_new":"Flappy","type":"app","bins":{"bin/honey-flap":"bin/candy-flappy"},"status":"remote-done"},
     {"batch":"A","kind":"rename","old":"candy-mines","new":"candy-minesweeper","ns_old":"Mines","ns_new":"Minesweeper","type":"app","bins":{"bin/candy-mines":"bin/candy-minesweeper"},"status":"pending"},
     {"batch":"A","kind":"rename","old":"sugar-calendar","new":"sugar-datepicker","ns_old":"Calendar","ns_new":"DatePicker","type":"lib","bins":{},"status":"pending"},
 
