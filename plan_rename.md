@@ -33,7 +33,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 2.2 | `sync-sugarcraft.yml` reads `tools/renames.json` (single-prefix split + legacy-ref preservation per 2.1 verdict) | ✅ 0b6d99af2 |
 | 2.3 | `gen-docs.php` emits redirect stubs for old slugs | ✅ 6f1ef69a0 (regen 6b3a7c618) |
 | 2.4 | `scripts/rename-remote.sh` (GitHub) + `scripts/packagist.sh` (Packagist) helpers | ✅ 022c0651a (review-fixed 2026-10-15: real Packagist API shape) |
-| 2.5 | Create the `candy-gifview` GitHub repo + Packagist package | ☐ |
+| 2.5 | Create the `candy-gifview` GitHub repo + Packagist package | ✅ 26edcb18c |
 | 3 | Batch A — pilot (3 renames) | ☐ |
 | 4 | Batch B — apps (12 renames) | ☐ |
 | 5 | Batch C — components (13 renames) | ☐ |
