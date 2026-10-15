@@ -90,10 +90,21 @@ final class DoctorExtensionProbesTest extends TestCase
         $this->assertSame(0, substr_count($slice, "'WARN'"));
     }
 
+    /**
+     * Reads the COMMITTED blob, not the working copy: CI runs
+     * `php tools/check-path-repos.php --fix --strict-closure` before install,
+     * which injects a `repositories[]` block into the working-tree lib
+     * manifests — a file-read here would go red in CI while staying green
+     * locally. The law under test (AGENTS.md composer rule) binds the
+     * committed manifest, so the committed manifest is what gets probed.
+     */
     public function testTheManifestDeclaresBothExtensionsAndCarriesNoRepositoriesBlock(): void
     {
+        $committed = shell_exec('git -C ' . escapeshellarg(\dirname(__DIR__, 2)) . ' show HEAD:sugar-crush/composer.json');
+        $this->assertNotNull($committed, 'git show HEAD:sugar-crush/composer.json produced no output — is this checkout a git work tree?');
+
         $manifest = json_decode(
-            (string) file_get_contents(\dirname(__DIR__, 2) . '/composer.json'),
+            $committed,
             true,
             512,
             \JSON_THROW_ON_ERROR

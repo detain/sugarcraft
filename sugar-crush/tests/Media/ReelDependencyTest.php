@@ -36,11 +36,21 @@ final class ReelDependencyTest extends TestCase
     /**
      * The lib ships standalone: the require line must exist in the manifest
      * and NO path-repo entry may accompany it.
+     *
+     * The probe targets the COMMITTED blob via `git show HEAD:`, not the
+     * working copy — CI's `check-path-repos.php --fix --strict-closure` step
+     * injects the path-repo closure into the working-tree manifest before
+     * install, so a file read would invert green/red between CI and local.
+     * The require/absence law binds the commit, and HEAD is exactly the
+     * commit under test in a CI checkout.
      */
     public function testTheManifestCarriesTheRequireWithoutAPathRepo(): void
     {
+        $committed = shell_exec('git -C ' . escapeshellarg(dirname(__DIR__, 2)) . ' show HEAD:sugar-crush/composer.json');
+        self::assertNotNull($committed, 'git show HEAD:sugar-crush/composer.json produced no output — is this checkout a git work tree?');
+
         $manifest = json_decode(
-            (string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'),
+            $committed,
             true,
             512,
             JSON_THROW_ON_ERROR,
