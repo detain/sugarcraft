@@ -80,7 +80,7 @@ renames.json (`old_slug_for` matches `new == $lib`), so a B→C hop names `legac
   "Split + force-push each affected lib").
 - Embedded `php -r` snippet extracted → `php -l` clean; `php -l scripts/affected-libs.php` clean.
 - Dry logic test (sourced real `old_slug_for()` from the extracted step, cwd=repo root):
-  - `candy-flappy→honey-flap`, `sugar-markdown→candy-shine`, `candy-code→sugar-crush`,
+  - `candy-flappy→honey-flap`, `sugar-markdown→candy-shine`, `candy-code→sugar-crush`, <!-- @rename-keep -->
     `candy-code-web→sugar-crush-web`, `sugar-core→candy-core` (post-rename names answer old slugs).
   - `candy-mouse`, `candy-forms`, `candy-gifview`, `docs`, and every current pending-old dir
     answer empty.
@@ -123,6 +123,6 @@ fix sha = the commit containing this line — tracker row 2.2 intentionally stil
    behavior and zero extra network calls for non-renamed libs; workflow guard comment aligned too).
 
 Re-verification after fixes: `yaml.safe_load` OK; all 5 extracted run blocks `bash -n` OK; `php -l` on
-the extracted `old_slug_for` snippet OK; regression re-run against the REAL map: `candy-flappy→honey-flap`,
+the extracted `old_slug_for` snippet OK; regression re-run against the REAL map: `candy-flappy→honey-flap`, <!-- @rename-keep -->
 `sugar-crush→''`, `candy-mouse→''`, and all 61 dirs of `affected-libs --all` still answer empty with
 rc=0 ("fires=0, rc!=0 count=0"). Fresh-file `grep` of the shipped blk4 confirms the no-`|| true` line.

@@ -46,7 +46,7 @@ git clone /home/sites/sugarcraft $D/mono    # tip = 6e888792848199fae89be21e8f65
 ## 3. Pre-rename split SHA (plan step 3)
 
 ```sh
-cd $D/mono && $D/splitsh-lite --prefix=honey-flap
+cd $D/mono && $D/splitsh-lite --prefix=honey-flap <!-- @rename-keep -->
 # → 29667bf6d556bbdae85103f4c4f9ed135fbcd1ca   ("83 commits created, 9039 commits traversed, in 1m34.303s")
 OLD=29667bf6d556bbdae85103f4c4f9ed135fbcd1ca
 ```
@@ -54,26 +54,26 @@ OLD=29667bf6d556bbdae85103f4c4f9ed135fbcd1ca
 Determinism cross-check (plan step 5, live repo):
 
 ```sh
-git ls-remote https://github.com/sugarcraft/honey-flap refs/heads/master
+git ls-remote https://github.com/sugarcraft/honey-flap refs/heads/master <!-- @rename-keep -->
 # → 29667bf6d556bbdae85103f4c4f9ed135fbcd1ca	refs/heads/master
 ```
 
 **Identical.** The local split reproduces the live split byte-for-byte → splitsh-lite v1.0.1 output
-is deterministic for a given prefix, and sugarcraft/honey-flap was in sync with monorepo master at
+is deterministic for a given prefix, and sugarcraft/honey-flap was in sync with monorepo master at <!-- @rename-keep -->
 6e8887928 (logs/03, logs/04).
 
 ## 4. The prescribed multi-prefix command (plan step 4) — FAILS AT PARSE
 
 ```sh
 cd $D/mono
-git mv honey-flap candy-flappy
+git mv honey-flap candy-flappy <!-- @rename-keep -->
 git -c user.name='Joe Huss' -c user.email=detain@interserver.net commit -qm test   # 44807677e
-$D/splitsh-lite --prefix=honey-flap --prefix=candy-flappy
+$D/splitsh-lite --prefix=honey-flap --prefix=candy-flappy <!-- @rename-keep -->
 ```
 
 ```
 invalid value "candy-flappy" for flag -prefix: Cannot have two prefix splits under the same
-directory: honey-flap ->  vs candy-flappy -> 
+directory: honey-flap ->  vs candy-flappy -> <!-- @rename-keep -->
 ```
 
 rc=2, nothing runs. The same error appears for two **never-related** dirs
@@ -106,7 +106,7 @@ to `legacy/<old-slug>` and tag `<old-slug>-final` in the split repo before the f
 - Grammar check: `--prefix=candy-async:candy-async --prefix=candy-core:candy-core` parses and runs
   (464 split commits, `e27e0412a26ddf713eae7cf67c3b8dfb8678f9f6`) — each source lands under its own
   subdirectory in the split repo. Wrong layout for our per-lib repos (they are root-flattened).
-- Creative continuity attempt: `--prefix=honey-flap:candy-flappy --prefix=candy-flappy` (old dir
+- Creative continuity attempt: `--prefix=honey-flap:candy-flappy --prefix=candy-flappy` (old dir <!-- @rename-keep -->
   mapped INTO the new dir's root position). Parses; "84 commits created" →
   `0524cdfa126a3de77c11fb894757db1d0740fb4e`; tip tree is flat (`composer.json`, `src`, …) but every
   pre-rename split commit carries the files nested under `candy-flappy/`
@@ -125,7 +125,7 @@ to `legacy/<old-slug>` and tag `<old-slug>-final` in the split repo before the f
 
   ```sh
   # fresh clone of pre-rename master (mono2)
-  git subtree split --prefix=honey-flap
+  git subtree split --prefix=honey-flap <!-- @rename-keep -->
   # → 3506e91bdbb79114f94294b699c307b6c4fe0bf9   (84 commits)
   ```
 
@@ -164,7 +164,7 @@ therefore implement the plan's **fallback** (2.1 #6 second bullet):
    list for naming those branches/tags.
 
 Determinism note for CI: a cold single-prefix split of a lib with 9k-commit traverse takes ~95 s
-here (honey-flap, 83 split commits); repeat runs with the same prefix set reproduce SHAs
+here (honey-flap, 83 split commits); repeat runs with the same prefix set reproduce SHAs <!-- @rename-keep -->
 byte-exactly (§3 live-repo match). The `.git/splitsh.db` cache is shared across invocations in one
 run — with the fallback, 2.2's per-lib loop needs no cache changes.
 
