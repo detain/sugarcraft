@@ -71,6 +71,9 @@ const FORCE_ALL_FILES = [
     'scripts/affected-libs.php',
     'composer.json',
     'composer.lock',
+    // The rename map drives sync-sugarcraft.yml's legacy-preservation logic,
+    // so an edit to it must re-sync every lib (plan_rename.md step 2.2 #5).
+    'tools/renames.json',
 ];
 
 function fail(string $msg): never

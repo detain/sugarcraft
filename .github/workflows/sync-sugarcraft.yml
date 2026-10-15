@@ -73,12 +73,21 @@ jobs:
           git config user.email 'detain@interserver.net'
           git config --local --unset-all http.https://github.com/.extraheader || true
 
-      # splitsh-lite emits the IDENTICAL split SHA as `git subtree split`, so the
-      # pushed history is byte-for-byte the same — no divergence for existing
-      # sugarcraft/* clones. Within a single run it keeps an in-process commit
-      # cache (.git/splitsh.db) shared across prefixes, so the first lib pays the
-      # full history walk (~25s) and the remaining libs are near-instant — all 56
-      # libs split + push cold in ~70s.
+      # splitsh-lite v1.0.1 output is deterministic for a given prefix set: the
+      # same monorepo HEAD plus the same single --prefix always yields the same
+      # split SHA (verified against the live sugarcraft/* masters in
+      # prompt_kit/briefs/rename-2.1/REPORT.md §3). It is NOT equal to
+      # `git subtree split` output — the two diverge mid-history on this repo
+      # (different merge-commit handling), so nothing may substitute subtree
+      # here: the SHA this workflow pushes is the splitsh-lite SHA.
+      # A split tracks exactly one directory path and does NOT follow a dir
+      # rename (rename-2.1 REPORT §4–5): after a `git mv <old> <new>` from a
+      # tools/renames.json batch, the new prefix's split is an unrelated fresh
+      # root, so the loop below preserves the remote's pre-rename master under
+      # legacy/<old-slug> + <old-slug>-final before the first force-push.
+      # Within a single run splitsh-lite keeps an in-process commit cache
+      # (.git/splitsh.db) shared across invocations, so the first lib pays the
+      # full history walk and the remaining libs are near-instant.
       #
       # We deliberately do NOT persist .git/splitsh.db across runs via
       # actions/cache: splitsh-lite opens the BoltDB cache read-write, and a
@@ -134,6 +143,25 @@ jobs:
             return 1
           }
 
+          # tools/renames.json is the authoritative old->new map (plan_rename.md
+          # Part C). Print the pre-rename slug when the lib dir $1 is a rename
+          # target; empty otherwise. The splitsh-lite invocation below must stay
+          # SINGLE-prefix — two plain --prefix flags are a hard parse error in
+          # v1.0.1 and never preserved continuity anyway (measured in
+          # prompt_kit/briefs/rename-2.1/REPORT.md §4, §8), so the map's only
+          # use here is naming the legacy preservation refs below.
+          old_slug_for() {
+            php -r '
+              $entries = json_decode(file_get_contents("tools/renames.json"), true)["entries"];
+              $old = "";
+              foreach ($entries as $e) {
+                if (($e["kind"] ?? "") !== "rename" || ($e["old"] ?? null) === null) continue;
+                if (($e["new"] ?? null) === $argv[1]) $old = $e["old"];
+              }
+              echo $old;
+            ' "$1"
+          }
+
           force_all="$FORCE_ALL"
           libs_str="$AFFECTED_LIBS"
 
@@ -159,9 +187,32 @@ jobs:
             [ -d "$lib" ] || { echo "skip $lib (no dir)"; continue; }
             # splitsh-lite prints the split-commit SHA for the prefix on stdout.
             sha=$(/tmp/splitsh-lite --prefix="$lib")
-            retry_git_push git push --force \
-              "https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git" \
-              "$sha:refs/heads/master"
+            push_url="https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git"
+
+            # Rename continuity (step 2.1 verdict NOT-CONTINUOUS fallback):
+            # when this dir was produced by a `git mv <old> <new>`, the split
+            # above has a fresh unrelated root, so the remote master still
+            # holds the only copy of the pre-rename split history. Preserve it
+            # as refs/heads/legacy/<old> + refs/tags/<old>-final before the
+            # first force-push that would strand it. Non-renamed libs split as
+            # a fast-forward, so the ancestor guard never fires for them and
+            # their sync path is byte-identical to before. A fetch failure
+            # aborts the job here (set -e) — fail closed, never force-push
+            # over an uninspected remote master.
+            prev=$(old_slug_for "$lib")
+            if [ -n "$prev" ]; then
+              remote_tip=$(git ls-remote "$push_url" refs/heads/master | cut -f1 || true)
+              if [ -n "$remote_tip" ]; then
+                git fetch --quiet "$push_url" "$remote_tip"
+                if ! git merge-base --is-ancestor "$remote_tip" "$sha"; then
+                  echo "! $lib: pre-rename master $remote_tip is not an ancestor of $sha — preserving legacy/$prev"
+                  retry_git_push git push "$push_url" "$remote_tip:refs/heads/legacy/$prev"
+                  retry_git_push git push "$push_url" "$remote_tip:refs/tags/$prev-final"
+                fi
+              fi
+            fi
+
+            retry_git_push git push --force "$push_url" "$sha:refs/heads/master"
             echo "✓ synced $lib ($sha)"
 
             # Belt-and-suspenders Packagist re-crawl (see env note above).
