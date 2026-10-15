@@ -76,11 +76,13 @@ final class GenDocsTest extends TestCase
 
     /**
      * A monorepo root containing only what the generator reads: docs/MATCHUPS.md,
-     * docs/_data/, docs/lib/ and docs/index.html.
+     * docs/_data/, docs/lib/ and docs/index.html — plus tools/renames.json when
+     * the caller passes entries (redirect-stub tests).
      *
      * @param list<string> $dataSlugs slugs to give a _data entry (and so a page)
+     * @param list<array<string,mixed>>|null $renames renames.json entries
      */
-    private function makeFixtureRoot(array $dataSlugs = ['fixture-alpha', 'fixture-appy']): string
+    private function makeFixtureRoot(array $dataSlugs = ['fixture-alpha', 'fixture-appy'], ?array $renames = null): string
     {
         $root = $this->tmpDir;
         \mkdir($root . '/docs/_data', 0777, true);
@@ -90,7 +92,37 @@ final class GenDocsTest extends TestCase
         foreach ($dataSlugs as $slug) {
             $this->writeData($root, $slug);
         }
+        if ($renames !== null) {
+            \mkdir($root . '/tools', 0777, true);
+            \file_put_contents(
+                $root . '/tools/renames.json',
+                \json_encode(['$comment' => 'fixture', 'entries' => $renames], \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES) . "\n"
+            );
+        }
         return $root;
+    }
+
+    /**
+     * A three-link fixture for the redirect-stub tests:
+     *  - fixture-pre    → fixture-alpha, EXECUTED   (a renamed entry gets a stub)
+     *  - fixture-pre2   → fixture-pre,   EXECUTED   (chases to the FINAL slug)
+     *  - fixture-tbd    → fixture-alpha, pending    (no stub — the page still lives)
+     *  - fixture-shadow → fixture-beta,  EXECUTED, but fixture-shadow has real
+     *    _data, so the live page must win over the stub.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function renamesFixture(): array
+    {
+        return [
+            ['kind' => 'rename', 'old' => 'fixture-pre', 'new' => 'fixture-alpha', 'status' => 'renamed'],
+            ['kind' => 'rename', 'old' => 'fixture-pre2', 'new' => 'fixture-pre', 'status' => 'renamed'],
+            ['kind' => 'rename', 'old' => 'fixture-tbd', 'new' => 'fixture-alpha', 'status' => 'pending'],
+            ['kind' => 'merge', 'old' => 'fixture-shadow', 'new' => 'fixture-beta', 'status' => 'renamed'],
+            // The eventual (pending) hop for the chain's tail: following EXECUTED
+            // hops only is what keeps every stub landing on a page that exists.
+            ['kind' => 'rename', 'old' => 'fixture-alpha', 'new' => 'fixture-zeta', 'status' => 'pending'],
+        ];
     }
 
     /**
@@ -493,6 +525,119 @@ final class GenDocsTest extends TestCase
             'prefixOverride',
             (string) \file_get_contents("$root/docs/_data/fixture-appy.json")
         );
+    }
+
+    // -----------------------------------------------------------------
+    // Redirect stubs (rename plan step 2.3)
+    // -----------------------------------------------------------------
+
+    /**
+     * An EXECUTED rename writes docs/lib/<old>.html pointing at the final slug;
+     * a CHAIN of executed renames resolves to the end of the chain (so
+     * fixture-pre2 never redirects to fixture-pre, which is itself only a stub);
+     * a PENDING rename writes nothing (its old page is still the live one — a
+     * stub today would 404-stub a URL that works); and the chain stops at the
+     * PENDING hop fixture-alpha→fixture-zeta, so every stub lands on a page that
+     * exists right now.
+     */
+    public function testExecutedRenamesProduceStubsAtTheFinalSlugAndPendingOnesDoNot(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha', 'fixture-appy'], $this->renamesFixture());
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+
+        $stub = $this->page($root, 'fixture-pre');
+        $this->assertStringContainsString('<title>Moved: fixture-pre is now fixture-alpha</title>', $stub);
+        $this->assertStringContainsString('<link rel="canonical" href="https://sugarcraft.github.io/lib/fixture-alpha.html">', $stub);
+        $this->assertStringContainsString('<meta name="robots" content="noindex">', $stub);
+        $this->assertStringContainsString('<meta http-equiv="refresh" content="0; url=fixture-alpha.html">', $stub);
+        $this->assertStringContainsString('<code>sugarcraft/fixture-pre</code> was renamed to <a href="fixture-alpha.html"><code>sugarcraft/fixture-alpha</code></a>', $stub);
+        $this->assertStringEndsWith("</body></html>\n", $stub);
+
+        // The chained entry lands on the FINAL slug, and merge/fold kinds ride
+        // the same path (fixture-shadow below is consumed by the live-page test).
+        $chained = $this->page($root, 'fixture-pre2');
+        $this->assertStringContainsString('<meta http-equiv="refresh" content="0; url=fixture-alpha.html">', $chained);
+        $this->assertStringContainsString('<title>Moved: fixture-pre2 is now fixture-alpha</title>', $chained);
+
+        // Pending: no stub at all.
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-tbd.html");
+
+        // The merge-kind entry (fixture-shadow, no real _data here) redirects to
+        // its `new` too — merge/fold ride the same writer.
+        $merged = $this->page($root, 'fixture-shadow');
+        $this->assertStringContainsString('<meta http-equiv="refresh" content="0; url=fixture-beta.html">', $merged);
+
+        // Idempotent + drift-clean.
+        $again = $this->runScript($root);
+        $this->assertSame(0, $again['exit'], $again['output']);
+        $this->assertSame($stub, $this->page($root, 'fixture-pre'));
+        $check = $this->runScript($root, ['--check']);
+        $this->assertSame(0, $check['exit'], $check['output']);
+        $this->assertStringContainsString('+ 3 redirect stubs', $check['output']);
+    }
+
+    /**
+     * --check polices the stubs in both failure shapes: MISSING (a rename landed
+     * and nobody re-ran the generator) and HAND-EDITED (the published redirect
+     * was tweaked by hand) — each must exit 1 and NAME the stub.
+     */
+    public function testCheckFailsOnAMissingOrHandEditedStubNamingTheStub(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha', 'fixture-appy'], $this->renamesFixture());
+        $this->runScript($root);
+        $this->assertSame(0, $this->runScript($root, ['--check'])['exit']);
+
+        \unlink("$root/docs/lib/fixture-pre.html");
+        $missing = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $missing['exit'], $missing['output']);
+        $this->assertStringContainsString('drift: fixture-pre.html redirect stub missing', $missing['output']);
+        $this->assertStringNotContainsString('drift: fixture-pre2.html', $missing['output']);
+
+        $this->runScript($root);
+        $path = "$root/docs/lib/fixture-pre2.html";
+        \file_put_contents($path, \str_replace('fixture-alpha.html', 'elsewhere.html', (string) \file_get_contents($path)));
+        $edited = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $edited['exit'], $edited['output']);
+        $this->assertStringContainsString('drift: fixture-pre2.html redirect stub differs from generated output', $edited['output']);
+    }
+
+    /**
+     * A stub never overwrites a slug with a real docs/_data/<slug>.json — the
+     * live page wins and the run says so, rather than silently shadowing content
+     * (which is what a half-landed rename looks like mid-batch).
+     */
+    public function testAStubIsSkippedWithAWarningWhenTheOldSlugHasRealData(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha', 'fixture-appy'], $this->renamesFixture());
+        $this->writeData($root, 'fixture-shadow');   // real _data, executed merge entry in the map
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertStringContainsString("warning: stub target 'fixture-shadow' has a real _data page", $r['output']);
+        $this->assertFileExists("$root/docs/_data/fixture-shadow.json");
+        $shadow = (string) \file_get_contents("$root/docs/_data/fixture-shadow.json");
+        $this->assertStringContainsString('Fixture description for fixture-shadow.', $shadow);
+        // And --check agrees with this state (the slug left the stub map).
+        $this->assertSame(0, $this->runScript($root, ['--check'])['exit']);
+    }
+
+    /**
+     * --extract must not treat a stub as an authored page: extracting one would
+     * mint a phantom _data entry and promote the redirect into a real page.
+     */
+    public function testExtractSkipsRedirectStubs(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha', 'fixture-appy'], $this->renamesFixture());
+        $this->runScript($root);
+
+        $e = $this->runScript($root, ['--extract']);
+        $this->assertSame(0, $e['exit'], $e['output']);
+        $this->assertStringContainsString("note: skipping redirect stub 'fixture-pre'", $e['output']);
+        $this->assertStringContainsString("note: skipping redirect stub 'fixture-pre2'", $e['output']);
+        $this->assertStringContainsString('extracted 2 page(s)', $e['output']);
+        $this->assertFileDoesNotExist("$root/docs/_data/fixture-pre.json");
+        $this->assertFileDoesNotExist("$root/docs/_data/fixture-pre2.json");
     }
 
     // -----------------------------------------------------------------

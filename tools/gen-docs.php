@@ -21,10 +21,13 @@ declare(strict_types=1);
  * Modes:
  *   php tools/gen-docs.php --extract    Rebuild the data store (docs/_data/<slug>.json
  *                                       + docs/_data/<slug>.body.html) from the current pages.
- *   php tools/gen-docs.php              Regenerate every docs/lib/<slug>.html from the data store
- *                                       and patch docs/index.html's counts to the MATCHUPS split.
- *   php tools/gen-docs.php --check      Generate/patch in-memory and fail (exit 1) if any page or
- *                                       the index.html counts on disk differ — a CI drift guard.
+ *   php tools/gen-docs.php              Regenerate every docs/lib/<slug>.html from the data store,
+ *                                       write docs/lib/<old>.html redirect stubs for executed
+ *                                       renames.json entries, and patch docs/index.html's counts
+ *                                       to the MATCHUPS split.
+ *   php tools/gen-docs.php --check      Generate/patch in-memory and fail (exit 1) if any page,
+ *                                       stub or the index.html counts on disk differ — a CI drift
+ *                                       guard.
  *
  * "A CI drift guard" WAS ASPIRATIONAL FOR AS LONG AS THIS FILE HAS EXISTED, and
  * rewriting the claim rather than deleting it is the point (rule 7). WHAT IT
@@ -78,10 +81,13 @@ const SLUG_RE = '[a-z0-9]+(?:-[a-z0-9]+)+';
 const USAGE = <<<'TXT'
     usage: gen-docs.php [--extract|--check|--help]
 
-      (no flag)   Regenerate docs/lib/<slug>.html from docs/_data/<slug>.{json,body.html}.
-      --extract   Seed docs/_data/ from the pages that are already there.
-      --check     Regenerate in memory and exit 1 on any difference. This is a
-                  HARD CI GATE (the docs-generated job): the pages are generated
+      (no flag)   Regenerate docs/lib/<slug>.html from docs/_data/<slug>.{json,body.html},
+                  plus docs/lib/<old>.html redirect stubs for executed renames.json entries.
+      --extract   Seed docs/_data/ from the pages that are already there (redirect stubs
+                  are skipped — they are generated, not authored content).
+      --check     Regenerate in memory and exit 1 on any difference (pages, stubs,
+                  index counts). This is a HARD CI GATE (the docs-generated job):
+                  the pages are generated
                   and AGENTS.md forbids hand-editing them, while pages.yml
                   publishes docs/ verbatim on every push to master.
       --help      Print this text and exit 0.
@@ -146,8 +152,13 @@ $types = parse_matchups($matchups);           // slug => 'library' | 'app'
 $nLib  = count(array_filter($types, static fn ($t) => $t === 'library'));
 $nApp  = count(array_filter($types, static fn ($t) => $t === 'app'));
 
+// Redirect stubs (rename plan step 2.3): docs/lib/<old>.html for every executed
+// rename in tools/renames.json, so URLs published from Packagist READMEs, old
+// split repos and search engines keep resolving after a lib moves.
+$stubs = redirect_stubs($root, $dataDir);     // old slug => final target slug
+
 if ($mode === '--extract') {
-    run_extract($libDir, $dataDir, $types);
+    run_extract($libDir, $dataDir, $types, $stubs);
     exit(0);
 }
 
@@ -183,6 +194,26 @@ foreach ($slugs as $slug) {
     $written++;
 }
 
+// Redirect stubs are written AFTER the real pages, never over one (see
+// redirect_stubs(): a slug with a docs/_data/<slug>.json is dropped from the
+// stub map), and in --check a missing or hand-edited stub is drift.
+foreach ($stubs as $old => $final) {
+    $stubHtml = stub_html($old, $final);
+    $stubPath = "$libDir/$old.html";
+
+    if ($mode === '--check') {
+        $current = is_file($stubPath) ? (string) file_get_contents($stubPath) : '';
+        if ($current !== $stubHtml) {
+            fwrite(STDERR, "drift: $old.html redirect stub " . ($current === '' ? 'missing' : 'differs from generated output') . "\n");
+            $drift++;
+        }
+        continue;
+    }
+
+    file_put_contents($stubPath, $stubHtml);
+    $written++;
+}
+
 // index.html count patch — the generator OWNS the homepage's library/app counts
 // so they can never drift from the authoritative MATCHUPS split. Every count
 // token (meta/og/JSON-LD descriptions, the hero prose, the two .stat numerals,
@@ -208,7 +239,8 @@ if ($mode === '--check') {
         fwrite(STDERR, "$drift page(s) out of sync — run: php tools/gen-docs.php\n");
         exit(1);
     }
-    fwrite(STDOUT, "ok: all " . count($slugs) . " pages + index.html counts match generated output\n");
+    $stubClause = $stubs === [] ? '' : ' + ' . count($stubs) . ' redirect stubs';
+    fwrite(STDOUT, "ok: all " . count($slugs) . " pages" . $stubClause . " + index.html counts match generated output\n");
     exit(0);
 }
 
@@ -270,19 +302,124 @@ function parse_matchups(string $path): array
 }
 
 // ---------------------------------------------------------------------------
+// Redirect stubs (rename plan step 2.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the stub map: old slug => final target slug, for every tools/renames.json
+ * entry that has ALREADY been executed (status ≠ "pending") and names an `old`.
+ *
+ * The target follows the rename chain through executed entries only — a pending
+ * hop's page still exists at its old name today, so redirecting past it would
+ * 404. That is why the map's "Done when" pairs resolve to candy-mouse and
+ * candy-forms (whose own renames are pending) rather than to their eventual
+ * sugar- names. merge/fold entries start at `new` and follow its chain the same
+ * way (step 2.2's prefixes_for walks the map in the same chain shape, but for
+ * git history, where pending entries are facts too).
+ *
+ * A slug with a real docs/_data/<slug>.json is dropped from the map: a live page
+ * always wins over a stub, so a half-landed rename can never shadow content.
+ *
+ * @return array<string,string>
+ */
+function redirect_stubs(string $root, string $dataDir): array
+{
+    $path = $root . '/tools/renames.json';
+    if (!is_file($path)) {
+        return [];                                  // fixture trees without the map get no stubs
+    }
+    $decoded = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    $entries = is_array($decoded['entries'] ?? null) ? $decoded['entries'] : [];
+
+    $stubs = [];
+    foreach ($entries as $entry) {
+        $old = $entry['old'] ?? null;
+        $new = $entry['new'] ?? null;
+        if ($old === null || $new === null || ($entry['status'] ?? 'pending') === 'pending') {
+            continue;                               // create entries and unbuilt renames redirect nothing
+        }
+        $final = resolve_final_slug((string) $new, $entries);
+        if (is_file("$dataDir/$old.json")) {
+            fwrite(STDERR, "warning: stub target '$old' has a real _data page — keeping the page, skipping the stub\n");
+            continue;
+        }
+        $stubs[(string) $old] = $final;
+    }
+    ksort($stubs);
+    return $stubs;
+}
+
+/**
+ * Walk `start` forward through executed (status ≠ "pending") renames until no
+ * entry's `old` names it any more. Fail-loud on a cycle: the map is authored
+ * data, and a loop in it is a defect to fix at the source, not to paper over
+ * with a depth cap that silently mis-directs readers.
+ *
+ * @param list<array<string,mixed>> $entries
+ */
+function resolve_final_slug(string $start, array $entries): string
+{
+    $current = $start;
+    $seen = [$start => true];
+    for (;;) {
+        $next = null;
+        foreach ($entries as $entry) {
+            if (($entry['old'] ?? null) === $current && ($entry['status'] ?? 'pending') !== 'pending') {
+                $next = (string) ($entry['new'] ?? '');
+                break;
+            }
+        }
+        if ($next === null || $next === '') {
+            return $current;
+        }
+        if (isset($seen[$next])) {
+            throw new \RuntimeException("tools/renames.json rename cycle: $start leads back to $next");
+        }
+        $seen[$next] = true;
+        $current = $next;
+    }
+}
+
+/**
+ * The stub page, exactly as prescribed by plan step 2.3 — a meta-refresh (works
+ * on plain GitHub Pages, no JS, no server rules) plus a canonical + noindex pair
+ * so search engines transfer rank to the new URL instead of indexing the mirror.
+ */
+function stub_html(string $old, string $new): string
+{
+    return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\n"
+        . "<title>Moved: $old is now $new</title>\n"
+        . "<link rel=\"canonical\" href=\"https://sugarcraft.github.io/lib/$new.html\">\n"
+        . "<meta name=\"robots\" content=\"noindex\">\n"
+        . "<meta http-equiv=\"refresh\" content=\"0; url=$new.html\">\n"
+        . "</head><body><p><code>sugarcraft/$old</code> was renamed to "
+        . "<a href=\"$new.html\"><code>sugarcraft/$new</code></a>.</p></body></html>\n";
+}
+
+// ---------------------------------------------------------------------------
 // Extraction
 // ---------------------------------------------------------------------------
 
 /**
  * @param array<string,string> $types
+ * @param array<string,string> $stubs old slug => final target; these pages are
+ *                                    generated redirects, not extractable content —
+ *                                    extracting one would mint a phantom _data entry
+ *                                    and turn the redirect into a real page.
  */
-function run_extract(string $libDir, string $dataDir, array $types): void
+function run_extract(string $libDir, string $dataDir, array $types, array $stubs = []): void
 {
     $files = glob("$libDir/*.html") ?: [];
     sort($files);
     $count = 0;
+    $pages = [];
     foreach ($files as $file) {
         $slug = basename($file, '.html');
+        if (isset($stubs[$slug])) {
+            fwrite(STDOUT, "note: skipping redirect stub '$slug'\n");
+            continue;
+        }
+        $pages[] = $slug;
         $html = (string) file_get_contents($file);
         [$meta, $body] = extract_one($slug, $html);
         file_put_contents(
@@ -294,7 +431,6 @@ function run_extract(string $libDir, string $dataDir, array $types): void
     }
     fwrite(STDOUT, "extracted $count page(s) into $dataDir\n");
     // report anything MATCHUPS knows about but has no page, and vice versa
-    $pages = array_map(static fn ($f) => basename($f, '.html'), $files);
     foreach (array_diff(array_keys($types), $pages) as $missing) {
         fwrite(STDERR, "note: MATCHUPS row '$missing' has no docs/lib page\n");
     }
