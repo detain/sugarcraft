@@ -19,9 +19,9 @@ Tetris built on the SugarCraft stack. SugarCraft runtime, CandySprinkles for the
 
 ```bash
 composer install
-./bin/tetris         # Single player mode
-./bin/tetris -v      # VS Computer mode
-./bin/tetris --vs    # VS Computer mode (long form)
+./bin/candy-tetris         # Single player mode
+./bin/candy-tetris -v      # VS Computer mode
+./bin/candy-tetris --vs    # VS Computer mode (long form)
 ```
 
 ## VS Computer Mode

@@ -3623,7 +3623,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-files",
-                "reference": "691e2da2f1d055d77d9b54d3f20097dec039482c"
+                "reference": "4c6eddd4e15e6f368e58ac53bcca8f4d6c2d6c43"
             },
             "require": {
                 "php": "^8.3",
@@ -3637,7 +3637,7 @@
                 "phpunit/phpunit": "^10.5"
             },
             "bin": [
-                "bin/candyfiles"
+                "bin/candy-files"
             ],
             "type": "project",
             "autoload": {
@@ -3986,7 +3986,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-gifview",
-                "reference": "be4339b415b8961d71826265a8aeeb366a9d7b54"
+                "reference": "54e5d74d18a072575827251bf42cf48ea965bee5"
             },
             "require": {
                 "php": "^8.3",
@@ -5254,7 +5254,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-tetris",
-                "reference": "dc04722f68b9a2d5100c4b405b83d3dd3c895742"
+                "reference": "d75eb30152c0b5c201303aaaf92dd3d8444547b8"
             },
             "require": {
                 "php": ">=8.3",
@@ -5267,7 +5267,7 @@
                 "sugarcraft/candy-testing": "dev-master"
             },
             "bin": [
-                "bin/tetris"
+                "bin/candy-tetris"
             ],
             "type": "project",
             "autoload": {

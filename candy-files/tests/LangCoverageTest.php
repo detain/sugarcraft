@@ -89,7 +89,7 @@ final class LangCoverageTest extends TestCase
                 $sources[] = $file->getPathname();
             }
         }
-        $sources[] = __DIR__ . '/../bin/candyfiles';
+        $sources[] = __DIR__ . '/../bin/candy-files';
 
         foreach ($sources as $source) {
             $content = \file_get_contents($source);

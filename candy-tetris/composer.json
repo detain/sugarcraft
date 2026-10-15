@@ -25,7 +25,7 @@
         "docs": "https://sugarcraft.github.io/lib/candy-tetris.html"
     },
     "bin": [
-        "bin/tetris"
+        "bin/candy-tetris"
     ],
     "require": {
         "php": ">=8.3",

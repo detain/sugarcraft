@@ -11,7 +11,7 @@ declare(strict_types=1);
             return;
         }
     }
-    fwrite(STDERR, "candyfiles: cannot find composer autoload.php\n");
+    fwrite(STDERR, "candy-files: cannot find composer autoload.php\n");
     exit(1);
 })();
 
@@ -29,7 +29,7 @@ $rightCwd = $argv[2] ?? $home;
 // mysterious "no entries" rather than "you passed a bogus path").
 foreach (['left' => $leftCwd, 'right' => $rightCwd] as $side => $dir) {
     if (!is_dir($dir)) {
-        fwrite(STDERR, "candyfiles: {$side} directory does not exist: {$dir}\n");
+        fwrite(STDERR, "candy-files: {$side} directory does not exist: {$dir}\n");
         exit(1);
     }
 }

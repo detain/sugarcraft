@@ -8,6 +8,6 @@ Set Height 560
 Set TypingSpeed 80ms
 Set Theme "TokyoNight"
 
-Type "./bin/tetris -v"
+Type "./bin/candy-tetris -v"
 Enter
 Sleep 3s

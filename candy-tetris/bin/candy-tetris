@@ -11,7 +11,7 @@ declare(strict_types=1);
             return;
         }
     }
-    fwrite(STDERR, "tetris: cannot find composer autoload.php\n");
+    fwrite(STDERR, "candy-tetris: cannot find composer autoload.php\n");
     exit(1);
 })();
 
@@ -26,7 +26,7 @@ if ($argc > 1) {
         $mode = 'vs';
     } elseif ($argv[1] === 'h' || $argv[1] === '--help') {
         fwrite(STDOUT, "candy-tetris - Tetris clone\n\n");
-        fwrite(STDOUT, "Usage: tetris [options]\n");
+        fwrite(STDOUT, "Usage: candy-tetris [options]\n");
         fwrite(STDOUT, "  (no args)   Start single player game\n");
         fwrite(STDOUT, "  -v, --vs    Start VS Computer mode\n");
         fwrite(STDOUT, "  -h, --help  Show this help\n");

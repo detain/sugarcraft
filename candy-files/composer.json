@@ -27,7 +27,7 @@
         "docs": "https://sugarcraft.github.io/lib/candy-files.html"
     },
     "bin": [
-        "bin/candyfiles"
+        "bin/candy-files"
     ],
     "require": {
         "php": "^8.3",

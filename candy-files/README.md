@@ -33,7 +33,7 @@ Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with
 
 ```bash
 composer install
-./bin/candyfiles [LEFT_DIR] [RIGHT_DIR]
+./bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 ```
 
 Default: left pane = current directory, right pane = `$HOME`.

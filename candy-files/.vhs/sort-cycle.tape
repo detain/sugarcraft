@@ -9,7 +9,7 @@ Set Height 480
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "./bin/candyfiles src tests"
+Type "./bin/candy-files src tests"
 Enter
 Sleep 800ms
 

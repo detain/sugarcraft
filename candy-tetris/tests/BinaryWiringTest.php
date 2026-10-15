@@ -8,11 +8,11 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Tetris\Game;
 
 /**
- * Guards the wiring of the `bin/tetris` entry point.
+ * Guards the wiring of the `bin/candy-tetris` entry point.
  *
  * The single-player mode must boot through {@see Game::startWithLockDelay()}
  * so the SRS lock-delay feature is actually live in the shipped binary — it
- * was dead in the binary while `bin/tetris` still called `Game::start()`
+ * was dead in the binary while `bin/candy-tetris` still called `Game::start()`
  * (W15). This is a source-level regression pin: reverting the wiring back to
  * the lock-delay-less `Game::start()` breaks the test.
  */
@@ -20,8 +20,8 @@ final class BinaryWiringTest extends TestCase
 {
     private function binarySource(): string
     {
-        $src = file_get_contents(__DIR__ . '/../bin/tetris');
-        self::assertNotFalse($src, 'bin/tetris must be readable');
+        $src = file_get_contents(__DIR__ . '/../bin/candy-tetris');
+        self::assertNotFalse($src, 'bin/candy-tetris must be readable');
 
         return $src;
     }
@@ -32,7 +32,7 @@ final class BinaryWiringTest extends TestCase
         $this->assertStringContainsString(
             'Game::startWithLockDelay(',
             $src,
-            'bin/tetris single-player must boot via Game::startWithLockDelay() so lock delay is live (W15)',
+            'bin/candy-tetris single-player must boot via Game::startWithLockDelay() so lock delay is live (W15)',
         );
     }
 
@@ -44,7 +44,7 @@ final class BinaryWiringTest extends TestCase
         $this->assertStringNotContainsString(
             'default => Game::start(',
             $src,
-            'bin/tetris single-player must not fall back to the lock-delay-less Game::start() default (W15)',
+            'bin/candy-tetris single-player must not fall back to the lock-delay-less Game::start() default (W15)',
         );
     }
 
