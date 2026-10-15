@@ -46,7 +46,7 @@ prose check — candy-mouse/src/Zone.php already imports `SugarCraft\Mouse\Zone 
 - [x] examples/zones-*.php + .vhs/zones-*.{tape,gif} git-mv'd, tape Output/Type/Render lines rewritten; README fold `## Zones (bubblezone)`; CALIBER_LEARNINGS `## From candy-zone` section (+2 historical `candyzone:` wire tokens restored, tagged) <!-- @rename-keep section headings quote the historical slug -->
 - [x] old lib dir git rm'd; docs/_data, docs/lib page, icons removed; vhs.yml rewritten-to-candy-mouse KEPT (2x); codecov.yml dup flag+component blocks removed; bootstrap-org-repos.sh clean
 - [x] docs fold: candy-mouse.body.html Zones section + demos grid fixed (pre-existing card referenced a never-existing buttons.gif); candy-mouse.json tagline/detailMeta; MATCHUPS rows merged; root README row; PROJECT_NAMES had no row to delete; findings/research/repo_map git mv + underscore refs hand-fixed; gen-docs x2 + --check OK (61 pages)
-- [x] suites: candy-mouse 343T/916A (exact 204+139/500+416) | sugar-bits 570/1246 | sugar-gallery 264/1162 | sugar-crumbs 144/260 | sugar-veil 258/561 | candy-mines 180/820/1F W4 = exact baseline row | sugar-crush: see shard note below
+- [x] suites: candy-mouse 343T/916A (exact 204+139/500+416) | sugar-bits 570/1246 | sugar-gallery 264/1162 | sugar-crumbs 144/260 | sugar-veil 258/561 | candy-mines 180/820/1F W4 = exact baseline row | sugar-crush: see shard note below <!-- @rename-keep -->
 - [x] residue: check-rename-residue --old=candy-mouse exit 0; (candy-zone entry now status=renamed) <!-- @rename-keep flag argument names the historical slug -->
 - [x] renames.json entry status pending→renamed
 - [ ] guards battery + K=4 sharded crush run (in progress)

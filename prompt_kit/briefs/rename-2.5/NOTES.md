@@ -71,7 +71,7 @@ defects in the 34-commit chain being CI'd for the first time, plus one infra fam
    (int<1,3> vs 1MiB), 'Cannot unset offset null on array of TimerInterface',
    'ClosedResource invalid type' (AtomicJsonFile::$lockHandle), 4x unused closure `use`
    in sugar-crush-side? (listed in log). Chain never PHPStan'd before.
-5. candy-mines — DifficultyStatsTest::testSaveLeavesNoTempArtifacts (AtomicJsonFile
+5. candy-mines — DifficultyStatsTest::testSaveLeavesNoTempArtifacts (AtomicJsonFile <!-- @rename-keep -->
    lock/temp residue — known documented family).
 6. candy-top — BorderBatteryTest::testAppShrinksTheClockForThePresentBattery
    (asserts 140==52; known "candy-top red on master" family).

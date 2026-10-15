@@ -36,5 +36,5 @@ sugar-crush: ZERO references to `SugarCraft\Flip` / candy-flip in src|bin|compos
 2. examples/play.php + .vhs/play.tape STAY in candy-flip: plan rule 4 — they demo the library API (Decoder+Player+Program directly), not the CLI. candy-gifview got NEW examples/view.php + .vhs/view.tape driving the CLI.
 3. Missing-file error text keeps the `candy-flip:` brand (raised by the library's Decoder, not rewritten by the app) — honest layering; CliTest asserts the neutral `no such file` fragment.
 4. gifview emoji 📽 (flip keeps 🎞).
-5. Pre-existing reds untouched per brief: candy-mines 1F+4W, sugar-dash 2F, candy-pty hang (none in the suites this step ran).
+5. Pre-existing reds untouched per brief: candy-mines 1F+4W, sugar-dash 2F, candy-pty hang (none in the suites this step ran). <!-- @rename-keep -->
 6. No ci.yml edit (scripts/affected-libs.php auto-discovers), no durations.tsv row (non-crush lib), no codecov flag file beyond fix+component, no Packagist/org repo creation (plan defers to step 2.5).

@@ -99,7 +99,7 @@ Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcra
   errors reproduce identically at 40a4919fc; zero campaign-introduced; no
   baseline widening performed. Recommend minting a pre-campaign candy-core
   debt item.
-- F5 candy-mines DifficultyStatsTest::testSaveLeavesNoTempArtifacts:
+- F5 candy-mines DifficultyStatsTest::testSaveLeavesNoTempArtifacts: <!-- @rename-keep -->
   PRE-EXISTING-RECORDED — byte-matches rename-baseline.md catalog item 1
   (180T/820A/1F + warnings); cross-reference only per brief.
 - F6 candy-top BorderBatteryTest::testAppShrinksTheClockForThePresentBattery
