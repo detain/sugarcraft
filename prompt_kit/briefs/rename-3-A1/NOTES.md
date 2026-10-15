@@ -106,16 +106,13 @@ documented intermittent ESC-flush timing flake family (baseline 5254bdbd2 ran
 green on the same job; candy-core sources untouched by the rename). Not chased.
 status=remote-done commit d8238ad4f.
 
-## R9 — BLOCKED: Packagist credentials gone (honest stop)
-The plan-mandated token source `/home/sites/mystage/auth_login_credentials.txt`
-no longer exists (owner removed /home/sites/mystage mid-2026-10); no PACKAGIST_*
-env, no packagist entry in ~/.composer/auth.json, no copy found under /home.
-`scripts/packagist.sh` itself is FIXED and ready (c2539ca8a live
-create-package Bearer shape). Per brief's network-auth rule: stopped at last
-committed state; renames.json stays `remote-done` (NOT faked to packagist-done).
-Prep landed instead: prompt_kit/briefs/rename-packagist-abandon-checklist.md
-created with the honey-flap entry; <!-- @rename-keep -->
-tracker line added under plan Phase 3. Remaining R9 when the owner re-supplies
-PACKAGIST_TOKEN (username detain): `bash scripts/packagist.sh create candy-flappy`
-→ `check candy-flappy` until dev-master shows the split SHA → status=packagist-done
-commit `rename: candy-flappy published`.
+## R9 — DONE 2026-10-15 (owner re-supplied credentials)
+The mystage token file is gone on this server; the owner provided username `detain` + API token at run time in the
+resume brief (env-only, never persisted — script masks output). `scripts/packagist.sh create candy-flappy` →
+**HTTP 202 {"status":"success"}**. First index hadn't produced dev-master after ~3 min of `check` polling, so a forced
+`update candy-flappy` (HTTP 202, manual job 7af25f44485b18653b03fee39bab10274e88ba51) landed it on the next poll:
+`dev-master: present / source.reference: e166e660e3a756dede36e644316fd7567f495019` (= split-repo master tip from R8).
+renames.json entry → `packagist-done`; abandon-checklist line flipped to DONE (old sugarcraft/honey-flap package stays <!-- @rename-keep -->
+installable; manual UI abandon in Phase 10). Tracker entry line flipped to R1-R9 complete. CI-watch policy update
+(owner directive 2026-10-15: local gates per entry, one full CI pass at plan end, ls-remote continuity check retained)
+encoded in plan Part A rule 7, R8, and R9 with strike-through precedent.

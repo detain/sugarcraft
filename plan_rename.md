@@ -66,10 +66,11 @@ Per-lib progress inside Batches 3–8 is tracked in the `status` field of `tools
 5. **Run sub-agents ONE AT A TIME.** Never run two writers concurrently (they collide on `docs/MATCHUPS.md`, `README.md`).
 6. **Before pushing:** `cd /home/sites/sugarcraft && git pull --rebase origin master` (the VHS workflow pushes
    "vhs: regenerate demo GIFs" commits to master on its own).
-7. **Packagist API token:** obtain it at run time with
-   `grep -A1 packagist /home/sites/mystage/auth_login_credentials.txt`. Put it ONLY in a shell variable for
-   the command that needs it (`PACKAGIST_TOKEN=… scripts/packagist.sh …`). **Never** write it to any file, commit
-   message, plan, log or brief, and never echo it.
+7. **Packagist API token:** ~~obtain it at run time with
+   `grep -A1 packagist /home/sites/mystage/auth_login_credentials.txt`~~ — that file no longer exists on this server
+   (**owner note 2026-10-15**): the owner now supplies username `detain` + API token **at run time in the agent brief**;
+   pass them via environment only for the command that needs it (`PACKAGIST_USERNAME=… PACKAGIST_TOKEN=… scripts/packagist.sh …`).
+   **Never** write the token to any file, commit message, plan, log or brief, and never echo it.
 8. **Fix, don't disable.** Never skip/delete a failing test, never add a test to an allowlist, never
    `markTestSkipped` to get green. Never delete dormant/unwired code — move or consolidate it.
 9. **PHPUnit hangs:** `timeout` does not reliably kill PTY/FFI hangs. For any lib whose suite touches PTYs
@@ -866,16 +867,22 @@ unset GITHUB_TOKEN && gh run list -R detain/sugarcraft -L 5
 gh run watch <ci-run-id> -R detain/sugarcraft --exit-status
 gh run watch <sync-run-id> -R detain/sugarcraft --exit-status
 ```
-- CI: any red job must be investigated. A root `composer.json` change forces the full matrix — this is expected.
+- ~~CI: any red job must be investigated~~ **owner directive 2026-10-15 (governs every Procedure R entry):** after
+  `git push origin master` do **not** wait for or watch the monorepo CI run to completion — the local gates (residue 0,
+  affected lib suites, tools guards, `check-path-repos`, `gen-docs`/`gen-ansi-readme --check`) are sufficient per entry,
+  and a single full CI verification pass happens at the very end of the plan. The sync
+  continuity check below stays: one cheap `git ls-remote` after the sync run; spot-check run *status* only when a local
+  gate failed to explain something. (Root `composer.json` changes still force the full matrix whenever CI does run.)
 - Sync: confirm `✓ synced <new>` in the log: `gh run view <sync-run-id> -R detain/sugarcraft --log | grep -E "synced (<new>|<old>)"`.
 - Check continuity: `git ls-remote https://github.com/sugarcraft/<new> refs/heads/master` and confirm that SHA's parent chain contains
   the old master. (Optional: `gh api repos/sugarcraft/<new>/commits?per_page=3`.)
 Set `status` to `remote-done`.
 
 **R9 — Packagist.**
-First, once per session, run `grep -A1 packagist /home/sites/mystage/auth_login_credentials.txt`, find the API token in that output by eye, and
-`export PACKAGIST_TOKEN='<token>'` in the same shell command chain that uses it (shell state doesn't persist between tool calls). Don't paste it
-anywhere else.
+~~First, once per session, run `grep -A1 packagist /home/sites/mystage/auth_login_credentials.txt`…~~ — the mystage
+credentials file is gone from this server (**owner note 2026-10-15**): the owner supplies Packagist username `detain` +
+API token at run time in the agent brief. Export them ONLY in the same shell command chain that uses them (shell state
+doesn't persist between tool calls); never echo, store, or commit the token.
 ```sh
 export PACKAGIST_TOKEN='<token>' PACKAGIST_USERNAME='<packagist account>' && cd /home/sites/sugarcraft && bash scripts/packagist.sh create <new>
 bash scripts/packagist.sh check <new>     # no token needed; repeat until dev-master shows the pushed SHA
@@ -891,10 +898,10 @@ Phase 11. Its auto-update will start failing (the repo now declares a different 
 
 ## Phase 3 — Batch A (pilot): honey-flap, candy-mines, sugar-calendar
 
-Entry status: `honey-flap` → `candy-flappy` R1–R8 ✅ (renamed 611322309, doc-paths d985eb232,
-remote-done d8238ad4f; split continuity verified — legacy/honey-flap ref + honey-flap-final tag live).
-**R9 HELD**: Packagist token source `/home/sites/mystage/auth_login_credentials.txt` no longer exists
-on this box; `scripts/packagist.sh create candy-flappy` ready to run the moment credentials are re-supplied.
+Entry status: `honey-flap` → `candy-flappy` ✅ **R1–R9 complete** — R7 611322309, doc-paths d985eb232,
+remote-done d8238ad4f, R9 packagist-done 2026-10-15 (create HTTP 202, forced re-index job 7af25f44…, dev-master =
+split SHA e166e660e3a756dede36e644316fd7567f495019). Split continuity verified: `refs/heads/master` +
+`refs/heads/legacy/honey-flap` + tag `honey-flap-final` live.
 
 Run Procedure R for each of the three. Extra checks for this pilot batch, because it's validating the tooling:
 - After the first entry (`honey-flap` → `candy-flappy`), read the full `git show --stat` and spot-check 10 changed files by eye. Confirm the
