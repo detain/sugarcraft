@@ -13,9 +13,9 @@ use PHPUnit\Framework\TestCase;
  * A large slice of sugar-widgets (TextInput, TextArea, ItemList, Viewport,
  * FilePicker, Cursor, Scrollbar, Spinner) is a thin deprecated façade: each
  * `SugarCraft\Widgets\*` symbol is a `class_alias` re-export of the canonical
- * `SugarCraft\Forms\*` implementation in candy-forms.
+ * `SugarCraft\Forms\*` implementation in sugar-forms.
  *
- * The behaviour of those classes is exercised by candy-forms' own suites
+ * The behaviour of those classes is exercised by sugar-forms' own suites
  * against the canonical impl. Re-running byte-identical copies here would be
  * zero incremental coverage, double CI cost, and a silent-drift hazard, so the
  * duplicated suites were deleted (workstream W17). What remains worth asserting
@@ -75,7 +75,7 @@ final class AliasesTest extends TestCase
 
     /**
      * Each sugar-widgets façade name must be a live type that resolves to its
-     * canonical candy-forms class. `ReflectionClass::getName()` on an alias
+     * canonical sugar-forms class. `ReflectionClass::getName()` on an alias
      * returns the *original* class name, so a broken/renamed alias target
      * (or a shim pointing at the wrong FQN) fails the `assertSame`.
      */
