@@ -1,13 +1,13 @@
-# Audit: sugar-spark
+# Audit: sugar-spark <!-- @rename-keep historical mislabel: content audits sugar-charts Sparkline, not this app -->
 
-**Library:** SugarCraft/sugar-spark  
+**Library:** SugarCraft/sugar-spark <!-- @rename-keep historical mislabel: content audits sugar-charts Sparkline, not this app -->
 **Date:** 2026-06-30  
 
 ---
 
 ## Overview
 
-`sugar-spark` ports `charmbracelet/spark` — generates ASCII sparkline charts from numeric data sequences. Pure computation, no external dependencies beyond `candy-ansi` for styling.
+`sugar-spark` ports `charmbracelet/spark` — generates ASCII sparkline charts from numeric data sequences. Pure computation, no external dependencies beyond `candy-ansi` for styling. <!-- @rename-keep historical mislabel: content audits sugar-charts Sparkline, not this app -->
 
 ---
 
