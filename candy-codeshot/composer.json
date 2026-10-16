@@ -1,0 +1,54 @@
+{
+    "name": "sugarcraft/candy-codeshot",
+    "description": "PHP port of charmbracelet/freeze \u2014 render code or terminal output to SVG screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "screenshot",
+        "svg",
+        "code",
+        "terminal",
+        "freeze",
+        "ansi",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-codeshot",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-codeshot/issues",
+        "source": "https://github.com/sugarcraft/candy-codeshot",
+        "docs": "https://sugarcraft.github.io/lib/candy-codeshot.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-ansi": "dev-master",
+        "sugarcraft/candy-core": "dev-master"
+    },
+    "suggest": {
+        "ext-gd": "Required for PNG output in PngRenderer"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\CodeShot\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\CodeShot\\Tests\\": "tests/"
+        }
+    },
+    "bin": [
+        "bin/candy-codeshot"
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

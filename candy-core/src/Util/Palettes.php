@@ -6,7 +6,7 @@ namespace SugarCraft\Core\Util;
 
 /**
  * Raw-hex single-source-of-truth for the named theme colour schemes that
- * SugarCraft consumer libs (candy-sprinkles, candy-freeze, candy-vt, …) all
+ * SugarCraft consumer libs (candy-sprinkles, candy-codeshot, candy-vt, …) all
  * draw from.
  *
  * Keys are the CANONICAL COLOUR NAMES of each scheme (Dracula's `pink`,

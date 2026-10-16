@@ -18,9 +18,9 @@ use SugarCraft\Core\Syntax\TokenSpan;
  * landed the highlighting pipeline; its reusable surface is candy-core's
  * pure {@see RegexHighlighter} lexer — the same primitive candy-mdview /
  * candy-shine render through (via Shine\SyntaxHighlighter's Theme slots) and
- * candy-freeze consumes directly (Freeze\CodeHighlighter). candy-mdview itself
+ * candy-codeshot consumes directly (CodeShot\CodeHighlighter). candy-mdview itself
  * exposes no embeddable highlight surface (it is the markdown pager CLI), so
- * candy-git follows the candy-freeze precedent: consume the shared lexer,
+ * candy-git follows the candy-codeshot precedent: consume the shared lexer,
  * keep presentation in {@see Renderer}.
  *
  * This class carries NO colour/ANSI knowledge — it answers "which language

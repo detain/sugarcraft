@@ -67,7 +67,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **candy-mdview** | [research/libraries/candy-mdview-research.md](libraries/candy-mdview-research.md) | 1. Pygments highlighting, 2. Enhanced themes, 3. File watching |
-| **candy-freeze** | [research/libraries/candy-freeze-research.md](libraries/candy-freeze-research.md) | 1. Bg colors, 2. Lang detection, 3. VS Code themes |
+| **candy-codeshot** | [research/libraries/candy-codeshot-research.md](libraries/candy-codeshot-research.md) | 1. Bg colors, 2. Lang detection, 3. VS Code themes |
 | **candy-mosaic** | [research/libraries/candy-mosaic-research.md](libraries/candy-mosaic-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
 | **candy-mouse** | [research/libraries/candy-mouse-research.md](libraries/candy-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
 | **candy-palette** | [research/libraries/candy-palette-research.md](libraries/candy-palette-research.md) | 1. CLICOLOR, 2. Terminfo Tc, 3. tmux handling |
@@ -114,8 +114,8 @@ To implement an item:
 | 8 | candy-hermit | Item interface | 2-3h | [link](libraries/candy-hermit-research.md) |
 | 9 | sugar-crumbs | Fix examples | 1h | [link](libraries/sugar-crumbs-research.md) |
 | 10 | sugar-crumbs | Separator escaping | 1h | [link](libraries/sugar-crumbs-research.md) |
-| 11 | candy-freeze | Background colors | 2h | [link](libraries/candy-freeze-research.md) |
-| 12 | candy-freeze | Ligature flag | 1h | [link](libraries/candy-freeze-research.md) |
+| 11 | candy-codeshot | Background colors | 2h | [link](libraries/candy-codeshot-research.md) |
+| 12 | candy-codeshot | Ligature flag | 1h | [link](libraries/candy-codeshot-research.md) |
 | 13 | candy-mosaic | WezTerm detection fix | 0.5h | [link](libraries/candy-mosaic-research.md) |
 | 14 | candy-vt | DECSTBM margins | 2-3h | [link](libraries/candy-vt-research.md) |
 | 15 | candy-vt | Auto-wrap DECAWM | 2h | [link](libraries/candy-vt-research.md) |

@@ -135,7 +135,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
 | **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
 | **CandyKv** | candy + kv = personal key/value store app. `kv` says the domain plainly (was SugarSkate — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
-| **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
+| **CandyCodeshot** | candy + codeshot = code → SVG screenshots, literally. Took this name in the 2026-10 rename; the upstream-inherited `freeze` pun retired with it. | <!-- @rename-keep -->
 | **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the `sugar-` family placement. |
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |
 | **CandyMold** | candy + mold = the project skeleton you pour into. ✓✓ |
@@ -212,7 +212,7 @@ matching package turns out to be.
 | **GlazeMarkdown** | markdown renderer (CandyShine alternative) |
 | **IcingTheme** | theme system / palette extension |
 | **FrostingPaint** | colors / styling overlay |
-| **SherbetSnap** | screenshot / capture (CandyFreeze alternative) |
+| **SherbetSnap** | screenshot / capture (CandyCodeshot alternative) |
 | **BiscuitWidgets** | components grab-bag (SugarBits alternative) |
 | **SundaeServe** | SSH-served app aggregator |
 | **MochiTunnel** | SSH multiplexer |

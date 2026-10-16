@@ -80,7 +80,7 @@ called out in the table below.
 |---|:---:|---|
 | **CandyMold** (`candy-mold/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
 | **CandyScriptui** (`candy-scriptui/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
-| **CandyFreeze** (`candy-freeze/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
+| **CandyCodeshot** (`candy-codeshot/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **CandySshLauncher** (`candy-ssh-launcher/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
@@ -157,7 +157,7 @@ reference projects supplied the ideas, not the code.
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
 | CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |
 | CandyFocus (candy-focus/) | [bubbles](https://github.com/charmbracelet/bubbles) (focus behavior) |
-| CandyFreeze (candy-freeze/) | [freeze](https://github.com/charmbracelet/freeze) |
+| CandyCodeshot (candy-codeshot/) | [freeze](https://github.com/charmbracelet/freeze) |
 | CandyFuzzy (candy-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
 | CandyHermit (candy-hermit/) | [theHermit](https://github.com/Genekkion/theHermit) |
 | CandyInput (candy-input/) | none — first-party |

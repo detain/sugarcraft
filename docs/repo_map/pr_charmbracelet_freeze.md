@@ -5,7 +5,7 @@
 - **Report Date**: 2026-05-27
 - **Upstream**: `charmbracelet/freeze` (Go, ~4.6k stars, MIT)
 - **Analysis Stage**: Second-stage (issues, PRs, discussions mining)
-- **Sugarcraft Port**: `sugarcraft/candy-freeze` (v1 ready, PHP 8.3+)
+- **Sugarcraft Port**: `sugarcraft/candy-codeshot` (v1 ready, PHP 8.3+)
 
 ---
 
@@ -28,9 +28,9 @@ Key technical components:
 
 ## 2. Existing Sugarcraft Mapping
 
-The `candy-freeze` port (`sugarcraft/candy-freeze`) is **v1 ready** and covers:
+The `candy-codeshot` port (`sugarcraft/candy-codeshot`) is **v1 ready** and covers:
 
-| freeze Component | candy-freeze Class | Status |
+| freeze Component | candy-codeshot Class | Status |
 |-----------------|-------------------|--------|
 | ANSI SGR parsing | `AnsiParser.php` | ✅ Parity |
 | SVG rendering | `SvgRenderer.php` | ✅ Parity |
@@ -44,14 +44,14 @@ The `candy-freeze` port (`sugarcraft/candy-freeze`) is **v1 ready** and covers:
 | Font embedding | `withFont()` TTF base64 | ✅ Parity |
 | Ligatures | `font-variant-ligatures` | ✅ Parity |
 
-**Fundamental gap**: freeze uses **Chroma** for live code tokenization; candy-freeze requires **pre-colored ANSI input** (no embedded lexer).
+**Fundamental gap**: freeze uses **Chroma** for live code tokenization; candy-codeshot requires **pre-colored ANSI input** (no embedded lexer).
 
 ---
 
 ## 3. Previously Identified Gaps
 
 From the first-stage `charmbracelet_freeze.md`:
-1. **No syntax highlighter** — candy-freeze needs pre-colored input
+1. **No syntax highlighter** — candy-codeshot needs pre-colored input
 2. **No WebP output** — only SVG + PNG
 3. **No interactive TUI** — CLI-only configuration
 4. **GD loses per-segment background** — bitmap fonts limit PNG quality
@@ -79,9 +79,9 @@ freeze png.go:L59 → resvg-go.NewPixmap() → TinySkiaPixmapNew() → wazero.Ru
 
 **Workaround**: Install `librsvg2-bin` (`rsvg-convert`) which bypasses the resvg path entirely. Performance improves from **31.4s to 1.3s** with librsvg.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: LOW — candy-freeze uses GD instead of resvg-go WASM for PNG. This is an architectural advantage.
+- **Direct risk**: LOW — candy-codeshot uses GD instead of resvg-go WASM for PNG. This is an architectural advantage.
 - **Risk if using FFI/ImageMagick**: HIGH — any external rasterization via WASM or FFI could hit similar issues.
 - **Strategic lesson**: Prefer pure-PHP or pure-extension rasterization over WASM or complex FFI chains. GD is boring but stable.
 
@@ -95,9 +95,9 @@ freeze png.go:L59 → resvg-go.NewPixmap() → TinySkiaPixmapNew() → wazero.Ru
 
 **Root cause**: `shellwords.Parse()` splits by space but doesn't handle shell operators. The upstream `github.com/caarlos0/go-shellwords` is abandoned and was replaced with `github.com/mattn/go-shellwords` in PR #248, but the fundamental issue is that freeze's `--execute` doesn't run through a shell — it parses and executes directly.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: MEDIUM — candy-freeze has no PTY execution at all (`--execute` is a gap). If added, must handle shell parsing carefully.
+- **Direct risk**: MEDIUM — candy-codeshot has no PTY execution at all (`--execute` is a gap). If added, must handle shell parsing carefully.
 - **Strategic opportunity**: A proper PHP PTY wrapper via `candy-pty` could provide better cross-platform shell execution than Go's approach.
 
 ### Issue #181: Set specific font style for font family
@@ -109,9 +109,9 @@ freeze png.go:L59 → resvg-go.NewPixmap() → TinySkiaPixmapNew() → wazero.Ru
 
 **Root cause**: Chroma's SVG formatter doesn't expose font-weight/font-style attributes. The fix is `--font.style` and `--font.weight` flags that map to SVG `font-weight` and `font-style` attributes on text elements.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: LOW — candy-freeze already has `withFont()` that could be extended with `withFontStyle()` and `withFontWeight()`.
+- **Direct risk**: LOW — candy-codeshot already has `withFont()` that could be extended with `withFontStyle()` and `withFontWeight()`.
 - **Strategic opportunity**: SugarCraft can implement this more cleanly by passing font style/weight separately to renderers.
 
 ### Issue #93: CJK/Chinese characters garbled in PNG
@@ -128,9 +128,9 @@ err = fontdb.LoadFontData(font.JetBrainsMonoNLTTF)
 
 **User workaround**: Rebuild freeze with custom fonts embedded at compile time.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: LOW — candy-freeze's SVG path embeds fonts via base64 `@font-face` (works for all Unicode). PNG path uses GD bitmap fonts (limitation but different mechanism).
+- **Direct risk**: LOW — candy-codeshot's SVG path embeds fonts via base64 `@font-face` (works for all Unicode). PNG path uses GD bitmap fonts (limitation but different mechanism).
 - **Defensive lesson**: If implementing font embedding in a rasterization path, the font must be loaded and available before any text rendering — not after initialization.
 
 ### Issue #65: Shadow settings produce transparent background
@@ -141,9 +141,9 @@ err = fontdb.LoadFontData(font.JetBrainsMonoNLTTF)
 
 **Workaround**: Using `rsvg-convert` instead of resvg fixes both shadow rendering and speed.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: LOW — candy-freeze uses GD for PNG and SVG filters for shadow. Different mechanism.
+- **Direct risk**: LOW — candy-codeshot uses GD for PNG and SVG filters for shadow. Different mechanism.
 - **Defensive lesson**: SVG shadow filters require the background rect to be painted before the filter is applied; ordering matters in the SVG element tree.
 
 ### Issue #90: Make user config the default config
@@ -153,9 +153,9 @@ err = fontdb.LoadFontData(font.JetBrainsMonoNLTTF)
 
 **Problem**: Users must pass `-c user` every time to use their saved configuration. The user config at `~/.config/freeze/user.json` should be the default when no config is specified.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: LOW — candy-freeze already stateless, but if config persistence is added, should default to user config.
+- **Direct risk**: LOW — candy-codeshot already stateless, but if config persistence is added, should default to user config.
 - **Strategic opportunity**: An `--interactive` mode (currently missing) would generate and persist user config naturally.
 
 ---
@@ -174,9 +174,9 @@ err = fontdb.LoadFontData(font.JetBrainsMonoNLTTF)
 
 **Implementation**: `--show-cmd` flag added.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: N/A — candy-freeze has no `--execute`. If added, should implement similar `--show-cmd` behavior.
+- **Direct risk**: N/A — candy-codeshot has no `--execute`. If added, should implement similar `--show-cmd` behavior.
 
 ### Issue #70: Multi-language highlighting (PR #79 merged)
 
@@ -184,9 +184,9 @@ err = fontdb.LoadFontData(font.JetBrainsMonoNLTTF)
 
 **Implementation**: `--language jinja,sql` flag for multiple lexers.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: HIGH — This requires a lexer, which candy-freeze deliberately doesn't include. This is a fundamental capability gap.
+- **Direct risk**: HIGH — This requires a lexer, which candy-codeshot deliberately doesn't include. This is a fundamental capability gap.
 - **Strategic opportunity**: Could integrate with a PHP lexer (Geshi, php-lexer) to enable similar multi-language highlighting.
 
 ### Issue #95: Add version flag (PR #99 merged)
@@ -212,7 +212,7 @@ The dual-backend PNG system (rsvg-convert fast path vs resvg-go WASM fallback) c
 
 **Pattern**: Freeze relies on external system tools or WASM for rasterization — both are less reliable than compiling a clean rasterizer. The maintainers acknowledge this by always recommending `rsvg-convert` as the workaround.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - GD is boring and slow but **stable and consistent** across platforms.
 - If adding WebP or other formats, prefer pure-PHP encoding (e.g., `imagewebp()`) over external tool invocation.
@@ -231,7 +231,7 @@ The dual-backend PNG system (rsvg-convert fast path vs resvg-go WASM fallback) c
 
 **Pattern**: When building a tool that captures terminal output, the hardest part is not the rendering — it's reliably executing arbitrary shell commands and capturing their output. This is a notoriously hard problem (see `script` command, `asciinema`, `termcapture`).
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - If implementing PTY capture, study how `asciinema` handles this — they've solved most of these problems.
 - PHP's `proc_open()` with `pty` pseudo-terminal is possible but tricky on Windows.
@@ -248,9 +248,9 @@ Custom font embedding works for SVG but PNG conversion path ignores custom fonts
 
 **Pattern**: Font handling is split across SVG path (embedded fonts work) and PNG path (system fonts or bust). This is a architectural split that causes user confusion.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- candy-freeze embeds fonts via base64 in SVG `@font-face` — works correctly for SVG.
+- candy-codeshot embeds fonts via base64 in SVG `@font-face` — works correctly for SVG.
 - PNG via GD uses bitmap fonts — no font embedding possible, only GD-built-in fonts.
 - For true CJK support in PNG, would need `imagettftext()` with font file loaded — viable but adds complexity.
 
@@ -265,9 +265,9 @@ Interactive mode (`--interactive`) lacks:
 
 **Pattern**: The interactive TUI form is powerful but not comprehensive. Users want more live preview and more settings.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: N/A — candy-freeze has no interactive mode.
+- **Direct risk**: N/A — candy-codeshot has no interactive mode.
 - **Strategic opportunity**: Building an interactive TUI config mode would be a differentiator and is a planned future enhancement.
 
 ---
@@ -283,7 +283,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Status in upstream**: PR #215 exists as WiP.
 
-**Implications for candy-freeze**: Shell completion is a low-effort, high-impact quality-of-life feature. Should implement `--generate-completion` flag.
+**Implications for candy-codeshot**: Shell completion is a low-effort, high-impact quality-of-life feature. Should implement `--generate-completion` flag.
 
 ### Feature: Publish to URL (#28)
 
@@ -294,7 +294,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Note**: This was implemented in `vhs`; freeze users want the same.
 
-**Implications for candy-freeze**: Would require a PHP upload endpoint or integration with an image hosting API. Lower priority for library use.
+**Implications for candy-codeshot**: Would require a PHP upload endpoint or integration with an image hosting API. Lower priority for library use.
 
 ### Feature: Default User Config (#90)
 
@@ -303,7 +303,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Request**: Make `~/.config/freeze/user.json` the default config when no `-c` flag is passed.
 
-**Implications for candy-freeze**: If config persistence is added, should auto-load user config as default.
+**Implications for candy-codeshot**: If config persistence is added, should auto-load user config as default.
 
 ### Feature: Window Title from Filename (#107)
 
@@ -311,7 +311,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Implementation**: Input filename becomes window title bar content.
 
-**Implications for candy-freeze**: Already not implemented — worth adding as `withWindowTitle()` option.
+**Implications for candy-codeshot**: Already not implemented — worth adding as `withWindowTitle()` option.
 
 ### Feature: Line Highlighting (#164)
 
@@ -319,7 +319,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Request**: `--highlight` flag to highlight specific lines (for tutorial/contribution screenshots).
 
-**Implications for candy-freeze**: Already implemented as `withHighlight($start, $end, $color)` in library API, but not exposed via CLI.
+**Implications for candy-codeshot**: Already implemented as `withHighlight($start, $end, $color)` in library API, but not exposed via CLI.
 
 ### Feature: Animation (#207)
 
@@ -327,7 +327,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Request**: Animated GIF output to capture terminal sessions.
 
-**Implications for candy-freeze**: Animation would require a frame sequence capture mechanism — significantly more complex. Not currently planned.
+**Implications for candy-codeshot**: Animation would require a frame sequence capture mechanism — significantly more complex. Not currently planned.
 
 ### Feature: Copy to Clipboard (#213)
 
@@ -335,7 +335,7 @@ Interactive mode (`--interactive`) lacks:
 
 **Request**: `--copy` flag to copy image to clipboard instead of saving to file.
 
-**Implications for candy-freeze**: On Linux, `xclip`/`xcopy`; on macOS, `pbcopy`; on Windows, `clip`. Simple to implement as external command invocation.
+**Implications for candy-codeshot**: On Linux, `xclip`/`xcopy`; on macOS, `pbcopy`; on Windows, `clip`. Simple to implement as external command invocation.
 
 ---
 
@@ -350,9 +350,9 @@ Interactive mode (`--interactive`) lacks:
 
 **Lesson**: When depending on personal GitHub accounts for critical infrastructure, fork and maintain your own copy, or use well-established community libraries with multiple maintainers.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
-- **Direct risk**: LOW — candy-freeze doesn't use shellwords.
+- **Direct risk**: LOW — candy-codeshot doesn't use shellwords.
 - **Defensive lesson**: PHP's `proc_open()` + `shell_exec()` is standard and stable; no single-author dependencies.
 
 ### PR #242: Load system fonts for CJK/non-ASCII support (Open)
@@ -362,14 +362,14 @@ Interactive mode (`--interactive`) lacks:
 
 Attempts to fix the CJK font loading issue by loading system fonts in the PNG path.
 
-**Implications for candy-freeze**: Could study this approach for better non-ASCII font support.
+**Implications for candy-codeshot**: Could study this approach for better non-ASCII font support.
 
 ### PR #215: Add tab-completion (WiP)
 
 **Author**: S0AndS0
 **Status**: Draft/inactive
 
-**Implications for candy-freeze**: Tab completion is a good CLI feature to add.
+**Implications for candy-codeshot**: Tab completion is a good CLI feature to add.
 
 ### PR #40: Fix properly parse exec (Merged March 2024)
 
@@ -380,7 +380,7 @@ Fixed shell command parsing — `gum format "foo bar"` was incorrectly split to 
 
 **Lesson**: Simple space-splitting of shell commands is wrong; use a proper shellwords parser.
 
-**Implications for candy-freeze**: If implementing `--execute`, must use proper shell parsing. PHP's ` escapeshellcmd()` and `exec()` are insufficient for complex commands.
+**Implications for candy-codeshot**: If implementing `--execute`, must use proper shell parsing. PHP's ` escapeshellcmd()` and `exec()` are insufficient for complex commands.
 
 ### PR #83: Fix manually load font file for resvg-go (Not merged)
 
@@ -389,7 +389,7 @@ Fixed shell command parsing — `gum format "foo bar"` was incorrectly split to 
 
 Attempted to fix font loading in the resvg-go PNG path by loading user-specified font files manually. Never merged — the approach was incomplete.
 
-**Implications for candy-freeze**: The font loading architecture in freeze is tightly coupled to the WASM/FFI rendering path. PHP's approach (embedding in SVG, or loading GD fonts) is simpler and more reliable.
+**Implications for candy-codeshot**: The font loading architecture in freeze is tightly coupled to the WASM/FFI rendering path. PHP's approach (embedding in SVG, or loading GD fonts) is simpler and more reliable.
 
 ### PR #107: Add input file as window title (Draft)
 
@@ -398,7 +398,7 @@ Attempted to fix font loading in the resvg-go PNG path by loading user-specified
 
 Implements auto-detecting filename and using it as window chrome title.
 
-**Implications for candy-freeze**: Simple to implement; `LanguageDetector` already has the logic.
+**Implications for candy-codeshot**: Simple to implement; `LanguageDetector` already has the logic.
 
 ---
 
@@ -413,7 +413,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Architectural smell**: The fallback path (resvg-go WASM) is the source of most stability issues (segfaults, transparency bugs). A well-designed system would fail fast when the preferred backend is unavailable rather than falling back to an unstable alternative.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - GD is the only PNG backend — stable but lower quality.
 - If adding more backends (WebP, JPEG), consider: prefer pure-PHP extensions over external tools or WASM.
@@ -429,7 +429,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Pattern**: PTY execution libraries are low-level; they run a single command with args, not a shell. Adding shell syntax support requires running through `/bin/bash -c "..."` or equivalent, which introduces shell quoting complexity.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - If implementing `--execute`, must decide: simple command execution (limited) or full shell execution (complex but powerful).
 - Full shell execution via `/bin/bash -c "..."` is the pragmatic choice; handle with `proc_open()` + `pty` on Unix.
@@ -442,7 +442,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Design pattern**: Embed one good monospace font, let users override with `--font.file` for special needs.
 
-**Implications for candy-freeze**: Already follows this pattern with TTF base64 embedding in SVG. GD bitmap fonts don't support embedding.
+**Implications for candy-codeshot**: Already follows this pattern with TTF base64 embedding in SVG. GD bitmap fonts don't support embedding.
 
 ---
 
@@ -462,7 +462,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Pattern**: Visual complexity (shadows, borders, rounded corners) doesn't slow down SVG generation but dramatically slows PNG rasterization via WASM.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - GD rendering is slower than vector SVG but doesn't have the WASM overhead.
 - If performance matters, recommend SVG output over PNG.
@@ -474,7 +474,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Implication**: Reproducible builds require lockfiles or vendoring.
 
-**Implications for candy-freeze**: Composer handles this better with `composer.lock` — always commit lockfiles.
+**Implications for candy-codeshot**: Composer handles this better with `composer.lock` — always commit lockfiles.
 
 ---
 
@@ -488,7 +488,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Not implemented** — freeze is a focused single-purpose tool. Plugin architecture would increase complexity significantly.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - Theme loading from files (Chroma, VS Code) is already extensible.
 - For PHP, implementing `ThemeLoaderInterface` allows third-party theme packages.
@@ -500,7 +500,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 **Not implemented** — SVG and PNG only. Maintainers prefer keeping the tool focused.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - JPEG via GD (`imagejpeg()`) is trivial to add.
 - PDF via TCPDF or Dompdf would be a new renderer.
@@ -517,7 +517,7 @@ This is a pragmatic choice — rsvg-convert is fast (1.3s) but requires external
 
 Users needed `--version` for health-check scripts and plugin integrations.
 
-**Implications for candy-freeze**: Already has version info; ensure CLI always exposes `--version`.
+**Implications for candy-codeshot**: Already has version info; ensure CLI always exposes `--version`.
 
 ### Complaint: Unclear Theme List (Issue #74)
 
@@ -527,7 +527,7 @@ Users couldn't find which themes are available. Documentation points to Chroma b
 
 **Fix**: PR #104 added link to theme showcase page.
 
-**Implications for candy-freeze**: Already ships 5 built-in themes. Should document which Chroma themes are loadable and link to theme previews.
+**Implications for candy-codeshot**: Already ships 5 built-in themes. Should document which Chroma themes are loadable and link to theme previews.
 
 ### Complaint: Error Messages for --execute are Poor (Issue #119)
 
@@ -536,7 +536,7 @@ Users couldn't find which themes are available. Documentation points to Chroma b
 
 `--execute` failures gave cryptic errors. Improved in v0.1.4.
 
-**Implications for candy-freeze**: If implementing `--execute`, ensure errors are descriptive and actionable.
+**Implications for candy-codeshot**: If implementing `--execute`, ensure errors are descriptive and actionable.
 
 ### Complaint: Default Mono Font is Not Mono-Space (#211)
 
@@ -547,7 +547,7 @@ The default "monospace" font may not actually be monospaced on all systems.
 
 **Implication**: Font fallbacks can be unpredictable. Prefer embedded fonts for guaranteed rendering.
 
-**Implications for candy-freeze**:
+**Implications for candy-codeshot**:
 
 - Default to a specific embedded font, not system font discovery.
 - SVG embedding ensures consistent rendering.
@@ -562,7 +562,7 @@ The default "monospace" font may not actually be monospaced on all systems.
 
 **Lesson**: WASM dependencies are sensitive to version resolution quirks. Test thoroughly after any WASM library upgrade.
 
-**Implications for candy-freeze**: Avoid WASM dependencies in PHP. GD and native extensions are more predictable.
+**Implications for candy-codeshot**: Avoid WASM dependencies in PHP. GD and native extensions are more predictable.
 
 ### Migration: Shellwords to go-shellwords
 
@@ -570,7 +570,7 @@ The default "monospace" font may not actually be monospaced on all systems.
 
 **Lesson**: For critical parsing libraries, consider forking and maintaining rather than depending on single-maintainer repos.
 
-**Implications for candy-freeze**: PHP's `shell_exec()` and `exec()` are standard library — no external dependency risk.
+**Implications for candy-codeshot**: PHP's `shell_exec()` and `exec()` are standard library — no external dependency risk.
 
 ---
 
@@ -586,7 +586,7 @@ The default "monospace" font may not actually be monospaced on all systems.
 
 **Why it works**: The code already had `rsvg-convert` as the preferred fast path; it just wasn't documented prominently. Users discover it through issue comments.
 
-**Implications for candy-freeze**: Document that SVG output is recommended for reliability; PNG via GD is available but lower quality.
+**Implications for candy-codeshot**: Document that SVG output is recommended for reliability; PNG via GD is available but lower quality.
 
 ### Workaround: Rebuild with Custom CJK Font
 
@@ -604,7 +604,7 @@ Rebuild and replace the binary.
 
 **Implication**: Users who need CJK support must recompile. This is a build-time decision, not runtime.
 
-**Implications for candy-freeze**: For CJK support, could ship with a small CJK font subset embedded, or document how to build a custom version.
+**Implications for candy-codeshot**: For CJK support, could ship with a small CJK font subset embedded, or document how to build a custom version.
 
 ### Workaround: Wrap Commands in bash -c
 
@@ -614,7 +614,7 @@ Rebuild and replace the binary.
 
 **Pattern**: The workaround is to use bash explicitly. This sidesteps the shellwords parsing issue entirely.
 
-**Implications for candy-freeze**: If implementing PTY execution, always invoke through `/bin/bash -c` to get proper shell semantics.
+**Implications for candy-codeshot**: If implementing PTY execution, always invoke through `/bin/bash -c` to get proper shell semantics.
 
 ---
 
@@ -811,7 +811,7 @@ Add `--background` flag to CLI. Currently only available via Theme.
 **Priority**: Low
 **Effort**: Medium
 
-Save last-used settings to `$XDG_CONFIG_HOME/candy-freeze/user.json`, auto-loading on next run. Depends on interactive mode.
+Save last-used settings to `$XDG_CONFIG_HOME/candy-codeshot/user.json`, auto-loading on next run. Depends on interactive mode.
 
 ### 8. WebP Output
 
@@ -910,7 +910,7 @@ v0.2.0 changed `line_numbers` to `show_line_numbers` (more descriptive but break
 
 Tools like Carbon, Ray.so, Shiki, and freeze indicate strong demand for code-to-image conversion. The use case spans documentation, social media, and education.
 
-**Implication**: SugarCraft's candy-freeze fills a real need. The market is established.
+**Implication**: SugarCraft's candy-codeshot fills a real need. The market is established.
 
 ### Trend 2: Terminal Output Capture is Specialized
 
@@ -928,11 +928,11 @@ Freeze uses Chroma themes (100+), but VS Code themes are more popular. The theme
 
 The `--interactive` mode in freeze (and similar in gum, glow, vhs) shows that CLI tools with complex configuration benefit from interactive TUI configuration.
 
-**Implication**: Adding interactive mode to candy-freeze would improve DX significantly. Use `candy-sprinkles` form components.
+**Implication**: Adding interactive mode to candy-codeshot would improve DX significantly. Use `candy-sprinkles` form components.
 
 ### Trend 5: Embedding Fonts is Standard Practice
 
-Both freeze and candy-freeze embed JetBrains Mono in some form. This ensures consistent rendering.
+Both freeze and candy-codeshot embed JetBrains Mono in some form. This ensures consistent rendering.
 
 **Implication**: Continue embedding a default monospace font. SVG embedding via base64 is the right approach for PHP.
 
@@ -942,7 +942,7 @@ Both freeze and candy-freeze embed JetBrains Mono in some form. This ensures con
 
 ### Opportunity 1: PHP Syntax Highlighting Integration
 
-**Upstream gap**: freeze has Chroma for syntax highlighting. candy-freeze requires pre-colored input.
+**Upstream gap**: freeze has Chroma for syntax highlighting. candy-codeshot requires pre-colored input.
 
 **Opportunity**: Integrate a PHP lexer (Geshi, highlight.js via FFI, or Python bridge to pygments) to enable live syntax highlighting.
 
@@ -956,7 +956,7 @@ Both freeze and candy-freeze embed JetBrains Mono in some form. This ensures con
 
 ### Opportunity 3: Interactive TUI Configuration
 
-**Upstream gap**: freeze's interactive mode uses huh (Go). candy-freeze has no interactive mode.
+**Upstream gap**: freeze's interactive mode uses huh (Go). candy-codeshot has no interactive mode.
 
 **Opportunity**: Build `--interactive` using `candy-sprinkles` form components with live SVG preview. This would be a unique feature (upstream's interactive mode doesn't show live preview).
 

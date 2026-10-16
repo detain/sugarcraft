@@ -157,7 +157,7 @@ final class ByteFidelityTest extends TestCase
             Inspector::parse("\x1b[38:5:m")[0]->describe(),
         );
 
-        // The exact bytes candy-freeze resolves to `#000001` by falling back to
+        // The exact bytes candy-codeshot resolves to `#000001` by falling back to
         // the flat parameter list. Here the same input is labelled for what it
         // says and never guessed into a colour, which is the divergence both
         // libs' docblocks promise is pinned on each side — so pin it literally,
@@ -897,7 +897,7 @@ final class ByteFidelityTest extends TestCase
     {
         // xterm allows the colour-space id slot to be omitted *entirely*, so a
         // group of three sub-parameters after the mode is bare R:G:B and a group
-        // of four is CS:R:G:B. candy-ansi-inspect's label and candy-freeze's resolved
+        // of four is CS:R:G:B. candy-ansi-inspect's label and candy-codeshot's resolved
         // colour apply the same rule to the same bytes; pinning the reading here
         // keeps the two parsers from drifting apart silently.
         $cases = [

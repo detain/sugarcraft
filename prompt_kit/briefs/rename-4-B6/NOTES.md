@@ -97,7 +97,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 - Suite EXACT-shape: **278T/1412A OK (0.745s)** = baseline ✓. Watchdog + plain pipe + env -u LINES/COLUMNS.
 - Sparkline untouched proof: `git diff --cached --name-only -M | grep -ci sparkline` = **0** ✓; `ls -d *spark*` → no match.
 - Consumer sanity: candy-ansi suite **360T/901A OK** (its 4 changed files are docblock-comment-only; lint clean ×3 incl
-  candy-freeze/SgrStateHandler.php auto-rewrite). No composer REQUIRE consumers exist.
+  candy-freeze/SgrStateHandler.php auto-rewrite). No composer REQUIRE consumers exist. <!-- @rename-keep -->
 - tools/tests **426T/1484A OK (36s)** — floor EXACT ✓. path-repos --no-lib-path-repos rc=0 ✓.
 - Diffstat: 284 files; rename-detection `{sugar-spark => candy-ansi-inspect}` through lib tree + docs pair + repo_map pair <!-- @rename-keep -->
   + research + findings plan + icon png ✓.

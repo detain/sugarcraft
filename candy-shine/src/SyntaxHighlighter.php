@@ -15,7 +15,7 @@ use SugarCraft\Core\Syntax\TokenKind;
  *
  * The lexing itself now lives in candy-core's
  * {@see \SugarCraft\Core\Syntax\RegexHighlighter} — a pure, style-agnostic
- * primitive shared with other consumers (e.g. candy-freeze). This class is
+ * primitive shared with other consumers (e.g. candy-codeshot). This class is
  * the render half: it maps each {@see \SugarCraft\Core\Syntax\TokenSpan} onto
  * a {@see Theme} slot and emits ANSI, plus the optional line-number gutter.
  * The set of recognised languages is intentionally small — PHP, JS, TS,
@@ -30,7 +30,7 @@ final class SyntaxHighlighter
      * README) still burns CPU proportionally — an unbounded input is a
      * cheap denial-of-service surface. Mirrors the 1 MB caps already
      * enforced by the sibling loaders (LanguageDetector,
-     * candy-freeze ChromaThemeLoader / VsCodeThemeLoader); oversized
+     * candy-codeshot ChromaThemeLoader / VsCodeThemeLoader); oversized
      * input degrades gracefully to the plain code-block style.
      */
     private const MAX_HIGHLIGHT_BYTES = 1_000_000;

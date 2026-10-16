@@ -1,6 +1,6 @@
-# Step 08.13 — candy-freeze per-segment bg + ligature + language detection
+# Step 08.13 — candy-codeshot per-segment bg + ligature + language detection
 
-**Source:** `leftover_updates_later.md` candy-freeze §4.1.1 + §4.1.2 + §4.2.2
+**Source:** `leftover_updates_later.md` candy-codeshot §4.1.1 + §4.1.2 + §4.2.2
 **Branch:** `ai/freeze-segment-ligature-langdetect`
 
 ## Deliverable
@@ -15,15 +15,15 @@
 
 **Modify:**
 
-- `candy-freeze/src/Segment.php` — `$bg` field, applied in render.
+- `candy-codeshot/src/Segment.php` — `$bg` field, applied in render.
 
 **Create:**
 
-- `candy-freeze/src/LanguageDetector.php`.
+- `candy-codeshot/src/LanguageDetector.php`.
 
 **Modify:**
 
-- `candy-freeze/src/Renderer/SvgRenderer.php` — `--ligatures` flag
+- `candy-codeshot/src/Renderer/SvgRenderer.php` — `--ligatures` flag
   emits `font-variant-ligatures: normal`.
 
 ## Tests
@@ -32,7 +32,7 @@
 
 ## Acceptance
 
-- `cd candy-freeze && vendor/bin/phpunit --filter "Segment|Ligature|LanguageDetector"` green.
+- `cd candy-codeshot && vendor/bin/phpunit --filter "Segment|Ligature|LanguageDetector"` green.
 
 ---
 

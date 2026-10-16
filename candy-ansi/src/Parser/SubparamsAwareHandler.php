@@ -16,7 +16,7 @@ namespace SugarCraft\Ansi\Parser;
  * could get them was to *pull*: the front-end that owns the Parser handed the
  * handler a way back to it, and the handler read {@see Parser::subparams()}
  * from inside its own dispatch. The two injection helpers that bridged this on
- * the candy-vt/candy-freeze paths (a closure via `attachSubparamsProvider()`, a
+ * the candy-vt/candy-codeshot paths (a closure via `attachSubparamsProvider()`, a
  * Parser object via `bindParser()`) are gone now — those paths take the push
  * instead. The pull itself is NOT a dead route: a handler that owns its Parser
  * (candy-ansi-inspect's `AnsiHandler` does `new Parser($this)` and reads
@@ -59,12 +59,12 @@ namespace SugarCraft\Ansi\Parser;
  *
  * This interface shipped one wave ahead of its consumers so neither side needed a
  * big-bang cutover, then wave-6 "vt-B" (#1447) migrated the candy-vt and
- * candy-freeze paths to the push and DELETED the pull-bridging injection
+ * candy-codeshot paths to the push and DELETED the pull-bridging injection
  * helpers those paths used (a closure-injection helper on two classes, a
  * Parser-injection helper on a third) —
  * `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()`,
  * `SugarCraft\Vt\Parser\CsiHandlerImpl::attachSubparamsProvider()`, and
- * `SugarCraft\Freeze\SgrStateHandler::bindParser()`. Those helpers live in
+ * `SugarCraft\CodeShot\SgrStateHandler::bindParser()`. Those helpers live in
  * consuming libraries (never in candy-ansi), which is why no `@deprecated` tag
  * ever accompanied this interface.
  *
@@ -90,8 +90,8 @@ namespace SugarCraft\Ansi\Parser;
  *    them. The plain {@see HandlerAdapter} sits *inside* that decorator and is no
  *    longer passed to the parser directly, which is why its own `escDispatch()`
  *    can stay a no-op: `RendererHandler` takes over just that one event.
- *  - `SugarCraft\Freeze\SgrStateHandler` — candy-freeze's sink
- *    (`candy-freeze/src/AnsiParser.php`); implements this interface.
+ *  - `SugarCraft\CodeShot\SgrStateHandler` — candy-codeshot's sink
+ *    (`candy-codeshot/src/AnsiParser.php`); implements this interface.
  *
  * Sinks that do NOT opt in need nothing pushed and are dispatched unchanged —
  * e.g. candy-vcr's `MouseModeTracker` and candy-pty's `AnsiOutputParser` pass a

@@ -118,7 +118,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | candy-log | P1 | 2 | Log level filtering; Handler interface consistency |
 | candy-git | P1 | 2 | Path-repo closure check (verify candy-fuzzy is clean) |
 | candy-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
-| candy-freeze | P1 | 2 | WeakMap for allocateColor cache (memory leak fix) |
+| candy-codeshot | P1 | 2 | WeakMap for allocateColor cache (memory leak fix) |
 
 **Concurrency:** 6 libs — spawn 6 subagents in parallel.
 
@@ -184,7 +184,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_candy-log.md` — Phase 1 (log level filtering, handler consistency)
 - `findings/plan_candy-git.md` — Phase 1 (path-repo closure verification)
 - `findings/plan_candy-testing.md` — Phase 1 (TapeRecorder Dracula theme bug)
-- `findings/plan_candy-freeze.md` — Phase 1 (WeakMap allocateColor cache)
+- `findings/plan_candy-codeshot.md` — Phase 1 (WeakMap allocateColor cache)
 
 ### Group F Source Plans
 

@@ -23,7 +23,7 @@ before. State machine actions in `start()` should only set up transitional
 state, not discard data that arrived earlier in the same logical sequence.
 
 **Impact:** candy-ansi-inspect Inspector now passes all 147 tests; also fixed
-candy-hermit and candy-freeze consumers.
+candy-hermit and candy-codeshot consumers.
 
 ## 2026-07-10 — W1 defork-prep: grow CsiHandler, route CR/LF, fix OSC-8, configurable buffer cap
 
@@ -37,7 +37,7 @@ forking its own copy). Four changes, all inside candy-ansi:
   `CsiHandlerImpl` (count methods take `int $count = 1`) so the later candy-vt
   reimplementation is a drop-in. **BC-critical:** growing an interface breaks
   every implementer — the only in-repo implementer of `SugarCraft\Ansi\Parser\CsiHandler`
-  is `CsiHandlerImpl` (all dependents — candy-pty, candy-ansi-inspect, candy-freeze —
+  is `CsiHandlerImpl` (all dependents — candy-pty, candy-ansi-inspect, candy-codeshot —
   implement the `Handler` interface, NOT `CsiHandler`), so only `CsiHandlerImpl`
   needed new (no-op / return-0) method bodies.
 
@@ -71,7 +71,7 @@ only ever the "step-12 pending" placeholder: **all 30 methods no-op**,
 `gridRows()`/`gridCols()` return `0`, and its test was 30 `assertTrue(true)`
 smoke assertions. Grep confirmed **zero real consumers** — the only references
 were the class's own file + its own test, and every dependent (candy-pty,
-candy-ansi-inspect, candy-freeze) implements the `Handler` interface, while candy-vt
+candy-ansi-inspect, candy-codeshot) implements the `Handler` interface, while candy-vt
 supplies its own `CsiHandler` implementation. So both files were deleted.
 
 - **The `CsiHandler` interface stays** — it is the contract `HandlerAdapter`

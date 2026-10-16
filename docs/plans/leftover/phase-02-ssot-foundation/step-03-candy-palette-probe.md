@@ -9,7 +9,7 @@
 Today multiple libs probe environment variables independently
 (`NO_COLOR` / `FORCE_COLOR` / `COLORTERM` / `WT_SESSION` / etc.).
 Consolidate every probe into `candy-palette/src/Probe.php` so that
-`candy-log`, `candy-mosaic`, `candy-freeze`, `candy-vt` (truecolor
+`candy-log`, `candy-mosaic`, `candy-codeshot`, `candy-vt` (truecolor
 accept), and future consumers all call a single API.
 
 ## Files

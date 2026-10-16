@@ -192,7 +192,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 21. `step-21-vcr-idle-trim-realtime.md`
 22. `step-22-vcr-focuslostmsg.md`
 
-### Phase 08 — Forms / Charts / Style / Freeze (`phase-08-forms-charts-style/`)
+### Phase 08 — Forms / Charts / Style / Codeshot (`phase-08-forms-charts-style/`)
 
 1. `step-01-prompt-validators.md`
 2. `step-02-prompt-fuzzy.md`

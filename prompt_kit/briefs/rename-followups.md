@@ -74,3 +74,8 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   `wishlist` wordmark. <!-- @rename-keep --> CI `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.
 - `media/icons/candy-ssh-launcher.png` — icon carries copied pre-rename art bytes (regenerated via renamed dict key,
   prompt text unchanged); redraw optional at owner triage.
+
+## B11 candy-freeze → candy-codeshot (2026-10-16) <!-- @rename-keep -->
+- `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
+  still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
+  already-rewritten `.tape` files on the next tape run; do not hand-patch.

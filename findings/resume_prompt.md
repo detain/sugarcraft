@@ -13,7 +13,7 @@ Resume the SugarCraft audit-fixing workflow from where it left off. This documen
 
 ## What Was Done
 
-The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-freeze, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
+The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
 
 **The plan files themselves were NOT marked ✅ — the fixes landed but bookkeeping was not done.**
 
@@ -97,7 +97,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 2-C | 2.7–2.9 | candy-hermit (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) |
 | 2-D | 2.10–2.12 | sugar-bits (AnimatedProgress spring cache), candy-buffer (DiffOptimiser array_merge, DiffEncoder state reset) |
 | 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), candy-shine (string concat loops, Theme::fromJson issues) |
-| 2-F | 2.16–2.18 | candy-freeze (LayoutCalculator extraction, match expression), candy-testing (O(n) array_shift) |
+| 2-F | 2.16–2.18 | candy-codeshot (LayoutCalculator extraction, match expression), candy-testing (O(n) array_shift) |
 | 2-G | 2.19–2.20 | candy-testing (escapeVhsRune addcslashes, KeyType coverage) |
 
 ### Phase 3: Missing Features and API Completeness

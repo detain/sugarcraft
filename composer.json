@@ -48,7 +48,7 @@
         "sugarcraft/candy-flip": "dev-master",
         "sugarcraft/candy-focus": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
-        "sugarcraft/candy-freeze": "dev-master",
+        "sugarcraft/candy-codeshot": "dev-master",
         "sugarcraft/candy-fuzzy": "dev-master",
         "sugarcraft/candy-gifview": "dev-master",
         "sugarcraft/candy-hermit": "dev-master",
@@ -153,7 +153,7 @@
         },
         {
             "type": "path",
-            "url": "candy-freeze",
+            "url": "candy-codeshot",
             "options": {
                 "symlink": true
             }
