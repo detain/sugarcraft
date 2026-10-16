@@ -41,6 +41,14 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 - [ ] R6 gates (residue 0 &&-staged, suite exact, candy-ansi/-inspect consumers, tools/tests 426/1484, path-repos, generic-freeze audit)
 - [ ] R7 commit status=renamed + push branch rename/b11 ONLY (no R8/R9 — weld agent)
 
+## R1 dry-run — LANDED
+- Post tag-prep 517bc8f01: plan **136 files, 11 paths, R1=102 R2=27 R3=410 R4=120 R6=1, R5=0** rc=0 (report /tmp/rename-candy-freeze.txt). R5=0 confirms honest-none env. Eye-review PASS: dir move + bin move under candy-codeshot/bin listed; ns pair fires; my NOTES listed as rewritable (re-verify post-R3, B4 law).
+- pr_charmbracelet_freeze.md 64 hits INSPECTED: all "Sugarcraft Port"/"Implications for candy-freeze" mapping lines = living port-analysis, mechanical correct (upstream charmbracelet/freeze bare-word URLs untouched). php74_branch/plan_crush_media/leftover steps = live path tables, mechanical.
+
+## R2 remote — LANDED
+- rename-remote.sh run 1: GitHub rename SUCCEEDED, died on topics HTTP 422 (repo at 20-cap incl stale `candycore` + noise showoff/xterm/drop-shadow — B5/B6 family).
+- Run 2 (before trim) FALSELY refused "candy-codeshot already exists and is not candy-freeze" — transient old-name redirect resolution race post-rename; run 3 after trimming 4 topics + re-run = idempotent convergence ("rename skipped, re-syncing metadata"), verified record name=candy-codeshot, description kept "port of charmbracelet/freeze." per entry mandate, old URL 301s. Topics=20 exact.
+
 ## Log
 
 (step findings appended here incrementally)
