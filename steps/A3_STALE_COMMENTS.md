@@ -15,18 +15,18 @@ Find and remove or update outdated comments in the codebase that no longer refle
 
    ConnectionsPage NOW extends PageBase, so this comment is false.
 
-2. Any other stale comments found via grep across the candy-query src/
+2. Any other stale comments found via grep across the candy-sql src/
 
 ## Grep for Stale Comments
 
 Run before coding to find all candidates:
 
 ```bash
-grep -rn "placeholder" /home/sites/sugarcraft/candy-query/src
-grep -rn "TODO" /home/sites/sugarcraft/candy-query/src
-grep -rn "FIXME" /home/sites/sugarcraft/candy-query/src
-grep -rn "later phase" /home/sites/sugarcraft/candy-query/src
-grep -rn "does not extend" /home/sites/sugarcraft/candy-query/src
+grep -rn "placeholder" /home/sites/sugarcraft/candy-sql/src
+grep -rn "TODO" /home/sites/sugarcraft/candy-sql/src
+grep -rn "FIXME" /home/sites/sugarcraft/candy-sql/src
+grep -rn "later phase" /home/sites/sugarcraft/candy-sql/src
+grep -rn "does not extend" /home/sites/sugarcraft/candy-sql/src
 ```
 
 ## Acceptance Criteria

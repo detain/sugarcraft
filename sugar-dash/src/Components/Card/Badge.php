@@ -142,7 +142,7 @@ final class Badge implements \SugarCraft\Dash\Foundation\SizedItem, Drawable
      * null → a subtle "Unknown" badge.
      *
      * Replaces the Yes/No/Unknown tristate text duplicated across the
-     * candy-query admin panels (ServerStatusPage, PerfSchema toggles).
+     * candy-sql admin panels (ServerStatusPage, PerfSchema toggles).
      */
     public static function bool(
         ?bool $value,

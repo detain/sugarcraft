@@ -1,0 +1,1181 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql;
+
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Sql\Admin\AdminPane;
+use SugarCraft\Sql\Admin\AdminQueryCache;
+use SugarCraft\Sql\Admin\CacheTtl;
+use SugarCraft\Sql\Admin\AsyncCachingServerContext;
+use SugarCraft\Sql\Admin\EmptyServerContext;
+use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
+use SugarCraft\Sql\Admin\Dashboard\DashboardPage;
+use SugarCraft\Sql\Admin\Debug\DebugPage;
+use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\PostgresServerContext;
+use SugarCraft\Sql\Admin\ReactMysqlConnection;
+use SugarCraft\Sql\Admin\ReactPostgresConnection;
+use SugarCraft\Sql\Admin\Reports\ReportsPage;
+use SugarCraft\Sql\Admin\Providers\PostgresAdminProvider;
+use SugarCraft\Sql\Admin\PerfSchema\EasySetupDetector;
+use SugarCraft\Sql\Admin\PerfSchema\PerfSchemaPage;
+use SugarCraft\Sql\Admin\Sampler;
+use SugarCraft\Sql\Admin\ServerContext;
+use SugarCraft\Sql\Admin\ServerContextInterface;
+use SugarCraft\Sql\Admin\ServerStatus\ServerStatusPage;
+use SugarCraft\Sql\Admin\ServerStatusSnapshotAdapter;
+use SugarCraft\Sql\Admin\Variables\Catalog;
+use SugarCraft\Sql\Admin\Variables\VariableEditor;
+use SugarCraft\Sql\Admin\Variables\VariablesPage;
+use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\PreviewQuery;
+use SugarCraft\Sql\App\AdminState;
+use SugarCraft\Sql\App\AppBuilder;
+use SugarCraft\Sql\App\BrowseState;
+use SugarCraft\Sql\App\ConnectionState;
+use SugarCraft\Sql\App\QueryState;
+use SugarCraft\Sql\App\UiState;
+use SugarCraft\Sql\Admin\History\HistoryRecorder;
+use SugarCraft\Sql\Admin\QueryLogger;
+use SugarCraft\Sql\Admin\StatusSnapshot;
+use SugarCraft\Sql\Core\Msg\AdminDataLoadedMsg;
+use SugarCraft\Sql\Core\Msg\AdminDrainCompletedMsg;
+use SugarCraft\Sql\Core\Msg\AdminFetchStartedMsg;
+use SugarCraft\Sql\Core\Msg\AdminTickMsg;
+use SugarCraft\Sql\Core\Msg\QueryRowsLoadedMsg;
+use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
+use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
+
+/**
+ * SQLite browser as a SugarCraft Model. Three panes:
+ *
+ *   - Tables: a list of tables. Enter loads its rows into the
+ *             rows pane; the rows pane's title updates accordingly.
+ *   - Rows:   a paginated peek at the selected table's contents.
+ *   - Query:  an editor — type SQL, Ctrl+Enter to run. Errors land
+ *             on a status line; the rowset replaces the rows pane.
+ *
+ * Tab cycles focus; j/k or arrows move the cursor in list panes;
+ * `q` quits.
+ *
+ * Query editor:
+ *   - The Query pane is backed by a candy-forms {@see TextArea} — it owns
+ *     the cursor, UTF-8 editing, and Up/Down line movement.
+ *   - Ctrl+R / Ctrl+E run the query; Ctrl+F favorites it; Ctrl+Shift+F
+ *     unfavorites. Executed queries are recorded in {@see QueryState::$history}.
+ *
+ * Model state is grouped into cohesive value objects (plan 3.3) instead of a
+ * ~29-parameter constructor: {@see ConnectionState} (db/flavor/context),
+ * {@see BrowseState} (tables + row preview), {@see QueryState} (editor +
+ * history), {@see UiState} (focus + status line), {@see AdminState}
+ * (admin pane, caches, polling bookkeeping).
+ */
+final class App implements Model
+{
+    use Mutable;
+
+    public function __construct(
+        public readonly ConnectionState $connection,
+        public readonly BrowseState $browse = new BrowseState(),
+        public readonly QueryState $query = new QueryState(),
+        public readonly UiState $ui = new UiState(),
+        public readonly AdminState $admin = new AdminState(),
+    ) {}
+
+    /**
+     * @param Flavor::* $flavor Database flavor for driver-specific behavior
+     */
+    public static function start(DatabaseInterface $db, Flavor $flavor = Flavor::Sqlite): self
+    {
+        $tables = $db->tables();
+        $a = new self(
+            ConnectionState::new($db, $flavor),
+            BrowseState::new()->withTables($tables),
+        );
+        if ($tables !== []) {
+            $a = $a->loadTable($tables[0]);
+        }
+        return $a;
+    }
+
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+
+    /**
+     * Create an App via a fluent builder.
+     */
+    public static function builder(): AppBuilder
+    {
+        return new AppBuilder();
+    }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof WindowSizeMsg) {
+            // The Program is the single source of truth for terminal size:
+            // it emits this at startup and on every SIGWINCH. Forward it to
+            // the renderer so our layout always matches the screen the
+            // framework's own renderer is driving (no stale/independent
+            // detection, and resizes are honored).
+            Renderer::setSize($msg->cols, $msg->rows);
+            return [$this, null];
+        }
+        if ($msg instanceof AdminFetchStartedMsg) {
+            if (!$this->admin->loading) {
+                return [$this->mutate([
+                    'admin' => $this->admin->withLoading(true)->withLastFetchAt(microtime(true)),
+                ]), null];
+            }
+            return [$this, null];
+        }
+        if ($msg instanceof AdminDataLoadedMsg) {
+            // After status/server vars are cached, trigger report reload for
+            // ReportsPage so its async query is queued for the next tick.
+            $newApp = $this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt);
+            // Pin the lazily-built page into model state the moment data
+            // arrives, not merely when a keypress happened to delegate first:
+            // adminPage() never persisted its build, so an un-touched pane
+            // minted a throwaway page per render — rolling-window widgets
+            // (Server Status graphs, Sampler rates) could never accumulate.
+            $page = $newApp->admin->page ?? $newApp->adminPage();
+            [$newPage,] = $page->update(new ReloadReportMsg());
+            $newApp = $newApp->withAdminPage($newPage);
+            return [$newApp, null];
+        }
+        if ($msg instanceof TableRowsLoadedMsg) {
+            // An async browse fetch finished — fold its rows (or error) in.
+            return [$this->applyLoadedRows($msg), null];
+        }
+        if ($msg instanceof QueryRowsLoadedMsg) {
+            // An async query finished — fold its rows (or error) into the result table.
+            return [$this->applyQueryRows($msg), null];
+        }
+        if ($msg instanceof AdminTickMsg) {
+            return $this->handleAdminTick();
+        }
+        if ($msg instanceof AdminDrainCompletedMsg) {
+            // Page-driven rows landed in the cache during the status cooldown.
+            // Only the page is told to re-read (memo invalidation) — never
+            // AdminDataLoadedMsg, whose empty arrays would wipe the cached vars.
+            if ($this->admin->page !== null) {
+                [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
+                return [$this->withAdminPage($newPage), null];
+            }
+            return [$this, null];
+        }
+        if (!$msg instanceof KeyMsg) {
+            return [$this, null];
+        }
+        if ($msg->type === KeyType::Escape
+            || ($msg->type === KeyType::Char && $msg->rune === 'q' && $this->ui->pane !== Pane::Query)
+            || ($msg->ctrl && $msg->rune === 'c')) {
+            return [$this, Cmd::quit()];
+        }
+        if ($msg->type === KeyType::Tab) {
+            $nextPane = $this->ui->pane->next();
+            if ($nextPane === Pane::Admin) {
+                // First time entering admin - set loading immediately and trigger fetch
+                return [
+                    $this->withPane($nextPane)->withAdminLoading(true),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder)),
+                ];
+            }
+            return [$this->withPane($nextPane), null];
+        }
+        if ($this->ui->pane === Pane::Query) {
+            if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
+                || ($msg->type === KeyType::Enter && $msg->ctrl)) {
+                return $this->beginRunQuery();
+            }
+            return [$this->editQuery($msg), null];
+        }
+        if ($this->ui->pane === Pane::Tables) {
+            return $this->handleTablesKey($msg);
+        }
+        if ($this->ui->pane === Pane::Admin) {
+            return $this->handleAdminKey($msg);
+        }
+        return [$this->handleRowsKey($msg), null];
+    }
+
+    public function view(): string
+    {
+        return Renderer::render($this);
+    }
+
+    /**
+     * Tables-pane navigation. Moving the cursor (or Enter/Space) loads the
+     * highlighted table's row preview. The load returns an optional Cmd: for
+     * MySQL/Postgres the fetch runs on the React loop (so a large/remote table
+     * never freezes the UI), so this handler returns a tuple rather than a bare
+     * model.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function handleTablesKey(KeyMsg $msg): array
+    {
+        if ($msg->type === KeyType::Up
+            || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+            $newApp = $this->withTableCursor($this->browse->tableCursor - 1);
+            $name = $newApp->browse->tables[$newApp->browse->tableCursor] ?? null;
+            return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
+        }
+        if ($msg->type === KeyType::Down
+            || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+            $newApp = $this->withTableCursor($this->browse->tableCursor + 1);
+            $name = $newApp->browse->tables[$newApp->browse->tableCursor] ?? null;
+            return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
+        }
+        if ($msg->type === KeyType::Enter
+            || $msg->type === KeyType::Space) {
+            $name = $this->browse->tables[$this->browse->tableCursor] ?? null;
+            return $name === null ? [$this, null] : $this->beginLoadTable($name);
+        }
+        return [$this, null];
+    }
+
+    private function handleRowsKey(KeyMsg $msg): self
+    {
+        if ($msg->type === KeyType::Up
+            || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+            return $this->mutate([
+                'browse' => $this->browse->withRowCursor(max(0, $this->browse->rowCursor - 1)),
+            ]);
+        }
+        if ($msg->type === KeyType::Down
+            || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+            return $this->mutate([
+                'browse' => $this->browse->withRowCursor(
+                    min(max(0, count($this->browse->rows) - 1), $this->browse->rowCursor + 1),
+                ),
+            ]);
+        }
+        // For wide query results, h/l + ←/→ scroll the ResultTable's columns.
+        if ($this->browse->resultTable !== null) {
+            if ($msg->type === KeyType::Left
+                || ($msg->type === KeyType::Char && $msg->rune === 'h')) {
+                return $this->mutate([
+                    'browse' => $this->browse->withResultTable($this->browse->resultTable->scrollLeft()),
+                ]);
+            }
+            if ($msg->type === KeyType::Right
+                || ($msg->type === KeyType::Char && $msg->rune === 'l')) {
+                return $this->mutate([
+                    'browse' => $this->browse->withResultTable($this->browse->resultTable->scrollRight()),
+                ]);
+            }
+        }
+        return $this;
+    }
+
+    /**
+     * Handle keyboard input while the Admin pane is focused.
+     *
+     * App-level keys (digits 1-9, q, j/k, p, r) are handled first. All other
+     * keys — Tab, Space, 'a', 'w', 's', and any other navigation/editing keys
+     * — are delegated to the active page's update() method so pages like
+     * VariablesPage and DashboardPage can respond to them. The page returned
+     * by update() is stored back in App, preserving any in-memory state
+     * (cursor, active tab, pending edits) that survived the refresh cycle.
+     *
+     * @return array{App, ?Cmd} [updated App, optional command to execute]
+     */
+    private function handleAdminKey(KeyMsg $msg): array
+    {
+        $allPanes = AdminPane::orderedCases();
+        $count = count($allPanes);
+
+        // Number keys directly select an admin pane (1 = first pane). The range
+        // spans every pane. Uses orderedCases() so digit N selects the same
+        // pane that appears at row N in the sidebar (section-grouped display
+        // order: Management first, then Performance). The isset() guard below
+        // ignores digits with no matching pane.
+        if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '9') {
+            $index = (int) $msg->rune - 1;
+            if (isset($allPanes[$index]) && $allPanes[$index] !== $this->admin->pane) {
+                $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+            }
+            if (isset($allPanes[$index])) {
+                return [$this->withAdminCursor($index), null];
+            }
+        }
+        // [q] returns to Tables pane
+        if ($msg->type === KeyType::Char && $msg->rune === 'q') {
+            return [$this->withPane(Pane::Tables), null];
+        }
+        // j/k or arrows navigate within admin sidebar (with wrap-around)
+        if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+            $newCursor = ($this->admin->cursor + 1) % $count;
+            $newPane = $allPanes[$newCursor];
+            if ($newPane !== $this->admin->pane) {
+                $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+            }
+            return [$this->withAdminCursor($newCursor), null];
+        }
+        if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+            $newCursor = ($this->admin->cursor - 1 + $count) % $count;
+            $newPane = $allPanes[$newCursor];
+            if ($newPane !== $this->admin->pane) {
+                $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+            }
+            return [$this->withAdminCursor($newCursor), null];
+        }
+        // [p] pause/resume polling (sync with DashboardPage if present)
+        if ($msg->type === KeyType::Char && $msg->rune === 'p') {
+            $newPaused = !$this->admin->paused;
+            $page = $this->adminPage();
+            if ($page instanceof \SugarCraft\Sql\Admin\Dashboard\DashboardPage) {
+                $page = $page->withPaused($newPaused);
+                return [$this->withPaused($newPaused)->withAdminPage($page), null];
+            }
+            return [$this->withPaused($newPaused), null];
+        }
+        // [r] reset — drop cached query results so the next tick re-fetches
+        // everything immediately, then delegate to the admin page's update.
+        if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+            AdminQueryCache::instance()->forget();
+            $page = $this->adminPage();
+            [$newPage, ] = $page->update($msg);
+            if ($newPage !== $page) {
+                return [$this->withAdminPage($newPage), null];
+            }
+            return [$this, null];
+        }
+
+        // Delegate unhandled keys to the active page's update(), following the
+        // precedence: app-level keys (digits, q, j/k, p, r) are handled above;
+        // page keys (Tab, w, s, etc.) reach the page here. This ensures pages
+        // like VariablesPage can respond to Tab/Space/etc. while preserving
+        // the returned page state across poll-tick refreshes.
+        $page = $this->adminPage();
+        [$newPage, $cmd] = $page->update($msg);
+        return [$this->withAdminPage($newPage), $cmd];
+    }
+
+    private function editQuery(KeyMsg $msg): self
+    {
+        // Ctrl+F / Ctrl+Shift+F favorite/unfavorite shortcuts are intercepted
+        // before the widget sees them.
+        if ($msg->ctrl && !$msg->shift && $msg->rune === 'f') {
+            return $this->favoriteQuery();
+        }
+        if ($msg->ctrl && $msg->shift && $msg->rune === 'f') {
+            return $this->unfavoriteQuery();
+        }
+        // Everything else drives the editor: chars, backspace, space,
+        // Enter→newline, and Up/Down move the cursor between lines.
+        [$editor, ] = $this->editor()->update($msg);
+        return $this->mutate(['query' => $this->query->withEditor($editor)]);
+    }
+
+    private function runQuery(): self
+    {
+        $sql = $this->editor()->value();
+        $trimmed = trim($sql);
+        if ($trimmed === '') {
+            return $this;
+        }
+        // Record in history (front = newest), de-duping consecutive repeats.
+        $history = $this->query->history;
+        if (($history[0] ?? '') !== $trimmed) {
+            array_unshift($history, $trimmed);
+        }
+        try {
+            $rows = $this->connection->db->query($sql);
+            // Guard against null (e.g., connection lost after handled reconnect).
+            if ($rows === null) {
+                return $this->mutate([
+                    'query' => $this->query->withHistory($history),
+                    'ui' => $this->ui->withError('connection lost; retry')->withStatus(null),
+                ]);
+            }
+            return $this->mutate([
+                'browse' => $this->browse
+                    ->withSelectedTable('(query)')
+                    ->withRows($rows)
+                    ->withRowCursor(0)
+                    // Query results render through ResultTable (horizontal scroll,
+                    // JSON pretty, styled NULL). Cleared again on table browse.
+                    ->withResultTable(ResultTable::fromRows($rows)),
+                'query' => $this->query->withEditor($this->editor()->reset())->withHistory($history),
+                'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
+            ]);
+        } catch (\PDOException $e) {
+            return $this->mutate([
+                'query' => $this->query->withHistory($history),
+                'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
+            ]);
+        }
+    }
+
+    /**
+     * Begin executing a query, either synchronously (SQLite) or asynchronously
+     * (MySQL/Postgres).
+     *
+     * For SQLite: runs the query immediately and returns the updated model
+     * with no pending command. For async flavors: marks the model as loading,
+     * records history immediately, and returns a promise that resolves to a
+     * {@see QueryRowsLoadedMsg} which is folded back via applyQueryRows().
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function beginRunQuery(): array
+    {
+        $sql = $this->editor()->value();
+        $trimmed = trim($sql);
+        if ($trimmed === '') {
+            return [$this, null];
+        }
+
+        // Record in history immediately (front = newest), de-duping consecutive repeats.
+        $history = $this->query->history;
+        if (($history[0] ?? '') !== $trimmed) {
+            array_unshift($history, $trimmed);
+        }
+
+        // SQLite runs synchronously — a local file cannot freeze the event loop
+        // and there is no React driver for it.
+        if (!$this->isAsyncFlavor()) {
+            // Run synchronously and return without a pending command.
+            // runQuery() handles null-safety and error state internally.
+            $updated = $this->runQuery();
+            // Preserve the history that was built above (runQuery uses its own
+            // history derivation, so we fold our pre-derived one in).
+            if ($updated === $this) {
+                // Empty query — runQuery returned unchanged; restore history.
+                return [$this->mutate(['query' => $this->query->withHistory($history)]), null];
+            }
+            // runQuery already built the correct state including history.
+            return [$updated, null];
+        }
+
+        // Async flavor (MySQL/Postgres): mark loading and dispatch promise.
+        $loading = $this->mutate([
+            'browse' => $this->browse
+                ->withSelectedTable('(query)')
+                ->withRows([])
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withRowsLoading(false),
+            'query' => $this->query->withHistory($history),
+            'ui' => $this->ui->withError(null)->withStatus('running query…'),
+        ]);
+        return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed))];
+    }
+
+    /**
+     * Build the async query execution promise for MySQL/Postgres.
+     *
+     * Runs the query on the React loop via the same pooled async connection
+     * used by createRowsPromise/admin (same DSN → same connection key).
+     * Always resolves (never rejects) to prevent unhandled promise rejections.
+     *
+     * @return \React\Promise\PromiseInterface<QueryRowsLoadedMsg>
+     */
+    private function createQueryPromise(string $sql): \React\Promise\PromiseInterface
+    {
+        try {
+            $context = $this->connection->serverContext ?? $this->createContext();
+        } catch (\Throwable $e) {
+            return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage()));
+        }
+        if ($context === null) {
+            return \React\Promise\resolve(
+                new QueryRowsLoadedMsg($sql, [], 'Async query unsupported for this driver'),
+            );
+        }
+
+        $dsn = $context->connection()->dsn();
+        $username = $context->connection()->username();
+        $password = $context->password();
+        $isPostgres = $context instanceof PostgresServerContext;
+
+        $cache = AdminQueryCache::instance();
+        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+            return $isPostgres
+                ? new ReactPostgresConnection($dsn, $username, $password)
+                : new ReactMysqlConnection($dsn, $username, $password);
+        });
+
+        return $connection->query($sql)
+            ->then(
+                static fn (array $rows): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, $rows, null),
+            )
+            ->otherwise(
+                static fn (\Throwable $e): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, [], $e->getMessage()),
+            );
+    }
+
+    /**
+     * Fold an async query result into the model.
+     *
+     * Mirrors applyLoadedRows for the table-browse path. A result that arrives
+     * after the user has since run another query is considered stale and
+     * dropped — the in-flight result for the old query must not overwrite a
+     * fresh result.
+     */
+    private function applyQueryRows(QueryRowsLoadedMsg $msg): self
+    {
+        // Stale result: another query was issued after this one was dispatched.
+        if (($this->query->history[0] ?? '') !== $msg->sql) {
+            return $this;
+        }
+        if ($msg->error !== null) {
+            return $this->mutate([
+                'browse' => $this->browse->withRows([])->withResultTable(null),
+                'ui' => $this->ui->withError($msg->error)->withStatus(null),
+            ]);
+        }
+        return $this->mutate([
+            'browse' => $this->browse
+                ->withRows($msg->rows)
+                ->withRowCursor(0)
+                ->withResultTable(ResultTable::fromRows($msg->rows)),
+            'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
+        ]);
+    }
+
+    /**
+     * Begin loading a table's row preview.
+     *
+     * SQLite loads synchronously — a local file can't freeze the event loop and
+     * there is no React driver for it. MySQL/Postgres load on the React loop so
+     * a large or remote table never blocks the UI: the model is marked loading
+     * and the rows arrive later via {@see TableRowsLoadedMsg}. Either way the
+     * preview is blob-safe (see {@see PreviewQuery}) — no BLOB bytes cross the
+     * wire just to peek at a table.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function beginLoadTable(string $name): array
+    {
+        if (!$this->isAsyncFlavor()) {
+            return [$this->loadTable($name), null];
+        }
+        $loading = $this->mutate([
+            'browse' => $this->browse
+                ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+                ->withSelectedTable($name)
+                ->withRows([])
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withRowsLoading(true),
+            'ui' => $this->ui->withError(null)->withStatus('loading…'),
+        ]);
+        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name))];
+    }
+
+    /**
+     * Whether table-row browsing for this flavor must run on the React loop.
+     * SQLite is a local file (synchronous is fine and there is no async driver).
+     */
+    private function isAsyncFlavor(): bool
+    {
+        return match ($this->connection->flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona, Flavor::Postgres => true,
+            Flavor::Sqlite => false,
+        };
+    }
+
+    /**
+     * Fold an async browse result into the model. A result for a table the user
+     * has since navigated away from is stale and dropped — leaving the current
+     * in-flight load's spinner untouched.
+     */
+    private function applyLoadedRows(TableRowsLoadedMsg $msg): self
+    {
+        if ($msg->table !== $this->browse->selectedTable) {
+            return $this;
+        }
+        if ($msg->error !== null) {
+            return $this->mutate([
+                'browse' => $this->browse->withRows([])->withRowsLoading(false),
+                'ui' => $this->ui->withError($msg->error)->withStatus(null),
+            ]);
+        }
+        return $this->mutate([
+            'browse' => $this->browse
+                ->withRows($msg->rows)
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withRowsLoading(false),
+            'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
+        ]);
+    }
+
+    /**
+     * Build the non-blocking browse fetch: introspect the table's columns then
+     * fetch the blob-safe preview, BOTH on the React loop, so neither the (tiny)
+     * metadata query nor the row fetch blocks the UI. Reuses the same pooled
+     * async connection as the admin pane (same DSN → same connection key).
+     */
+    private function createRowsPromise(string $name): \React\Promise\PromiseInterface
+    {
+        try {
+            $context = $this->connection->serverContext ?? $this->createContext();
+        } catch (\Throwable $e) {
+            return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage()));
+        }
+        if ($context === null) {
+            return \React\Promise\resolve(
+                new TableRowsLoadedMsg($name, [], 'Async browse unsupported for this driver'),
+            );
+        }
+
+        $dsn = $context->connection()->dsn();
+        $username = $context->connection()->username();
+        $password = $context->password();
+        $isPostgres = $context instanceof PostgresServerContext;
+        $flavor = $isPostgres ? Flavor::Postgres : $this->connection->flavor;
+
+        $cache = AdminQueryCache::instance();
+        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+            return $isPostgres
+                ? new ReactPostgresConnection($dsn, $username, $password)
+                : new ReactMysqlConnection($dsn, $username, $password);
+        });
+
+        return $connection->query(PreviewQuery::columnsSql($flavor, $name))
+            ->then(function (array $colRows) use ($connection, $flavor, $name): \React\Promise\PromiseInterface {
+                $columns = PreviewQuery::classify($flavor, $colRows);
+                return $connection->query(PreviewQuery::build($flavor, $name, $columns));
+            })
+            ->then(
+                static fn (array $rows): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, $rows, null),
+            )
+            ->otherwise(
+                static fn (\Throwable $e): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, [], $e->getMessage()),
+            );
+    }
+
+    /**
+     * Synchronously load a blob-safe row preview. Used at startup (no event loop
+     * yet) and for SQLite browsing. The preview never selects BLOB/large-text
+     * bytes — see {@see PreviewQuery} — so even a media table loads cheaply.
+     */
+    private function loadTable(string $name): self
+    {
+        try {
+            $columns = PreviewQuery::classify(
+                $this->connection->flavor,
+                $this->connection->db->query(PreviewQuery::columnsSql($this->connection->flavor, $name)) ?? [],
+            );
+            $rows = $this->connection->db->query(PreviewQuery::build($this->connection->flavor, $name, $columns)) ?? [];
+            return $this->mutate([
+                'browse' => $this->browse
+                    ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+                    ->withSelectedTable($name)
+                    ->withRows($rows)
+                    ->withRowCursor(0)
+                    // Browsing a table → the sugar-table grid, not the query viewer.
+                    ->withResultTable(null)
+                    ->withRowsLoading(false),
+                'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
+            ]);
+        } catch (\PDOException $e) {
+            return $this->mutate([
+                'browse' => $this->browse->withRowsLoading(false),
+                'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
+            ]);
+        }
+    }
+
+    private function withTableCursor(int $i): self
+    {
+        $size = count($this->browse->tables);
+        if ($size === 0) {
+            return $this;
+        }
+        // Wrap around: moving up past the top lands on the bottom of the list,
+        // and moving down past the bottom lands back on the top. The extra
+        // "+ $size" keeps the result non-negative for the up direction (-1).
+        return $this->mutate([
+            'browse' => $this->browse->withTableCursor((($i % $size) + $size) % $size),
+        ]);
+    }
+
+    private function withAdminPane(AdminPane $adminPane): self
+    {
+        // AdminState::withPane resets the page to null, forcing lazy
+        // recreation against the new pane.
+        return $this->mutate(['admin' => $this->admin->withPane($adminPane)]);
+    }
+
+    private function withAdminCursor(int $adminCursor): self
+    {
+        $allPanes = AdminPane::orderedCases();
+        return $this->mutate([
+            'admin' => $this->admin->withCursor(max(0, min($adminCursor, count($allPanes) - 1))),
+        ]);
+    }
+
+    private function withPaused(bool $paused): self
+    {
+        return $this->mutate(['admin' => $this->admin->withPaused($paused)]);
+    }
+
+    private function withAdminPage(PageBase $newPage): self
+    {
+        return $this->mutate(['admin' => $this->admin->withPage($newPage)]);
+    }
+
+    /**
+     * Lazily create the admin page for the currently selected admin pane.
+     *
+     * Uses ServerContext (MySQL) or PostgresServerContext (PostgreSQL) to
+     * instantiate the appropriate PageBase subclass. Cache is invalidated
+     * when the admin pane changes (via AdminState::withPane resetting the
+     * page to null).
+     */
+    public function adminPage(): PageBase
+    {
+        if ($this->admin->page !== null) {
+            return $this->admin->page;
+        }
+
+        $context = $this->connection->serverContext ?? $this->createContext();
+
+        if ($context === null) {
+            // Unsupported flavor (e.g., SQLite) - use empty context to avoid render errors
+            $context = new EmptyServerContext();
+        }
+
+        // Build context with cached data if available
+        $context = new AsyncCachingServerContext(
+            $context,
+            $this->admin->cachedStatusVars,
+            $this->admin->cachedServerVars,
+            $this->admin->loading,
+            // AdminState keeps the payload's true fetchedAt beside the vars;
+            // pass it so a pane rebuild stamps the snapshot's real age
+            // instead of "now" (review MINOR-1 — false Running on rebuild).
+            statusVarsArrivedAt: $this->admin->cacheTs > 0.0 ? $this->admin->cacheTs : null,
+        );
+
+        return match ($this->admin->pane) {
+            AdminPane::ProcessList => ConnectionsPage::new($context),
+            AdminPane::Dashboard => new DashboardPage($context),
+            AdminPane::Variables => self::buildVariablesPage($context),
+            AdminPane::Status => self::buildServerStatusPage($context),
+            AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context, $context->connection()),
+            AdminPane::PerfSchema => PerfSchemaPage::new($context, EasySetupDetector::fromContext($context)),
+            AdminPane::Debug => DebugPage::new($context),
+        };
+    }
+
+    /**
+     * Create the appropriate server context based on database flavor.
+     * Returns null for unsupported flavors (e.g., SQLite).
+     *
+     * The built context is memoized per database handle in AdminQueryCache,
+     * NOT minted fresh per call (E718): adminPage() re-runs this on every pane
+     * reset, and a cold ServerContext means a cold status-variables TTL cache,
+     * which means a synchronous SHOW GLOBAL STATUS on the render path on every
+     * navigation. One shared instance lets the TTL window actually cover
+     * repeated renders.
+     */
+    private function createContext(): ?ServerContextInterface
+    {
+        $db = $this->connection->db;
+        $flavor = $this->connection->flavor;
+
+        return match ($flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => AdminQueryCache::instance()->serverContext(
+                $db,
+                static fn(DatabaseInterface $connection): ServerContextInterface => new ServerContext($connection, $flavor),
+            ),
+            Flavor::Postgres => AdminQueryCache::instance()->serverContext(
+                $db,
+                fn(DatabaseInterface $connection): ServerContextInterface => $this->createPostgresContext(),
+            ),
+            default => null,
+        };
+    }
+
+    /**
+     * Create a PostgresServerContext wrapping PostgresAdminProvider.
+     */
+    private function createPostgresContext(): ServerContextInterface
+    {
+        $provider = PostgresAdminProvider::new($this->connection->db);
+        return PostgresServerContext::new($this->connection->db, $provider);
+    }
+
+    /**
+     * Build a VariablesPage with its Catalog and VariableEditor collaborators.
+     *
+     * The catalog is loaded eagerly so loadCategories() and isEditable() work
+     * immediately. If loading fails (e.g., missing metadata file), the page
+     * still renders — it just shows an empty category tree and [rw] will be
+     * absent for all variables.
+     */
+    private static function buildVariablesPage(ServerContextInterface $context): VariablesPage
+    {
+        $catalog = Catalog::new();
+        try {
+            $catalog->load();
+        } catch (\Throwable) {
+            // Missing metadata is non-fatal — page renders without categories.
+        }
+
+        $editor = VariableEditor::new($context, $catalog);
+
+        return VariablesPage::new($context, $catalog, $editor);
+    }
+
+    /**
+     * Build a ServerStatusPage with a Sampler for per-second rate sampling.
+     *
+     * The Sampler requires a StatusSnapshotProviderInterface, so we wrap
+     * the ServerContextInterface in a ServerStatusSnapshotAdapter.
+     */
+    private static function buildServerStatusPage(ServerContextInterface $context): ServerStatusPage
+    {
+        $adapter = new ServerStatusSnapshotAdapter($context);
+        $sampler = new Sampler($adapter);
+
+        return ServerStatusPage::new($context, $sampler);
+    }
+
+    private function withPane(Pane $p): self
+    {
+        // The editor is focused only while the Query pane is active, so its
+        // cursor renders only there (matching the old per-pane cursor mark).
+        $editor = $p === Pane::Query ? $this->editor()->focus()[0] : $this->editor()->blur();
+        return $this->mutate([
+            'ui' => $this->ui->withPane($p),
+            'query' => $this->query->withEditor($editor),
+        ]);
+    }
+
+    /**
+     * The SQL editor, lazily defaulted so a freshly constructed App (e.g. in
+     * tests) needn't supply one. {@see withPane()} swaps in the focused
+     * instance when the Query pane is entered.
+     */
+    public function editor(): TextArea
+    {
+        return $this->query->editor ?? self::newEditor();
+    }
+
+    private static function newEditor(): TextArea
+    {
+        return TextArea::new()->withPlaceholder('-- type SQL, ctrl+r to run --');
+    }
+
+    private function favoriteQuery(): self
+    {
+        $trimmed = trim($this->editor()->value());
+        // No-op on an empty editor or an already-saved query.
+        if ($trimmed === '' || in_array($trimmed, $this->query->favorites, true)) {
+            return $this;
+        }
+        $favorites = $this->query->favorites;
+        array_unshift($favorites, $trimmed);
+        return $this->mutate(['query' => $this->query->withFavorites($favorites)]);
+    }
+
+    private function unfavoriteQuery(): self
+    {
+        $trimmed = trim($this->editor()->value());
+        $favorites = array_values(array_filter(
+            $this->query->favorites,
+            fn(string $f) => $f !== $trimmed
+        ));
+        return $this->mutate(['query' => $this->query->withFavorites($favorites)]);
+    }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        if ($this->ui->pane !== Pane::Admin) {
+            return null;
+        }
+
+        // ONE stable declaration while the Admin pane is open. The throttle
+        // decision (full fetch vs. pending-drain vs. silence) is made per-fire
+        // inside update()'s AdminTickMsg arm, NOT here: Program::reconcileSubscriptions()
+        // diffs subscriptions only by id, so whichever closure this method
+        // returned at install time would be locked in until the pane leaves
+        // Admin and re-enters — a declaration-time branch can never change
+        // its mind across ticks.
+        return (new Subscriptions())->withTick('admin-fetch', 1.0, static fn (): Msg => new AdminTickMsg());
+    }
+
+    /**
+     * Per-fire admin throttle. Beyond the dashboard refresh window
+     * (CacheTtl::DASHBOARD — Workbench's 1s cadence) run the full fetch —
+     * fetching inside the window would only refill a still-fresh cache.
+     * During cooldown the tick still matters: pages register
+     * pending SQL through AdminQueryCache (that is how SHOW FULL PROCESSLIST
+     * results ever arrive), so drain it; otherwise emit nothing.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleAdminTick(): array
+    {
+        $elapsed = microtime(true) - $this->admin->lastFetchAt;
+
+        // In-flight guard: while a full fetch is still running, the next due
+        // tick must not pile a second one onto the same connection — it falls
+        // through to drain-only/silence instead. The in-flight fetch drains the
+        // pending queue on completion, so nothing starves.
+        if ($elapsed >= CacheTtl::DASHBOARD && !$this->admin->loading) {
+            return [$this, Cmd::batch(
+                static fn (): Msg => new AdminFetchStartedMsg(),
+                Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
+            )];
+        }
+
+        if (AdminQueryCache::instance()->hasPending()) {
+            return [$this, Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder, drainOnly: true))];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * @param bool $drainOnly When true, skip the status/server fetch entirely and
+     *        run only the page-registered pending SQL — used by the throttled
+     *        ticks inside CacheTtl::DASHBOARD so page queries still land during the
+     *        status cooldown. Resolves AdminDrainCompletedMsg (NOT
+     *        AdminDataLoadedMsg — empty arrays there would wipe cached vars),
+     *        or null when there is nothing pending.
+     */
+    private function createAdminFetchPromise(?HistoryRecorder $recorder = null, bool $drainOnly = false): \React\Promise\PromiseInterface
+    {
+        // Wrap entire async flow in try-catch to ensure we ALWAYS return a promise.
+        // This prevents synchronous exceptions from causing unhandled promise rejections.
+        try {
+            $context = $this->connection->serverContext ?? $this->createContext();
+        } catch (\Throwable $e) {
+            // Any exception during context creation (not just RuntimeException)
+            $msg = $e->getMessage();
+            QueryLogger::log('error', 'createContext', 0, $msg);
+            return \React\Promise\resolve($drainOnly ? null : new AdminDataLoadedMsg([], [], microtime(true)));
+        }
+
+        // Null context means unsupported flavor
+        if ($context === null) {
+            return \React\Promise\resolve($drainOnly ? null : new AdminDataLoadedMsg([], [], microtime(true)));
+        }
+
+        $dsn = $context->connection()->dsn();
+        $username = $context->connection()->username();
+        $password = $context->password();
+
+        $isPostgres = $context instanceof PostgresServerContext;
+
+        // Reuse a single async connection across ticks (lazy connect — avoids
+        // opening a fresh TCP/auth connection every poll).
+        $cache = AdminQueryCache::instance();
+        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+            return $isPostgres
+                ? new ReactPostgresConnection($dsn, $username, $password)
+                : new ReactMysqlConnection($dsn, $username, $password);
+        });
+
+        if ($isPostgres) {
+            $statusQuery = "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, conflicts, temp_files, temp_bytes, deadlocks FROM pg_stat_database";
+            $serverQuery = 'SELECT name, setting FROM pg_settings';
+        } else {
+            $statusQuery = 'SHOW GLOBAL STATUS';
+            $serverQuery = 'SHOW GLOBAL VARIABLES';
+        }
+
+        // Ternary (not if/else around a 80-line literal) so the status/server
+        // queries are never even issued in drain mode — only the selected
+        // branch of a ternary is evaluated.
+        $promises = $drainOnly ? [] : [
+            'status' => $connection->query($statusQuery)
+                ->then(function(array $rows) use ($isPostgres): array {
+                    if ($isPostgres) {
+                        // pg_stat_database returns one row per database with columns like
+                        // datname, numbackends, xact_commit, blks_read, etc.
+                        // Aggregate all rows by summing numeric columns to produce
+                        // a single system-wide snapshot the calc engine can read.
+                        // WHY: PostgresWidgetCatalog widgets look up keys like
+                        // pg_stat_database.tup_fetched (RatePerSecond) or
+                        // pg_stat_database.numbackends (StatusVar) directly.
+                        // The aggregated keys take the form pg_stat_database.<column>
+                        // (e.g. pg_stat_database.tup_fetched, pg_stat_database.numbackends).
+                        // NOTE: we do NOT aggregate shared_buffers here (it's not
+                        // in pg_stat_database; it comes from pg_settings server vars).
+                        $out = [];
+                        foreach ($rows as $row) {
+                            foreach ($row as $key => $value) {
+                                if ($key === 'datname') {
+                                    continue; // skip database name identifier
+                                }
+                                if (is_numeric($value)) {
+                                    $out['pg_stat_database.' . $key] = isset($out['pg_stat_database.' . $key])
+                                        ? (string) (((int) $out['pg_stat_database.' . $key]) + ((int) $value))
+                                        : (string) ((int) $value);
+                                }
+                            }
+                        }
+                        return $out;
+                    }
+                    // MySQL: SHOW GLOBAL STATUS returns Variable_name/Value pairs
+                    $out = [];
+                    foreach ($rows as $row) {
+                        if (isset($row['Variable_name'], $row['Value'])) {
+                            $out[(string)$row['Variable_name']] = (string)$row['Value'];
+                        }
+                    }
+                    return $out;
+                }),
+            'server' => $connection->query($serverQuery)
+                ->then(function(array $rows) use ($isPostgres): array {
+                    $out = [];
+                    if ($isPostgres) {
+                        // pg_settings returns name/setting pairs.
+                        // PostgreSQL's shared_buffers is expressed in 8KB blocks (the unit
+                        // pg uses internally), but the PostgresWidgetCatalog cache panel
+                        // displays it with a byte format string (%.0f B).  We therefore
+                        // scale it here: shared_buffers value * block_size = bytes.
+                        // pg_settings.block_size is 8192 bytes on all currently supported
+                        // PG versions; we read it dynamically in case that ever changes.
+                        $blockSize = 8192;
+                        foreach ($rows as $row) {
+                            if (isset($row['name'], $row['setting'])) {
+                                $name = (string) $row['name'];
+                                $setting = (string) $row['setting'];
+                                if ($name === 'block_size' && is_numeric($setting)) {
+                                    $blockSize = (int) $setting;
+                                }
+                            }
+                        }
+                        foreach ($rows as $row) {
+                            if (isset($row['name'], $row['setting'])) {
+                                $name = (string) $row['name'];
+                                $value = (string) $row['setting'];
+                                if ($name === 'shared_buffers' && is_numeric($value)) {
+                                    // shared_buffers is stored in 8KB blocks; convert to bytes
+                                    $value = (string) (((int) $value) * $blockSize);
+                                }
+                                $out[$name] = $value;
+                            }
+                        }
+                    } else {
+                        foreach ($rows as $row) {
+                            if (isset($row['Variable_name'], $row['Value'])) {
+                                $out[(string)$row['Variable_name']] = (string)$row['Value'];
+                            } elseif (isset($row['name'], $row['setting'])) {
+                                $out[(string)$row['name']] = (string)$row['setting'];
+                            }
+                        }
+                    }
+                    return $out;
+                }),
+        ];
+
+        // Drain page-driven queries (process list, replica status, sys reports,
+        // availability) requested during the last render. Each is isolated so a
+        // single failing query can't sink the batch, and every result — even an
+        // empty one — is cached so the next render renders instead of blocking.
+        $pending = $cache->takePending();
+        if ($drainOnly && $pending === []) {
+            // Guard against a race where the queue emptied between the
+            // hasPending() check and takePending() — silently resolve, never
+            // emit an empty AdminDataLoadedMsg that would wipe cached vars.
+            return \React\Promise\resolve(null);
+        }
+        foreach ($pending as $sql) {
+            $promises[] = $connection->query($sql)->then(
+                static function(array $rows) use ($cache, $sql): void {
+                    $cache->store($sql, $rows);
+                    QueryLogger::log('query', $sql, count($rows));
+                },
+                static function(\Throwable $e) use ($cache, $sql): void {
+                    $cache->store($sql, []);
+                    QueryLogger::log('error', $sql, 0, $e->getMessage());
+                },
+            );
+        }
+
+        if ($drainOnly) {
+            return \React\Promise\all($promises)->then(
+                static fn(array $results): Msg => new AdminDrainCompletedMsg(),
+            );
+        }
+
+        return \React\Promise\all($promises)->then(function(array $results) use ($recorder, $cache): AdminDataLoadedMsg {
+            // Record status snapshot to history if recorder is configured
+            if ($recorder !== null && isset($results['status'])) {
+                $ts = microtime(true);
+                $snapshot = new StatusSnapshot($results['status'], $ts);
+                $recorder->record($snapshot);
+            }
+
+            // Store status and server variables in the shared cache so
+            // AsyncCachingServerContext can read them even before the App model
+            // is updated with the result.
+            if (isset($results['status'])) {
+                $cache->store('status', $results['status']);
+                QueryLogger::log('status', 'SHOW GLOBAL STATUS', count($results['status']));
+            }
+            if (isset($results['server'])) {
+                $cache->store('server', $results['server']);
+                QueryLogger::log('server', 'SHOW GLOBAL VARIABLES', count($results['server']));
+            }
+
+            return new AdminDataLoadedMsg(
+                statusVars: $results['status'] ?? [],
+                serverVars: $results['server'] ?? [],
+                fetchedAt: microtime(true),
+            );
+        })->otherwise(function(\Throwable $e): AdminDataLoadedMsg {
+            // Defensively wrap QueryLogger in try-catch to prevent logging errors
+            // from creating new unhandled rejections
+            try {
+                QueryLogger::log('error', 'admin fetch', 0, $e->getMessage());
+            } catch (\Throwable $logError) {
+                // Swallow logging errors to preserve error recovery path
+            }
+            return new AdminDataLoadedMsg([], [], microtime(true));
+        });
+    }
+
+    private function withAdminCachedData(array $statusVars, array $serverVars, float $ts): self
+    {
+        return $this->mutate([
+            'admin' => $this->admin->withCachedData($statusVars, $serverVars, $ts),
+        ]);
+    }
+
+    /**
+     * Mark admin data fetch as loading or complete.
+     *
+     * Unlike the old behaviour (which nulled the admin page on every tick),
+     * this preserves the existing page instance so that in-memory state —
+     * active tab, cursor position, pending edits — survives a poll-tick
+     * refresh. The page reads fresh data from the shared AdminQueryCache on
+     * the next render. Only AdminState::withPane() resets the page when the
+     * pane changes.
+     *
+     * @see AdminState::withPane() resets the page when the active pane changes.
+     */
+    private function withAdminLoading(bool $loading): self
+    {
+        return $this->mutate(['admin' => $this->admin->withLoading($loading)]);
+    }
+}

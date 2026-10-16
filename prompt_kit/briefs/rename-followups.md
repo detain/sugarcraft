@@ -33,3 +33,4 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   CI re-renders from the already-rewritten `.tape` files on the next change to the lib. Left as-is per R4.10.
 - `candy-git/.assets/icon.png` + `media/icons/candy-git.png` + `docs/img/icons/candy-git.png` — binary
   icon content untouched (path renamed only).
+- ansi/candy-sql/: 167 art pieces; some embed the pre-rename text wordmark `CandyQuery`/`QUERY` (e.g. candy-sql-5-256-m-2.ansi) — art content is C.3-excluded, redraw deferred (human), per plan R4.9.

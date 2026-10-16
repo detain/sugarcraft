@@ -1,0 +1,135 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\Terminal;
+
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Kit\Frame;
+use SugarCraft\Sql\Admin\AdminPane;
+use SugarCraft\Sql\App;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Pane;
+use SugarCraft\Sprinkles\Style;
+
+/**
+ * Wraps TUI content in a full terminal frame with title bar and status bar.
+ *
+ * The generic full-screen chrome — the double-line box, the exact-height
+ * normalisation, ANSI-width-aware padding, and the constant line count the
+ * frame-diff renderer relies on — lives in {@see Frame} (candy-kit). This class
+ * is the candy-sql-specific adapter: it measures the terminal, builds the
+ * app's title bar (name / table count / dsn / server version) and status bar
+ * (context-sensitive keybar), and hands them to Frame.
+ *
+ * @internal Renderer consumer only — not part of the public sugar-query API.
+ */
+final class BorderFrame
+{
+    /**
+     * Wrap content in a full terminal frame sized to the current terminal.
+     */
+    public static function wrap(App $a, string $content): string
+    {
+        // One size lookup so the frame matches the dimensions the content was
+        // rendered at; fall back to the Renderer's modern-terminal default.
+        try {
+            $size = \SugarCraft\Sql\Renderer::getTerminalSize();
+            $width = $size['cols'];
+            $height = $size['rows'];
+        } catch (\Throwable) {
+            $width = 200;
+            $height = 60;
+        }
+
+        return Frame::new()
+            ->withTitle(self::buildTitleBar($a))
+            ->withStatus(self::buildStatusBar($a))
+            ->render($content, $width, $height);
+    }
+
+    /**
+     * Build the title bar content.
+     *
+     * Shows: SugarSQL │ Tables: N │ dsn │ version. Only non-empty values are
+     * included.
+     */
+    private static function buildTitleBar(App $a): string
+    {
+        $titleStyle = Style::new()->bold()->foreground(Color::ansi(6)); // bold cyan
+        $infoStyle = Style::new()->foreground(Color::hex('#cbd5e3'));   // light slate
+        $sepStyle = Style::new()->foreground(Color::hex('#64748b'));    // slate
+
+        $parts = [];
+
+        // App name in bold cyan.
+        $parts[] = $titleStyle->render('SugarSQL');
+
+        // Table count.
+        $parts[] = 'Tables: ' . count($a->browse->tables);
+
+        // Connection info (dsn) — only if non-empty.
+        $dsn = $a->connection->db->dsn();
+        if ($dsn !== '') {
+            $parts[] = $infoStyle->render($dsn);
+        }
+
+        // Server version from serverContext, or flavor fallback.
+        $version = self::serverVersion($a);
+        if ($version !== '') {
+            $parts[] = $infoStyle->render($version);
+        }
+
+        return implode($sepStyle->render(' │ '), $parts);
+    }
+
+    /**
+     * Build the status bar content with context-sensitive keyboard shortcuts.
+     */
+    private static function buildStatusBar(App $a): string
+    {
+        $segments = ['Tab:cycle', '↑↓:navigate'];
+
+        if ($a->ui->pane === Pane::Tables || $a->ui->pane === Pane::Rows) {
+            $segments[] = 'Enter:load';
+        }
+        if ($a->ui->pane === Pane::Query) {
+            $segments[] = 'Ctrl+R:run';
+        }
+        if ($a->ui->pane === Pane::Admin) {
+            // Derive the digit range from the pane list so it never drifts when
+            // panes are added/removed (the audit caught a stale hardcoded "1-6"
+            // after the pane count grew to 8 — orderedCases() is the source of truth).
+            $segments[] = '1-' . count(AdminPane::orderedCases()) . ':select';
+            $segments[] = 'j/k:nav';
+            $segments[] = '[admin:' . $a->admin->pane->value . ']';
+        }
+        $segments[] = 'q:quit';
+
+        $status = implode('  ', $segments);
+
+        // Show PAUSED indicator when the admin dashboard is paused.
+        if ($a->ui->pane === Pane::Admin && $a->admin->paused) {
+            $status .= '  ' . Style::new()->bold()->foreground(Color::ansi(6))->render('[PAUSED]');
+        }
+
+        return $status;
+    }
+
+    /**
+     * Get server version string from App.
+     */
+    private static function serverVersion(App $a): string
+    {
+        if ($a->connection->serverContext !== null) {
+            return $a->connection->serverContext->versionString();
+        }
+
+        // Fallback: show flavor for non-SQLite databases.
+        if ($a->connection->flavor !== Flavor::Sqlite) {
+            return $a->connection->flavor->value;
+        }
+
+        return '';
+    }
+}

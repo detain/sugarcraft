@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Width;
  * The label column is auto-aligned to the widest label so the separators
  * line up. A null value renders as the placeholder ("—" by default) in a
  * subdued color, which is the common "Unknown"/"missing" affordance in
- * the candy-query admin panels (ServerInfoCard, ServerStatusPage,
+ * the candy-sql admin panels (ServerInfoCard, ServerStatusPage,
  * VariablesPage header rows).
  *
  * Implements Sizer so it composes directly inside a Card: the card sets

@@ -1,0 +1,197 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\App;
+
+use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Sql\Admin\History\HistoryRecorder;
+use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
+use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Pane;
+use SugarCraft\Sql\ResultTable;
+
+/**
+ * Fluent builder for App.
+ *
+ * @method self withDb(DatabaseInterface $db)
+ * @method self withFlavor(Flavor $flavor)
+ * @method self withTables(array $tables)
+ * @method self withTableCursor(int $tableCursor)
+ * @method self withSelectedTable(?string $selectedTable)
+ * @method self withRows(array $rows)
+ * @method self withRowCursor(int $rowCursor)
+ * @method self withResultTable(?ResultTable $resultTable)
+ * @method self withQueryEditor(?TextArea $queryEditor)
+ * @method self withPane(Pane $pane)
+ * @method self withError(?string $error)
+ * @method self withStatus(?string $status)
+ * @method self withQueryHistory(array $queryHistory)
+ * @method self withQueryFavorites(array $queryFavorites)
+ */
+final class AppBuilder
+{
+    private ?DatabaseInterface $db = null;
+    private Flavor $flavor = Flavor::Sqlite;
+    private array $tables = [];
+    private int $tableCursor = 0;
+    private ?string $selectedTable = null;
+    private array $rows = [];
+    private int $rowCursor = 0;
+    private ?ResultTable $resultTable = null;
+    private ?TextArea $queryEditor = null;
+    private Pane $pane = Pane::Tables;
+    private ?string $error = null;
+    private ?string $status = null;
+    private array $queryHistory = [];
+    private array $queryFavorites = [];
+    private ?string $historyDbPath = null;
+
+    public function withDb(DatabaseInterface $db): self
+    {
+        $clone = clone $this;
+        $clone->db = $db;
+        return $clone;
+    }
+
+    public function withFlavor(Flavor $flavor): self
+    {
+        $clone = clone $this;
+        $clone->flavor = $flavor;
+        return $clone;
+    }
+
+    public function withTables(array $tables): self
+    {
+        $clone = clone $this;
+        $clone->tables = $tables;
+        return $clone;
+    }
+
+    public function withTableCursor(int $tableCursor): self
+    {
+        $clone = clone $this;
+        $clone->tableCursor = $tableCursor;
+        return $clone;
+    }
+
+    public function withSelectedTable(?string $selectedTable): self
+    {
+        $clone = clone $this;
+        $clone->selectedTable = $selectedTable;
+        return $clone;
+    }
+
+    public function withRows(array $rows): self
+    {
+        $clone = clone $this;
+        $clone->rows = $rows;
+        return $clone;
+    }
+
+    public function withRowCursor(int $rowCursor): self
+    {
+        $clone = clone $this;
+        $clone->rowCursor = $rowCursor;
+        return $clone;
+    }
+
+    public function withResultTable(?ResultTable $resultTable): self
+    {
+        $clone = clone $this;
+        $clone->resultTable = $resultTable;
+        return $clone;
+    }
+
+    public function withQueryEditor(?TextArea $queryEditor): self
+    {
+        $clone = clone $this;
+        $clone->queryEditor = $queryEditor;
+        return $clone;
+    }
+
+    public function withPane(Pane $pane): self
+    {
+        $clone = clone $this;
+        $clone->pane = $pane;
+        return $clone;
+    }
+
+    public function withError(?string $error): self
+    {
+        $clone = clone $this;
+        $clone->error = $error;
+        return $clone;
+    }
+
+    public function withStatus(?string $status): self
+    {
+        $clone = clone $this;
+        $clone->status = $status;
+        return $clone;
+    }
+
+    public function withQueryHistory(array $queryHistory): self
+    {
+        $clone = clone $this;
+        $clone->queryHistory = $queryHistory;
+        return $clone;
+    }
+
+    public function withQueryFavorites(array $queryFavorites): self
+    {
+        $clone = clone $this;
+        $clone->queryFavorites = $queryFavorites;
+        return $clone;
+    }
+
+    /**
+     * Enable history recording with the specified SQLite file path.
+     * When set, admin fetch results are persisted for later rate analysis.
+     */
+    public function withHistoryDbPath(?string $path): self
+    {
+        $clone = clone $this;
+        $clone->historyDbPath = $path;
+        return $clone;
+    }
+
+    public function build(): \SugarCraft\Sql\App
+    {
+        if ($this->db === null) {
+            throw new \LogicException('db is required');
+        }
+
+        $historyRecorder = null;
+        if ($this->historyDbPath !== null) {
+            $store = new SqliteHistoryStore($this->historyDbPath);
+            $historyRecorder = new HistoryRecorder($store);
+        }
+
+        // The builder keeps its flat with*() surface for callers; the App
+        // constructor itself takes cohesive state value objects (plan 3.3).
+        return new \SugarCraft\Sql\App(
+            ConnectionState::new($this->db, $this->flavor),
+            new BrowseState(
+                tables: $this->tables,
+                tableCursor: $this->tableCursor,
+                selectedTable: $this->selectedTable,
+                rows: $this->rows,
+                rowCursor: $this->rowCursor,
+                resultTable: $this->resultTable,
+            ),
+            new QueryState(
+                editor: $this->queryEditor,
+                history: $this->queryHistory,
+                favorites: $this->queryFavorites,
+            ),
+            new UiState(
+                pane: $this->pane,
+                error: $this->error,
+                status: $this->status,
+            ),
+            new AdminState(historyRecorder: $historyRecorder),
+        );
+    }
+}

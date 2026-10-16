@@ -182,7 +182,7 @@ final class AsyncOps
      * themselves, and cancelling the RETURNED promise behaves exactly like
      * cancelling through the token.
      *
-     * Extracted from the candy-query CancellableQuery pattern.
+     * Extracted from the candy-sql CancellableQuery pattern.
      *
      * Note: {@see CancellationToken} has no callback unregistration, so a
      * token reused across many operations accumulates one (settled-guarded,

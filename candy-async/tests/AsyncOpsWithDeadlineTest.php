@@ -15,7 +15,7 @@ use function React\Promise\reject;
 use function React\Promise\resolve;
 
 /**
- * Guards the cancelling-deadline semantics ported from candy-query's
+ * Guards the cancelling-deadline semantics ported from candy-sql's
  * QueryTimeout (port Q4): a promise that never settles (network partition —
  * drivers only reject on an observed socket error) must reject with
  * TimeoutException, CANCEL the inner, and fire the abort hook exactly once —

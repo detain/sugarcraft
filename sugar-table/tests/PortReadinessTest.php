@@ -10,7 +10,7 @@ use SugarCraft\Table\{Column, ColumnWidth, Row, RowData, Table};
 
 /**
  * Port-readiness pins for the audit fix wave (findings #1-#10): the exact
- * behaviours candy-query's ResultTable will rely on when it unifies into this
+ * behaviours candy-sql's ResultTable will rely on when it unifies into this
  * lib. One focused test per finding, each naming the finding it guards.
  */
 final class PortReadinessTest extends TestCase

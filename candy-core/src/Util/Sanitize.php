@@ -57,7 +57,7 @@ namespace SugarCraft\Core\Util;
  * Elm-architecture TUI runtime with no text sanitizer — see `docs/MATCHUPS.md`):
  *   - `controlChars()` — extracted from sugar-bits' per-cell `sanitizeCell`
  *     helper (commit 114118393);
- *   - `cellValue()` — byte-identical to candy-query's `CellValue::sanitize()`
+ *   - `cellValue()` — byte-identical to candy-sql's `CellValue::sanitize()`
  *     (commit 8ac981ebf);
  *   - `untrusted()` — ported from sugar-dash (commit 8ac981ebf).
  * Consolidating them gives every component one audited injection boundary.
@@ -159,7 +159,7 @@ final class Sanitize
      * Invalid UTF-8 bytes become U+FFFD rather than being silently dropped,
      * so binary/BLOB data keeps a 1:1 visible stand-in and downstream
      * width/truncation math stays sane. This is the canonical policy that
-     * the sugar-table and candy-query grids share.
+     * the sugar-table and candy-sql grids share.
      *
      * @param string $value            Raw, already-stringified cell value.
      * @param bool   $preserveNewlines When true, keep line breaks as "\n" so

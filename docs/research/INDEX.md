@@ -41,7 +41,7 @@ To implement an item:
 | **sugar-stickers** | [research/libraries/sugar-stickers-research.md](libraries/sugar-stickers-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
 | **sugar-boxer** | [research/libraries/sugar-boxer-research.md](libraries/sugar-boxer-research.md) | 1. Box styles enum, 2. Text alignment, 3. Box titles |
 | **sugar-crumbs** | [research/libraries/sugar-crumbs-research.md](libraries/sugar-crumbs-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
-| **MySQL Workbench status & performance dashboard** (candy-query parity study) | [mysql_workbench_dash.md](mysql_workbench_dash.md) | 1. Performance page metrics, 2. Two-connection cache model, 3. Page lifecycle / event-task model |
+| **MySQL Workbench status & performance dashboard** (candy-sql parity study) | [mysql_workbench_dash.md](mysql_workbench_dash.md) | 1. Performance page metrics, 2. Two-connection cache model, 3. Page lifecycle / event-task model |
 
 ### Input & Readline
 
@@ -91,7 +91,7 @@ To implement an item:
 | **candy-git** | [research/libraries/candy-git-research.md](libraries/candy-git-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
 | **sugar-crush** | [research/libraries/sugar-crush-research.md](libraries/sugar-crush-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
 | **sugar-post** | [research/libraries/sugar-post-research.md](libraries/sugar-post-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
-| **candy-query** | [research/libraries/candy-query-research.md](libraries/candy-query-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
+| **candy-sql** | [research/libraries/candy-sql-research.md](libraries/candy-sql-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
 | **candy-lister** | [research/libraries/candy-lister-research.md](libraries/candy-lister-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
 | **super-candy** | [research/libraries/super-candy-research.md](libraries/super-candy-research.md) | 1. Copy/move, 2. Bookmarks, 3. Preview |
 | **candy-serve** | [research/libraries/candy-serve-research.md](libraries/candy-serve-research.md) | 1. Interactive TUI, 2. Repo browser, 3. HTTP server |

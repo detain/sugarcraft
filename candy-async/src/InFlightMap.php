@@ -16,7 +16,7 @@ use React\Promise\PromiseInterface;
  * can settle synchronously, and freed exactly once when it does). One home for
  * that law keeps it pinned once.
  *
- * Extracted from the candy-query/phlix pattern.
+ * Extracted from the candy-sql/phlix pattern.
  *
  * @internal  Library plumbing — not part of the public API.
  */

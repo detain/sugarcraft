@@ -20,7 +20,7 @@ For every changed file:
    - Command injection — every external CLI invocation must use `escapeshellarg((string)($field ?? ''))` for every argument.
    - Path traversal — file paths from user input or env must be `realpath()`'d and confined.
    - ANSI injection — untrusted strings rendered to the terminal must be sanitised (strip C0/C1 controls).
-   - SQL injection — `candy-query` work must use parameterised statements via the abstraction layer.
+   - SQL injection — `candy-sql` work must use parameterised statements via the abstraction layer.
    `Severity: critical` for any active vulnerability; `Severity: high` for hardening misses.
 5. **Bad logic** — off-by-one, type juggling (`==` vs `===`), missing nullable handling, race conditions in flock/JSONL appenders.
 6. **Convention drift**:

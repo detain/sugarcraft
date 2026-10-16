@@ -841,7 +841,7 @@ Fixed by pinning `StreamSelectLoop` in `tests/bootstrap.php`. 8/8 green after,
 at no time cost. Production is immune because `Program::run()` drives one
 continuous `uv_run()`.
 
-**Other libs are plausibly flaking for this reason** — candy-query, candy-wish,
+**Other libs are plausibly flaking for this reason** — candy-sql, candy-wish,
 candy-pty, candy-mosaic. Signature: intermittent failure consuming no wall time.
 
 ### New evidence for #54, the intermittent hang (2026-08-14)
@@ -11817,7 +11817,7 @@ at `e765b1742`) over six waves.
 sugar-glow **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5),
 sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6), candy-input 307/40762/1S,
 candy-pty 663/1862/1W(base-carry)/17S, candy-core 862/7646/27S, candy-serve 354/875, sugar-reel 361/2473/1S,
-candy-mosaic 465/7783/6S, candy-query 1483/4203, sugar-skate 206/427 (audit-only); sugar-crush
+candy-mosaic 465/7783/6S, candy-sql 1483/4203, sugar-skate 206/427 (audit-only); sugar-crush
 **11,991 / 172,291 / 0F / 0E / 1S (McpClientTest canary) / EXIT 0 — UNCHANGED**: a sibling-lib round that
 touched ZERO sugar-crush files moved ZERO sugar-crush figures (q15's eight candy-vcr test rebinds are the
 closest approach; the `Vt|Terminal|Buffer` filter re-measured byte-identical 288T/20970A).

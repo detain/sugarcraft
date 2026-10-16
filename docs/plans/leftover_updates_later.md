@@ -428,7 +428,7 @@ handled by the monorepo.) Skip until someone uses it as a template.
 (See SSOT-08 — most of the work happens here.) Specifically the
 research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 
-### candy-query
+### candy-sql
 
 - Schema browser via PRAGMA queries (P1).
 - Pagination (P2).

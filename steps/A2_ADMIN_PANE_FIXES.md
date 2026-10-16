@@ -45,4 +45,4 @@ The current 6 panes are:
 
 ## Coder Notes
 - If renaming enum cases, update ALL references in App.php, tests, and anywhere AdminPane is used
-- Use `grep -r "AdminPane::" /home/sites/sugarcraft/candy-query/src` to find all usages before renaming
+- Use `grep -r "AdminPane::" /home/sites/sugarcraft/candy-sql/src` to find all usages before renaming

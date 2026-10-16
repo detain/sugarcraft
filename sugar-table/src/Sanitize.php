@@ -12,7 +12,7 @@ namespace SugarCraft\Table;
  *
  * This is a thin delegator onto the canonical policy in
  * {@see \SugarCraft\Core\Util\Sanitize::cellValue()} — the single source of
- * truth shared with the candy-query grid. Delegating converges sugar-table
+ * truth shared with the candy-sql grid. Delegating converges sugar-table
  * onto that one behavior: newlines collapse to ↵ (U+21B5), TAB and every other
  * control byte become · (U+00B7), and invalid UTF-8 is repaired to U+FFFD
  * rather than silently dropped.

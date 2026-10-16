@@ -527,7 +527,7 @@ final class Toast
      *
      * Lowercase `view()` per the project renderer convention; PHP method
      * dispatch is case-insensitive, so the legacy `View()` call sites in
-     * sugar-dash/candy-query keep resolving here without an alias.
+     * sugar-dash/candy-sql keep resolving here without an alias.
      *
      * @param string $background  The underlying viewport content
      * @param int $viewportWidth  Viewport width in cells

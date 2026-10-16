@@ -113,8 +113,8 @@ flag_management:
     - name: candy-git
       paths: ["candy-git/src/**"]
       carryforward: true
-    - name: candy-query
-      paths: ["candy-query/src/**"]
+    - name: candy-sql
+      paths: ["candy-sql/src/**"]
       carryforward: true
     - name: sugar-tick
       paths: ["sugar-tick/src/**"]
@@ -379,12 +379,12 @@ component_management:
         - "candy-git/src/**"
       flag_regexes:
         - "^candy-git$"
-    - component_id: candy-query
-      name: candy-query
+    - component_id: candy-sql
+      name: candy-sql
       paths:
-        - "candy-query/src/**"
+        - "candy-sql/src/**"
       flag_regexes:
-        - "^candy-query$"
+        - "^candy-sql$"
     - component_id: sugar-tick
       name: sugar-tick
       paths:

@@ -26,7 +26,7 @@ Scaffolds a new MCP tool exposed by a SugarCraft library over the Model Context 
 From the lib slug and the operation the maintainer described, derive:
 
 ```
-Lib: candy-query    Tool: query    FQN: SugarCraft\Query\MCP\QueryMcpServer
+Lib: candy-sql    Tool: query    FQN: SugarCraft\Sql\MCP\QueryMcpServer
 Lib: sugar-charts  Tool: chart    FQN: SugarCraft\Charts\MCP\ChartMcpServer
 ```
 

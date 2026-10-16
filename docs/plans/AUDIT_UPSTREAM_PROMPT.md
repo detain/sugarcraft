@@ -185,7 +185,7 @@ that are tiny but together justify a PR.
 - Broderick-Westrope/tetrigo → candy-tetris
 - yorukot/superfile → super-candy
 - jesseduffield/lazygit → candy-git
-- jorgerojas26/lazysql → candy-query
+- jorgerojas26/lazysql → candy-sql
 - Rtarun3606k/TakaTime → sugar-tick
 - maxpaulus43/go-sweep → candy-minesweeper
 - namzug16/gifterm → candy-flip

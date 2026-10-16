@@ -1,0 +1,75 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\Tests\Admin;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Sql\Admin\AdminQueryCache;
+use SugarCraft\Sql\Admin\CacheTtl;
+use SugarCraft\Sql\Admin\PostgresServerContext;
+use SugarCraft\Sql\Admin\ServerContext;
+
+/**
+ * Guards the single-source-of-truth property of the cache TTLs: the freshness
+ * windows were previously duplicated as private per-file constants (3.0 / 30.0
+ * under three different names), so one copy could drift and silently change
+ * refresh behaviour in only one layer. Every consumer must resolve to CacheTtl.
+ */
+final class CacheTtlTest extends TestCase
+{
+    public function testStatusWindowIsThreeSecondsAndServerWindowThirty(): void
+    {
+        $this->assertSame(3.0, CacheTtl::STATUS);
+        $this->assertSame(30.0, CacheTtl::SERVER);
+        $this->assertLessThan(
+            CacheTtl::SERVER,
+            CacheTtl::STATUS,
+            'live status must refresh more often than near-static server config',
+        );
+    }
+
+    public function testDashboardWindowIsOneSecondBelowStatus(): void
+    {
+        $this->assertSame(1.0, CacheTtl::DASHBOARD);
+        $this->assertLessThan(
+            CacheTtl::STATUS,
+            CacheTtl::DASHBOARD,
+            "Workbench's dashboard cadence is the fastest window — one second",
+        );
+    }
+
+    public function testAdminQueryCacheTtlResolvesToTheSharedStatusWindow(): void
+    {
+        $ttl = new \ReflectionClassConstant(AdminQueryCache::class, 'TTL');
+
+        $this->assertSame(CacheTtl::STATUS, $ttl->getValue());
+    }
+
+    public function testServerContextsResolveToTheSharedWindows(): void
+    {
+        foreach ([ServerContext::class, PostgresServerContext::class] as $context) {
+            $status = new \ReflectionClassConstant($context, 'STATUS_CACHE_TTL');
+            $server = new \ReflectionClassConstant($context, 'SERVER_CACHE_TTL');
+
+            $this->assertSame(CacheTtl::STATUS, $status->getValue(), $context);
+            $this->assertSame(CacheTtl::SERVER, $server->getValue(), $context);
+        }
+    }
+
+    public function testAppThrottleReferencesTheSharedConstantNotAMagicNumber(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/App.php');
+
+        $this->assertStringContainsString(
+            'CacheTtl::DASHBOARD',
+            $source,
+            'the admin-fetch throttle must reference the shared dashboard window, not a magic number',
+        );
+        $this->assertStringNotContainsString(
+            '$elapsed < 3.0',
+            $source,
+            'the admin-fetch throttle must not re-inline the magic 3.0',
+        );
+    }
+}

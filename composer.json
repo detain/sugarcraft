@@ -62,7 +62,7 @@
         "sugarcraft/candy-mosaic": "dev-master",
         "sugarcraft/candy-palette": "dev-master",
         "sugarcraft/candy-pty": "dev-master",
-        "sugarcraft/candy-query": "dev-master",
+        "sugarcraft/candy-sql": "dev-master",
         "sugarcraft/candy-serve": "dev-master",
         "sugarcraft/candy-testing": "dev-master",
         "sugarcraft/candy-shell": "dev-master",
@@ -265,7 +265,7 @@
         },
         {
             "type": "path",
-            "url": "candy-query",
+            "url": "candy-sql",
             "options": {
                 "symlink": true
             }

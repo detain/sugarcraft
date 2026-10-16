@@ -1,0 +1,216 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\bin;
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-sql: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Sql\App;
+use SugarCraft\Sql\App\AppBuilder;
+use SugarCraft\Sql\Db\ConnectionFactory;
+use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\MysqlDatabase;
+use SugarCraft\Sql\Db\PostgresDatabase;
+use SugarCraft\Sql\Db\SqliteDatabase;
+use SugarCraft\Sql\Lang;
+
+$argv = $argv ?? [];
+
+// Handle --help/-h and --version/-V before anything else
+$exit = handleGlobalFlags($argv);
+if ($exit !== null) {
+    exit($exit);
+}
+
+$database = buildDatabase($argv);
+
+// Extract flavor from database type
+$flavor = match (true) {
+    $database instanceof MysqlDatabase => Flavor::MySQL,
+    $database instanceof PostgresDatabase => Flavor::Postgres,
+    $database instanceof SqliteDatabase => Flavor::Sqlite,
+    default => Flavor::Sqlite,
+};
+
+(new Program(
+    App::start($database, $flavor),
+    new ProgramOptions(useAltScreen: true),
+))->run();
+
+/**
+ * Print help or handle version flag, return exit code or null to continue.
+ *
+ * @param array<string> $argv
+ * @return int|null null means "continue", int means "exit with this code"
+ */
+function handleGlobalFlags(array $argv): ?int
+{
+    $args = array_slice($argv, 1);
+    $hasHelp = false;
+    $hasVersion = false;
+
+    foreach ($args as $arg) {
+        // Normalize: strip leading dashes, split on =, take the flag name
+        $normalized = ltrim($arg, '-');
+        if (str_contains($normalized, '=')) {
+            [$flag] = explode('=', $normalized, 2);
+        } else {
+            $flag = $normalized;
+        }
+
+        if (in_array($flag, ['h', 'help'], true)) {
+            $hasHelp = true;
+        }
+        if (in_array($flag, ['V', 'version'], true)) {
+            $hasVersion = true;
+        }
+    }
+
+    if ($hasVersion) {
+        fwrite(STDOUT, "candy-sql 1.0.0\n");
+        return 0;
+    }
+
+    if ($hasHelp) {
+        showHelp();
+        return 0;
+    }
+
+    return null;
+}
+
+/**
+ * Print the full help screen.
+ */
+function showHelp(): void
+{
+    fwrite(STDOUT, <<<'HELP'
+candy-sql - Terminal SQL client for SQLite, MySQL and PostgreSQL
+
+USAGE
+  candy-sql [OPTIONS] [path-or-dsn]
+
+ARGUMENTS
+  path-or-dsn
+    SQLite database file path, e.g.: app.sqlite
+    Or a DSN string, e.g.:  mysql://user:pass@localhost:3306/dbname
+
+  When omitted entirely, this help is shown.
+
+OPTIONS
+  --help, -h
+    Show this help screen.
+
+  --version, -V
+    Show the version number.
+
+  --dsn=<dsn>
+    Full DSN connection string.
+    Format: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Examples:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:
+
+  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Individual connection parameters (all except --driver and --db are optional).
+    --driver must be one of: sqlite, mysql, pgsql
+    --ssl-mode defaults to "prefer" for MySQL.
+
+EXAMPLES
+  # SQLite (default — bare path or DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # MySQL via DSN
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL via individual flags
+  candy-sql --driver=mysql --host=localhost --port=3306 --user=root --pass=secret --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb
+
+KEYBOARD SHORTCUTS (TUI)
+  Tab         Cycle focus through panes (Tables → Rows → Query)
+  ↑ / ↓       Navigate list rows (or j/k)
+  Enter       Load selected table's rows
+  Ctrl+Enter  Execute the current query
+  Ctrl+R      Execute the current query
+  q           Quit (from Tables or Rows pane)
+
+SEE ALSO
+  https://github.com/sugarcraft/candy-sql
+
+HELP
+    );
+}
+
+/**
+ * Build a DatabaseInterface from CLI arguments.
+ *
+ * Supports:
+ *   - Bare path (e.g. app.sqlite) → SQLite connection
+ *   - DSN as first argument (e.g. mysql://user:pass@host:3306/db)
+ *   - --dsn=<dsn> → ConnectionFactory::fromDsn()
+ *   - --driver=<driver> --db=<db> [--host=<host>] [--port=<port>]
+ *     [--user=<user>] [--pass=<pass>] [--ssl-mode=<mode>]
+ *
+ * @param array<string> $argv Command line arguments (includes script name at index 0)
+ * @return DatabaseInterface
+ */
+function buildDatabase(array $argv): DatabaseInterface
+{
+    // Filter out the script name at index 0
+    $args = array_slice($argv, 1);
+
+    // No arguments → show usage
+    if ($args === []) {
+        fwrite(STDOUT, "USAGE: candy-sql [OPTIONS] [path-or-dsn]\n");
+        fwrite(STDOUT, "       candy-sql --help   # for full usage information\n");
+        exit(1);
+    }
+
+    // Check if first argument is a bare path (doesn't start with --)
+    // or is a DSN string (contains ://)
+    $firstArg = $args[0];
+
+    if (!str_starts_with($firstArg, '--') && !str_contains($firstArg, '://')) {
+        // Bare path → SQLite connection (default behavior preserved)
+        return ConnectionFactory::fromPath($firstArg);
+    }
+
+    // Check for DSN as first argument (e.g., mysql://user:pass@host:3306/db)
+    if (str_contains($firstArg, '://')) {
+        // DSN passed as first argument without --dsn= prefix
+        array_unshift($args, '--dsn=' . $firstArg);
+    }
+
+    // Parse and build from ConnectionFactory
+    return ConnectionFactory::fromArgv($args);
+}

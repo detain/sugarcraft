@@ -24,7 +24,7 @@ For each sugarcraft/* package used:
 
 ## Files to Modify
 
-1. **`candy-query/composer.json`** — Add any missing path repo entries
+1. **`candy-sql/composer.json`** — Add any missing path repo entries
 
 ## Current Repos Already Present
 
@@ -33,7 +33,7 @@ For each sugarcraft/* package used:
 - candy-fuzzy, candy-pty, sugar-bits, candy-kit
 
 ## Check for Missing
-Run: `grep -h "sugarcraft/" /home/sites/sugarcraft/candy-query/composer.json | grep -v "sugarcraft/candy-query"`
+Run: `grep -h "sugarcraft/" /home/sites/sugarcraft/candy-sql/composer.json | grep -v "sugarcraft/candy-sql"`
 
 Compare against actual imports in source to find missing ones.
 

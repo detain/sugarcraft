@@ -42,11 +42,11 @@ trait Mutable
 
 - `candy-flip/src/Player.php`
 - `sugar-wishlist/src/Endpoint.php`
-- `candy-query/src/App.php`
+- `candy-sql/src/App.php`
 - `sugar-post/src/Email.php`
 - `candy-mouse/src/ClickCounter.php`
 - `candy-shine/src/Style/StyleSheet.php`
-- `candy-query/src/Admin/PerfSchema/*` (6 setup classes)
+- `candy-sql/src/Admin/PerfSchema/*` (6 setup classes)
 - `candy-forms/src/TextArea/TextArea.php`
 
 ### Classes With Local `mutate()` Implementations (Examples)
@@ -126,7 +126,7 @@ interface Model
 - `candy-minesweeper/src/Game.php`
 - `candy-tetris/src/Game.php`, `VsGame.php`
 - `candy-mosaic/src/AnimationDriver.php`
-- `candy-query/src/App.php`
+- `candy-sql/src/App.php`
 
 **sugar-* libs (20+):**
 - `sugar-bits/src/Table.php`, `Tabs.php`, `Tree.php`, `Timer.php`, `Stopwatch.php`, `Paginator.php`, `Progress/AnimatedProgress.php`

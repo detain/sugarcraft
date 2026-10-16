@@ -1,6 +1,6 @@
-# Step 09.16 — candy-query saved queries + explain plan + h-scroll + JSON/NULL
+# Step 09.16 — candy-sql saved queries + explain plan + h-scroll + JSON/NULL
 
-**Source:** `leftover_updates_later.md` candy-query P4-P7
+**Source:** `leftover_updates_later.md` candy-sql P4-P7
 **Branch:** `ai/query-saved-explain-scroll-jsonnull`
 
 ## Deliverable
@@ -14,9 +14,9 @@
 
 **Create/Modify:**
 
-- `candy-query/src/SnippetStore.php`.
-- `candy-query/src/ExplainView.php`.
-- `candy-query/src/ResultTable.php` — h-scroll + JSON pretty print.
+- `candy-sql/src/SnippetStore.php`.
+- `candy-sql/src/ExplainView.php`.
+- `candy-sql/src/ResultTable.php` — h-scroll + JSON pretty print.
 
 ## Tests
 
@@ -24,7 +24,7 @@
 
 ## Acceptance
 
-- `cd candy-query && vendor/bin/phpunit` green.
+- `cd candy-sql && vendor/bin/phpunit` green.
 
 ---
 

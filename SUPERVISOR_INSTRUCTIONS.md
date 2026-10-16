@@ -1,11 +1,11 @@
-# Supervisor Instructions: candy-query Bug Fixes
+# Supervisor Instructions: candy-sql Bug Fixes
 
 ## Overview
 
 
 
 
-You are the **orchestrator** for 14 bug fixes in the `candy-query` library. Your role is to delegate work to subagents, NOT to investigate or write code directly. You manage the pipeline, track status, and ensure each step is properly reviewed and merged.
+You are the **orchestrator** for 14 bug fixes in the `candy-sql` library. Your role is to delegate work to subagents, NOT to investigate or write code directly. You manage the pipeline, track status, and ensure each step is properly reviewed and merged.
 
 ---
 
@@ -48,7 +48,7 @@ task tool → subagent_type: coder
 prompt: [contents of the step file]
 ```
 
-The coder implements the fix in `candy-query/`.
+The coder implements the fix in `candy-sql/`.
 
 ### Step B: Reviewer Subagent (if issues found)
 
@@ -56,7 +56,7 @@ The coder implements the fix in `candy-query/`.
 
 ```
 task tool → subagent_type: reviewer
-prompt: "Review the changes in candy-query/ for [issue]. 
+prompt: "Review the changes in candy-sql/ for [issue]. 
 Focus on: [specific concerns from the step file].
 Report any problems found."
 ```
@@ -70,7 +70,7 @@ Report any problems found."
 
 ```
 task tool → subagent_type: TestEngineer
-prompt: "Write PHPUnit tests for the changes made in step [X] of candy-query.
+prompt: "Write PHPUnit tests for the changes made in step [X] of candy-sql.
 Tests should cover: [specific test cases from the step file].
 Run vendor/bin/phpunit to verify."
 ```
@@ -81,7 +81,7 @@ Run vendor/bin/phpunit to verify."
 
 ```
 task tool → subagent_type: scribe
-prompt: "Update documentation for candy-query after step [X] changes.
+prompt: "Update documentation for candy-sql after step [X] changes.
 Update: [specific docs to update from the step file]."
 ```
 
@@ -93,7 +93,7 @@ Update: [specific docs to update from the step file]."
 cd /home/sites/sugarcraft
 git add -A
 git commit -m "[Step X]: [brief description]"
-git push origin ai/candy-query-[short]
+git push origin ai/candy-sql-[short]
 ```
 
 ### Step F: Create & Merge PR
@@ -132,7 +132,7 @@ Maintain `/home/sites/sugarcraft/updates.md`:
 
 ```markdown
 
-# candy-query Bug Fix Status
+# candy-sql Bug Fix Status
 
 ## Overall: IN PROGRESS (X/14 complete)
 
@@ -166,8 +166,8 @@ Maintain `/home/sites/sugarcraft/updates.md`:
 
 After ALL 14 steps complete:
 
-1. Run a final reviewer pass across entire `candy-query/`
-2. Run full test suite: `vendor/bin/phpunit` in candy-query
+1. Run a final reviewer pass across entire `candy-sql/`
+2. Run full test suite: `vendor/bin/phpunit` in candy-sql
 3. Address any remaining issues
 4. Final commit if needed
 5. Create final PR with full changelog
@@ -250,7 +250,7 @@ When a BLOCKING issue is found:
 For EACH step after review is clean:
 
 1. `git add -A && git commit -m "[Step X]: [desc]"`
-2. `git push origin ai/candy-query-[short]`
+2. `git push origin ai/candy-sql-[short]`
 3. `unset GITHUB_TOKEN && gh pr create ...`
 4. `unset GITHUB_TOKEN && gh pr merge [n] --merge --delete-branch`
 5. `git checkout master && git pull --ff-only`

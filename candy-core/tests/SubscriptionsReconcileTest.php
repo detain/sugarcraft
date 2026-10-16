@@ -217,7 +217,7 @@ final class SubscriptionsReconcileTest extends TestCase
      * model's declared subscriptions even when no `subscriptions:` closure is
      * passed to ProgramOptions. Otherwise every consumer has to remember to wire
      * `subscriptions: fn($m) => $m->subscriptions()` by hand or their ticks
-     * silently never fire (regression: candy-query admin polling).
+     * silently never fire (regression: candy-sql admin polling).
      */
     public function testProgramStartsSubscriptionWithoutExplicitOptionClosure(): void
     {

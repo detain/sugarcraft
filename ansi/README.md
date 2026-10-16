@@ -1686,179 +1686,179 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-palette-9-tc-s-2.ansi` | 64x12 | truecolor | 38 | Jewel beetle elytra row: five gradient carapaces with sheen and splay legs on velvet |
 <!-- END candy-palette SLOTS -->
 
-<!-- BEGIN candy-query SLOTS -->
-### candy-query — slot series
+<!-- BEGIN candy-sql SLOTS -->
+### candy-sql — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-query-1-16-l-7.ansi` | 200x40 | 16 | 12 | data canyon: starlit sky over carved sediment strata, fossil records, row river with barges |
-| `candy-query-1-16-l-8.ansi` | 164x34 | 16 | 15 | chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY |
-| `candy-query-1-16-l-9.ansi` | 148x32 | 16 | 17 | schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground |
-| `candy-query-1-16-m-4.ansi` | 86x24 | 16 | 14 | SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark |
-| `candy-query-1-16-m-5.ansi` | 86x24 | 16 | 14 | performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome |
-| `candy-query-1-16-m-6.ansi` | 86x24 | 16 | 8 | EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages |
-| `candy-query-1-16-s-1.ansi` | 62x12 | 16 | 11 | candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker |
-| `candy-query-1-16-s-2.ansi` | 62x12 | 16 | 9 | magnifier scanning a mini sweets grid with loading bar and qps sparkline |
-| `candy-query-1-16-s-3.ansi` | 62x12 | 16 | 11 | gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode |
-| `candy-query-1-256-l-7.ansi` | 200x40 | 256 | 50 | data canyon: starlit sky over carved sediment strata, fossil records, row river with barges |
-| `candy-query-1-256-l-8.ansi` | 164x34 | 256 | 50 | chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY |
-| `candy-query-1-256-l-9.ansi` | 148x32 | 256 | 43 | schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground |
-| `candy-query-1-256-m-4.ansi` | 86x24 | 256 | 21 | SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark |
-| `candy-query-1-256-m-5.ansi` | 86x24 | 256 | 33 | performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome |
-| `candy-query-1-256-m-6.ansi` | 86x24 | 256 | 19 | EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages |
-| `candy-query-1-256-s-1.ansi` | 62x12 | 256 | 17 | candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker |
-| `candy-query-1-256-s-2.ansi` | 62x12 | 256 | 17 | magnifier scanning a mini sweets grid with loading bar and qps sparkline |
-| `candy-query-1-256-s-3.ansi` | 62x12 | 256 | 37 | gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode |
-| `candy-query-1-tc-l-7.ansi` | 200x40 | truecolor | 485 | data canyon: starlit sky over carved sediment strata, fossil records, row river with barges |
-| `candy-query-1-tc-l-8.ansi` | 164x34 | truecolor | 277 | chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY |
-| `candy-query-1-tc-l-9.ansi` | 148x32 | truecolor | 104 | schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground |
-| `candy-query-1-tc-m-4.ansi` | 86x24 | truecolor | 23 | SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark |
-| `candy-query-1-tc-m-5.ansi` | 86x24 | truecolor | 46 | performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome |
-| `candy-query-1-tc-m-6.ansi` | 86x24 | truecolor | 22 | EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages |
-| `candy-query-1-tc-s-1.ansi` | 62x12 | truecolor | 19 | candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker |
-| `candy-query-1-tc-s-2.ansi` | 62x12 | truecolor | 20 | magnifier scanning a mini sweets grid with loading bar and qps sparkline |
-| `candy-query-1-tc-s-3.ansi` | 62x12 | truecolor | 79 | gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode |
-| `candy-query-10-16-l-2.ansi` | 176x32 | 16 | 8 | post-commit reception floor plan: txns seated at table-rounds, wait-for dance, 3-tier commit cake |
-| `candy-query-10-16-l-5.ansi` | 176x32 | 16 | 8 | atlas workshop: five framed projections, big plate with rays, measurement bench |
-| `candy-query-10-16-m-3.ansi` | 86x22 | 16 | 8 | fraud-lab bench: money order vs EXPLAIN exhibit, six-test panel, anomaly report |
-| `candy-query-10-16-m-6.ansi` | 86x22 | 16 | 8 | locksmith bench: pegboard of eight framed key tags, cutting lathe, FK key ring |
-| `candy-query-10-16-s-1.ansi` | 62x11 | 16 | 8 | query kitchen: pass window, ticket rail, heat lamp, ORDER BY fired |
-| `candy-query-10-16-s-4.ansi` | 62x11 | 16 | 8 | conservatory practice room door: users_pkey scale, tempo, tuner card |
-| `candy-query-10-256-l-3.ansi` | 176x31 | 256 | 22 | fraud case wall: three specimens, red string, UV booth, checksum lane, verdict |
-| `candy-query-10-256-l-6.ansi` | 176x31 | 256 | 17 | key-control vault: twelve-tag cabinet, impressioning lathe line, FK ring, do-not-duplicate law |
-| `candy-query-10-256-m-1.ansi` | 86x22 | 256 | 16 | SQL brigade: six stations cooking plan/execute/fetch courses, WAL dish pit |
-| `candy-query-10-256-m-4.ansi` | 86x22 | 256 | 18 | practice-room board: eight instruments tuned, metronome, B-tree vocalises, audition notice |
-| `candy-query-10-256-s-2.ansi` | 62x12 | 256 | 14 | txn wedding registry card: three gifts worn as locks, padlock sigil |
-| `candy-query-10-256-s-5.ansi` | 62x12 | 256 | 12 | projection plate: 6x5 result grid warped Mercator, inflated polar tails |
-| `candy-query-10-tc-l-1.ansi` | 176x32 | truecolor | 17 | full service: ticket rail, six-station brigade, expo timing, heat-lamp pass |
-| `candy-query-10-tc-l-4.ansi` | 176x33 | truecolor | 20 | symphony rehearsal: stage plan of sections, four-movement score of the plan, tuning ledger |
-| `candy-query-10-tc-m-2.ansi` | 86x22 | truecolor | 18 | transaction wedding gift ledger: nine locks requested, lock ledger, honeymoon WAL villa |
-| `candy-query-10-tc-m-5.ansi` | 86x21 | truecolor | 16 | light table: identity/Mercator/sine plates with distortion ledger and scale bar |
-| `candy-query-10-tc-s-3.ansi` | 62x11 | truecolor | 14 | postal money-order specimen with missing watermark, cost-overstated verdict |
-| `candy-query-10-tc-s-6.ansi` | 62x11 | truecolor | 14 | keyshop cabinet: four tags, masters and blanks, bitting code from B-tree path |
-| `candy-query-2-16-l-1.ansi` | 132x29 | 16 | 6 | sweet-shop ledger: 18 confections, sparkline sales column, totals, inverse cursor row |
-| `candy-query-2-16-l-2.ansi` | 148x28 | 16 | 6 | admin process list beside server-vitals meters, alerts and page tabs |
-| `candy-query-2-16-m-1.ansi` | 86x20 | 16 | 6 | three-pane TUI: tables list, rows grid, syntax-highlighted editor, status bar |
-| `candy-query-2-16-m-2.ansi` | 80x18 | 16 | 7 | EXPLAIN ANALYZE operator tree with color-coded ops and time-share bars |
-| `candy-query-2-16-s-1.ansi` | 67x9 | 16 | 6 | boot splash: block CANDY QUERY wordmark, version stamp and SQL prompt |
-| `candy-query-2-16-s-2.ansi` | 50x11 | 16 | 5 | mini result grid with muted-italic NULLs and timing footer |
-| `candy-query-2-256-l-1.ansi` | 150x32 | 256 | 25 | chart workbench: throughput bars, buffer-pool gauge, area and dual line charts |
-| `candy-query-2-256-l-2.ansi` | 160x28 | 256 | 27 | query river: gradient waves ferrying SQL-token plaques past a wordmark island |
-| `candy-query-2-256-m-1.ansi` | 84x20 | 256 | 26 | result grid with 256-color heat backgrounds on stock, cursor row |
-| `candy-query-2-256-m-2.ansi` | 78x23 | 256 | 16 | schema browser tree with type-colored column chips and PK/FK flags |
-| `candy-query-2-256-s-1.ansi` | 58x8 | 256 | 21 | CandyQuery wordmark over 256-color gradient rules and candy-dot trim |
-| `candy-query-2-256-s-2.ansi` | 62x10 | 256 | 18 | rows-scanned-by-flavor bar chart with hue-ramped candy bars |
-| `candy-query-2-tc-l-1.ansi` | 148x28 | truecolor | 75 | confection ledger with candy-tinted row backgrounds, heat prices, stock bars |
-| `candy-query-2-tc-l-2.ansi` | 170x34 | truecolor | 3753 | aurora over a perspective data plain with gradient block CANDY QUERY wordmark |
-| `candy-query-2-tc-m-1.ansi` | 86x23 | truecolor | 944 | data cathedral: rainbow rose window and stained lancets casting light shafts |
-| `candy-query-2-tc-m-2.ansi` | 70x19 | truecolor | 376 | flavor spectrum hue wheel with candy legend and driver chips |
-| `candy-query-2-tc-s-1.ansi` | 61x6 | truecolor | 245 | rainbow-lettered CandyQuery between smooth two-hue gradient rules |
-| `candy-query-2-tc-s-2.ansi` | 58x13 | truecolor | 297 | candy jar: five radially shaded orbs with specular highlights and rim glints |
-| `candy-query-3-16-l-1.ansi` | 179x34 | 16 | 7 | great JOIN bridge panorama: three table-towers, hanged index cables, orphan cart, EXPLAIN span panel |
-| `candy-query-3-16-l-2.ansi` | 170x32 | 16 | 7 | migration railyard: ALTER Express loco hauling numbered schema wagons between v1/v2 platforms and ledger |
-| `candy-query-3-16-m-1.ansi` | 86x22 | 16 | 7 | INNER JOIN suspension bridge: tower table-blocks, index cables, matched-pair carts on deck |
-| `candy-query-3-16-m-2.ansi` | 84x21 | 16 | 7 | transaction departures board: flip-clock, isolation platforms, commit/abort states, lock-wait alert |
-| `candy-query-3-16-s-1.ansi` | 58x11 | 16 | 7 | WAL write-ahead journal strip with LSN entries, checkpoint gauge and rollback ticks |
-| `candy-query-3-16-s-2.ansi` | 58x12 | 16 | 6 | deadlock watch badge: two txn cards wired through a cross-bar padlock with wait-for cycle line |
-| `candy-query-3-256-l-1.ansi` | 178x37 | 256 | 46 | hall of indexes: B+tree chandelier over stacked book-spine shelves, ladders and open-query catalog desks |
-| `candy-query-3-256-l-2.ansi` | 159x28 | 256 | 18 | unrolled WAL scroll: LSN entries along parchment with checkpoint beads, fsync column and recycler note |
-| `candy-query-3-256-m-1.ansi` | 88x23 | 256 | 18 | index wall of nine catalog drawers with a fanned fulltext card tray |
-| `candy-query-3-256-m-2.ansi` | 86x21 | 256 | 16 | schema migration conveyor: v1 crates on belt through ALTER press into v2 stack with status rail |
-| `candy-query-3-256-s-1.ansi` | 60x14 | 256 | 10 | card-catalog index drawers with leaf-card counts and brass handles |
-| `candy-query-3-256-s-2.ansi` | 58x11 | 256 | 12 | transaction departures mini-board: clock tile, train-sheet rows, delayed alert box |
-| `candy-query-3-tc-l-1.ansi` | 194x37 | truecolor | 603 | golden-hour JOIN bridge: sunset gradient sky, glass table towers, cable reflections on water |
-| `candy-query-3-tc-l-2.ansi` | 170x33 | truecolor | 415 | the great deadlock knot: teal/magenta candy ropes weaving through a luminous lock with victim toast |
-| `candy-query-3-tc-m-1.ansi` | 80x23 | truecolor | 185 | deadlock candy knot: two glossy ropes braided around a padlock with wait-for legend |
-| `candy-query-3-tc-m-2.ansi` | 83x19 | truecolor | 62 | open double-entry transaction ledger spread, redo debits and undo credits on gradient pages |
-| `candy-query-3-tc-s-1.ansi` | 64x13 | truecolor | 28 | tiny SQL editor pane with rainbow-gradient result sparkline and glowing caret |
-| `candy-query-3-tc-s-2.ansi` | 50x13 | truecolor | 29 | wax-sealed write-ahead journal page, gradient parchment with LSN rows and embossed WAL seal |
-| `candy-query-4-16-l-1.ansi` | 200x42 | 16 | 12 | optimizer grand hall: chessboard, chosen plan tree and cost bars |
-| `candy-query-4-16-m-2.ansi` | 86x22 | 16 | 5 | three-pane TUI browser: tables list, rows grid, syntax SQL editor |
-| `candy-query-4-256-l-1.ansi` | 204x44 | 256 | 18 | database aquarium: layered table schools, WHERE net, coral and sonar |
-| `candy-query-4-256-l-2.ansi` | 196x40 | 256 | 12 | mega slow-query ward: triage waiting and monitor wings with ambulance |
-| `candy-query-4-256-m-1.ansi` | 88x23 | 256 | 18 | backup vault wall of reels with schedule and restore-test panel |
-| `candy-query-4-256-m-2.ansi` | 86x24 | 256 | 12 | slow-query ward: triage, waiting and monitor boards side by side |
-| `candy-query-4-256-s-1.ansi` | 64x16 | 256 | 18 | backup vault: brass round door with cross handle and tape reels |
-| `candy-query-4-256-s-2.ansi` | 62x16 | 256 | 10 | slow-query ER: triage board with severity rows beside green vitals monitor |
-| `candy-query-4-tc-l-1.ansi` | 210x44 | truecolor | 172 | great backup vault: wall of glowing reels, round door and restore rail |
-| `candy-query-4-tc-l-2.ansi` | 200x40 | truecolor | 592 | schema cosmos: constellation of tables joined by light on a starfield |
-| `candy-query-4-tc-m-1.ansi` | 88x23 | truecolor | 168 | replication ring of 5 nodes with gradient wire and commit wave |
-| `candy-query-4-tc-m-2.ansi` | 84x24 | truecolor | 76 | schema family tree hall: root users over six child table portraits |
-| `candy-query-4-tc-s-1.ansi` | 66x15 | truecolor | 72 | replication telephone game: 3 rainbow nodes passing a SQL token with ACK |
-| `candy-query-4-tc-s-2.ansi` | 64x16 | truecolor | 24 | schema family tree: framed portraits of parent and child tables |
-| `candy-query-5-16-l-1.ansi` | 150x33 | 16 | 7 | plan anatomy poster: skeleton plan tree beside self-time organ chart |
-| `candy-query-5-16-s-2.ansi` | 56x12 | 16 | 7 | slow-query speed trap: SEQ SCAN sign, roadside CAM and an EXPLAIN ticket |
-| `candy-query-5-256-l-1.ansi` | 160x29 | 256 | 14 | execution factory: SQL hopper, five stations, belted result crate |
-| `candy-query-5-256-l-2.ansi` | 150x35 | 256 | 13 | feathered-stream chart: primary isle, replica isles, pigeon shipping lanes |
-| `candy-query-5-256-m-1.ansi` | 84x23 | 256 | 12 | vacuum night crew: sweeper truck reclaiming dead-tuple litter under lamps |
-| `candy-query-5-256-m-2.ansi` | 80x22 | 256 | 11 | isolation cellar: three sealed MVCC vintage bottles on the shelf |
-| `candy-query-5-256-s-1.ansi` | 62x13 | 256 | 11 | pigeon-post replication: birds hop the primary loft to the replica with ACKs |
-| `candy-query-5-256-s-2.ansi` | 54x15 | 256 | 10 | index flapjacks: syrup-poured pancake pages stacked root down to leaf |
-| `candy-query-5-tc-l-1.ansi` | 190x41 | truecolor | 294 | join strait at dusk: beam parts two fleets into port INNER-JOIN |
-| `candy-query-5-tc-l-2.ansi` | 200x37 | truecolor | 253 | great schema serpent: S-curved molting snake shedding its 1998 columns |
-| `candy-query-5-tc-m-1.ansi` | 82x23 | truecolor | 61 | connection-pool laundromat: gradient drum machines spin conn#03/#07/#11 |
-| `candy-query-5-tc-m-2.ansi` | 78x22 | truecolor | 56 | partition orchard: cross-cut citrus, two wedges scanned, two PRUNED |
-| `candy-query-5-tc-s-1.ansi` | 58x15 | truecolor | 87 | lighthouse on the join strait: index beam guides row-boat tuples at dusk |
-| `candy-query-5-tc-s-2.ansi` | 64x11 | truecolor | 35 | schema molt: snake slides out of a cracked VARCHAR(255) skin into JSONB |
-| `candy-query-6-16-l-1.ansi` | 196x32 | 16 | 7 | grand-prix straightaway: the seq-scan snail lapped 90 times while the index hare naps at 99% |
-| `candy-query-6-16-l-2.ansi` | 190x33 | 16 | 7 | oceanographic expedition: brig SELECT drags a predicate net through schools, past the leviathan table orders |
-| `candy-query-6-16-m-2.ansi` | 80x20 | 16 | 6 | metro ticket and legend: PK express, FK local and aggregate loop with station=table rules |
-| `candy-query-6-256-l-1.ansi` | 212x30 | 256 | 21 | ERD as a metro map: PK express, FK local and the aggregate loop with JOIN interchanges and one orphan line |
-| `candy-query-6-256-l-2.ansi` | 200x34 | 256 | 23 | the INNER JOIN staged as ballroom tango — two rows ribboned by one predicate while result rows watch |
-| `candy-query-6-256-m-1.ansi` | 86x24 | 256 | 19 | reading room of the data-library: spine walls, clerestory window pooling lamplight on the oaken desk |
-| `candy-query-6-256-m-2.ansi` | 84x22 | 256 | 14 | hash shards as jigsaw pieces on a workbench, rebalance bolts mid-cut |
-| `candy-query-6-256-s-1.ansi` | 62x15 | 256 | 7 | query-cache geode: cracked stone reveals crystallised HIT facets of warm result sets |
-| `candy-query-6-256-s-2.ansi` | 60x14 | 256 | 6 | arena scoreboard: seq-scan snail at 3% while the crowd chants for statement_timeout |
-| `candy-query-6-tc-l-1.ansi` | 176x44 | truecolor | 21 | heraldic crest: shield quartered into four tables, PK pale, banner-bearers Uniqueness and Cascade, Latin motto |
-| `candy-query-6-tc-l-2.ansi` | 204x40 | truecolor | 50 | grand library hall: vaults, glowing spines in three bays, arched restore-light, floor mosaic medallion |
-| `candy-query-6-tc-m-1.ansi` | 88x26 | truecolor | 29 | four-way TX interchange: signal heads cycle BEGIN/COMMIT/ROLLBACK under a MUTEX traffic officer |
-| `candy-query-6-tc-m-2.ansi` | 82x26 | truecolor | 22 | stained-glass VIEW window: jewel panes project only their named columns onto the floor |
-| `candy-query-6-tc-s-1.ansi` | 64x14 | truecolor | 24 | connection-pool ferry: named connections shuttle client quay to server quay on a depth-graded harbour |
-| `candy-query-6-tc-s-2.ansi` | 52x15 | truecolor | 12 | planner altitude: ANALYZE balloon rises on striped lifting-gas of fresh statistics |
-| `candy-query-7-256-l-1.ansi` | 168x34 | 256 | 9 | storage-tier volcano: hot caldera to glacial strata, layered |
-| `candy-query-7-256-l-2.ansi` | 172x30 | 256 | 12 | query fan-out cableway: gondola shards cross a valley to workers |
-| `candy-query-7-256-m-1.ansi` | 88x24 | 256 | 10 | optimizer labyrinth: runner picks cheapest path, minotaur waits |
-| `candy-query-7-256-m-2.ansi` | 86x22 | 256 | 9 | buffer-pool water tower feeding a cistern, LRU + hit-level gauge |
-| `candy-query-7-256-s-1.ansi` | 64x15 | 256 | 8 | goose V-formation: primary leads, replicas trail in exact wake |
-| `candy-query-7-256-s-2.ansi` | 62x15 | 256 | 13 | backup time capsule buried under numbered soil strata, date-marked |
-| `candy-query-7-tc-l-1.ansi` | 184x36 | truecolor | 17 | projection prism: one white SELECT beam splits into named columns |
-| `candy-query-7-tc-l-2.ansi` | 196x40 | truecolor | 17 | star-schema orrery: dimensions orbit the sun of the fact table |
-| `candy-query-7-tc-m-1.ansi` | 84x24 | truecolor | 13 | ACID chemistry bench: four labeled flasks hold glowing reagents |
-| `candy-query-7-tc-m-2.ansi` | 82x23 | truecolor | 10 | primary-key fingerprint: rainbow ridge whorl stamped id=42 |
-| `candy-query-7-tc-s-1.ansi` | 60x16 | truecolor | 23 | index bonsai: potted B-tree with pruned root/branch/leaf canopy |
-| `candy-query-7-tc-s-2.ansi` | 66x15 | truecolor | 10 | deadlock: two trucks frozen nose-to-nose inside a one-way tunnel |
-| `candy-query-8-16-l-1.ansi` | 186x28 | 16 | 7 | terraced partitions: row-water descends nine contour fields into aggregate reservoir |
-| `candy-query-8-16-l-2.ansi` | 204x29 | 16 | 7 | replication downlink array: relay-sat beams LSN stream to three dishes + control shed |
-| `candy-query-8-16-m-2.ansi` | 88x21 | 16 | 8 | materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack |
-| `candy-query-8-16-s-2.ansi` | 66x9 | 16 | 7 | latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather |
-| `candy-query-8-256-l-1.ansi` | 186x28 | 256 | 9 | terraced partitions: row-water descends nine contour fields into aggregate reservoir |
-| `candy-query-8-256-l-2.ansi` | 204x29 | 256 | 9 | replication downlink array: relay-sat beams LSN stream to three dishes + control shed |
-| `candy-query-8-256-m-1.ansi` | 90x25 | 256 | 10 | approach-control radar: RING-1/3 scope tracks in-flight queries as flight strips + landing table |
-| `candy-query-8-256-m-2.ansi` | 88x21 | 256 | 10 | materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack |
-| `candy-query-8-256-s-1.ansi` | 64x10 | 256 | 11 | partition router: hash spins incoming key 94103 into shard bins P0-P9 |
-| `candy-query-8-256-s-2.ansi` | 66x9 | 256 | 7 | latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather |
-| `candy-query-8-tc-l-1.ansi` | 186x28 | truecolor | 9 | terraced partitions: row-water descends nine contour fields into aggregate reservoir |
-| `candy-query-8-tc-l-2.ansi` | 204x29 | truecolor | 9 | replication downlink array: relay-sat beams LSN stream to three dishes + control shed |
-| `candy-query-8-tc-m-1.ansi` | 90x25 | truecolor | 10 | approach-control radar: RING-1/3 scope tracks in-flight queries as flight strips + landing table |
-| `candy-query-8-tc-m-2.ansi` | 88x21 | truecolor | 10 | materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack |
-| `candy-query-8-tc-s-1.ansi` | 64x10 | truecolor | 11 | partition router: hash spins incoming key 94103 into shard bins P0-P9 |
-| `candy-query-8-tc-s-2.ansi` | 66x9 | truecolor | 7 | latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather |
-| `candy-query-9-256-l-1.ansi` | 184x32 | 256 | 16 | seismograph drum: four ink channels record query bursts and checkpoint quakes |
-| `candy-query-9-256-l-2.ansi` | 190x30 | 256 | 34 | dusk consolidation yard: gantry trolley sets a FULL JOIN over stack bays |
-| `candy-query-9-256-m-1.ansi` | 88x24 | 256 | 12 | tide-gauge station log: 24h harmonic height curve over a datum grid |
-| `candy-query-9-256-m-2.ansi` | 86x22 | 256 | 17 | census tally sheet: age-cohort heat cells per dwelling with response totals |
-| `candy-query-9-256-s-1.ansi` | 66x13 | 256 | 10 | seed vault drawer: six frosted accession packets under a rime shelf |
-| `candy-query-9-256-s-2.ansi` | 64x11 | 256 | 13 | pathology slide rack: biopsy accession tags with stain and verdict |
-| `candy-query-9-tc-l-1.ansi` | 196x36 | truecolor | 58 | last-light consolidation yard: lamp bloom over JOIN container stacks |
-| `candy-query-9-tc-l-2.ansi` | 188x34 | truecolor | 54 | backlit strip bays: eighteen flight-progress cards glowing by statement state |
-| `candy-query-9-tc-l-3.ansi` | 180x30 | truecolor | 189 | density block: dusk census quarter, lots heat-shaded per hectare |
-| `candy-query-9-tc-m-1.ansi` | 88x24 | truecolor | 79 | seed vault shelf: frosted accession packets in rime gradient light |
-| `candy-query-9-tc-m-2.ansi` | 88x22 | truecolor | 101 | horologist's bench: blued hairspring spiral beside gradient rate card |
-| `candy-query-9-tc-m-3.ansi` | 86x24 | truecolor | 107 | tide under moon: harmonic crest with glow and glitter path to the gauge |
-| `candy-query-9-tc-m-4.ansi` | 90x22 | truecolor | 147 | drum trace detail: ink amplitudes colour-keyed cool to hot per event |
-| `candy-query-9-tc-s-1.ansi` | 62x10 | truecolor | 22 | bird-band tray: five colour aluminium rings with specular bands on felt |
-| `candy-query-9-tc-s-2.ansi` | 64x12 | truecolor | 26 | row biopsy slide: eosin-stained tissue disc under ground glass edges |
-<!-- END candy-query SLOTS -->
+| `candy-sql-1-16-l-7.ansi` | 200x40 | 16 | 12 | data canyon: starlit sky over carved sediment strata, fossil records, row river with barges |
+| `candy-sql-1-16-l-8.ansi` | 164x34 | 16 | 15 | chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY |
+| `candy-sql-1-16-l-9.ansi` | 148x32 | 16 | 17 | schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground |
+| `candy-sql-1-16-m-4.ansi` | 86x24 | 16 | 14 | SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark |
+| `candy-sql-1-16-m-5.ansi` | 86x24 | 16 | 14 | performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome |
+| `candy-sql-1-16-m-6.ansi` | 86x24 | 16 | 8 | EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages |
+| `candy-sql-1-16-s-1.ansi` | 62x12 | 16 | 11 | candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker |
+| `candy-sql-1-16-s-2.ansi` | 62x12 | 16 | 9 | magnifier scanning a mini sweets grid with loading bar and qps sparkline |
+| `candy-sql-1-16-s-3.ansi` | 62x12 | 16 | 11 | gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode |
+| `candy-sql-1-256-l-7.ansi` | 200x40 | 256 | 50 | data canyon: starlit sky over carved sediment strata, fossil records, row river with barges |
+| `candy-sql-1-256-l-8.ansi` | 164x34 | 256 | 50 | chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY |
+| `candy-sql-1-256-l-9.ansi` | 148x32 | 256 | 43 | schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground |
+| `candy-sql-1-256-m-4.ansi` | 86x24 | 256 | 21 | SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark |
+| `candy-sql-1-256-m-5.ansi` | 86x24 | 256 | 33 | performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome |
+| `candy-sql-1-256-m-6.ansi` | 86x24 | 256 | 19 | EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages |
+| `candy-sql-1-256-s-1.ansi` | 62x12 | 256 | 17 | candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker |
+| `candy-sql-1-256-s-2.ansi` | 62x12 | 256 | 17 | magnifier scanning a mini sweets grid with loading bar and qps sparkline |
+| `candy-sql-1-256-s-3.ansi` | 62x12 | 256 | 37 | gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode |
+| `candy-sql-1-tc-l-7.ansi` | 200x40 | truecolor | 485 | data canyon: starlit sky over carved sediment strata, fossil records, row river with barges |
+| `candy-sql-1-tc-l-8.ansi` | 164x34 | truecolor | 277 | chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY |
+| `candy-sql-1-tc-l-9.ansi` | 148x32 | truecolor | 104 | schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground |
+| `candy-sql-1-tc-m-4.ansi` | 86x24 | truecolor | 23 | SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark |
+| `candy-sql-1-tc-m-5.ansi` | 86x24 | truecolor | 46 | performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome |
+| `candy-sql-1-tc-m-6.ansi` | 86x24 | truecolor | 22 | EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages |
+| `candy-sql-1-tc-s-1.ansi` | 62x12 | truecolor | 19 | candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker |
+| `candy-sql-1-tc-s-2.ansi` | 62x12 | truecolor | 20 | magnifier scanning a mini sweets grid with loading bar and qps sparkline |
+| `candy-sql-1-tc-s-3.ansi` | 62x12 | truecolor | 79 | gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode |
+| `candy-sql-10-16-l-2.ansi` | 176x32 | 16 | 8 | post-commit reception floor plan: txns seated at table-rounds, wait-for dance, 3-tier commit cake |
+| `candy-sql-10-16-l-5.ansi` | 176x32 | 16 | 8 | atlas workshop: five framed projections, big plate with rays, measurement bench |
+| `candy-sql-10-16-m-3.ansi` | 86x22 | 16 | 8 | fraud-lab bench: money order vs EXPLAIN exhibit, six-test panel, anomaly report |
+| `candy-sql-10-16-m-6.ansi` | 86x22 | 16 | 8 | locksmith bench: pegboard of eight framed key tags, cutting lathe, FK key ring |
+| `candy-sql-10-16-s-1.ansi` | 62x11 | 16 | 8 | query kitchen: pass window, ticket rail, heat lamp, ORDER BY fired |
+| `candy-sql-10-16-s-4.ansi` | 62x11 | 16 | 8 | conservatory practice room door: users_pkey scale, tempo, tuner card |
+| `candy-sql-10-256-l-3.ansi` | 176x31 | 256 | 22 | fraud case wall: three specimens, red string, UV booth, checksum lane, verdict |
+| `candy-sql-10-256-l-6.ansi` | 176x31 | 256 | 17 | key-control vault: twelve-tag cabinet, impressioning lathe line, FK ring, do-not-duplicate law |
+| `candy-sql-10-256-m-1.ansi` | 86x22 | 256 | 16 | SQL brigade: six stations cooking plan/execute/fetch courses, WAL dish pit |
+| `candy-sql-10-256-m-4.ansi` | 86x22 | 256 | 18 | practice-room board: eight instruments tuned, metronome, B-tree vocalises, audition notice |
+| `candy-sql-10-256-s-2.ansi` | 62x12 | 256 | 14 | txn wedding registry card: three gifts worn as locks, padlock sigil |
+| `candy-sql-10-256-s-5.ansi` | 62x12 | 256 | 12 | projection plate: 6x5 result grid warped Mercator, inflated polar tails |
+| `candy-sql-10-tc-l-1.ansi` | 176x32 | truecolor | 17 | full service: ticket rail, six-station brigade, expo timing, heat-lamp pass |
+| `candy-sql-10-tc-l-4.ansi` | 176x33 | truecolor | 20 | symphony rehearsal: stage plan of sections, four-movement score of the plan, tuning ledger |
+| `candy-sql-10-tc-m-2.ansi` | 86x22 | truecolor | 18 | transaction wedding gift ledger: nine locks requested, lock ledger, honeymoon WAL villa |
+| `candy-sql-10-tc-m-5.ansi` | 86x21 | truecolor | 16 | light table: identity/Mercator/sine plates with distortion ledger and scale bar |
+| `candy-sql-10-tc-s-3.ansi` | 62x11 | truecolor | 14 | postal money-order specimen with missing watermark, cost-overstated verdict |
+| `candy-sql-10-tc-s-6.ansi` | 62x11 | truecolor | 14 | keyshop cabinet: four tags, masters and blanks, bitting code from B-tree path |
+| `candy-sql-2-16-l-1.ansi` | 132x29 | 16 | 6 | sweet-shop ledger: 18 confections, sparkline sales column, totals, inverse cursor row |
+| `candy-sql-2-16-l-2.ansi` | 148x28 | 16 | 6 | admin process list beside server-vitals meters, alerts and page tabs |
+| `candy-sql-2-16-m-1.ansi` | 86x20 | 16 | 6 | three-pane TUI: tables list, rows grid, syntax-highlighted editor, status bar |
+| `candy-sql-2-16-m-2.ansi` | 80x18 | 16 | 7 | EXPLAIN ANALYZE operator tree with color-coded ops and time-share bars |
+| `candy-sql-2-16-s-1.ansi` | 67x9 | 16 | 6 | boot splash: block CANDY QUERY wordmark, version stamp and SQL prompt |
+| `candy-sql-2-16-s-2.ansi` | 50x11 | 16 | 5 | mini result grid with muted-italic NULLs and timing footer |
+| `candy-sql-2-256-l-1.ansi` | 150x32 | 256 | 25 | chart workbench: throughput bars, buffer-pool gauge, area and dual line charts |
+| `candy-sql-2-256-l-2.ansi` | 160x28 | 256 | 27 | query river: gradient waves ferrying SQL-token plaques past a wordmark island |
+| `candy-sql-2-256-m-1.ansi` | 84x20 | 256 | 26 | result grid with 256-color heat backgrounds on stock, cursor row |
+| `candy-sql-2-256-m-2.ansi` | 78x23 | 256 | 16 | schema browser tree with type-colored column chips and PK/FK flags |
+| `candy-sql-2-256-s-1.ansi` | 58x8 | 256 | 21 | CandySql wordmark over 256-color gradient rules and candy-dot trim |
+| `candy-sql-2-256-s-2.ansi` | 62x10 | 256 | 18 | rows-scanned-by-flavor bar chart with hue-ramped candy bars |
+| `candy-sql-2-tc-l-1.ansi` | 148x28 | truecolor | 75 | confection ledger with candy-tinted row backgrounds, heat prices, stock bars |
+| `candy-sql-2-tc-l-2.ansi` | 170x34 | truecolor | 3753 | aurora over a perspective data plain with gradient block CANDY QUERY wordmark |
+| `candy-sql-2-tc-m-1.ansi` | 86x23 | truecolor | 944 | data cathedral: rainbow rose window and stained lancets casting light shafts |
+| `candy-sql-2-tc-m-2.ansi` | 70x19 | truecolor | 376 | flavor spectrum hue wheel with candy legend and driver chips |
+| `candy-sql-2-tc-s-1.ansi` | 61x6 | truecolor | 245 | rainbow-lettered CandySql between smooth two-hue gradient rules |
+| `candy-sql-2-tc-s-2.ansi` | 58x13 | truecolor | 297 | candy jar: five radially shaded orbs with specular highlights and rim glints |
+| `candy-sql-3-16-l-1.ansi` | 179x34 | 16 | 7 | great JOIN bridge panorama: three table-towers, hanged index cables, orphan cart, EXPLAIN span panel |
+| `candy-sql-3-16-l-2.ansi` | 170x32 | 16 | 7 | migration railyard: ALTER Express loco hauling numbered schema wagons between v1/v2 platforms and ledger |
+| `candy-sql-3-16-m-1.ansi` | 86x22 | 16 | 7 | INNER JOIN suspension bridge: tower table-blocks, index cables, matched-pair carts on deck |
+| `candy-sql-3-16-m-2.ansi` | 84x21 | 16 | 7 | transaction departures board: flip-clock, isolation platforms, commit/abort states, lock-wait alert |
+| `candy-sql-3-16-s-1.ansi` | 58x11 | 16 | 7 | WAL write-ahead journal strip with LSN entries, checkpoint gauge and rollback ticks |
+| `candy-sql-3-16-s-2.ansi` | 58x12 | 16 | 6 | deadlock watch badge: two txn cards wired through a cross-bar padlock with wait-for cycle line |
+| `candy-sql-3-256-l-1.ansi` | 178x37 | 256 | 46 | hall of indexes: B+tree chandelier over stacked book-spine shelves, ladders and open-query catalog desks |
+| `candy-sql-3-256-l-2.ansi` | 159x28 | 256 | 18 | unrolled WAL scroll: LSN entries along parchment with checkpoint beads, fsync column and recycler note |
+| `candy-sql-3-256-m-1.ansi` | 88x23 | 256 | 18 | index wall of nine catalog drawers with a fanned fulltext card tray |
+| `candy-sql-3-256-m-2.ansi` | 86x21 | 256 | 16 | schema migration conveyor: v1 crates on belt through ALTER press into v2 stack with status rail |
+| `candy-sql-3-256-s-1.ansi` | 60x14 | 256 | 10 | card-catalog index drawers with leaf-card counts and brass handles |
+| `candy-sql-3-256-s-2.ansi` | 58x11 | 256 | 12 | transaction departures mini-board: clock tile, train-sheet rows, delayed alert box |
+| `candy-sql-3-tc-l-1.ansi` | 194x37 | truecolor | 603 | golden-hour JOIN bridge: sunset gradient sky, glass table towers, cable reflections on water |
+| `candy-sql-3-tc-l-2.ansi` | 170x33 | truecolor | 415 | the great deadlock knot: teal/magenta candy ropes weaving through a luminous lock with victim toast |
+| `candy-sql-3-tc-m-1.ansi` | 80x23 | truecolor | 185 | deadlock candy knot: two glossy ropes braided around a padlock with wait-for legend |
+| `candy-sql-3-tc-m-2.ansi` | 83x19 | truecolor | 62 | open double-entry transaction ledger spread, redo debits and undo credits on gradient pages |
+| `candy-sql-3-tc-s-1.ansi` | 64x13 | truecolor | 28 | tiny SQL editor pane with rainbow-gradient result sparkline and glowing caret |
+| `candy-sql-3-tc-s-2.ansi` | 50x13 | truecolor | 29 | wax-sealed write-ahead journal page, gradient parchment with LSN rows and embossed WAL seal |
+| `candy-sql-4-16-l-1.ansi` | 200x42 | 16 | 12 | optimizer grand hall: chessboard, chosen plan tree and cost bars |
+| `candy-sql-4-16-m-2.ansi` | 86x22 | 16 | 5 | three-pane TUI browser: tables list, rows grid, syntax SQL editor |
+| `candy-sql-4-256-l-1.ansi` | 204x44 | 256 | 18 | database aquarium: layered table schools, WHERE net, coral and sonar |
+| `candy-sql-4-256-l-2.ansi` | 196x40 | 256 | 12 | mega slow-query ward: triage waiting and monitor wings with ambulance |
+| `candy-sql-4-256-m-1.ansi` | 88x23 | 256 | 18 | backup vault wall of reels with schedule and restore-test panel |
+| `candy-sql-4-256-m-2.ansi` | 86x24 | 256 | 12 | slow-query ward: triage, waiting and monitor boards side by side |
+| `candy-sql-4-256-s-1.ansi` | 64x16 | 256 | 18 | backup vault: brass round door with cross handle and tape reels |
+| `candy-sql-4-256-s-2.ansi` | 62x16 | 256 | 10 | slow-query ER: triage board with severity rows beside green vitals monitor |
+| `candy-sql-4-tc-l-1.ansi` | 210x44 | truecolor | 172 | great backup vault: wall of glowing reels, round door and restore rail |
+| `candy-sql-4-tc-l-2.ansi` | 200x40 | truecolor | 592 | schema cosmos: constellation of tables joined by light on a starfield |
+| `candy-sql-4-tc-m-1.ansi` | 88x23 | truecolor | 168 | replication ring of 5 nodes with gradient wire and commit wave |
+| `candy-sql-4-tc-m-2.ansi` | 84x24 | truecolor | 76 | schema family tree hall: root users over six child table portraits |
+| `candy-sql-4-tc-s-1.ansi` | 66x15 | truecolor | 72 | replication telephone game: 3 rainbow nodes passing a SQL token with ACK |
+| `candy-sql-4-tc-s-2.ansi` | 64x16 | truecolor | 24 | schema family tree: framed portraits of parent and child tables |
+| `candy-sql-5-16-l-1.ansi` | 150x33 | 16 | 7 | plan anatomy poster: skeleton plan tree beside self-time organ chart |
+| `candy-sql-5-16-s-2.ansi` | 56x12 | 16 | 7 | slow-query speed trap: SEQ SCAN sign, roadside CAM and an EXPLAIN ticket |
+| `candy-sql-5-256-l-1.ansi` | 160x29 | 256 | 14 | execution factory: SQL hopper, five stations, belted result crate |
+| `candy-sql-5-256-l-2.ansi` | 150x35 | 256 | 13 | feathered-stream chart: primary isle, replica isles, pigeon shipping lanes |
+| `candy-sql-5-256-m-1.ansi` | 84x23 | 256 | 12 | vacuum night crew: sweeper truck reclaiming dead-tuple litter under lamps |
+| `candy-sql-5-256-m-2.ansi` | 80x22 | 256 | 11 | isolation cellar: three sealed MVCC vintage bottles on the shelf |
+| `candy-sql-5-256-s-1.ansi` | 62x13 | 256 | 11 | pigeon-post replication: birds hop the primary loft to the replica with ACKs |
+| `candy-sql-5-256-s-2.ansi` | 54x15 | 256 | 10 | index flapjacks: syrup-poured pancake pages stacked root down to leaf |
+| `candy-sql-5-tc-l-1.ansi` | 190x41 | truecolor | 294 | join strait at dusk: beam parts two fleets into port INNER-JOIN |
+| `candy-sql-5-tc-l-2.ansi` | 200x37 | truecolor | 253 | great schema serpent: S-curved molting snake shedding its 1998 columns |
+| `candy-sql-5-tc-m-1.ansi` | 82x23 | truecolor | 61 | connection-pool laundromat: gradient drum machines spin conn#03/#07/#11 |
+| `candy-sql-5-tc-m-2.ansi` | 78x22 | truecolor | 56 | partition orchard: cross-cut citrus, two wedges scanned, two PRUNED |
+| `candy-sql-5-tc-s-1.ansi` | 58x15 | truecolor | 87 | lighthouse on the join strait: index beam guides row-boat tuples at dusk |
+| `candy-sql-5-tc-s-2.ansi` | 64x11 | truecolor | 35 | schema molt: snake slides out of a cracked VARCHAR(255) skin into JSONB |
+| `candy-sql-6-16-l-1.ansi` | 196x32 | 16 | 7 | grand-prix straightaway: the seq-scan snail lapped 90 times while the index hare naps at 99% |
+| `candy-sql-6-16-l-2.ansi` | 190x33 | 16 | 7 | oceanographic expedition: brig SELECT drags a predicate net through schools, past the leviathan table orders |
+| `candy-sql-6-16-m-2.ansi` | 80x20 | 16 | 6 | metro ticket and legend: PK express, FK local and aggregate loop with station=table rules |
+| `candy-sql-6-256-l-1.ansi` | 212x30 | 256 | 21 | ERD as a metro map: PK express, FK local and the aggregate loop with JOIN interchanges and one orphan line |
+| `candy-sql-6-256-l-2.ansi` | 200x34 | 256 | 23 | the INNER JOIN staged as ballroom tango — two rows ribboned by one predicate while result rows watch |
+| `candy-sql-6-256-m-1.ansi` | 86x24 | 256 | 19 | reading room of the data-library: spine walls, clerestory window pooling lamplight on the oaken desk |
+| `candy-sql-6-256-m-2.ansi` | 84x22 | 256 | 14 | hash shards as jigsaw pieces on a workbench, rebalance bolts mid-cut |
+| `candy-sql-6-256-s-1.ansi` | 62x15 | 256 | 7 | query-cache geode: cracked stone reveals crystallised HIT facets of warm result sets |
+| `candy-sql-6-256-s-2.ansi` | 60x14 | 256 | 6 | arena scoreboard: seq-scan snail at 3% while the crowd chants for statement_timeout |
+| `candy-sql-6-tc-l-1.ansi` | 176x44 | truecolor | 21 | heraldic crest: shield quartered into four tables, PK pale, banner-bearers Uniqueness and Cascade, Latin motto |
+| `candy-sql-6-tc-l-2.ansi` | 204x40 | truecolor | 50 | grand library hall: vaults, glowing spines in three bays, arched restore-light, floor mosaic medallion |
+| `candy-sql-6-tc-m-1.ansi` | 88x26 | truecolor | 29 | four-way TX interchange: signal heads cycle BEGIN/COMMIT/ROLLBACK under a MUTEX traffic officer |
+| `candy-sql-6-tc-m-2.ansi` | 82x26 | truecolor | 22 | stained-glass VIEW window: jewel panes project only their named columns onto the floor |
+| `candy-sql-6-tc-s-1.ansi` | 64x14 | truecolor | 24 | connection-pool ferry: named connections shuttle client quay to server quay on a depth-graded harbour |
+| `candy-sql-6-tc-s-2.ansi` | 52x15 | truecolor | 12 | planner altitude: ANALYZE balloon rises on striped lifting-gas of fresh statistics |
+| `candy-sql-7-256-l-1.ansi` | 168x34 | 256 | 9 | storage-tier volcano: hot caldera to glacial strata, layered |
+| `candy-sql-7-256-l-2.ansi` | 172x30 | 256 | 12 | query fan-out cableway: gondola shards cross a valley to workers |
+| `candy-sql-7-256-m-1.ansi` | 88x24 | 256 | 10 | optimizer labyrinth: runner picks cheapest path, minotaur waits |
+| `candy-sql-7-256-m-2.ansi` | 86x22 | 256 | 9 | buffer-pool water tower feeding a cistern, LRU + hit-level gauge |
+| `candy-sql-7-256-s-1.ansi` | 64x15 | 256 | 8 | goose V-formation: primary leads, replicas trail in exact wake |
+| `candy-sql-7-256-s-2.ansi` | 62x15 | 256 | 13 | backup time capsule buried under numbered soil strata, date-marked |
+| `candy-sql-7-tc-l-1.ansi` | 184x36 | truecolor | 17 | projection prism: one white SELECT beam splits into named columns |
+| `candy-sql-7-tc-l-2.ansi` | 196x40 | truecolor | 17 | star-schema orrery: dimensions orbit the sun of the fact table |
+| `candy-sql-7-tc-m-1.ansi` | 84x24 | truecolor | 13 | ACID chemistry bench: four labeled flasks hold glowing reagents |
+| `candy-sql-7-tc-m-2.ansi` | 82x23 | truecolor | 10 | primary-key fingerprint: rainbow ridge whorl stamped id=42 |
+| `candy-sql-7-tc-s-1.ansi` | 60x16 | truecolor | 23 | index bonsai: potted B-tree with pruned root/branch/leaf canopy |
+| `candy-sql-7-tc-s-2.ansi` | 66x15 | truecolor | 10 | deadlock: two trucks frozen nose-to-nose inside a one-way tunnel |
+| `candy-sql-8-16-l-1.ansi` | 186x28 | 16 | 7 | terraced partitions: row-water descends nine contour fields into aggregate reservoir |
+| `candy-sql-8-16-l-2.ansi` | 204x29 | 16 | 7 | replication downlink array: relay-sat beams LSN stream to three dishes + control shed |
+| `candy-sql-8-16-m-2.ansi` | 88x21 | 16 | 8 | materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack |
+| `candy-sql-8-16-s-2.ansi` | 66x9 | 16 | 7 | latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather |
+| `candy-sql-8-256-l-1.ansi` | 186x28 | 256 | 9 | terraced partitions: row-water descends nine contour fields into aggregate reservoir |
+| `candy-sql-8-256-l-2.ansi` | 204x29 | 256 | 9 | replication downlink array: relay-sat beams LSN stream to three dishes + control shed |
+| `candy-sql-8-256-m-1.ansi` | 90x25 | 256 | 10 | approach-control radar: RING-1/3 scope tracks in-flight queries as flight strips + landing table |
+| `candy-sql-8-256-m-2.ansi` | 88x21 | 256 | 10 | materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack |
+| `candy-sql-8-256-s-1.ansi` | 64x10 | 256 | 11 | partition router: hash spins incoming key 94103 into shard bins P0-P9 |
+| `candy-sql-8-256-s-2.ansi` | 66x9 | 256 | 7 | latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather |
+| `candy-sql-8-tc-l-1.ansi` | 186x28 | truecolor | 9 | terraced partitions: row-water descends nine contour fields into aggregate reservoir |
+| `candy-sql-8-tc-l-2.ansi` | 204x29 | truecolor | 9 | replication downlink array: relay-sat beams LSN stream to three dishes + control shed |
+| `candy-sql-8-tc-m-1.ansi` | 90x25 | truecolor | 10 | approach-control radar: RING-1/3 scope tracks in-flight queries as flight strips + landing table |
+| `candy-sql-8-tc-m-2.ansi` | 88x21 | truecolor | 10 | materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack |
+| `candy-sql-8-tc-s-1.ansi` | 64x10 | truecolor | 11 | partition router: hash spins incoming key 94103 into shard bins P0-P9 |
+| `candy-sql-8-tc-s-2.ansi` | 66x9 | truecolor | 7 | latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather |
+| `candy-sql-9-256-l-1.ansi` | 184x32 | 256 | 16 | seismograph drum: four ink channels record query bursts and checkpoint quakes |
+| `candy-sql-9-256-l-2.ansi` | 190x30 | 256 | 34 | dusk consolidation yard: gantry trolley sets a FULL JOIN over stack bays |
+| `candy-sql-9-256-m-1.ansi` | 88x24 | 256 | 12 | tide-gauge station log: 24h harmonic height curve over a datum grid |
+| `candy-sql-9-256-m-2.ansi` | 86x22 | 256 | 17 | census tally sheet: age-cohort heat cells per dwelling with response totals |
+| `candy-sql-9-256-s-1.ansi` | 66x13 | 256 | 10 | seed vault drawer: six frosted accession packets under a rime shelf |
+| `candy-sql-9-256-s-2.ansi` | 64x11 | 256 | 13 | pathology slide rack: biopsy accession tags with stain and verdict |
+| `candy-sql-9-tc-l-1.ansi` | 196x36 | truecolor | 58 | last-light consolidation yard: lamp bloom over JOIN container stacks |
+| `candy-sql-9-tc-l-2.ansi` | 188x34 | truecolor | 54 | backlit strip bays: eighteen flight-progress cards glowing by statement state |
+| `candy-sql-9-tc-l-3.ansi` | 180x30 | truecolor | 189 | density block: dusk census quarter, lots heat-shaded per hectare |
+| `candy-sql-9-tc-m-1.ansi` | 88x24 | truecolor | 79 | seed vault shelf: frosted accession packets in rime gradient light |
+| `candy-sql-9-tc-m-2.ansi` | 88x22 | truecolor | 101 | horologist's bench: blued hairspring spiral beside gradient rate card |
+| `candy-sql-9-tc-m-3.ansi` | 86x24 | truecolor | 107 | tide under moon: harmonic crest with glow and glitter path to the gauge |
+| `candy-sql-9-tc-m-4.ansi` | 90x22 | truecolor | 147 | drum trace detail: ink amplitudes colour-keyed cool to hot per event |
+| `candy-sql-9-tc-s-1.ansi` | 62x10 | truecolor | 22 | bird-band tray: five colour aluminium rings with specular bands on felt |
+| `candy-sql-9-tc-s-2.ansi` | 64x12 | truecolor | 26 | row biopsy slide: eosin-stained tissue disc under ground glass edges |
+<!-- END candy-sql SLOTS -->
 
 <!-- BEGIN candy-sprinkles SLOTS -->
 ### candy-sprinkles — slot series

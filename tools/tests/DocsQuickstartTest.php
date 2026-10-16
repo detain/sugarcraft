@@ -42,7 +42,7 @@ declare(strict_types=1);
  * wrong arguments (sugar-reel `cols:`/`rows:`, candy-log `with('k', 'v')`), a
  * private constructor (sugar-table `new Table()`), and two `Model`
  * implementations without `subscriptions()` (candy-core, sugar-bits). The
- * argument-type check came later. candy-query's programmatic sample handed
+ * argument-type check came later. candy-sql's programmatic sample handed
  * `ConnectionFactory::fromDsn()`'s ConnectionConfig to
  * `App::start(DatabaseInterface $db)`, a TypeError that names and counts alone
  * passed.
@@ -333,7 +333,7 @@ final class DocsQuickstartTest extends TestCase
                 }
                 PHP,
             'fixture-lib/src/Holder.php' => "<?php\nnamespace SugarCraft\\Fixture;\nuse SugarCraft\\Fixture\\Sub\\Region;\nfinal class Holder { public function __construct(public readonly Region \$region, private readonly ?Composites \$c = null) {} }\n",
-            // The candy-query shape: a factory whose first step returns a config, not the database.
+            // The candy-sql shape: a factory whose first step returns a config, not the database.
             'fixture-lib/src/Db/Config.php' => "<?php\nnamespace SugarCraft\\Fixture\\Db;\nfinal readonly class Config { public function __construct(public string \$dsn) {} }\n",
             'fixture-lib/src/Db/Database.php' => "<?php\nnamespace SugarCraft\\Fixture\\Db;\ninterface Database { public function tables(): array; }\n",
             'fixture-lib/src/Db/Factory.php' => "<?php\nnamespace SugarCraft\\Fixture\\Db;\nfinal class Factory { public static function fromDsn(string \$dsn): Config { return new Config(\$dsn); } public static function fromConfig(Config \$config): Database { throw new \\LogicException(); } }\n",
@@ -479,7 +479,7 @@ final class DocsQuickstartTest extends TestCase
             "use SugarCraft\\Fixture\\Composites;\nfinal class C implements Composites { public function other(): void {} }\n",
             'C implements Composites but does not define composite()',
         ];
-        yield 'argument of the wrong type, through a variable (the candy-query sample)' => [
+        yield 'argument of the wrong type, through a variable (the candy-sql sample)' => [
             "use SugarCraft\\Fixture\\App;\nuse SugarCraft\\Fixture\\Db\\Factory;\n\$pdo = Factory::fromDsn('mysql://u:p@h/db');\nApp::start(\$pdo);\n",
             'App::start() $db must be Database, but is given Config',
         ];
@@ -1453,7 +1453,7 @@ final class DocsQuickstartTest extends TestCase
      * A type is checked only when the parameter declares a single SugarCraft
      * class, interface or enum, and the argument's type is a final SugarCraft
      * class or an enum, so a subclass the source cannot see could never make the
-     * call legal. The candy-query sample passed `ConnectionFactory::fromDsn()`'s
+     * call legal. The candy-sql sample passed `ConnectionFactory::fromDsn()`'s
      * ConnectionConfig straight to `App::start(DatabaseInterface $db)`, which
      * names and counts alone could not catch.
      *

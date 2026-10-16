@@ -13,7 +13,7 @@ use function React\Promise\resolve;
  * Promise-library-only async cache-aside primitive: TTL freshness,
  * concurrent-loader dedupe, optional serve-stale-on-error.
  *
- * Extracted from the candy-query AdminQueryCache pattern. What generalises is
+ * Extracted from the candy-sql AdminQueryCache pattern. What generalises is
  * the entry machinery; the SQL-string keying, pending-drain queue, and
  * connection/ServerContext memo slots stay app-side. AdminQueryCache needed a
  * pending set + external drain only because its render path could not hang
@@ -21,7 +21,7 @@ use function React\Promise\resolve;
  * peek()/isFresh() (never blocking, stale served while a refresh runs) and
  * the loading path is fetch().
  *
- * Ordering law carried over from candy-query's hard-won live refresh (the
+ * Ordering law carried over from candy-sql's hard-won live refresh (the
  * stale-wins family): a load that was superseded by invalidate()/clear() while
  * in flight still resolves its own callers — the data it fetched was true at
  * request time — but is never adopted into the store, because the

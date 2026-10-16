@@ -444,7 +444,7 @@ All 45 research documents available at:
 | candy-mosaic | 24KB |
 | candy-palette | 15KB |
 | candy-pty | 24KB |
-| candy-query | 11KB |
+| candy-sql | 11KB |
 | candy-serve | 12KB |
 | candy-shell | 18KB |
 | candy-sprinkles | 15KB |

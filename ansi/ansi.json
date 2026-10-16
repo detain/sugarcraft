@@ -12627,9 +12627,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-16-l-7.ansi": {
-        "name": "candy-query-1-16-l-7.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-l-7.ansi": {
+        "name": "candy-sql-1-16-l-7.ansi",
+        "category": "candy-sql",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -12639,9 +12639,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-1-16-l-8.ansi": {
-        "name": "candy-query-1-16-l-8.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-l-8.ansi": {
+        "name": "candy-sql-1-16-l-8.ansi",
+        "category": "candy-sql",
         "resolution": "164x34",
         "width": 164,
         "height": 34,
@@ -12651,9 +12651,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-1-16-l-9.ansi": {
-        "name": "candy-query-1-16-l-9.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-l-9.ansi": {
+        "name": "candy-sql-1-16-l-9.ansi",
+        "category": "candy-sql",
         "resolution": "148x32",
         "width": 148,
         "height": 32,
@@ -12663,9 +12663,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-1-16-m-4.ansi": {
-        "name": "candy-query-1-16-m-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-m-4.ansi": {
+        "name": "candy-sql-1-16-m-4.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12675,9 +12675,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-query/candy-query-1-16-m-5.ansi": {
-        "name": "candy-query-1-16-m-5.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-m-5.ansi": {
+        "name": "candy-sql-1-16-m-5.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12687,9 +12687,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-query/candy-query-1-16-m-6.ansi": {
-        "name": "candy-query-1-16-m-6.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-m-6.ansi": {
+        "name": "candy-sql-1-16-m-6.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12699,9 +12699,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-query/candy-query-1-16-s-1.ansi": {
-        "name": "candy-query-1-16-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-s-1.ansi": {
+        "name": "candy-sql-1-16-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12711,9 +12711,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-query/candy-query-1-16-s-2.ansi": {
-        "name": "candy-query-1-16-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-s-2.ansi": {
+        "name": "candy-sql-1-16-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12723,9 +12723,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-1-16-s-3.ansi": {
-        "name": "candy-query-1-16-s-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-16-s-3.ansi": {
+        "name": "candy-sql-1-16-s-3.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12735,9 +12735,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-1-256-l-7.ansi": {
-        "name": "candy-query-1-256-l-7.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-l-7.ansi": {
+        "name": "candy-sql-1-256-l-7.ansi",
+        "category": "candy-sql",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -12747,9 +12747,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-1-256-l-8.ansi": {
-        "name": "candy-query-1-256-l-8.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-l-8.ansi": {
+        "name": "candy-sql-1-256-l-8.ansi",
+        "category": "candy-sql",
         "resolution": "164x34",
         "width": 164,
         "height": 34,
@@ -12759,9 +12759,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-l-9.ansi": {
-        "name": "candy-query-1-256-l-9.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-l-9.ansi": {
+        "name": "candy-sql-1-256-l-9.ansi",
+        "category": "candy-sql",
         "resolution": "148x32",
         "width": 148,
         "height": 32,
@@ -12771,9 +12771,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-m-4.ansi": {
-        "name": "candy-query-1-256-m-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-m-4.ansi": {
+        "name": "candy-sql-1-256-m-4.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12783,9 +12783,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-m-5.ansi": {
-        "name": "candy-query-1-256-m-5.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-m-5.ansi": {
+        "name": "candy-sql-1-256-m-5.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12795,9 +12795,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-m-6.ansi": {
-        "name": "candy-query-1-256-m-6.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-m-6.ansi": {
+        "name": "candy-sql-1-256-m-6.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12807,9 +12807,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-s-1.ansi": {
-        "name": "candy-query-1-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-s-1.ansi": {
+        "name": "candy-sql-1-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12819,9 +12819,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-s-2.ansi": {
-        "name": "candy-query-1-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-s-2.ansi": {
+        "name": "candy-sql-1-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12831,9 +12831,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-256-s-3.ansi": {
-        "name": "candy-query-1-256-s-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-256-s-3.ansi": {
+        "name": "candy-sql-1-256-s-3.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12843,9 +12843,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-l-7.ansi": {
-        "name": "candy-query-1-tc-l-7.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-l-7.ansi": {
+        "name": "candy-sql-1-tc-l-7.ansi",
+        "category": "candy-sql",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -12855,9 +12855,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-l-8.ansi": {
-        "name": "candy-query-1-tc-l-8.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-l-8.ansi": {
+        "name": "candy-sql-1-tc-l-8.ansi",
+        "category": "candy-sql",
         "resolution": "164x34",
         "width": 164,
         "height": 34,
@@ -12867,9 +12867,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-l-9.ansi": {
-        "name": "candy-query-1-tc-l-9.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-l-9.ansi": {
+        "name": "candy-sql-1-tc-l-9.ansi",
+        "category": "candy-sql",
         "resolution": "148x32",
         "width": 148,
         "height": 32,
@@ -12879,9 +12879,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-m-4.ansi": {
-        "name": "candy-query-1-tc-m-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-m-4.ansi": {
+        "name": "candy-sql-1-tc-m-4.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12891,9 +12891,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-m-5.ansi": {
-        "name": "candy-query-1-tc-m-5.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-m-5.ansi": {
+        "name": "candy-sql-1-tc-m-5.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12903,9 +12903,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-m-6.ansi": {
-        "name": "candy-query-1-tc-m-6.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-m-6.ansi": {
+        "name": "candy-sql-1-tc-m-6.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -12915,9 +12915,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-s-1.ansi": {
-        "name": "candy-query-1-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-s-1.ansi": {
+        "name": "candy-sql-1-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12927,9 +12927,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-s-2.ansi": {
-        "name": "candy-query-1-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-s-2.ansi": {
+        "name": "candy-sql-1-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12939,9 +12939,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-1-tc-s-3.ansi": {
-        "name": "candy-query-1-tc-s-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-1-tc-s-3.ansi": {
+        "name": "candy-sql-1-tc-s-3.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12951,9 +12951,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-16-l-1.ansi": {
-        "name": "candy-query-2-16-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-16-l-1.ansi": {
+        "name": "candy-sql-2-16-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "132x29",
         "width": 132,
         "height": 29,
@@ -12965,9 +12965,9 @@
             "alignment-fix"
         ]
     },
-    "candy-query/candy-query-2-16-l-2.ansi": {
-        "name": "candy-query-2-16-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-16-l-2.ansi": {
+        "name": "candy-sql-2-16-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "148x28",
         "width": 148,
         "height": 28,
@@ -12977,9 +12977,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-query/candy-query-2-16-m-1.ansi": {
-        "name": "candy-query-2-16-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-16-m-1.ansi": {
+        "name": "candy-sql-2-16-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -12989,9 +12989,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-query/candy-query-2-16-m-2.ansi": {
-        "name": "candy-query-2-16-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-16-m-2.ansi": {
+        "name": "candy-sql-2-16-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -13001,9 +13001,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-query/candy-query-2-16-s-1.ansi": {
-        "name": "candy-query-2-16-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-16-s-1.ansi": {
+        "name": "candy-sql-2-16-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "67x9",
         "width": 67,
         "height": 9,
@@ -13013,9 +13013,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-2-16-s-2.ansi": {
-        "name": "candy-query-2-16-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-16-s-2.ansi": {
+        "name": "candy-sql-2-16-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "50x11",
         "width": 50,
         "height": 11,
@@ -13025,9 +13025,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-2-256-l-1.ansi": {
-        "name": "candy-query-2-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-256-l-1.ansi": {
+        "name": "candy-sql-2-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -13037,9 +13037,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-256-l-2.ansi": {
-        "name": "candy-query-2-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-256-l-2.ansi": {
+        "name": "candy-sql-2-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -13049,9 +13049,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-256-m-1.ansi": {
-        "name": "candy-query-2-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-256-m-1.ansi": {
+        "name": "candy-sql-2-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -13061,9 +13061,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-256-m-2.ansi": {
-        "name": "candy-query-2-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-256-m-2.ansi": {
+        "name": "candy-sql-2-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "78x23",
         "width": 78,
         "height": 23,
@@ -13073,21 +13073,21 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-256-s-1.ansi": {
-        "name": "candy-query-2-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-256-s-1.ansi": {
+        "name": "candy-sql-2-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "58x8",
         "width": 58,
         "height": 8,
         "depth": "256",
         "colors": 21,
-        "description": "CandyQuery wordmark over 256-color gradient rules and candy-dot trim",
+        "description": "CandySql wordmark over 256-color gradient rules and candy-dot trim",
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-256-s-2.ansi": {
-        "name": "candy-query-2-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-256-s-2.ansi": {
+        "name": "candy-sql-2-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -13097,9 +13097,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-tc-l-1.ansi": {
-        "name": "candy-query-2-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-tc-l-1.ansi": {
+        "name": "candy-sql-2-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "148x28",
         "width": 148,
         "height": 28,
@@ -13109,9 +13109,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-tc-l-2.ansi": {
-        "name": "candy-query-2-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-tc-l-2.ansi": {
+        "name": "candy-sql-2-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "170x34",
         "width": 170,
         "height": 34,
@@ -13121,9 +13121,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-tc-m-1.ansi": {
-        "name": "candy-query-2-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-tc-m-1.ansi": {
+        "name": "candy-sql-2-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -13133,9 +13133,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-tc-m-2.ansi": {
-        "name": "candy-query-2-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-tc-m-2.ansi": {
+        "name": "candy-sql-2-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "70x19",
         "width": 70,
         "height": 19,
@@ -13145,21 +13145,21 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-tc-s-1.ansi": {
-        "name": "candy-query-2-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-tc-s-1.ansi": {
+        "name": "candy-sql-2-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "61x6",
         "width": 61,
         "height": 6,
         "depth": "truecolor",
         "colors": 245,
-        "description": "rainbow-lettered CandyQuery between smooth two-hue gradient rules",
+        "description": "rainbow-lettered CandySql between smooth two-hue gradient rules",
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-2-tc-s-2.ansi": {
-        "name": "candy-query-2-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-2-tc-s-2.ansi": {
+        "name": "candy-sql-2-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -13169,9 +13169,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-16-l-1.ansi": {
-        "name": "candy-query-3-16-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-16-l-1.ansi": {
+        "name": "candy-sql-3-16-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "179x34",
         "width": 179,
         "height": 34,
@@ -13181,9 +13181,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-query/candy-query-3-16-l-2.ansi": {
-        "name": "candy-query-3-16-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-16-l-2.ansi": {
+        "name": "candy-sql-3-16-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "170x32",
         "width": 170,
         "height": 32,
@@ -13193,9 +13193,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-3-16-m-1.ansi": {
-        "name": "candy-query-3-16-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-16-m-1.ansi": {
+        "name": "candy-sql-3-16-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -13205,9 +13205,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-3-16-m-2.ansi": {
-        "name": "candy-query-3-16-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-16-m-2.ansi": {
+        "name": "candy-sql-3-16-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -13217,9 +13217,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-3-16-s-1.ansi": {
-        "name": "candy-query-3-16-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-16-s-1.ansi": {
+        "name": "candy-sql-3-16-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -13229,9 +13229,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-3-16-s-2.ansi": {
-        "name": "candy-query-3-16-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-16-s-2.ansi": {
+        "name": "candy-sql-3-16-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -13241,9 +13241,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-3-256-l-1.ansi": {
-        "name": "candy-query-3-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-256-l-1.ansi": {
+        "name": "candy-sql-3-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "178x37",
         "width": 178,
         "height": 37,
@@ -13253,9 +13253,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-256-l-2.ansi": {
-        "name": "candy-query-3-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-256-l-2.ansi": {
+        "name": "candy-sql-3-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "159x28",
         "width": 159,
         "height": 28,
@@ -13265,9 +13265,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-256-m-1.ansi": {
-        "name": "candy-query-3-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-256-m-1.ansi": {
+        "name": "candy-sql-3-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -13277,9 +13277,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-256-m-2.ansi": {
-        "name": "candy-query-3-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-256-m-2.ansi": {
+        "name": "candy-sql-3-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -13289,9 +13289,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-256-s-1.ansi": {
-        "name": "candy-query-3-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-256-s-1.ansi": {
+        "name": "candy-sql-3-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -13301,9 +13301,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-256-s-2.ansi": {
-        "name": "candy-query-3-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-256-s-2.ansi": {
+        "name": "candy-sql-3-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -13313,9 +13313,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-tc-l-1.ansi": {
-        "name": "candy-query-3-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-tc-l-1.ansi": {
+        "name": "candy-sql-3-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "194x37",
         "width": 194,
         "height": 37,
@@ -13325,9 +13325,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-tc-l-2.ansi": {
-        "name": "candy-query-3-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-tc-l-2.ansi": {
+        "name": "candy-sql-3-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "170x33",
         "width": 170,
         "height": 33,
@@ -13337,9 +13337,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-tc-m-1.ansi": {
-        "name": "candy-query-3-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-tc-m-1.ansi": {
+        "name": "candy-sql-3-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "80x23",
         "width": 80,
         "height": 23,
@@ -13349,9 +13349,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-tc-m-2.ansi": {
-        "name": "candy-query-3-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-tc-m-2.ansi": {
+        "name": "candy-sql-3-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "83x19",
         "width": 83,
         "height": 19,
@@ -13361,9 +13361,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-tc-s-1.ansi": {
-        "name": "candy-query-3-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-tc-s-1.ansi": {
+        "name": "candy-sql-3-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -13373,9 +13373,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-3-tc-s-2.ansi": {
-        "name": "candy-query-3-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-3-tc-s-2.ansi": {
+        "name": "candy-sql-3-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "50x13",
         "width": 50,
         "height": 13,
@@ -13385,9 +13385,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-16-l-1.ansi": {
-        "name": "candy-query-4-16-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-16-l-1.ansi": {
+        "name": "candy-sql-4-16-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "200x42",
         "width": 200,
         "height": 42,
@@ -13397,9 +13397,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-4-16-m-2.ansi": {
-        "name": "candy-query-4-16-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-16-m-2.ansi": {
+        "name": "candy-sql-4-16-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -13409,9 +13409,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-4-256-l-1.ansi": {
-        "name": "candy-query-4-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-256-l-1.ansi": {
+        "name": "candy-sql-4-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "204x44",
         "width": 204,
         "height": 44,
@@ -13421,9 +13421,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-256-l-2.ansi": {
-        "name": "candy-query-4-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-256-l-2.ansi": {
+        "name": "candy-sql-4-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "196x40",
         "width": 196,
         "height": 40,
@@ -13433,9 +13433,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-256-m-1.ansi": {
-        "name": "candy-query-4-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-256-m-1.ansi": {
+        "name": "candy-sql-4-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -13445,9 +13445,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-256-m-2.ansi": {
-        "name": "candy-query-4-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-256-m-2.ansi": {
+        "name": "candy-sql-4-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -13457,9 +13457,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-256-s-1.ansi": {
-        "name": "candy-query-4-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-256-s-1.ansi": {
+        "name": "candy-sql-4-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "64x16",
         "width": 64,
         "height": 16,
@@ -13469,9 +13469,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-256-s-2.ansi": {
-        "name": "candy-query-4-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-256-s-2.ansi": {
+        "name": "candy-sql-4-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x16",
         "width": 62,
         "height": 16,
@@ -13481,9 +13481,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-tc-l-1.ansi": {
-        "name": "candy-query-4-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-tc-l-1.ansi": {
+        "name": "candy-sql-4-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "210x44",
         "width": 210,
         "height": 44,
@@ -13493,9 +13493,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-tc-l-2.ansi": {
-        "name": "candy-query-4-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-tc-l-2.ansi": {
+        "name": "candy-sql-4-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -13505,9 +13505,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-tc-m-1.ansi": {
-        "name": "candy-query-4-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-tc-m-1.ansi": {
+        "name": "candy-sql-4-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -13517,9 +13517,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-tc-m-2.ansi": {
-        "name": "candy-query-4-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-tc-m-2.ansi": {
+        "name": "candy-sql-4-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -13529,9 +13529,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-tc-s-1.ansi": {
-        "name": "candy-query-4-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-tc-s-1.ansi": {
+        "name": "candy-sql-4-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -13541,9 +13541,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-4-tc-s-2.ansi": {
-        "name": "candy-query-4-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-4-tc-s-2.ansi": {
+        "name": "candy-sql-4-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "64x16",
         "width": 64,
         "height": 16,
@@ -13553,9 +13553,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-16-l-1.ansi": {
-        "name": "candy-query-5-16-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-16-l-1.ansi": {
+        "name": "candy-sql-5-16-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "150x33",
         "width": 150,
         "height": 33,
@@ -13565,9 +13565,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-5-16-s-2.ansi": {
-        "name": "candy-query-5-16-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-16-s-2.ansi": {
+        "name": "candy-sql-5-16-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -13577,9 +13577,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-5-256-l-1.ansi": {
-        "name": "candy-query-5-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-256-l-1.ansi": {
+        "name": "candy-sql-5-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "160x29",
         "width": 160,
         "height": 29,
@@ -13589,9 +13589,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-256-l-2.ansi": {
-        "name": "candy-query-5-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-256-l-2.ansi": {
+        "name": "candy-sql-5-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "150x35",
         "width": 150,
         "height": 35,
@@ -13601,9 +13601,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-256-m-1.ansi": {
-        "name": "candy-query-5-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-256-m-1.ansi": {
+        "name": "candy-sql-5-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -13613,9 +13613,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-256-m-2.ansi": {
-        "name": "candy-query-5-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-256-m-2.ansi": {
+        "name": "candy-sql-5-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -13625,9 +13625,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-256-s-1.ansi": {
-        "name": "candy-query-5-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-256-s-1.ansi": {
+        "name": "candy-sql-5-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -13637,9 +13637,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-256-s-2.ansi": {
-        "name": "candy-query-5-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-256-s-2.ansi": {
+        "name": "candy-sql-5-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "54x15",
         "width": 54,
         "height": 15,
@@ -13649,9 +13649,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-tc-l-1.ansi": {
-        "name": "candy-query-5-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-tc-l-1.ansi": {
+        "name": "candy-sql-5-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "190x41",
         "width": 190,
         "height": 41,
@@ -13661,9 +13661,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-tc-l-2.ansi": {
-        "name": "candy-query-5-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-tc-l-2.ansi": {
+        "name": "candy-sql-5-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "200x37",
         "width": 200,
         "height": 37,
@@ -13673,9 +13673,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-tc-m-1.ansi": {
-        "name": "candy-query-5-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-tc-m-1.ansi": {
+        "name": "candy-sql-5-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "82x23",
         "width": 82,
         "height": 23,
@@ -13685,9 +13685,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-tc-m-2.ansi": {
-        "name": "candy-query-5-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-tc-m-2.ansi": {
+        "name": "candy-sql-5-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "78x22",
         "width": 78,
         "height": 22,
@@ -13697,9 +13697,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-tc-s-1.ansi": {
-        "name": "candy-query-5-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-tc-s-1.ansi": {
+        "name": "candy-sql-5-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -13709,9 +13709,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-5-tc-s-2.ansi": {
-        "name": "candy-query-5-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-5-tc-s-2.ansi": {
+        "name": "candy-sql-5-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -13721,9 +13721,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-16-l-1.ansi": {
-        "name": "candy-query-6-16-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-16-l-1.ansi": {
+        "name": "candy-sql-6-16-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "196x32",
         "width": 196,
         "height": 32,
@@ -13733,9 +13733,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-6-16-l-2.ansi": {
-        "name": "candy-query-6-16-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-16-l-2.ansi": {
+        "name": "candy-sql-6-16-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "190x33",
         "width": 190,
         "height": 33,
@@ -13745,9 +13745,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-6-16-m-2.ansi": {
-        "name": "candy-query-6-16-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-16-m-2.ansi": {
+        "name": "candy-sql-6-16-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -13757,9 +13757,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-6-256-l-1.ansi": {
-        "name": "candy-query-6-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-256-l-1.ansi": {
+        "name": "candy-sql-6-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "212x30",
         "width": 212,
         "height": 30,
@@ -13769,9 +13769,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-256-l-2.ansi": {
-        "name": "candy-query-6-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-256-l-2.ansi": {
+        "name": "candy-sql-6-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "200x34",
         "width": 200,
         "height": 34,
@@ -13781,9 +13781,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-256-m-1.ansi": {
-        "name": "candy-query-6-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-256-m-1.ansi": {
+        "name": "candy-sql-6-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -13793,9 +13793,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-256-m-2.ansi": {
-        "name": "candy-query-6-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-256-m-2.ansi": {
+        "name": "candy-sql-6-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -13805,9 +13805,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-256-s-1.ansi": {
-        "name": "candy-query-6-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-256-s-1.ansi": {
+        "name": "candy-sql-6-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -13817,9 +13817,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-256-s-2.ansi": {
-        "name": "candy-query-6-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-256-s-2.ansi": {
+        "name": "candy-sql-6-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -13829,9 +13829,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-tc-l-1.ansi": {
-        "name": "candy-query-6-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-tc-l-1.ansi": {
+        "name": "candy-sql-6-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "176x44",
         "width": 176,
         "height": 44,
@@ -13841,9 +13841,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-tc-l-2.ansi": {
-        "name": "candy-query-6-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-tc-l-2.ansi": {
+        "name": "candy-sql-6-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "204x40",
         "width": 204,
         "height": 40,
@@ -13853,9 +13853,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-tc-m-1.ansi": {
-        "name": "candy-query-6-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-tc-m-1.ansi": {
+        "name": "candy-sql-6-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x26",
         "width": 88,
         "height": 26,
@@ -13865,9 +13865,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-tc-m-2.ansi": {
-        "name": "candy-query-6-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-tc-m-2.ansi": {
+        "name": "candy-sql-6-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "82x26",
         "width": 82,
         "height": 26,
@@ -13877,9 +13877,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-tc-s-1.ansi": {
-        "name": "candy-query-6-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-tc-s-1.ansi": {
+        "name": "candy-sql-6-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -13889,9 +13889,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-6-tc-s-2.ansi": {
-        "name": "candy-query-6-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-6-tc-s-2.ansi": {
+        "name": "candy-sql-6-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "52x15",
         "width": 52,
         "height": 15,
@@ -13901,9 +13901,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-256-l-1.ansi": {
-        "name": "candy-query-7-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-256-l-1.ansi": {
+        "name": "candy-sql-7-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -13913,9 +13913,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-256-l-2.ansi": {
-        "name": "candy-query-7-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-256-l-2.ansi": {
+        "name": "candy-sql-7-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "172x30",
         "width": 172,
         "height": 30,
@@ -13925,9 +13925,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-256-m-1.ansi": {
-        "name": "candy-query-7-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-256-m-1.ansi": {
+        "name": "candy-sql-7-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -13937,9 +13937,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-256-m-2.ansi": {
-        "name": "candy-query-7-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-256-m-2.ansi": {
+        "name": "candy-sql-7-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -13949,9 +13949,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-256-s-1.ansi": {
-        "name": "candy-query-7-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-256-s-1.ansi": {
+        "name": "candy-sql-7-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "64x15",
         "width": 64,
         "height": 15,
@@ -13961,9 +13961,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-256-s-2.ansi": {
-        "name": "candy-query-7-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-256-s-2.ansi": {
+        "name": "candy-sql-7-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -13973,9 +13973,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-tc-l-1.ansi": {
-        "name": "candy-query-7-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-tc-l-1.ansi": {
+        "name": "candy-sql-7-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -13985,9 +13985,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-tc-l-2.ansi": {
-        "name": "candy-query-7-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-tc-l-2.ansi": {
+        "name": "candy-sql-7-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "196x40",
         "width": 196,
         "height": 40,
@@ -13997,9 +13997,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-tc-m-1.ansi": {
-        "name": "candy-query-7-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-tc-m-1.ansi": {
+        "name": "candy-sql-7-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -14009,9 +14009,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-tc-m-2.ansi": {
-        "name": "candy-query-7-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-tc-m-2.ansi": {
+        "name": "candy-sql-7-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "82x23",
         "width": 82,
         "height": 23,
@@ -14021,9 +14021,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-tc-s-1.ansi": {
-        "name": "candy-query-7-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-tc-s-1.ansi": {
+        "name": "candy-sql-7-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
@@ -14033,9 +14033,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-7-tc-s-2.ansi": {
-        "name": "candy-query-7-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-7-tc-s-2.ansi": {
+        "name": "candy-sql-7-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -14045,9 +14045,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-16-l-1.ansi": {
-        "name": "candy-query-8-16-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-16-l-1.ansi": {
+        "name": "candy-sql-8-16-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "186x28",
         "width": 186,
         "height": 28,
@@ -14057,9 +14057,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-8-16-l-2.ansi": {
-        "name": "candy-query-8-16-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-16-l-2.ansi": {
+        "name": "candy-sql-8-16-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "204x29",
         "width": 204,
         "height": 29,
@@ -14069,9 +14069,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-8-16-m-2.ansi": {
-        "name": "candy-query-8-16-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-16-m-2.ansi": {
+        "name": "candy-sql-8-16-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "88x21",
         "width": 88,
         "height": 21,
@@ -14081,9 +14081,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-8-16-s-2.ansi": {
-        "name": "candy-query-8-16-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-16-s-2.ansi": {
+        "name": "candy-sql-8-16-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "66x9",
         "width": 66,
         "height": 9,
@@ -14093,9 +14093,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-8-256-l-1.ansi": {
-        "name": "candy-query-8-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-256-l-1.ansi": {
+        "name": "candy-sql-8-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "186x28",
         "width": 186,
         "height": 28,
@@ -14105,9 +14105,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-256-l-2.ansi": {
-        "name": "candy-query-8-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-256-l-2.ansi": {
+        "name": "candy-sql-8-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "204x29",
         "width": 204,
         "height": 29,
@@ -14117,9 +14117,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-256-m-1.ansi": {
-        "name": "candy-query-8-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-256-m-1.ansi": {
+        "name": "candy-sql-8-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "90x25",
         "width": 90,
         "height": 25,
@@ -14129,9 +14129,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-256-m-2.ansi": {
-        "name": "candy-query-8-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-256-m-2.ansi": {
+        "name": "candy-sql-8-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "88x21",
         "width": 88,
         "height": 21,
@@ -14141,9 +14141,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-256-s-1.ansi": {
-        "name": "candy-query-8-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-256-s-1.ansi": {
+        "name": "candy-sql-8-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
@@ -14153,9 +14153,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-256-s-2.ansi": {
-        "name": "candy-query-8-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-256-s-2.ansi": {
+        "name": "candy-sql-8-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "66x9",
         "width": 66,
         "height": 9,
@@ -14165,9 +14165,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-tc-l-1.ansi": {
-        "name": "candy-query-8-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-tc-l-1.ansi": {
+        "name": "candy-sql-8-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "186x28",
         "width": 186,
         "height": 28,
@@ -14177,9 +14177,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-tc-l-2.ansi": {
-        "name": "candy-query-8-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-tc-l-2.ansi": {
+        "name": "candy-sql-8-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "204x29",
         "width": 204,
         "height": 29,
@@ -14189,9 +14189,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-tc-m-1.ansi": {
-        "name": "candy-query-8-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-tc-m-1.ansi": {
+        "name": "candy-sql-8-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "90x25",
         "width": 90,
         "height": 25,
@@ -14201,9 +14201,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-tc-m-2.ansi": {
-        "name": "candy-query-8-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-tc-m-2.ansi": {
+        "name": "candy-sql-8-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "88x21",
         "width": 88,
         "height": 21,
@@ -14213,9 +14213,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-tc-s-1.ansi": {
-        "name": "candy-query-8-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-tc-s-1.ansi": {
+        "name": "candy-sql-8-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
@@ -14225,9 +14225,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-8-tc-s-2.ansi": {
-        "name": "candy-query-8-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-8-tc-s-2.ansi": {
+        "name": "candy-sql-8-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "66x9",
         "width": 66,
         "height": 9,
@@ -14237,9 +14237,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-256-l-1.ansi": {
-        "name": "candy-query-9-256-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-256-l-1.ansi": {
+        "name": "candy-sql-9-256-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "184x32",
         "width": 184,
         "height": 32,
@@ -14249,9 +14249,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-256-l-2.ansi": {
-        "name": "candy-query-9-256-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-256-l-2.ansi": {
+        "name": "candy-sql-9-256-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "190x30",
         "width": 190,
         "height": 30,
@@ -14261,9 +14261,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-256-m-1.ansi": {
-        "name": "candy-query-9-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-256-m-1.ansi": {
+        "name": "candy-sql-9-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -14273,9 +14273,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-256-m-2.ansi": {
-        "name": "candy-query-9-256-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-256-m-2.ansi": {
+        "name": "candy-sql-9-256-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -14285,9 +14285,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-256-s-1.ansi": {
-        "name": "candy-query-9-256-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-256-s-1.ansi": {
+        "name": "candy-sql-9-256-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -14297,9 +14297,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-256-s-2.ansi": {
-        "name": "candy-query-9-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-256-s-2.ansi": {
+        "name": "candy-sql-9-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -14309,9 +14309,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-l-1.ansi": {
-        "name": "candy-query-9-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-l-1.ansi": {
+        "name": "candy-sql-9-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "196x36",
         "width": 196,
         "height": 36,
@@ -14321,9 +14321,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-l-2.ansi": {
-        "name": "candy-query-9-tc-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-l-2.ansi": {
+        "name": "candy-sql-9-tc-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "188x34",
         "width": 188,
         "height": 34,
@@ -14333,9 +14333,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-l-3.ansi": {
-        "name": "candy-query-9-tc-l-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-l-3.ansi": {
+        "name": "candy-sql-9-tc-l-3.ansi",
+        "category": "candy-sql",
         "resolution": "180x30",
         "width": 180,
         "height": 30,
@@ -14345,9 +14345,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-m-1.ansi": {
-        "name": "candy-query-9-tc-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-m-1.ansi": {
+        "name": "candy-sql-9-tc-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -14357,9 +14357,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-m-2.ansi": {
-        "name": "candy-query-9-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-m-2.ansi": {
+        "name": "candy-sql-9-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -14369,9 +14369,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-m-3.ansi": {
-        "name": "candy-query-9-tc-m-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-m-3.ansi": {
+        "name": "candy-sql-9-tc-m-3.ansi",
+        "category": "candy-sql",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -14381,9 +14381,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-m-4.ansi": {
-        "name": "candy-query-9-tc-m-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-m-4.ansi": {
+        "name": "candy-sql-9-tc-m-4.ansi",
+        "category": "candy-sql",
         "resolution": "90x22",
         "width": 90,
         "height": 22,
@@ -14393,9 +14393,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-s-1.ansi": {
-        "name": "candy-query-9-tc-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-s-1.ansi": {
+        "name": "candy-sql-9-tc-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -14405,9 +14405,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-9-tc-s-2.ansi": {
-        "name": "candy-query-9-tc-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-9-tc-s-2.ansi": {
+        "name": "candy-sql-9-tc-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -14417,9 +14417,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-16-l-2.ansi": {
-        "name": "candy-query-10-16-l-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-16-l-2.ansi": {
+        "name": "candy-sql-10-16-l-2.ansi",
+        "category": "candy-sql",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -14431,9 +14431,9 @@
             "alignment-fix"
         ]
     },
-    "candy-query/candy-query-10-16-l-5.ansi": {
-        "name": "candy-query-10-16-l-5.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-16-l-5.ansi": {
+        "name": "candy-sql-10-16-l-5.ansi",
+        "category": "candy-sql",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -14443,9 +14443,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-10-16-m-3.ansi": {
-        "name": "candy-query-10-16-m-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-16-m-3.ansi": {
+        "name": "candy-sql-10-16-m-3.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -14455,9 +14455,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-10-16-m-6.ansi": {
-        "name": "candy-query-10-16-m-6.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-16-m-6.ansi": {
+        "name": "candy-sql-10-16-m-6.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -14467,9 +14467,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-query/candy-query-10-16-s-1.ansi": {
-        "name": "candy-query-10-16-s-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-16-s-1.ansi": {
+        "name": "candy-sql-10-16-s-1.ansi",
+        "category": "candy-sql",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -14479,9 +14479,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-10-16-s-4.ansi": {
-        "name": "candy-query-10-16-s-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-16-s-4.ansi": {
+        "name": "candy-sql-10-16-s-4.ansi",
+        "category": "candy-sql",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -14491,9 +14491,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-10-256-l-3.ansi": {
-        "name": "candy-query-10-256-l-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-256-l-3.ansi": {
+        "name": "candy-sql-10-256-l-3.ansi",
+        "category": "candy-sql",
         "resolution": "176x31",
         "width": 176,
         "height": 31,
@@ -14503,9 +14503,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-256-l-6.ansi": {
-        "name": "candy-query-10-256-l-6.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-256-l-6.ansi": {
+        "name": "candy-sql-10-256-l-6.ansi",
+        "category": "candy-sql",
         "resolution": "176x31",
         "width": 176,
         "height": 31,
@@ -14515,9 +14515,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-256-m-1.ansi": {
-        "name": "candy-query-10-256-m-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-256-m-1.ansi": {
+        "name": "candy-sql-10-256-m-1.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -14527,9 +14527,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-256-m-4.ansi": {
-        "name": "candy-query-10-256-m-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-256-m-4.ansi": {
+        "name": "candy-sql-10-256-m-4.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -14539,9 +14539,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-256-s-2.ansi": {
-        "name": "candy-query-10-256-s-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-256-s-2.ansi": {
+        "name": "candy-sql-10-256-s-2.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -14551,9 +14551,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-256-s-5.ansi": {
-        "name": "candy-query-10-256-s-5.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-256-s-5.ansi": {
+        "name": "candy-sql-10-256-s-5.ansi",
+        "category": "candy-sql",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -14563,9 +14563,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-tc-l-1.ansi": {
-        "name": "candy-query-10-tc-l-1.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-tc-l-1.ansi": {
+        "name": "candy-sql-10-tc-l-1.ansi",
+        "category": "candy-sql",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -14575,9 +14575,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-tc-l-4.ansi": {
-        "name": "candy-query-10-tc-l-4.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-tc-l-4.ansi": {
+        "name": "candy-sql-10-tc-l-4.ansi",
+        "category": "candy-sql",
         "resolution": "176x33",
         "width": 176,
         "height": 33,
@@ -14587,9 +14587,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-tc-m-2.ansi": {
-        "name": "candy-query-10-tc-m-2.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-tc-m-2.ansi": {
+        "name": "candy-sql-10-tc-m-2.ansi",
+        "category": "candy-sql",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -14599,9 +14599,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-tc-m-5.ansi": {
-        "name": "candy-query-10-tc-m-5.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-tc-m-5.ansi": {
+        "name": "candy-sql-10-tc-m-5.ansi",
+        "category": "candy-sql",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -14611,9 +14611,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-tc-s-3.ansi": {
-        "name": "candy-query-10-tc-s-3.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-tc-s-3.ansi": {
+        "name": "candy-sql-10-tc-s-3.ansi",
+        "category": "candy-sql",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -14623,9 +14623,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-query/candy-query-10-tc-s-6.ansi": {
-        "name": "candy-query-10-tc-s-6.ansi",
-        "category": "candy-query",
+    "candy-sql/candy-sql-10-tc-s-6.ansi": {
+        "name": "candy-sql-10-tc-s-6.ansi",
+        "category": "candy-sql",
         "resolution": "62x11",
         "width": 62,
         "height": 11,

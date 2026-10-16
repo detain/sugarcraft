@@ -28,7 +28,7 @@
 
 - **In-flight release identity doubles as the stale-adoption gate** — `InFlightMap::end(key, flight)` returns false when the slot no longer holds *this* flight, so an arrival displaced mid-flight by `invalidate()`/`clear()` still answers its own callers but can never write a superseded value back into the store. One mechanism, two invariants; the async slot map must be keyed-blind-safe this way or a doomed flight's tail silently frees the CURRENT flight's slot.
 
-- **A failed refresh must not re-stamp the stale entry it served** — with `serveStaleOnError`, resolving the caller from `values[$key]` without touching `storedAt[$key]` is what keeps the key un-latched: the next tick re-probes a blipped upstream instead of waiting out an accidental freshness extension (E718 lesson, carried from candy-query `AdminQueryCache`).
+- **A failed refresh must not re-stamp the stale entry it served** — with `serveStaleOnError`, resolving the caller from `values[$key]` without touching `storedAt[$key]` is what keeps the key un-latched: the next tick re-probes a blipped upstream instead of waiting out an accidental freshness extension (E718 lesson, carried from candy-sql `AdminQueryCache`).
 
 - **withTimeout vs withDeadline is orthogonal-by-design** — timeout answers "how long will the caller wait" (inner runs on), deadline answers "how long may the work take" (inner is `cancel()`ed, plus an optional one-shot `onTimeout` abort hook for the server-side kill the driver cannot perform, e.g. MySQL KILL QUERY). Deadlines are bounded I/O ceilings computed on the remaining budget (E646 law), never blanket wall-clock killers; the inner cancel fires AFTER the caller-facing rejection so a driver whose `cancel()` re-settles the inner cannot leak through the settle guards.
 

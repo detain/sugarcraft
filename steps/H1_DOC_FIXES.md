@@ -1,12 +1,12 @@
 # Step H1: Fix Documentation Errors
 
 ## Goal
-Fix incorrect API documentation in `docs/lib/candy-query.html`.
+Fix incorrect API documentation in `docs/lib/candy-sql.html`.
 
 ## Issues to Fix
 
 ### Issue 1: AdminProviderInterface::forFlavor() doesn't exist
-In docs/lib/candy-query.html around line 156:
+In docs/lib/candy-sql.html around line 156:
 ```html
 <tr><td>AdminProviderInterface</td><td>forFlavor(flavor, serverContext)</td>
 ```
@@ -24,7 +24,7 @@ Compare README.md architecture table against actual source files.
 
 ## Files to Modify
 
-1. **`docs/lib/candy-query.html`** — Fix the API table entry for AdminProviderInterface
+1. **`docs/lib/candy-sql.html`** — Fix the API table entry for AdminProviderInterface
 2. **`README.md`** — Fix any discrepancies found in architecture section
 
 ## Acceptance Criteria

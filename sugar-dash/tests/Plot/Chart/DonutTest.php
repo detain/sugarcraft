@@ -886,7 +886,7 @@ final class DonutTest extends TestCase
 
     public function testDownstreamReportedThreeCharReadoutSurvivesSizeTwelve(): void
     {
-        // candy-query MeterCell::viewRound documented workaround: "Donut
+        // candy-sql MeterCell::viewRound documented workaround: "Donut
         // truncates center text to the hole span, and at the former size 12
         // the live page clipped '85%' to '85'". Size 12 → radius 5 →
         // innerRadius 2 → the center hole row spans exactly 3 columns, which

@@ -51,16 +51,16 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 2: candy-query, candy-mold, candy-kit, candy-freeze
+### Group 2: candy-sql, candy-mold, candy-kit, candy-freeze
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| candy-query | 123 ✓ | REQUEST_CHANGES | 0 | 1 | 2 | 0 |
+| candy-sql | 123 ✓ | REQUEST_CHANGES | 0 | 1 | 2 | 0 |
 | candy-mold | 8 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | candy-kit | 41 ✓ | APPROVE | 0 | 1 | 1 | 0 |
 | candy-freeze | 111 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 
-**candy-query** — SQLite browser TUI. SQL injection surface exists but is by design (it's a SQL browser). Inconsistent prepared statement usage vs string interpolation.
+**candy-sql** — SQLite browser TUI. SQL injection surface exists but is by design (it's a SQL browser). Inconsistent prepared statement usage vs string interpolation.
 
 **candy-mold** — **Skeleton template**, not a library. Package description misleading ("data modeling/validation"). `composer create-project` bootstrap only.
 
@@ -563,7 +563,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Group | Packages | Tests | Status |
 |-------|----------|-------|--------|
 | 1 | candy-core, candy-shell, candy-sprinkles, candy-shine, candy-serve | 1,638 | ✅ All pass |
-| 2 | candy-query, candy-mold, candy-kit, candy-freeze | 283 | ✅ All pass |
+| 2 | candy-sql, candy-mold, candy-kit, candy-freeze | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |

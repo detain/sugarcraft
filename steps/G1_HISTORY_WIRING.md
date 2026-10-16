@@ -10,7 +10,7 @@ Connect HistoryRecorder to the App's admin data fetching so query history is act
 - App::subscriptions() uses `Cmd::promise()` directly, not HistoryRecorder
 
 ## MySQL Workbench
-No query history in Workbench admin - this is a candy-query enhancement.
+No query history in Workbench admin - this is a candy-sql enhancement.
 
 ## Files to Modify
 

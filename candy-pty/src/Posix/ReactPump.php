@@ -42,7 +42,7 @@ use SugarCraft\Pty\PumpOptions;
  * SignalForwarder, and ext-pcntl is not guaranteed to be loaded.
  *
  * Naming follows the house `React*` prefix for event-loop adapters
- * (candy-input `ReactInputDriver`, candy-query `ReactMysqlConnection`).
+ * (candy-input `ReactInputDriver`, candy-sql `ReactMysqlConnection`).
  *
  * Implements plan item 8.1 (findings/plan_candy-pty.md).
  *

@@ -12,7 +12,7 @@ use SugarCraft\Toast\{Position, Toast, ToastType};
  * broke the project's bare-accessor / lowercase-renderer conventions).
  *
  * `View()` survives ONLY as a deprecated delegating shim — sugar-dash and
- * candy-query call it across the library boundary, so it must keep answering
+ * candy-sql call it across the library boundary, so it must keep answering
  * byte-identically until those callers migrate. `getHistory()` had no
  * cross-library consumer and was renamed outright, no alias.
  */

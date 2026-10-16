@@ -92,7 +92,7 @@ called out in the table below.
 | **CandyTetris** (`candy-tetris/`) | 🟢 ready | Tetris clone — SRS / 7-bag / NES scoring. |
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
 | **CandyGit** (`candy-git/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
-| **CandyQuery** (`candy-query/`) | 🟢 ready | SQLite/MySQL/PostgreSQL browser TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
+| **CandySql** (`candy-sql/`) | 🟢 ready | SQLite/MySQL/PostgreSQL client TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
 | **SugarTick** (`sugar-tick/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL on disk. |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF + .ansi-art viewer CLI (ext-gd via candy-flip) — port of gifterm. |
@@ -172,7 +172,7 @@ reference projects supplied the ideas, not the code.
 | CandyMosaic (candy-mosaic/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
 | CandyPalette (candy-palette/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
 | CandyPty (candy-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |
-| CandyQuery (candy-query/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
+| CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
 | CandyServe (candy-serve/) | [soft-serve](https://github.com/charmbracelet/soft-serve) |
 | CandyShell (candy-shell/) | [gum](https://github.com/charmbracelet/gum) |
 | CandyShine (candy-shine/) | [glamour](https://github.com/charmbracelet/glamour) |

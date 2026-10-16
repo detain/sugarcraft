@@ -68,7 +68,7 @@
 - sugar-wishlist: Config non-scalar cast
 - candy-mouse: Scan duplicate zone
 - candy-serve: SEC issues
-- candy-query: SQL logging
+- candy-sql: SQL logging
 - sugar-post: STARTTLS
 - (and many others)
 

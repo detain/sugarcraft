@@ -139,7 +139,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 6. **Manual byte-loop parsing vs. state machine architecture** — sugar-spark (551-line Inspector.php), candy-hermit use `strlen()`/`strpos()` at byte level. The canonical state machine from `charmbracelet/x/ansi` is already available in candy-vt but not shared.
 
-7. **God Classes with 10-15 constructor parameters** — super-candy's `Manager` (915 lines, 15 params), candy-query's `App` (12 args). Builder pattern never applied proactively.
+7. **God Classes with 10-15 constructor parameters** — super-candy's `Manager` (915 lines, 15 params), candy-sql's `App` (12 args). Builder pattern never applied proactively.
 
 8. **String-based action detection for undo/redo** — super-candy uses `str_starts_with($desc, 'delete ')` to route undo actions; translation changes silently break it.
 
@@ -221,7 +221,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **Inconsistent `auto()` fallback pattern** — Terminal capability probing failures produce panics rather than graceful degradation.
 
-5. **Builder pattern never applied proactively** — god classes (super-candy Manager at 915 lines, candy-query App at 12 args) grow without limits.
+5. **Builder pattern never applied proactively** — god classes (super-candy Manager at 915 lines, candy-sql App at 12 args) grow without limits.
 
 ---
 
@@ -283,7 +283,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 6. **`Mosaic::diagnose()`** — Structured terminal capability report.
 
-7. **DatabaseInterface extraction** — Unblocks MySQL/Postgres in candy-query.
+7. **DatabaseInterface extraction** — Unblocks MySQL/Postgres in candy-sql.
 
 8. **yazi/ranger-style progress bars** — Per-file, per-byte progress for super-candy file operations.
 
@@ -348,7 +348,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 3 | Add `flock()` to JSONL append operations | sugar-tick, candy-flip | Critical | Low | Low | P0 |
 | 4 | Implement fuzzy matching with scored indices | candy-shell, candy-forms, candy-forms, sugar-bits | High | Medium | Low | P0 |
 | 5 | Add `ProgramOptions::builder()` + ergonomic APIs | candy-core | High | Low | Low | P0 |
-| 6 | Extract `DatabaseInterface` in candy-query | candy-query | Critical | Low | Low | P0 |
+| 6 | Extract `DatabaseInterface` in candy-sql | candy-sql | Critical | Low | Low | P0 |
 | 7 | Fix `toSshArgv()` to emit ALL identity files | sugar-wishlist | High | Low | Low | P0 |
 | 8 | Wire `Mosaic::auto()` + `diagnose()` | candy-mosaic | High | Low | Low | P0 |
 | 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-bits, sugar-boxer, sugar-dash | Critical | High | Medium | P1 |
@@ -378,7 +378,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **Add `flock()` to sugar-tick Store::append()** — One-line fix eliminates critical concurrent-write corruption risk.
 
-5. **Extract `DatabaseInterface` in candy-query** — Stable 7-method interface; unblocks MySQL/Postgres driver.
+5. **Extract `DatabaseInterface` in candy-sql** — Stable 7-method interface; unblocks MySQL/Postgres driver.
 
 6. **Fix `toSshArgv()` in sugar-wishlist** — Single-method change + test; full SSH feature parity.
 
@@ -412,7 +412,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 9. **Add concurrent undo/redo infrastructure** — `UndoActionType` enum replacing string-based detection; shared across super-candy, candy-minesweeper, candy-tetris.
 
-10. **Add `Builder` pattern to god classes** — Refactor super-candy Manager (915 lines) and candy-query App (12 args) using extracted value objects.
+10. **Add `Builder` pattern to god classes** — Refactor super-candy Manager (915 lines) and candy-sql App (12 args) using extracted value objects.
 
 ### Major Architectural (2-6 months)
 
@@ -466,7 +466,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 6. **`TerminalProbe` / `Mosaic::auto()`** — Graceful capability detection with safe universal fallback.
 
-7. **`DatabaseInterface`** — Extracted contract in candy-query enabling multiple drivers.
+7. **`DatabaseInterface`** — Extracted contract in candy-sql enabling multiple drivers.
 
 8. **`UndoActionType` enum** — Type-safe undo action routing replacing string-based detection.
 
@@ -514,7 +514,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 9. **Terminal capability probing** — candy-mosaic, sugar-glow, candy-wish each struggle with the same probing failure patterns independently.
 
-10. **God class construction** — super-candy Manager (915 lines), candy-query App (12 args) represent the same architectural failure in different stages.
+10. **God class construction** — super-candy Manager (915 lines), candy-sql App (12 args) represent the same architectural failure in different stages.
 
 ---
 

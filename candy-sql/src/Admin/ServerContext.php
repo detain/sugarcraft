@@ -1,0 +1,378 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\Admin;
+
+use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\Version;
+
+/**
+ * MySQL-focused ServerContext implementation.
+ *
+ * Caches SHOW GLOBAL VARIABLES, SHOW GLOBAL STATUS (with timestamp),
+ * SHOW PLUGINS, and parsed version/flavor. Gracefully degrades on
+ * MySQL errors 1142/1227/1146/2002/2003/2013.
+ *
+ * ## How this fits the non-blocking admin data path (E718)
+ *
+ * The live feed for the admin pane is asynchronous: App::subscriptions()
+ * ticks once per second (throttled to CacheTtl::STATUS) and
+ * App::createAdminFetchPromise() runs SHOW GLOBAL STATUS / VARIABLES on the
+ * React event loop, storing results in AdminQueryCache. Pages render through
+ * AsyncCachingServerContext, which answers variable queries from that cache
+ * and NEVER calls into this class's fetches for them.
+ *
+ * This class's own TTL caches ({@see statusVariables()}, {@see
+ * serverVariables()}) are the synchronous backstop behind the few delegations
+ * AsyncCachingServerContext still forwards — statusVariablesTs(), wasReset(),
+ * lastUptime() and the sync-side admin providers. To keep that backstop
+ * actually cheap across admin-pane resets, the model hands out ONE shared
+ * instance via AdminQueryCache::serverContext() — a single slot keyed to the
+ * database handle it wraps (a process alternating two handles re-mints on
+ * each switch: bounded, pinned by the displacement test):
+ * dropping and rebuilding the page (AdminState::withPane()) reuses the same
+ * warm cache instead of minting a cold context whose first read would block.
+ *
+ * ACCEPTED RESIDUAL: the first synchronous read in each TTL window still
+ * issues one blocking fetch on the calling (render) path. Removing that
+ * entirely means every consumer moves onto the async cache; the status page's
+ * sampling helpers are not there yet. The window bounds the blast radius —
+ * repeated renders inside it execute the query exactly once — but do not
+ * eliminate the call, and the surviving call is DURATION-unbounded: it is a
+ * synchronous PDO read, so a hung server can stall that one render for its
+ * full connection timeout. E646 bans blanket timeouts on our side, so this
+ * is a disclosed property, not an oversight.
+ *
+ * @see Mirrors charmbracelet/lazysql ServerContext
+ */
+final class ServerContext implements ServerContextInterface
+{
+    private const STATUS_CACHE_TTL = CacheTtl::STATUS;
+    private const SERVER_CACHE_TTL = CacheTtl::SERVER;
+
+    private ?array $serverVariablesCache = null;
+    private ?float $serverVariablesTsCache = null;
+    private ?array $statusVariablesCache = null;
+    private ?float $statusVariablesTsCache = null;
+    /** @var list<array<string, mixed>>|null */
+    private $pluginsCache = null;
+    private ?Version $versionCache = null;
+    private ?Flavor $flavorCache = null;
+    private ?string $versionStringCache = null;
+    private ?bool $wasResetCache = null;
+    private ?int $lastUptime = null;
+
+    public function __construct(
+        private readonly DatabaseInterface $connection,
+        private readonly ?Flavor $flavor = null,
+    ) {
+        // If flavor is provided, use it to pre-set the cache
+        if ($this->flavor !== null) {
+            $this->flavorCache = $this->flavor;
+        }
+    }
+
+    public function connection(): DatabaseInterface
+    {
+        return $this->connection;
+    }
+
+    /**
+     * SHOW GLOBAL VARIABLES with an in-window TTL cache (fail-open).
+     *
+     * Fresh cache → return it, no query. Expired/absent → issue exactly one
+     * fetch per window. If that fetch fails with a non-ignorable error and a
+     * previous snapshot exists, the stale snapshot is served rather than
+     * crashing the render — a monitoring pane showing 3-second-old data beats
+     * a dead UI, and the next window retries. With no previous snapshot the
+     * error is rethrown (there is nothing honest to serve).
+     *
+     * The timestamp records the last refresh ATTEMPT, not the last success:
+     * a failed window still swallows its retry until it expires, so a
+     * struggling server costs at most one blocking call per TTL, never one
+     * per render.
+     *
+     * @return array<string, string>
+     */
+    public function serverVariables(): array
+    {
+        $now = microtime(true);
+
+        if ($this->serverVariablesCache !== null && $this->serverVariablesTsCache !== null) {
+            if (($now - $this->serverVariablesTsCache) < self::SERVER_CACHE_TTL) {
+                return $this->serverVariablesCache;
+            }
+        }
+
+        $stale = $this->serverVariablesCache;
+        $this->serverVariablesTsCache = $now;
+
+        try {
+            $this->serverVariablesCache = $this->fetchServerVariables();
+        } catch (\PDOException $e) {
+            if ($stale === null) {
+                throw $e;
+            }
+            return $stale;
+        }
+
+        return $this->serverVariablesCache;
+    }
+
+    /**
+     * SHOW GLOBAL STATUS with an in-window TTL cache (fail-open).
+     *
+     * Same contract as {@see serverVariables()}: within CacheTtl::STATUS of
+     * the last refresh attempt the cached snapshot answers every read — two
+     * renders inside one window execute the query exactly once — and a failed
+     * refresh serves the last-known snapshot instead of propagating into the
+     * render path. Cold-with-error rethrows; detection of a server restart
+     * (detectReset) runs only on a successful fetch.
+     *
+     * @return array<string, string>
+     */
+    public function statusVariables(): array
+    {
+        $now = microtime(true);
+
+        if ($this->statusVariablesCache !== null && $this->statusVariablesTsCache !== null) {
+            if (($now - $this->statusVariablesTsCache) < self::STATUS_CACHE_TTL) {
+                return $this->statusVariablesCache;
+            }
+        }
+
+        $stale = $this->statusVariablesCache;
+        $this->statusVariablesTsCache = $now;
+
+        try {
+            $this->statusVariablesCache = $this->fetchStatusVariables();
+        } catch (\PDOException $e) {
+            if ($stale === null) {
+                throw $e;
+            }
+            return $stale;
+        }
+
+        $this->detectReset();
+
+        return $this->statusVariablesCache;
+    }
+
+    public function statusVariablesTs(): float
+    {
+        if ($this->statusVariablesTsCache !== null) {
+            return $this->statusVariablesTsCache;
+        }
+        $this->statusVariables();
+        return $this->statusVariablesTsCache ?? 0.0;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function plugins(): array
+    {
+        if ($this->pluginsCache !== null) {
+            return $this->pluginsCache;
+        }
+
+        $this->pluginsCache = $this->fetchPlugins();
+        return $this->pluginsCache;
+    }
+
+    public function version(): Version
+    {
+        if ($this->versionCache !== null) {
+            return $this->versionCache;
+        }
+
+        $raw = $this->connection()->serverVersion();
+        $this->versionStringCache = $raw;
+        $this->versionCache = Version::parse($raw);
+        return $this->versionCache;
+    }
+
+    public function flavor(): Flavor
+    {
+        if ($this->flavorCache !== null) {
+            return $this->flavorCache;
+        }
+
+        $version = $this->version();
+        $numericVersion = $version->major . '.' . $version->minor . '.' . $version->release;
+        $raw = $this->connection()->serverVersion();
+        $this->flavorCache = Flavor::detectFromVersionString($numericVersion, $raw);
+        return $this->flavorCache;
+    }
+
+    public function versionString(): string
+    {
+        if ($this->versionStringCache !== null) {
+            return $this->versionStringCache;
+        }
+
+        return $this->connection()->serverVersion();
+    }
+
+    public function password(): string
+    {
+        // Delegated to the underlying connection if it has password().
+        // AsyncCachedConnection no longer exposes password() so we return ''
+        // when the connection doesn't support it.
+        if (method_exists($this->connection(), 'password')) {
+            return $this->connection()->password();
+        }
+        return '';
+    }
+
+    public function wasReset(): bool
+    {
+        $this->statusVariables();
+        return $this->wasResetCache ?? false;
+    }
+
+    /**
+     * Get the last known server uptime.
+     *
+     * Returns null if uptime has not been tracked yet.
+     */
+    public function lastUptime(): ?int
+    {
+        $this->statusVariables();
+        return $this->lastUptime;
+    }
+
+    /**
+     * Force a refresh of all cached values.
+     */
+    public function refresh(): void
+    {
+        $this->serverVariablesCache = null;
+        $this->serverVariablesTsCache = null;
+        $this->statusVariablesCache = null;
+        $this->statusVariablesTsCache = null;
+        $this->pluginsCache = null;
+        $this->versionCache = null;
+        $this->flavorCache = null;
+        $this->versionStringCache = null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function fetchServerVariables(): array
+    {
+        try {
+            $rows = $this->connection()->query('SHOW GLOBAL VARIABLES');
+            $out = [];
+            foreach ($rows as $row) {
+                if (isset($row['Variable_name'], $row['Value'])) {
+                    $out[(string) $row['Variable_name']] = (string) $row['Value'];
+                }
+            }
+            return $out;
+        } catch (\PDOException $e) {
+            if ($this->isIgnorableError($e)) {
+                return [];
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function fetchStatusVariables(): array
+    {
+        try {
+            $rows = $this->connection()->query('SHOW GLOBAL STATUS');
+            $out = [];
+            foreach ($rows as $row) {
+                if (isset($row['Variable_name'], $row['Value'])) {
+                    $out[(string) $row['Variable_name']] = (string) $row['Value'];
+                }
+            }
+            return $out;
+        } catch (\PDOException $e) {
+            if ($this->isIgnorableError($e)) {
+                return [];
+            }
+            throw $e;
+        }
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function fetchPlugins(): array
+    {
+        try {
+            $rows = $this->connection()->query('SHOW PLUGINS');
+            /** @var list<array<string, mixed>> */
+            return $rows;
+        } catch (\PDOException $e) {
+            if ($this->isIgnorableError($e)) {
+                return [];
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Detect whether the server has restarted since the last poll.
+     *
+     * Compares the current Uptime status variable against the last observed
+     * value. If the new uptime is less than the previous (wrap or restart),
+     * sets wasResetCache to true. This is the single authoritative source of
+     * restart detection — consumers (Sampler) delegate to
+     * ServerContext via StatusSnapshotProviderInterface::wasReset().
+     *
+     * Called automatically by statusVariables() after fetching fresh data.
+     */
+    private function detectReset(): void
+    {
+        $uptime = $this->statusVariablesCache['Uptime'] ?? null;
+        if ($uptime === null) {
+            return;
+        }
+
+        // Snapshot semantics: one read of $lastUptime into a local, compare
+        // against it, then one write. PHP is single-threaded per request, but
+        // this runs amid interleaved ReactPHP callbacks — an interleaved
+        // read/compare/write on the property itself would let another callback
+        // update lastUptime between our read and our write, masking (or
+        // fabricating) a restart. The local pins the value this comparison is
+        // based on, so the compare and the state transition stay consistent.
+        $previousUptime = $this->lastUptime;
+        $currentUptime = (int) $uptime;
+        if ($previousUptime !== null && $currentUptime < $previousUptime) {
+            $this->wasResetCache = true;
+        }
+        $this->lastUptime = $currentUptime;
+    }
+
+    /**
+     * MySQL error codes that indicate missing privileges or unavailable features.
+     *
+     * Using codes instead of message strings makes this locale-independent — MySQL
+     * error messages are returned in the server's locale, but error codes are fixed.
+     *
+     * @see https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference/
+     * @see https://dev.mysql.com/doc/mysql-errors/8.0/en/client-error-reference/
+     */
+    private const IGNORABLE_ERROR_CODES = [
+        '42000', // ER_UNKNOWN_ERROR_CLASS / syntax/access denied (general)
+        '1142',  // ER_TABLEACCESS_DENIED_ERROR
+        '1146',  // ER_NO_SUCH_TABLE
+        '1227',  // ER_SPECIFIC_ACCESS_DENIED_ERROR (proxy, replication grants)
+        '2002',  // CR_CONNECTION_ERROR (Can't connect to MySQL server)
+        '2003',  // CR_CONN_HOST_ERROR (Unknown MySQL server host)
+        '2013',  // CR_SERVER_LOST (Lost connection to MySQL server during query)
+    ];
+
+    /**
+     * True for errors that indicate missing privileges or unavailable features.
+     */
+    private function isIgnorableError(\PDOException $e): bool
+    {
+        return \in_array((string) $e->getCode(), self::IGNORABLE_ERROR_CODES, true);
+    }
+}

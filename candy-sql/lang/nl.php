@@ -1,0 +1,14 @@
+<?php
+
+/**
+ * Dutch translations for candy-sql.
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    'database.no_file' => 'candy-sql: SQLite-bestand niet gevonden: {path}',
+    'cli.usage'        => 'Gebruik: candy-sql <sqlite-bestand>',
+];

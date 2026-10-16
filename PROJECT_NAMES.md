@@ -115,7 +115,7 @@ assembles them, which is exactly the `Sugar-` "components / apps" role.
 **For `Candy-`**, the AGENTS.md naming line gives `Candy-` to
 "foundation / **system**", and a system monitor is about as literally
 "system" as a package gets (it reads `/proc` and `/sys`, not user data);
-`Candy-` apps already exist (CandyFiles, CandyQuery, CandyGifView). The ruling
+`Candy-` apps already exist (CandyFiles, CandySql, CandyGifView). The ruling
 stands; it is not a precedent that apps default to `Candy-`.
 
 ---
@@ -157,7 +157,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyMinesweeper** | plain descriptive — took this name in the 2026-10 rename; the “candy + mines” wordplay retired with it. |
 | **CandyLister** | candy + lister = scrollable tree/list view component. literal. |
 | **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |
-| **CandyQuery** | candy + query = terminal SQL browser. multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. |
+| **CandySql** | candy + sql = terminal SQL client. literal pairing (was candy-query — the query-editor framing retired with the 2026-10 rename); multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. | <!-- @rename-keep -->
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
 | **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter numbering model); first-party PHP. |
 | **SugarMcp** | sugar + mcp = Model Context Protocol client core. component/data per prefix law; extracted from sugar-crush (src/MCP stdio stack + McpMessage codec); first-party PHP — MCP is an open protocol spec. |

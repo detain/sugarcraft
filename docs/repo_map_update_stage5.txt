@@ -1,6 +1,6 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
-Sourced from 11 update docs: candy-kit, candy-flip, sugar-post, candy-query,
+Sourced from 11 update docs: candy-kit, candy-flip, sugar-post, candy-sql,
 candy-minesweeper, candy-tetris, candy-mold, candy-flappy, super-candy, sugar-tick.
 
 ---
@@ -12,7 +12,7 @@ Every package independently identifies the same hole: no `Simulator` class,
 no `Program::withInput()/withOutput()`, no snapshot testing utilities. This is
 not a per-package gap — it is an ecosystem gap. bubble-tea issue #1654 (6+
 years old) confirms the Go world never solved this. SugarCraft can lead here.
-Affected: candy-mold (critical), candy-query, candy-minesweeper, candy-tetris,
+Affected: candy-mold (critical), candy-sql, candy-minesweeper, candy-tetris,
 super-candy, sugar-tick.
 
 ### B. Concurrent Write Safety — Data Corruption Risk
@@ -34,7 +34,7 @@ Affected: super-candy (critical), sugar-post (large attachment send).
 
 ### A. God Classes with 10-15 Constructor Parameters
 super-candy's `Manager` at 915 lines has 15 constructor params.
-candy-query's `App` has 12 args. This pattern repeats across apps built on
+candy-sql's `App` has 12 args. This pattern repeats across apps built on
 candy-core TEA. The fix is well-understood: extract value objects
 (SearchState, TabManager, PaneState, ManagerState) and use a Builder pattern.
 No package has addressed this proactively.
@@ -79,7 +79,7 @@ Add `flock()` to `Store::append()` in sugar-tick. Same pattern applies to
 any JSONL/append-write package. Eliminates the critical concurrent-write
 corruption risk. Complexity: Low. Impact: Critical (data safety).
 
-### B. Extract DatabaseInterface now in candy-query — 1 interface, unlocks MySQL
+### B. Extract DatabaseInterface now in candy-sql — 1 interface, unlocks MySQL
 The README explicitly says "promoting to an interface is a one-class job
 once the second driver lands." The interface contract is already stable from
 7 public methods. Waiting costs nothing except forces a later refactor

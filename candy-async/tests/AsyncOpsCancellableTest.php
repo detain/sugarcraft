@@ -13,7 +13,7 @@ use SugarCraft\Async\OperationCancelledException;
 use function React\Promise\resolve;
 
 /**
- * Guards the cooperative-cancellation semantics ported from candy-query's
+ * Guards the cooperative-cancellation semantics ported from candy-sql's
  * CancellableQuery (port Q2): cancelling the token must reject the caller's
  * promise IMMEDIATELY (no loop turn needed), fire the abort hook exactly once,
  * and drop — not resurrect — a late-arriving result. An operation that settles

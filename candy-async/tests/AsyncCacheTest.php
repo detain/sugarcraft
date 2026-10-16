@@ -13,7 +13,7 @@ use function React\Promise\reject;
 use function React\Promise\resolve;
 
 /**
- * Guards the cache-aside machinery extracted from candy-query's
+ * Guards the cache-aside machinery extracted from candy-sql's
  * AdminQueryCache (port Q6): fresh hits skip the loader, concurrent fetches
  * coalesce onto ONE load, TTL expiry re-fetches while the render path keeps
  * serving the stale value, failed loads optionally fall back to stale WITHOUT

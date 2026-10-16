@@ -9,12 +9,12 @@ skips/flake), `5f33c4b7` (candy-mouse contains, candy-wish StreamHelper
 + pid()), `1920988f`/`09546125` (candy-serve auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-shell), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
-candy-input paste-EOF hang), `1050caf5` (candy-query), `41b47d9a`
+candy-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
 (candy-pty). candy-sprinkles plan items were all verified
 misreferenced/N-A (see plan_candy-sprinkles.md annotations).
 Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
 "Future work (deferred pre-1.0)" sections: candy-serve 6.1/6.2/7.5-7.9,
-candy-pty 8.1/8.3/8.4, candy-query 3.1/3.3/3.4/5.1 (+1.8/0.25
+candy-pty 8.1/8.3/8.4, candy-sql 3.1/3.3/3.4/5.1 (+1.8/0.25
 react-pg WONTFIX, react/mysql stable pin WONTFIX — no 0.7 tag),
 sugar-readline 3.2 (vi text objects, needs candy-forms VimAction).
 ## ⚠️ CONCURRENCY RULES — READ BEFORE SPAWNING ANY AGENT
@@ -281,22 +281,22 @@ For each phase:
 **Files:** `candy-metrics/src/Backend/PrometheusFileBackend.php:132-273`
 **Agent:** Same coder agent as 0.21 (grouped — same lib)
 
-#### 0.24 🔴 candy-query: SQLite branch still uses str_replace (Item 1.7)
+#### 0.24 🔴 candy-sql: SQLite branch still uses str_replace (Item 1.7)
 
-**Plan:** `findings/plan_candy-query.md` — Item 1.7
+**Plan:** `findings/plan_candy-sql.md` — Item 1.7
 **Issue:** `PreviewQuery.php:63` — SQLite branch uses `str_replace('"', '""', $table)` not `Identifier::quote()`
 **Fix:** Change to `Identifier::quote(Flavor::Sqlite, $table)`
-**Files:** `candy-query/src/Db/PreviewQuery.php:63`
+**Files:** `candy-sql/src/Db/PreviewQuery.php:63`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 0.25 🔴 candy-query: voryx/pgasync replacement (Item 1.8) — BLOCKED
+#### 0.25 🔴 candy-sql: voryx/pgasync replacement (Item 1.8) — BLOCKED
 
-**Plan:** `findings/plan_candy-query.md` — Item 1.8
+**Plan:** `findings/plan_candy-sql.md` — Item 1.8
 **Issue:** `react/pg` not on Packagist — cannot replace voryx/pgasync as specified
 **Fix:** Mark as WONTFIX for now and document. No code change required.
-**Files:** `candy-query/composer.json:45`, `candy-query/src/ReactPostgresConnection.php`
+**Files:** `candy-sql/composer.json:45`, `candy-sql/src/ReactPostgresConnection.php`
 **Agent:** BLOCKED — skip, document as WONTFIX pre-1.0
 **Note:** This item is blocked (dependency not available). Skip and mark ⏭️ WONTFIX pre-1.0.
 
@@ -1287,7 +1287,7 @@ Same verification as previous phases.
 | `plan_candy-mosaic.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
 | `plan_candy-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
 | `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
-| `plan_candy-query.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
+| `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
 | `plan_candy-serve.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
 | `plan_candy-shell.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |
 | `plan_candy-shine.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |

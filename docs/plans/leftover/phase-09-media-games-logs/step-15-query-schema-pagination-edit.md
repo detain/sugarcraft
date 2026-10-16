@@ -1,6 +1,6 @@
-# Step 09.15 — candy-query schema browser + pagination + cell editing
+# Step 09.15 — candy-sql schema browser + pagination + cell editing
 
-**Source:** `leftover_updates_later.md` candy-query P1-P3
+**Source:** `leftover_updates_later.md` candy-sql P1-P3
 **Branch:** `ai/query-schema-page-edit`
 
 ## Deliverable
@@ -14,9 +14,9 @@ Three TUI features:
 
 **Modify / Create:**
 
-- `candy-query/src/SchemaBrowser.php`.
-- `candy-query/src/ResultPager.php`.
-- `candy-query/src/CellEditor.php`.
+- `candy-sql/src/SchemaBrowser.php`.
+- `candy-sql/src/ResultPager.php`.
+- `candy-sql/src/CellEditor.php`.
 
 ## Tests
 
@@ -24,7 +24,7 @@ Three TUI features:
 
 ## Acceptance
 
-- `cd candy-query && vendor/bin/phpunit` green.
+- `cd candy-sql && vendor/bin/phpunit` green.
 
 ---
 

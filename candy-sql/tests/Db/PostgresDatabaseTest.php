@@ -1,0 +1,175 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\Tests\Db;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\PostgresDatabase;
+
+/**
+ * Tests for PostgresDatabase implementation.
+ *
+ * Tests behavior that doesn't require a live PostgreSQL connection.
+ * Uses reflection to inject test doubles for behavior verification.
+ */
+final class PostgresDatabaseTest extends TestCase
+{
+    private PostgresDatabase $db;
+
+    protected function setUp(): void
+    {
+        // Create PostgresDatabase instance without constructor via reflection
+        // Since constructor is private (use connect() factory in production)
+        $reflection = new \ReflectionClass(PostgresDatabase::class);
+        $this->db = $reflection->newInstanceWithoutConstructor();
+
+        // Set pdo property to null initially
+        $pdoProperty = $reflection->getProperty('pdo');
+        $pdoProperty->setAccessible(true);
+        $pdoProperty->setValue($this->db, null);
+    }
+
+    public function testImplementsDatabaseInterface(): void
+    {
+        $this->assertInstanceOf(DatabaseInterface::class, $this->db);
+    }
+
+    public function testDriverNameReturnsPgsql(): void
+    {
+        $this->assertSame('pgsql', $this->db->driverName());
+    }
+
+    public function testPingReturnsFalseWhenDisconnected(): void
+    {
+        $this->db->close();
+        $this->assertFalse($this->db->ping());
+    }
+
+    public function testServerVersionReturnsUnknownWhenDisconnected(): void
+    {
+        $this->db->close();
+        $this->assertSame('PostgreSQL version unknown', $this->db->serverVersion());
+    }
+
+    public function testDatabasesReturnsEmptyWhenDisconnected(): void
+    {
+        $this->db->close();
+        $this->assertSame([], $this->db->databases());
+    }
+
+    public function testTablesReturnsEmptyWhenDisconnected(): void
+    {
+        $this->db->close();
+        $this->assertSame([], $this->db->tables());
+    }
+
+    public function testRowsReturnsEmptyWhenDisconnected(): void
+    {
+        $this->assertSame([], $this->db->rows('users'));
+    }
+
+    public function testRowsReturnsEmptyWhenDisconnectedWithLimit(): void
+    {
+        $this->assertSame([], $this->db->rows('users', 50));
+    }
+
+    public function testQueryReturnsNullWhenDisconnected(): void
+    {
+        // Per STEP 2.2: query() returns null on handled connection loss
+        $this->assertNull($this->db->query('SELECT 1'));
+    }
+
+    public function testLastInsertIdReturnsZeroWhenDisconnected(): void
+    {
+        $this->assertSame(0, $this->db->lastInsertId());
+    }
+
+    public function testQuoteThrowsExceptionWhenDisconnected(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot quote without connection');
+        $this->db->quote('test');
+    }
+
+    public function testExecReturnsZeroWhenDisconnected(): void
+    {
+        $this->assertSame(0, $this->db->exec('DELETE FROM users'));
+    }
+
+    public function testCloseSetsPdoToNull(): void
+    {
+        $this->db->close();
+        // After close, ping should return false
+        $this->assertFalse($this->db->ping());
+    }
+
+    public function testCloseIsIdempotent(): void
+    {
+        $this->db->close();
+        $this->db->close(); // Second close should not throw
+        $this->assertFalse($this->db->ping());
+    }
+
+    public function testServerVersionFormat(): void
+    {
+        // Driver name must be 'pgsql'
+        $this->assertSame('pgsql', $this->db->driverName());
+    }
+
+    public function testDatabaseMethodContract(): void
+    {
+        // Verify all interface methods are callable (signature test)
+        $reflection = new \ReflectionClass(DatabaseInterface::class);
+        $requiredMethods = [
+            'tables',
+            'rows',
+            'query',
+            'lastInsertId',
+            'quote',
+            'exec',
+            'close',
+            'serverVersion',
+            'driverName',
+            'ping',
+            'databases',
+        ];
+
+        foreach ($requiredMethods as $method) {
+            $this->assertTrue(
+                $reflection->hasMethod($method),
+                "DatabaseInterface should have {$method} method",
+            );
+        }
+    }
+
+    /**
+     * PostgresServerContext::password() delegates via method_exists() — same
+     * blind spot as MySQL (see MysqlDatabaseTest). Pin the accessor.
+     */
+    public function testPasswordReturnsConfiguredPass(): void
+    {
+        $config = new \SugarCraft\Sql\Db\ConnectionConfig(
+            driver: 'postgresql',
+            host: 'db.example.com',
+            port: 5432,
+            user: 'analyst',
+            pass: 'sekrit-pass',
+            dbname: 'metrics',
+            sslMode: 'require',
+            dsn: 'pgsql:host=db.example.com;port=5432;dbname=metrics',
+        );
+
+        $property = new \ReflectionProperty(PostgresDatabase::class, 'connectionConfig');
+        $property->setValue($this->db, $config);
+
+        $this->assertSame('sekrit-pass', $this->db->password());
+    }
+
+    /** Without a config there is no password — the honest empty string. */
+    public function testPasswordDefaultsToEmptyStringWithoutConfig(): void
+    {
+        $this->assertSame('', $this->db->password());
+    }
+}

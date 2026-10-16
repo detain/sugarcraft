@@ -1,0 +1,67 @@
+{
+    "name": "sugarcraft/candy-sql",
+    "description": "Terminal SQL client for SQLite, MySQL and PostgreSQL \u2014 port of jorgerojas26/lazysql on the SugarCraft stack.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "cli",
+        "sql",
+        "sqlite",
+        "mysql",
+        "postgresql",
+        "lazysql",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-sql.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-sql/issues",
+        "source": "https://github.com/sugarcraft/candy-sql",
+        "docs": "https://sugarcraft.github.io/lib/candy-sql.html"
+    },
+    "bin": [
+        "bin/candy-sql"
+    ],
+    "require": {
+        "php": ">=8.3",
+        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/candy-kit": "dev-master",
+        "sugarcraft/candy-layout": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-bits": "dev-master",
+        "sugarcraft/sugar-charts": "dev-master",
+        "sugarcraft/sugar-dash": "dev-master",
+        "sugarcraft/sugar-table": "dev-master",
+        "sugarcraft/sugar-toast": "dev-master",
+        "react/mysql": "0.7.x-dev",
+        "react/promise-timer": "^1.9",
+        "voryx/pgasync": "^2.2",
+        "ext-pdo_sqlite": "*",
+        "ext-pdo_mysql": "*",
+        "ext-pdo_pgsql": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Sql\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Sql\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

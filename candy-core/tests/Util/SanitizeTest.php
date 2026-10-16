@@ -270,8 +270,8 @@ final class SanitizeTest extends TestCase
 
     public function testCellValueIsByteEquivalentToCandyQuerySanitize(): void
     {
-        // Reimplements candy-query CellValue::sanitize() verbatim; cellValue(_,
-        // false) must match it byte-for-byte so candy-query can later delegate
+        // Reimplements candy-sql CellValue::sanitize() verbatim; cellValue(_,
+        // false) must match it byte-for-byte so candy-sql can later delegate
         // with zero output change.
         $candyQuerySanitize = static function (string $s): string {
             if (!mb_check_encoding($s, 'UTF-8')) {
@@ -303,7 +303,7 @@ final class SanitizeTest extends TestCase
             $this->assertSame(
                 $candyQuerySanitize($in),
                 Sanitize::cellValue($in),
-                'cellValue diverged from candy-query sanitize() for: ' . bin2hex($in),
+                'cellValue diverged from candy-sql sanitize() for: ' . bin2hex($in),
             );
         }
     }

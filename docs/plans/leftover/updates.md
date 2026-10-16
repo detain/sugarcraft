@@ -502,11 +502,11 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     review for step 09.14 · clean · PR#738
     tests-ci for step 09.14 · clean
     docs for step 09.14 · PR#739 · document UpDownCounter/AsyncCounter/AsyncGauge in README + end-user HTML + CALIBER entries (cardinality-fifo-eviction, async-instrument-ownership)
-    step 09.15 · PR#740 · candy-query: SchemaBrowser (PRAGMA table_info/index_list/foreign_key_list) + ResultPager (immutable cursor pagination) + CellEditor (UPDATE by PK) (leftover-rollout step 09.15)
+    step 09.15 · PR#740 · candy-sql: SchemaBrowser (PRAGMA table_info/index_list/foreign_key_list) + ResultPager (immutable cursor pagination) + CellEditor (UPDATE by PK) (leftover-rollout step 09.15)
     review for step 09.15 · clean · PR#740
     tests-ci for step 09.15 · clean
     docs for step 09.15 · PR#741 · document SchemaBrowser/ResultPager/CellEditor in README + end-user HTML + CALIBER_LEARNINGS.md (sqlite-pragma-schema, immutable-cursor-pager patterns)
-    step 09.16 · PR#742 · candy-query: SnippetStore (file-backed JSON snippets) + ExplainView (EXPLAIN QUERY PLAN renderer) + ResultTable (h-scroll + JSON pretty-print + NULL formatting) (leftover-rollout step 09.16)
+    step 09.16 · PR#742 · candy-sql: SnippetStore (file-backed JSON snippets) + ExplainView (EXPLAIN QUERY PLAN renderer) + ResultTable (h-scroll + JSON pretty-print + NULL formatting) (leftover-rollout step 09.16)
     review for step 09.16 · clean · PR#742
     tests-ci for step 09.16 · clean
     docs for step 09.16 · PR#743 · document SnippetStore/ExplainView/ResultTable in README (architecture table + 3 feature sections) + end-user HTML (feature grid + API table rows) + CALIBER_LEARNINGS.md (file-backed-json-store, horizontal-scroll-table patterns)

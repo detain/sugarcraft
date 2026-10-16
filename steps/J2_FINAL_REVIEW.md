@@ -35,7 +35,7 @@ Comprehensive review of all changes across all previous steps to ensure quality 
 ### Documentation
 
 - README.md reflects all changes
-- docs/lib/candy-query.html API table is accurate
+- docs/lib/candy-sql.html API table is accurate
 - CALIBER_LEARNINGS.md updated with any new patterns/gotchas
 
 ## Reviewer Instructions
@@ -44,7 +44,7 @@ Comprehensive review of all changes across all previous steps to ensure quality 
 2. Verify acceptance criteria met
 3. Check for: security issues, logic errors, missing error handling
 4. Run `vendor/bin/phpunit` and confirm all tests pass
-5. Run `php bin/candy-query --dsn sqlite://:memory:` to verify it starts
+5. Run `php bin/candy-sql --dsn sqlite://:memory:` to verify it starts
 
 ## Acceptance Criteria
 - All 14 audit issues addressed

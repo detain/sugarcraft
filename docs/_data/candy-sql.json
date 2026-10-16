@@ -1,0 +1,11 @@
+{
+  "title": "CandySql — SugarCraft",
+  "description": "CandySql: Terminal SQL client for SQLite, MySQL and PostgreSQL with Workbench-style admin panels.",
+  "ogTitle": "CandySql — SugarCraft",
+  "ogDescription": "Terminal SQL client for SQLite, MySQL and PostgreSQL with Workbench-style admin panels.",
+  "emoji": "🔎",
+  "displayName": "CandySql",
+  "tagline": "Terminal SQL client",
+  "phpVersion": "8.3+",
+  "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/jorgerojas26/lazysql\" style=\"color: inherit;\">jorgerojas26/lazysql</a></span>\n          <span class=\"tag-chip\">sql</span>\n          <span class=\"tag-chip\">sqlite</span>\n          <span class=\"tag-chip\">tui</span>\n          <span class=\"tag-chip\">pdo</span>"
+}

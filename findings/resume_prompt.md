@@ -70,7 +70,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 0-C | 0.6–0.9 | candy-pty (FD reuse race, encoding artifact), candy-vcr (undefined cassette, shared tileCache), candy-wish (async blocking, promise rejection loss) | 1 coder |
 | 0-D | 0.10–0.12 | candy-shell (shell injection env-var), sugar-reel (SIGCONT), candy-flappy (score wrong x) | 1 coder |
 | 0-E | 0.13–0.15 | candy-forms (undefined $status), sugar-toast (unclamped maxWidth), candy-metrics (hard-coupled wish, missing flush(), re-emit all) | 1 coder |
-| 0-F | 0.16–0.18 | candy-query (SQLite str_replace), candy-mouse (OSC bounds), candy-flip (fixed interval), candy-async (markCancelled visibility) | 1 coder |
+| 0-F | 0.16–0.18 | candy-sql (SQLite str_replace), candy-mouse (OSC bounds), candy-flip (fixed interval), candy-async (markCancelled visibility) | 1 coder |
 | 0-G | 0.19–0.20 | candy-log (Phive directory, PSR-3 context array type) | 1 coder |
 
 ### Phase 1: High Priority Functional Fixes

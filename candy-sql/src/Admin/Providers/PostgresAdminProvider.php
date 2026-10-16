@@ -1,0 +1,552 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Sql\Admin\Providers;
+
+use SugarCraft\Sql\Admin\AdminProviderInterface;
+use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+
+/**
+ * PostgreSQL stub implementation of AdminProviderInterface.
+ *
+ * Provides placeholder data so the admin UI remains functional when
+ * connected to PostgreSQL. The processlist, status variables, and
+ * server variables map PostgreSQL's system catalogs to the AdminProvider
+ * interface schema.
+ *
+ * Full PostgreSQL support requires:
+ * - pg_stat_activity GRANT for processlist
+ * - pg_stat_database mapping for status counters
+ * - pg_settings for server variables
+ *
+ * @see AdminProviderInterface
+ */
+final class PostgresAdminProvider implements AdminProviderInterface
+{
+    private ?array $statusVariablesCache = null;
+    private ?float $statusVariablesTsCache = null;
+    private ?array $serverVariablesCache = null;
+    private ?int $maxConnectionsCache = null;
+    private bool $wasResetCache = false;
+
+    /** @var array<string, string>|null */
+    private ?array $previousStatusVariables = null;
+    private ?float $previousStatusVariablesTs = null;
+
+    public function __construct(
+        private readonly DatabaseInterface $connection,
+    ) {}
+
+    /**
+     * Create a new instance from a PostgreSQL database connection.
+     */
+    public static function new(DatabaseInterface $connection): self
+    {
+        return new self($connection);
+    }
+
+    public function flavor(): Flavor
+    {
+        return Flavor::Postgres;
+    }
+
+    /**
+     * Fetch pg_stat_database metrics for the current database as "status variables".
+     *
+     * Maps numbackends, xact_commit, xact_rollback, blks_read, blks_hit,
+     * tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted,
+     * conflicts, temp_files, temp_bytes, deadlocks to the status variable schema.
+     */
+    public function fetchStatusVariables(): array
+    {
+        if ($this->statusVariablesCache !== null) {
+            return $this->statusVariablesCache;
+        }
+
+        $this->statusVariablesTsCache = microtime(true);
+
+        try {
+            $currentDb = $this->getCurrentDatabaseName();
+            if ($currentDb === null) {
+                $this->statusVariablesCache = [];
+                return [];
+            }
+
+            $sql = <<<SQL
+                SELECT
+                    numbackends,
+                    xact_commit,
+                    xact_rollback,
+                    blks_read,
+                    blks_hit,
+                    tup_returned,
+                    tup_fetched,
+                    tup_inserted,
+                    tup_updated,
+                    tup_deleted,
+                    conflicts,
+                    temp_files,
+                    temp_bytes,
+                    deadlocks,
+                    stats_reset
+                FROM pg_stat_database
+                WHERE datname = :datname
+            SQL;
+
+            $stmt = $this->connection->prepare($sql);
+            if ($stmt === false) {
+                $this->statusVariablesCache = [];
+                return [];
+            }
+
+            if (!$stmt->execute(['datname' => $currentDb])) {
+                $this->statusVariablesCache = [];
+                return [];
+            }
+            $row = $stmt->fetch();
+
+            if ($row === false) {
+                $this->statusVariablesCache = [];
+                return [];
+            }
+
+            // Parse shared_buffers from pg_settings (unit may be kB, MB, GB)
+            $sharedBuffersBytes = $this->parseSharedBuffers();
+
+            $this->statusVariablesCache = [
+                'pg_stat_database.numbackends' => (string) ($row['numbackends'] ?? 0),
+                'pg_stat_database.xact_commit' => (string) ($row['xact_commit'] ?? 0),
+                'pg_stat_database.xact_rollback' => (string) ($row['xact_rollback'] ?? 0),
+                'pg_stat_database.blks_read' => (string) ($row['blks_read'] ?? 0),
+                'pg_stat_database.blks_hit' => (string) ($row['blks_hit'] ?? 0),
+                'pg_stat_database.tup_returned' => (string) ($row['tup_returned'] ?? 0),
+                'pg_stat_database.tup_fetched' => (string) ($row['tup_fetched'] ?? 0),
+                'pg_stat_database.tup_inserted' => (string) ($row['tup_inserted'] ?? 0),
+                'pg_stat_database.tup_updated' => (string) ($row['tup_updated'] ?? 0),
+                'pg_stat_database.tup_deleted' => (string) ($row['tup_deleted'] ?? 0),
+                'pg_stat_database.conflicts' => (string) ($row['conflicts'] ?? 0),
+                'pg_stat_database.temp_files' => (string) ($row['temp_files'] ?? 0),
+                'pg_stat_database.temp_bytes' => (string) ($row['temp_bytes'] ?? 0),
+                'pg_stat_database.deadlocks' => (string) ($row['deadlocks'] ?? 0),
+                // Derived: shared_buffers in bytes (mirrors InnoDB buffer pool config)
+                'pg_settings.shared_buffers' => (string) $sharedBuffersBytes,
+            ];
+
+            return $this->statusVariablesCache;
+        } catch (\PDOException) {
+            $this->statusVariablesCache = [];
+            return [];
+        }
+    }
+
+    /**
+     * Fetch all pg_settings as server variables.
+     *
+     * @return array<string, string>
+     */
+    public function fetchServerVariables(): array
+    {
+        if ($this->serverVariablesCache !== null) {
+            return $this->serverVariablesCache;
+        }
+
+        try {
+            $rows = $this->connection->query('SELECT name, setting FROM pg_settings');
+            $out = [];
+            foreach ($rows as $row) {
+                if (isset($row['name'], $row['setting'])) {
+                    $out[(string) $row['name']] = (string) $row['setting'];
+                }
+            }
+            $this->serverVariablesCache = $out;
+            return $out;
+        } catch (\PDOException) {
+            $this->serverVariablesCache = [];
+            return [];
+        }
+    }
+
+    /**
+     * Fetch active connections from pg_stat_activity.
+     *
+     * Returns an empty list if pg_stat_activity is not accessible due to
+     * missing GRANT. The notice() method provides the guidance string.
+     *
+     * @return list<array{
+     *     processId: int,
+     *     user: string,
+     *     host: string,
+     *     database: string,
+     *     command: string,
+     *     time: int,
+     *     state: ?string,
+     *     info: ?string,
+     *     connectionAttr: array<string, string>
+     * }>
+     */
+    public function fetchProcesslist(): array
+    {
+        try {
+            $currentDb = $this->getCurrentDatabaseName();
+            $sql = <<<SQL
+                SELECT
+                    pid,
+                    usename,
+                    COALESCE(client_addr::text, '') AS client_addr,
+                    datname,
+                    state,
+                    query_start,
+                    query,
+                    application_name
+                FROM pg_stat_activity
+                WHERE datname = :datname
+                ORDER BY query_start DESC
+            SQL;
+
+            $stmt = $this->connection->prepare($sql);
+            if ($stmt === false) {
+                return [];
+            }
+
+            $stmt->execute(['datname' => $currentDb]);
+            $rows = $stmt->fetchAll();
+
+            $results = [];
+            foreach ($rows as $row) {
+                $queryStart = $row['query_start'] ?? null;
+                $secondsAgo = 0;
+                if ($queryStart !== null && $queryStart !== false) {
+                    try {
+                        $diff = (new \DateTime())->getTimestamp() - (new \DateTime($queryStart))->getTimestamp();
+                        $secondsAgo = max(0, $diff);
+                    } catch (\Exception) {
+                        $secondsAgo = 0;
+                    }
+                }
+
+                $results[] = [
+                    'processId' => (int) ($row['pid'] ?? 0),
+                    'user' => (string) ($row['usename'] ?? ''),
+                    'host' => (string) ($row['client_addr'] ?? ''),
+                    'database' => (string) ($row['datname'] ?? ''),
+                    'command' => (string) ($row['state'] ?? 'unknown'),
+                    'time' => $secondsAgo,
+                    'state' => ($row['state'] ?? null) !== null ? (string) $row['state'] : null,
+                    'info' => ($row['query'] ?? null) !== null ? (string) $row['query'] : null,
+                    'connectionAttr' => [
+                        'application_name' => (string) ($row['application_name'] ?? ''),
+                    ],
+                ];
+            }
+
+            return $results;
+        } catch (\PDOException) {
+            return [];
+        }
+    }
+
+    public function maxConnections(): int
+    {
+        if ($this->maxConnectionsCache !== null) {
+            return $this->maxConnectionsCache;
+        }
+
+        try {
+            $rows = $this->connection->query(
+                "SELECT setting FROM pg_settings WHERE name = 'max_connections'",
+            );
+
+            if (isset($rows[0]['setting'])) {
+                $this->maxConnectionsCache = (int) $rows[0]['setting'];
+                return $this->maxConnectionsCache;
+            }
+        } catch (\PDOException) {
+            // Query failed (e.g., insufficient privileges); use default.
+        }
+
+        $this->maxConnectionsCache = 100;
+        return $this->maxConnectionsCache;
+    }
+
+    public function statusVariablesTs(): float
+    {
+        if ($this->statusVariablesTsCache !== null) {
+            return $this->statusVariablesTsCache;
+        }
+
+        $this->fetchStatusVariables();
+        return $this->statusVariablesTsCache ?? microtime(true);
+    }
+
+    public function wasReset(): bool
+    {
+        // PostgreSQL restart detection not yet implemented
+        return false;
+    }
+
+    public function refresh(): void
+    {
+        $this->statusVariablesCache = null;
+        $this->statusVariablesTsCache = null;
+        $this->serverVariablesCache = null;
+        $this->maxConnectionsCache = null;
+        $this->previousStatusVariables = null;
+        $this->previousStatusVariablesTs = null;
+    }
+
+    /**
+     * Compute PostgreSQL metrics (rates and ratios) from pg_stat_database.
+     *
+     * Uses time deltas between calls to compute per-second rates for
+     * tuple operations and block I/O. Also computes cache hit ratio.
+     *
+     * First call returns zeros for rates (no previous snapshot).
+     *
+     * @return array<string, float> Computed metrics:
+     *   - tuples_returned_rate:   tup_returned per second
+     *   - tuples_fetched_rate:   tup_fetched per second
+     *   - tuples_inserted_rate:  tup_inserted per second
+     *   - tuples_updated_rate:   tup_updated per second
+     *   - tuples_deleted_rate:   tup_deleted per second
+     *   - writes_rate:            total DML rate (insert+update+delete)/s
+     *   - blocks_read_rate:       blks_read per second
+     *   - blocks_hit_rate:       blks_hit per second
+     *   - cache_hit_ratio:       blks_hit / (blks_hit + blks_read) as percentage
+     *   - xact_commit_rate:      transaction commits per second
+     *   - xact_rollback_rate:    transaction rollbacks per second
+     */
+    public function checkAllMetrics(): array
+    {
+        $currentVars = $this->fetchStatusVariables();
+        if ($currentVars === []) {
+            return [];
+        }
+
+        $currentTs = $this->statusVariablesTs();
+        $metrics = [];
+
+        // Compute cache hit ratio (instantaneous, no delta needed)
+        $blksHit = (float) ($currentVars['pg_stat_database.blks_hit'] ?? 0);
+        $blksRead = (float) ($currentVars['pg_stat_database.blks_read'] ?? 0);
+        $blksTotal = $blksHit + $blksRead;
+        $metrics['cache_hit_ratio'] = $blksTotal > 0 ? ($blksHit / $blksTotal) * 100.0 : 0.0;
+
+        // Rate calculations require previous snapshot
+        if ($this->previousStatusVariables === null || $this->previousStatusVariablesTs === null) {
+            // First call - initialize previous and return zero rates
+            $this->previousStatusVariables = $currentVars;
+            $this->previousStatusVariablesTs = $currentTs;
+
+            return array_merge($metrics, [
+                'tuples_returned_rate' => 0.0,
+                'tuples_fetched_rate' => 0.0,
+                'tuples_inserted_rate' => 0.0,
+                'tuples_updated_rate' => 0.0,
+                'tuples_deleted_rate' => 0.0,
+                'writes_rate' => 0.0,
+                'blocks_read_rate' => 0.0,
+                'blocks_hit_rate' => 0.0,
+                'xact_commit_rate' => 0.0,
+                'xact_rollback_rate' => 0.0,
+            ]);
+        }
+
+        $elapsed = $currentTs - $this->previousStatusVariablesTs;
+        if ($elapsed <= 0) {
+            $elapsed = 1.0; // Avoid division by zero
+        }
+
+        // Compute per-second rates using previous snapshot
+        $metrics['tuples_returned_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_returned', $elapsed
+        );
+        $metrics['tuples_fetched_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_fetched', $elapsed
+        );
+        $metrics['tuples_inserted_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_inserted', $elapsed
+        );
+        $metrics['tuples_updated_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_updated', $elapsed
+        );
+        $metrics['tuples_deleted_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_deleted', $elapsed
+        );
+        $metrics['blocks_read_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.blks_read', $elapsed
+        );
+        $metrics['blocks_hit_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.blks_hit', $elapsed
+        );
+        $metrics['xact_commit_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.xact_commit', $elapsed
+        );
+        $metrics['xact_rollback_rate'] = $this->computeRate(
+            $currentVars, $this->previousStatusVariables, 'pg_stat_database.xact_rollback', $elapsed
+        );
+
+        // writes_rate = insert + update + delete rates combined
+        $metrics['writes_rate'] = $metrics['tuples_inserted_rate']
+            + $metrics['tuples_updated_rate']
+            + $metrics['tuples_deleted_rate'];
+
+        // Store current as previous for next call
+        $this->previousStatusVariables = $currentVars;
+        $this->previousStatusVariablesTs = $currentTs;
+
+        return $metrics;
+    }
+
+    /**
+     * Compute connection usage and fire alerts when thresholds are exceeded.
+     *
+     * Uses numbackends / max_connections to compute usage ratio.
+     * Warning threshold: 60%, Critical threshold: 80%.
+     *
+     * @return array<string, mixed> Connection data:
+     *   - numbackends:        current active backends
+     *   - max_connections:    server max_connections setting
+     *   - connection_usage:   ratio as decimal (0.0 to 1.0+)
+     *   - alert:             null, 'warning', or 'critical' based on threshold
+     *   - alert_message:     human-readable message when alert is set
+     */
+    public function checkConnectionUsage(): array
+    {
+        $statusVars = $this->fetchStatusVariables();
+        $maxConn = $this->maxConnections();
+
+        if ($statusVars === [] || $maxConn <= 0) {
+            return [
+                'numbackends' => 0,
+                'max_connections' => $maxConn > 0 ? $maxConn : 100,
+                'connection_usage' => 0.0,
+                'alert' => null,
+                'alert_message' => null,
+            ];
+        }
+
+        $numbackends = (int) ($statusVars['pg_stat_database.numbackends'] ?? 0);
+        $usage = (float) $numbackends / (float) $maxConn;
+
+        $result = [
+            'numbackends' => $numbackends,
+            'max_connections' => $maxConn,
+            'connection_usage' => $usage,
+            'alert' => null,
+            'alert_message' => null,
+        ];
+
+        // Warning at 60%, Critical at 80%
+        if ($usage >= 0.8) {
+            $result['alert'] = 'critical';
+            $result['alert_message'] = sprintf(
+                'Connection usage critically high: %.1f%% (%d/%d)',
+                $usage * 100,
+                $numbackends,
+                $maxConn,
+            );
+        } elseif ($usage >= 0.6) {
+            $result['alert'] = 'warning';
+            $result['alert_message'] = sprintf(
+                'Connection usage elevated: %.1f%% (%d/%d)',
+                $usage * 100,
+                $numbackends,
+                $maxConn,
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Compute the rate of change for a status variable.
+     *
+     * @param array<string, string> $current    Current status variables
+     * @param array<string, string> $previous  Previous status variables
+     * @param string $key                        Status variable key
+     * @param float $elapsed                     Seconds elapsed
+     * @return float Rate per second (clamped to zero on counter wrap)
+     */
+    private function computeRate(
+        array $current,
+        array $previous,
+        string $key,
+        float $elapsed,
+    ): float {
+        if ($elapsed <= 0) {
+            return 0.0;
+        }
+
+        $newVal = (float) ($current[$key] ?? 0);
+        $oldVal = (float) ($previous[$key] ?? 0);
+        $delta = $newVal - $oldVal;
+
+        // Clamp negative deltas (counter wrap/reset) to zero
+        if ($delta < 0) {
+            $delta = 0;
+        }
+
+        return $delta / $elapsed;
+    }
+
+    /**
+     * Get the current database name from the connection.
+     */
+    private function getCurrentDatabaseName(): string
+    {
+        try {
+            $rows = $this->connection->query('SELECT current_database() AS dbname');
+            return (string) ($rows[0]['dbname'] ?? 'postgres');
+        } catch (\PDOException) {
+            return 'postgres';
+        }
+    }
+
+    /**
+     * Parse shared_buffers setting into bytes.
+     *
+     * pg_settings stores shared_buffers with units (e.g. "128MB", "4GB").
+     * This converts to bytes for consistent display.
+     *
+     * @return int Bytes value of shared_buffers, defaults to 0 on parse failure
+     */
+    private function parseSharedBuffers(): int
+    {
+        try {
+            $rows = $this->connection->query(
+                "SELECT setting, unit FROM pg_settings WHERE name = 'shared_buffers'",
+            );
+
+            if (!isset($rows[0])) {
+                return 0;
+            }
+
+            $value = (string) ($rows[0]['setting'] ?? '0');
+            $unit = $rows[0]['unit'] ?? null;
+
+            // Value is already in bytes if unit is NULL (postgres default is 8kB = 8192 bytes pages)
+            if ($unit === null) {
+                return (int) $value;
+            }
+
+            // Parse unit suffixes: 8kB, 64MB, 1GB, etc.
+            $multipliers = [
+                'B' => 1,
+                'kB' => 1024,
+                'MB' => 1024 * 1024,
+                'GB' => 1024 * 1024 * 1024,
+                'TB' => 1024 * 1024 * 1024 * 1024,
+            ];
+
+            if (!isset($multipliers[$unit])) {
+                return (int) $value;
+            }
+
+            return (int) ((float) $value * $multipliers[$unit]);
+        } catch (\PDOException) {
+            return 0;
+        }
+    }
+}
