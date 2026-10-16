@@ -10,14 +10,14 @@ use SugarCraft\Testing\Lang;
 /**
  * Byte-level decoder for the iTerm2 inline-image protocol.
  *
- * Reads the OSC 1337 form emitted by sugarcraft/candy-mosaic
+ * Reads the OSC 1337 form emitted by sugarcraft/sugar-image
  * (`\x1b]1337;File=k=v;k=v:<base64>` closed by BEL or ST) and its companion
  * control sequences (`Pop`, and `File=…;do=…` actions that carry no data).
  *
- * The width/height arguments are character-cell counts (matching candy-mosaic's
+ * The width/height arguments are character-cell counts (matching sugar-image's
  * default sizing), exposed as {@see cellsWidth()} / {@see cellsHeight()}.
  *
- * Mirrors charmbracelet/candy-mosaic Iterm2Renderer (inverse).
+ * Mirrors charmbracelet/sugar-image Iterm2Renderer (inverse).
  */
 final class Iterm2Stream
 {
@@ -68,7 +68,7 @@ final class Iterm2Stream
     /**
      * Fail fast when a size argument is not a plain integer, so a corrupt
      * `width=8x4` can never surface as a misleading cell count. This decoder
-     * models the integer character-cell subset candy-mosaic emits; the iTerm2
+     * models the integer character-cell subset sugar-image emits; the iTerm2
      * protocol's `px`/`%`/`half`/`visible` size forms are intentionally out of
      * scope and rejected rather than silently truncated by an `(int)` cast.
      *

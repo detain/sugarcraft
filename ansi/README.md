@@ -1318,199 +1318,199 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-minesweeper-9-tc-s-14.ansi` | 64x12 | truecolor | 7 | site-safety ledger under warning-lamp glow, zones tinted by their near-miss density |
 <!-- END candy-minesweeper SLOTS -->
 
-<!-- BEGIN candy-mosaic SLOTS -->
-### candy-mosaic — slot series
+<!-- BEGIN sugar-image SLOTS -->
+### sugar-image — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-mosaic-1-16-l-1.ansi` | 132x30 | 16 | 14 | PixelGrid inspector: ANSI cell field with probe ring and annotated giant half-block |
-| `candy-mosaic-1-16-l-2.ansi` | 142x30 | 16 | 11 | lamp-lit indigo tessera wall with gold block-letter CANDY MOSAIC wordmark and cracks |
-| `candy-mosaic-1-16-m-2.ansi` | 82x22 | 16 | 8 | CGA-blue decode screen: status list, striped progress bar and braille spinner |
-| `candy-mosaic-1-16-s-1.ansi` | 66x8 | 16 | 16 | quarter-block density ladder ░▒▓█ scrolling through ANSI hues with legend strip |
-| `candy-mosaic-1-16-s-2.ansi` | 50x13 | 16 | 20 | kiln mouth arch blazing white-to-red fire gradient with flying tessera sparks |
-| `candy-mosaic-1-256-l-1.ansi` | 180x34 | 256 | 65 | SMPTE-style calibration chart: color bars, castellation, wedges, PLUGE, circle |
-| `candy-mosaic-1-256-l-2.ansi` | 158x32 | 256 | 56 | roman mosaic floor with rosettes, Sol medallion, guilloche border and tessera name band |
-| `candy-mosaic-1-256-m-1.ansi` | 86x24 | 256 | 84 | neon sixel data rain above a raster image mid-paint, DCS header line |
-| `candy-mosaic-1-256-m-2.ansi` | 84x22 | 256 | 26 | 256-palette mountain lake at dusk with moon, pines and mirrored ripples |
-| `candy-mosaic-1-256-s-1.ansi` | 54x13 | 256 | 16 | block-built cat glyph beside kitty APC protocol notes (a=T/f=1/a=p) |
-| `candy-mosaic-1-256-s-2.ansi` | 60x14 | 256 | 26 | magnifying loupe zooming a tiny source image into fat pixel grid with handle |
-| `candy-mosaic-1-tc-l-1.ansi` | 150x36 | truecolor | 523 | half-block portrait of a figure beside a pixel-probe inspector panel |
-| `candy-mosaic-1-tc-l-2.ansi` | 172x38 | truecolor | 515 | wide sunset panorama: layered ridges, clouds, glitter path, sailboat and rocks |
-| `candy-mosaic-1-tc-l-3.ansi` | 140x32 | truecolor | 6266 | truecolor nebula clouds with ringed planet, star field and dust lanes |
-| `candy-mosaic-1-tc-m-1.ansi` | 86x23 | truecolor | 333 | moonlit photo of hills dissolving left-to-right into scattered half-block pixels |
-| `candy-mosaic-1-tc-m-2.ansi` | 84x24 | truecolor | 51 | macOS-styled terminal window painting a truecolor ocean-sunset render inside |
-| `candy-mosaic-1-tc-s-1.ansi` | 56x12 | truecolor | 76 | miniature half-block sunset with gradient sky, glowing sun disc and shimmering sea band |
-| `candy-mosaic-1-tc-s-2.ansi` | 62x14 | truecolor | 57 | RGB channels funneled through arrows into one two-pixel ▀ cell on dark bench |
-| `candy-mosaic-10-16-l-1.ansi` | 184x36 | 16 | 6 | surface weather map: warm/cold/occluded/stationary fronts drawn as 16-glyph symbol rails across a chart grid |
-| `candy-mosaic-10-16-l-2.ansi` | 160x34 | 16 | 5 | isobar analysis sheet: nested pressure contours, high/low centers and wind barbs in the ANSI eight hues |
-| `candy-mosaic-10-16-m-1.ansi` | 84x19 | 16 | 6 | chroma subsampling: luma field with chroma sampled at 4:4:4 solid, 4:2:2 column pairs, 4:2:0 checker grid |
-| `candy-mosaic-10-16-m-2.ansi` | 84x24 | 16 | 7 | scaling filters: one diagonal edge resampled nearest (block staircase), bilinear (ramped), bicubic (smooth) |
-| `candy-mosaic-10-16-s-1.ansi` | 48x15 | 16 | 6 | synoptic station model: barbs, wind pennant and 16-glyph pressure/temperature plot on a chart cell |
-| `candy-mosaic-10-16-s-2.ansi` | 56x14 | 16 | 6 | bit-plane stack: one grey image sliced into b7..b0 monochrome planes, dense top bits to dither-noise low bits |
-| `candy-mosaic-10-16-s-3.ansi` | 56x14 | 16 | 6 | Adam7 progressive reveal: seven interlaced PNG passes tiling a field from sparse to full, rows P1..P7 |
-| `candy-mosaic-10-256-l-1.ansi` | 198x44 | 256 | 17 | topographic contour survey: index and intermediate contours, spot elevations and a colour ramp legend |
-| `candy-mosaic-10-256-l-2.ansi` | 198x44 | 256 | 17 | weather radar PPI scope: concentric range rings, radial sweep, precipitation cells graded in a dBZ colour table |
-| `candy-mosaic-10-256-m-1.ansi` | 84x24 | 256 | 25 | CIE 1931 xy chromaticity diagram: horseshoe locus, Planckian curve and D65 point on the 256-cube |
-| `candy-mosaic-10-256-m-2.ansi` | 84x24 | 256 | 16 | lens vignette test field: centred reticle falling off radially to the corners with crop marks and stop value |
-| `candy-mosaic-10-256-s-1.ansi` | 56x11 | 256 | 16 | white-balance kelvin ramp: tungsten-to-daylight swatch strip with a grey card anchoring the neutral line |
-| `candy-mosaic-10-256-s-2.ansi` | 56x14 | 256 | 12 | histogram equalisation: humpy tonal histogram left, redistributed flat histogram right, before/after caption |
-| `candy-mosaic-10-tc-l-1.ansi` | 180x44 | truecolor | 5475 | thin-film interference: full-bleed oil-slick iridescence with contour bands sweeping the whole spectrum |
-| `candy-mosaic-10-tc-l-2.ansi` | 180x44 | truecolor | 523 | water caustics: full-bleed refracted light web on a pool floor, bright filaments closing into cells |
-| `candy-mosaic-10-tc-m-1.ansi` | 84x24 | truecolor | 283 | star trails: circumpolar long-exposure arcs sweeping around the pole with bright and faint trails |
-| `candy-mosaic-10-tc-m-2.ansi` | 84x24 | truecolor | 346 | anamorphic flare: hot core, horizontal blue streak and a diagonal chain of spectral ghost discs |
-| `candy-mosaic-10-tc-s-1.ansi` | 56x15 | truecolor | 371 | bokeh field: out-of-focus colour discs of varying radius and hue scattered on a night gradient |
-| `candy-mosaic-10-tc-s-2.ansi` | 56x15 | truecolor | 15 | chromatic aberration: high-contrast edge with lateral red/blue fringing widening toward the frame corners |
-| `candy-mosaic-2-16-l-1.ansi` | 124x30 | 16 | 14 | giant block-letter CANDY MOSAIC banner: 2x pixel font rainbow rows over mosaic rule bands |
-| `candy-mosaic-2-16-l-2.ansi` | 130x28 | 16 | 10 | Mosaic::probe() selector dialog: radio backend list, live half-block preview pane, status bar |
-| `candy-mosaic-2-16-m-1.ansi` | 76x20 | 16 | 6 | error-diffusion study: Floyd–Steinberg candy sphere in ░▒▓ density with error-kernel annotations |
-| `candy-mosaic-2-16-m-2.ansi` | 72x18 | 16 | 7 | ordered dither bench: eight Bayer 4x4 luminance tiles in framed groups with step labels |
-| `candy-mosaic-2-16-s-1.ansi` | 60x5 | 16 | 14 | 16-colour half-block palette strip: candy fg/bg pair rows with bold-bright echo and italic legend |
-| `candy-mosaic-2-16-s-2.ansi` | 46x12 | 16 | 9 | tessera mini-wall: jittered ANSI-hue block tiles in a double-rule frame with reverse caption |
-| `candy-mosaic-2-256-l-1.ansi` | 150x28 | 256 | 24 | render pipeline schematic: PNG/JPEG/GIF through gd decode, resize and quantise into five backend outputs |
-| `candy-mosaic-2-256-l-2.ansi` | 120x33 | 256 | 408 | full 216-cube panorama: plane-by-plane hue wall of ▄ swatch pairs with gray footer and wordmark bar |
-| `candy-mosaic-2-256-m-1.ansi` | 89x18 | 256 | 26 | resolution ladder: one mint→berry scene tiled at 8, 12 and 20 tesserae, quantised to the cube |
-| `candy-mosaic-2-256-m-2.ansi` | 78x21 | 256 | 354 | hue sweep bands: ten stepped cube ramps offset in phase with the wordmark set into row five |
-| `candy-mosaic-2-256-s-1.ansi` | 44x5 | 256 | 20 | xterm 6x6x6 cube slice: mint-to-berry ██ swatch rows with an interleave gradient cap |
-| `candy-mosaic-2-256-s-2.ansi` | 58x5 | 256 | 55 | grayscale ramp 232–255 on berry field, mirrored row plus hot accent ticks |
-| `candy-mosaic-2-tc-l-1.ansi` | 176x35 | truecolor | 1211 | kitty virtual-placement matrix: one transmitted emblem stamped at a=p offsets with z blending over gradient wall |
-| `candy-mosaic-2-tc-l-2.ansi` | 158x31 | truecolor | 1698 | dithered bead field: seven specular candy spheres over a checker-noise indigo→wine gradient with block footer |
-| `candy-mosaic-2-tc-m-1.ansi` | 72x18 | truecolor | 378 | stained-glass window: leading grid of jewel-tone panes, rose window with radial hues, arch mask |
-| `candy-mosaic-2-tc-m-2.ansi` | 81x18 | truecolor | 781 | kitty transmit frame: RGB24 byte-chip columns decoded live into a matching truecolor thumbnail |
-| `candy-mosaic-2-tc-s-1.ansi` | 60x6 | truecolor | 125 | spectrum half-bar: four phase-shifted hue bands stacked via 48;2 half-block cells |
-| `candy-mosaic-2-tc-s-2.ansi` | 48x11 | truecolor | 553 | single candy bead: Lambert-shaded truecolor sphere with specular on night indigo, boxed |
-| `candy-mosaic-3-16-l-1.ansi` | 150x41 | 16 | 5 | Backend duel bill poster: double frame, giant BACKEND DUEL title, four framed emblems, CANDY MOSAIC gold band |
-| `candy-mosaic-3-16-l-2.ansi` | 140x30 | 16 | 12 | Pixel archaeology dig: strata bands with column letters, tripod derrick, buried tesserae, half-brushed landscape fragment |
-| `candy-mosaic-3-16-m-1.ansi` | 84x22 | 16 | 10 | Byzantine apse icon: gold-ground dome, white-faced saint in red mantle with halo cross, CANDY MOSAIC wordmark band |
-| `candy-mosaic-3-16-m-2.ansi` | 82x20 | 16 | 6 | Tessera Coliseum seating plan: oval ANSI crowd ring, sand floor DUEL NIGHT, four backend sigils at corners |
-| `candy-mosaic-3-16-s-1.ansi` | 62x13 | 16 | 6 | SIXEL vs KITTY duel card: dual cyan/magenta wave bars under white title bar, italic 'probe decides' verdict |
-| `candy-mosaic-3-256-l-1.ansi` | 190x41 | 256 | 46 | Migration journey: six framed stations from source photo to terminal with arrows and CANDY MOSAIC caption |
-| `candy-mosaic-3-256-l-2.ansi` | 150x34 | 256 | 158 | Sweet glass triptych: three candy jars on a wood shelf, cube-quantised, with stepped swatch band |
-| `candy-mosaic-3-256-m-1.ansi` | 88x25 | 256 | 10 | Pixel migration map: serpentine PNG-GD-SCALE / DITHER-GATES-TTY station trail with drop arrow |
-| `candy-mosaic-3-256-m-2.ansi` | 86x23 | 256 | 26 | Probe bench: five numbered gauge bars beside KITTY and SIXEL chip cards from the backend probe matrix |
-| `candy-mosaic-3-256-s-1.ansi` | 62x14 | 256 | 26 | Kernel snacks: six candy-hue strips dithered by box, Bayer 2/4/8, FS-spread and Atkinson patterns |
-| `candy-mosaic-3-256-s-2.ansi` | 60x11 | 256 | 98 | Sixel ribbon: hue-cycled sine-wave interference band in the 256 cube beneath faint protocol title |
-| `candy-mosaic-3-tc-l-1.ansi` | 200x44 | truecolor | 1035 | Byzantine wall mural: crowned empress with cross-nimbus and gold stole on shimmering tesserae ground, CANDY MOSAIC tile band |
-| `candy-mosaic-3-tc-l-2.ansi` | 210x40 | truecolor | 457 | Gate passage: sunset landscape enters, flows through SIXEL/KITTY/ITERM/HALF gates, re-renders at growing chunk sizes |
-| `candy-mosaic-3-tc-l-3.ansi` | 170x40 | truecolor | 13 | Dither kitchen: one candy still life plated three ways - Bayer-8 ordered, Floyd-Steinberg, Atkinson |
-| `candy-mosaic-3-tc-m-1.ansi` | 84x24 | truecolor | 475 | Truecolor candy jar study: glass cylinder shading, 30 specular candies, red MOSAIC ribbon, cork lid |
-| `candy-mosaic-3-tc-m-2.ansi` | 88x20 | truecolor | 451 | Inspector loupe: 3x magnifier circle over tile wall, dashed source marker, crosshair and RGB readout strip |
-| `candy-mosaic-3-tc-s-1.ansi` | 48x10 | truecolor | 212 | Byzantine tesserae close-up: gold tile grid with grout, dark-red cross motif and one bright glint |
-| `candy-mosaic-3-tc-s-2.ansi` | 56x12 | truecolor | 1096 | Pixel tear: teal-to-magenta gradient shearing apart into drifting half-block pixels at the fray line |
-| `candy-mosaic-4-16-l-1.ansi` | 219x31 | 16 | 16 | Broadcast control room: monitor wall of six test patterns, ident with block font, fader desk |
-| `candy-mosaic-4-16-l-2.ansi` | 140x34 | 16 | 7 | Mosaic of a mosaic: giant tesserae wall, medium tesserae inner frame, micro tesserae core, self-rendering caption |
-| `candy-mosaic-4-16-m-1.ansi` | 84x18 | 16 | 6 | Weather-sat receiver: shaded disc in block glyphs, AOS telemetry column, blue frame |
-| `candy-mosaic-4-16-m-2.ansi` | 78x22 | 16 | 12 | Gallery room: gold-framed half-block landscape on striped wallpaper, brass plate, plant, lamp |
-| `candy-mosaic-4-16-s-1.ansi` | 66x12 | 16 | 16 | 16-color test-card slate: rainbow station ident, solid-bar wall, shade wedge greys |
-| `candy-mosaic-4-16-s-2.ansi` | 53x10 | 16 | 6 | Sixel telegram slip: framed wire picture with semicolon payload and perforated tear edge |
-| `candy-mosaic-4-256-l-1.ansi` | 190x40 | 256 | 132 | Fractal zoom wall: every 3x2 cube panel contains shrunken copies of itself, dark grout seams |
-| `candy-mosaic-4-256-l-2.ansi` | 150x35 | 256 | 65 | Museum gallery: three framed cube-color canvases incl. a tiled CandyMosaic sunrise, damask wall, bench |
-| `candy-mosaic-4-256-m-1.ansi` | 88x23 | 256 | 27 | Engineering test card: elliptical 12-spoke hue wheel, twin white dials, grey staircase, CANDY plate |
-| `candy-mosaic-4-256-m-2.ansi` | 86x22 | 256 | 26 | Pixel weather satellite plot: dotted orbit ellipse, shaded limb earth, dashed downlink to dish clock |
-| `candy-mosaic-4-256-s-1.ansi` | 62x6 | 256 | 29 | Weather satellite downlink strip: cube-shaded earth arc, dish and dashed 4.1 GHz link |
-| `candy-mosaic-4-256-s-2.ansi` | 48x5 | 256 | 11 | Studio VU bridge: green-amber-red cube meters with needles, ON AIR block, peak lamp |
-| `candy-mosaic-4-tc-l-1.ansi` | 200x44 | truecolor | 1299 | Mosaic of a mosaic: truecolor sunset field tiled 4x3, each tile a whole tiled sunset, brass plaque center |
-| `candy-mosaic-4-tc-l-2.ansi` | 170x41 | truecolor | 1943 | Dusk gallery room: gold-framed terminal-picture glowing over plank floor, brass label, lamp halo, plant |
-| `candy-mosaic-4-tc-m-1.ansi` | 86x22 | truecolor | 1141 | Orbital weather globe: truecolor half-block sphere with continents, clouds, limb glow and IR scale panel |
-| `candy-mosaic-4-tc-m-2.ansi` | 88x20 | truecolor | 895 | Studio monitor wall: six bezelled truecolor canvases incl. rainbow ident with pixel-font CANDY |
-| `candy-mosaic-4-tc-s-1.ansi` | 56x8 | truecolor | 243 | Signal-noise slate: rainbow pixel-font CANDY MOSAIC glowing over violet static field |
-| `candy-mosaic-4-tc-s-2.ansi` | 66x11 | truecolor | 234 | Sixel telegraph machine: shaded brass console feeding a hue-cycled rainbow tape with CANDY MOSAIC message |
-| `candy-mosaic-5-16-l-1.ansi` | 150x28 | 16 | 9 | brick kiln hall: glowing arch, tile shelves, wordmarked furnace door |
-| `candy-mosaic-5-16-l-2.ansi` | 140x30 | 16 | 9 | two-page spread: twenty hinged mounts, ruled index, brass magnifier |
-| `candy-mosaic-5-16-m-1.ansi` | 84x18 | 16 | 10 | stick rail: slug lines, huge wood wordmark, letter case, a spilled sort |
-| `candy-mosaic-5-16-m-2.ansi` | 78x22 | 16 | 15 | perforated pane of six stamps, shaded checker vignettes, denominations |
-| `candy-mosaic-5-16-s-1.ansi` | 66x11 | 16 | 13 | wood-type bed: wordmark composed as inked tiles in a brass chase |
-| `candy-mosaic-5-16-s-2.ansi` | 52x11 | 16 | 9 | lone perforated stamp with checker tesserae vignette, 5c denomination |
-| `candy-mosaic-5-256-l-1.ansi` | 132x29 | 256 | 31 | full-height loom, 30-warp sheet, half-block sunflower near completion |
-| `candy-mosaic-5-256-l-2.ansi` | 146x28 | 256 | 11 | platen press, open bed of slugs, drying halftone proof of MOSAIC |
-| `candy-mosaic-5-256-m-1.ansi` | 86x18 | 256 | 26 | warp-to-weft tapestry: heddles lift, shuttle mid-slit, tesserae cloth grows |
-| `candy-mosaic-5-256-m-2.ansi` | 88x18 | 256 | 23 | community tank: banded water gradient, half-decoded fish, planted sand bed |
-| `candy-mosaic-5-256-s-1.ansi` | 62x9 | 256 | 14 | shuttle crossing an indigo warp shed with a saffron weft trailing |
-| `candy-mosaic-5-256-s-2.ansi` | 63x7 | 256 | 8 | aerial ice holes, dark pupils of water, pixel fish cruising beneath |
-| `candy-mosaic-5-tc-l-1.ansi` | 160x46 | truecolor | 781 | cathedral rose: twelve truecolor petal sectors, oculus, light on stone |
-| `candy-mosaic-5-tc-l-2.ansi` | 180x37 | truecolor | 141 | reef split by a decode line: mosaic left, half-toned middle, scanline right |
-| `candy-mosaic-5-tc-m-1.ansi` | 88x18 | truecolor | 251 | R/G/B ramps converge at a merge node, extruding a truecolor pane grid |
-| `candy-mosaic-5-tc-m-2.ansi` | 82x19 | truecolor | 52 | sunlit snow, bored hole, red bobber, line down to a warm/cold pixel shoal |
-| `candy-mosaic-5-tc-s-1.ansi` | 60x11 | truecolor | 34 | pocket tank: gradient fish whose rear half dissolves into scan streaks |
-| `candy-mosaic-5-tc-s-2.ansi` | 46x15 | truecolor | 17 | pocket rose window: six truecolor wedges, gold oculus, lead rings |
-| `candy-mosaic-6-16-l-1.ansi` | 160x34 | 16 | 12 | canyon section: nine strata bands carved by a meandering river into a lake |
-| `candy-mosaic-6-16-l-2.ansi` | 150x36 | 16 | 16 | descending square tunnel: nested color rings twisted wall by wall |
-| `candy-mosaic-6-16-m-1.ansi` | 84x22 | 16 | 16 | kaleido mini: eight-fold angular cells, dark radial spokes |
-| `candy-mosaic-6-16-m-2.ansi` | 80x24 | 16 | 9 | spectrum lighthouse: gilded beam fan over a banded tower and surf |
-| `candy-mosaic-6-16-s-1.ansi` | 62x10 | 16 | 6 | pixelfall mini: three block meteors on indigo paper, white-hot heads, wordmark ink-strip |
-| `candy-mosaic-6-16-s-2.ansi` | 64x8 | 16 | 15 | harlequin tessera band: alternating diamond rows with rainbow half-block seam |
-| `candy-mosaic-6-16-s-3.ansi` | 56x12 | 16 | 6 | zipper track: chroma teeth meshing around a dim spine, slider crown |
-| `candy-mosaic-6-16-s-4.ansi` | 60x11 | 16 | 12 | checker relay: two dye stacks trading tiles through gold chevrons |
-| `candy-mosaic-6-256-l-1.ansi` | 184x36 | 256 | 61 | swatch grandmaster: half-block board, clocks, eval bar, game score, chroma rack |
-| `candy-mosaic-6-256-l-2.ansi` | 172x38 | 256 | 86 | deep-field downlink: ringed planet decoding row by row at 9600 baud |
-| `candy-mosaic-6-256-m-1.ansi` | 86x24 | 256 | 42 | hex refinery: filled cells feed a settling chroma lane through valve V1 |
-| `candy-mosaic-6-256-m-2.ansi` | 78x20 | 256 | 24 | swatch chess mini: pieces dyed one hue per rank, legend and mate line |
-| `candy-mosaic-6-256-s-1.ansi` | 66x9 | 256 | 50 | 12-swatch fan: numbered chips over a full hue-arc baseboard |
-| `candy-mosaic-6-256-s-2.ansi` | 68x10 | 256 | 22 | hex sizzle: two vat clusters linked by a dotted chroma pipe |
-| `candy-mosaic-6-256-s-3.ansi` | 64x10 | 256 | 23 | domino fall: ivory pips tipping in sequence above a teal ramp |
-| `candy-mosaic-6-tc-l-1.ansi` | 200x40 | truecolor | 7670 | infinite kaleido corridor: octant-folded hue vortex with black oculus |
-| `candy-mosaic-6-tc-l-2.ansi` | 192x40 | truecolor | 3240 | dusk canyon: sun haze over shaded strata, river decoded into its delta |
-| `candy-mosaic-6-tc-m-1.ansi` | 88x24 | truecolor | 321 | pixelfall storm: gradient meteor trails across a violet dusk gradient |
-| `candy-mosaic-6-tc-m-2.ansi` | 84x22 | truecolor | 97 | hot shop bench: furnace glow, gathered gather on rod, annealing bottles |
-| `candy-mosaic-6-tc-s-1.ansi` | 62x9 | truecolor | 72 | glassblow gather: radial heat blob riding the blowpipe at 1100C |
-| `candy-mosaic-6-tc-s-2.ansi` | 66x12 | truecolor | 109 | core strata: five cased tube samples extruded in hue-stepped layers |
-| `candy-mosaic-6-tc-s-3.ansi` | 60x10 | truecolor | 290 | thermal decode: five isotherm bars cooling blue to ember, scan comb |
-| `candy-mosaic-7-16-l-1.ansi` | 160x34 | 16 | 10 | great-hall floor: meander-bordered tesserae, cream grout drying along a diagonal past the inlay |
-| `candy-mosaic-7-16-l-2.ansi` | 150x36 | 16 | 9 | cutter line: candy slab rides the belt under a nine-blade gantry into the snap bin |
-| `candy-mosaic-7-16-m-1.ansi` | 84x22 | 16 | 10 | grout day: tessera floor mid-journey, cream grout ridge and float sealing column by column |
-| `candy-mosaic-7-16-m-2.ansi` | 80x24 | 16 | 6 | specimen card: block-built morpho on pinned plate, shade-lattice wings, brass label |
-| `candy-mosaic-7-16-s-1.ansi` | 58x11 | 16 | 7 | bayer 4x4 seed: threshold tiles tone up black→blue→cyan→white, pass 1/4 |
-| `candy-mosaic-7-16-s-2.ansi` | 62x9 | 16 | 9 | slab snap: nine scored candy tiles, tenth lifted off the groove, crumb scatter |
-| `candy-mosaic-7-256-l-1.ansi` | 184x36 | 256 | 31 | lepidoptera plate: twelve cube-tessera butterflies pinned in ruled frames with labels |
-| `candy-mosaic-7-256-l-2.ansi` | 172x38 | 256 | 16 | separation wall: four 65-lpi color plates stacked over their screened composite proof |
-| `candy-mosaic-7-256-m-1.ansi` | 86x24 | 256 | 35 | bayer bloom: 8x8 threshold lattice firing hue-mapped cells in matrix order, pass 40/64 |
-| `candy-mosaic-7-256-m-2.ansi` | 78x22 | 256 | 20 | confection rack: five striped candy slabs leaned on a brass rail with price chips |
-| `candy-mosaic-7-256-s-1.ansi` | 60x10 | 256 | 9 | ocellus: butterfly-wing eyespot in cobalt-amber-pitch rings on brown scale fur |
-| `candy-mosaic-7-256-s-2.ansi` | 64x8 | 256 | 38 | half-block proof: two pixel rows fold into one ▀ cell strip, no chroma lost |
-| `candy-mosaic-7-tc-l-1.ansi` | 200x40 | truecolor | 7864 | morpho spread: full iridescent wing pair, veins, margin lunules and scale shimmer |
-| `candy-mosaic-7-tc-l-2.ansi` | 192x40 | truecolor | 33 | palette octree: nine hot pixels descend red-green-blue cuts into eight swatch leaves |
-| `candy-mosaic-7-tc-l-3.ansi` | 168x34 | truecolor | 167 | snap macro: truecolor candy slab split at the score line, crystals glittering in the gap |
-| `candy-mosaic-7-tc-m-1.ansi` | 88x24 | truecolor | 51 | morning edition: halftone landscape under a masthead, three ruled columns, rosette note |
-| `candy-mosaic-7-tc-m-2.ansi` | 84x22 | truecolor | 44 | zoom autopsy: a 5x4 chip expands into ruled dual cells, then collapses to one ▀ row |
-| `candy-mosaic-7-tc-s-1.ansi` | 60x11 | truecolor | 6 | rosette strip: five CMYK halftone dots with growing radius on newsprint |
-| `candy-mosaic-7-tc-s-2.ansi` | 66x11 | truecolor | 18 | quantizer snip: eight candy hues bracketed into three merged palette leaves |
-| `candy-mosaic-7-tc-s-3.ansi` | 62x10 | truecolor | 29 | tile fan: six glossy sugar casts fanned, specular highlight struck per tile |
-| `candy-mosaic-8-16-l-1.ansi` | 172x34 | 16 | 8 | great rose window: 16-colour twelve-light rose, concentric rings, stone tracery and mullions |
-| `candy-mosaic-8-16-l-2.ansi` | 160x30 | 16 | 9 | tapestry reweave wall: 16-colour woven grid, scattered loss holes, full pinned selvedge |
-| `candy-mosaic-8-16-m-1.ansi` | 84x22 | 16 | 8 | stained-glass rose: 12 leaded lights in four rings, stone tracery rim, jewel quarries |
-| `candy-mosaic-8-16-m-2.ansi` | 86x20 | 16 | 9 | tapestry conservation table: 16-colour warp/weft grid, loss holes, pinned edge |
-| `candy-mosaic-8-16-s-1.ansi` | 58x11 | 16 | 9 | bubble-wrap decoder: 16-colour pop/flat bubble field on a deck, cal swatches |
-| `candy-mosaic-8-16-s-2.ansi` | 62x12 | 16 | 10 | praline box by hue, 16-colour: nine bonbons on a dark tray, gloss strip |
-| `candy-mosaic-8-256-l-1.ansi` | 190x32 | 256 | 10 | groove microscope panorama x2500: 256-colour sine groove walls, specular crests, riding stylus |
-| `candy-mosaic-8-256-l-2.ansi` | 184x30 | 256 | 12 | coral outplant grid: 256-colour nursery rack, branching frags on ties over graded water |
-| `candy-mosaic-8-256-m-1.ansi` | 86x21 | 256 | 26 | bubble-wrap decoder sheet: 256-colour inflated/popped grid, cal strip, popped bit mask |
-| `candy-mosaic-8-256-m-2.ansi` | 84x22 | 256 | 54 | praline tasting box: 256-colour bonbons graded around the hue wheel with per-piece gloss |
-| `candy-mosaic-8-256-s-1.ansi` | 64x11 | 256 | 13 | fishmonger's ice sample: 256-colour silver fish on a scored ice tile, chip k100 |
-| `candy-mosaic-8-256-s-2.ansi` | 66x12 | 256 | 9 | vinyl groove cross-section x1200: 256-colour sine walls, brass stylus tip |
-| `candy-mosaic-8-tc-l-1.ansi` | 200x44 | truecolor | 347 | sequin gown full plate: truecolor iridescent lattice across a full dress-form silhouette |
-| `candy-mosaic-8-tc-l-2.ansi` | 176x34 | truecolor | 365 | grand praline assortment: truecolor bonbons sorted across the hue wheel, cacao 54-72% |
-| `candy-mosaic-8-tc-m-1.ansi` | 88x24 | truecolor | 151 | pixel gown on the stand: truecolor hand-stitched sequin lattice on a dress-form silhouette |
-| `candy-mosaic-8-tc-m-2.ansi` | 82x22 | truecolor | 35 | fishmonger's counter: truecolor silver-blue fish with warm tails on a scored ice field |
-| `candy-mosaic-8-tc-s-1.ansi` | 60x13 | truecolor | 92 | sequin atelier strip: truecolor iridescent dress-form slice, offset lattice, thread gaps |
-| `candy-mosaic-8-tc-s-2.ansi` | 64x11 | truecolor | 20 | coral nursery tray: truecolor frags on yellow ties over a depth-graded water column |
-| `candy-mosaic-9-16-l-1.ansi` | 184x36 | 16 | 11 | organ of palette: 28 hue-cycled pipes with mouths over windchest, two manuals and bench |
-| `candy-mosaic-9-16-l-2.ansi` | 176x32 | 16 | 10 | departures split-flap board: protocol gates, half-turned tiles, ticker and signal mast |
-| `candy-mosaic-9-16-m-1.ansi` | 86x22 | 16 | 13 | Venetian slat raster: 75°/45°/15° panels sampling a landscape at three densities |
-| `candy-mosaic-9-16-m-2.ansi` | 84x21 | 16 | 10 | basket loom twill: six weft bands interlaced over a fixed warp, stamped maker's label |
-| `candy-mosaic-9-16-s-1.ansi` | 66x13 | 16 | 9 | Fresnel lens: 16-colour parallel pixel beams refracted through stepped glass to one focal spark |
-| `candy-mosaic-9-16-s-2.ansi` | 64x12 | 16 | 9 | pin-tumbler cutaway: five chambers as palette slots, shear line broken where the lift starves |
-| `candy-mosaic-9-256-l-1.ansi` | 190x40 | 256 | 26 | radiosonde descent: balloon tethered through eight strata with sonde box and T(°C) profile |
-| `candy-mosaic-9-256-l-2.ansi` | 178x32 | 256 | 42 | hue library: four shelves of ramp-graded spines, title bands, one vertical Candy mark |
-| `candy-mosaic-9-256-m-1.ansi` | 86x23 | 256 | 55 | developing reel: spiral reel with slot openings, sprocketed strip, six frames, drying clips |
-| `candy-mosaic-9-256-m-2.ansi` | 88x21 | 256 | 41 | perforator T-13: punch ram over a paper web of seven thumbnails, punched rows, chad bin |
-| `candy-mosaic-9-256-s-1.ansi` | 64x12 | 256 | 33 | ice-cream sampler: six scoops clamped k=6 in wafer cups with flavour codes under the tray |
-| `candy-mosaic-9-256-s-2.ansi` | 60x14 | 256 | 22 | agarose gel: six lanes of migrating pigment bands, ladder lane, smears, electrode marks |
-| `candy-mosaic-9-tc-l-1.ansi` | 196x42 | truecolor | 205 | murmuration: three quantised bird waves over a steel dusk sky, moon halo, treeline silhouette |
-| `candy-mosaic-9-tc-l-2.ansi` | 180x34 | truecolor | 187 | dendro-palette: 137-ring disc with drought scars and radial crack, Ø5mm core sample inset |
-| `candy-mosaic-9-tc-m-1.ansi` | 86x24 | truecolor | 53 | photolitho stepper: chrome reticle casting UV columns onto wafer dies exposed/stepping/raw |
-| `candy-mosaic-9-tc-m-2.ansi` | 88x25 | truecolor | 30 | desk-24 console: twelve channel strips of hue-tinted knobs and fader caps, lit master meters |
-| `candy-mosaic-9-tc-s-1.ansi` | 68x14 | truecolor | 106 | grapeshot cannon: bronze barrel and wheel, flash cone, 22 pellets fading with range |
-| `candy-mosaic-9-tc-s-2.ansi` | 62x13 | truecolor | 20 | tide-step: three rock pools of graded water, spilling overflows, sparkle and anemones |
-<!-- END candy-mosaic SLOTS -->
+| `sugar-image-1-16-l-1.ansi` | 132x30 | 16 | 14 | PixelGrid inspector: ANSI cell field with probe ring and annotated giant half-block |
+| `sugar-image-1-16-l-2.ansi` | 142x30 | 16 | 11 | lamp-lit indigo tessera wall with gold block-letter CANDY MOSAIC wordmark and cracks |
+| `sugar-image-1-16-m-2.ansi` | 82x22 | 16 | 8 | CGA-blue decode screen: status list, striped progress bar and braille spinner |
+| `sugar-image-1-16-s-1.ansi` | 66x8 | 16 | 16 | quarter-block density ladder ░▒▓█ scrolling through ANSI hues with legend strip |
+| `sugar-image-1-16-s-2.ansi` | 50x13 | 16 | 20 | kiln mouth arch blazing white-to-red fire gradient with flying tessera sparks |
+| `sugar-image-1-256-l-1.ansi` | 180x34 | 256 | 65 | SMPTE-style calibration chart: color bars, castellation, wedges, PLUGE, circle |
+| `sugar-image-1-256-l-2.ansi` | 158x32 | 256 | 56 | roman mosaic floor with rosettes, Sol medallion, guilloche border and tessera name band |
+| `sugar-image-1-256-m-1.ansi` | 86x24 | 256 | 84 | neon sixel data rain above a raster image mid-paint, DCS header line |
+| `sugar-image-1-256-m-2.ansi` | 84x22 | 256 | 26 | 256-palette mountain lake at dusk with moon, pines and mirrored ripples |
+| `sugar-image-1-256-s-1.ansi` | 54x13 | 256 | 16 | block-built cat glyph beside kitty APC protocol notes (a=T/f=1/a=p) |
+| `sugar-image-1-256-s-2.ansi` | 60x14 | 256 | 26 | magnifying loupe zooming a tiny source image into fat pixel grid with handle |
+| `sugar-image-1-tc-l-1.ansi` | 150x36 | truecolor | 523 | half-block portrait of a figure beside a pixel-probe inspector panel |
+| `sugar-image-1-tc-l-2.ansi` | 172x38 | truecolor | 515 | wide sunset panorama: layered ridges, clouds, glitter path, sailboat and rocks |
+| `sugar-image-1-tc-l-3.ansi` | 140x32 | truecolor | 6266 | truecolor nebula clouds with ringed planet, star field and dust lanes |
+| `sugar-image-1-tc-m-1.ansi` | 86x23 | truecolor | 333 | moonlit photo of hills dissolving left-to-right into scattered half-block pixels |
+| `sugar-image-1-tc-m-2.ansi` | 84x24 | truecolor | 51 | macOS-styled terminal window painting a truecolor ocean-sunset render inside |
+| `sugar-image-1-tc-s-1.ansi` | 56x12 | truecolor | 76 | miniature half-block sunset with gradient sky, glowing sun disc and shimmering sea band |
+| `sugar-image-1-tc-s-2.ansi` | 62x14 | truecolor | 57 | RGB channels funneled through arrows into one two-pixel ▀ cell on dark bench |
+| `sugar-image-10-16-l-1.ansi` | 184x36 | 16 | 6 | surface weather map: warm/cold/occluded/stationary fronts drawn as 16-glyph symbol rails across a chart grid |
+| `sugar-image-10-16-l-2.ansi` | 160x34 | 16 | 5 | isobar analysis sheet: nested pressure contours, high/low centers and wind barbs in the ANSI eight hues |
+| `sugar-image-10-16-m-1.ansi` | 84x19 | 16 | 6 | chroma subsampling: luma field with chroma sampled at 4:4:4 solid, 4:2:2 column pairs, 4:2:0 checker grid |
+| `sugar-image-10-16-m-2.ansi` | 84x24 | 16 | 7 | scaling filters: one diagonal edge resampled nearest (block staircase), bilinear (ramped), bicubic (smooth) |
+| `sugar-image-10-16-s-1.ansi` | 48x15 | 16 | 6 | synoptic station model: barbs, wind pennant and 16-glyph pressure/temperature plot on a chart cell |
+| `sugar-image-10-16-s-2.ansi` | 56x14 | 16 | 6 | bit-plane stack: one grey image sliced into b7..b0 monochrome planes, dense top bits to dither-noise low bits |
+| `sugar-image-10-16-s-3.ansi` | 56x14 | 16 | 6 | Adam7 progressive reveal: seven interlaced PNG passes tiling a field from sparse to full, rows P1..P7 |
+| `sugar-image-10-256-l-1.ansi` | 198x44 | 256 | 17 | topographic contour survey: index and intermediate contours, spot elevations and a colour ramp legend |
+| `sugar-image-10-256-l-2.ansi` | 198x44 | 256 | 17 | weather radar PPI scope: concentric range rings, radial sweep, precipitation cells graded in a dBZ colour table |
+| `sugar-image-10-256-m-1.ansi` | 84x24 | 256 | 25 | CIE 1931 xy chromaticity diagram: horseshoe locus, Planckian curve and D65 point on the 256-cube |
+| `sugar-image-10-256-m-2.ansi` | 84x24 | 256 | 16 | lens vignette test field: centred reticle falling off radially to the corners with crop marks and stop value |
+| `sugar-image-10-256-s-1.ansi` | 56x11 | 256 | 16 | white-balance kelvin ramp: tungsten-to-daylight swatch strip with a grey card anchoring the neutral line |
+| `sugar-image-10-256-s-2.ansi` | 56x14 | 256 | 12 | histogram equalisation: humpy tonal histogram left, redistributed flat histogram right, before/after caption |
+| `sugar-image-10-tc-l-1.ansi` | 180x44 | truecolor | 5475 | thin-film interference: full-bleed oil-slick iridescence with contour bands sweeping the whole spectrum |
+| `sugar-image-10-tc-l-2.ansi` | 180x44 | truecolor | 523 | water caustics: full-bleed refracted light web on a pool floor, bright filaments closing into cells |
+| `sugar-image-10-tc-m-1.ansi` | 84x24 | truecolor | 283 | star trails: circumpolar long-exposure arcs sweeping around the pole with bright and faint trails |
+| `sugar-image-10-tc-m-2.ansi` | 84x24 | truecolor | 346 | anamorphic flare: hot core, horizontal blue streak and a diagonal chain of spectral ghost discs |
+| `sugar-image-10-tc-s-1.ansi` | 56x15 | truecolor | 371 | bokeh field: out-of-focus colour discs of varying radius and hue scattered on a night gradient |
+| `sugar-image-10-tc-s-2.ansi` | 56x15 | truecolor | 15 | chromatic aberration: high-contrast edge with lateral red/blue fringing widening toward the frame corners |
+| `sugar-image-2-16-l-1.ansi` | 124x30 | 16 | 14 | giant block-letter CANDY MOSAIC banner: 2x pixel font rainbow rows over mosaic rule bands |
+| `sugar-image-2-16-l-2.ansi` | 130x28 | 16 | 10 | Mosaic::probe() selector dialog: radio backend list, live half-block preview pane, status bar |
+| `sugar-image-2-16-m-1.ansi` | 76x20 | 16 | 6 | error-diffusion study: Floyd–Steinberg candy sphere in ░▒▓ density with error-kernel annotations |
+| `sugar-image-2-16-m-2.ansi` | 72x18 | 16 | 7 | ordered dither bench: eight Bayer 4x4 luminance tiles in framed groups with step labels |
+| `sugar-image-2-16-s-1.ansi` | 60x5 | 16 | 14 | 16-colour half-block palette strip: candy fg/bg pair rows with bold-bright echo and italic legend |
+| `sugar-image-2-16-s-2.ansi` | 46x12 | 16 | 9 | tessera mini-wall: jittered ANSI-hue block tiles in a double-rule frame with reverse caption |
+| `sugar-image-2-256-l-1.ansi` | 150x28 | 256 | 24 | render pipeline schematic: PNG/JPEG/GIF through gd decode, resize and quantise into five backend outputs |
+| `sugar-image-2-256-l-2.ansi` | 120x33 | 256 | 408 | full 216-cube panorama: plane-by-plane hue wall of ▄ swatch pairs with gray footer and wordmark bar |
+| `sugar-image-2-256-m-1.ansi` | 89x18 | 256 | 26 | resolution ladder: one mint→berry scene tiled at 8, 12 and 20 tesserae, quantised to the cube |
+| `sugar-image-2-256-m-2.ansi` | 78x21 | 256 | 354 | hue sweep bands: ten stepped cube ramps offset in phase with the wordmark set into row five |
+| `sugar-image-2-256-s-1.ansi` | 44x5 | 256 | 20 | xterm 6x6x6 cube slice: mint-to-berry ██ swatch rows with an interleave gradient cap |
+| `sugar-image-2-256-s-2.ansi` | 58x5 | 256 | 55 | grayscale ramp 232–255 on berry field, mirrored row plus hot accent ticks |
+| `sugar-image-2-tc-l-1.ansi` | 176x35 | truecolor | 1211 | kitty virtual-placement matrix: one transmitted emblem stamped at a=p offsets with z blending over gradient wall |
+| `sugar-image-2-tc-l-2.ansi` | 158x31 | truecolor | 1698 | dithered bead field: seven specular candy spheres over a checker-noise indigo→wine gradient with block footer |
+| `sugar-image-2-tc-m-1.ansi` | 72x18 | truecolor | 378 | stained-glass window: leading grid of jewel-tone panes, rose window with radial hues, arch mask |
+| `sugar-image-2-tc-m-2.ansi` | 81x18 | truecolor | 781 | kitty transmit frame: RGB24 byte-chip columns decoded live into a matching truecolor thumbnail |
+| `sugar-image-2-tc-s-1.ansi` | 60x6 | truecolor | 125 | spectrum half-bar: four phase-shifted hue bands stacked via 48;2 half-block cells |
+| `sugar-image-2-tc-s-2.ansi` | 48x11 | truecolor | 553 | single candy bead: Lambert-shaded truecolor sphere with specular on night indigo, boxed |
+| `sugar-image-3-16-l-1.ansi` | 150x41 | 16 | 5 | Backend duel bill poster: double frame, giant BACKEND DUEL title, four framed emblems, CANDY MOSAIC gold band |
+| `sugar-image-3-16-l-2.ansi` | 140x30 | 16 | 12 | Pixel archaeology dig: strata bands with column letters, tripod derrick, buried tesserae, half-brushed landscape fragment |
+| `sugar-image-3-16-m-1.ansi` | 84x22 | 16 | 10 | Byzantine apse icon: gold-ground dome, white-faced saint in red mantle with halo cross, CANDY MOSAIC wordmark band |
+| `sugar-image-3-16-m-2.ansi` | 82x20 | 16 | 6 | Tessera Coliseum seating plan: oval ANSI crowd ring, sand floor DUEL NIGHT, four backend sigils at corners |
+| `sugar-image-3-16-s-1.ansi` | 62x13 | 16 | 6 | SIXEL vs KITTY duel card: dual cyan/magenta wave bars under white title bar, italic 'probe decides' verdict |
+| `sugar-image-3-256-l-1.ansi` | 190x41 | 256 | 46 | Migration journey: six framed stations from source photo to terminal with arrows and CANDY MOSAIC caption |
+| `sugar-image-3-256-l-2.ansi` | 150x34 | 256 | 158 | Sweet glass triptych: three candy jars on a wood shelf, cube-quantised, with stepped swatch band |
+| `sugar-image-3-256-m-1.ansi` | 88x25 | 256 | 10 | Pixel migration map: serpentine PNG-GD-SCALE / DITHER-GATES-TTY station trail with drop arrow |
+| `sugar-image-3-256-m-2.ansi` | 86x23 | 256 | 26 | Probe bench: five numbered gauge bars beside KITTY and SIXEL chip cards from the backend probe matrix |
+| `sugar-image-3-256-s-1.ansi` | 62x14 | 256 | 26 | Kernel snacks: six candy-hue strips dithered by box, Bayer 2/4/8, FS-spread and Atkinson patterns |
+| `sugar-image-3-256-s-2.ansi` | 60x11 | 256 | 98 | Sixel ribbon: hue-cycled sine-wave interference band in the 256 cube beneath faint protocol title |
+| `sugar-image-3-tc-l-1.ansi` | 200x44 | truecolor | 1035 | Byzantine wall mural: crowned empress with cross-nimbus and gold stole on shimmering tesserae ground, CANDY MOSAIC tile band |
+| `sugar-image-3-tc-l-2.ansi` | 210x40 | truecolor | 457 | Gate passage: sunset landscape enters, flows through SIXEL/KITTY/ITERM/HALF gates, re-renders at growing chunk sizes |
+| `sugar-image-3-tc-l-3.ansi` | 170x40 | truecolor | 13 | Dither kitchen: one candy still life plated three ways - Bayer-8 ordered, Floyd-Steinberg, Atkinson |
+| `sugar-image-3-tc-m-1.ansi` | 84x24 | truecolor | 475 | Truecolor candy jar study: glass cylinder shading, 30 specular candies, red MOSAIC ribbon, cork lid |
+| `sugar-image-3-tc-m-2.ansi` | 88x20 | truecolor | 451 | Inspector loupe: 3x magnifier circle over tile wall, dashed source marker, crosshair and RGB readout strip |
+| `sugar-image-3-tc-s-1.ansi` | 48x10 | truecolor | 212 | Byzantine tesserae close-up: gold tile grid with grout, dark-red cross motif and one bright glint |
+| `sugar-image-3-tc-s-2.ansi` | 56x12 | truecolor | 1096 | Pixel tear: teal-to-magenta gradient shearing apart into drifting half-block pixels at the fray line |
+| `sugar-image-4-16-l-1.ansi` | 219x31 | 16 | 16 | Broadcast control room: monitor wall of six test patterns, ident with block font, fader desk |
+| `sugar-image-4-16-l-2.ansi` | 140x34 | 16 | 7 | Mosaic of a mosaic: giant tesserae wall, medium tesserae inner frame, micro tesserae core, self-rendering caption |
+| `sugar-image-4-16-m-1.ansi` | 84x18 | 16 | 6 | Weather-sat receiver: shaded disc in block glyphs, AOS telemetry column, blue frame |
+| `sugar-image-4-16-m-2.ansi` | 78x22 | 16 | 12 | Gallery room: gold-framed half-block landscape on striped wallpaper, brass plate, plant, lamp |
+| `sugar-image-4-16-s-1.ansi` | 66x12 | 16 | 16 | 16-color test-card slate: rainbow station ident, solid-bar wall, shade wedge greys |
+| `sugar-image-4-16-s-2.ansi` | 53x10 | 16 | 6 | Sixel telegram slip: framed wire picture with semicolon payload and perforated tear edge |
+| `sugar-image-4-256-l-1.ansi` | 190x40 | 256 | 132 | Fractal zoom wall: every 3x2 cube panel contains shrunken copies of itself, dark grout seams |
+| `sugar-image-4-256-l-2.ansi` | 150x35 | 256 | 65 | Museum gallery: three framed cube-color canvases incl. a tiled SugarImage sunrise, damask wall, bench |
+| `sugar-image-4-256-m-1.ansi` | 88x23 | 256 | 27 | Engineering test card: elliptical 12-spoke hue wheel, twin white dials, grey staircase, CANDY plate |
+| `sugar-image-4-256-m-2.ansi` | 86x22 | 256 | 26 | Pixel weather satellite plot: dotted orbit ellipse, shaded limb earth, dashed downlink to dish clock |
+| `sugar-image-4-256-s-1.ansi` | 62x6 | 256 | 29 | Weather satellite downlink strip: cube-shaded earth arc, dish and dashed 4.1 GHz link |
+| `sugar-image-4-256-s-2.ansi` | 48x5 | 256 | 11 | Studio VU bridge: green-amber-red cube meters with needles, ON AIR block, peak lamp |
+| `sugar-image-4-tc-l-1.ansi` | 200x44 | truecolor | 1299 | Mosaic of a mosaic: truecolor sunset field tiled 4x3, each tile a whole tiled sunset, brass plaque center |
+| `sugar-image-4-tc-l-2.ansi` | 170x41 | truecolor | 1943 | Dusk gallery room: gold-framed terminal-picture glowing over plank floor, brass label, lamp halo, plant |
+| `sugar-image-4-tc-m-1.ansi` | 86x22 | truecolor | 1141 | Orbital weather globe: truecolor half-block sphere with continents, clouds, limb glow and IR scale panel |
+| `sugar-image-4-tc-m-2.ansi` | 88x20 | truecolor | 895 | Studio monitor wall: six bezelled truecolor canvases incl. rainbow ident with pixel-font CANDY |
+| `sugar-image-4-tc-s-1.ansi` | 56x8 | truecolor | 243 | Signal-noise slate: rainbow pixel-font CANDY MOSAIC glowing over violet static field |
+| `sugar-image-4-tc-s-2.ansi` | 66x11 | truecolor | 234 | Sixel telegraph machine: shaded brass console feeding a hue-cycled rainbow tape with CANDY MOSAIC message |
+| `sugar-image-5-16-l-1.ansi` | 150x28 | 16 | 9 | brick kiln hall: glowing arch, tile shelves, wordmarked furnace door |
+| `sugar-image-5-16-l-2.ansi` | 140x30 | 16 | 9 | two-page spread: twenty hinged mounts, ruled index, brass magnifier |
+| `sugar-image-5-16-m-1.ansi` | 84x18 | 16 | 10 | stick rail: slug lines, huge wood wordmark, letter case, a spilled sort |
+| `sugar-image-5-16-m-2.ansi` | 78x22 | 16 | 15 | perforated pane of six stamps, shaded checker vignettes, denominations |
+| `sugar-image-5-16-s-1.ansi` | 66x11 | 16 | 13 | wood-type bed: wordmark composed as inked tiles in a brass chase |
+| `sugar-image-5-16-s-2.ansi` | 52x11 | 16 | 9 | lone perforated stamp with checker tesserae vignette, 5c denomination |
+| `sugar-image-5-256-l-1.ansi` | 132x29 | 256 | 31 | full-height loom, 30-warp sheet, half-block sunflower near completion |
+| `sugar-image-5-256-l-2.ansi` | 146x28 | 256 | 11 | platen press, open bed of slugs, drying halftone proof of MOSAIC |
+| `sugar-image-5-256-m-1.ansi` | 86x18 | 256 | 26 | warp-to-weft tapestry: heddles lift, shuttle mid-slit, tesserae cloth grows |
+| `sugar-image-5-256-m-2.ansi` | 88x18 | 256 | 23 | community tank: banded water gradient, half-decoded fish, planted sand bed |
+| `sugar-image-5-256-s-1.ansi` | 62x9 | 256 | 14 | shuttle crossing an indigo warp shed with a saffron weft trailing |
+| `sugar-image-5-256-s-2.ansi` | 63x7 | 256 | 8 | aerial ice holes, dark pupils of water, pixel fish cruising beneath |
+| `sugar-image-5-tc-l-1.ansi` | 160x46 | truecolor | 781 | cathedral rose: twelve truecolor petal sectors, oculus, light on stone |
+| `sugar-image-5-tc-l-2.ansi` | 180x37 | truecolor | 141 | reef split by a decode line: mosaic left, half-toned middle, scanline right |
+| `sugar-image-5-tc-m-1.ansi` | 88x18 | truecolor | 251 | R/G/B ramps converge at a merge node, extruding a truecolor pane grid |
+| `sugar-image-5-tc-m-2.ansi` | 82x19 | truecolor | 52 | sunlit snow, bored hole, red bobber, line down to a warm/cold pixel shoal |
+| `sugar-image-5-tc-s-1.ansi` | 60x11 | truecolor | 34 | pocket tank: gradient fish whose rear half dissolves into scan streaks |
+| `sugar-image-5-tc-s-2.ansi` | 46x15 | truecolor | 17 | pocket rose window: six truecolor wedges, gold oculus, lead rings |
+| `sugar-image-6-16-l-1.ansi` | 160x34 | 16 | 12 | canyon section: nine strata bands carved by a meandering river into a lake |
+| `sugar-image-6-16-l-2.ansi` | 150x36 | 16 | 16 | descending square tunnel: nested color rings twisted wall by wall |
+| `sugar-image-6-16-m-1.ansi` | 84x22 | 16 | 16 | kaleido mini: eight-fold angular cells, dark radial spokes |
+| `sugar-image-6-16-m-2.ansi` | 80x24 | 16 | 9 | spectrum lighthouse: gilded beam fan over a banded tower and surf |
+| `sugar-image-6-16-s-1.ansi` | 62x10 | 16 | 6 | pixelfall mini: three block meteors on indigo paper, white-hot heads, wordmark ink-strip |
+| `sugar-image-6-16-s-2.ansi` | 64x8 | 16 | 15 | harlequin tessera band: alternating diamond rows with rainbow half-block seam |
+| `sugar-image-6-16-s-3.ansi` | 56x12 | 16 | 6 | zipper track: chroma teeth meshing around a dim spine, slider crown |
+| `sugar-image-6-16-s-4.ansi` | 60x11 | 16 | 12 | checker relay: two dye stacks trading tiles through gold chevrons |
+| `sugar-image-6-256-l-1.ansi` | 184x36 | 256 | 61 | swatch grandmaster: half-block board, clocks, eval bar, game score, chroma rack |
+| `sugar-image-6-256-l-2.ansi` | 172x38 | 256 | 86 | deep-field downlink: ringed planet decoding row by row at 9600 baud |
+| `sugar-image-6-256-m-1.ansi` | 86x24 | 256 | 42 | hex refinery: filled cells feed a settling chroma lane through valve V1 |
+| `sugar-image-6-256-m-2.ansi` | 78x20 | 256 | 24 | swatch chess mini: pieces dyed one hue per rank, legend and mate line |
+| `sugar-image-6-256-s-1.ansi` | 66x9 | 256 | 50 | 12-swatch fan: numbered chips over a full hue-arc baseboard |
+| `sugar-image-6-256-s-2.ansi` | 68x10 | 256 | 22 | hex sizzle: two vat clusters linked by a dotted chroma pipe |
+| `sugar-image-6-256-s-3.ansi` | 64x10 | 256 | 23 | domino fall: ivory pips tipping in sequence above a teal ramp |
+| `sugar-image-6-tc-l-1.ansi` | 200x40 | truecolor | 7670 | infinite kaleido corridor: octant-folded hue vortex with black oculus |
+| `sugar-image-6-tc-l-2.ansi` | 192x40 | truecolor | 3240 | dusk canyon: sun haze over shaded strata, river decoded into its delta |
+| `sugar-image-6-tc-m-1.ansi` | 88x24 | truecolor | 321 | pixelfall storm: gradient meteor trails across a violet dusk gradient |
+| `sugar-image-6-tc-m-2.ansi` | 84x22 | truecolor | 97 | hot shop bench: furnace glow, gathered gather on rod, annealing bottles |
+| `sugar-image-6-tc-s-1.ansi` | 62x9 | truecolor | 72 | glassblow gather: radial heat blob riding the blowpipe at 1100C |
+| `sugar-image-6-tc-s-2.ansi` | 66x12 | truecolor | 109 | core strata: five cased tube samples extruded in hue-stepped layers |
+| `sugar-image-6-tc-s-3.ansi` | 60x10 | truecolor | 290 | thermal decode: five isotherm bars cooling blue to ember, scan comb |
+| `sugar-image-7-16-l-1.ansi` | 160x34 | 16 | 10 | great-hall floor: meander-bordered tesserae, cream grout drying along a diagonal past the inlay |
+| `sugar-image-7-16-l-2.ansi` | 150x36 | 16 | 9 | cutter line: candy slab rides the belt under a nine-blade gantry into the snap bin |
+| `sugar-image-7-16-m-1.ansi` | 84x22 | 16 | 10 | grout day: tessera floor mid-journey, cream grout ridge and float sealing column by column |
+| `sugar-image-7-16-m-2.ansi` | 80x24 | 16 | 6 | specimen card: block-built morpho on pinned plate, shade-lattice wings, brass label |
+| `sugar-image-7-16-s-1.ansi` | 58x11 | 16 | 7 | bayer 4x4 seed: threshold tiles tone up black→blue→cyan→white, pass 1/4 |
+| `sugar-image-7-16-s-2.ansi` | 62x9 | 16 | 9 | slab snap: nine scored candy tiles, tenth lifted off the groove, crumb scatter |
+| `sugar-image-7-256-l-1.ansi` | 184x36 | 256 | 31 | lepidoptera plate: twelve cube-tessera butterflies pinned in ruled frames with labels |
+| `sugar-image-7-256-l-2.ansi` | 172x38 | 256 | 16 | separation wall: four 65-lpi color plates stacked over their screened composite proof |
+| `sugar-image-7-256-m-1.ansi` | 86x24 | 256 | 35 | bayer bloom: 8x8 threshold lattice firing hue-mapped cells in matrix order, pass 40/64 |
+| `sugar-image-7-256-m-2.ansi` | 78x22 | 256 | 20 | confection rack: five striped candy slabs leaned on a brass rail with price chips |
+| `sugar-image-7-256-s-1.ansi` | 60x10 | 256 | 9 | ocellus: butterfly-wing eyespot in cobalt-amber-pitch rings on brown scale fur |
+| `sugar-image-7-256-s-2.ansi` | 64x8 | 256 | 38 | half-block proof: two pixel rows fold into one ▀ cell strip, no chroma lost |
+| `sugar-image-7-tc-l-1.ansi` | 200x40 | truecolor | 7864 | morpho spread: full iridescent wing pair, veins, margin lunules and scale shimmer |
+| `sugar-image-7-tc-l-2.ansi` | 192x40 | truecolor | 33 | palette octree: nine hot pixels descend red-green-blue cuts into eight swatch leaves |
+| `sugar-image-7-tc-l-3.ansi` | 168x34 | truecolor | 167 | snap macro: truecolor candy slab split at the score line, crystals glittering in the gap |
+| `sugar-image-7-tc-m-1.ansi` | 88x24 | truecolor | 51 | morning edition: halftone landscape under a masthead, three ruled columns, rosette note |
+| `sugar-image-7-tc-m-2.ansi` | 84x22 | truecolor | 44 | zoom autopsy: a 5x4 chip expands into ruled dual cells, then collapses to one ▀ row |
+| `sugar-image-7-tc-s-1.ansi` | 60x11 | truecolor | 6 | rosette strip: five CMYK halftone dots with growing radius on newsprint |
+| `sugar-image-7-tc-s-2.ansi` | 66x11 | truecolor | 18 | quantizer snip: eight candy hues bracketed into three merged palette leaves |
+| `sugar-image-7-tc-s-3.ansi` | 62x10 | truecolor | 29 | tile fan: six glossy sugar casts fanned, specular highlight struck per tile |
+| `sugar-image-8-16-l-1.ansi` | 172x34 | 16 | 8 | great rose window: 16-colour twelve-light rose, concentric rings, stone tracery and mullions |
+| `sugar-image-8-16-l-2.ansi` | 160x30 | 16 | 9 | tapestry reweave wall: 16-colour woven grid, scattered loss holes, full pinned selvedge |
+| `sugar-image-8-16-m-1.ansi` | 84x22 | 16 | 8 | stained-glass rose: 12 leaded lights in four rings, stone tracery rim, jewel quarries |
+| `sugar-image-8-16-m-2.ansi` | 86x20 | 16 | 9 | tapestry conservation table: 16-colour warp/weft grid, loss holes, pinned edge |
+| `sugar-image-8-16-s-1.ansi` | 58x11 | 16 | 9 | bubble-wrap decoder: 16-colour pop/flat bubble field on a deck, cal swatches |
+| `sugar-image-8-16-s-2.ansi` | 62x12 | 16 | 10 | praline box by hue, 16-colour: nine bonbons on a dark tray, gloss strip |
+| `sugar-image-8-256-l-1.ansi` | 190x32 | 256 | 10 | groove microscope panorama x2500: 256-colour sine groove walls, specular crests, riding stylus |
+| `sugar-image-8-256-l-2.ansi` | 184x30 | 256 | 12 | coral outplant grid: 256-colour nursery rack, branching frags on ties over graded water |
+| `sugar-image-8-256-m-1.ansi` | 86x21 | 256 | 26 | bubble-wrap decoder sheet: 256-colour inflated/popped grid, cal strip, popped bit mask |
+| `sugar-image-8-256-m-2.ansi` | 84x22 | 256 | 54 | praline tasting box: 256-colour bonbons graded around the hue wheel with per-piece gloss |
+| `sugar-image-8-256-s-1.ansi` | 64x11 | 256 | 13 | fishmonger's ice sample: 256-colour silver fish on a scored ice tile, chip k100 |
+| `sugar-image-8-256-s-2.ansi` | 66x12 | 256 | 9 | vinyl groove cross-section x1200: 256-colour sine walls, brass stylus tip |
+| `sugar-image-8-tc-l-1.ansi` | 200x44 | truecolor | 347 | sequin gown full plate: truecolor iridescent lattice across a full dress-form silhouette |
+| `sugar-image-8-tc-l-2.ansi` | 176x34 | truecolor | 365 | grand praline assortment: truecolor bonbons sorted across the hue wheel, cacao 54-72% |
+| `sugar-image-8-tc-m-1.ansi` | 88x24 | truecolor | 151 | pixel gown on the stand: truecolor hand-stitched sequin lattice on a dress-form silhouette |
+| `sugar-image-8-tc-m-2.ansi` | 82x22 | truecolor | 35 | fishmonger's counter: truecolor silver-blue fish with warm tails on a scored ice field |
+| `sugar-image-8-tc-s-1.ansi` | 60x13 | truecolor | 92 | sequin atelier strip: truecolor iridescent dress-form slice, offset lattice, thread gaps |
+| `sugar-image-8-tc-s-2.ansi` | 64x11 | truecolor | 20 | coral nursery tray: truecolor frags on yellow ties over a depth-graded water column |
+| `sugar-image-9-16-l-1.ansi` | 184x36 | 16 | 11 | organ of palette: 28 hue-cycled pipes with mouths over windchest, two manuals and bench |
+| `sugar-image-9-16-l-2.ansi` | 176x32 | 16 | 10 | departures split-flap board: protocol gates, half-turned tiles, ticker and signal mast |
+| `sugar-image-9-16-m-1.ansi` | 86x22 | 16 | 13 | Venetian slat raster: 75°/45°/15° panels sampling a landscape at three densities |
+| `sugar-image-9-16-m-2.ansi` | 84x21 | 16 | 10 | basket loom twill: six weft bands interlaced over a fixed warp, stamped maker's label |
+| `sugar-image-9-16-s-1.ansi` | 66x13 | 16 | 9 | Fresnel lens: 16-colour parallel pixel beams refracted through stepped glass to one focal spark |
+| `sugar-image-9-16-s-2.ansi` | 64x12 | 16 | 9 | pin-tumbler cutaway: five chambers as palette slots, shear line broken where the lift starves |
+| `sugar-image-9-256-l-1.ansi` | 190x40 | 256 | 26 | radiosonde descent: balloon tethered through eight strata with sonde box and T(°C) profile |
+| `sugar-image-9-256-l-2.ansi` | 178x32 | 256 | 42 | hue library: four shelves of ramp-graded spines, title bands, one vertical Candy mark |
+| `sugar-image-9-256-m-1.ansi` | 86x23 | 256 | 55 | developing reel: spiral reel with slot openings, sprocketed strip, six frames, drying clips |
+| `sugar-image-9-256-m-2.ansi` | 88x21 | 256 | 41 | perforator T-13: punch ram over a paper web of seven thumbnails, punched rows, chad bin |
+| `sugar-image-9-256-s-1.ansi` | 64x12 | 256 | 33 | ice-cream sampler: six scoops clamped k=6 in wafer cups with flavour codes under the tray |
+| `sugar-image-9-256-s-2.ansi` | 60x14 | 256 | 22 | agarose gel: six lanes of migrating pigment bands, ladder lane, smears, electrode marks |
+| `sugar-image-9-tc-l-1.ansi` | 196x42 | truecolor | 205 | murmuration: three quantised bird waves over a steel dusk sky, moon halo, treeline silhouette |
+| `sugar-image-9-tc-l-2.ansi` | 180x34 | truecolor | 187 | dendro-palette: 137-ring disc with drought scars and radial crack, Ø5mm core sample inset |
+| `sugar-image-9-tc-m-1.ansi` | 86x24 | truecolor | 53 | photolitho stepper: chrome reticle casting UV columns onto wafer dies exposed/stepping/raw |
+| `sugar-image-9-tc-m-2.ansi` | 88x25 | truecolor | 30 | desk-24 console: twelve channel strips of hue-tinted knobs and fader caps, lit master meters |
+| `sugar-image-9-tc-s-1.ansi` | 68x14 | truecolor | 106 | grapeshot cannon: bronze barrel and wheel, flash cone, 22 pellets fading with range |
+| `sugar-image-9-tc-s-2.ansi` | 62x13 | truecolor | 20 | tide-step: three rock pools of graded water, spilling overflows, sparkle and anemones |
+<!-- END sugar-image SLOTS -->
 
 <!-- BEGIN candy-palette SLOTS -->
 ### candy-palette — slot series

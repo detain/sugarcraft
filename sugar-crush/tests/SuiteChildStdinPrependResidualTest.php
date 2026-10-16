@@ -42,14 +42,14 @@ use PHPUnit\Framework\TestCase;
  * halves at once.
  *
  * The price was priced wrong for two rounds at `9500 tests, 107 errors, rc 2`.
- * That run predated the candy-mosaic repairs: it was ONE defect — a fallback
+ * That run predated the sugar-image repairs: it was ONE defect — a fallback
  * naming a `Capability` case candy-palette spells differently — multiplied by
  * every test that reached it, plus the unguarded `?? STDIN` that dropped the
  * library into that fallback in the first place. Both are fixed. RE-MEASURED,
  * PHP 8.3.6, full suite, the descriptor replacement alone against a green
  * `9661 tests / 142165 assertions / 1 skipped / rc 0` baseline at the same
  * head: ONE error and TWO failures, all three in tests whose entire subject is
- * this repair, and not one candy-mosaic error of any kind.
+ * this repair, and not one sugar-image error of any kind.
  *
  * ## WHY THIS IS THREE ARMS AND NOT TWO
  *

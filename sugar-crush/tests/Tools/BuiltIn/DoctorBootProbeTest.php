@@ -7,8 +7,8 @@ namespace SugarCraft\Crush\Tests\Tools\BuiltIn;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ToolResult as BootProbe;
 use SugarCraft\Crush\Tools\BuiltIn\Doctor;
-use SugarCraft\Mosaic\Detect;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Detect;
+use SugarCraft\Image\Mosaic;
 
 /**
  * Audit F-T6: `doctor` reports the boot-time probe and never queries the tty.

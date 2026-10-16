@@ -10,7 +10,7 @@ use SugarCraft\Core\Program;
 /**
  * ONE guard for the whole closed-descriptor-0 family.
  *
- * candy-core and candy-mosaic were written when descriptor 0 was always a
+ * candy-core and sugar-image were written when descriptor 0 was always a
  * live terminal. It is not any more: `sugar-crush`'s test bootstrap closes
  * the standard input constant on every non-tty run, and a daemon, a git
  * hook, or a shell invocation that detaches its own input reaches the same

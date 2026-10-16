@@ -8355,9 +8355,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-16-l-1.ansi": {
-        "name": "candy-mosaic-1-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-16-l-1.ansi": {
+        "name": "sugar-image-1-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "132x30",
         "width": 132,
         "height": 30,
@@ -8367,9 +8367,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-16-l-2.ansi": {
-        "name": "candy-mosaic-1-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-16-l-2.ansi": {
+        "name": "sugar-image-1-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "142x30",
         "width": 142,
         "height": 30,
@@ -8379,9 +8379,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-16-m-2.ansi": {
-        "name": "candy-mosaic-1-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-16-m-2.ansi": {
+        "name": "sugar-image-1-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -8391,9 +8391,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-16-s-1.ansi": {
-        "name": "candy-mosaic-1-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-16-s-1.ansi": {
+        "name": "sugar-image-1-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "66x8",
         "width": 66,
         "height": 8,
@@ -8403,9 +8403,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-16-s-2.ansi": {
-        "name": "candy-mosaic-1-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-16-s-2.ansi": {
+        "name": "sugar-image-1-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "50x13",
         "width": 50,
         "height": 13,
@@ -8415,9 +8415,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-256-l-1.ansi": {
-        "name": "candy-mosaic-1-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-256-l-1.ansi": {
+        "name": "sugar-image-1-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "180x34",
         "width": 180,
         "height": 34,
@@ -8427,9 +8427,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-256-l-2.ansi": {
-        "name": "candy-mosaic-1-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-256-l-2.ansi": {
+        "name": "sugar-image-1-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "158x32",
         "width": 158,
         "height": 32,
@@ -8439,9 +8439,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-256-m-1.ansi": {
-        "name": "candy-mosaic-1-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-256-m-1.ansi": {
+        "name": "sugar-image-1-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -8451,9 +8451,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-256-m-2.ansi": {
-        "name": "candy-mosaic-1-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-256-m-2.ansi": {
+        "name": "sugar-image-1-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -8463,9 +8463,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-256-s-1.ansi": {
-        "name": "candy-mosaic-1-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-256-s-1.ansi": {
+        "name": "sugar-image-1-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -8475,9 +8475,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-256-s-2.ansi": {
-        "name": "candy-mosaic-1-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-256-s-2.ansi": {
+        "name": "sugar-image-1-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -8487,9 +8487,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-l-1.ansi": {
-        "name": "candy-mosaic-1-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-l-1.ansi": {
+        "name": "sugar-image-1-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -8499,9 +8499,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-l-2.ansi": {
-        "name": "candy-mosaic-1-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-l-2.ansi": {
+        "name": "sugar-image-1-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "172x38",
         "width": 172,
         "height": 38,
@@ -8511,9 +8511,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-l-3.ansi": {
-        "name": "candy-mosaic-1-tc-l-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-l-3.ansi": {
+        "name": "sugar-image-1-tc-l-3.ansi",
+        "category": "sugar-image",
         "resolution": "140x32",
         "width": 140,
         "height": 32,
@@ -8523,9 +8523,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-m-1.ansi": {
-        "name": "candy-mosaic-1-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-m-1.ansi": {
+        "name": "sugar-image-1-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -8535,9 +8535,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-m-2.ansi": {
-        "name": "candy-mosaic-1-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-m-2.ansi": {
+        "name": "sugar-image-1-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -8547,9 +8547,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-s-1.ansi": {
-        "name": "candy-mosaic-1-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-s-1.ansi": {
+        "name": "sugar-image-1-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -8559,9 +8559,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-1-tc-s-2.ansi": {
-        "name": "candy-mosaic-1-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-1-tc-s-2.ansi": {
+        "name": "sugar-image-1-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -8571,9 +8571,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-16-l-1.ansi": {
-        "name": "candy-mosaic-2-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-16-l-1.ansi": {
+        "name": "sugar-image-2-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "124x30",
         "width": 124,
         "height": 30,
@@ -8583,9 +8583,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-16-l-2.ansi": {
-        "name": "candy-mosaic-2-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-16-l-2.ansi": {
+        "name": "sugar-image-2-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "130x28",
         "width": 130,
         "height": 28,
@@ -8597,9 +8597,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-2-16-m-1.ansi": {
-        "name": "candy-mosaic-2-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-16-m-1.ansi": {
+        "name": "sugar-image-2-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "76x20",
         "width": 76,
         "height": 20,
@@ -8611,9 +8611,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-2-16-m-2.ansi": {
-        "name": "candy-mosaic-2-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-16-m-2.ansi": {
+        "name": "sugar-image-2-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "72x18",
         "width": 72,
         "height": 18,
@@ -8625,9 +8625,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-2-16-s-1.ansi": {
-        "name": "candy-mosaic-2-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-16-s-1.ansi": {
+        "name": "sugar-image-2-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "60x5",
         "width": 60,
         "height": 5,
@@ -8637,9 +8637,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-16-s-2.ansi": {
-        "name": "candy-mosaic-2-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-16-s-2.ansi": {
+        "name": "sugar-image-2-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "46x12",
         "width": 46,
         "height": 12,
@@ -8651,9 +8651,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-2-256-l-1.ansi": {
-        "name": "candy-mosaic-2-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-256-l-1.ansi": {
+        "name": "sugar-image-2-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -8663,9 +8663,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-256-l-2.ansi": {
-        "name": "candy-mosaic-2-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-256-l-2.ansi": {
+        "name": "sugar-image-2-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "120x33",
         "width": 120,
         "height": 33,
@@ -8675,9 +8675,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-256-m-1.ansi": {
-        "name": "candy-mosaic-2-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-256-m-1.ansi": {
+        "name": "sugar-image-2-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "89x18",
         "width": 89,
         "height": 18,
@@ -8687,9 +8687,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-256-m-2.ansi": {
-        "name": "candy-mosaic-2-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-256-m-2.ansi": {
+        "name": "sugar-image-2-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "78x21",
         "width": 78,
         "height": 21,
@@ -8699,9 +8699,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-256-s-1.ansi": {
-        "name": "candy-mosaic-2-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-256-s-1.ansi": {
+        "name": "sugar-image-2-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "44x5",
         "width": 44,
         "height": 5,
@@ -8711,9 +8711,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-256-s-2.ansi": {
-        "name": "candy-mosaic-2-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-256-s-2.ansi": {
+        "name": "sugar-image-2-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "58x5",
         "width": 58,
         "height": 5,
@@ -8723,9 +8723,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-tc-l-1.ansi": {
-        "name": "candy-mosaic-2-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-tc-l-1.ansi": {
+        "name": "sugar-image-2-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "176x35",
         "width": 176,
         "height": 35,
@@ -8735,9 +8735,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-tc-l-2.ansi": {
-        "name": "candy-mosaic-2-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-tc-l-2.ansi": {
+        "name": "sugar-image-2-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "158x31",
         "width": 158,
         "height": 31,
@@ -8747,9 +8747,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-tc-m-1.ansi": {
-        "name": "candy-mosaic-2-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-tc-m-1.ansi": {
+        "name": "sugar-image-2-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "72x18",
         "width": 72,
         "height": 18,
@@ -8759,9 +8759,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-tc-m-2.ansi": {
-        "name": "candy-mosaic-2-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-tc-m-2.ansi": {
+        "name": "sugar-image-2-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "81x18",
         "width": 81,
         "height": 18,
@@ -8771,9 +8771,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-tc-s-1.ansi": {
-        "name": "candy-mosaic-2-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-tc-s-1.ansi": {
+        "name": "sugar-image-2-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "60x6",
         "width": 60,
         "height": 6,
@@ -8783,9 +8783,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-2-tc-s-2.ansi": {
-        "name": "candy-mosaic-2-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-2-tc-s-2.ansi": {
+        "name": "sugar-image-2-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "48x11",
         "width": 48,
         "height": 11,
@@ -8795,9 +8795,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-16-l-1.ansi": {
-        "name": "candy-mosaic-3-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-16-l-1.ansi": {
+        "name": "sugar-image-3-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "150x41",
         "width": 150,
         "height": 41,
@@ -8809,9 +8809,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-3-16-l-2.ansi": {
-        "name": "candy-mosaic-3-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-16-l-2.ansi": {
+        "name": "sugar-image-3-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "140x30",
         "width": 140,
         "height": 30,
@@ -8821,9 +8821,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-16-m-1.ansi": {
-        "name": "candy-mosaic-3-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-16-m-1.ansi": {
+        "name": "sugar-image-3-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -8833,9 +8833,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-16-m-2.ansi": {
-        "name": "candy-mosaic-3-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-16-m-2.ansi": {
+        "name": "sugar-image-3-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -8845,9 +8845,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-16-s-1.ansi": {
-        "name": "candy-mosaic-3-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-16-s-1.ansi": {
+        "name": "sugar-image-3-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -8857,9 +8857,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-256-l-1.ansi": {
-        "name": "candy-mosaic-3-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-256-l-1.ansi": {
+        "name": "sugar-image-3-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "190x41",
         "width": 190,
         "height": 41,
@@ -8869,9 +8869,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-256-l-2.ansi": {
-        "name": "candy-mosaic-3-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-256-l-2.ansi": {
+        "name": "sugar-image-3-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -8881,9 +8881,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-256-m-1.ansi": {
-        "name": "candy-mosaic-3-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-256-m-1.ansi": {
+        "name": "sugar-image-3-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "88x25",
         "width": 88,
         "height": 25,
@@ -8893,9 +8893,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-256-m-2.ansi": {
-        "name": "candy-mosaic-3-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-256-m-2.ansi": {
+        "name": "sugar-image-3-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -8905,9 +8905,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-256-s-1.ansi": {
-        "name": "candy-mosaic-3-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-256-s-1.ansi": {
+        "name": "sugar-image-3-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -8917,9 +8917,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-256-s-2.ansi": {
-        "name": "candy-mosaic-3-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-256-s-2.ansi": {
+        "name": "sugar-image-3-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -8929,9 +8929,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-l-1.ansi": {
-        "name": "candy-mosaic-3-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-l-1.ansi": {
+        "name": "sugar-image-3-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -8941,9 +8941,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-l-2.ansi": {
-        "name": "candy-mosaic-3-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-l-2.ansi": {
+        "name": "sugar-image-3-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "210x40",
         "width": 210,
         "height": 40,
@@ -8953,9 +8953,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-l-3.ansi": {
-        "name": "candy-mosaic-3-tc-l-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-l-3.ansi": {
+        "name": "sugar-image-3-tc-l-3.ansi",
+        "category": "sugar-image",
         "resolution": "170x40",
         "width": 170,
         "height": 40,
@@ -8965,9 +8965,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-m-1.ansi": {
-        "name": "candy-mosaic-3-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-m-1.ansi": {
+        "name": "sugar-image-3-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -8977,9 +8977,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-m-2.ansi": {
-        "name": "candy-mosaic-3-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-m-2.ansi": {
+        "name": "sugar-image-3-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -8989,9 +8989,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-s-1.ansi": {
-        "name": "candy-mosaic-3-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-s-1.ansi": {
+        "name": "sugar-image-3-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "48x10",
         "width": 48,
         "height": 10,
@@ -9001,9 +9001,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-3-tc-s-2.ansi": {
-        "name": "candy-mosaic-3-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-3-tc-s-2.ansi": {
+        "name": "sugar-image-3-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -9013,9 +9013,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-16-l-1.ansi": {
-        "name": "candy-mosaic-4-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-16-l-1.ansi": {
+        "name": "sugar-image-4-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "219x31",
         "width": 219,
         "height": 31,
@@ -9027,9 +9027,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-4-16-l-2.ansi": {
-        "name": "candy-mosaic-4-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-16-l-2.ansi": {
+        "name": "sugar-image-4-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "140x34",
         "width": 140,
         "height": 34,
@@ -9039,9 +9039,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-16-m-1.ansi": {
-        "name": "candy-mosaic-4-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-16-m-1.ansi": {
+        "name": "sugar-image-4-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -9051,9 +9051,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-16-m-2.ansi": {
-        "name": "candy-mosaic-4-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-16-m-2.ansi": {
+        "name": "sugar-image-4-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "78x22",
         "width": 78,
         "height": 22,
@@ -9063,9 +9063,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-16-s-1.ansi": {
-        "name": "candy-mosaic-4-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-16-s-1.ansi": {
+        "name": "sugar-image-4-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -9075,9 +9075,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-16-s-2.ansi": {
-        "name": "candy-mosaic-4-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-16-s-2.ansi": {
+        "name": "sugar-image-4-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "53x10",
         "width": 53,
         "height": 10,
@@ -9089,9 +9089,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-4-256-l-1.ansi": {
-        "name": "candy-mosaic-4-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-256-l-1.ansi": {
+        "name": "sugar-image-4-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -9101,21 +9101,21 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-256-l-2.ansi": {
-        "name": "candy-mosaic-4-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-256-l-2.ansi": {
+        "name": "sugar-image-4-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "150x35",
         "width": 150,
         "height": 35,
         "depth": "256",
         "colors": 65,
-        "description": "Museum gallery: three framed cube-color canvases incl. a tiled CandyMosaic sunrise, damask wall, bench",
+        "description": "Museum gallery: three framed cube-color canvases incl. a tiled SugarImage sunrise, damask wall, bench",
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-256-m-1.ansi": {
-        "name": "candy-mosaic-4-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-256-m-1.ansi": {
+        "name": "sugar-image-4-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -9125,9 +9125,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-256-m-2.ansi": {
-        "name": "candy-mosaic-4-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-256-m-2.ansi": {
+        "name": "sugar-image-4-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -9137,9 +9137,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-256-s-1.ansi": {
-        "name": "candy-mosaic-4-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-256-s-1.ansi": {
+        "name": "sugar-image-4-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "62x6",
         "width": 62,
         "height": 6,
@@ -9149,9 +9149,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-256-s-2.ansi": {
-        "name": "candy-mosaic-4-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-256-s-2.ansi": {
+        "name": "sugar-image-4-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "48x5",
         "width": 48,
         "height": 5,
@@ -9161,9 +9161,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-tc-l-1.ansi": {
-        "name": "candy-mosaic-4-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-tc-l-1.ansi": {
+        "name": "sugar-image-4-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -9173,9 +9173,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-tc-l-2.ansi": {
-        "name": "candy-mosaic-4-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-tc-l-2.ansi": {
+        "name": "sugar-image-4-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "170x41",
         "width": 170,
         "height": 41,
@@ -9185,9 +9185,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-tc-m-1.ansi": {
-        "name": "candy-mosaic-4-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-tc-m-1.ansi": {
+        "name": "sugar-image-4-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -9197,9 +9197,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-tc-m-2.ansi": {
-        "name": "candy-mosaic-4-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-tc-m-2.ansi": {
+        "name": "sugar-image-4-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -9209,9 +9209,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-tc-s-1.ansi": {
-        "name": "candy-mosaic-4-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-tc-s-1.ansi": {
+        "name": "sugar-image-4-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "56x8",
         "width": 56,
         "height": 8,
@@ -9221,9 +9221,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-4-tc-s-2.ansi": {
-        "name": "candy-mosaic-4-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-4-tc-s-2.ansi": {
+        "name": "sugar-image-4-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "66x11",
         "width": 66,
         "height": 11,
@@ -9233,9 +9233,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-16-l-1.ansi": {
-        "name": "candy-mosaic-5-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-16-l-1.ansi": {
+        "name": "sugar-image-5-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -9247,9 +9247,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-5-16-l-2.ansi": {
-        "name": "candy-mosaic-5-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-16-l-2.ansi": {
+        "name": "sugar-image-5-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "140x30",
         "width": 140,
         "height": 30,
@@ -9261,9 +9261,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-5-16-m-1.ansi": {
-        "name": "candy-mosaic-5-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-16-m-1.ansi": {
+        "name": "sugar-image-5-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -9273,9 +9273,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-16-m-2.ansi": {
-        "name": "candy-mosaic-5-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-16-m-2.ansi": {
+        "name": "sugar-image-5-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "78x22",
         "width": 78,
         "height": 22,
@@ -9285,9 +9285,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-16-s-1.ansi": {
-        "name": "candy-mosaic-5-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-16-s-1.ansi": {
+        "name": "sugar-image-5-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "66x11",
         "width": 66,
         "height": 11,
@@ -9297,9 +9297,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-16-s-2.ansi": {
-        "name": "candy-mosaic-5-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-16-s-2.ansi": {
+        "name": "sugar-image-5-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "52x11",
         "width": 52,
         "height": 11,
@@ -9309,9 +9309,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-256-l-1.ansi": {
-        "name": "candy-mosaic-5-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-256-l-1.ansi": {
+        "name": "sugar-image-5-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "132x29",
         "width": 132,
         "height": 29,
@@ -9321,9 +9321,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-256-l-2.ansi": {
-        "name": "candy-mosaic-5-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-256-l-2.ansi": {
+        "name": "sugar-image-5-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "146x28",
         "width": 146,
         "height": 28,
@@ -9333,9 +9333,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-256-m-1.ansi": {
-        "name": "candy-mosaic-5-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-256-m-1.ansi": {
+        "name": "sugar-image-5-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -9345,9 +9345,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-256-m-2.ansi": {
-        "name": "candy-mosaic-5-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-256-m-2.ansi": {
+        "name": "sugar-image-5-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -9357,9 +9357,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-256-s-1.ansi": {
-        "name": "candy-mosaic-5-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-256-s-1.ansi": {
+        "name": "sugar-image-5-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "62x9",
         "width": 62,
         "height": 9,
@@ -9369,9 +9369,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-256-s-2.ansi": {
-        "name": "candy-mosaic-5-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-256-s-2.ansi": {
+        "name": "sugar-image-5-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "63x7",
         "width": 63,
         "height": 7,
@@ -9381,9 +9381,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-tc-l-1.ansi": {
-        "name": "candy-mosaic-5-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-tc-l-1.ansi": {
+        "name": "sugar-image-5-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "160x46",
         "width": 160,
         "height": 46,
@@ -9393,9 +9393,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-tc-l-2.ansi": {
-        "name": "candy-mosaic-5-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-tc-l-2.ansi": {
+        "name": "sugar-image-5-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "180x37",
         "width": 180,
         "height": 37,
@@ -9405,9 +9405,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-tc-m-1.ansi": {
-        "name": "candy-mosaic-5-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-tc-m-1.ansi": {
+        "name": "sugar-image-5-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -9417,9 +9417,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-tc-m-2.ansi": {
-        "name": "candy-mosaic-5-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-tc-m-2.ansi": {
+        "name": "sugar-image-5-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -9429,9 +9429,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-tc-s-1.ansi": {
-        "name": "candy-mosaic-5-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-tc-s-1.ansi": {
+        "name": "sugar-image-5-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -9441,9 +9441,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-5-tc-s-2.ansi": {
-        "name": "candy-mosaic-5-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-5-tc-s-2.ansi": {
+        "name": "sugar-image-5-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "46x15",
         "width": 46,
         "height": 15,
@@ -9453,9 +9453,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-l-1.ansi": {
-        "name": "candy-mosaic-6-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-l-1.ansi": {
+        "name": "sugar-image-6-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -9465,9 +9465,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-l-2.ansi": {
-        "name": "candy-mosaic-6-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-l-2.ansi": {
+        "name": "sugar-image-6-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -9477,9 +9477,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-m-1.ansi": {
-        "name": "candy-mosaic-6-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-m-1.ansi": {
+        "name": "sugar-image-6-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -9489,9 +9489,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-m-2.ansi": {
-        "name": "candy-mosaic-6-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-m-2.ansi": {
+        "name": "sugar-image-6-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -9501,9 +9501,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-s-1.ansi": {
-        "name": "candy-mosaic-6-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-s-1.ansi": {
+        "name": "sugar-image-6-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -9513,9 +9513,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-s-2.ansi": {
-        "name": "candy-mosaic-6-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-s-2.ansi": {
+        "name": "sugar-image-6-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "64x8",
         "width": 64,
         "height": 8,
@@ -9525,9 +9525,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-s-3.ansi": {
-        "name": "candy-mosaic-6-16-s-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-s-3.ansi": {
+        "name": "sugar-image-6-16-s-3.ansi",
+        "category": "sugar-image",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -9537,9 +9537,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-16-s-4.ansi": {
-        "name": "candy-mosaic-6-16-s-4.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-16-s-4.ansi": {
+        "name": "sugar-image-6-16-s-4.ansi",
+        "category": "sugar-image",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -9549,9 +9549,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-l-1.ansi": {
-        "name": "candy-mosaic-6-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-l-1.ansi": {
+        "name": "sugar-image-6-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -9561,9 +9561,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-l-2.ansi": {
-        "name": "candy-mosaic-6-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-l-2.ansi": {
+        "name": "sugar-image-6-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "172x38",
         "width": 172,
         "height": 38,
@@ -9573,9 +9573,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-m-1.ansi": {
-        "name": "candy-mosaic-6-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-m-1.ansi": {
+        "name": "sugar-image-6-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -9585,9 +9585,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-m-2.ansi": {
-        "name": "candy-mosaic-6-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-m-2.ansi": {
+        "name": "sugar-image-6-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "78x20",
         "width": 78,
         "height": 20,
@@ -9597,9 +9597,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-s-1.ansi": {
-        "name": "candy-mosaic-6-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-s-1.ansi": {
+        "name": "sugar-image-6-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "66x9",
         "width": 66,
         "height": 9,
@@ -9609,9 +9609,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-s-2.ansi": {
-        "name": "candy-mosaic-6-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-s-2.ansi": {
+        "name": "sugar-image-6-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "68x10",
         "width": 68,
         "height": 10,
@@ -9621,9 +9621,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-256-s-3.ansi": {
-        "name": "candy-mosaic-6-256-s-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-256-s-3.ansi": {
+        "name": "sugar-image-6-256-s-3.ansi",
+        "category": "sugar-image",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
@@ -9633,9 +9633,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-l-1.ansi": {
-        "name": "candy-mosaic-6-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-l-1.ansi": {
+        "name": "sugar-image-6-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -9645,9 +9645,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-l-2.ansi": {
-        "name": "candy-mosaic-6-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-l-2.ansi": {
+        "name": "sugar-image-6-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "192x40",
         "width": 192,
         "height": 40,
@@ -9657,9 +9657,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-m-1.ansi": {
-        "name": "candy-mosaic-6-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-m-1.ansi": {
+        "name": "sugar-image-6-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -9669,9 +9669,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-m-2.ansi": {
-        "name": "candy-mosaic-6-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-m-2.ansi": {
+        "name": "sugar-image-6-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -9681,9 +9681,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-s-1.ansi": {
-        "name": "candy-mosaic-6-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-s-1.ansi": {
+        "name": "sugar-image-6-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "62x9",
         "width": 62,
         "height": 9,
@@ -9693,9 +9693,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-s-2.ansi": {
-        "name": "candy-mosaic-6-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-s-2.ansi": {
+        "name": "sugar-image-6-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -9705,9 +9705,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-6-tc-s-3.ansi": {
-        "name": "candy-mosaic-6-tc-s-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-6-tc-s-3.ansi": {
+        "name": "sugar-image-6-tc-s-3.ansi",
+        "category": "sugar-image",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -9717,9 +9717,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-16-l-1.ansi": {
-        "name": "candy-mosaic-7-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-16-l-1.ansi": {
+        "name": "sugar-image-7-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -9729,9 +9729,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-16-l-2.ansi": {
-        "name": "candy-mosaic-7-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-16-l-2.ansi": {
+        "name": "sugar-image-7-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -9741,9 +9741,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-16-m-1.ansi": {
-        "name": "candy-mosaic-7-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-16-m-1.ansi": {
+        "name": "sugar-image-7-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -9753,9 +9753,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-16-m-2.ansi": {
-        "name": "candy-mosaic-7-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-16-m-2.ansi": {
+        "name": "sugar-image-7-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -9765,9 +9765,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-16-s-1.ansi": {
-        "name": "candy-mosaic-7-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-16-s-1.ansi": {
+        "name": "sugar-image-7-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -9777,9 +9777,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-16-s-2.ansi": {
-        "name": "candy-mosaic-7-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-16-s-2.ansi": {
+        "name": "sugar-image-7-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "62x9",
         "width": 62,
         "height": 9,
@@ -9789,9 +9789,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-256-l-1.ansi": {
-        "name": "candy-mosaic-7-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-256-l-1.ansi": {
+        "name": "sugar-image-7-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -9801,9 +9801,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-256-l-2.ansi": {
-        "name": "candy-mosaic-7-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-256-l-2.ansi": {
+        "name": "sugar-image-7-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "172x38",
         "width": 172,
         "height": 38,
@@ -9813,9 +9813,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-256-m-1.ansi": {
-        "name": "candy-mosaic-7-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-256-m-1.ansi": {
+        "name": "sugar-image-7-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -9825,9 +9825,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-256-m-2.ansi": {
-        "name": "candy-mosaic-7-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-256-m-2.ansi": {
+        "name": "sugar-image-7-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "78x22",
         "width": 78,
         "height": 22,
@@ -9837,9 +9837,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-256-s-1.ansi": {
-        "name": "candy-mosaic-7-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-256-s-1.ansi": {
+        "name": "sugar-image-7-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -9849,9 +9849,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-256-s-2.ansi": {
-        "name": "candy-mosaic-7-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-256-s-2.ansi": {
+        "name": "sugar-image-7-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "64x8",
         "width": 64,
         "height": 8,
@@ -9861,9 +9861,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-l-1.ansi": {
-        "name": "candy-mosaic-7-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-l-1.ansi": {
+        "name": "sugar-image-7-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -9873,9 +9873,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-l-2.ansi": {
-        "name": "candy-mosaic-7-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-l-2.ansi": {
+        "name": "sugar-image-7-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "192x40",
         "width": 192,
         "height": 40,
@@ -9885,9 +9885,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-l-3.ansi": {
-        "name": "candy-mosaic-7-tc-l-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-l-3.ansi": {
+        "name": "sugar-image-7-tc-l-3.ansi",
+        "category": "sugar-image",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -9897,9 +9897,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-m-1.ansi": {
-        "name": "candy-mosaic-7-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-m-1.ansi": {
+        "name": "sugar-image-7-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -9909,9 +9909,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-m-2.ansi": {
-        "name": "candy-mosaic-7-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-m-2.ansi": {
+        "name": "sugar-image-7-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -9921,9 +9921,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-s-1.ansi": {
-        "name": "candy-mosaic-7-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-s-1.ansi": {
+        "name": "sugar-image-7-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -9933,9 +9933,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-s-2.ansi": {
-        "name": "candy-mosaic-7-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-s-2.ansi": {
+        "name": "sugar-image-7-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "66x11",
         "width": 66,
         "height": 11,
@@ -9945,9 +9945,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-7-tc-s-3.ansi": {
-        "name": "candy-mosaic-7-tc-s-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-7-tc-s-3.ansi": {
+        "name": "sugar-image-7-tc-s-3.ansi",
+        "category": "sugar-image",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -9957,9 +9957,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-16-l-1.ansi": {
-        "name": "candy-mosaic-8-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-16-l-1.ansi": {
+        "name": "sugar-image-8-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "172x34",
         "width": 172,
         "height": 34,
@@ -9969,9 +9969,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-16-l-2.ansi": {
-        "name": "candy-mosaic-8-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-16-l-2.ansi": {
+        "name": "sugar-image-8-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -9981,9 +9981,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-16-m-1.ansi": {
-        "name": "candy-mosaic-8-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-16-m-1.ansi": {
+        "name": "sugar-image-8-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -9993,9 +9993,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-16-m-2.ansi": {
-        "name": "candy-mosaic-8-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-16-m-2.ansi": {
+        "name": "sugar-image-8-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -10005,9 +10005,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-16-s-1.ansi": {
-        "name": "candy-mosaic-8-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-16-s-1.ansi": {
+        "name": "sugar-image-8-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -10017,9 +10017,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-16-s-2.ansi": {
-        "name": "candy-mosaic-8-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-16-s-2.ansi": {
+        "name": "sugar-image-8-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -10029,9 +10029,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-256-l-1.ansi": {
-        "name": "candy-mosaic-8-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-256-l-1.ansi": {
+        "name": "sugar-image-8-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "190x32",
         "width": 190,
         "height": 32,
@@ -10041,9 +10041,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-256-l-2.ansi": {
-        "name": "candy-mosaic-8-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-256-l-2.ansi": {
+        "name": "sugar-image-8-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "184x30",
         "width": 184,
         "height": 30,
@@ -10053,9 +10053,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-256-m-1.ansi": {
-        "name": "candy-mosaic-8-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-256-m-1.ansi": {
+        "name": "sugar-image-8-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -10065,9 +10065,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-256-m-2.ansi": {
-        "name": "candy-mosaic-8-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-256-m-2.ansi": {
+        "name": "sugar-image-8-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -10077,9 +10077,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-256-s-1.ansi": {
-        "name": "candy-mosaic-8-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-256-s-1.ansi": {
+        "name": "sugar-image-8-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -10089,9 +10089,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-256-s-2.ansi": {
-        "name": "candy-mosaic-8-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-256-s-2.ansi": {
+        "name": "sugar-image-8-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -10101,9 +10101,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-tc-l-1.ansi": {
-        "name": "candy-mosaic-8-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-tc-l-1.ansi": {
+        "name": "sugar-image-8-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -10113,9 +10113,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-tc-l-2.ansi": {
-        "name": "candy-mosaic-8-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-tc-l-2.ansi": {
+        "name": "sugar-image-8-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -10125,9 +10125,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-tc-m-1.ansi": {
-        "name": "candy-mosaic-8-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-tc-m-1.ansi": {
+        "name": "sugar-image-8-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -10137,9 +10137,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-tc-m-2.ansi": {
-        "name": "candy-mosaic-8-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-tc-m-2.ansi": {
+        "name": "sugar-image-8-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -10149,9 +10149,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-tc-s-1.ansi": {
-        "name": "candy-mosaic-8-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-tc-s-1.ansi": {
+        "name": "sugar-image-8-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -10161,9 +10161,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-8-tc-s-2.ansi": {
-        "name": "candy-mosaic-8-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-8-tc-s-2.ansi": {
+        "name": "sugar-image-8-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -10173,9 +10173,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-16-l-1.ansi": {
-        "name": "candy-mosaic-9-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-16-l-1.ansi": {
+        "name": "sugar-image-9-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -10185,9 +10185,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-16-l-2.ansi": {
-        "name": "candy-mosaic-9-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-16-l-2.ansi": {
+        "name": "sugar-image-9-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -10197,9 +10197,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-16-m-1.ansi": {
-        "name": "candy-mosaic-9-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-16-m-1.ansi": {
+        "name": "sugar-image-9-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -10209,9 +10209,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-16-m-2.ansi": {
-        "name": "candy-mosaic-9-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-16-m-2.ansi": {
+        "name": "sugar-image-9-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -10221,9 +10221,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-16-s-1.ansi": {
-        "name": "candy-mosaic-9-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-16-s-1.ansi": {
+        "name": "sugar-image-9-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -10233,9 +10233,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-16-s-2.ansi": {
-        "name": "candy-mosaic-9-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-16-s-2.ansi": {
+        "name": "sugar-image-9-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -10245,9 +10245,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-256-l-1.ansi": {
-        "name": "candy-mosaic-9-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-256-l-1.ansi": {
+        "name": "sugar-image-9-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -10257,9 +10257,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-256-l-2.ansi": {
-        "name": "candy-mosaic-9-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-256-l-2.ansi": {
+        "name": "sugar-image-9-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "178x32",
         "width": 178,
         "height": 32,
@@ -10269,9 +10269,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-256-m-1.ansi": {
-        "name": "candy-mosaic-9-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-256-m-1.ansi": {
+        "name": "sugar-image-9-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -10281,9 +10281,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-256-m-2.ansi": {
-        "name": "candy-mosaic-9-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-256-m-2.ansi": {
+        "name": "sugar-image-9-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "88x21",
         "width": 88,
         "height": 21,
@@ -10293,9 +10293,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-256-s-1.ansi": {
-        "name": "candy-mosaic-9-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-256-s-1.ansi": {
+        "name": "sugar-image-9-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -10305,9 +10305,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-256-s-2.ansi": {
-        "name": "candy-mosaic-9-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-256-s-2.ansi": {
+        "name": "sugar-image-9-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -10317,9 +10317,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-tc-l-1.ansi": {
-        "name": "candy-mosaic-9-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-tc-l-1.ansi": {
+        "name": "sugar-image-9-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "196x42",
         "width": 196,
         "height": 42,
@@ -10329,9 +10329,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-tc-l-2.ansi": {
-        "name": "candy-mosaic-9-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-tc-l-2.ansi": {
+        "name": "sugar-image-9-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "180x34",
         "width": 180,
         "height": 34,
@@ -10341,9 +10341,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-tc-m-1.ansi": {
-        "name": "candy-mosaic-9-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-tc-m-1.ansi": {
+        "name": "sugar-image-9-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -10353,9 +10353,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-tc-m-2.ansi": {
-        "name": "candy-mosaic-9-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-tc-m-2.ansi": {
+        "name": "sugar-image-9-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "88x25",
         "width": 88,
         "height": 25,
@@ -10365,9 +10365,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-tc-s-1.ansi": {
-        "name": "candy-mosaic-9-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-tc-s-1.ansi": {
+        "name": "sugar-image-9-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "68x14",
         "width": 68,
         "height": 14,
@@ -10377,9 +10377,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-9-tc-s-2.ansi": {
-        "name": "candy-mosaic-9-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-9-tc-s-2.ansi": {
+        "name": "sugar-image-9-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -10389,9 +10389,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-16-l-1.ansi": {
-        "name": "candy-mosaic-10-16-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-l-1.ansi": {
+        "name": "sugar-image-10-16-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -10401,9 +10401,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-16-l-2.ansi": {
-        "name": "candy-mosaic-10-16-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-l-2.ansi": {
+        "name": "sugar-image-10-16-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -10413,9 +10413,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-16-m-1.ansi": {
-        "name": "candy-mosaic-10-16-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-m-1.ansi": {
+        "name": "sugar-image-10-16-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x19",
         "width": 84,
         "height": 19,
@@ -10425,9 +10425,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-16-m-2.ansi": {
-        "name": "candy-mosaic-10-16-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-m-2.ansi": {
+        "name": "sugar-image-10-16-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -10437,9 +10437,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-16-s-1.ansi": {
-        "name": "candy-mosaic-10-16-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-s-1.ansi": {
+        "name": "sugar-image-10-16-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "48x15",
         "width": 48,
         "height": 15,
@@ -10451,9 +10451,9 @@
             "alignment-fix"
         ]
     },
-    "candy-mosaic/candy-mosaic-10-16-s-2.ansi": {
-        "name": "candy-mosaic-10-16-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-s-2.ansi": {
+        "name": "sugar-image-10-16-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -10463,9 +10463,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-16-s-3.ansi": {
-        "name": "candy-mosaic-10-16-s-3.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-16-s-3.ansi": {
+        "name": "sugar-image-10-16-s-3.ansi",
+        "category": "sugar-image",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -10475,9 +10475,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-256-l-1.ansi": {
-        "name": "candy-mosaic-10-256-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-256-l-1.ansi": {
+        "name": "sugar-image-10-256-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "198x44",
         "width": 198,
         "height": 44,
@@ -10487,9 +10487,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-256-l-2.ansi": {
-        "name": "candy-mosaic-10-256-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-256-l-2.ansi": {
+        "name": "sugar-image-10-256-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "198x44",
         "width": 198,
         "height": 44,
@@ -10499,9 +10499,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-256-m-1.ansi": {
-        "name": "candy-mosaic-10-256-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-256-m-1.ansi": {
+        "name": "sugar-image-10-256-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -10511,9 +10511,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-256-m-2.ansi": {
-        "name": "candy-mosaic-10-256-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-256-m-2.ansi": {
+        "name": "sugar-image-10-256-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -10523,9 +10523,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-256-s-1.ansi": {
-        "name": "candy-mosaic-10-256-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-256-s-1.ansi": {
+        "name": "sugar-image-10-256-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "56x11",
         "width": 56,
         "height": 11,
@@ -10535,9 +10535,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-256-s-2.ansi": {
-        "name": "candy-mosaic-10-256-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-256-s-2.ansi": {
+        "name": "sugar-image-10-256-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -10547,9 +10547,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-tc-l-1.ansi": {
-        "name": "candy-mosaic-10-tc-l-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-tc-l-1.ansi": {
+        "name": "sugar-image-10-tc-l-1.ansi",
+        "category": "sugar-image",
         "resolution": "180x44",
         "width": 180,
         "height": 44,
@@ -10559,9 +10559,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-tc-l-2.ansi": {
-        "name": "candy-mosaic-10-tc-l-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-tc-l-2.ansi": {
+        "name": "sugar-image-10-tc-l-2.ansi",
+        "category": "sugar-image",
         "resolution": "180x44",
         "width": 180,
         "height": 44,
@@ -10571,9 +10571,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-tc-m-1.ansi": {
-        "name": "candy-mosaic-10-tc-m-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-tc-m-1.ansi": {
+        "name": "sugar-image-10-tc-m-1.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -10583,9 +10583,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-tc-m-2.ansi": {
-        "name": "candy-mosaic-10-tc-m-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-tc-m-2.ansi": {
+        "name": "sugar-image-10-tc-m-2.ansi",
+        "category": "sugar-image",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -10595,9 +10595,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-tc-s-1.ansi": {
-        "name": "candy-mosaic-10-tc-s-1.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-tc-s-1.ansi": {
+        "name": "sugar-image-10-tc-s-1.ansi",
+        "category": "sugar-image",
         "resolution": "56x15",
         "width": 56,
         "height": 15,
@@ -10607,9 +10607,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-mosaic/candy-mosaic-10-tc-s-2.ansi": {
-        "name": "candy-mosaic-10-tc-s-2.ansi",
-        "category": "candy-mosaic",
+    "sugar-image/sugar-image-10-tc-s-2.ansi": {
+        "name": "sugar-image-10-tc-s-2.ansi",
+        "category": "sugar-image",
         "resolution": "56x15",
         "width": 56,
         "height": 15,

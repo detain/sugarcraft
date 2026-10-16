@@ -135,7 +135,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **Greedy constraint solvers / no shared layout engine** — Every layout-sensitive package independently implements manual sizing logic. No shared layout engine exists at the foundation layer.
 
-5. **Terminal capability detection failures cause panics, not graceful fallback** — candy-mosaic, candy-mdview, candy-wish (Stage 2) all struggle with probing failures on Windows, SSH, old terminals. ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No package has an `auto()` fallback that always returns a usable renderer.
+5. **Terminal capability detection failures cause panics, not graceful fallback** — sugar-image, candy-mdview, candy-wish (Stage 2) all struggle with probing failures on Windows, SSH, old terminals. ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No package has an `auto()` fallback that always returns a usable renderer.
 
 6. **Manual byte-loop parsing vs. state machine architecture** — candy-ansi-inspect (551-line Inspector.php), sugar-quickpick use `strlen()`/`strpos()` at byte level. The canonical state machine from `charmbracelet/x/ansi` is already available in candy-vt but not shared.
 
@@ -201,7 +201,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **Wide-character overflow handling** — sugar-panels (and likely others) don't fill adjacent cells when writing CJK/emoji, causing visual artifacts.
 
-3. **Parallel base64 encoding** — candy-mosaic cites `blacktop/go-termimg` sync.Pool pattern for ~33% speedup in terminal image rendering.
+3. **Parallel base64 encoding** — sugar-image cites `blacktop/go-termimg` sync.Pool pattern for ~33% speedup in terminal image rendering.
 
 4. **LRU cache sizing** — go-termimg has 100-entry LRU vs the current smaller cache; request coalescing in async pipeline.
 
@@ -350,7 +350,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 5 | Add `ProgramOptions::builder()` + ergonomic APIs | candy-core | High | Low | Low | P0 |
 | 6 | Extract `DatabaseInterface` in candy-sql | candy-sql | Critical | Low | Low | P0 |
 | 7 | Fix `toSshArgv()` to emit ALL identity files | candy-ssh-launcher | High | Low | Low | P0 |
-| 8 | Wire `Mosaic::auto()` + `diagnose()` | candy-mosaic | High | Low | Low | P0 |
+| 8 | Wire `Mosaic::auto()` + `diagnose()` | sugar-image | High | Low | Low | P0 |
 | 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-widgets, sugar-panels, sugar-dashboard | Critical | High | Medium | P1 |
 | 10 | Implement cell-based buffer model | candy-core, sugar-widgets, candy-sprinkles | Critical | High | Medium | P1 |
 | 11 | Implement buffer diffing / dirty-region tracking | sugar-panels, sugar-dashboard, sugar-crush, sugar-overlay, sugar-flexbox, sugar-treelist | High | Medium | Low | P1 |
@@ -382,7 +382,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 6. **Fix `toSshArgv()` in candy-ssh-launcher** — Single-method change + test; full SSH feature parity.
 
-7. **Wire `Mosaic::auto()` + `diagnose()` in candy-mosaic** — Eliminate user-facing failures on Windows, SSH, old terminals.
+7. **Wire `Mosaic::auto()` + `diagnose()` in sugar-image** — Eliminate user-facing failures on Windows, SSH, old terminals.
 
 8. **Add `SUGAR_MOUSE_DEBUG=1` to sugar-mouse** — Debug visualization mode; competitive differentiation over upstream.
 
@@ -512,7 +512,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 8. **Snapshot test pattern** — Every package independently "should add" them; no shared infrastructure emerged despite universal acknowledgment of need.
 
-9. **Terminal capability probing** — candy-mosaic, candy-mdview, candy-wish each struggle with the same probing failure patterns independently.
+9. **Terminal capability probing** — sugar-image, candy-mdview, candy-wish each struggle with the same probing failure patterns independently.
 
 10. **God class construction** — super-candy Manager (915 lines), candy-sql App (12 args) represent the same architectural failure in different stages.
 

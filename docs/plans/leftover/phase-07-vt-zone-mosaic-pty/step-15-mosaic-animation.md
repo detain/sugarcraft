@@ -1,13 +1,13 @@
-# Step 07.15 — candy-mosaic animation support (consumes candy-flip frames)
+# Step 07.15 — sugar-image animation support (consumes candy-flip frames)
 
-**Source:** `leftover_updates_later.md` candy-mosaic P2 #8 + strategic split
+**Source:** `leftover_updates_later.md` sugar-image P2 #8 + strategic split
 **Branch:** `ai/mosaic-animation`
 
 ## Deliverable
 
 GIF/MP4-style animation in mosaic. Per the strategic split documented
 in plans/leftover_updates_later.md §6: **candy-flip emits frame bytes;
-candy-mosaic owns the Kitty/iTerm2/WezTerm protocol output**.
+sugar-image owns the Kitty/iTerm2/WezTerm protocol output**.
 
 This step adds the consumer side — `Animation` class that takes a
 sequence of frames from candy-flip and drives the renderer.
@@ -16,27 +16,27 @@ sequence of frames from candy-flip and drives the renderer.
 
 **Create:**
 
-- `candy-mosaic/src/Animation.php` — readonly: array of frames + per-frame
+- `sugar-image/src/Animation.php` — readonly: array of frames + per-frame
   delays. Methods to play / pause / step.
-- `candy-mosaic/src/AnimationDriver.php` — drives an Animation onto a
+- `sugar-image/src/AnimationDriver.php` — drives an Animation onto a
   Renderer; uses candy-core `Cmd::tick(...)` for frame timing.
 
 **Modify:**
 
-- `candy-mosaic/src/Renderer/KittyRenderer.php` — `renderFrame()` /
+- `sugar-image/src/Renderer/KittyRenderer.php` — `renderFrame()` /
   `deletePrevious()` API for animation.
-- `candy-mosaic/composer.json` — add `"sugarcraft/candy-flip": "@dev"`
+- `sugar-image/composer.json` — add `"sugarcraft/candy-flip": "@dev"`
   (it's the source of frames) — IF the split says so. Verify with
   strategic-plan step 11.04.
 
 ## Tests
 
-- `candy-mosaic/tests/AnimationDriverTest.php` — fixture animation
+- `sugar-image/tests/AnimationDriverTest.php` — fixture animation
   with 5 frames, asserting render+delete cycle.
 
 ## Acceptance
 
-- `cd candy-mosaic && vendor/bin/phpunit --filter Animation` green.
+- `cd sugar-image && vendor/bin/phpunit --filter Animation` green.
 
 ## Notes
 

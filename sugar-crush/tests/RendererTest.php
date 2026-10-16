@@ -2244,7 +2244,7 @@ final class RendererTest extends TestCase
     // its own tool row from the tail-clipped transcript AND ignored Ctrl+O.
     // =========================================================================
 
-    /** A real, decodable PNG — candy-mosaic refuses anything it cannot decode. */
+    /** A real, decodable PNG — sugar-image refuses anything it cannot decode. */
     private function pngBytes(int $width = 20, int $height = 10): string
     {
         $gd = imagecreatetruecolor($width, $height);
@@ -2256,10 +2256,10 @@ final class RendererTest extends TestCase
     }
 
     /** The shape `/doctor` produces: a summary string plus a capability swatch. */
-    private function doctorChat(?\SugarCraft\Mosaic\Mosaic $mosaic, ?string $bytes = null, int $rows = 40): Chat
+    private function doctorChat(?\SugarCraft\Image\Mosaic $mosaic, ?string $bytes = null, int $rows = 40): Chat
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
 
         return new Chat(
@@ -2283,7 +2283,7 @@ final class RendererTest extends TestCase
      */
     public function testCollapsedImageResultShowsItsRowCaptionAndExpandAffordance(): void
     {
-        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock()));
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock()));
 
         $this->assertStringContainsString('tool: doctor', $out);
         $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
@@ -2294,7 +2294,7 @@ final class RendererTest extends TestCase
     /** The affordance answers "how big" and "with what", the swatch's whole point. */
     public function testCollapsedImageNoticeNamesTheSourceDimensionsAndProtocol(): void
     {
-        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock()));
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock()));
 
         $this->assertStringContainsString('20×10 sixel image hidden (ctrl+o)', $out);
     }
@@ -2302,12 +2302,12 @@ final class RendererTest extends TestCase
     /**
      * Ctrl+O (and the click zone that shares its key, §8 E5) now actually
      * reaches the picture: expanding paints it and drops the affordance.
-     * '▀' re-verified vs candy-mosaic e5f60c4f6 (CL-3) — opaque fixture,
+     * '▀' re-verified vs sugar-image e5f60c4f6 (CL-3) — opaque fixture,
      * both-opaque branch, unchanged by the transparency fix.
      */
     public function testExpandingAnImageResultPaintsThePictureAndDropsTheAffordance(): void
     {
-        $chat = $this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock())->toggleToolOutput('call_img');
+        $chat = $this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock())->toggleToolOutput('call_img');
 
         $out = Renderer::render($chat);
 
@@ -2319,7 +2319,7 @@ final class RendererTest extends TestCase
     /** A collapsed picture is never decoded, so it never reaches the image layer. */
     public function testCollapsedPixelGraphicsImageRegistersNoPlacement(): void
     {
-        $chat = $this->doctorChat(\SugarCraft\Mosaic\Mosaic::sixel());
+        $chat = $this->doctorChat(\SugarCraft\Image\Mosaic::sixel());
 
         $this->assertSame([], Renderer::renderView($chat)->images);
         $this->assertNotSame([], Renderer::renderView($chat->toggleToolOutput('call_img'))->images);
@@ -2332,7 +2332,7 @@ final class RendererTest extends TestCase
      */
     public function testATallImageNoLongerEvictsItsOwnToolRow(): void
     {
-        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock(), $this->pngBytes(16, 1600), 12));
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock(), $this->pngBytes(16, 1600), 12));
 
         $this->assertStringContainsString('tool: doctor', $out);
         $this->assertStringContainsString('image hidden (ctrl+o)', $out);
@@ -2355,7 +2355,7 @@ final class RendererTest extends TestCase
     /** Unreadable bytes cost the dimensions, not the row. */
     public function testCollapsedImageNoticeOmitsDimensionsItCannotRead(): void
     {
-        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock(), 'definitely-not-a-png'));
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock(), 'definitely-not-a-png'));
 
         $this->assertStringContainsString('sixel image hidden (ctrl+o)', $out);
         $this->assertStringNotContainsString('×', $out);

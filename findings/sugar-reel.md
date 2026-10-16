@@ -311,7 +311,7 @@ private function mutate(array $changes): self
 ```
 The comment at line 1206-1207 acknowledges this: "?? is null-coalescing, so passing ended => false / frameIndex => 0 through mutate() is honourée (false/0 are not null)". This is a footgun — any caller who writes `$this->mutate(['ended' => false])` will be surprised. Use `array_key_exists()` or a dedicated builder instead.
 
-### ◐ 9. `Player.php:664-693` — HalfBlock inline rendering duplicates MosaicHalfBlockRenderer path
+### ◐ 9. `Player.php:664-693` — HalfBlock inline rendering duplicates MosaicHalfBlockRenderer path <!-- @rename-keep historical provenance -->
 
 > **Premise inverted; deletion deliberately NOT performed (branch
 > `ai/reel-findings-closeout`).** The finding has the two paths backwards. The inline
@@ -335,7 +335,7 @@ The comment at line 1206-1207 acknowledges this: "?? is null-coalescing, so pass
 > rather than an untested accident; collapsing it means picking one byte format and
 > regenerating every HalfBlock golden.
 
-The `frameToBuffer()` method (lines 664-693) has a dedicated inline HalfBlock rendering path that mirrors exactly what `HalfBlockRenderer` (which delegates to `candy-mosaic`) does. The test `testHalfBlockInlineMatchesMosaicRenderer` guards parity, but this is fragile — any change to the inline math (luma, color packing, glyph) won't automatically update the mosaic path and vice versa. The inline path is marked "NEVER reached by the Player runtime" per the comment at line 41.
+The `frameToBuffer()` method (lines 664-693) has a dedicated inline HalfBlock rendering path that mirrors exactly what `HalfBlockRenderer` (which delegates to `sugar-image`) does. The test `testHalfBlockInlineMatchesMosaicRenderer` guards parity, but this is fragile — any change to the inline math (luma, color packing, glyph) won't automatically update the mosaic path and vice versa. The inline path is marked "NEVER reached by the Player runtime" per the comment at line 41.
 
 **Refactor**: Consider removing the inline path and always routing through `RendererFactory::create(Mode::HalfBlock)`, or removing the `HalfBlockRenderer` class entirely and routing all HalfBlock through the inline Buffer path.
 
@@ -719,7 +719,7 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 
 ### ✅ 58. `Reel.php:404-405`, `:443` — cell pixel size hardcoded to 10×20 in the `Player::open()` calls
 
-> **Resolved (branch `ai/w4-reel`).** `Reel` now carries the caller's measured cell geometry: `withCellPx(int $w, int $h): self` (immutable, paired `bool $cellPxSet` sentinel, non-positive dimensions throw at the boundary) and a bare `cellPx(): ?array` accessor. Both `toPlayer()` and `play()` thread the value into `Player::open()`'s existing `$cellPxW`/`$cellPxH` parameters instead of passing literal `10, 20`; a Reel that never called `withCellPx()` still yields 10×20, and `Player::open()`'s signature and defaults are untouched, so the change is fully backward-compatible. `Reel` deliberately does not probe the terminal itself — a query from inside a Model builder would block and would contend with the embedding program's own I/O — so the host supplies the measurement it already has (candy-mosaic's `Mosaic::fontSize()`, parsed from the XTWINOPS 16t reply). This seam is what unblocks the downstream client's `toPlayer()` adoption: in the graphics modes the decode happens at cells·cellPx, so the unmeasured 10×20 guess is exactly what made an embedded player look soft. Covered by `tests/DecoderSeamTest.php` (unset → 10×20 and a 4×3 Kitty grid decoding at 40×60 px; `withCellPx(7,14)` → 28×42 px).
+> **Resolved (branch `ai/w4-reel`).** `Reel` now carries the caller's measured cell geometry: `withCellPx(int $w, int $h): self` (immutable, paired `bool $cellPxSet` sentinel, non-positive dimensions throw at the boundary) and a bare `cellPx(): ?array` accessor. Both `toPlayer()` and `play()` thread the value into `Player::open()`'s existing `$cellPxW`/`$cellPxH` parameters instead of passing literal `10, 20`; a Reel that never called `withCellPx()` still yields 10×20, and `Player::open()`'s signature and defaults are untouched, so the change is fully backward-compatible. `Reel` deliberately does not probe the terminal itself — a query from inside a Model builder would block and would contend with the embedding program's own I/O — so the host supplies the measurement it already has (sugar-image's `Mosaic::fontSize()`, parsed from the XTWINOPS 16t reply). This seam is what unblocks the downstream client's `toPlayer()` adoption: in the graphics modes the decode happens at cells·cellPx, so the unmeasured 10×20 guess is exactly what made an embedded player look soft. Covered by `tests/DecoderSeamTest.php` (unset → 10×20 and a 4×3 Kitty grid decoding at 40×60 px; `withCellPx(7,14)` → 28×42 px).
 
 `toPlayer()` and `play()` passed literal `10, 20` for the cell geometry, so an embedding host had no way to supply the real terminal font metrics and its graphics-mode output was decoded at a guessed resolution.
 

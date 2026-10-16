@@ -383,7 +383,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   + intersection. *(High‑touch; extra review per §4.11.)*
 - **3.5** `candy-git-server`(14,med, deps core+async), `candy-sql`(14,high, core+sprinkles),
   `candy-log`(16,high, core+palette+sprinkles; psr/log→^1.1 + drop param types).
-- **3.6** `candy-mosaic`(25,high, core+palette+sprinkles) → **3.6a** `Renderer/` (7), **3.6b**
+- **3.6** `sugar-image`(25,high, core+palette+sprinkles) → **3.6a** `Renderer/` (7), **3.6b**
   root (≈10), **3.6c** remainder; ext‑gd/mbstring.
 - **3.7** `candy-shine`(9,high, buffer+core+sprinkles; attributes, league/commonmark pin).
 - **3.8** `candy-vt`(40,high, buffer+core+sprinkles) → **3.8a** `Parser/` (11), **3.8b**
@@ -434,7 +434,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `Components/Select` (9), `Components/Nav` (9), `Module` (8), `Keys` (7),
   `Components/Toast` (7), `Plugin` (5) + remaining root files.
 - **5.7** `candy-codetime`(16,high, async+core+sprinkles+sugar‑charts), `sugar-reel`(19,high, many
-  deps incl. mosaic/flip). ⚠️ **`sugar-reel` is in active development** (working‑tree changes to
+  deps incl. mosaic/flip). ⚠️ **`sugar-reel` is in active development** (working‑tree changes to <!-- @rename-keep historical provenance -->
   `Player.php`/`AudioPlayer.php` at audit time) — schedule **last**, re‑audit the lib immediately
   before its step, and coordinate so the backport rebases on the finished feature.
 - **5.8** `candy-files`(14,med, core+mosaic+sprinkles).
@@ -481,7 +481,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union |
 | candy-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
 | candy-minesweeper | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |
-| candy-mosaic | high | 25 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, php8-strfn; gd/mbstring |
+| sugar-image | high | 25 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, php8-strfn; gd/mbstring |
 | candy-pty | high | 42 | FFI, ctor-promotion, match, mixed, new-in-init, nullsafe |
 | candy-sql | high | 14 | enum-with-methods, ctor-promotion, match, mixed, named-args; pdo_sqlite |
 | candy-shine | high | 9 | attribute, ctor-promotion, enum, match, named-args, nullsafe; commonmark |

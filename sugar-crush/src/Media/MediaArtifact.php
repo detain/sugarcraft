@@ -28,7 +28,7 @@ final readonly class MediaArtifact
 {
     use Mutable;
 
-    /** Display-protocol hints the renderer may advertise (candy-mosaic ladder; crush_media §2 vocabulary). */
+    /** Display-protocol hints the renderer may advertise (sugar-image ladder; crush_media §2 vocabulary). */
     public const PROTOCOL_HINTS = ['sixel', 'kitty', 'iterm2', 'halfblock'];
 
     private function __construct(

@@ -24,7 +24,7 @@ use SugarCraft\Testing\Lang;
  * compression travels on the separate `o` key (`o=z` = zlib), while `z` itself
  * means the image z-index. SugarCraft's producers once misspelled compression
  * as `f=1`; the M2 fix (round LL) landed the spec spelling on BOTH sides at
- * once — candy-mosaic's `KittyOptions::withCompression(1)` now emits
+ * once — sugar-image's `KittyOptions::withCompression(1)` now emits
  * `f=100,o=z`, and this decoder inflates only on `o=z`, accepting nothing
  * else. `f=12` is additionally accepted as a second PNG spelling so a capture
  * written by tooling that uses it still round-trips (nothing in this monorepo
@@ -171,7 +171,7 @@ final class KittyImage
      * The `z` stacking index — deliberately NOT a compression flag.
      *
      * The kitty spec types `z` as a signed integer index (negative values are
-     * legal), and candy-mosaic's `KittyOptions::withZIndex()` emits it as such.
+     * legal), and sugar-image's `KittyOptions::withZIndex()` emits it as such.
      * Transmission compression lives on the separate `o` key (`o=z` = zlib —
      * what SugarCraft's producer has emitted since the M2/round-LL fix), so
      * nothing here reads `z` as a hint to inflate.

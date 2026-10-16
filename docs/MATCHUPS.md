@@ -47,7 +47,7 @@ called out in the table below.
 | **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + CandyWish session middleware. |
 | **CandyLog** (`candy-log/`) | 🟢 ready | Minimal, colorful logging library. |
 | **CandyPalette** (`candy-palette/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
-| **CandyMosaic** (`candy-mosaic/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
+| **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
 | **CandyFlip** (`candy-flip/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
 | **CandyVt** (`candy-vt/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
 | **CandyAnsi** (`candy-ansi/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into CandyVt for cell-grid rendering. |
@@ -169,7 +169,7 @@ reference projects supplied the ideas, not the code.
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
 | CandyStarter (candy-starter/) | none — first-party |
 | SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
-| CandyMosaic (candy-mosaic/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
+| SugarImage (sugar-image/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
 | CandyPalette (candy-palette/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
 | CandyPty (candy-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |
 | CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |

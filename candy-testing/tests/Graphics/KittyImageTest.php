@@ -58,7 +58,7 @@ final class KittyImageTest extends TestCase
 
     public function testZIndexIsNeverACompressionSignal(): void
     {
-        // candy-mosaic's `KittyOptions::transmit()->withZIndex(1)` emits `z=1`
+        // sugar-image's `KittyOptions::transmit()->withZIndex(1)` emits `z=1`
         // next to an uncompressed `f=100` PNG; reading that `z` as compression
         // would reject the monorepo's own output, so `z` stays orthogonal to
         // both format predicates.

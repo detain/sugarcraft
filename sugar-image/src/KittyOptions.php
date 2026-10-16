@@ -1,0 +1,212 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image;
+
+/**
+ * Options for the Kitty graphics protocol renderer.
+ */
+final class KittyOptions
+{
+    /**
+     * Action: "T" = transmit, "p" = place a previously transmitted image.
+     */
+    private const ACTION_TRANSMIT = 'T';
+    private const ACTION_PLACE    = 'p';
+
+    private function __construct(
+        private readonly string $action,
+        private readonly int $imageId,
+        private readonly int $zIndex,
+        private readonly int $compress,
+        private readonly int $cellWidth,
+        private readonly int $cellHeight,
+        private readonly int $offsetX,
+        private readonly int $offsetY,
+        /**
+         * When true, renders with action 'p' (place virtual image) instead
+         * of 'T' (transmit). On first render with a given image id this stores
+         * the image in the terminal; subsequent renders with the same id+offset
+         * reference the stored copy.
+         *
+         * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/#transmission
+         */
+        private readonly bool $useVirtual,
+    ) {}
+
+    /**
+     * Default options: transmit image inline.
+     */
+    public static function transmit(int $imageId = 0): self
+    {
+        return new self(
+            action:     self::ACTION_TRANSMIT,
+            imageId:    $imageId,
+            zIndex:     0,
+            compress:   100,
+            cellWidth:  0,
+            cellHeight: 0,
+            offsetX:    0,
+            offsetY:    0,
+            useVirtual: false,
+        );
+    }
+
+    /**
+     * Place a previously transmitted virtual image.
+     *
+     * @param int $imageId  The ID of the image to place (from a prior transmit with id=)
+     * @param int $x        Cell offset from left (columns)
+     * @param int $y        Cell offset from top (rows)
+     */
+    public static function place(int $imageId, int $x = 0, int $y = 0): self
+    {
+        return new self(
+            action:     self::ACTION_PLACE,
+            imageId:    $imageId,
+            zIndex:     0,
+            compress:   100,
+            cellWidth:  0,
+            cellHeight: 0,
+            offsetX:    $x,
+            offsetY:    $y,
+            useVirtual: false,
+        );
+    }
+
+    /**
+     * Set z-index (stacking order, higher renders on top).
+     */
+    public function withZIndex(int $z): self
+    {
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $z,
+            compress:   $this->compress,
+            cellWidth:  $this->cellWidth,
+            cellHeight: $this->cellHeight,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+        );
+    }
+
+    /**
+     * Request zlib compression for the PNG payload.
+     *
+     * Per the kitty graphics protocol, `f` is the DATA FORMAT (100 = PNG)
+     * and transmission compression travels on the separate `o` key — so a
+     * compressed transmit is emitted as `f=100,o=z`. (Until M2/round-LL
+     * this pair wrongly spelled compression as `f=1`; the candy-testing
+     * KittyStream decoder flipped in the same change.)
+     *
+     * @param int $compress  100 = none (default), 1 = zlib compressed (o=z).
+     *                        Any other value is inert: the wire carries no
+     *                        compression LEVEL, only the zlib (o=z) signal,
+     *                        and emitting `f=N` for N outside the spec's
+     *                        format table would mislabel the payload.
+     *                        zlib is worthwhile for large images on slow links.
+     */
+    public function withCompression(int $compress): self
+    {
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $compress,
+            cellWidth:  $this->cellWidth,
+            cellHeight: $this->cellHeight,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+        );
+    }
+
+    /**
+     * Enable virtual-image placement mode (a=p instead of a=T).
+     */
+    public function withUseVirtual(bool $useVirtual = true): self
+    {
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $this->compress,
+            cellWidth:  $this->cellWidth,
+            cellHeight: $this->cellHeight,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $useVirtual,
+        );
+    }
+
+    /**
+     * Set the source display area in cells: the kitty `s=` (columns) and
+     * `v=` (rows) transmit params.
+     *
+     * These size the region the terminal maps the image onto. They were
+     * carried on every instance but had no setter, so the fields stayed 0 and
+     * `s=`/`v=` were never emitted; this is the seam that makes them settable.
+     *
+     * @param int $width   Cell columns (`s=`); 0 clears (terminal default).
+     * @param int $height  Cell rows (`v=`); 0 clears (terminal default).
+     * @throws \InvalidArgumentException  if either dimension is negative
+     */
+    public function withCellDimensions(int $width, int $height): self
+    {
+        if ($width < 0 || $height < 0) {
+            throw new \InvalidArgumentException(
+                "Cell dimensions must be non-negative, got {$width}×{$height}"
+            );
+        }
+
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $this->compress,
+            cellWidth:  $width,
+            cellHeight: $height,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+        );
+    }
+
+    /** @internal */
+    public function toArray(): array
+    {
+        return [
+            'a' => $this->action,
+            'i' => $this->imageId !== 0 ? $this->imageId : null,
+            'z' => $this->zIndex !== 0 ? $this->zIndex : null,
+            // 'o' is the spec's transmission-compression key; 'f' stays the
+            // data format and is emitted by the renderer as a constant 100.
+            'o' => $this->isCompressed() ? 'z' : null,
+            's' => $this->cellWidth ?: null,
+            'v' => $this->cellHeight ?: null,
+            'x' => $this->offsetX ?: null,
+            'y' => $this->offsetY ?: null,
+        ];
+    }
+
+    /** @internal */
+    public function isCompressed(): bool
+    {
+        return $this->compress === 1;
+    }
+
+    /** @internal */
+    public function isPlace(): bool
+    {
+        return $this->action === self::ACTION_PLACE;
+    }
+
+    /** @internal */
+    public function useVirtual(): bool
+    {
+        return $this->useVirtual;
+    }
+}

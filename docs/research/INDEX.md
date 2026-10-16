@@ -68,7 +68,7 @@ To implement an item:
 |---------|--------------|-------------------|
 | **candy-mdview** | [research/libraries/candy-mdview-research.md](libraries/candy-mdview-research.md) | 1. Pygments highlighting, 2. Enhanced themes, 3. File watching |
 | **candy-codeshot** | [research/libraries/candy-codeshot-research.md](libraries/candy-codeshot-research.md) | 1. Bg colors, 2. Lang detection, 3. VS Code themes |
-| **candy-mosaic** | [research/libraries/candy-mosaic-research.md](libraries/candy-mosaic-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
+| **sugar-image** | [research/libraries/sugar-image-research.md](libraries/sugar-image-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
 | **sugar-mouse** | [research/libraries/sugar-mouse-research.md](libraries/sugar-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
 | **candy-palette** | [research/libraries/candy-palette-research.md](libraries/candy-palette-research.md) | 1. CLICOLOR, 2. Terminfo Tc, 3. tmux handling |
 | **candy-metrics** | [research/libraries/candy-metrics-research.md](libraries/candy-metrics-research.md) | 1. Histogram buckets, 2. Metric describe, 3. UpDownCounter |
@@ -116,7 +116,7 @@ To implement an item:
 | 10 | sugar-navstack | Separator escaping | 1h | [link](libraries/sugar-navstack-research.md) |
 | 11 | candy-codeshot | Background colors | 2h | [link](libraries/candy-codeshot-research.md) |
 | 12 | candy-codeshot | Ligature flag | 1h | [link](libraries/candy-codeshot-research.md) |
-| 13 | candy-mosaic | WezTerm detection fix | 0.5h | [link](libraries/candy-mosaic-research.md) |
+| 13 | sugar-image | WezTerm detection fix | 0.5h | [link](libraries/sugar-image-research.md) |
 | 14 | candy-vt | DECSTBM margins | 2-3h | [link](libraries/candy-vt-research.md) |
 | 15 | candy-vt | Auto-wrap DECAWM | 2h | [link](libraries/candy-vt-research.md) |
 | 16 | candy-kv | CSV/JSON export | 1-2h | [link](libraries/candy-kv-research.md) |

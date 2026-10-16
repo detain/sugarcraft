@@ -9,7 +9,7 @@ use SugarCraft\Testing\Lang;
 /**
  * Byte-level decoder for the Sixel graphics protocol.
  *
- * Independent of candy-mosaic: it reads the exact wire form that
+ * Independent of sugar-image: it reads the exact wire form that
  * `SugarCraft\Core\Util\Ansi::sixel*` emits — a single DCS string carrying a
  * palette (`#idx;2;R;G;B`, percent), sixel bands of `?`..`~` column bytes, RLE
  * runs (`!count char`), graphics CR (`$`) and NL (`-`), terminated by ST.
@@ -18,7 +18,7 @@ use SugarCraft\Testing\Lang;
  * colour used before it is defined, or a run that overflows the declared raster
  * all raise {@see MalformedGraphicsException} rather than guessing.
  *
- * Mirrors charmbracelet/candy-mosaic SixelRenderer (inverse).
+ * Mirrors charmbracelet/sugar-image SixelRenderer (inverse).
  */
 final class SixelStream
 {

@@ -46,11 +46,11 @@ final class AgentLabelFoldingTest extends TestCase
     {
         $folded = AgentLabelFolding::fold([
             'You are auditing one library in sugar-dashboard',
-            'You are auditing one library in candy-mosaic',
+            'You are auditing one library in sugar-image',
         ]);
 
         $this->assertSame(
-            ['You are … sugar-dashboard', 'You are … candy-mosaic'],
+            ['You are … sugar-dashboard', 'You are … sugar-image'],
             $folded,
         );
     }
@@ -96,11 +96,11 @@ final class AgentLabelFoldingTest extends TestCase
     {
         $plain = [
             'You are auditing one very long shared prefix across many words in sugar-dashboard',
-            'You are auditing one very long shared prefix across many words in candy-mosaic',
+            'You are auditing one very long shared prefix across many words in sugar-image',
         ];
         $folded = AgentLabelFolding::fold($plain);
 
-        foreach ([['sugar-dashboard', 0], ['candy-mosaic', 1]] as [$needle, $i]) {
+        foreach ([['sugar-dashboard', 0], ['sugar-image', 1]] as [$needle, $i]) {
             $this->assertLessThanOrEqual(
                 30,
                 Width::string($folded[$i]),
@@ -119,7 +119,7 @@ final class AgentLabelFoldingTest extends TestCase
     {
         $labels = [
             'You are auditing one library in sugar-dashboard',
-            'You are auditing one library in candy-mosaic',
+            'You are auditing one library in sugar-image',
             'You are auditing one library in honey-bounce',
         ];
         $forward = AgentLabelFolding::fold($labels);
@@ -135,7 +135,7 @@ final class AgentLabelFoldingTest extends TestCase
     {
         $folded = AgentLabelFolding::fold([
             'You are auditing one library in sugar-dashboard',
-            'You are auditing one library in candy-mosaic',
+            'You are auditing one library in sugar-image',
             'Summarize the changelog for release day',
         ]);
 
@@ -164,7 +164,7 @@ final class AgentLabelFoldingTest extends TestCase
         $entries = AgentDashboardPane::managerEntries($manager);
 
         $this->assertSame(
-            ['You are … sugar-dashboard', 'You are … candy-mosaic'],
+            ['You are … sugar-dashboard', 'You are … sugar-image'],
             array_map(static fn ($e): string => $e->operation, $entries),
         );
         $this->assertSame(
@@ -181,7 +181,7 @@ final class AgentLabelFoldingTest extends TestCase
         $out = AgentSplitColumn::renderRuns(array_values($manager->liveRuns()), Theme::default(), 40, 20);
 
         $this->assertStringContainsString('You are … sugar-dashboard', $out);
-        $this->assertStringContainsString('You are … candy-mosaic', $out);
+        $this->assertStringContainsString('You are … sugar-image', $out);
         $this->assertStringNotContainsString(
             'across many words',
             $out,
@@ -224,7 +224,7 @@ final class AgentLabelFoldingTest extends TestCase
             SubAgentActivity::OP_STARTED,
             'run-b',
             'reviewer',
-            'You are auditing one library across many words in candy-mosaic',
+            'You are auditing one library across many words in sugar-image',
             1,
             '',
         ));

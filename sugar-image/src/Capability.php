@@ -1,0 +1,104 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image;
+
+/**
+ * Snapshot of the detected terminal's image-rendering capabilities.
+ * Immutable value object returned by {@see Detect::probe()}.
+ */
+final class Capability
+{
+    private function __construct(
+        public readonly bool $sixel,
+        public readonly bool $kitty,
+        public readonly bool $iterm2,
+        public readonly bool $halfblock,
+        public readonly bool $chafa,
+        /** Cell pixel dimensions if probed, null otherwise. */
+        public readonly ?CellSize $cellSize,
+        /** True when TMUX env var is set (requires allow-passthrough on). */
+        public readonly bool $inTmux,
+    ) {}
+
+    /**
+     * Build a full-capability instance (all protocols available).
+     * Used for {@see Mosaic::halfBlock()} which is always available.
+     */
+    public static function universal(?CellSize $cellSize = null, bool $inTmux = false): self
+    {
+        return new self(true, true, true, true, true, $cellSize, $inTmux);
+    }
+
+    /** Kitty-only capability (other protocols unknown until DA1 probing). */
+    public static function kitty(?CellSize $cellSize = null, bool $inTmux = false): self
+    {
+        return new self(false, true, false, true, false, $cellSize, $inTmux);
+    }
+
+    /** iTerm2-only capability. */
+    public static function iterm2(?CellSize $cellSize = null, bool $inTmux = false): self
+    {
+        return new self(false, false, true, true, false, $cellSize, $inTmux);
+    }
+
+    /** Sixel-only capability. */
+    public static function sixel(?CellSize $cellSize = null, bool $inTmux = false): self
+    {
+        return new self(true, false, false, true, false, $cellSize, $inTmux);
+    }
+
+    /**
+     * Empty capability set — used when no probe data is available.
+     */
+    public static function unknown(?CellSize $cellSize = null, bool $inTmux = false): self
+    {
+        return new self(false, false, false, true, false, $cellSize, $inTmux);
+    }
+
+    /**
+     * Return a copy of this capability with the given cell size attached.
+     * Used by {@see Detect::probeFontSize()} to attach font-size data
+     * to whatever protocol was detected via env vars or DA1.
+     */
+    public function withCellSize(?CellSize $cellSize): self
+    {
+        return new self(
+            $this->sixel,
+            $this->kitty,
+            $this->iterm2,
+            $this->halfblock,
+            $this->chafa,
+            $cellSize,
+            $this->inTmux,
+        );
+    }
+
+    /**
+     * Return a human-readable summary of which protocols were detected.
+     * Mirrors Charmbracelet's image.(Kitty|Sixel|Iterm2|HalfBlock)Protocol.Name().
+     *
+     * @return string e.g. "Kitty", "iTerm2", "Sixel", "HalfBlock", "Unknown"
+     */
+    public function detectSummary(): string
+    {
+        if ($this->kitty) {
+            return 'Kitty';
+        }
+        if ($this->iterm2) {
+            return 'iTerm2';
+        }
+        if ($this->sixel) {
+            return 'Sixel';
+        }
+        if ($this->chafa) {
+            return 'Chafa';
+        }
+        if ($this->halfblock) {
+            return 'HalfBlock';
+        }
+
+        return 'Unknown';
+    }
+}

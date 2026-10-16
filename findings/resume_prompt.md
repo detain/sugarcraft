@@ -47,7 +47,7 @@ git status && git branch -a && git log --oneline -5
 ### Step 3: Mark already-done items
 
 Before spawning new agents, mark the plan file items that were already completed. From the completed commits, these plan files have items done:
-- `findings/plan_candy-mosaic.md` — ✅ marked (resource leaks, SSRF hardening)
+- `findings/plan_candy-mosaic.md` — ✅ marked (resource leaks, SSRF hardening) <!-- @rename-keep historical provenance -->
 - `findings/plan_candy-shine.md` — ✅ marked (lazy-init blockStack/styleSheet)
 - `findings/plan_candy-git.md` — ✅ marked (Phase 1 infrastructure)
 
@@ -127,8 +127,8 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 |-------|-------|------|
 | 5-A | 5.1–5.3 | sugar-table (frozen/hidden conflict, invalid key tests), candy-flip (per-frame delay test) |
 | 5-B | 5.4–5.6 | candy-flip (DISPOSAL_PREVIOUS), candy-input (FocusEvent tests), candy-async (markCancelled test) |
-| 5-C | 5.7–5.9 | honey-bounce (CubicBezier invalid control points), candy-mdview (viewport key binding tests), candy-mosaic (ChafaRenderer pipe cleanup) |
-| 5-D | 5.10 | candy-mosaic (ChafaRenderer::reset test) |
+| 5-C | 5.7–5.9 | honey-bounce (CubicBezier invalid control points), candy-mdview (viewport key binding tests), candy-mosaic (ChafaRenderer pipe cleanup) | <!-- @rename-keep historical provenance -->
+| 5-D | 5.10 | candy-mosaic (ChafaRenderer::reset test) | <!-- @rename-keep historical provenance -->
 
 ### Phase 6: Remaining Items by Plan File
 

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Render;
 
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Mosaic;
-use SugarCraft\Mosaic\Renderer\HalfBlockRenderer as MosaicHalfBlockRenderer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Renderer\HalfBlockRenderer as ImageHalfBlockRenderer;
 use SugarCraft\Reel\Decode\RgbFrame;
 
 /**
- * Half-block Unicode renderer — delegates to candy-mosaic's HalfBlockRenderer.
+ * Half-block Unicode renderer — delegates to sugar-image's HalfBlockRenderer.
  *
  * Each terminal cell shows two vertically-stacked pixels via the ▀ (upper-half
  * block) glyph: the upper pixel's color as foreground, the lower pixel's color
@@ -32,12 +32,12 @@ final class HalfBlockRenderer implements FrameRenderer
         }
 
         // Bridge: convert RgbFrame (raw rgb24 bytes) → GD image → ImageSource.
-        // candy-mosaic's HalfBlockRenderer expects ImageSource with PNG bytes.
+        // sugar-image's HalfBlockRenderer expects ImageSource with PNG bytes.
         $gd = $frame->toGd();
         $imageSource = ImageSource::fromGd($gd, 'image/png');
         imagedestroy($gd);
 
-        // Delegate to candy-mosaic's HalfBlockRenderer (HalfBlockRenderer.php:33).
+        // Delegate to sugar-image's HalfBlockRenderer (HalfBlockRenderer.php:33).
         // NOTE: This renderer is the "Mosaic" path — it is NEVER used by Player::view()
         // at runtime (Player uses the inline Buffer path in frameToBuffer instead).
         // This class exists for direct RendererFactory::new(Mode::HalfBlock) callers.
@@ -49,7 +49,7 @@ final class HalfBlockRenderer implements FrameRenderer
         // runs while mosaic terminates each cell with a reset, and this path resamples
         // through GD (so it needs ext-gd, which sugar-reel does not require). Do not
         // "simplify" view() onto this path without regenerating every HalfBlock golden.
-        $renderer = new MosaicHalfBlockRenderer();
+        $renderer = new ImageHalfBlockRenderer();
 
         // Half-block uses full width in cells, double height density.
         $cellWidth = $frame->w;

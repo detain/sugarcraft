@@ -529,7 +529,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * receipt arm was not widened with it, so for the length of one round a
      * promotion inside a sibling library cost nothing anywhere - E425 reopened
      * at the scope the same round had just created. Measured: an exposed spawn
-     * appended to candy-mosaic's src and closed by a rostered helper left this
+     * appended to sugar-image's src and closed by a rostered helper left this
      * guard green; the byte-identical injection into this package's own src
      * reddened it. WHY THE SENTENCE STILL EARNS ITS PLACE: the argument was
      * always right and only its scope was wrong. The sibling half now lives in
@@ -2250,7 +2250,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * reopened at the scope the same round had just created.
      *
      * MEASURED, BOTH DIRECTIONS, BEFORE THIS ARM EXISTED: an exposed spawn
-     * appended to candy-mosaic's src and closed by a rostered helper left the
+     * appended to sugar-image's src and closed by a rostered helper left the
      * guard green at 10 tests; the byte-identical injection into this
      * package's own src reddened it. The asymmetry was the finding.
      *

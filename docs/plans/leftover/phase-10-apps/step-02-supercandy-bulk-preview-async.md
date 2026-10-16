@@ -6,7 +6,7 @@
 ## Deliverable
 
 - Bulk rename UI (regex template + sequential numbering).
-- Preview pane — image preview delegates to candy-mosaic. **Do not**
+- Preview pane — image preview delegates to sugar-image. **Do not**
   re-implement.
 - Async file ops via ReactPHP (long copies don't block UI).
 
@@ -16,13 +16,13 @@
 
 - `super-candy/src/BulkRename.php` + UI.
 - `super-candy/src/PreviewPane.php` — for image files invokes
-  `\SugarCraft\Mosaic\Renderer`.
+  `\SugarCraft\Image\Renderer`.
 - `super-candy/src/AsyncOps.php` — wraps copy/move in
   `\React\Promise`.
 
 **Modify:**
 
-- `super-candy/composer.json` — `sugarcraft/candy-mosaic` +
+- `super-candy/composer.json` — `sugarcraft/sugar-image` +
   `react/promise`.
 
 ## Tests

@@ -1294,7 +1294,7 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `sugar-diff` (the settings editor's save preview),
 `sugar-toast` (the toast a settings save reports through),
 `sugar-reel` (the video the player screen renders through),
-`candy-mosaic`, `sugar-mouse`,
+`sugar-image`, `sugar-mouse`,
 `candy-layout` (dock geometry), `sugar-focus`, `candy-kit`, `candy-pty`
 (the pseudo-terminal interactive tool output is captured through).
 

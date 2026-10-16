@@ -17,7 +17,7 @@ use SugarCraft\Crush\Tui\MediaForm\MediaForm;
 use SugarCraft\Crush\Tui\MediaForm\MediaFormState;
 use SugarCraft\Crush\Tui\MediaForm\Section;
 use SugarCraft\Forms\Field;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * The W7.5 perf lane's keeper (plan_crush_media.md §W7.5: measure, don't
@@ -141,7 +141,7 @@ final class PerfBudgetTest extends TestCase
     public function testRepeatingTheNewestFrameServesTheMemoWithinBudget(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
         PreviewPaint::resetForTesting();
         $mosaic = Mosaic::fromModeString('halfblock');

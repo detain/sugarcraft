@@ -54,7 +54,7 @@ final class TtyDetectTest extends TestCase
     public function testNothingThatIsNotALiveStreamIsATty(): void
     {
         // The `resource|null` in the signature is a real cross-package
-        // contract, not padding: SugarCraft\Mosaic\Detect::isInteractiveTty()
+        // contract, not padding: SugarCraft\Image\Detect::isInteractiveTty()
         // calls this with the result of a resolver that answers null for a
         // dead descriptor 0.
         self::assertFalse(TtyDetect::isAtty(null));

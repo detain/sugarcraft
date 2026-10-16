@@ -19,7 +19,7 @@ use SugarCraft\Reel\Subtitle\WebVtt;
  *
  * No single upstream: the decode → render → pace pipeline draws on prior art in
  * maxcurzi/tplay, seatedro/glyph, and joelibaceta/video-to-ascii. The rendering
- * stack is reused from the SugarCraft ecosystem (candy-mosaic image renderers,
+ * stack is reused from the SugarCraft ecosystem (sugar-image image renderers,
  * candy-flip downsampling, candy-palette color mapping, candy-core TEA runtime)
  * rather than reinvented.
  *
@@ -41,8 +41,8 @@ final class Reel
      * made for a text cell — roughly a common font size at default DPI — and it
      * is only a guess: graphics modes (kitty/sixel/iTerm2) decode at
      * cells·cellPx, so an unmeasured cell is what makes those modes look soft.
-     * A host that knows its real cell size (candy-mosaic's
-     * {@see \SugarCraft\Mosaic\Mosaic::fontSize()}, derived from the terminal's
+     * A host that knows its real cell size (sugar-image's
+     * {@see \SugarCraft\Image\Mosaic::fontSize()}, derived from the terminal's
      * XTWINOPS 16t reply) should say so with {@see withCellPx()}.
      */
     private const DEFAULT_CELL_PX_W = 10;
@@ -408,8 +408,8 @@ final class Reel
      * Graphics modes (kitty, sixel, iTerm2) decode at cells·cellPx so the image
      * fills the terminal's pixel box, which makes the cell geometry a decode
      * input rather than a render detail. Only the HOST knows it: a terminal's
-     * font size comes from a query the host has already answered (candy-mosaic's
-     * {@see \SugarCraft\Mosaic\Mosaic::fontSize()} exposes it, parsed from the
+     * font size comes from a query the host has already answered (sugar-image's
+     * {@see \SugarCraft\Image\Mosaic::fontSize()} exposes it, parsed from the
      * XTWINOPS 16t reply), and sugar-reel must not issue terminal queries from
      * inside a Model builder — that would block and would fight whatever the
      * embedding program already owns. So the measurement is injected here.

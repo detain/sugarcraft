@@ -11,15 +11,15 @@ namespace SugarCraft\Core\Util;
  * TTY?" without taking a direct candy-pty dependency.
  *
  * WHAT THE CONSUMER LIST USED TO SAY, AND WHY IT CHANGED.  It read
- * "(candy-mosaic, sugar-widgets, sugar-forms, candy-log, …) all route
+ * "(sugar-image, sugar-widgets, sugar-forms, candy-log, …) all route
  * through here, so the answer is defined in exactly one place".  Both
  * halves are wrong.  The list had been carried forward from an older
  * revision without being re-measured, while the sentence around it was
  * strengthened to "all".
  *
  * MEASURED by grepping this class name across every lib's `src/`: the
- * consumers outside candy-core are candy-mosaic
- * ({@see \SugarCraft\Mosaic\Detect::isInteractiveTty()}), candy-mdview
+ * consumers outside candy-core are sugar-image
+ * ({@see \SugarCraft\Image\Detect::isInteractiveTty()}), candy-mdview
  * ({@see \SugarCraft\MdView\RenderCommand::loadInput()}) and sugar-forms
  * ({@see \SugarCraft\Forms\ActionSpinner::run()}).  `sugar-widgets` and
  * `candy-log` do not reference this class at all, and candy-mdview — a
@@ -103,7 +103,7 @@ namespace SugarCraft\Core\Util;
  *
  * ## THE CLOSED-DESCRIPTOR-0 FAMILY — read this before touching a member
  *
- * candy-core and candy-mosaic were written when descriptor 0 was always a
+ * candy-core and sugar-image were written when descriptor 0 was always a
  * live terminal.  It is not any more.  `sugar-crush`'s `tests/bootstrap.php`
  * closes the standard input constant on every non-tty run, and a daemon, a
  * git hook, or a shell invocation that detaches its own input reaches the
@@ -138,7 +138,7 @@ namespace SugarCraft\Core\Util;
  *     unpinned until the two `posix_backend_*` probe rows added it: nothing
  *     in the suite distinguished the short-circuited answer from the throw
  *     the swapped operands produce.
- *   - `SugarCraft\Mosaic\Detect::stdinFd()` — answers null for a dead
+ *   - `SugarCraft\Image\Detect::stdinFd()` — answers null for a dead
  *     handle, and its readers treat null as their existing no-answer case.
  *
  * `Tty\WindowsBackend::isTty()` is deliberately NOT a row. It carries the
@@ -167,7 +167,7 @@ final class TtyDetect
      * in guard clauses without wrapping in try/catch.
      *
      * `resource|null` is the real contract across a package boundary, not
-     * defensive padding: `SugarCraft\Mosaic\Detect::isInteractiveTty()`
+     * defensive padding: `SugarCraft\Image\Detect::isInteractiveTty()`
      * calls this as `TtyDetect::isAtty(self::stdinFd())`, and `stdinFd()`
      * answers null when descriptor 0 is dead.  The `is_resource()` guard
      * below already gave that call the right answer — false, which is the

@@ -1,9 +1,9 @@
-# Step 01.13 — candy-mosaic Termios::isAtty() + WezTerm detection fix
+# Step 01.13 — sugar-image Termios::isAtty() + WezTerm detection fix
 
-**Source:** `leftover_updates.md` CC-LO-06 + research candy-mosaic
+**Source:** `leftover_updates.md` CC-LO-06 + research sugar-image
 WezTerm detection bug (bundle)
 **Branch:** `ai/mosaic-detect-fix`
-**Bundle hint:** two small bugs in `candy-mosaic/src/Detect.php`
+**Bundle hint:** two small bugs in `sugar-image/src/Detect.php`
 
 ## Deliverable
 
@@ -21,7 +21,7 @@ WezTerm detection bug (bundle)
 
 **Modify:**
 
-- `candy-mosaic/src/Detect.php`:
+- `sugar-image/src/Detect.php`:
   - Lines ~236-237 — replace `posix_isatty(0) && posix_isatty(1)`
     with `Termios::isAtty(STDIN) && Termios::isAtty(STDOUT)` via
     `TermiosFactory::open(...)`. Or, equivalently, call a new
@@ -29,7 +29,7 @@ WezTerm detection bug (bundle)
     the candy-pty call.
   - Lines ~386-400 — for `TERM_PROGRAM=WezTerm`, return Kitty
     protocol family only; do not also list iTerm2 candidate.
-- `candy-mosaic/composer.json` — confirm `sugarcraft/candy-pty` is
+- `sugar-image/composer.json` — confirm `sugarcraft/candy-pty` is
   in `require` (likely transitive via candy-core).
 
 **Create (recommended):**
@@ -41,7 +41,7 @@ WezTerm detection bug (bundle)
 
 ## Tests
 
-- `candy-mosaic/tests/DetectTest.php`:
+- `sugar-image/tests/DetectTest.php`:
   - Mock or fixture `TERM_PROGRAM=WezTerm`; assert protocol family
     is Kitty only.
   - For non-TTY input, assert `isAtty()` returns false without
@@ -50,9 +50,9 @@ WezTerm detection bug (bundle)
 
 ## Acceptance
 
-- `grep -n "posix_isatty\|stream_isatty" candy-mosaic/src` returns
+- `grep -n "posix_isatty\|stream_isatty" sugar-image/src` returns
   nothing.
-- `cd candy-mosaic && vendor/bin/phpunit` green.
+- `cd sugar-image && vendor/bin/phpunit` green.
 - `php tools/check-path-repos.php` green.
 
 ## Notes

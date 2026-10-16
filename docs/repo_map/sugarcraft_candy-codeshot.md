@@ -220,9 +220,9 @@ The package does NOT use candy-shine for rendering — it implements its own SVG
 - `candy-codeshot` renders text/code as SVG/PNG images (static files, not terminal protocols)
 - **Relationship**: Both handle image generation but for different targets (terminal vs file)
 
-### candy-mosaic (terminal image rendering)
+### sugar-image (terminal image rendering)
 
-- `candy-mosaic` renders PNG/JPEG into terminals via multiple protocols (Kitty, iTerm2, Sixel, HalfBlock)
+- `sugar-image` renders PNG/JPEG into terminals via multiple protocols (Kitty, iTerm2, Sixel, HalfBlock)
 - `candy-codeshot` renders text (with ANSI) as images
 - **No overlap** — mosaic is for displaying images in terminals, freeze is for capturing text as images
 

@@ -4,12 +4,12 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
 
 - **Renderer-agnostic by design.** `PosterCard` holds *already-rendered* poster
   bytes (a string); it never decodes images. That keeps sugar-gallery off
-  candy-mosaic (and ext-gd) — the consumer renders posters however it likes and
+  sugar-image (and ext-gd) — the consumer renders posters however it likes and
   hands the ANSI in via `withPoster()`. Don't add an image decoder dependency.
-  (candy-mosaic appears in `require-dev` ONLY, so the integration suite and
+  (sugar-image appears in `require-dev` ONLY, so the integration suite and
   `examples/poster-grid-mosaic.php` can prove the glue against real renders; a
   standalone `composer require sugarcraft/sugar-gallery` still pulls in no
-  decoder. Keep it that way: nothing in `src/` may reference `SugarCraft\Mosaic`.)
+  decoder. Keep it that way: nothing in `src/` may reference `SugarCraft\Image`.)
 - **The grid is sparse + absolute-indexed.** `PosterGrid` stores cards keyed by
   ABSOLUTE index, not a packed list. Range fetches `withItems([$i => $card,…])`
   splice at the real offset so an A–Z jump to index 2600 shows that page, not the
@@ -36,7 +36,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   (verified in PosterGridTest). Mark only real cells (`idx < total`), not the
   blank trailing fillers.
 
-## The candy-mosaic glue (proven by `MosaicPosterIntegrationTest`)
+## The sugar-image glue (proven by `MosaicPosterIntegrationTest`)
 
 - **The recipe is `Mosaic::render() → PosterCard::withPoster() → PosterGrid::withItem()`.**
   Ask the renderer for the cell box the card already reserves
@@ -47,7 +47,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
 - **Inline vs overlay is the only renderer fork that reaches the widget.** Half/
   quarter-block (and ascii/ansi256/truecolor) return cell text → `withPoster()`.
   sixel/kitty/iterm2 return an opaque blob that would shred a text frame →
-  register it with candy-mosaic's `ImageLayer` and use `withImage($bytes, $id)`;
+  register it with sugar-image's `ImageLayer` and use `withImage($bytes, $id)`;
   the card then draws a one-cell `ImageOverlay::marker()` and the runtime paints
   the art on top. `hasPoster()` deliberately covers BOTH fill modes, so the grid's
   fill policy never has to know which one a cell is in — keep it that way. It keys
@@ -56,7 +56,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   because it renders as a skeleton and the owner must be offered the cell again.
 - **Cache the rendered bytes, keyed by protocol.** `DiskCache::key($url, $w, $h,
   $mosaic->protocol())` — width, height and protocol all change the bytes, and
-  candy-mosaic bumps its `FORMAT_VERSION` when a renderer is fixed so old entries
+  sugar-image bumps its `FORMAT_VERSION` when a renderer is fixed so old entries
   retire themselves. A cache probe handed to `indicesNeedingPoster()` must build
   the same key or it silently never hits.
 - **`indicesNeedingPoster()` / `visibleCards()` are the promoted half of the

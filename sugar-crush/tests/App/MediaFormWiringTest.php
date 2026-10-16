@@ -13,7 +13,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Media\Sd\Client;
-use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Image\ImageSource;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Crush\Tui\MediaForm\DisplayOverrides;

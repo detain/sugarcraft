@@ -12,7 +12,7 @@
 
 - Half-block rendering for 2× vertical resolution
 
-- Terminal graphics protocol integration (Sixel/Kitty/iTerm2 via candy-mosaic)
+- Terminal graphics protocol integration (Sixel/Kitty/iTerm2 via sugar-image)
 
 **Biggest missing capabilities:**
 
@@ -123,7 +123,7 @@ candy-flip/src/
 | `charmbracelet/x/cellbuf` (Go) | Cell buffer | Damage tracking, cell-based rendering, wide char handling | Medium |
 | `textualize/textual` (Python) | Reactive patterns | Reactive state, message pump, CSS layout, compositor | Medium |
 | `ratatui/ratatui` (Rust) | Buffer diffing | Immediate-mode with buffer diffing, Cassowary layout, widget traits | Medium |
-| `sugarcraft/candy-mosaic` | Sister library | Protocol rendering (Kitty/Sixel/iTerm2/HalfBlock), LRU cache, animation driver | Critical |
+| `sugarcraft/sugar-image` | Sister library | Protocol rendering (Kitty/Sixel/iTerm2/HalfBlock), LRU cache, animation driver | Critical |
 | `charmbracelet/vhs` (Go) | Tape/recording | .tape DSL, frame capture, FFmpeg encoding, theme system | Low |
 | `charmbracelet/glow` (Go) | TUI patterns | Lipgloss styling, viewport scrolling, status bar patterns | Low |
 
@@ -161,7 +161,7 @@ candy-flip/src/
 
 - Wire `FloydSteinberg::dither()` before downsampling
 
-- Add `Dither` enum: `None`, `FloydSteinberg`, `Stucki`, `Atkinson` (candy-mosaic has Stucki/Atkinson)
+- Add `Dither` enum: `None`, `FloydSteinberg`, `Stucki`, `Atkinson` (sugar-image has Stucki/Atkinson)
 
 - Add `PRESET_PALETTE` render mode that outputs palette-indexed glyphs
 **Estimated complexity:** Medium
@@ -173,7 +173,7 @@ candy-flip/src/
 
 **Description:** `PRESET_SOLID` uses full-cell `█` (1× vertical resolution). Half-blocks (`▀` upper + `▄` lower) would double effective vertical resolution with 24-bit color per half.
 **Why it matters:** jif and ansipx both use half-blocks. Doubling vertical resolution significantly improves visual quality for the same terminal width.
-**Source:** `Gaurav-Gosain/jif`, `Zebbeni/ansipx`, `docs/repo_map/sugarcraft_candy-mosaic.md` (HalfBlockRenderer)
+**Source:** `Gaurav-Gosain/jif`, `Zebbeni/ansipx`, `docs/repo_map/sugarcraft_sugar-image.md` (HalfBlockRenderer)
 **Implementation ideas:**
 
 - In `Renderer`, add `PRESET_HALFBLOCK` constant
@@ -204,13 +204,13 @@ candy-flip/src/
 ### 5. Terminal Graphics Protocol Output
 
 **Description:** On terminals supporting Kitty/Sixel/iTerm2, candy-flip produces text where binary protocols would look dramatically better.
-**Why it matters:** `candy-mosaic` handles protocol rendering but is not integrated with `candy-flip`'s `Player`/`TickMsg` animation loop.
-**Source:** `blacktop/go-termimg`, `docs/repo_map/sugarcraft_candy-mosaic.md`
+**Why it matters:** `sugar-image` handles protocol rendering but is not integrated with `candy-flip`'s `Player`/`TickMsg` animation loop.
+**Source:** `blacktop/go-termimg`, `docs/repo_map/sugarcraft_sugar-image.md`
 **Implementation ideas:**
 
-- Add `KittyRenderer::renderFrame()` + `delete()` to `candy-mosaic`'s animation driver
+- Add `KittyRenderer::renderFrame()` + `delete()` to `sugar-image`'s animation driver
 
-- Create `PlayerProtocol` that wraps `Player` but outputs via `candy-mosaic` protocol renderers instead of ANSI
+- Create `PlayerProtocol` that wraps `Player` but outputs via `sugar-image` protocol renderers instead of ANSI
 
 - Detect terminal capability via `Detect::cached()` and auto-select best protocol
 **Estimated complexity:** High — requires architectural integration between two libs
@@ -310,7 +310,7 @@ candy-flip/src/
 
 - **Disk cache** adds filesystem I/O; needs cache directory management
 
-- **Protocol output** requires `candy-mosaic` as dependency; increases coupling
+- **Protocol output** requires `sugar-image` as dependency; increases coupling
 
 ## Applicability to candy-flip
 
@@ -435,9 +435,9 @@ Table comparing ANSI text vs Kitty vs Sixel vs iTerm2 — quality, terminal supp
 
 How to use `FloydSteinberg` with a custom palette (e.g., IBM VGA 16-color, WebSafe 216-color).
 
-## 5. Integration with candy-mosaic
+## 5. Integration with sugar-image
 
-How to use `candy-mosaic`'s protocol renderers for near-lossless output within `candy-flip`'s player loop.
+How to use `sugar-image`'s protocol renderers for near-lossless output within `candy-flip`'s player loop.
 
 ---
 
@@ -523,16 +523,16 @@ Golden files for render output in both light/dark themes across different charac
 
 # Ecosystem / Integration Opportunities
 
-## 1. candy-flip × candy-mosaic Integration
+## 1. candy-flip × sugar-image Integration
 
-`candy-mosaic` provides:
+`sugar-image` provides:
 - `KittyRenderer`, `SixelRenderer`, `Iterm2Renderer` 
 
 - `Detect::cached()` for capability detection
 
 - `AnimationDriver` as candy-core Model
 
-**Integration:** Create `candy-flip/src/ProtocolPlayer.php` that wraps `candy-mosaic`'s renderers in the `Player` loop.
+**Integration:** Create `candy-flip/src/ProtocolPlayer.php` that wraps `sugar-image`'s renderers in the `Player` loop.
 
 ## 2. VHS Demo Tapes
 
@@ -579,7 +579,7 @@ Animated sparklines or bar charts could use `candy-flip`'s frame rendering for r
 
 **Relevance:** Protocol rendering (Kitty/Sixel/iTerm2/halfblocks), LRU resize cache, parallel Base64 encoding, animation support
 **Key insight:** Protocol rendering is 30-40× faster than Sixel client-side rendering but requires terminal support
-**Lessons:** LRU cache size of 4 in candy-mosaic vs 100 in go-termimg is a trade-off between memory and cache hit rate
+**Lessons:** LRU cache size of 4 in sugar-image vs 100 in go-termimg is a trade-off between memory and cache hit rate
 
 ## charmbracelet/bubbletea (Tea Model)
 
@@ -607,7 +607,7 @@ Animated sparklines or bar charts could use `candy-flip`'s frame rendering for r
 
 6. **Lanczos3 downsampling mode** — `imagecopyresampled()` approximation or imagick extension
 
-7. **candy-mosaic integration** — `ProtocolPlayer` using Kitty/Sixel/iTerm2 renderers
+7. **sugar-image integration** — `ProtocolPlayer` using Kitty/Sixel/iTerm2 renderers
 
 8. **APNG input support** — detect and decode animated PNG
 
@@ -638,7 +638,7 @@ Animated sparklines or bar charts could use `candy-flip`'s frame rendering for r
 | Custom density ramp | Medium | Low | Low | **P1 — High** |
 | Status bar enhancement | Low | Low | Low | **P1 — High** |
 | Lanczos3 downsampling | High | Medium | Medium | **P1 — High** |
-| candy-mosaic integration | Critical | High | Medium | **P2 — Medium** |
+| sugar-image integration | Critical | High | Medium | **P2 — Medium** |
 | APNG input support | Medium | Medium | Low | **P2 — Medium** |
 | Disk cache (SHA-256) | Medium | Medium | Low | **P2 — Medium** |
 | Protocol auto-detection | High | Medium | Low | **P2 — Medium** |
@@ -664,12 +664,12 @@ The package's primary strategic gap is **visual quality** — area-average downs
 
 **Medium-term priorities:**
 
-4. Integrate with `candy-mosaic` for protocol-aware rendering — this transforms candy-flip from a text-only viewer into a quality-conscious multi-protocol viewer
+4. Integrate with `sugar-image` for protocol-aware rendering — this transforms candy-flip from a text-only viewer into a quality-conscious multi-protocol viewer
 
 5. Add Lanczos3 downsampling via `imagecopyresampled()` approximation or `ext-imagick`
 
 **Long-term positioning:**
-candy-flip should occupy the role of the **universal ASCII GIF viewer** — works everywhere, requires only PHP 8.3+ and ext-gd, with optional protocol enhancements via candy-mosaic. This is a valuable niche: not the highest quality (protocol rendering wins) but the most portable and dependency-free.
+candy-flip should occupy the role of the **universal ASCII GIF viewer** — works everywhere, requires only PHP 8.3+ and ext-gd, with optional protocol enhancements via sugar-image. This is a valuable niche: not the highest quality (protocol rendering wins) but the most portable and dependency-free.
 
 The competitive landscape reveals that text-based ANSI rendering is a deliberate tradeoff: universal compatibility at the cost of visual fidelity. The cutting edge (nalediym/gifterm, hzeller/timg, blacktop/go-termimg) uses binary graphics protocols for near-lossless rendering. candy-flip's contribution is making ASCII GIF playback accessible and dependency-free on any PHP 8.3+ system with ext-gd.
 

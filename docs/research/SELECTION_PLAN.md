@@ -132,12 +132,12 @@
 - **Effort**: 1-2 hours
 - **Research**: `libraries/candy-ansi-inspect-research.md`
 
-### candy-mosaic
+### sugar-image
 
 ### [ ] Fix WezTerm detection (TERM_PROGRAM=WezTerm)
 
 - **Effort**: 30 minutes
-- **Research**: `libraries/candy-mosaic-research.md`
+- **Research**: `libraries/sugar-image-research.md`
 
 ### candy-vt
 
@@ -441,7 +441,7 @@ All 45 research documents available at:
 | candy-metrics | 20KB |
 | candy-minesweeper | 15KB |
 | candy-starter | 18KB |
-| candy-mosaic | 24KB |
+| sugar-image | 24KB |
 | candy-palette | 15KB |
 | candy-pty | 24KB |
 | candy-sql | 11KB |

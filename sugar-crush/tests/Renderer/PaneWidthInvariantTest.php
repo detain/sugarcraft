@@ -7,8 +7,8 @@ namespace SugarCraft\Crush\Tests\Renderer;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Mosaic\ImageLayer;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
@@ -504,7 +504,7 @@ final class PaneWidthInvariantTest extends TestCase
     public function testTheZoneScanSurvivesAFrameCarryingToolPaletteAndImageZones(): void
     {
         if (!\extension_loaded('gd')) {
-            self::markTestSkipped('candy-mosaic decodes images through ext-gd');
+            self::markTestSkipped('sugar-image decodes images through ext-gd');
         }
 
         $chat = new Chat(
@@ -795,7 +795,7 @@ final class PaneWidthInvariantTest extends TestCase
     public function testAnImageMarkerRowSurvivesTheFitterAtTheBoundaryWidths(): void
     {
         if (!\extension_loaded('gd')) {
-            self::markTestSkipped('candy-mosaic decodes images through ext-gd');
+            self::markTestSkipped('sugar-image decodes images through ext-gd');
         }
 
         // cols=8 is not a real terminal, it is the case that used to make the
@@ -1642,7 +1642,7 @@ final class PaneWidthInvariantTest extends TestCase
         return $out;
     }
 
-    /** A real, decodable PNG — candy-mosaic rejects anything it cannot decode. */
+    /** A real, decodable PNG — sugar-image rejects anything it cannot decode. */
     private static function pngBytes(): string
     {
         $gd = imagecreatetruecolor(20, 10);

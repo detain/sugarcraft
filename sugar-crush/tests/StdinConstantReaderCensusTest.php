@@ -33,7 +33,7 @@ use PHPUnit\Framework\TestCase;
  *   THE CENSUS BEHIND THEM WAS SCOPED TO `sugar-crush/`, AND THE READER THAT
  *   MATTERED WAS IN A SIBLING LIBRARY.
  *
- * `SugarCraft\Mosaic\Detect::stdinFd()` is `self::$probeStdin ?? STDIN` and
+ * `SugarCraft\Image\Detect::stdinFd()` is `self::$probeStdin ?? STDIN` and
  * hands the result to `stream_select()` with no `is_resource()` guard. A
  * census's ALPHABET includes the directory it was pointed at, and that one was
  * a package.
@@ -44,7 +44,7 @@ use PHPUnit\Framework\TestCase;
  * option (a).
  *
  * WHAT IS TRUE NOW: that run predated E302, and it was never 107 costs. It was
- * ONE defect multiplied by every test that reached it — `candy-mosaic` naming
+ * ONE defect multiplied by every test that reached it — `sugar-image` naming
  * `Capability::Iterm2Image`, a case candy-palette spells `ITerm2`, in a
  * fallback that nothing entered until fd 0 was closed. The unguarded read
  * below was the TRIGGER; the enum name was the FAULT, and `1a2caebb` fixed it.
@@ -52,7 +52,7 @@ use PHPUnit\Framework\TestCase;
  * `case ITerm2`, and that commit is an ancestor of this tree. RE-MEASURED
  * here after it, PHP 8.3.6, full suite, with the descriptor replacement
  * applied to `tests/bootstrap.php`: one error and two failures, all three in
- * tests whose entire subject is that repair, and not one `candy-mosaic` error
+ * tests whose entire subject is that repair, and not one `sugar-image` error
  * of any kind.
  *
  * AND THE ONE SITE THAT WAS STILL WRONG AFTER THE PRICE FELL IS FIXED TOO.
@@ -145,7 +145,7 @@ use PHPUnit\Framework\TestCase;
  * which this retires), every row carries a judgement. Each was driven on this
  * box rather than reasoned about, PHP 8.3.6:
  *
- *  - `candy-mosaic/src/Detect.php` — GUARDED NOW, and it is the site that
+ *  - `sugar-image/src/Detect.php` — GUARDED NOW, and it is the site that
  *    TRIGGERED round 49's 107 errors rather than the site that caused them:
  *    the fault was the enum case name in the fallback it dropped into (E302).
  *    WHAT THIS ROW SAID: "UNGUARDED … `stdinFd()` returns `?? STDIN` and
@@ -387,7 +387,7 @@ final class StdinConstantReaderCensusTest extends TestCase
         'candy-core/src/Util/Tty/PosixBackend.php' => ['STDIN'],
         'candy-core/src/Util/Tty/WindowsBackend.php' => ['STDIN'],
         'candy-core/src/WorkerPool.php' => ['php://fd/0'],
-        'candy-mosaic/src/Detect.php' => ['STDIN'],
+        'sugar-image/src/Detect.php' => ['STDIN'],
         'sugar-crush/src/Agents/ProcessExecutor.php' => ['STDIN'],
         'sugar-crush/src/Cli/Acp.php' => ['STDIN'],
         'sugar-crush/src/Cli/NonInteractive.php' => ['STDIN'],

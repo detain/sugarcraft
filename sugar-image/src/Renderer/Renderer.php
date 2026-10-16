@@ -1,0 +1,60 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image\Renderer;
+
+use SugarCraft\Image\ImageSource;
+
+/**
+ * Contract for image-to-terminal renderers.
+ *
+ * Each backend (Sixel, Kitty, iTerm2, HalfBlock) implements this
+ * interface. Renderers are immutable — all configuration is supplied
+ * at construction time via their own factory methods.
+ */
+interface Renderer
+{
+    /**
+     * Render `$image` into ANSI bytes at the given cell dimensions.
+     *
+     * @param ImageSource $image  Source image
+     * @param int         $width  Target width in terminal cells
+     * @param int|null    $height Target height in terminal cells
+     *                            (null = auto from aspect ratio)
+     * @return string             Raw ANSI escape bytes — write directly to stdout
+     */
+    public function render(ImageSource $image, int $width, ?int $height = null): string;
+
+    /**
+     * Stable backend identifier: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock'.
+     */
+    public function name(): string;
+
+    /**
+     * True if this backend supports partial transparency (alpha channel).
+     * Half-block does not; Sixel and Kitty do.
+     */
+    public function supportsAlpha(): bool;
+
+    /**
+     * True if {@see render()} produces inline cell text — newline-separated
+     * rows, one terminal line per cell row — that can be placed directly in a
+     * text frame and stitched beside other content (half/quarter-block, ASCII).
+     *
+     * False for pixel-graphics protocols (Sixel, Kitty, iTerm2) whose output is
+     * one opaque escape blob with no per-row structure: it must be painted as an
+     * out-of-band overlay (see candy-core's `ImageOverlay`) rather than embedded
+     * in the frame. Lets a caller route output without hard-coding protocol names.
+     */
+    public function isInline(): bool;
+
+    /**
+     * Emit the protocol-specific sequence to delete a previously rendered
+     * image identified by `$imageId`.
+     *
+     * @param string $imageId  Numeric or named image identifier
+     * @return string          Raw ANSI escape bytes — write directly to stdout
+     */
+    public function delete(string $imageId): string;
+}

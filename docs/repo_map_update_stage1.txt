@@ -138,7 +138,7 @@ The `SubStyleParser` for per-element styles already exists in candy-scriptui —
 
 ## Stage 2 Findings (packages 11-19)
 
-Sources: sugar-mouse, sugar-charts, sugar-table, candy-wish, candy-mosaic, candy-mdview, candy-log, candy-vt, candy-vcr
+Sources: sugar-mouse, sugar-charts, sugar-table, candy-wish, sugar-image, candy-mdview, candy-log, candy-vt, candy-vcr
 
 ### 1. Top 3 Most Critical Feature Gaps
 
@@ -157,7 +157,7 @@ Upstream issue #10: drag operations produce duplicate `MouseDown` events as curs
 sugar-charts, sugar-table, candy-mdview, candy-vt, and candy-vcr all explicitly cite the absence of byte-level SGR output assertions. Only Sixel in sugar-charts has comprehensive snapshot tests. Without golden files, any regression in color codes, cursor positioning, or layout is invisible until runtime. Upstream repos (bubbletea, huh, ratatui, pterm with 28,952 tests) all use golden files. This is the single highest-confidence improvement available across Stage 2 packages.
 
 #### B. Terminal Capability Detection Failures Cause Panics, Not Graceful Fallback
-candy-mosaic, candy-mdview, and candy-wish all struggle with terminal probing failures (Windows, SSH, old terminals, stdout locked). ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No Stage 2 package has implemented a robust `auto()` fallback pattern that always returns a usable renderer with sensible defaults. This is a consistent pattern across the entire image/terminal rendering layer.
+sugar-image, candy-mdview, and candy-wish all struggle with terminal probing failures (Windows, SSH, old terminals, stdout locked). ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No Stage 2 package has implemented a robust `auto()` fallback pattern that always returns a usable renderer with sensible defaults. This is a consistent pattern across the entire image/terminal rendering layer.
 
 ### 3. Top 3 Most Commonly Cited External Repos
 
@@ -165,14 +165,14 @@ candy-mosaic, candy-mdview, and candy-wish all struggle with terminal probing fa
 Also: glamour (block stack, cascading style inheritance, two-phase rendering), lipgloss (style system, color blending, word wrap fixes), bubbles (viewport, textarea memoization). glow and its dependencies define the markdown/TUI rendering architecture.
 
 #### 2. `ratatui/ratatui` + `ratatui/ratatui-image` — Tied for buffer/layout (Critical)
-ratatui cited for sugar-charts (Gauge widget, buffer diffing), candy-mosaic (sliced rendering, background color query, graceful fallback), candy-vt (buffer diffing, widget trait pattern), and general architecture. ratatui-image is the reference for sliced/partial rendering and never-fail initialization.
+ratatui cited for sugar-charts (Gauge widget, buffer diffing), sugar-image (sliced rendering, background color query, graceful fallback), candy-vt (buffer diffing, widget trait pattern), and general architecture. ratatui-image is the reference for sliced/partial rendering and never-fail initialization.
 
 #### 3. `blacktop/go-termimg` — Terminal image rendering (High)
-Referenced by candy-mosaic for: parallel base64 encoding (~33% speedup via sync.Pool), larger LRU cache (100 entries vs 4), request coalescing in async pipeline, Unicode placeholder mode for Kitty scrolling. Also ratatui-image for sliced/partial rendering patterns and graceful fallback architecture.
+Referenced by sugar-image for: parallel base64 encoding (~33% speedup via sync.Pool), larger LRU cache (100 entries vs 4), request coalescing in async pipeline, Unicode placeholder mode for Kitty scrolling. Also ratatui-image for sliced/partial rendering patterns and graceful fallback architecture.
 
 ### 4. Top 2 Immediate-Win Roadmap Items
 
-#### A. `Mosaic::auto()` Graceful Fallback + `Mosaic::diagnose()` — candy-mosaic (P0, Days)
+#### A. `Mosaic::auto()` Graceful Fallback + `Mosaic::diagnose()` — sugar-image (P0, Days)
 ratatui-image issues #69, #68, #72 all stem from terminal probing failures. Add `Mosaic::auto()` that tries probing and falls back to HalfBlock (safe universal fallback) on any exception. Add `Mosaic::diagnose()` that produces a structured report of detected capabilities and probing failures. Low effort, eliminates user-facing failures on Windows, SSH, and old terminals.
 
 #### B. Wire MarkLine into LineChart + Add Snapshot Tests — sugar-charts (P0, Days)

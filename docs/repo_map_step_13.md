@@ -1,4 +1,4 @@
-# Step 13 — candy-mosaic + candy-palette TerminalProbe consolidation
+# Step 13 — sugar-image + candy-palette TerminalProbe consolidation
 
 **Branch:** `ai/probe-consolidation`
 **Depends on:** step-00 ✅ (no new shared package; lifts the probe into existing candy-palette)
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Extract terminal capability probing into a shared `TerminalProbe` in `candy-palette` (which already does 12-step detection per §422 of the repo map). Add `Mosaic::auto()` graceful fallback + `Mosaic::diagnose()` structured probe report to candy-mosaic, both consuming the new shared `TerminalProbe`. Eliminates the user-facing panics on Windows/SSH/old terminals (issues #69/#68/#72/#64 on ratatui-image cited).
+Extract terminal capability probing into a shared `TerminalProbe` in `candy-palette` (which already does 12-step detection per §422 of the repo map). Add `Mosaic::auto()` graceful fallback + `Mosaic::diagnose()` structured probe report to sugar-image, both consuming the new shared `TerminalProbe`. Eliminates the user-facing panics on Windows/SSH/old terminals (issues #69/#68/#72/#64 on ratatui-image cited).
 
 Reference: `docs/repo_map_update.md` §345.6 (TerminalProbe / Mosaic::auto()), §387.9 (probing reinvention), §327.5 (frameworks).
 
@@ -19,9 +19,9 @@ Reference: `docs/repo_map_update.md` §345.6 (TerminalProbe / Mosaic::auto()), �
 ## Files expected to be modified
 
 - `candy-palette/src/` — refactor the existing detection logic to use TerminalProbe internally; existing public API stays.
-- `candy-mosaic/composer.json` — add `sugarcraft/candy-palette: @dev` if not already there (via `path-repo-closure`).
-- `candy-mosaic/src/Mosaic.php` — add `Mosaic::auto(): self` and `Mosaic::diagnose(): ProbeReport` factories.
-- `candy-mosaic/tests/MosaicTest.php` — add auto() + diagnose() test cases.
+- `sugar-image/composer.json` — add `sugarcraft/candy-palette: @dev` if not already there (via `path-repo-closure`).
+- `sugar-image/src/Mosaic.php` — add `Mosaic::auto(): self` and `Mosaic::diagnose(): ProbeReport` factories.
+- `sugar-image/tests/MosaicTest.php` — add auto() + diagnose() test cases.
 
 ## Acceptance criteria
 
@@ -29,7 +29,7 @@ Reference: `docs/repo_map_update.md` §345.6 (TerminalProbe / Mosaic::auto()), �
 - [ ] `ProbeReport::has(Capability): bool`, `ProbeReport::source(Capability): string` (e.g., "env:COLORTERM", "terminfo:Tc", "escape-query:OSC4").
 - [ ] `Mosaic::auto()` returns a Mosaic instance using the best renderer the probe finds (Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii). NEVER throws — falls back to BasicAscii on every error.
 - [ ] `Mosaic::diagnose()` returns the ProbeReport — useful for users debugging "why is my terminal not rendering Sixel".
-- [ ] Existing candy-palette / candy-mosaic tests still pass.
+- [ ] Existing candy-palette / sugar-image tests still pass.
 - [ ] ≥95 % coverage on TerminalProbe + ProbeReport + auto().
 - [ ] No more "unhelpful error on Windows/SSH" — replaced by a falling-back Mosaic + actionable diagnose() output.
 - [ ] `git status` clean on master.
@@ -44,8 +44,8 @@ Reference: `docs/repo_map_update.md` §345.6 (TerminalProbe / Mosaic::auto()), �
    - Pick best supported renderer: `Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii`.
    - Construct + return Mosaic with that renderer. `BasicAscii` is the always-available floor.
 5. **Add Mosaic::diagnose()** — calls TerminalProbe::run(), returns the ProbeReport.
-6. **Path-repo closure**: candy-mosaic now requires candy-palette; if it didn't before, run `path-repo-closure`.
-7. Run phpunit in candy-palette + candy-mosaic + check-path-repos.
+6. **Path-repo closure**: sugar-image now requires candy-palette; if it didn't before, run `path-repo-closure`.
+7. Run phpunit in candy-palette + sugar-image + check-path-repos.
 
 ## Tester brief
 
@@ -58,26 +58,26 @@ Reference: `docs/repo_map_update.md` §345.6 (TerminalProbe / Mosaic::auto()), �
 ## Scribe brief
 
 - `candy-palette/README.md`: add section "Terminal capability probing" with TerminalProbe code example.
-- `candy-mosaic/README.md`: add `## Auto-detection` section with `Mosaic::auto()` + `diagnose()` examples; highlight the "never throws" guarantee.
+- `sugar-image/README.md`: add `## Auto-detection` section with `Mosaic::auto()` + `diagnose()` examples; highlight the "never throws" guarantee.
 - CALIBER_LEARNINGS in both: "TerminalProbe is the single source of truth for capability detection. Don't re-roll env-var parsing in consumers — use TerminalProbe."
 - MATCHUPS: both libs get note "shared TerminalProbe via candy-palette".
 
 ## Ship brief
 
-- **PR title**: `candy-mosaic + candy-palette: shared TerminalProbe + Mosaic::auto() never throws`
+- **PR title**: `sugar-image + candy-palette: shared TerminalProbe + Mosaic::auto() never throws`
 - **PR body**:
   ```
   ## Summary
   - candy-palette adds TerminalProbe / ProbeReport / Capability extracting its 12-step detection into a public API.
-  - candy-mosaic gains Mosaic::auto() (graceful fallback to BasicAscii on any probe failure) and Mosaic::diagnose() (structured ProbeReport).
+  - sugar-image gains Mosaic::auto() (graceful fallback to BasicAscii on any probe failure) and Mosaic::diagnose() (structured ProbeReport).
   - Addresses ratatui-image issues #69, #68, #72, #64 pattern: no more unhelpful errors on Windows/SSH/old terminals.
   - candy-mdview + candy-wish migrate to TerminalProbe in step-29.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-palette + candy-mosaic (≥95% coverage on probe code)
+  - [x] vendor/bin/phpunit in candy-palette + sugar-image (≥95% coverage on probe code)
   - [x] Mosaic::auto on simulated probe failure — confirms no exception, falls to BasicAscii
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_13.md, docs/repo_map_update.md §327.5, §345.6, §387.9
   ```
-- Commit subject: `candy-palette: extract TerminalProbe; candy-mosaic: auto()+diagnose()`.
+- Commit subject: `candy-palette: extract TerminalProbe; sugar-image: auto()+diagnose()`.

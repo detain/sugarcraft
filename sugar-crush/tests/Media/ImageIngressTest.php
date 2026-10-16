@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tests\Media;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Media\ImageIngress;
-use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Image\ImageSource;
 
 /**
  * Plan W4.1 gates for the ingress boundary: every accepted fixture yields the

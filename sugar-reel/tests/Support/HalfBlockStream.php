@@ -14,7 +14,7 @@ use SugarCraft\Reel\Tests\FakeDecoder;
 /**
  * Reads a rendered half-block ANSI stream back into its per-cell semantics.
  *
- * The two HalfBlock paths (Player's inline Buffer path and the candy-mosaic
+ * The two HalfBlock paths (Player's inline Buffer path and the sugar-image
  * `Render\HalfBlockRenderer`) encode their escapes differently — one combined
  * `0;38;2;r;g;b;48;2;r;g;bm` run per cell versus a reset-terminated fg/bg pair —
  * so comparing their bytes says nothing useful while comparing glyph counts says

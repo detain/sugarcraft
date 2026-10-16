@@ -1117,8 +1117,8 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Location:**
   - `sugar-crush/bin/sugarcrush:551-556` (`Bootstrap::app()` evaluated before `Program::run()` enters raw mode)
   - `sugar-crush/src/Cli/Bootstrap.php:1473`; `sugar-crush/src/ToolResult.php:457-468`
-  - `candy-mosaic/src/Mosaic.php:111-128`
-  - `candy-mosaic/src/Detect.php:49-78` (probe), `:345-395` (16t → 14t + 18t fallback), `:231` (DA1 early exit tests `str_contains($buf, "\x1b[c")`)
+  - `sugar-image/src/Mosaic.php:111-128`
+  - `sugar-image/src/Detect.php:49-78` (probe), `:345-395` (16t → 14t + 18t fallback), `:231` (DA1 early exit tests `str_contains($buf, "\x1b[c")`)
 - **Problem:**
   - `Detect::probe()` writes DA1 and XTWINOPS queries and `stream_select`s stdin while the TTY is still canonical with echo on.
   - The replies echo onto the screen and cannot be read before a newline, so every query waits out its 100 ms.

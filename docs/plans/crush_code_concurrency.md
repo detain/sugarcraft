@@ -702,7 +702,7 @@ Three independent reasons, any one of which is fatal for this use:
 1270646  php8.3 -S 127.0.0.1:41393  /tmp/mosaic-ssrf-…/router.php
 ```
 
-Measured 2026-08-19: four `php -S` servers left behind by **candy-mosaic's** SSRF tests, 3h18m old,
+Measured 2026-08-19: four `php -S` servers left behind by **candy-mosaic's** SSRF tests, 3h18m old, <!-- @rename-keep historical provenance -->
 0.0% CPU each. They are not sugar-crush's and sugar-crush's suite does not start them.
 
 **Why they belong in a concurrency document.** They are the standing proof that the "never run a global

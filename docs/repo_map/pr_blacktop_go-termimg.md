@@ -16,11 +16,11 @@
 
 ## 2. Existing SugarCraft Mapping
 
-### Primary Mapping: `candy-mosaic`
+### Primary Mapping: `sugar-image`
 
-The `candy-mosaic` library in SugarCraft directly maps to `go-termimg` functionality:
+The `sugar-image` library in SugarCraft directly maps to `go-termimg` functionality:
 
-| go-termimg Concept | candy-mosaic Implementation |
+| go-termimg Concept | sugar-image Implementation |
 |-------------------|---------------------------|
 | `Image` struct with fluent API | `Mosaic` facade with `render()` |
 | `KittyRenderer` | `Renderer\KittyRenderer` |
@@ -35,7 +35,7 @@ The `candy-mosaic` library in SugarCraft directly maps to `go-termimg` functiona
 | Font size caching | `Detect::cached()` per-process |
 | Resize LRU cache | Not yet implemented |
 
-**Key Architectural Difference**: go-termimg uses a fluent `Image` builder pattern; candy-mosaic uses a `Mosaic::probe()` factory with a `render(image, width, height)` method.
+**Key Architectural Difference**: go-termimg uses a fluent `Image` builder pattern; sugar-image uses a `Mosaic::probe()` factory with a `render(image, width, height)` method.
 
 ## 3. Previously Identified Gaps (from repo_map/blacktop_go-termimg.md)
 
@@ -137,7 +137,7 @@ These are automated Dependabot PRs - low signal but show active maintenance.
 **Pattern**: Multiple goroutines accessing shared cache with RLock
 **Problem**: TOCTOU (time-of-check to time-of-use) race
 **Solution**: Atomic read-modify-write under single lock
-**Relevance to SugarCraft**: `candy-mosaic`'s `Detect::cached()` should use atomic operations or proper locking
+**Relevance to SugarCraft**: `sugar-image`'s `Detect::cached()` should use atomic operations or proper locking
 
 ### Pain Point #2: CSI Query Side Effects
 
@@ -152,7 +152,7 @@ These are automated Dependabot PRs - low signal but show active maintenance.
 **Pattern**: Missing `\x1b\\` terminator in clear sequences
 **Problem**: Terminal interprets subsequent output as escape sequence continuation
 **Solution**: Always terminate DCS/APC sequences with `\x1b\\`
-**Relevance to SugarCraft**: Must ensure all candy-mosaic escape sequences are properly terminated
+**Relevance to SugarCraft**: Must ensure all sugar-image escape sequences are properly terminated
 
 ### Pain Point #4: Tmux Positioning
 
@@ -226,7 +226,7 @@ This is a known trade-off:
 3. **Chunked encoding** - 4KB default chunks
 4. **Resize caching** - LRU with RWMutex
 
-**Relevance to SugarCraft**: candy-mosaic doesn't have resize caching yet - this would be a valuable optimization.
+**Relevance to SugarCraft**: sugar-image doesn't have resize caching yet - this would be a valuable optimization.
 
 ## 11. Extensibility Discussions
 
@@ -341,12 +341,12 @@ Regular commits (multiple per month), respond to issues, merge fixes quickly
 
 **Status**: Planned but not implemented
 **Mention**: README says "WebP support planned"
-**Relevance**: candy-mosaic uses ext-gd which supports WebP - potential advantage
+**Relevance**: sugar-image uses ext-gd which supports WebP - potential advantage
 
 ### Idea: Animation Support
 
 **Status**: Partially implemented (Animation struct exists with TODO comments)
-**Relevance**: candy-mosaic has `AnimationDriver` and `Animation` classes - might need to check if go-termimg's approach is better
+**Relevance**: sugar-image has `AnimationDriver` and `Animation` classes - might need to check if go-termimg's approach is better
 
 ### Idea: File Transfer Optimization
 
@@ -357,19 +357,19 @@ Regular commits (multiple per month), respond to issues, merge fixes quickly
 
 ### Problem #1: CSI Query Side Effects (HIGH)
 
-**Risk**: candy-mosaic's `Detect` class issues DA1 queries and CSI font-size queries that could pollute stdin
+**Risk**: sugar-image's `Detect` class issues DA1 queries and CSI font-size queries that could pollute stdin
 **Evidence**: PR #27 specifically fixed this by skipping queries when protocol detected from environment
-**Action**: Review candy-mosaic's Detect class for similar issues
+**Action**: Review sugar-image's Detect class for similar issues
 
 ### Problem #2: Race Condition in Cache (MEDIUM)
 
-**Risk**: If candy-mosaic ever adds a resize cache, the same TOCTOU pattern could occur
+**Risk**: If sugar-image ever adds a resize cache, the same TOCTOU pattern could occur
 **Evidence**: PR #25/26 fixed exactly this pattern
 **Action**: If implementing ResizeCache, use atomic operations or single-lock discipline
 
 ### Problem #3: Tmux Positioning (MEDIUM)
 
-**Risk**: candy-mosaic's `TmuxPassthroughDecorator` may not handle cursor-position-dependent rendering correctly
+**Risk**: sugar-image's `TmuxPassthroughDecorator` may not handle cursor-position-dependent rendering correctly
 **Evidence**: Issue #10 shows user experienced different behavior based on cursor position in tmux
 **Action**: Test TmuxPassthroughDecorator across different cursor positions
 
@@ -377,13 +377,13 @@ Regular commits (multiple per month), respond to issues, merge fixes quickly
 
 **Risk**: Missing `\x1b\\` terminators could cause terminal state corruption
 **Evidence**: PR #27 fixed missing terminator in ClearAll
-**Action**: Audit all candy-mosaic escape sequences for proper termination
+**Action**: Audit all sugar-image escape sequences for proper termination
 
 ### Problem #5: Protocol Detection Clarity (MEDIUM)
 
 **Risk**: Users don't understand which protocols will work where
 **Evidence**: Issue #10 explicitly complained about unclear support
-**Action**: Add clearer documentation in candy-mosaic about protocol/terminal compatibility
+**Action**: Add clearer documentation in sugar-image about protocol/terminal compatibility
 
 ## 19. Features SugarCraft Should Consider
 
@@ -408,7 +408,7 @@ Regular commits (multiple per month), respond to issues, merge fixes quickly
 ### Feature #4: WebP Support via ext-gd
 
 **What**: Add WebP format support
-**Why valuable**: go-termimg has this as "planned"; candy-mosaic has it via GD
+**Why valuable**: go-termimg has this as "planned"; sugar-image has it via GD
 **Reference**: ext-gd natively supports WebP
 
 ### Feature #5: Terminal Capability Detection Caching
@@ -431,20 +431,20 @@ Fast path: Check environment variables (`KITTY_WINDOW_ID`, `TERM`, etc.)
 Slow path: Issue CSI queries with timeout
 Fallback: Use hardcoded defaults per terminal type
 
-**Application**: candy-mosaic's `Detect` class should follow this pattern.
+**Application**: sugar-image's `Detect` class should follow this pattern.
 
 ### Lesson #3: Escape Sequences Must Be Terminated
 
 All DCS/APC/OSC sequences need proper terminators (`\x1b\\` for DCS/APC)
 Missing terminators cause terminal state corruption
 
-**Application**: Audit all candy-mosaic escape sequence generation.
+**Application**: Audit all sugar-image escape sequence generation.
 
 ### Lesson #4: Concurrency Requires Single-Point Atomicity
 
 For cache operations that check-then-update, the entire operation must be atomic under a single lock
 
-**Application**: If implementing ResizeCache in candy-mosaic, use `get()` method that locks for entire read-modify-write.
+**Application**: If implementing ResizeCache in sugar-image, use `get()` method that locks for entire read-modify-write.
 
 ## 21. Defensive Design Lessons
 
@@ -472,7 +472,7 @@ Issues only appear in specific terminals:
 - Alacritty: No Sixel support (fails silently)
 - tmux: Special passthrough requirements
 
-**Defense**: Test candy-mosaic against Kitty, iTerm2, Alacritty, VS Code, tmux.
+**Defense**: Test sugar-image against Kitty, iTerm2, Alacritty, VS Code, tmux.
 
 ### Lesson #4: Clear Operations Must Be Idempotent
 
@@ -508,7 +508,7 @@ Charmbracelet's Bubbletea has first-class image support via go-termimg
 
 Long-running renders should not block UI
 
-**Implication**: candy-mosaic's `AsyncRenderer` is the right approach.
+**Implication**: sugar-image's `AsyncRenderer` is the right approach.
 
 ## 23. Strategic Opportunities
 
@@ -530,7 +530,7 @@ go-termimg has WebP as "planned"
 ### Opportunity #4: Resize Caching
 
 go-termimg has LRU resize cache
-**Opportunity**: candy-mosaic doesn't have this yet; adding would improve repeat-render performance
+**Opportunity**: sugar-image doesn't have this yet; adding would improve repeat-render performance
 
 ## 24. Cross-Ecosystem Pattern Matches
 
@@ -562,7 +562,7 @@ go-termimg has LRU resize cache
 
 ### Recommendation #1: Audit Detect Class for Stdin Pollution (HIGH ROI)
 
-**Action**: Review `candy-mosaic/src/Detect.php` to ensure:
+**Action**: Review `sugar-image/src/Detect.php` to ensure:
 
 - CSI queries have timeouts
 - stdin is flushed after queries
@@ -572,7 +572,7 @@ go-termimg has LRU resize cache
 
 ### Recommendation #2: Add Resize LRU Cache (MEDIUM ROI)
 
-**Action**: Implement `ResizeCache` in candy-mosaic with:
+**Action**: Implement `ResizeCache` in sugar-image with:
 
 - Single-lock `get()` method (no TOCTOU)
 - RWMutex for concurrent reads, exclusive writes
@@ -598,7 +598,7 @@ go-termimg has LRU resize cache
 
 ### Recommendation #5: Document Protocol/Terminal Compatibility (MEDIUM ROI)
 
-**Action**: Create compatibility matrix in candy-mosaic README
+**Action**: Create compatibility matrix in sugar-image README
 
 | Terminal | Sixel | Kitty | iTerm2 | Halfblock |
 |----------|-------|-------|--------|-----------|

@@ -11,8 +11,8 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\ToolCall;
-use SugarCraft\Mosaic\ImageLayer;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\Mosaic;
 
 /**
  * The running tool row's live-preview block (W2.4): the newest frame paints
@@ -77,7 +77,7 @@ final class RunningRowPreviewTest extends TestCase
     public function testAnInlineFramePaintsIntoTheRowText(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
         PreviewSlots::set('call-1', self::SQUARE_PNG_B64, 0.5, 4.0);
 
@@ -90,7 +90,7 @@ final class RunningRowPreviewTest extends TestCase
     public function testABlobFrameRidesTheImageLayerMarkerAndNeverSpillsBytes(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
         $mosaic = Mosaic::fromModeString('sixel');
         $this->assertNotNull($mosaic);

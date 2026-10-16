@@ -62,7 +62,7 @@
 
 ### Preview and Rendering
 
-- **File preview pane** (`PreviewPane`) — Image preview via `candy-mosaic` (Kitty/iTerm2/Sixel protocols); text metadata block for non-images (size, mtime, mode, MIME type)
+- **File preview pane** (`PreviewPane`) — Image preview via `sugar-image` (Kitty/iTerm2/Sixel protocols); text metadata block for non-images (size, mtime, mode, MIME type)
 
 - **Bulk rename engine** (`BulkRename`) — PCRE regex pattern + template with placeholders: `{name}`, `{ext}`, `{n}`, `{N}`, `$1`-$9`; sequential numbering with zero-padding
 
@@ -268,7 +268,7 @@ Pane::open($cwd, fn(string $path): list<Entry> => $fakeEntries);
 |-----------|----------------------|------|
 | Manager (TEA Model) | `candy-core` | Implements `Model` interface, uses `KeyMsg`, `Cmd`, `KeyType`, `Subscriptions` |
 | Rendering | `candy-sprinkles` | `Style`, `Border`, `Layout` for pane boxes and status bar |
-| Image preview | `candy-mosaic` | `Mosaic::probe()`, `ImageSource::fromFile()` for Kitty/Sixel/iTerm2 rendering |
+| Image preview | `sugar-image` | `Mosaic::probe()`, `ImageSource::fromFile()` for Kitty/Sixel/iTerm2 rendering |
 | i18n | `candy-core` | `SugarCraft\Core\I18n\Lang` base class |
 | Async ops | `react/promise` | `React\Promise\Deferred`, `React\EventLoop\Loop` |
 
@@ -458,7 +458,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
 
 8. **Bulk rename** — PCRE regex + template engine with sequential numbering
 
-9. **File preview** — Image preview via candy-mosaic; metadata block for other files
+9. **File preview** — Image preview via sugar-image; metadata block for other files
 10. **Undo stack** — Delete/move/rename reversible; delete captures file content for restore
 11. **Documentation** — Well-documented source code; README with ASCII diagram of layout
 
@@ -528,7 +528,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
     "php": ">=8.3",
     "sugarcraft/candy-core": "dev-master",
     "sugarcraft/candy-sprinkles": "dev-master",
-    "sugarcraft/candy-mosaic": "dev-master",
+    "sugarcraft/sugar-image": "dev-master",
     "react/promise": "^3.3"
   }
 }
@@ -538,7 +538,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
 |-------------|---------|
 | `candy-core` | TEA Model, KeyMsg, Cmd, Program, Ansi utilities |
 | `candy-sprinkles` | Style, Border, Layout for pane rendering |
-| `candy-mosaic` | Image preview rendering (Kitty/Sixel/iTerm2 protocols) |
+| `sugar-image` | Image preview rendering (Kitty/Sixel/iTerm2 protocols) |
 | `react/promise` | Async file operations via promises |
 
 ---

@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\View;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
@@ -16,7 +16,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * crush_feat.md §9 E3 — image-bearing tool results reach the terminal through
- * candy-mosaic + candy-core's ImageOverlay compositor.
+ * sugar-image + candy-core's ImageOverlay compositor.
  *
  * Every assertion here fails against the pre-E3 renderer, which had no
  * {@see Renderer::renderView()} at all: a ToolResult's `imageBytes` were
@@ -40,7 +40,7 @@ final class RendererImageTest extends TestCase
     protected function setUp(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
 
         // Constructing a Chat reaches the skill trees under HOME; sandbox both
@@ -58,7 +58,7 @@ final class RendererImageTest extends TestCase
         parent::tearDown();
     }
 
-    /** A real, decodable 20x10 PNG — candy-mosaic rejects anything it cannot decode. */
+    /** A real, decodable 20x10 PNG — sugar-image rejects anything it cannot decode. */
     private function pngBytes(int $width = 20, int $height = 10): string
     {
         $gd = imagecreatetruecolor($width, $height);
@@ -130,7 +130,7 @@ final class RendererImageTest extends TestCase
      * An inline renderer (half-block/quarter-block/ASCII) emits ordinary cells,
      * so it goes straight into the frame and needs no overlay at all.
      *
-     * The '▀' shape was re-verified against candy-mosaic e5f60c4f6's fixed
+     * The '▀' shape was re-verified against sugar-image e5f60c4f6's fixed
      * transparency mapping (CL-3): this fixture is a fully opaque PNG, so only
      * the untouched both-opaque branch fires — the ▄/space shapes the fix
      * introduced for transparent cells are unreachable through crush's decode

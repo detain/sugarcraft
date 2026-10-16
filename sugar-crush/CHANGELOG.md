@@ -229,7 +229,7 @@ happen to share the numbers 1–4.
   `--root`, and a fix for `--help` opening a blocking TUI instead of printing.
 - **Diffs** — a real unified diff on `ToolResult`, and no-op edits stopped
   being reported as success.
-- **Images** — added the candy-mosaic dependency, image-bearing tool results,
+- **Images** — added the sugar-image dependency, image-bearing tool results,
   and a `/doctor` capability-probe tool.
 
 ### Wave 2 — the live chat surface (2026-08)

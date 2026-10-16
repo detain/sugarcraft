@@ -9,22 +9,22 @@ use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\PosterGrid;
-use SugarCraft\Mosaic\DiskCache;
-use SugarCraft\Mosaic\ImageLayer;
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Mosaic;
-use SugarCraft\Mosaic\Scale;
+use SugarCraft\Image\DiskCache;
+use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Scale;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Mouse\Zones\Manager as ZoneManager;
 
 /**
- * The sugar-gallery × candy-mosaic seam, proved with REAL renders.
+ * The sugar-gallery × sugar-image seam, proved with REAL renders.
  *
  * Every other suite in this lib feeds cards hand-written ANSI strings, which
  * proves the widget's bookkeeping but says nothing about whether a genuine
  * terminal image render survives the grid's width/height normalisation. These
  * tests build real pixel images in memory with GD (no network, no fixture files),
- * render them through candy-mosaic's own renderers, and push the bytes through
+ * render them through sugar-image's own renderers, and push the bytes through
  * the documented recipe:
  *
  *     Mosaic::render() → PosterCard::withPoster()/withImage() → PosterGrid::withItem()

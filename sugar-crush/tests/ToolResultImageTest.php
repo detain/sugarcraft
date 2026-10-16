@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * Covers ToolResult's image/attachment field + probe-once Mosaic::auto()
@@ -71,7 +71,7 @@ final class ToolResultImageTest extends TestCase
 
     public function testOkWithImageNeverThrowsWithoutATty(): void
     {
-        // The whole point of Mosaic::auto() (per candy-mosaic docs) is that
+        // The whole point of Mosaic::auto() (per sugar-image docs) is that
         // it NEVER throws, even with no controlling TTY (exactly this
         // sandboxed PHPUnit process). If probing were wired incorrectly
         // (e.g. calling Mosaic::probe() directly, which can throw) this

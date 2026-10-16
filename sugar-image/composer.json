@@ -1,0 +1,59 @@
+{
+    "name": "sugarcraft/sugar-image",
+    "description": "Image-to-cell renderer \u2014 PNG/JPEG/static GIF to terminal via Sixel, Kitty, iTerm2, or half-block Unicode fallback. Port of charmbracelet/x/mosaic.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "image",
+        "sixel",
+        "kitty",
+        "iterm2",
+        "charmbracelet",
+        "x-mosaic",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-image",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-image/issues",
+        "source": "https://github.com/sugarcraft/sugar-image",
+        "docs": "https://sugarcraft.github.io/lib/sugar-image.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-flip": "dev-master",
+        "sugarcraft/candy-palette": "dev-master",
+        "ext-gd": "*",
+        "ext-mbstring": "*",
+        "react/promise": "^3.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "react/http": "^1.11",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "suggest": {
+        "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Image\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Image\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

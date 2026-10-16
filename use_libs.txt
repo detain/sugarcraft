@@ -20,6 +20,6 @@ https://sugarcraft.github.io/lib/sugar-forms.html
 https://sugarcraft.github.io/lib/candy-shine.html
 https://sugarcraft.github.io/lib/candy-kit.html
 https://sugarcraft.github.io/lib/candy-metrics.html
-https://sugarcraft.github.io/lib/candy-mosaic.html
+https://sugarcraft.github.io/lib/sugar-image.html
 https://sugarcraft.github.io/lib/candy-pty.html
 https://sugarcraft.github.io/lib/sugar-treelist.html

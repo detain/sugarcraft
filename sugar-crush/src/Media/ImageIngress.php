@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Media;
 
-use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Image\ImageSource;
 
 /**
  * One image admitted into a generation request (crush-media W4.1).
@@ -13,7 +13,7 @@ use SugarCraft\Mosaic\ImageSource;
  * `init_images` entry": validation happens HERE, once, and everything past
  * this point is a trusted immutable value — base64 of the EXACT source
  * bytes (no re-encode in v1, plan §W4.1 microstep 3), plus the geometry
- * read by candy-mosaic's {@see ImageSource} (its decompression-bomb pixel
+ * read by sugar-image's {@see ImageSource} (its decompression-bomb pixel
  * ceiling applies; the byte ceiling is enforced here because
  * `ImageSource::fromFile()` reads before it validates).
  *

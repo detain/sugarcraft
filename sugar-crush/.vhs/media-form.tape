@@ -6,7 +6,7 @@
 # Generation params, Hires. fix is enabled so its accordion opens, a CANNED
 # MediaResponse answers a txt2img round (no server is dialled — the PNG bytes
 # come from fixed integer arithmetic), those bytes are painted inline through
-# candy-mosaic at halfblock truecolor, and the form closes. Seven beats, one
+# sugar-image at halfblock truecolor, and the form closes. Seven beats, one
 # screen clear each, ~1.1s apart inside the script; the Sleeps below just track
 # that cadence so the GIF reads as states, not scrolling text.
 #

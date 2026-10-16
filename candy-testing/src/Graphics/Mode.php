@@ -9,7 +9,7 @@ use SugarCraft\Testing\Lang;
 /**
  * The terminal graphics protocols a stream can speak.
  *
- * Mirrors the three renderer families in sugarcraft/candy-mosaic
+ * Mirrors the three renderer families in sugarcraft/sugar-image
  * (SixelRenderer, KittyRenderer, Iterm2Renderer) but is deliberately a local,
  * dependency-free vocabulary so the decoders stand alone.
  */
@@ -23,7 +23,7 @@ enum Mode: string
      * Sniff the protocol a byte stream speaks from its control introducer.
      *
      * Sixel rides a DCS with a `q` color-space introducer; Kitty (as emitted by
-     * candy-mosaic) rides a DCS whose parameter starts with `q`, or the standard
+     * sugar-image) rides a DCS whose parameter starts with `q`, or the standard
      * APC `_G` form; iTerm2 rides an OSC 1337. The probe matches the framing the
      * decoders themselves accept — a transmit embedded in surrounding screen text
      * still sniffs correctly. Detection is best-effort framing only; the stream is

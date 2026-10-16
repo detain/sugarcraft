@@ -697,7 +697,7 @@ final class Chat implements Model
         private readonly ?int $rows = null,
         private readonly ?int $cols = null,
         /**
-         * The candy-mosaic probe-once capability instance (W1.G2/E2 - see
+         * The sugar-image probe-once capability instance (W1.G2/E2 - see
          * {@see ToolResult::mosaic()}'s docblock), exposed here per
          * crush_feat.md section 9's literal `new Chat(..., mosaic: $mosaic)`
          * so a future renderer (E3) can read the SAME detected protocol an
@@ -707,7 +707,7 @@ final class Chat implements Model
          * ToolResult::mosaic()} here; null for a Chat built directly in a
          * test that never needs it.
          */
-        private readonly ?\SugarCraft\Mosaic\Mosaic $mosaic = null,
+        private readonly ?\SugarCraft\Image\Mosaic $mosaic = null,
         /**
          * Hook chain gating this Chat's OWN ({@see registerTool()}) tool
          * calls, so `PreToolUse`/`PostToolUse` fire for a call no matter
@@ -9942,10 +9942,10 @@ final class Chat implements Model
     }
 
     /**
-     * Get the shared candy-mosaic probe-once capability instance, if wired
+     * Get the shared sugar-image probe-once capability instance, if wired
      * (see this class's `$mosaic` constructor docblock, W1.G2/E2).
      */
-    public function mosaic(): ?\SugarCraft\Mosaic\Mosaic
+    public function mosaic(): ?\SugarCraft\Image\Mosaic
     {
         return $this->mosaic;
     }

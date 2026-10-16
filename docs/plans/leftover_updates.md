@@ -386,9 +386,9 @@ no-shim path is exercised only implicitly by the legacy `SpawnTest`.
 process spawned without TIOCSCTTY does NOT respond to Ctrl-C from
 master — opposite of `SIGINTForwardingTest`.
 
-### CC-LO-06 — `candy-mosaic/src/Detect.php` uses `posix_isatty` directly
+### CC-LO-06 — `sugar-image/src/Detect.php` uses `posix_isatty` directly
 
-*Where:* `candy-mosaic/src/Detect.php:236-237`.
+*Where:* `sugar-image/src/Detect.php:236-237`.
 *Why it matters:* Single-source-of-truth violation. Detect's job is
 "do we have a TTY that can render images?" — the canonical answer
 should come from `\SugarCraft\Pty\Contract\Termios::isAtty()` (or a
@@ -488,7 +488,7 @@ Recommended order (each line ≤1 PR unless `[multi-PR]` flag):
 8. CC-LO-03 + CC-LO-04 + CC-LO-05 (signal + ReactPHP + SIGHUP +
    no-ctty integration tests). Combined PR — adds 3 test files,
    touches nothing else.
-9. CC-LO-06 + CC-LO-07 (`candy-mosaic` + `candy-core/Util/Editor|Open`
+9. CC-LO-06 + CC-LO-07 (`sugar-image` + `candy-core/Util/Editor|Open`
    single-source-of-truth fix). One PR.
 10. P6-LO-02 + P6-LO-03 + P6-LO-04 (Pool ReactPHP test, Expect ↔ Recorder
     integration, MultiPump docs+example). Combined PR.

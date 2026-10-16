@@ -1,6 +1,6 @@
-# Step 07.13 — candy-mosaic Kitty virtual-image (a=p) + Kitty f=1 zlib compression
+# Step 07.13 — sugar-image Kitty virtual-image (a=p) + Kitty f=1 zlib compression
 
-**Source:** `leftover_updates_later.md` candy-mosaic P1 #4 + #5
+**Source:** `leftover_updates_later.md` sugar-image P1 #4 + #5
 **Branch:** `ai/mosaic-kitty-extras`
 
 ## Deliverable
@@ -17,21 +17,21 @@ Two Kitty protocol extensions:
 
 **Modify:**
 
-- `candy-mosaic/src/Renderer/KittyRenderer.php` — honor
+- `sugar-image/src/Renderer/KittyRenderer.php` — honor
   `KittyOptions::$useVirtual` and `KittyOptions::$compress`.
-- `candy-mosaic/src/KittyOptions.php` — both flags become non-experimental;
+- `sugar-image/src/KittyOptions.php` — both flags become non-experimental;
   doc updates.
 
 ## Tests
 
-- `candy-mosaic/tests/Renderer/KittyVirtualImageTest.php` — assert
+- `sugar-image/tests/Renderer/KittyVirtualImageTest.php` — assert
   `a=p` chunk emitted when virtual mode is on.
-- `candy-mosaic/tests/Renderer/KittyZlibTest.php` — assert payload is
+- `sugar-image/tests/Renderer/KittyZlibTest.php` — assert payload is
   zlib-compressed when `compress=true`.
 
 ## Acceptance
 
-- `cd candy-mosaic && vendor/bin/phpunit --filter "Kitty"` green.
+- `cd sugar-image && vendor/bin/phpunit --filter "Kitty"` green.
 
 ---
 

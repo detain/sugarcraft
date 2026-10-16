@@ -330,7 +330,7 @@ goes back; `?` opens help.
 ┌──────────── sugarcraft · master · log ───────────────────────────────────┐
 │  ▸ e9667b5f  Joe Huss     2d ago   updates.md: log docs PR for step 07. │
 │    c30dda36  Joe Huss     2d ago   Merge pull request #648 from detain… │
-│    48168ed2  Joe Huss     2d ago   docs: candy-mosaic HalfBlock transp… │
+│    48168ed2  Joe Huss     2d ago   docs: sugar-image HalfBlock transp… │
 │    5d3f8aef  Joe Huss     2d ago   tests-ci for step 07.14 · clean      │
 │    24e68248  Joe Huss     2d ago   updates.md: add step 07.14 done log… │
 │    …                                                                     │

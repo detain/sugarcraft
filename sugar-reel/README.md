@@ -188,7 +188,7 @@ through `withCellPx()` and forwards it to `Player::open()` (and to `play()`,
 which builds the same player internally):
 
 ```php
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Reel\Reel;
 use SugarCraft\Reel\Render\Mode;
 
@@ -272,7 +272,7 @@ video file (mp4/gif/avi/webm)
 ```
 
 - **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps candy-flip's pure-PHP GIF decoder.
-- **Render:** Delegates to candy-mosaic for sixel/kitty/iTerm2. Uses candy-palette for color mapping. Delta repaint via candy-buffer.
+- **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses candy-palette for color mapping. Delta repaint via candy-buffer.
 - **Pace:** `Cmd::tick()` wall-clock alignment via `Sync`, no busy-waiting.
 - **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio master clock.
 
@@ -286,7 +286,7 @@ three terminal-video projects, credited here:
 - [joelibaceta/video-to-ascii](https://github.com/joelibaceta/video-to-ascii) — Python video-to-ASCII player.
 
 The rendering stack is reused from the SugarCraft ecosystem rather than
-reinvented: [candy-mosaic](../candy-mosaic) (image → cell renderers),
+reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 [candy-flip](../candy-flip) (downsampling / dithering), [candy-palette](../candy-palette)
 (color mapping), and [candy-core](../candy-core) (Model–Update–View runtime + frame pacing).
 

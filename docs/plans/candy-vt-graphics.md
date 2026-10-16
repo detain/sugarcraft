@@ -11,7 +11,7 @@
 > covering whether to add **receive-side** graphics-protocol support to
 > `candy-vt`, what that would look like architecturally, and what
 > conditions need to hold before phase-1 step files get drafted. Render
-> *emission* already lives in `candy-mosaic`; this plan is about parsing
+> *emission* already lives in `sugar-image`; this plan is about parsing
 > graphics escape sequences a TUI emits *back* into a candy-vt-managed
 > screen, which is a much harder problem and intentionally deferred.
 
@@ -26,16 +26,16 @@ clipboard, OSC 4 palette, and the Charm-relevant DEC private modes
 **does not** decode the three image-transmission protocols that
 modern terminals understand: **Kitty graphics (APC)**, **iTerm2 / WezTerm
 inline images (OSC 1337)**, and **DEC Sixel (DCS)**. The encoders
-already live in `candy-mosaic/src/Renderer/{KittyRenderer, Iterm2Renderer,
+already live in `sugar-image/src/Renderer/{KittyRenderer, Iterm2Renderer,
 SixelRenderer}.php` — they emit the bytes; nothing in this monorepo
 parses them.
 
 This memo proposes:
 
 1. **Scope** — receive-side decode in `candy-vt` for the same three
-   protocols `candy-mosaic` emits, with the decoded pixel buffer either
+   protocols `sugar-image` emits, with the decoded pixel buffer either
    stored on the `Screen` (as image-region metadata + raw image bytes)
-   or handed off to `candy-mosaic`'s `ImageSource` / `PixelGrid` for
+   or handed off to `sugar-image`'s `ImageSource` / `PixelGrid` for
    downstream rendering by a host application.
 2. **Architecture** — extend the existing parser dispatch surface (no
    new states needed; OSC / APC / DCS dispatch already lands at
@@ -57,14 +57,14 @@ This memo proposes:
 5. **Decision criteria** — **do not start** until at least one of these
    is true: (a) a SugarCraft consumer needs to *record* a TUI session
    that includes inline images and replay it deterministically (the
-   candy-vcr / Shirley path); (b) a candy-mosaic test wants to
+   candy-vcr / Shirley path); (b) a sugar-image test wants to
    round-trip an emitted byte stream through a decoder; (c) a port of a
    Charm tool that ships images downstream of `candy-vt` (e.g. a `glow`
    integration that pipes through a virtual terminal) lands. **None of
    these conditions hold today.**
 
 **Recommendation:** **defer past 1.0.** Keep the existing emit-side
-support in `candy-mosaic`; do not start this work until at least one
+support in `sugar-image`; do not start this work until at least one
 concrete consumer needs it. Pre-allocate the namespace
 (`SugarCraft\Vt\Graphics\`) and the handler-dispatch entry points so
 nothing further-down in candy-vt has to be refactored to accept
@@ -92,20 +92,20 @@ states accumulate into `Parser::$stringBuffer` until the ST terminator
 arrives), so **a graphics decoder does not need to extend the parser
 state machine** — it plugs into the dispatch surface.
 
-### 1.2 candy-mosaic emit surface today
+### 1.2 sugar-image emit surface today
 
 | Protocol | Renderer | LOC | Wire sequence family |
 |---|---|---|---|
-| Kitty graphics | `candy-mosaic/src/Renderer/KittyRenderer.php` | 204 | APC `\x1b_G<keys>;<base64chunk>\x1b\\` repeated until last `m=0` chunk |
-| iTerm2 / WezTerm inline | `candy-mosaic/src/Renderer/Iterm2Renderer.php` | 85 | OSC `\x1b]1337;File=<keys>:<base64>\x07` |
-| DEC Sixel | `candy-mosaic/src/Renderer/SixelRenderer.php` | 563 | DCS `\x1bPq<raster>#<color>...<sixeldata>\x1b\\` |
-| Unicode half-block fallback | `candy-mosaic/src/Renderer/HalfBlockRenderer.php` | 120 | plain SGR + ▀ |
-| Unicode quarter-block fallback | `candy-mosaic/src/Renderer/QuarterBlockRenderer.php` | 128 | plain SGR + ░▒▓█ |
-| Chafa wrapper | `candy-mosaic/src/Renderer/ChafaRenderer.php` | 115 | shells out to `chafa` |
+| Kitty graphics | `sugar-image/src/Renderer/KittyRenderer.php` | 204 | APC `\x1b_G<keys>;<base64chunk>\x1b\\` repeated until last `m=0` chunk |
+| iTerm2 / WezTerm inline | `sugar-image/src/Renderer/Iterm2Renderer.php` | 85 | OSC `\x1b]1337;File=<keys>:<base64>\x07` |
+| DEC Sixel | `sugar-image/src/Renderer/SixelRenderer.php` | 563 | DCS `\x1bPq<raster>#<color>...<sixeldata>\x1b\\` |
+| Unicode half-block fallback | `sugar-image/src/Renderer/HalfBlockRenderer.php` | 120 | plain SGR + ▀ |
+| Unicode quarter-block fallback | `sugar-image/src/Renderer/QuarterBlockRenderer.php` | 128 | plain SGR + ░▒▓█ |
+| Chafa wrapper | `sugar-image/src/Renderer/ChafaRenderer.php` | 115 | shells out to `chafa` |
 
 **Asymmetry:** every protocol that produces escape sequences has an
 encoder, but no decoder. A `candy-vcr` cassette that recorded a
-`candy-mosaic` Kitty render today would replay correctly on a real
+`sugar-image` Kitty render today would replay correctly on a real
 Kitty-capable terminal, but `candy-vt` would silently drop the bytes —
 they cross APC / OSC / DCS dispatch and land in handler methods that
 no-op.
@@ -175,7 +175,7 @@ in §6 because none of P0–P2 needed a product call; this does.
 ### 2.2 What this plan explicitly excludes
 
 - **Image rendering to ANSI / pixel surfaces.** That is the job of
-  `candy-mosaic` (encode side) and host applications (display side).
+  `sugar-image` (encode side) and host applications (display side).
   Decoded bytes stay as bytes (or PNG) on the placement; producing a
   cell-grid rendering of them is downstream.
 - **Per-frame animation reassembly.** Kitty's `a=a` animation
@@ -184,7 +184,7 @@ in §6 because none of P0–P2 needed a product call; this does.
   placements.
 - **Capability negotiation (XTGETTCAP / DA / Secondary DA).** These
   are escape sequences a *terminal* responds to; they are emit-side,
-  and any response logic belongs in candy-mosaic or candy-vcr, not
+  and any response logic belongs in sugar-image or candy-vcr, not
   here.
 - **Receive-side keyboard / mouse protocol upgrades** — Kitty keyboard
   protocol, xterm modifyOtherKeys. Those are separate research items;
@@ -219,7 +219,7 @@ to:
   through the matching encoder.
 
 This is enough to let a consumer (e.g. candy-vcr replay, a
-`candy-mosaic` integration test, a hypothetical `candy-vt-render`
+`sugar-image` integration test, a hypothetical `candy-vt-render`
 shim) reconstruct what the original TUI emitted.
 
 ---
@@ -250,7 +250,7 @@ candy-vt/src/Graphics/
     ├── SixelLexer.php          # byte-level RLE / colour / data tokenizer
     ├── SixelPalette.php        # mutable palette (256 indexed)
     ├── SixelRaster.php         # raster-attributes record
-    └── SixelToPng.php          # raw pixel grid → PNG via GD (matches candy-mosaic encode path)
+    └── SixelToPng.php          # raw pixel grid → PNG via GD (matches sugar-image encode path)
 ```
 
 `Sgr\Sgr` / `Cell\Cell` are not touched. `Screen\Screen` gets one
@@ -398,16 +398,16 @@ incremental-render consumer.
 
 ## 4. Dependencies
 
-### 4.1 candy-mosaic (encode-side reuse)
+### 4.1 sugar-image (encode-side reuse)
 
-The PNG-normalisation path in `candy-mosaic/src/Renderer/KittyRenderer.php`
+The PNG-normalisation path in `sugar-image/src/Renderer/KittyRenderer.php`
 (`ensurePng()`, 25 LOC) and the Sixel pixel-grid extraction path are
 the *inverse* of what the decoders need. Worth lifting either:
 
 - **Option A — shared util in candy-vt:** add
   `candy-vt/src/Graphics/Image/{PngCodec,RgbaCodec}.php` and let
-  candy-mosaic depend on candy-vt (today it does not). Pulls
-  candy-mosaic into the candy-vt dependency closure.
+  sugar-image depend on candy-vt (today it does not). Pulls
+  sugar-image into the candy-vt dependency closure.
 - **Option B — shared util in candy-core or a new tiny lib:** new
   `candy-pixel` (or `candy-img`) lib that both consume. Cleanest but
   adds a 7th lib to the foundation cluster.
@@ -422,7 +422,7 @@ duplication.
 
 ### 4.2 GD / Imagick
 
-candy-mosaic already requires `ext-gd`. The decoder needs the same
+sugar-image already requires `ext-gd`. The decoder needs the same
 for PNG encode (Kitty `f=100` round-trip + Sixel-to-PNG
 normalisation). Add `ext-gd` to `candy-vt/composer.json` `require`
 **only when the decoder ships** — until then, candy-vt stays GD-free
@@ -443,9 +443,9 @@ The plan-only step ships no composer changes. When phase 1 lands, the
 implementer:
 
 - Adds `"ext-gd": "*"` to `candy-vt/composer.json` `require`.
-- Does NOT add `sugarcraft/candy-mosaic` as a dep (no Option A);
+- Does NOT add `sugarcraft/sugar-image` as a dep (no Option A);
   per recommendation §4.1, decoder uses duplicated GD glue.
-- Does NOT add candy-vt to candy-mosaic (no inverse dep either).
+- Does NOT add candy-vt to sugar-image (no inverse dep either).
 
 ### 4.5 candy-vt → candy-vt only
 
@@ -467,7 +467,7 @@ which is multi-PR.** Estimated calendar weeks are aggressive — assume
 
 **Goal:** decode the simplest Kitty action — single-chunk transmit,
 PNG payload, no virtual placement, no animation, no chunk
-reassembly. End-to-end round-trip through candy-mosaic encode →
+reassembly. End-to-end round-trip through sugar-image encode →
 candy-vt decode in a single test.
 
 **Touched:**
@@ -484,7 +484,7 @@ candy-vt decode in a single test.
 - `candy-vt/src/Terminal/Terminal.php` — `withGraphics()` / `withPlacementLimits()`
 - `candy-vt/composer.json` — add `ext-gd: *`
 - `candy-vt/tests/Graphics/KittyDecoderTest.php` — round-trip
-  candy-mosaic-encoded PNG through decoder; assert dimensions, byte
+  sugar-image-encoded PNG through decoder; assert dimensions, byte
   equality, cell origin.
 - `candy-vt/README.md` — new "Graphics protocols" section
 - `candy-vt/CALIBER_LEARNINGS.md` — new patterns
@@ -518,7 +518,7 @@ consumers.
 **Decision-driven:** drop animation (`a=a`, `a=c`) — out of scope per
 §2.2; phase-2 ships without it.
 
-**Acceptance:** round-trip every candy-mosaic KittyRenderer code
+**Acceptance:** round-trip every sugar-image KittyRenderer code
 path (including step 07.13 useVirtual + compress + delete). Test
 suite expands to ~50 new tests under `tests/Graphics/Kitty/`.
 
@@ -544,14 +544,14 @@ as ImagePlacement.
 - 3e — `SixelToPng` via GD `imagecreatetruecolor` +
   `imagecolorallocate` per palette index + `imagesetpixel`. Encode
   PNG into ImagePlacement.
-- 3f — RLE round-trip with candy-mosaic SixelRenderer (each
+- 3f — RLE round-trip with sugar-image SixelRenderer (each
   encode-side run should decode to the same expanded byte sequence).
 - 3g — security: bound parse work by max-pixels (default 4 MP); 
   reject if exceeded.
 
 **Acceptance:** five canonical Sixel images (single colour, 4-colour,
 256-colour, RLE-heavy, raster-attribs-absent) round-trip via
-candy-mosaic encode → decode → re-encode → byte-equal-after-
+sugar-image encode → decode → re-encode → byte-equal-after-
 normalisation. New tests under `tests/Graphics/Sixel/`; expect ~40.
 
 ### Phase 4 — iTerm2 / WezTerm OSC 1337 (2 weeks)
@@ -568,7 +568,7 @@ normalisation. New tests under `tests/Graphics/Sixel/`; expect ~40.
   GraphicsHandler::iterm2
 - `candy-vt/tests/Graphics/Iterm2DecoderTest.php`
 
-**Acceptance:** round-trip every candy-mosaic Iterm2Renderer call
+**Acceptance:** round-trip every sugar-image Iterm2Renderer call
 path; ~10 new tests.
 
 ### Phase 5 — Diff API + memory hardening (2 weeks)
@@ -596,7 +596,7 @@ fuzz tests for memory-limit eviction under adversarial input
 - `docs/lib/candy-vt.html` — feature grid + API table updated
 - `docs/end-user/candy-vt.md` (if it exists; otherwise skip)
 - `candy-vt/examples/graphics-decode.php` — script that feeds a
-  candy-mosaic-rendered image into a Terminal and dumps the
+  sugar-image-rendered image into a Terminal and dumps the
   decoded placement
 - `candy-vt/.vhs/graphics-decode.tape` (if visual demo makes sense;
   graphics decode is largely non-visual — may opt out)
@@ -632,7 +632,7 @@ The DEC Sixel spec is small (~6 pages) but unforgiving:
 
 **Mitigation:** start phase 3 with a hand-rolled corpus of 40+
 known-good Sixel byte streams (canonical encoder output from
-`candy-mosaic/src/Renderer/SixelRenderer.php` covers most of it).
+`sugar-image/src/Renderer/SixelRenderer.php` covers most of it).
 Decode each; assert byte-perfect re-encode. Add adversarial fuzzy
 corpus only after the canonical path is locked.
 
@@ -721,7 +721,7 @@ candy-vt already has. CI time budget needs to be re-checked after
 phase 2.
 
 **Mitigation:** golden-snapshot the encoded byte streams from
-candy-mosaic at fixed input pixel grids; assert decode produces the
+sugar-image at fixed input pixel grids; assert decode produces the
 same pixel grid. The test surface grows linearly with input
 diversity, not with code surface.
 
@@ -740,8 +740,8 @@ the following must hold:
    does. The candy-vcr cassette format will replay raw bytes against
    any real terminal, so end-user replay works; the gap only matters
    for *automated* replay where candy-vt is the playback target.
-2. **A candy-mosaic test suite needs round-trip coverage.** Today
-   candy-mosaic only tests encode — there is no decoder to round-trip
+2. **A sugar-image test suite needs round-trip coverage.** Today
+   sugar-image only tests encode — there is no decoder to round-trip
    through. If a future bug requires "encode then decode produces
    the same pixel grid" as the regression test, this work becomes
    blocking.
@@ -806,20 +806,20 @@ prepare".
 ## 9. Out of scope for this memo
 
 - **Concrete pixel-buffer rendering of decoded placements to a host
-  terminal.** That belongs in candy-mosaic (we have it for emit; the
-  receive-side rendering would need a new `candy-mosaic`/Renderer
+  terminal.** That belongs in sugar-image (we have it for emit; the
+  receive-side rendering would need a new `sugar-image`/Renderer
   back-end or a host-app component). The decoder hands consumers raw
   image bytes; what they do with them is downstream.
 - **Captionable extensions to candy-vcr.** If candy-vcr wants
   efficient image-event storage post-decoder, that is its own plan.
-- **Upgrading candy-mosaic encode to match decode coverage.** Today
-  candy-mosaic supports a subset of each protocol's options on the
+- **Upgrading sugar-image encode to match decode coverage.** Today
+  sugar-image supports a subset of each protocol's options on the
   encode side (e.g. Kitty `a=T` and `a=p` but not `a=a` animation,
   Sixel without raster attribs optional emission). The decoder
   inherits whatever upstream emit-side options it sees in the wild,
   including from third-party producers — but expanding encode is a
   separate effort.
-- **Capability negotiation.** candy-mosaic detects terminal
+- **Capability negotiation.** sugar-image detects terminal
   capabilities via `Capability::detect()` to pick a renderer; the
   decoder side has no analogous need (it parses whatever arrives).
 - **Performance benchmarking baseline.** Defer to post-phase-3.
@@ -845,11 +845,11 @@ prepare".
   in `PlacementStore`.
 - `candy-vt/src/Terminal/Terminal.php` — `withGraphics()` /
   `withPlacementLimits()` factory methods.
-- `candy-mosaic/src/Renderer/KittyRenderer.php` — emit-side
+- `sugar-image/src/Renderer/KittyRenderer.php` — emit-side
   reference for round-trip tests (L24–L204).
-- `candy-mosaic/src/Renderer/Iterm2Renderer.php` — emit-side
+- `sugar-image/src/Renderer/Iterm2Renderer.php` — emit-side
   reference (L20–L85).
-- `candy-mosaic/src/Renderer/SixelRenderer.php` — emit-side
+- `sugar-image/src/Renderer/SixelRenderer.php` — emit-side
   reference; algorithm comment at L13–L26 mirrors what decoder
   inverts (L1–L563).
 - `plans/leftover_updates_later.md` §6 — strategic-decision item
@@ -903,6 +903,6 @@ fires.
 
 If a trigger does fire, phase 1 (Kitty MVP) is the right starting
 point — it is the smallest, the easiest to test, and the protocol
-candy-mosaic exercises most heavily. Phases 2 and 4 follow naturally;
+sugar-image exercises most heavily. Phases 2 and 4 follow naturally;
 phase 3 (Sixel) is the largest and most fragile and should not be
 started until phase 2 is green and stable.

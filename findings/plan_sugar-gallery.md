@@ -16,11 +16,11 @@ Create a detailed implementation plan addressing all 15 findings from `/home/sit
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| sugar-gallery is renderer-agnostic by design | PosterCard holds pre-rendered poster bytes; it never decodes images. Image rendering is delegated to candy-mosaic (ext-gd) | `findings/sugar-gallery.md:L10` |
+| sugar-gallery is renderer-agnostic by design | PosterCard holds pre-rendered poster bytes; it never decodes images. Image rendering is delegated to sugar-image (ext-gd) | `findings/sugar-gallery.md:L10` |
 | Gallery.php and FFIDecoder.php do not exist | Current library has PosterCard, Rail, PosterGrid only. No FFI decoder, no file-system navigation, no chdir() | `glob:sugar-gallery/src/**/*.php` |
 | No 1:1 upstream port | MATCHUPS.md states this is an original SugarCraft component inspired by bubbles' list/viewport and phlix web media grid | `docs/MATCHUPS.md:L51` |
 | FFI patterns exist in candy-pty | PosixTermios shows proper FFI allocation/try-finally pattern | `candy-pty/src/Posix/PosixTermios.php:L39-L44` |
-| Image validation in candy-mosaic | ImageSource.fromFile() validates via getimagesize() before decode | `candy-mosaic/src/ImageSource.php:L53-L56` |
+| Image validation in sugar-image | ImageSource.fromFile() validates via getimagesize() before decode | `sugar-image/src/ImageSource.php:L53-L56` |
 
 ---
 
@@ -53,10 +53,10 @@ Create a detailed implementation plan addressing all 15 findings from `/home/sit
 | **11** | No animated GIF support | FFIDecoder.php does not exist | **N/A — by design** |
 | **12** | No metadata display | PosterCard shows title but not dimensions | **APPLIES** |
 | **13** | FFI requires PHP 8.4+ | No FFI in current code | **N/A — by design** |
-| **14** | Blocking image decode | No image decoder; candy-mosaic has async | **N/A — by design** |
+| **14** | Blocking image decode | No image decoder; sugar-image has async | **N/A — by design** |
 
 **Investigation notes from 2026-06-30:**
-The findings file references `src/Gallery.php:78-85` and `src/FFIDecoder.php:45` which do not exist in the current codebase. CALIBER_LEARNINGS.md explicitly states "Renderer-agnostic by design" and "it never decodes images". The library intentionally delegates image rendering to candy-mosaic (ext-gd based). Findings 1-11, 13-14 describe features of a planned-but-unbuilt FFI image decoder and file browser.
+The findings file references `src/Gallery.php:78-85` and `src/FFIDecoder.php:45` which do not exist in the current codebase. CALIBER_LEARNINGS.md explicitly states "Renderer-agnostic by design" and "it never decodes images". The library intentionally delegates image rendering to sugar-image (ext-gd based). Findings 1-11, 13-14 describe features of a planned-but-unbuilt FFI image decoder and file browser.
 
 ---
 
@@ -86,7 +86,7 @@ Users cannot see image metadata (dimensions, file size) without decoding the ima
 
 - `sugar-gallery/src/PosterCard.php:L38-47` — constructor
 - `sugar-gallery/src/PosterCard.php:L106-143` — render() method
-- `sugar-mosaic/src/ImageSource.php:L25-30` — has width/height fields that could supply metadata
+- `sugar-image/src/ImageSource.php:L25-30` — has width/height fields that could supply metadata
 
 #### Implementation Approach
 
@@ -113,9 +113,9 @@ Add to `::new()` factory and update render() to optionally display metadata.
 
 #### Investigation Notes
 
-- candy-mosaic's `ImageSource` already has `$width`, `$height`, and access to file size via `filesize()` in `fromFile()`
+- sugar-image's `ImageSource` already has `$width`, `$height`, and access to file size via `filesize()` in `fromFile()`
 - The CALIBER_LEARNINGS explicitly says NOT to add an image decoder dependency
-- Metadata should be provided by the consumer that calls candy-mosaic to render
+- Metadata should be provided by the consumer that calls sugar-image to render
 
 ---
 
@@ -136,19 +136,19 @@ The MATCHUPS.md entry confirms:
 
 | Finding | Issue | Why Not Applicable | Recommendation |
 |---------|-------|-------------------|----------------|
-| **1** | No file type validation | FFIDecoder doesn't exist | Delegate to candy-mosaic's ImageSource validation (`candy-mosaic/src/ImageSource.php:L53-56`) |
+| **1** | No file type validation | FFIDecoder doesn't exist | Delegate to sugar-image's ImageSource validation (`sugar-image/src/ImageSource.php:L53-56`) |
 | **2** | Path traversal (chdir) | Gallery.php doesn't exist | If file browsing needed, create separate `sugar-files` library |
 | **3** | FFI dimension validation | FFIDecoder doesn't exist | N/A — no FFI decoder planned |
-| **4** | Format error fallback | No image loading | Delegate to candy-mosaic error handling |
+| **4** | Format error fallback | No image loading | Delegate to sugar-image error handling |
 | **5** | Full directory scan | Gallery.php doesn't exist | N/A — no directory navigation in renderer-agnostic design |
-| **6** | No thumbnail caching | FFIDecoder doesn't exist | candy-mosaic has `AdaptiveImage` with LRU cache (`candy-mosaic/src/AdaptiveImage.php:L21-26`) |
+| **6** | No thumbnail caching | FFIDecoder doesn't exist | sugar-image has `AdaptiveImage` with LRU cache (`sugar-image/src/AdaptiveImage.php:L21-26`) |
 | **7** | FFI buffer not freed | FFIDecoder.php doesn't exist | N/A — no FFI decoder |
-| **8** | Image buffer memory | No image decoder | Delegate to candy-mosaic which handles this |
+| **8** | Image buffer memory | No image decoder | Delegate to sugar-image which handles this |
 | **9** | Path traversal risk | Gallery.php doesn't exist | N/A — no file browsing |
 | **10** | Thin FFI abstraction | FFIDecoder.php doesn't exist | N/A — no FFI decoder |
-| **11** | No animated GIF | FFIDecoder doesn't exist | candy-mosaic's `AnimationDriver` handles GIF animation |
+| **11** | No animated GIF | FFIDecoder doesn't exist | sugar-image's `AnimationDriver` handles GIF animation |
 | **13** | PHP 8.4 FFI constraint | No FFI in current code | N/A — no FFI usage |
-| **14** | Blocking decode | No image decoder | candy-mosaic has `AsyncRenderer` for non-blocking (`candy-mosaic/src/AsyncRenderer.php`) |
+| **14** | Blocking decode | No image decoder | sugar-image has `AsyncRenderer` for non-blocking (`sugar-image/src/AsyncRenderer.php`) |
 
 ---
 
@@ -184,7 +184,7 @@ If FFI features are ever considered in the future, add constraint:
 
 - **2026-06-30**: The audit findings describe a `Gallery.php` and `FFIDecoder.php` that do not exist. The sugar-gallery library is intentionally renderer-agnostic per CALIBER_LEARNINGS.md.
 - **2026-06-30**: MATCHUPS.md confirms this is an original SugarCraft component, not a 1:1 port of charmbracelet/bubbles/gallery.
-- **2026-06-30**: Image rendering is handled by candy-mosaic (ext-gd based); file browsing would belong in a separate library.
+- **2026-06-30**: Image rendering is handled by sugar-image (ext-gd based); file browsing would belong in a separate library.
 - **2026-06-30**: FFI patterns are established in candy-pty (PosixTermios) and can be referenced if FFI decoding is ever implemented.
 
 ---
@@ -204,9 +204,9 @@ public function __construct(int $fd)
 }
 ```
 
-### Magic Byte Validation Pattern (from candy-mosaic)
+### Magic Byte Validation Pattern (from sugar-image)
 
-**Source:** `candy-mosaic/src/ImageSource.php:L53-56`
+**Source:** `sugar-image/src/ImageSource.php:L53-56`
 
 ```php
 $info = @getimagesize($path);
@@ -215,9 +215,9 @@ if ($info === false) {
 }
 ```
 
-### Async Rendering with Caching (from candy-mosaic)
+### Async Rendering with Caching (from sugar-image)
 
-**Source:** `candy-mosaic/src/AdaptiveImage.php:L59-73`
+**Source:** `sugar-image/src/AdaptiveImage.php:L59-73`
 
 ```php
 public function render(int $cellWidth, int $cellHeight): string

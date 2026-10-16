@@ -100,7 +100,7 @@ use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\MediaStore;
 use SugarCraft\Crush\Tui\MediaForm\MediaPresets;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
-use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Image\ImageSource;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\ZoneClickTracker;
 use DateTimeImmutable;

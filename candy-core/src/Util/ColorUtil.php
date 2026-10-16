@@ -8,7 +8,7 @@ namespace SugarCraft\Core\Util;
  * Shared color computation utilities for the SugarCraft monorepo.
  *
  * Provides BT.601 luma calculation and RGB squared distance — used by
- * image renderers (candy-mosaic) for color grouping and comparison.
+ * image renderers (sugar-image) for color grouping and comparison.
  */
 final class ColorUtil
 {

@@ -1062,7 +1062,7 @@ final class ScreenHandler implements SubparamsAwareHandler
      * DA1 (CSI c / CSI 0 c) is answered with the same attribute list
      * charmbracelet/x/vt emits — `ESC [ ?62;1;6;22 c` (VT220, 132-column,
      * selective erase, ANSI colour) — deliberately WITHOUT the `;4` sixel
-     * attribute: the emulator renders no sixel, and candy-mosaic's
+     * attribute: the emulator renders no sixel, and sugar-image's
      * `Detect::parseDa1Reply()` scans for `;4;` / `;4c` / `?4c` to enable
      * sixel, so this reply correctly keeps mosaic on its text/half-block
      * fallback. DA2 (CSI > c) answers `ESC [ >1;10;0 c`, again mirroring
@@ -1179,7 +1179,7 @@ final class ScreenHandler implements SubparamsAwareHandler
      * 16t answers `ESC [ 6 ; height ; width t` and 14t answers
      * `ESC [ 4 ; height ; width t` from the emulator's nominal cell
      * metrics (8×16 px unless `cellWidthPx`/`cellHeightPx` were set) —
-     * the exact field order candy-mosaic's `Detect::parseXtwinoReply()`
+     * the exact field order sugar-image's `Detect::parseXtwinoReply()`
      * expects. 18t answers `ESC [ 8 ; rows ; cols t` from true geometry.
      * A bare `CSI t` defaults to 1t in xterm (de-iconify, no reply), so
      * a missing Ps stays silent rather than emitting an unsolicited 4t.

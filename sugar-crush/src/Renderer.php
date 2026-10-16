@@ -15,9 +15,9 @@ use SugarCraft\Crush\Media\PreviewPaint;
 use SugarCraft\Crush\Media\PreviewSlots;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
-use SugarCraft\Mosaic\ImageLayer;
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
@@ -4918,7 +4918,7 @@ final class Renderer
      * available protocol (crush_feat.md §9 E3), following the exact pattern
      * `sugar-gallery/src/PosterCard.php` proves out.
      *
-     * Two shapes come back out of candy-mosaic and they are composed
+     * Two shapes come back out of sugar-image and they are composed
      * differently: an inline renderer (half-block / quarter-block / ASCII)
      * emits ordinary styled cells that go straight into the frame, while a
      * pixel-graphics renderer (Sixel / Kitty / iTerm2) emits an out-of-band

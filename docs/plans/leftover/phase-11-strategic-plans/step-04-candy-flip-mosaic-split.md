@@ -7,17 +7,17 @@
 ## Deliverable
 
 Create `plans/candy-flip-mosaic-split.md` — defines the responsibility
-boundary between candy-flip (frame decoding) and candy-mosaic
+boundary between candy-flip (frame decoding) and sugar-image
 (rendering / protocol output).
 
 The plan file should cover:
 
 - **Today's overlap** — both libs ship image-output paths (candy-flip
-  research P10 mentions Kitty/WezTerm output; candy-mosaic already
+  research P10 mentions Kitty/WezTerm output; sugar-image already
   owns Kitty/iTerm2/Sixel rendering).
-- **Recommended split** — candy-flip emits frame bytes; candy-mosaic
+- **Recommended split** — candy-flip emits frame bytes; sugar-image
   owns terminal-protocol output and consumes flip's frames.
-- **API contract** — `candy-flip::Frame[]` → `candy-mosaic::Animation`
+- **API contract** — `candy-flip::Frame[]` → `sugar-image::Animation`
   → `Renderer`.
 - **Migration plan** — what moves from flip to mosaic, what stays in
   flip.
