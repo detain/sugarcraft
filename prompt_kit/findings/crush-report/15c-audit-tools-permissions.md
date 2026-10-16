@@ -18,7 +18,7 @@ Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`, 
 - Support: `ProcessContainment`, `ContainedPath`, `HookContextFiles`, `ParentProcessGuard`. Agents: `PathJail`, `PathJailConfig`, `SuspendedDelegations`.
 - Docs: `docs/PERMISSIONS.md`, `docs/HOOKS.md`.
 
-**Read in part:** the gate, settle, child/IPC and dispatch parts of `src/Runtime.php`; the permission and tool-gate parts of `src/Chat.php`, `EngineBackend.php`, `Bootstrap.php` and `NonInteractive.php`; `candy-mosaic/src/Detect.php` probe paths.
+**Read in part:** the gate, settle, child/IPC and dispatch parts of `src/Runtime.php`; the permission and tool-gate parts of `src/Chat.php`, `EngineBackend.php`, `Bootstrap.php` and `NonInteractive.php`; `candy-mosaic/src/Detect.php` probe paths. <!-- @rename-keep historical provenance -->
 
 **Checked and found sound (no finding):**
 - `PathJail::resolve`/`resolveForCreate`/`resolveDir`, `ContainedPath::within`/`below`, and `Agents\PathJail` (which delegates to them).

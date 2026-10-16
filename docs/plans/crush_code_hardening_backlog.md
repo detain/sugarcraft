@@ -10070,7 +10070,7 @@ full suite run anyone had done of it.** WHAT ATTEMPT 3 ASSUMED: that the only in
 `\STDIN` constant was `NonInteractiveStdinPinTest`'s known-positive control, so pointing that control at
 a fresh `php://stdin` handle made closing the descriptor free. WHAT IS TRUE: **the census behind that
 sentence looked in `sugar-crush/{src,bin,tests}`, and the reader that matters is in a SIBLING LIBRARY.**
-`SugarCraft\Mosaic\Detect` resolves its probe stream as `self::$probeStdin ?? STDIN` and hands it to
+`SugarCraft\Mosaic\Detect` resolves its probe stream as `self::$probeStdin ?? STDIN` and hands it to <!-- @rename-keep historical provenance -->
 `drainStdin()` with no `is_resource()` guard; `Mosaic::auto()` catches the resulting throw and falls into
 `autoFromPalette()`, which references a `Capability` case candy-palette does not have. **MEASURED, full
 suite, PHP 8.3.6, this lane: `9500 tests, 107 errors, rc 2`**, every error
@@ -10241,7 +10241,7 @@ because `tests/Cli/NonInteractive*Test.php` is lane a's file.
 **WHAT IS TRUE NOW — and this entry was closed and then REOPENED inside one round, which is the useful
 part.** Option (a) was taken: the known-positive was repointed at a fresh `php://stdin` handle and the
 repair went back to close + reopen `/dev/null`. **The first full suite run of that shape produced 107
-errors** — `SugarCraft\Mosaic\Detect` reads the `\STDIN` constant unguarded from a SIBLING library, which
+errors** — `SugarCraft\Mosaic\Detect` reads the `\STDIN` constant unguarded from a SIBLING library, which <!-- @rename-keep historical provenance -->
 no grep of `sugar-crush/` could see (E290's attempt 3, and E302). So option (a) is not merely a
 trade, it is unavailable while any reachable library reads that constant without a guard. The repair is
 the flag again, and this residual is **live**: bytes already sitting on the runner's stdin still reach a
@@ -10252,7 +10252,7 @@ clearing it via `PosixBackend::restore()` — is fixed at every site in the tree
 holds for a whole run rather than up to the first raw-mode test. The BLOCKING half, which is the one that
 hangs a run for 60s a test with no message, is genuinely closed.
 
-**Step, revised.** Not "close the descriptor". Either (a) fix `SugarCraft\Mosaic\Detect` to guard its
+**Step, revised.** Not "close the descriptor". Either (a) fix `SugarCraft\Mosaic\Detect` to guard its <!-- @rename-keep historical provenance -->
 `?? STDIN` with `is_resource()` and fix the fallback it falls into (E302), then re-try the descriptor
 replacement behind a full suite run — noting that the census must then cover every reachable
 `sugarcraft/*` lib, not `sugar-crush/` — or (b) pin the residual with a test proving bytes on the runner's
@@ -10455,15 +10455,15 @@ at all — the combination means "drive this fd" and "wrap that stream", and the
 process's own descriptor 0 is the right answer to both.
 
 ---
-### E302 [CLOSED] — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+### E302 [CLOSED] — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have <!-- @rename-keep historical provenance -->
 
-🟢 **FIXED at `1a2caebb`**, with `candy-mosaic/tests/PaletteCapabilityReferenceTest.php` as a SOURCE-SCAN
-guard plus a known-positive control. candy-mosaic: 451 tests, 7707 assertions, rc 0.
+🟢 **FIXED at `1a2caebb`**, with `candy-mosaic/tests/PaletteCapabilityReferenceTest.php` as a SOURCE-SCAN <!-- @rename-keep historical provenance -->
+guard plus a known-positive control. candy-mosaic: 451 tests, 7707 assertions, rc 0. <!-- @rename-keep historical provenance -->
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: live crash on a reachable path.
-**Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.**
+**Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.** <!-- @rename-keep historical provenance -->
 
-**What.** `candy-mosaic/src/Mosaic.php`'s `autoFromPalette()` — the fallback taken when `Detect::probe()`
+**What.** `candy-mosaic/src/Mosaic.php`'s `autoFromPalette()` — the fallback taken when `Detect::probe()` <!-- @rename-keep historical provenance -->
 throws, i.e. whenever there is no usable TTY to probe — evaluates
 `$report->has(PaletteCapability::Iterm2Image)`. **There is no such case.**
 `candy-palette/src/Probe/Capability.php` spells it `ITerm2 = 'iterm2'`. The line is a fatal
@@ -10488,7 +10488,7 @@ To reproduce without that change: `fclose(\STDIN)` before anything calls `Mosaic
  2. `Detect::stdinFd()` hands an unguarded `?? STDIN` to stream functions. A closed descriptor 0 is a
     legitimate state for a process to be in; it should degrade, not throw.
 
-**Step.** Fix the case name in `candy-mosaic` (`ITerm2`, and check the rest of that method against the
+**Step.** Fix the case name in `candy-mosaic` (`ITerm2`, and check the rest of that method against the <!-- @rename-keep historical provenance -->
 enum the same way — one wrong name means nobody has executed the method). Guard `Detect::stdinFd()`'s
 consumers with `is_resource()`. Neither is a sugar-crush change; both are worth a PR of their own, and (1)
 should carry a test that drives `autoFromPalette()` directly rather than through a thrown probe, since
@@ -10721,7 +10721,7 @@ tree-wide change and wants its own plan.
 🟢 **IMPLEMENTED in round 51 by lane a, and this entry's measurement REPRODUCED EXACTLY.** The bootstrap
 change alone, against a green `9661 / 142165 / 1 skipped / rc 0` baseline at `a85fcfd6`: `9661 tests, 1
 error, 2 failures, 1 skipped` — the same three named assertions this entry predicted, and not one
-candy-mosaic error. A reviewer prescription that measured true; the first in a while.
+candy-mosaic error. A reviewer prescription that measured true; the first in a while. <!-- @rename-keep historical provenance -->
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: this is the answer E296 has been blocked on for a
 round. **MEASURED, full suite, PHP 8.3.6, at `a43d4f94` in lane b.** Not shipped — see "why not here".
@@ -10731,7 +10731,7 @@ reads that constant without a guard." The evidence was round 49's attempt 3: a f
 replaced produced `9500 tests, 107 errors, rc 2`, every error
 `Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`.
 
-**WHAT IS TRUE NOW.** That was never 107 costs. It was ONE defect — `candy-mosaic`'s `autoFromPalette()`
+**WHAT IS TRUE NOW.** That was never 107 costs. It was ONE defect — `candy-mosaic`'s `autoFromPalette()` <!-- @rename-keep historical provenance -->
 naming an enum case that does not exist — multiplied by every test that reached it. E302 fixed it at
 `1a2caebb`, which is IN the round-50 baseline, and nobody re-ran the experiment afterwards.
 
@@ -10747,7 +10747,7 @@ Full suite, PHP 8.3.6, lane b, one run:
 **`Tests: 9604, Assertions: 135499, Errors: 1, Failures: 2, Skipped: 1, rc 2`** — against a green
 baseline at the same head (9604 tests, 1 skipped, rc 0; the exact assertion total is in lane b's round
 report, and the three failures below account for the difference). **Not one
-`Capability::Iterm2Image`. Not one candy-mosaic error of any kind.**
+`Capability::Iterm2Image`. Not one candy-mosaic error of any kind.** <!-- @rename-keep historical provenance -->
 
 **All three are in tests whose entire subject is this repair, and all three are EXPECTED:**
 
@@ -10771,7 +10771,7 @@ out-of-lane edit is reportable, not prohibited):
  - **The Step's own precondition is unmet.** E296's revised Step reads "(a) fix `Detect::stdinFd()` to
    guard its `?? STDIN` with `is_resource()` **and** fix the fallback it falls into, THEN re-try the
    descriptor replacement". Only the second half is done. With the fallback repaired the throw is now
-   caught rather than fatal, so the suite is green-ish — but candy-mosaic still leaves its normal path
+   caught rather than fatal, so the suite is green-ish — but candy-mosaic still leaves its normal path <!-- @rename-keep historical provenance -->
    by exception on every call, and "no test noticed" is not the same as "the library is fine". See
    E318.
  - **Five lanes are live on `tests/bootstrap.php` this round** and lane e shipped attempt 4 into it
@@ -10874,7 +10874,7 @@ twice by grepping `sugar-crush/`, and both times the reader that mattered was in
 
 **The scope is REACHABILITY, and the two numbers are what make that the right choice rather than a
 convenient one.** Measured, token-based, controls first: the whole monorepo has **15** libs naming the
-`STDIN` constant under `*/src` or `*/bin`; only **2** of them (`candy-core`, `candy-mosaic`) are in
+`STDIN` constant under `*/src` or `*/bin`; only **2** of them (`candy-core`, `candy-mosaic`) are in <!-- @rename-keep historical provenance -->
 `sugar-crush`'s 18-lib reachable closure. "The monorepo" would have added thirteen libraries that cannot
 run in this process; `sugar-crush/` dropped the two that can. Neither directory was the alphabet — the
 DEPENDENCY CLOSURE was.
@@ -10895,7 +10895,7 @@ than reporting a clean tree. Reverting containment to equality KILLS it; injecti
 file.
 
 **Three of the nine are classified in the guard's doc-block; six deliberately are not.** Classified:
-`candy-mosaic/src/Detect.php` unguarded (the 107-error path); `PosixBackend`'s
+`candy-mosaic/src/Detect.php` unguarded (the 107-error path); `PosixBackend`'s <!-- @rename-keep historical provenance -->
 `TermiosFactory::open((int) STDIN)` already inside a `try`/`catch (\Throwable)` that says "STDIN closed
 (CI runner): silently no-op"; `candy-core/src/WorkerPool.php` NOT a reader of this process's fd 0 at all
 (the nowdoc is written to a temp file and run as a CHILD whose fd 0 is a `proc_open()` pipe). Classifying
@@ -11006,18 +11006,18 @@ that looks like good news.
 
 ### E318 [CLOSED] — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
 
-🟢 **FIXED in round 51 by lane a, in `candy-mosaic` (NOT candy-palette — see the round report).**
+🟢 **FIXED in round 51 by lane a, in `candy-mosaic` (NOT candy-palette — see the round report).** <!-- @rename-keep historical provenance -->
 `stdinFd()` answers null for a dead handle; `drainStdin()`/`readStdinTimed()` treat null as their existing
 no-answer case; the two inline `?? STDIN` spellings route through the guard; a closed INJECTED probe stream
-no longer short-circuits `isInteractiveTty()` to true. candy-mosaic suite: 451/7707/6-skipped before,
+no longer short-circuits `isInteractiveTty()` to true. candy-mosaic suite: 451/7707/6-skipped before, <!-- @rename-keep historical provenance -->
 457/7744/6-skipped after, rc 0 both.
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: the remaining blocker on E296 option (a).
-**Measured by symbol at `906fa666`. Out of lane — `candy-mosaic/` belongs to no lane.**
+**Measured by symbol at `906fa666`. Out of lane — `candy-mosaic/` belongs to no lane.** <!-- @rename-keep historical provenance -->
 
 **What.** E302 recorded two defects and `1a2caebb` fixed the first (`autoFromPalette()` named a
 `Capability` case candy-palette does not have). The second is untouched:
-`SugarCraft\Mosaic\Detect::stdinFd()` is `return self::$probeStdin ?? STDIN;`, and `drainStdin()` passes
+`SugarCraft\Mosaic\Detect::stdinFd()` is `return self::$probeStdin ?? STDIN;`, and `drainStdin()` passes <!-- @rename-keep historical provenance -->
 that straight into `stream_select()` with no `is_resource()`; `probeXtwinoSize()` and
 `probeXtwinoCellCount()` each spell `self::$probeStdin ?? STDIN` inline and hand it to
 `readStdinTimed()`. A closed descriptor 0 is a legitimate state for a process to be in — a daemon, a
@@ -11029,7 +11029,7 @@ exception rather than on a decision, and that is the difference between "we repl
 measured the result" and "we replaced the descriptor and a library quietly changed renderer".
 
 **Step.** Guard the three sites with `is_resource()`, and give `Detect` a test that drives them with a
-closed resource directly rather than through a thrown probe. Worth a candy-mosaic PR of its own.
+closed resource directly rather than through a thrown probe. Worth a candy-mosaic PR of its own. <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -11179,7 +11179,7 @@ inverse is worth holding rather than relaxing.
 on. **Out of this lane's file list** — `sugar-crush/tests/SuiteChildStdinIsolationTest.php` is lane e's.
 
 Its `testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking` reads
-`tests/bootstrap.php closed the \STDIN constant; SugarCraft\Mosaic\Detect reads it unguarded and 107
+`tests/bootstrap.php closed the \STDIN constant; SugarCraft\Mosaic\Detect reads it unguarded and 107 <!-- @rename-keep historical provenance -->
 tests error out when it is gone`. Observed verbatim in the option-(a) probe run. That figure predates
 E302 (`1a2caebb`, an ancestor of this tree) and is retired — see E310 and the two doc-blocks this lane
 rewrote. The assertion itself is correct and should stay; only its reason is stale.
@@ -11482,17 +11482,17 @@ bound violation without first checking whether the merge itself removed assertio
 
 The round-51 lane a brief's ITEM 2 read "Close this one, in `candy-palette`, with its own guard", and its
 file list carried `candy-palette/src/Probe/Detect.php` and `candy-palette/tests/`. Neither exists. There is
-exactly ONE `Detect.php` outside `vendor/` in this monorepo and it is `candy-mosaic/src/Detect.php`, which
+exactly ONE `Detect.php` outside `vendor/` in this monorepo and it is `candy-mosaic/src/Detect.php`, which <!-- @rename-keep historical provenance -->
 is what E318 — the entry the brief cites — names correctly. `candy-palette/src` and `candy-palette/tests`
 contain zero references to `STDIN`, `php://stdin`, `php://fd/0` or `/dev/stdin`, measured.
 
 **Why the confusion is worth an entry rather than a shrug.** E302 spans both libraries — the FAULT was a
-candy-mosaic caller naming `Capability::Iterm2Image`, and the enum it named wrongly is
+candy-mosaic caller naming `Capability::Iterm2Image`, and the enum it named wrongly is <!-- @rename-keep historical provenance -->
 `candy-palette/src/Probe/Capability.php`. A summary that keeps "Probe" and "Capability" and swaps the
 library is the exact error a two-library finding invites. E318's own text is unambiguous ("Out of lane —
-`candy-mosaic/` belongs to no lane"), so the brief is the only place that was wrong.
+`candy-mosaic/` belongs to no lane"), so the brief is the only place that was wrong. <!-- @rename-keep historical provenance -->
 
-**What was done.** The fix landed in `candy-mosaic`, with a new `candy-mosaic/tests/DetectClosedStdinTest.php`.
+**What was done.** The fix landed in `candy-mosaic`, with a new `candy-mosaic/tests/DetectClosedStdinTest.php`. <!-- @rename-keep historical provenance -->
 candy-palette's suite was run anyway, before and after: `266 tests, 529 assertions, 0 skipped, rc 0` both
 times, unchanged.
 
@@ -11565,7 +11565,7 @@ on a closed resource, so an `is_resource()` guard has to come first — which `i
 **Recorded and refuted 2026-08-24 by round-51 lane a, in that order.** Severity: none — there is no defect.
 Kept as a methodology instance, because the refutation came from the entry's own stated generator.
 
-**WHAT THIS ENTRY SAID**, drafted and committed: "`candy-mosaic/composer.lock` and
+**WHAT THIS ENTRY SAID**, drafted and committed: "`candy-mosaic/composer.lock` and <!-- @rename-keep historical provenance -->
 `candy-palette/composer.lock` are present in the tree at `a85fcfd6`", filed against the rule that
 `AGENTS.md` and `CONTRIBUTING.md` both state — never commit a per-lib `composer.lock`, because
 `composer install` then resolves from it and silently ignores CI's path-repo injection.
@@ -11673,7 +11673,7 @@ constant whose liveness is exactly what the guard already doubted. The same reas
 **Recorded 2026-08-24 by round-51 lane a (fix pass), confirming the reviewer's NOTE.** Severity:
 documentation/type accuracy, not a defect. **Verified by symbol. Out of lane — `candy-core/src/Util/TtyDetect.php`.**
 
-E318 made `SugarCraft\Mosaic\Detect::stdinFd()` nullable. `Detect::isInteractiveTty()` passes its result
+E318 made `SugarCraft\Mosaic\Detect::stdinFd()` nullable. `Detect::isInteractiveTty()` passes its result <!-- @rename-keep historical provenance -->
 straight to `TtyDetect::isAtty(self::stdinFd())`, whose signature documents `@param resource $stream`. The
 runtime behaviour is correct and unchanged — `isAtty()` opens with `is_resource($stream)` and
 `is_resource(null)` is false, which is the identical answer the old closed-`\STDIN` argument produced — so
@@ -12384,9 +12384,9 @@ opposite responses.
 ### E365 [CLOSED] — a test's `php -S` server leaked once per test method and held the CALLER'S STDOUT, so `phpunit | anything` hung after a green run
 
 **Recorded 2026-08-24.** Severity: measurement discipline (the fd half), hygiene (the process half).
-**FIXED + GUARDED this round in `candy-mosaic`.**
+**FIXED + GUARDED this round in `candy-mosaic`.** <!-- @rename-keep historical provenance -->
 
-`candy-mosaic/tests/ImageSourceSsrfTest.php` spawned a real `php -S` server per test in `setUp()` and
+`candy-mosaic/tests/ImageSourceSsrfTest.php` spawned a real `php -S` server per test in `setUp()` and <!-- @rename-keep historical provenance -->
 called `proc_terminate()` + `proc_close()` in `tearDown()`. It did not work. Two independent defects,
 both measured on this box rather than inferred:
 
@@ -12403,13 +12403,13 @@ named in its spec, and the spec named 0, 1, 2. Measured fd table of a leaked ser
 
 ```
 0 -> pipe:[…]                      1,2 -> /dev/null   (the test's own remap, correct)
-3 -> …/candy-mosaic/vendor/bin/phpunit
+3 -> …/candy-mosaic/vendor/bin/phpunit <!-- @rename-keep historical provenance -->
 4 -> THE CALLER'S STDOUT           <-- the damage
 5 -> /memfd:opcache_lock           6..10 -> phpunit's own sockets
 ```
 
 Because fd 4 is the caller's stdout, an orphaned server holds the write end of that pipe open forever.
-`cd candy-mosaic && vendor/bin/phpunit | tail -5` therefore **never returns**: the suite goes green in
+`cd candy-mosaic && vendor/bin/phpunit | tail -5` therefore **never returns**: the suite goes green in <!-- @rename-keep historical provenance -->
 13 s and the pipeline blocks on an EOF that will not come. Two measurements were lost to exactly this —
 one of 38 minutes and one of 11.5 hours — and both completed within milliseconds of the leaked servers
 being killed, which is the proof of the mechanism.
@@ -12420,7 +12420,7 @@ them individually: `testFollowsSameSchemeRedirect`, `testBlocksRedirectToDisallo
 `testBlocksRedirectToDisallowedGopherScheme`, `testBlocksRedirectToMetadataIp`. They had been
 accumulating for a long time: **136 found alive**, the oldest **11.5 hours** old.
 
-**Fix** (`candy-mosaic/tests/Support/LoopbackHttpServer.php`, new; `ImageSourceSsrfTest` rewired onto it):
+**Fix** (`candy-mosaic/tests/Support/LoopbackHttpServer.php`, new; `ImageSourceSsrfTest` rewired onto it): <!-- @rename-keep historical provenance -->
 
 - ARRAY command form to `proc_open()` — no `/bin/sh` at all, so the pid `proc_open()` reports IS the
   server's pid and `proc_terminate()` reaches it.
@@ -12434,7 +12434,7 @@ accumulating for a long time: **136 found alive**, the oldest **11.5 hours** old
 - Router temp dirs are process-unique (`mosaic-ssrf-<pid>-<uniqid>`), so the census can tell this run's
   servers from a concurrent checkout's.
 
-**Guard** (`candy-mosaic/tests/SsrfServerLeakTest.php`, 2 tests). It drives the real spawner, not a
+**Guard** (`candy-mosaic/tests/SsrfServerLeakTest.php`, 2 tests). It drives the real spawner, not a <!-- @rename-keep historical provenance -->
 re-implementation. `testServerLifecycleOrphansNoProcess` asserts the `/proc` census is empty on entry
 (this class sorts after `ImageSourceSsrfTest`, so that arm catches the original defect), then runs two
 start/stop cycles asserting `[] -> [pid] -> []`. The middle assertion is the point: **a leak detector
@@ -12487,9 +12487,9 @@ individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled bef
 
 Every one rc 0. **The six reporting PHPUnit's `OK (…)` form had ZERO skips**, which is the part that makes
 this evidence rather than an absence: a lib can post zero orphans because its spawning tests gated
-themselves out, and that is not what happened here. **Answer: no. The orphaning was candy-mosaic-specific.**
+themselves out, and that is not what happened here. **Answer: no. The orphaning was candy-mosaic-specific.** <!-- @rename-keep historical provenance -->
 
-⚠️ **`candy-mosaic`'s own row in that sweep is void** — E365's fix (`e7c777b9`) landed while the sweep was
+⚠️ **`candy-mosaic`'s own row in that sweep is void** — E365's fix (`e7c777b9`) landed while the sweep was <!-- @rename-keep historical provenance -->
 in flight, so the row measured already-fixed code. The pre-fix evidence is the separate direct
 measurement in E365 (0 servers before a run, 4 after, reproduced).
 
@@ -13400,7 +13400,7 @@ appeared three times with three different proximate causes (agent death, stale c
 treat the pattern as the expectation rather than the surprise.
 
 What was actually missing here was only the verification, which the supervisor measured directly:
-sugar-crush 9730/143168/1, candy-core 807/7288/25, candy-mosaic 458/7747/6, plus candy-mdview 71/115 and
+sugar-crush 9730/143168/1, candy-core 807/7288/25, candy-mosaic 458/7747/6, plus candy-mdview 71/115 and <!-- @rename-keep historical provenance -->
 sugar-forms 146/268/2 — all rc 0, closure 18/18. Those figures matched the REVIEWER's independent
 measurement at the pre-fix commit exactly, which is what established that the four fix commits were prose
 and guard corrections adding no tests.
@@ -13412,8 +13412,8 @@ and guard corrections adding no tests.
 **Recorded 2026-08-24.** Severity: process. **Real collision, cost one duplicated fix.**
 
 While round 52 was in flight, a user-reported symptom sent the supervisor to fix E365's `php -S` leak in
-`candy-mosaic` on master (`e7c777b9`). **Lane a fixed the same leak, independently, in the same file**
-(`b928e653` + `71b3ed87`) — because its brief was candy-core/candy-mosaic *fd defects*, and a descriptor
+`candy-mosaic` on master (`e7c777b9`). **Lane a fixed the same leak, independently, in the same file** <!-- @rename-keep historical provenance -->
+(`b928e653` + `71b3ed87`) — because its brief was candy-core/candy-mosaic *fd defects*, and a descriptor <!-- @rename-keep historical provenance -->
 inherited into a leaked child is exactly that. Neither party was wrong; the supervisor simply did not
 re-read the live briefs before dispatching.
 
@@ -13422,7 +13422,7 @@ and added a dedicated `SsrfServerLeakTest`; lane a patched the test in place. **
 helper is reusable by the two other mosaic tests that spawn their own servers, and its guard was proven
 red-then-green against the wrapper regression. Lane a's contribution (MINOR 4: skip loudly rather than
 self-disable where the kernel publishes no `children` file) was already satisfied there. Its `+1 / +3`
-therefore does NOT appear in the merged candy-mosaic figure, which is why that figure was deliberately
+therefore does NOT appear in the merged candy-mosaic figure, which is why that figure was deliberately <!-- @rename-keep historical provenance -->
 left unpredicted.
 
 **Two rules out of this.** (1) **Before dispatching any out-of-band fix mid-round, read the live lane
@@ -15604,7 +15604,7 @@ What is **not** established is that no caller pattern anywhere wants a stable re
 `close()`. "No test notices" is a much weaker claim than "no reachable caller was found", and the
 difference is exactly the kind of sentence this plan has had to retract before. Someone closing this owes
 a generator: a census of `PosixMasterPty::close()` callers across the monorepo (`candy-pty`,
-`candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the
+`candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the <!-- @rename-keep historical provenance -->
 descriptor number across the call. Until then the block stays and the comment says what it does not know.
 
 ### E467 [CLOSED] — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
@@ -20699,10 +20699,10 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 **What:** phase-4 sibling sweep (§5 rank-4): six string-form `proc_open` git pipelines — `candy-git-server/src/Git/GitDaemon.php:741` and `:945`, `candy-git-server/src/HttpSmartProtocol/Server.php:287`, `:347`, `:641` (+ `Git/UploadPack.php:157`) — escape their user-facing parts with `escapeshellarg` ✓ (sweep-verified), BUT they run under a LONG-LIVED server/daemon: git children can outlive the handler that spawned them and no daemon-shutdown ladder reaps them; `Server.php:652` carries the one live TODO (buffered-output gap, documented); 36 @-suppressions. The lib's `findings/candy-git-server.md` + plan stamp 28 open-F items that predate its rewrite. **Acceptance:** shutdown-ladder proof/tests (daemon stop ⇒ no surviving git children, fd-census clean), stale findings/plan marked per the E720 in-place conventions, any new child accounting rostered in `tools/check-child-lifetimes.php` (fail-closed roster), full candy-git-server suite green. **Conf:** MED.
 **CLOSED 2026-09-15 (round 82, lane q11 `17c7bb29b` → pick `4436e7ebc`; rv APPROVE 0C/0M/3MINOR):** try/finally terminate-if-undrained across the six git-spawn sites (GitDaemon/UploadPack/Server): verdict flags set only on COMPLETED drains (feof re-check / post-full-read), every non-drained exit (writeRaw TypeError, fread break, fwrite throw) terminates the stalled child, terminating a just-exited zombie is a no-op, and no path signals a healthy draining child; double-close guarded (fclose destroys the resource — is_resource guards honest). New ChildProcessLifetimeCensusTest (10T/157A, 5/5 consecutive green): ppid-keyed /proc survivor census counts ZOMBIES AS SURVIVORS (strict fail-closed) + proc_close reap-first drain check + fake-git `exec sleep 30` marker spawns keeping the census non-vacuous (exec keeps the proc_open pid). candy-git-server suite 354T/875A exit0; mutations 3/3 one-flip (unwind/overflow/shape arms), bounded 8s ceilings, never hangs. COMMIT-MESSAGE ERRATUM (rv MINOR-1 — restated truth; the pick message itself is NOT rewritten): the q11 commit message claims a fixed precedence bug `$packData ?? null === null` — that spelling NEVER existed in any committed blob (base was already `if ($packData === null)`, and the claimed-buggy form parses `$packData ?? (null === null)` ≡ `$packData ?? true` = always-fires, not never-fires). The REAL defect fixed: the cap-overflow path lacked a terminate, so `proc_close` could block on a stalled child (413 path now reachable+bounded). BRIEF ERRATUM: candy-git-server NEVER had check-child-lifetimes roster rows (the wave-brief's "4 sites" false — tool walks autoload roots, not tests/; the new test proc_open correctly needs no row, rc=0 re-verified at weld). RESIDUALS re-noted: readCapped maps a stream read FAILURE to clean `''` — theoretical false-drain skips terminate (distinguish EOF vs read-error = candidate follow-up); non-Linux survivor-census helpers markTestSkipped per-assert (skip-roster awareness for macos legs); stale findings/plan NOT re-marked (E720 lane already covers the audit-material pass convention).
 
-### E722 [CLOSED] — sugar-reel ffmpeg pipe reads block while the child lives; candy-mosaic fork-style AsyncRenderer needs owner-reap pins — with the anon-inode fd-census and size-cache-leak caveats armed
+### E722 [CLOSED] — sugar-reel ffmpeg pipe reads block while the child lives; candy-mosaic fork-style AsyncRenderer needs owner-reap pins — with the anon-inode fd-census and size-cache-leak caveats armed <!-- @rename-keep historical provenance -->
 
 **What:** phase-4 sibling sweep (§5 ranks 5/7): `sugar-reel/src/Decode/FfmpegDecoder.php:322` breaks on EOF/false but BLOCKS in `fread` for as long as the ffmpeg child holds the pipe — bounded in practice only by the E366 `Support\BoundedReaper` that landed; VERIFY the reaper's sufficiency (a wedged ffmpeg must die within its ceiling), do not assume it. `candy-mosaic/src/AsyncRenderer.php:13` documents the fork-style-or-process-per-render design (3 proc_open argv-array ✓, 34 suppressions/31 files); mosaic is the lib that ate the anon-inode stat-singleton false-census (Linux ≥6.6 shares one (dev,ino) across ALL anon_inode objects — fd identity MUST use fdinfo ids, e.g. eventfd-id, never dev/ino), and the r69 ShellContrastTest lesson binds its neighbor sugar-dash: a test-suite process-global size-cache must be RE-PINNED at tearDown, not written-and-left. **Acceptance:** blocking-read paths bounded or DOCUMENTED with owner-reap pins (mutation-demonstrated), mosaic fork/proc children accounted under the fdinfo-id census rule, both suites green. **Conf:** MED. <!-- @rename-keep -->
-**CLOSED 2026-09-15 (round 82, lane q12 `d894850d3`+`e59435108` → picks `4f6637d1c`+`bd07426d2`; rv APPROVE 0C/0M/1MINOR; weld precision follow-up `61d7d7deb`):** REEL — the pump-contract judgment SHIPPED: FfmpegDecoder's `next()`/`nextPng()` fread loops are genuinely unbounded against a live-silent ffmpeg (E366 BoundedReaper bounds teardown, provably NOT the parked read — single-thread park makes the close path unreachable), so the caller-bounds contract is documented on Decoder/FfmpegDecoder (docblock-only, zero executable src lines added, E646 compliant) with the two doors the class owns pinned behaviourally: EOF-promptness + close() 3.5s ceiling (GRACE 1.5 + TERM 1.0 + KILL 1.0) + stderr file-sink so a wedge cannot become permanent; wedge harness asserts close() ≤4.5s under `timeout -s KILL 20` and the ladder-strip mutation reddens exactly 1F with CHILD_RUNNING=1 SELECT_READY=0 live-pinned in the failure output. sugar-reel 361T/2473A/1S exit0. MOSAIC — BOTH mint premises re-derived FALSE: no fork-style AsyncRenderer ever existed (SyncAsyncRenderer is the lone implementation; the interface's fork/worker-pool text is a design invitation) and the "64 MiB stderr cap" has NO referent in the lib or its history (`git log -S '67108864' -- candy-mosaic` empty) — erratum legitimately minted. The interface now transcribes the FOUR future obligations for any backend implementing it: OWNER-REAP (every spawn reaped on resolve/reject/ABANDONMENT via the sugar-reel BoundedReaper TERM→poll→KILL ladder), NO READER-LESS PIPES (drain or file-sink — sugar-reel F7 deadlock shape), PUMP LAW r69 (pump/poll loops carry no internal deadline — the CALLER bounds), and FD CENSUS (Linux ≥6.6 anon_inodefs stat singleton: key descriptor identity by /proc fdinfo fields, e.g. eventfd-id, NEVER (dev,ino) — SsrfServerLeakTest law, 2026-09-03). ChafaRendererChildTest ships structural spec pins + behavioural flood/leash proofs whose sink-size polarity guard is the sole discriminator against a silently-void flood; candy-mosaic 465T/7783A/6S exit0. rv MINOR-1 (erratum over-reach: probe's `available()` DOES open a transient 2 => ['pipe','w'], closed microseconds after spawn before reaping) fixed at the weld by the truthful reword commit. BRIEF ERRATUM: candy-mosaic never had a check-child-lifetimes roster row either (the wave-brief's "1" false); tool rc=0 figures UNCHANGED at weld (57 libs / 24 sites / 6 findings / 6 rows / 0 problems).
+**CLOSED 2026-09-15 (round 82, lane q12 `d894850d3`+`e59435108` → picks `4f6637d1c`+`bd07426d2`; rv APPROVE 0C/0M/1MINOR; weld precision follow-up `61d7d7deb`):** REEL — the pump-contract judgment SHIPPED: FfmpegDecoder's `next()`/`nextPng()` fread loops are genuinely unbounded against a live-silent ffmpeg (E366 BoundedReaper bounds teardown, provably NOT the parked read — single-thread park makes the close path unreachable), so the caller-bounds contract is documented on Decoder/FfmpegDecoder (docblock-only, zero executable src lines added, E646 compliant) with the two doors the class owns pinned behaviourally: EOF-promptness + close() 3.5s ceiling (GRACE 1.5 + TERM 1.0 + KILL 1.0) + stderr file-sink so a wedge cannot become permanent; wedge harness asserts close() ≤4.5s under `timeout -s KILL 20` and the ladder-strip mutation reddens exactly 1F with CHILD_RUNNING=1 SELECT_READY=0 live-pinned in the failure output. sugar-reel 361T/2473A/1S exit0. MOSAIC — BOTH mint premises re-derived FALSE: no fork-style AsyncRenderer ever existed (SyncAsyncRenderer is the lone implementation; the interface's fork/worker-pool text is a design invitation) and the "64 MiB stderr cap" has NO referent in the lib or its history (`git log -S '67108864' -- candy-mosaic` empty) — erratum legitimately minted. The interface now transcribes the FOUR future obligations for any backend implementing it: OWNER-REAP (every spawn reaped on resolve/reject/ABANDONMENT via the sugar-reel BoundedReaper TERM→poll→KILL ladder), NO READER-LESS PIPES (drain or file-sink — sugar-reel F7 deadlock shape), PUMP LAW r69 (pump/poll loops carry no internal deadline — the CALLER bounds), and FD CENSUS (Linux ≥6.6 anon_inodefs stat singleton: key descriptor identity by /proc fdinfo fields, e.g. eventfd-id, NEVER (dev,ino) — SsrfServerLeakTest law, 2026-09-03). ChafaRendererChildTest ships structural spec pins + behavioural flood/leash proofs whose sink-size polarity guard is the sole discriminator against a silently-void flood; candy-mosaic 465T/7783A/6S exit0. rv MINOR-1 (erratum over-reach: probe's `available()` DOES open a transient 2 => ['pipe','w'], closed microseconds after spawn before reaping) fixed at the weld by the truthful reword commit. BRIEF ERRATUM: candy-mosaic never had a check-child-lifetimes roster row either (the wave-brief's "1" false); tool rc=0 figures UNCHANGED at weld (57 libs / 24 sites / 6 findings / 6 rows / 0 problems). <!-- @rename-keep historical provenance -->
 
 ### E723 [CLOSED] — sugar-dash PluginSdk terminates with `exit(0)` inside the SDK entry loop; candy-starter is the ONLY lib without CALIBER_LEARNINGS.md <!-- @rename-keep -->
 
@@ -20779,7 +20779,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 **CLOSED 2026-09-15 (round 83, lane r2 `c093c58bd` → pick `06cc8a7e9`; rv APPROVE 0C/0M/0MINOR):** both env polarities pinned in `DefaultChannelHandlerTest` (`SHELL=''` → `FALLBACK_SHELL` `/bin/sh` argv-spy `['/bin/sh','-l']`; `SHELL='/bin/zsh'` → honored) with putenv capture/restore in `finally` — a RED test cannot leak SHELL. Measured PHP 8.3: `putenv('SHELL=')` makes `getenv` return `''` (string, not false) — the empty leg is genuinely distinct from unset; `is_string()` alone would accept it. Mutation complementarity proven at rv: neuter whole blank-reject → exactly the 2 new pins red (old E727 pins green); neuter trim-only → whitespace pin only. wish 199/501 → 201/503 exit0 (lib-local); weld serial 201T/503A exit0.
 ### E735 [CLOSED] — leftover-rollout tail: 19 of 169 step files lack a PR-landed done mark (measured at tip — the "~110 undone" estimate was superseded)
 
-**What:** PHASE-5-KICKOFF umbrella row (r82 deferred list item 1, RESUME §0-NOW-84(c) — mint-time re-count REPLACES the probe estimate): `docs/plans/leftover/` holds 169 `step-*.md` files across 12 phases; diffing filenames against the PR-landed signature (`step N.M · PR#K`) in `docs/plans/leftover/updates.md` leaves **19 undone**: phase-03 ×2 (steps 3.9, 3.13), phase-06 ×1 (6.1), phase-10 ×3, phase-12 ×13 (the DEFERRED phase — most of these are parked-by-choice, not forgotten). The old "~110 undone, phases 08/10/12 untouched" framing is FALSE at tip: phase 08 shipped (step 08.01 · PR#684 onward). Umbrella, NOT 19 rows — each step file already carries its own scope. **Acceptance:** a scoping pass that walks the 19 files, stamps each DO / DEFER-with-why / DROP, and for the DOs either executes (they are pre-audit PR-series steps — re-verify premises against the post-w4 tree first, several may be moot) or mints per-step rows. Also re-mark `findings/candy-mosaic.md` §1 (sixel-builder row now stale — see merge-upstream supersession note in backlog §E728-era records / REPORT). **Conf:** HIGH (count derivation reproducible; disposition judgment is the work).
+**What:** PHASE-5-KICKOFF umbrella row (r82 deferred list item 1, RESUME §0-NOW-84(c) — mint-time re-count REPLACES the probe estimate): `docs/plans/leftover/` holds 169 `step-*.md` files across 12 phases; diffing filenames against the PR-landed signature (`step N.M · PR#K`) in `docs/plans/leftover/updates.md` leaves **19 undone**: phase-03 ×2 (steps 3.9, 3.13), phase-06 ×1 (6.1), phase-10 ×3, phase-12 ×13 (the DEFERRED phase — most of these are parked-by-choice, not forgotten). The old "~110 undone, phases 08/10/12 untouched" framing is FALSE at tip: phase 08 shipped (step 08.01 · PR#684 onward). Umbrella, NOT 19 rows — each step file already carries its own scope. **Acceptance:** a scoping pass that walks the 19 files, stamps each DO / DEFER-with-why / DROP, and for the DOs either executes (they are pre-audit PR-series steps — re-verify premises against the post-w4 tree first, several may be moot) or mints per-step rows. Also re-mark `findings/candy-mosaic.md` §1 (sixel-builder row now stale — see merge-upstream supersession note in backlog §E728-era records / REPORT). **Conf:** HIGH (count derivation reproducible; disposition judgment is the work). <!-- @rename-keep historical provenance -->
 
 
 **CLOSED 2026-09-16 (round 84 W1 weld; lanes t1–t6, all reviewed; picks `e0bff28cc`(t2) `5499c50bd`(t3) `676e597d7`(t4) `bb2e28cfb`(t6) `35f327d5b`(t1) `7a3280759`(t5, figure-amended): every actionable residual landed or verdicted this round.** **03.09** already-shipped NotificationQueue dual-ring + 3 defects fixed — state-losing withers, stale example (lane t1 `837763041`; dash FULL 5,977T/9,890A/0F/1S exit0 x2). **06.01** verify-only: Subscriptions + reconciliation already shipped (PR#581/582 audit); Done-line landed (lane t5 `7e28b3c9e`); rv corrected the test-scope attribution at fold — the gate figure is `--filter Subscription scope 14T/38A (class alone 12T/36A)`, not `SubscriptionsReconcileTest 14T/38A` (candy-core `--filter Subscription`: 14T/38A/1S exit0). **10.06** 4/5-landed + the missing DiffHighlighter shared-lexer diff-view highlighting (lane t2 `17e1036cb`; stash 256T/659A/5S). **10.16** upstream-landed + 8-defect C1 truth pass — SOS/PM naming, DEL fidelity, colon-SGR regressions (lane t3 `7031e17dc`; spark 269T/1380A). **10.25** watch-integration + GlamourTheme JSON themes + width-pins (lane t4 `dd1fec6c0`; glow 122T/313A). **Goldens-carry** cured: the 68d73f9ba downstream-goldens family is FULLY swept — zero stale blues tree-wide (lane t6 `39671bedd`; 2-file/+2-line surgical re-roll). **REMAINING 13 phase-12 steps: PAUSED-BY-USER-DECISION — never auto-resume.** `docs/plans/leftover/README.md:88-89` — "Phase 12 (deferred items) is the very end and may be paused indefinitely per the user's instruction" — and `:283` "pause indefinitely per user". **03.13 closed NOT-ACTIONABLE**: its dedup premise was satisfied by the E731 literal-twin extraction (ChartGridGeometry, r7 `79abe8461` → pick `c1f618a04`).
