@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "528d98615c5f7b67cb075b31b72b9382",
+    "content-hash": "715d3098657ecd04702437ac8079bea1",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3609,6 +3609,70 @@
             }
         },
         {
+            "name": "sugarcraft/candy-codeshot",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-codeshot",
+                "reference": "c8ac257ecc88b7af2dcee9821a85ee3428971848"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "suggest": {
+                "ext-gd": "Required for PNG output in PngRenderer"
+            },
+            "bin": [
+                "bin/candy-codeshot"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\CodeShot\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\CodeShot\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/freeze — render code or terminal output to SVG screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
+            "homepage": "https://github.com/sugarcraft/candy-codeshot",
+            "keywords": [
+                "ansi",
+                "code",
+                "freeze",
+                "screenshot",
+                "sugarcraft",
+                "svg",
+                "terminal"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-codeshot/issues",
+                "source": "https://github.com/sugarcraft/candy-codeshot",
+                "docs": "https://sugarcraft.github.io/lib/candy-codeshot.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-core",
             "version": "dev-master",
             "dist": {
@@ -3979,70 +4043,6 @@
                 "issues": "https://github.com/sugarcraft/candy-forms/issues",
                 "source": "https://github.com/sugarcraft/candy-forms",
                 "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-freeze",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-freeze",
-                "reference": "255157d59afa759f3cdf331b590b7fb39d3e9eb1"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "suggest": {
-                "ext-gd": "Required for PNG output in PngRenderer"
-            },
-            "bin": [
-                "bin/candyfreeze"
-            ],
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Freeze\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Freeze\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/freeze — render code or terminal output to SVG screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
-            "homepage": "https://github.com/sugarcraft/candy-freeze",
-            "keywords": [
-                "ansi",
-                "code",
-                "freeze",
-                "screenshot",
-                "sugarcraft",
-                "svg",
-                "terminal"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-freeze/issues",
-                "source": "https://github.com/sugarcraft/candy-freeze",
-                "docs": "https://sugarcraft.github.io/lib/candy-freeze.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8586,13 +8586,13 @@
         "sugarcraft/candy-ansi-inspect": 20,
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
+        "sugarcraft/candy-codeshot": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flappy": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
-        "sugarcraft/candy-freeze": 20,
         "sugarcraft/candy-fuzzy": 20,
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
