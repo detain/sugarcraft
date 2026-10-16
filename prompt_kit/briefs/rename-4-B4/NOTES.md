@@ -1,18 +1,18 @@
-# Rename B4: candy-shell → candy-scriptui (Procedure R)
+# Rename B4: candy-shell → candy-scriptui (Procedure R) <!-- @rename-keep -->
 
 Campaign record for Phase-4 Batch-B entry 4. Lines marked `<!-- @rename-keep -->`
 carry the pre-rename name on purpose (history).
 
 ## Entry (tools/renames.json line 11)
 kind=rename, old `candy-shell`, <!-- @rename-keep --> new `candy-scriptui`, type=app, ns `Shell`→`ScriptUi`,
-bins {`bin/candyshell`: `bin/candy-scriptui`} (glued compact bin spelling). Baseline 334T/694A/0F/0E/0S/0W.
+bins {`bin/candyshell`: `bin/candy-scriptui`} (glued compact bin spelling). Baseline 334T/694A/0F/0E/0S/0W. <!-- @rename-keep -->
 
 ## R0 recon
-- Cross-lib `SugarCraft\Shell\` PHP consumers: ZERO code — only docblock cross-refs
-  (candy-pty PosixProcess.php:17/:28 `@see \SugarCraft\Shell\Process\RealProcess`, Contract/Process.php,
+- Cross-lib `SugarCraft\Shell\` PHP consumers: ZERO code — only docblock cross-refs <!-- @rename-keep -->
+  (candy-pty PosixProcess.php:17/:28 `@see \SugarCraft\Shell\Process\RealProcess`, Contract/Process.php, <!-- @rename-keep -->
   SECURITY.md:43, research docs). All rewritten by R1, comment-only → no candy-pty/candy-core suite re-run.
-  No lib requires sugarcraft/candy-shell (root composer only) → no consumer serial/K=8.
-- Outside-lib `candyshell` brand refs: candy-core/src/ProgramOptions.php:42,308 + candy-core/src/Renderer.php:35,
+  No lib requires sugarcraft/candy-shell (root composer only) → no consumer serial/K=8. <!-- @rename-keep -->
+- Outside-lib `candyshell` brand refs: candy-core/src/ProgramOptions.php:42,308 + candy-core/src/Renderer.php:35, <!-- @rename-keep -->
   candy-forms/src/ActionSpinner.php:20, candy-core/README.md, sugar-bits/examples/item-list.php,
   candy-sprinkles/examples/table.php (docblock prose), tools/tests/DocsQuickstartTest.php:538 (test INPUT).
   All R2/R4 rewrites; behavior-neutral; tools/tests floor covers the Quickstart test.
@@ -55,7 +55,7 @@ php -l clean across all touched PHP; bin lints as php (shebang `#!/usr/bin/env p
   13 subcommands: ..." (JSON re-validated; keywords untouched — "gum" upstream + "shell" still accurate).
 - PROJECT_NAMES.md:135 rationale rewritten honest (candy + script UI, formerly-name clause tagged);
   :232 cheat-sheet "shell (CandyScriptui)" → "terminal scripting (CandyScriptui)".
-- `.vhs/filter.tape` demo item list `CandyShell` → `CandyScriptui` (R2 trailing-`n` blind; live demo data).
+- `.vhs/filter.tape` demo item list `CandyShell` → `CandyScriptui` (R2 trailing-`n` blind; live demo data). <!-- @rename-keep -->
 
 ## R5 wiring
 Root composer require+repository rewritten by tool; `composer update sugarcraft/candy-scriptui --no-install` →
@@ -64,7 +64,7 @@ generated, --check rc=0 (61 pages + 8 stubs at that point). gen-ansi-readme --ch
 refresh-deps --mode=linked candy-scriptui OK; committed-tree path-repo guard rc=0; tracked per-lib locks 0.
 
 ## R6 verification
-- residue --old=candy-shell → 0 findings (incl BIN glued rule); tree-wide manual grep for candyshell/
+- residue --old=candy-shell → 0 findings (incl BIN glued rule); tree-wide manual grep for candyshell/ <!-- @rename-keep -->
   CandyShell/CANDYSHELL <!-- @rename-keep --> → only @rename-keep-tagged history + excluded ledgers.
 - suite candy-scriptui: **334T/694A OK rc=0 — EXACT baseline** (watchdog, plain pipe, 1.1s).
 - tools/tests: **426/1484 EXACT**; path-repos rc=0; child-lifetimes rc=0.
