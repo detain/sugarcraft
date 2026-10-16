@@ -113,7 +113,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 
 | Lib | Phase | Items | Key Fix |
 |-----|-------|-------|---------|
-| sugar-post | P1 | 3 | Attachment silent failure; unchecked fwrite(); @ suppression on fgets() |
+| candy-mail | P1 | 3 | Attachment silent failure; unchecked fwrite(); @ suppression on fgets() |
 | candy-forms | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
 | candy-log | P1 | 2 | Log level filtering; Handler interface consistency |
 | candy-git | P1 | 2 | Path-repo closure check (verify candy-fuzzy is clean) |
@@ -179,7 +179,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 ### Group E Source Plans
 
-- `findings/plan_sugar-post.md` — Phase 1 (Attachment silent failure, unchecked fwrite)
+- `findings/plan_candy-mail.md` — Phase 1 (Attachment silent failure, unchecked fwrite)
 - `findings/plan_candy-forms-huh.md` — Phase 1 ($pid uninitialized on fork failure)
 - `findings/plan_candy-log.md` — Phase 1 (log level filtering, handler consistency)
 - `findings/plan_candy-git.md` — Phase 1 (path-repo closure verification)

@@ -106,12 +106,12 @@ From `repo_map/charmbracelet_pop.md`:
 
 **Signal:** 1 👍, open 9+ months
 **Problem:** Users want to use pop as an email composer and pipe output to other delivery agents (msmtp, mdeliver from mblaze toolkit, custom anonymization scripts). Currently pop only sends, it doesn't output the raw MIME message.
-**Requested solution:** `pop -o -` to output raw mail without sending
+**Requested solution:** `pop -o -` to output raw mail without sending <!-- @rename-keep -->
 **Use cases stated:**
 
-- `pop -o - | msmtp -a gmail` — compose with pop, deliver with user's existing MDA
-- `pop -o - | mdeliver /mnt/sshfs/some-host/mail/INBOX` — file-based delivery
-- `pop -o - | anonymize.sh | msmtp -a gmail` — pre-delivery transformation
+- `pop -o - | msmtp -a gmail` — compose with pop, deliver with user's existing MDA <!-- @rename-keep -->
+- `pop -o - | mdeliver /mnt/sshfs/some-host/mail/INBOX` — file-based delivery <!-- @rename-keep -->
+- `pop -o - | anonymize.sh | msmtp -a gmail` — pre-delivery transformation <!-- @rename-keep -->
 **Analysis for SugarCraft:** This is the **pipeline/compose-and-deliver separation** pattern. SugarCraft's sugar-mail (if built) should support outputting a composed MIME message rather than always sending it directly.
 
 ---
@@ -372,7 +372,7 @@ Request for pre-existing content files and HTML template customization. This wou
 
 3. **State machine is the right abstraction for TUIs** — Pop's `State` enum approach is well-regarded and portable. SugarCraft's `candy-forms` uses a similar step-based pattern.
 
-4. **CLI-first design enables scripting** — The `pop < message.md --from ... --to ...` pattern is powerful. SugarCraft's libraries should be CLI-friendly even when the primary interface is TUI.
+4. **CLI-first design enables scripting** — The `pop < message.md --from ... --to ...` pattern is powerful. SugarCraft's libraries should be CLI-friendly even when the primary interface is TUI. <!-- @rename-keep -->
 
 5. **Gmail smart defaults are high-value UX** — Auto-detecting `@gmail.com` and pre-filling `smtp.gmail.com:587` reduces friction for the most common case. SugarCraft should consider provider-specific smart defaults.
 
@@ -398,7 +398,7 @@ Request for pre-existing content files and HTML template customization. This wou
 
 1. **TUI-as-pipeline-component** — Users want TUIs that compose with traditional CLI tools (msmtp, gum, mods, invoice). The composable tool philosophy is a core charmbracelet value. SugarCraft should design for composability.
 
-2. **AI integration is expected** — The `mods` integration (`pop <<< "$(mods -f '...')"`) is a flagship example in documentation. SugarCraft should consider how AI tools integrate with its libraries.
+2. **AI integration is expected** — The `mods` integration (`pop <<< "$(mods -f '...')"`) is a flagship example in documentation. SugarCraft should consider how AI tools integrate with its libraries. <!-- @rename-keep -->
 
 3. **Markdown-first email composition** — Developers prefer writing in markdown. This is a genuine workflow improvement. SugarCraft should default to markdown support.
 
@@ -437,7 +437,7 @@ Request for pre-existing content files and HTML template customization. This wou
 
 ## 25. High ROI Recommendations
 
-1. **Build `sugar-mail` composable email library** — Email composition with markdown rendering + swappable delivery (SMTP, null transport for raw MIME output). Start with the raw output capability (`pop -o -` equivalent) which is the highest-value composability feature.
+1. **Build `sugar-mail` composable email library** — Email composition with markdown rendering + swappable delivery (SMTP, null transport for raw MIME output). Start with the raw output capability (`pop -o -` equivalent) which is the highest-value composability feature. <!-- @rename-keep -->
 
 2. **Adopt env-var-for-every-flag pattern** — For any `sugar-mail` CLI or SugarCraft app layer, ensure every flag has a corresponding env var. This is a well-proven pattern from pop.
 

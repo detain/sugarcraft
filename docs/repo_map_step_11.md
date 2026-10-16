@@ -38,7 +38,7 @@ Reference: `docs/repo_map_update.md` §345.9 (StyleSheet / BlockStack), shared d
 
 1. **Delegate to an Explore subagent**: "Map the current `candy-shine/src/Renderer.php` block-handling code. List every block type renderer (heading, paragraph, etc.) and confirm whether each currently passes any indent/width context, or always renders at column 0 with global width."
 2. **Spawn a Researcher**: "How does glamour's BlockStack work? Specifically: how does it compute available width as blocks nest? What's the rule for indent accumulation (additive vs replace)? How does style cascade through nested contexts (CSS-like or block-specific overrides only)?"
-3. **Implement BlockStack + BlockContext**: stack with `push`/`pop`/`peek`. Each BlockContext is immutable.
+3. **Implement BlockStack + BlockContext**: stack with `push`/`pop`/`peek`. Each BlockContext is immutable. <!-- @rename-keep -->
 4. **Implement StyleSheet**: keyed by `BlockKind` + depth, with a default sheet and fluent overrides. Use `Mutable` trait.
 5. **Implement StyleCascade**: rules — child Style overrides parent on specified attrs; unspecified attrs inherit.
 6. **Refactor block renderers** one at a time: pass `BlockStack` into each `render(Block, BlockStack): string` method. Compute available width as `parent.availableWidth - parent.indentForChildren`. Apply `StyleCascade(parent.cascadedStyle, blockStyle)` to produce the effective style.

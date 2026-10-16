@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "51fdbeda82300de995a7872fe7340d47",
+    "content-hash": "528d98615c5f7b67cb075b31b72b9382",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4720,6 +4720,67 @@
             }
         },
         {
+            "name": "sugarcraft/candy-mail",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-mail",
+                "reference": "ca489b080ae57ac9939b647777c12d68b964eea4"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.2",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5"
+            },
+            "bin": [
+                "bin/candy-mail"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Mail\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Mail\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Email sender for PHP, modeled on the charmbracelet/pop Go tool — send via the Resend API or direct SMTP. Compose from stdin, attach files, supports CC/BCC, HTML body.",
+            "homepage": "https://github.com/sugarcraft/candy-mail",
+            "keywords": [
+                "email",
+                "mailer",
+                "resend",
+                "send",
+                "smtp",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-mail/issues",
+                "source": "https://github.com/sugarcraft/candy-mail"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-mdview",
             "version": "dev-master",
             "dist": {
@@ -6700,67 +6761,6 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-post",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-post",
-                "reference": "d4046426be414ba80d88c530af50ce28fa099b5e"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpstan/phpstan": "^2.2",
-                "phpstan/phpstan-phpunit": "^2.0",
-                "phpunit/phpunit": "^10.5"
-            },
-            "bin": [
-                "bin/pop"
-            ],
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Post\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Post\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/pop — send emails from PHP via Resend API or direct SMTP. Compose from stdin, attach files, supports CC/BCC, HTML body.",
-            "homepage": "https://github.com/sugarcraft/sugar-post",
-            "keywords": [
-                "email",
-                "mailer",
-                "resend",
-                "send",
-                "smtp",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-post/issues",
-                "source": "https://github.com/sugarcraft/sugar-post"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/sugar-readline",
             "version": "dev-master",
             "dist": {
@@ -8602,6 +8602,7 @@
         "sugarcraft/candy-kv": 20,
         "sugarcraft/candy-lister": 20,
         "sugarcraft/candy-log": 20,
+        "sugarcraft/candy-mail": 20,
         "sugarcraft/candy-mdview": 20,
         "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
@@ -8632,7 +8633,6 @@
         "sugarcraft/sugar-diff": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-mcp": 20,
-        "sugarcraft/sugar-post": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-stickers": 20,

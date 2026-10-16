@@ -176,8 +176,8 @@ flag_management:
     - name: sugar-crumbs
       paths: ["sugar-crumbs/src/**"]
       carryforward: true
-    - name: sugar-post
-      paths: ["sugar-post/src/**"]
+    - name: candy-mail
+      paths: ["candy-mail/src/**"]
       carryforward: true
     - name: sugar-readline
       paths: ["sugar-readline/src/**"]
@@ -505,12 +505,12 @@ component_management:
         - "sugar-crumbs/src/**"
       flag_regexes:
         - "^sugar-crumbs$"
-    - component_id: sugar-post
-      name: sugar-post
+    - component_id: candy-mail
+      name: candy-mail
       paths:
-        - "sugar-post/src/**"
+        - "candy-mail/src/**"
       flag_regexes:
-        - "^sugar-post$"
+        - "^candy-mail$"
     - component_id: sugar-readline
       name: sugar-readline
       paths:

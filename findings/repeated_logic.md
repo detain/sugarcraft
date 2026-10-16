@@ -43,7 +43,7 @@ trait Mutable
 - `candy-flip/src/Player.php`
 - `sugar-wishlist/src/Endpoint.php`
 - `candy-sql/src/App.php`
-- `sugar-post/src/Email.php`
+- `candy-mail/src/Email.php`
 - `candy-mouse/src/ClickCounter.php`
 - `candy-shine/src/Style/StyleSheet.php`
 - `candy-sql/src/Admin/PerfSchema/*` (6 setup classes)
@@ -272,10 +272,10 @@ return Lang::t('validator.required');
 
 **Email/attachment validation:**
 ```php
-// sugar-post/src/Email.php:L102
+// candy-mail/src/Email.php:L102
 throw new \InvalidArgumentException(Lang::t('email.crlf_in_address'));
 
-// sugar-post/src/Email.php:L114
+// candy-mail/src/Email.php:L114
 throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $bareAddr]));
 ```
 

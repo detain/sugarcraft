@@ -1304,7 +1304,7 @@ Same verification as previous phases.
 | `plan_sugar-bits.md` | 2.3-2.4, 3.1-3.5, 3.7, 4.1-4.4, 5.1-5.2, 6.1-6.2, 7.1, 7.3 | Proportional width, Tabs scrollEnd, Progress layout, Tree/Table caching, C0 sanitization, input validation, ReactPHP/async docs |
 | `plan_sugar-dash.md` | M-1, M-2, M-3, M-4, L-1, L-3, F-2, F-4 | WeatherModule HOME fallback, FilesystemIterator, LegacyModuleAdapter msg filtering, Gauge double clamp, PluginSdk signals, EventDispatcherTest |
 | `plan_candy-mdview.md` | 2.2-2.3, 2.5 | GlamourTheme $throws, loadInput() docs, Pager empty stream |
-| `plan_sugar-post.md` | 3.1, 3.2, 4.1-4.7, 5.1, 6.1-6.2 | buildMimeMessage refactor, async transport, Resend API key, address deduplication, hasExtension parsing, CID validation, getenv consistency |
+| `plan_candy-mail.md` | 3.1, 3.2, 4.1-4.7, 5.1, 6.1-6.2 | buildMimeMessage refactor, async transport, Resend API key, address deduplication, hasExtension parsing, CID validation, getenv consistency |
 | `plan_candy-forms-huh.md` | 2.2-2.4, 3.2-3.7, 4.1-4.5, 5.1-5.2, 6.1-6.3, 7.1-7.3 | SIGCHLD handler, @ suppression removal, signal handler restoration, Spinner timeout, AsyncSpinner, SequentialSpinner, deprecation triggers, mutate helper |
 | `plan_sugar-reel.md` | 1.4, 2.4, 3.3-3.8, 4.1-4.9, 5.2-5.9, 6.2-6.9, 7.1-7.5, 8.1-8.6 | Exit code capture, mutate false/0, HalfBlock path, GifDecoder silent fallback, mode switch rebuild, renderPlaceholder memo, subtitle not found, skip limit, autoMode sentinel, decoderFactory, color packing, Windows NUL, tickMsg singleton, frame PTS |
 | `plan_candy-git.md` | 3.1-3.2, 5.1 | DiffViewer early return, HistoryManager spread syntax, async git driver |

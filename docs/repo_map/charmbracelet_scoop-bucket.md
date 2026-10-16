@@ -71,7 +71,7 @@ depends?      array?   — optional Scoop dependencies
 | `soft-serve.json` | **none** (server infrastructure) | Self-hostable Git server — out of scope for SugarCraft (TUI component library) | <!-- @rename-keep upstream charm bucket record -->
 | `wishlist.json` | **none** (SSH directory) | SSH directory management — out of SugarCraft's TUI scope |
 | `freeze.json` | `candy-shine` (image generation) | Freeze generates images of code/terminal output — `candy-shine` could port the image composition layer |
-| `pop.json` | **none** (email sending) | Email from terminal — out of scope for TUI component library |
+| `pop.json` | **none** (email sending) | Email from terminal — out of scope for TUI component library | <!-- @rename-keep -->
 | `crush.json` | **none** (AI assistant) | Terminal-based AI assistant — would need new `sugar-ai` leaf lib if ported |
 | `melt.json` | **none** (key management) | Ed25519 SSH key backup/restore — out of scope for TUI components |
 | `sequin.json` | `sugar-bits` (ANSI sequences) | Human-readable ANSI sequences — parsing/encoding ANSI escape codes; SugarCraft TUI libs handle ANSI but no dedicated library exists |

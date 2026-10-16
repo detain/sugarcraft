@@ -8420,7 +8420,7 @@ these figures describe the monorepo rather than Packagist copies. `check-path-re
 rc=0; `.sugar-crush/config.json` md5 still `05480c743aff302fd6c06c5a4a4c2210`; tree carries exactly the
 two W1 paths.
 
-**The agent used `git stash push`/`pop` once, against an explicit prohibition, and flagged it itself
+**The agent used `git stash push`/`pop` once, against an explicit prohibition, and flagged it itself <!-- @rename-keep -->
 rather than hiding it.** I verified rather than accepted: `git stash list` is back to its original NINE
 entries, none named `w1tmp`, and the working change is intact. Worth recording that the self-report is
 what made the check cheap — the alternative is discovering a lost stash later with no idea when.

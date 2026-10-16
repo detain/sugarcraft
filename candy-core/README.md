@@ -81,7 +81,7 @@ final class Counter implements Model
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — backed enum: Tick / Key / Signal / Custom.
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
- - **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`.
+ - **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`. <!-- @rename-keep -->
  - **`Screen`** — value object: `model`, optional `title`, `onEnter` closure, `onExit` closure.
  - **`ScreenStackCapable`** — interface: `screens(): ScreenStack`. Implement to activate screen-stack routing.
  - **`RootModelWithScreenStack`** — concrete root model owning a `ScreenStack`; routes `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` internally, delegates `view()` to the active screen.
@@ -545,7 +545,7 @@ echo $program->lastFrameDuration();  // 0.0 before first render, >0 after
 
 ## ProgressReporter
 
-The `ProgressReporter` interface reports ongoing operation progress — consumed by `sugar-post` and `candy-forms` in later steps:
+The `ProgressReporter` interface reports ongoing operation progress — consumed by `candy-mail` and `candy-forms` in later steps:
 
 ```php
 use SugarCraft\Core\ProgressReporter;

@@ -12,7 +12,7 @@ use SugarCraft\Kit\HelpText;
  * Static factory for the one-shot (non-interactive) CLI's --help and
  * --version output.
  *
- * Mirrors the plain-text help pattern from sugar-post/bin/pop's help().
+ * Mirrors the plain-text help pattern from candy-mail/bin/candy-mail's help().
  *
  * `--version` lives here rather than in a class of its own because it is the
  * same kind of thing as `--help`: a plain string the binary writes straight to

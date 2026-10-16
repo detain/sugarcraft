@@ -57,11 +57,11 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + candy-mouse + candy-testing (PR #911)
 - step-33 candy-kv + sugar-wishlist + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
-- step-35 sugar-tick + sugar-post + candy-git-server: adopted candy-async (PR #915)
+- step-35 sugar-tick + candy-mail + candy-git-server: adopted candy-async (PR #915)
 - step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, candy-mail, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).
@@ -245,7 +245,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **No mouse event deduplication** — Duplicate MouseDown events on drag operations across zone boundaries.
 
-3. **No progress feedback for async file operations** — super-candy, sugar-post silent failures until completion.
+3. **No progress feedback for async file operations** — super-candy, candy-mail silent failures until completion.
 
 4. **No Vim mode parity** — Implemented in candy-forms, candy-forms, sugar-bits but not universally across text input components.
 

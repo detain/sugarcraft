@@ -388,7 +388,7 @@ And several libs correctly depend on `candy-async`:
 - candy-core (i18n/Lang)
 - candy-forms (CancellationSource for async suggestions)
 - candy-git-server (Subscription/Subscriptions for cleanup)
-- sugar-post (CancellationToken, AsyncOps for SMTP)
+- candy-mail (CancellationToken, AsyncOps for SMTP)
 - sugar-tick (CancellationSource, CancellationToken)
 - candy-forms, sugar-reel, sugar-query
 

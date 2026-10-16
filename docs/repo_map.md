@@ -34,7 +34,7 @@
 | [charmbracelet/log](#charmbraceletlog) | Go | ~700 | candy-log |
 | [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-scriptui |
 | [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, candy-forms |
-| [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | sugar-post, candy-scriptui, candy-shine |
+| [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | candy-mail, candy-scriptui, candy-shine |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
 | [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, candy-ansi-inspect |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
@@ -576,11 +576,11 @@
 **Features:** TUI via Bubble Tea, goldmark markdown rendering, dual delivery (Resend API + SMTP), Gmail smart-defaults.
 
 **SugarCraft Mapping:**
-- `sugar-post` → Primary port
+- `candy-mail` → Primary port
 - `candy-forms` → TUI form navigation
 - `candy-shine` → Markdown rendering
 
-**Note:** Port exists as `sugar-post` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-mail` (🟢 in MATCHUPS.md).
 
 ---
 

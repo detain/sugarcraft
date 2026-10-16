@@ -146,7 +146,7 @@ hierarchy. The TUI's root model holds a stack of child models, one per
 `candy-core/src/ScreenStackCapable.php`,
 `candy-core/src/RootModelWithScreenStack.php`, and the
 `candy-core/src/Msg/ScreenStackPushedMsg.php` event) — TUI navigation
-uses `ScreenStack::push()` / `pop()` rather than re-implementing nav.
+uses `ScreenStack::push()` / `pop()` rather than re-implementing nav. <!-- @rename-keep -->
 
 ### 2.3 Git access (candy-git)
 

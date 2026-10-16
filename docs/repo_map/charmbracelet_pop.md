@@ -22,7 +22,7 @@
 - **Pre-fill Defaults:** `POP_FROM` and `POP_SIGNATURE` environment variables for boilerplate
 - **Keyboard-driven Navigation:** Tab/Shift+Tab between fields; Enter to send or attach; `ctrl+d` to send; `ctrl+c` to quit; `x` to remove attachment
 - **Integration Examples:** Pipelines with `gum` (interactive choosers), `mods` (AI-generated content), and `invoice` (PDF generation)
-- **Man Page Generation:** `pop man` command generates ROFF man pages via `muesli/mango-cobra`
+- **Man Page Generation:** `pop man` command generates ROFF man pages via `muesli/mango-cobra` <!-- @rename-keep -->
 - **Error Recovery:** Failed emails are saved to a dated temp file if sending fails
 
 ## Key Classes and Methods
@@ -132,7 +132,7 @@ There is no SugarCraft equivalent for the actual email-sending logic (SMTP, Rese
 
 ## Analysis
 
-**charmbracelet/pop** is a well-crafted terminal email client that serves as both a standalone tool and a showcase for the charmbracelet/Bubble Tea ecosystem. Its most impressive technical achievement is the seamless dual-mode operation: running `pop` with no arguments launches a full Bubble Tea TUI with sequential field editing (From → To → Cc/Bcc → Subject → Body → Attachments → Send), while `pop < message.md --from ... --to ... --subject ...` bypasses the TUI entirely and sends directly. Both paths share the same email-building and delivery logic in `email.go`, with the TUI path using `sendEmailCmd()` as an async Bubble Tea command.
+**charmbracelet/pop** is a well-crafted terminal email client that serves as both a standalone tool and a showcase for the charmbracelet/Bubble Tea ecosystem. Its most impressive technical achievement is the seamless dual-mode operation: running `pop` with no arguments launches a full Bubble Tea TUI with sequential field editing (From → To → Cc/Bcc → Subject → Body → Attachments → Send), while `pop < message.md --from ... --to ... --subject ...` bypasses the TUI entirely and sends directly. Both paths share the same email-building and delivery logic in `email.go`, with the TUI path using `sendEmailCmd()` as an async Bubble Tea command. <!-- @rename-keep -->
 
 The state machine in `model.go` is the operational core. The `State` enum (`editingFrom` through `sendingEmail`) drives every aspect of input focus, keybinding availability, and view rendering. This is a textbook Bubble Tea pattern: the `Update` method pattern-matches on `tea.KeyMsg` to advance or regress the state, delegates to sub-model `Update` calls, and the `View` method renders completely different layouts based on the current state (e.g., the filepicker view when `state == pickingFile`). The `updateKeymap()` method dynamically enables/disables bindings as state changes, creating a context-sensitive interface where only relevant keys do anything — a polished touch that prevents user errors.
 

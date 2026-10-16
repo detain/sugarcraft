@@ -32,7 +32,7 @@ The audit categories:
 5. **Sugar-dash detailed plan** — finish the Phase-0 reorg, fix the
    broken `ExternalModule`, wire a real interactive dashboard, kill the
    chart duplication.
-6. **Strategic-decision items** — sugar-post (email vs social), candy-git-server
+6. **Strategic-decision items** — candy-mail (email vs social), candy-git-server
    TUI scope, candy-vt P3 graphics protocols.
 7. **Sequencing recommendation** — order of operations so SSoT cleanup
    does not collide with feature work.
@@ -535,7 +535,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
   actually leftover: text alignment Left/Center/Right; margin (outer
   spacing).
 
-### sugar-post
+### candy-mail
 
 (Strategic. See §6.)
 
@@ -880,9 +880,9 @@ until a real profiler trace flags the cost.
 
 ## 6. Strategic-decision items (need a product call before any code)
 
-- **sugar-post identity** — ✅ **RESOLVED 2026-05-19** — Option A
-  chosen: sugar-post stays an email tool, finishes the upstream Pop TUI
-  surface. See `plans/sugar-post-identity.md`. Social-media pivot ideas
+- **candy-mail identity** — ✅ **RESOLVED 2026-05-19** — Option A
+  chosen: candy-mail stays an email tool, finishes the upstream Pop TUI
+  surface. See `plans/candy-mail-identity.md`. Social-media pivot ideas
   are shelved; a future microblog TUI would be a separate library.
 - **candy-git-server TUI scope** — soft-serve's marquee feature is the
   interactive SSH-served repo browser. That is a substantial TUI app on
@@ -935,7 +935,7 @@ inline strings. Approx 8 PRs.
 **Group E — Strategic-decision items (blocked):**
 
 Do not ship until product call:
-- sugar-post identity
+- candy-mail identity
 - candy-git-server TUI scope plan
 - candy-vt P3 graphics
 

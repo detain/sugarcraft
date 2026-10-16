@@ -48,7 +48,7 @@ Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoA
 2. **Build the Builder** — `with*()` per param, all fluent + immutable returning new builder instances. `build()` returns `ProgramOptions` via the existing ctor. Validate required fields.
 3. **withLogger / withExceptionHandler** on Program: use the `mutate()` helper. Default logger is `Psr\Log\NullLogger`. Default exception handler is `static fn(\Throwable $t) => throw $t`.
 4. **$lastFrameDuration**: in the render loop, capture `microtime(true)` before/after the view+flush cycle; store on the Program instance. Expose via `lastFrameDuration()` accessor.
-5. **ProgressReporter**: interface + 2 impls. Used by super-candy / sugar-post / others in step-25/35.
+5. **ProgressReporter**: interface + 2 impls. Used by super-candy / candy-mail / others in step-25/35.
 6. **UndoActionType + UndoAction**: replaces string-based routing (super-candy currently does `str_starts_with($desc, 'delete ')`). Consumers migrate in step-25.
 7. **Width::of**: if it already exists, no-op. If not, port from upstream `charmbracelet/x/cellbuf` width handling. Use `Symfony\Component\String` or `mb_strwidth` as starting point but extend for emoji ZWJ.
 8. Run phpunit + check-path-repos.

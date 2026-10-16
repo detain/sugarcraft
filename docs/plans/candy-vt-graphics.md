@@ -773,7 +773,7 @@ the following must hold:
 - The work is **not** unblocked by any sugar-* or honey-* milestone.
 - The work is **not** unblocked by 1.0 release readiness; 1.0 ships
   fine without it.
-- Phase-11 strategic plans 11.01 (sugar-post) and 11.02 (candy-git-server
+- Phase-11 strategic plans 11.01 (candy-mail) and 11.02 (candy-git-server
   TUI) target user-visible value. **This plan targets internal
   capability completeness only.** If product time is constrained,
   defer this in favour of the other two.

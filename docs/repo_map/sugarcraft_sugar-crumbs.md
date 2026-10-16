@@ -87,7 +87,7 @@ final class NavStack
 
 **Key design decisions:**
 
-1. **`pop()` mutates in-place** — unlike Go bubbleo's `Pop()` which returns `tea.Cmd`, PHP's `pop()` modifies the stack directly and returns the popped `NavigationItem|null`. This is simpler for PHP's synchronous execution model.
+1. **`pop()` mutates in-place** — unlike Go bubbleo's `Pop()` which returns `tea.Cmd`, PHP's `pop()` modifies the stack directly and returns the popped `NavigationItem|null`. This is simpler for PHP's synchronous execution model. <!-- @rename-keep -->
 
 2. **`setItems()` for Shell immutability** — Shell's `withPush()`/`withPop()` create a new NavStack copy via `setItems()` so Shell itself remains immutable.
 
@@ -365,7 +365,7 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 
 4. **Message-driven navigation** — `PushNavigation`/`PopNavigation` messages with `tea.Cmd` return values. sugar-crumbs uses direct method calls suitable for PHP's synchronous model.
 
-5. **`tea.Sequence` ordering** — bubbleo's `tea.Sequence(pop, cmd)` ensures pop executes before subsequent command. PHP has no equivalent since `pop()` modifies in-place.
+5. **`tea.Sequence` ordering** — bubbleo's `tea.Sequence(pop, cmd)` ensures pop executes before subsequent command. PHP has no equivalent since `pop()` modifies in-place. <!-- @rename-keep -->
 
 ---
 

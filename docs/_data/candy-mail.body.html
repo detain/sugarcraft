@@ -1,0 +1,67 @@
+<p class="lede" style="margin-top: 28px;">Email builder and sender. SMTP transport, Resend API transport, attachment support, HTML + plain-text multipart, and a fluent interface.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mail</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Mail\{Email, ResendTransport, SmtpTransport};
+
+// Immutable: every with*() returns a new Email
+$email = Email::new('noreply@example.com', 'user@example.com', 'Deployment complete', 'Your app was deployed successfully.')
+    -&gt;withHtmlBody('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
+    -&gt;withCc('ops@example.com')
+    -&gt;withAttachment('build.zip', '/tmp/build.zip');   // display name, then the file on disk
+
+$transport = new SmtpTransport('smtp.example.com', 587, 'user', 'secret');
+$transport-&gt;send($email);
+
+// Or over the Resend HTTP API (key from the argument or RESEND_API_KEY)
+(new ResendTransport())-&gt;send($email);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>SMTP transport</strong><span>TCP connection with TLS, auth (plain/login), and batching.</span></div>
+            <div class="feature"><strong>Resend transport</strong><span>API-based sending via Resend.com — no SMTP needed.</span></div>
+            <div class="feature"><strong>Attachments</strong><span>Local files, memory content, custom MIME types.</span></div>
+            <div class="feature"><strong>HTML + Text</strong><span>Multipart/alternative email bodies.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-mail">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mail/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mail/tree/main/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/pop">charmbracelet/pop</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Email</td><td>static new(from, to, ?subject, ?body)</td><td>Create an email</td></tr>
+<tr><td>Email</td><td>withFrom() / withTo(...$to) / withCc(...) / withBcc(...) / withReplyTo() / withSubject()</td><td>Immutable header builders</td></tr>
+<tr><td>Email</td><td>withBody() / withHtmlBody() / withSignature()</td><td>Plain-text and HTML bodies</td></tr>
+<tr><td>Email</td><td>withAttachment(filename, path) / withInlineAttachment(path, cid, filename)</td><td>Attach a file, or embed one for a cid: reference</td></tr>
+<tr><td>SmtpTransport</td><td>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '') / send(Email)</td><td>SMTP delivery</td></tr>
+<tr><td>ResendTransport</td><td>__construct(apiKey = '') / send(Email)</td><td>Resend API delivery; falls back to RESEND_API_KEY</td></tr>
+<tr><td>Attachment</td><td>static fromPath(path, filename) / static inline(path, cid, filename)</td><td>Attachment value objects</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mail/.vhs/showcase.gif" alt="Email DTOs + transports">
+                <h3>Email DTOs + transports</h3>
+                <span class="demo-caption">Plain + multipart Email values, transport surface listed.</span>
+            </div>
+        </div>
+    </div>
+</section>

@@ -9,7 +9,7 @@ use SugarCraft\Crush\Lang;
 /**
  * Manual argv-parsing, dependency-free — no CLI-flag-parsing lib exists
  * elsewhere in the monorepo, so this follows the precedent set by
- * sugar-post/bin/pop's hand-rolled getopt()-style loop rather than mirroring
+ * candy-mail/bin/candy-mail's hand-rolled getopt()-style loop rather than mirroring
  * any single upstream charmbracelet method.
  *
  * Supports: -p/--prompt <value>, --help/-h, --version/-v, the real

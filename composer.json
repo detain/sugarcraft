@@ -87,7 +87,7 @@
         "sugarcraft/sugar-gallery": "dev-master",
         "sugarcraft/candy-mdview": "dev-master",
         "sugarcraft/sugar-mcp": "dev-master",
-        "sugarcraft/sugar-post": "dev-master",
+        "sugarcraft/candy-mail": "dev-master",
         "sugarcraft/sugar-readline": "dev-master",
         "sugarcraft/sugar-reel": "dev-master",
         "sugarcraft/candy-kv": "dev-master",
@@ -440,7 +440,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-post",
+            "url": "candy-mail",
             "options": {
                 "symlink": true
             }

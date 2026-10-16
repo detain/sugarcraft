@@ -39,7 +39,7 @@ The 8 shared packages:
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
 | Step 33 | candy-kv, sugar-wishlist, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
-| Step 35 | sugar-tick, sugar-post, candy-git-server | candy-buffer, candy-async, candy-testing |
+| Step 35 | sugar-tick, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
 
@@ -187,14 +187,14 @@ The 8 shared packages:
 
 ---
 
-### sugar-post
+### candy-mail
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-async | SmtpTransport.php + ResendTransport.php use blocking I/O — AsyncOps::withTimeout() would add async sending with cancellation | M |
 | candy-testing | Transport.php + Mailer.php lack integration tests — candy-testing would provide fixture + golden test harness | M |
 
-**Notes:** sugar-post is an email-sending library. Currently all I/O is synchronous. Adopting candy-async would enable non-blocking SMTP sends with proper timeout/cancellation handling.
+**Notes:** candy-mail is an email-sending library. Currently all I/O is synchronous. Adopting candy-async would enable non-blocking SMTP sends with proper timeout/cancellation handling.
 
 ---
 
@@ -299,7 +299,7 @@ The 8 shared packages:
 | Effort | libs |
 |--------|------|
 | **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-git-server, honey-bounce, candy-metrics, candy-log |
+| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---
 

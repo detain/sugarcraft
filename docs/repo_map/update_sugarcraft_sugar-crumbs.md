@@ -16,7 +16,7 @@ sugar-crumbs provides three primitives with clear separation of concerns:
 
 | Class | Role | Lines | Public API Surface |
 |---|---|---|---|
-| `NavStack` | LIFO stack with push/pop/peek/filter | 197 | `push()`, `pop()`, `current()`, `parent()`, `depth()`, `isEmpty()`, `items()`, `updateTop()`, `clear()`, `setItems()`, `view()`, `viewHtml()`, `filter()` |
+| `NavStack` | LIFO stack with push/pop/peek/filter | 197 | `push()`, `pop()`, `current()`, `parent()`, `depth()`, `isEmpty()`, `items()`, `updateTop()`, `clear()`, `setItems()`, `view()`, `viewHtml()`, `filter()` | <!-- @rename-keep -->
 | `Breadcrumb` | Renders NavStack as string trail | 211 | `setSeparator()`, `setTruncator()`, `setMaxWidth()`, `setItemRenderer()`, `withZoneManager()`, `render()`, `renderTitles()` |
 | `Shell` | Combines NavStack + Breadcrumb | 66 | `new()`, `withPush()`, `withPop()`, `renderBreadcrumb()`, `pushDirectory()` |
 
@@ -347,7 +347,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Go's `bubbleo` uses `interface{}` / `any` similarly
 
 4. **Better error handling**
-   - `pop()` returns `null` on empty — clear
+   - `pop()` returns `null` on empty — clear <!-- @rename-keep -->
    - Add `?ClosableError` type for onLeave() failures
    - Document error propagation in push/pop
 

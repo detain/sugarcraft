@@ -463,7 +463,7 @@ All 45 research documents available at:
 | sugar-crush | 15KB |
 | sugar-dash | 25KB |
 | candy-mdview | 17KB |
-| sugar-post | 25KB |
+| candy-mail | 25KB |
 | candy-forms | 20KB |
 | sugar-readline | 18KB |
 | candy-kv | 21KB |

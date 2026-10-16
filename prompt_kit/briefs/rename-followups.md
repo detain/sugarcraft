@@ -66,3 +66,7 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   scripted-dialog consumer, so do not auto-rewrite to candy-kv (would mint a false claim). Retitle/reword when triaged.
 - `docs/plans/leftover/phase-10-apps/step-35-skate-import-typo-ttl-stdin-tx.md` filename + branch cite `ai/skate-import-typo-...`
   carry the bare word skate <!-- @rename-keep --> — historical plan/branch names, intentionally left (slug never appears; benign).
+- `ansi/candy-mail/*.ansi` — 40 wordmark art files (migrated from `ansi/sugar-post/` by R3 <!-- @rename-keep -->): their bytes still
+  render the pre-rename `SUGARPOST` wordmark. Content is rename-excluded (.ansi); re-generate via the ansi toolchain when triaged.
+- `candy-mail/.vhs/showcase.gif` — demo GIF renamed with the dir; its frames still show the pre-rename wordmark. CI
+  `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.

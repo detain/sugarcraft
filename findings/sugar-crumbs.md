@@ -44,7 +44,7 @@
 - **Location:** `src/NavigationItem.php:27-39`, `src/Closable.php:16-22`
 - **Finding:** `NavigationItem` implements `Closable` with `onEnter()` and `onLeave()` methods, but **no code in src/ ever calls these methods**. NavStack never fires `onEnter` when an item becomes current or `onLeave` when leaving an item. The interface exists but is dead code.
 - **Recommendation:** Either remove the `Closable` interface and methods (if lifecycle is out-of-scope), or implement the lifecycle in `NavStack`:
-  - Call `$top->onLeave()` before `pop()` 
+  - Call `$top->onLeave()` before `pop()` <!-- @rename-keep -->
   - Call `$newTop->onEnter()` after `push()`
 
 ---

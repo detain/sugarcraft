@@ -54,9 +54,9 @@ _All items in this section have been resolved by the completion of steps 20–40
 
 - [RESOLVED | 2026-06-01 | step-41 | scribe] All Active Items drained — steps 20–40 complete (PRs #899–#920 merged). Step-15 (candy-forms) confirmed complete — PRs #870, #895 wired candy-forms onto shared foundations; step-37 verified no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, candy-mouse, candy-mold).
 
-- [RESOLVED | 2026-06-01 | step-35 | coder] sugar-tick + sugar-post + candy-git-server: adopt candy-async — MERGED PR #915:
+- [RESOLVED | 2026-06-01 | step-35 | coder] sugar-tick + candy-mail + candy-git-server: adopt candy-async — MERGED PR #915:
   - sugar-tick: added CancellationToken support to Store::append()
-  - sugar-post: added CancellationToken support to SmtpTransport::send()
+  - candy-mail: added CancellationToken support to SmtpTransport::send()
   - candy-git-server: added Subscriptions for graceful shutdown in GitDaemon
   - Branch ai/async-adopters merged to master; Commit SHA: 30ea7afa
 

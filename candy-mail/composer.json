@@ -1,0 +1,51 @@
+{
+    "name": "sugarcraft/candy-mail",
+    "description": "Email sender for PHP, modeled on the charmbracelet/pop Go tool \u2014 send via the Resend API or direct SMTP. Compose from stdin, attach files, supports CC/BCC, HTML body.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "email",
+        "smtp",
+        "resend",
+        "mailer",
+        "send",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-mail",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-mail/issues",
+        "source": "https://github.com/sugarcraft/candy-mail"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/candy-core": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Mail\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Mail\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "bin": [
+        "bin/candy-mail"
+    ]
+}

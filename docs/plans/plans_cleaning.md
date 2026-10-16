@@ -69,7 +69,7 @@
 - candy-mouse: Scan duplicate zone
 - candy-git-server: SEC issues
 - candy-sql: SQL logging
-- sugar-post: STARTTLS
+- candy-mail: STARTTLS
 - (and many others)
 
 ---

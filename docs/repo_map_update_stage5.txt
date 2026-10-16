@@ -1,6 +1,6 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
-Sourced from 11 update docs: candy-kit, candy-flip, sugar-post, candy-sql,
+Sourced from 11 update docs: candy-kit, candy-flip, candy-mail, candy-sql,
 candy-minesweeper, candy-tetris, candy-mold, candy-flappy, super-candy, sugar-tick.
 
 ---
@@ -24,9 +24,9 @@ Affected: sugar-tick (critical, P0), candy-flip (DISPOSAL_PREVIOUS canvas race).
 ### C. Progress Feedback Missing From Async Operations
 super-candy's AsyncOps fires copy/move without any progress callback — the
 user sees nothing until completion. yazi and ranger set the modern standard
-with per-file, per-byte progress bars. sugar-post similarly lacks progress
+with per-file, per-byte progress bars. candy-mail similarly lacks progress
 feedback for large attachment sends.
-Affected: super-candy (critical), sugar-post (large attachment send).
+Affected: super-candy (critical), candy-mail (large attachment send).
 
 ---
 

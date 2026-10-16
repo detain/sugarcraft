@@ -33631,9 +33631,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-16-l-1.ansi": {
-        "name": "sugar-post-1-16-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-16-l-1.ansi": {
+        "name": "candy-mail-1-16-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -33643,9 +33643,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-1-16-l-2.ansi": {
-        "name": "sugar-post-1-16-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-16-l-2.ansi": {
+        "name": "candy-mail-1-16-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "140x28",
         "width": 140,
         "height": 28,
@@ -33655,9 +33655,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-1-16-m-2.ansi": {
-        "name": "sugar-post-1-16-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-16-m-2.ansi": {
+        "name": "candy-mail-1-16-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -33667,9 +33667,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-1-16-s-1.ansi": {
-        "name": "sugar-post-1-16-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-16-s-1.ansi": {
+        "name": "candy-mail-1-16-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -33679,9 +33679,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-1-16-s-2.ansi": {
-        "name": "sugar-post-1-16-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-16-s-2.ansi": {
+        "name": "candy-mail-1-16-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
@@ -33691,9 +33691,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-1-16-s-3.ansi": {
-        "name": "sugar-post-1-16-s-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-16-s-3.ansi": {
+        "name": "candy-mail-1-16-s-3.ansi",
+        "category": "candy-mail",
         "resolution": "64x16",
         "width": 64,
         "height": 16,
@@ -33703,9 +33703,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-l-1.ansi": {
-        "name": "sugar-post-1-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-l-1.ansi": {
+        "name": "candy-mail-1-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "160x32",
         "width": 160,
         "height": 32,
@@ -33715,9 +33715,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-l-2.ansi": {
-        "name": "sugar-post-1-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-l-2.ansi": {
+        "name": "candy-mail-1-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "170x30",
         "width": 170,
         "height": 30,
@@ -33727,9 +33727,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-m-1.ansi": {
-        "name": "sugar-post-1-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-m-1.ansi": {
+        "name": "candy-mail-1-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -33739,9 +33739,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-m-2.ansi": {
-        "name": "sugar-post-1-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-m-2.ansi": {
+        "name": "candy-mail-1-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -33751,9 +33751,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-m-3.ansi": {
-        "name": "sugar-post-1-256-m-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-m-3.ansi": {
+        "name": "candy-mail-1-256-m-3.ansi",
+        "category": "candy-mail",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -33763,9 +33763,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-s-1.ansi": {
-        "name": "sugar-post-1-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-s-1.ansi": {
+        "name": "candy-mail-1-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -33775,9 +33775,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-s-2.ansi": {
-        "name": "sugar-post-1-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-s-2.ansi": {
+        "name": "candy-mail-1-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -33787,9 +33787,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-256-s-3.ansi": {
-        "name": "sugar-post-1-256-s-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-256-s-3.ansi": {
+        "name": "candy-mail-1-256-s-3.ansi",
+        "category": "candy-mail",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -33799,9 +33799,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-l-1.ansi": {
-        "name": "sugar-post-1-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-l-1.ansi": {
+        "name": "candy-mail-1-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "175x34",
         "width": 175,
         "height": 34,
@@ -33811,9 +33811,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-l-2.ansi": {
-        "name": "sugar-post-1-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-l-2.ansi": {
+        "name": "candy-mail-1-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "185x36",
         "width": 185,
         "height": 36,
@@ -33823,9 +33823,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-m-1.ansi": {
-        "name": "sugar-post-1-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-m-1.ansi": {
+        "name": "candy-mail-1-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -33835,9 +33835,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-m-2.ansi": {
-        "name": "sugar-post-1-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-m-2.ansi": {
+        "name": "candy-mail-1-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -33847,9 +33847,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-m-3.ansi": {
-        "name": "sugar-post-1-tc-m-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-m-3.ansi": {
+        "name": "candy-mail-1-tc-m-3.ansi",
+        "category": "candy-mail",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -33859,21 +33859,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-s-1.ansi": {
-        "name": "sugar-post-1-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-s-1.ansi": {
+        "name": "candy-mail-1-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
         "depth": "truecolor",
         "colors": 34,
-        "description": "dawn gradient sky, half-sun on horizon, envelope locomotive on rails past a sugar-post station sign",
+        "description": "dawn gradient sky, half-sun on horizon, envelope locomotive on rails past a candy-mail station sign",
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-s-2.ansi": {
-        "name": "sugar-post-1-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-s-2.ansi": {
+        "name": "candy-mail-1-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -33883,9 +33883,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-1-tc-s-3.ansi": {
-        "name": "sugar-post-1-tc-s-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-1-tc-s-3.ansi": {
+        "name": "candy-mail-1-tc-s-3.ansi",
+        "category": "candy-mail",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -33895,9 +33895,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-16-l-1.ansi": {
-        "name": "sugar-post-2-16-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-16-l-1.ansi": {
+        "name": "candy-mail-2-16-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "149x28",
         "width": 149,
         "height": 28,
@@ -33907,9 +33907,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-2-16-l-2.ansi": {
-        "name": "sugar-post-2-16-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-16-l-2.ansi": {
+        "name": "candy-mail-2-16-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "134x28",
         "width": 134,
         "height": 28,
@@ -33919,9 +33919,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-2-16-m-1.ansi": {
-        "name": "sugar-post-2-16-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-16-m-1.ansi": {
+        "name": "candy-mail-2-16-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -33931,9 +33931,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-2-16-m-2.ansi": {
-        "name": "sugar-post-2-16-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-16-m-2.ansi": {
+        "name": "candy-mail-2-16-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "76x20",
         "width": 76,
         "height": 20,
@@ -33943,9 +33943,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-2-16-s-1.ansi": {
-        "name": "sugar-post-2-16-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-16-s-1.ansi": {
+        "name": "candy-mail-2-16-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "55x10",
         "width": 55,
         "height": 10,
@@ -33955,9 +33955,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-2-16-s-2.ansi": {
-        "name": "sugar-post-2-16-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-16-s-2.ansi": {
+        "name": "candy-mail-2-16-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "53x9",
         "width": 53,
         "height": 9,
@@ -33967,9 +33967,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-2-256-l-1.ansi": {
-        "name": "sugar-post-2-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-256-l-1.ansi": {
+        "name": "candy-mail-2-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "148x28",
         "width": 148,
         "height": 28,
@@ -33979,9 +33979,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-256-l-2.ansi": {
-        "name": "sugar-post-2-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-256-l-2.ansi": {
+        "name": "candy-mail-2-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "160x29",
         "width": 160,
         "height": 29,
@@ -33991,9 +33991,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-256-m-1.ansi": {
-        "name": "sugar-post-2-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-256-m-1.ansi": {
+        "name": "candy-mail-2-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "77x21",
         "width": 77,
         "height": 21,
@@ -34003,21 +34003,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-256-m-2.ansi": {
-        "name": "sugar-post-2-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-256-m-2.ansi": {
+        "name": "candy-mail-2-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "73x19",
         "width": 73,
         "height": 19,
         "depth": "256",
         "colors": 30,
-        "description": "mosaic of sixteen 256-palette HTTP/SMTP status chips with SugarPost wordmark",
+        "description": "mosaic of sixteen 256-palette HTTP/SMTP status chips with CandyMail wordmark",
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-256-s-1.ansi": {
-        "name": "sugar-post-2-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-256-s-1.ansi": {
+        "name": "candy-mail-2-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "55x10",
         "width": 55,
         "height": 10,
@@ -34027,9 +34027,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-256-s-2.ansi": {
-        "name": "sugar-post-2-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-256-s-2.ansi": {
+        "name": "candy-mail-2-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "43x9",
         "width": 43,
         "height": 9,
@@ -34039,9 +34039,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-tc-l-1.ansi": {
-        "name": "sugar-post-2-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-tc-l-1.ansi": {
+        "name": "candy-mail-2-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "178x35",
         "width": 178,
         "height": 35,
@@ -34051,9 +34051,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-tc-l-2.ansi": {
-        "name": "sugar-post-2-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-tc-l-2.ansi": {
+        "name": "candy-mail-2-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "150x31",
         "width": 150,
         "height": 31,
@@ -34063,9 +34063,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-tc-m-1.ansi": {
-        "name": "sugar-post-2-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-tc-m-1.ansi": {
+        "name": "candy-mail-2-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -34075,9 +34075,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-tc-m-2.ansi": {
-        "name": "sugar-post-2-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-tc-m-2.ansi": {
+        "name": "candy-mail-2-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -34087,9 +34087,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-tc-s-1.ansi": {
-        "name": "sugar-post-2-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-tc-s-1.ansi": {
+        "name": "candy-mail-2-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "55x8",
         "width": 55,
         "height": 8,
@@ -34099,9 +34099,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-2-tc-s-2.ansi": {
-        "name": "sugar-post-2-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-2-tc-s-2.ansi": {
+        "name": "candy-mail-2-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -34111,9 +34111,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-16-l-1.ansi": {
-        "name": "sugar-post-3-16-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-16-l-1.ansi": {
+        "name": "candy-mail-3-16-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "128x30",
         "width": 128,
         "height": 30,
@@ -34123,9 +34123,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-3-16-l-2.ansi": {
-        "name": "sugar-post-3-16-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-16-l-2.ansi": {
+        "name": "candy-mail-3-16-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "134x30",
         "width": 134,
         "height": 30,
@@ -34135,9 +34135,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-3-16-m-1.ansi": {
-        "name": "sugar-post-3-16-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-16-m-1.ansi": {
+        "name": "candy-mail-3-16-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -34147,9 +34147,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-3-16-m-2.ansi": {
-        "name": "sugar-post-3-16-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-16-m-2.ansi": {
+        "name": "candy-mail-3-16-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -34161,9 +34161,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-post/sugar-post-3-16-s-1.ansi": {
-        "name": "sugar-post-3-16-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-16-s-1.ansi": {
+        "name": "candy-mail-3-16-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "52x9",
         "width": 52,
         "height": 9,
@@ -34173,9 +34173,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-3-16-s-2.ansi": {
-        "name": "sugar-post-3-16-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-16-s-2.ansi": {
+        "name": "candy-mail-3-16-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "44x14",
         "width": 44,
         "height": 14,
@@ -34185,9 +34185,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-3-256-l-1.ansi": {
-        "name": "sugar-post-3-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-256-l-1.ansi": {
+        "name": "candy-mail-3-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "166x28",
         "width": 166,
         "height": 28,
@@ -34197,9 +34197,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-256-l-2.ansi": {
-        "name": "sugar-post-3-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-256-l-2.ansi": {
+        "name": "candy-mail-3-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "120x29",
         "width": 120,
         "height": 29,
@@ -34209,9 +34209,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-256-m-1.ansi": {
-        "name": "sugar-post-3-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-256-m-1.ansi": {
+        "name": "candy-mail-3-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -34221,9 +34221,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-256-m-2.ansi": {
-        "name": "sugar-post-3-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-256-m-2.ansi": {
+        "name": "candy-mail-3-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -34233,9 +34233,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-256-s-1.ansi": {
-        "name": "sugar-post-3-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-256-s-1.ansi": {
+        "name": "candy-mail-3-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "48x10",
         "width": 48,
         "height": 10,
@@ -34245,9 +34245,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-256-s-2.ansi": {
-        "name": "sugar-post-3-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-256-s-2.ansi": {
+        "name": "candy-mail-3-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "44x9",
         "width": 44,
         "height": 9,
@@ -34257,9 +34257,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-l-1.ansi": {
-        "name": "sugar-post-3-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-l-1.ansi": {
+        "name": "candy-mail-3-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -34269,9 +34269,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-l-2.ansi": {
-        "name": "sugar-post-3-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-l-2.ansi": {
+        "name": "candy-mail-3-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -34281,9 +34281,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-m-1.ansi": {
-        "name": "sugar-post-3-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-m-1.ansi": {
+        "name": "candy-mail-3-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -34293,9 +34293,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-m-2.ansi": {
-        "name": "sugar-post-3-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-m-2.ansi": {
+        "name": "candy-mail-3-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -34305,9 +34305,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-s-1.ansi": {
-        "name": "sugar-post-3-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-s-1.ansi": {
+        "name": "candy-mail-3-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "56x11",
         "width": 56,
         "height": 11,
@@ -34317,9 +34317,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-s-2.ansi": {
-        "name": "sugar-post-3-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-s-2.ansi": {
+        "name": "candy-mail-3-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x8",
         "width": 58,
         "height": 8,
@@ -34329,9 +34329,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-3-tc-s-3.ansi": {
-        "name": "sugar-post-3-tc-s-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-3-tc-s-3.ansi": {
+        "name": "candy-mail-3-tc-s-3.ansi",
+        "category": "candy-mail",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -34341,9 +34341,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-16-l-1.ansi": {
-        "name": "sugar-post-4-16-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-16-l-1.ansi": {
+        "name": "candy-mail-4-16-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "148x30",
         "width": 148,
         "height": 30,
@@ -34353,9 +34353,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-4-16-l-2.ansi": {
-        "name": "sugar-post-4-16-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-16-l-2.ansi": {
+        "name": "candy-mail-4-16-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "142x30",
         "width": 142,
         "height": 30,
@@ -34365,9 +34365,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-l-1.ansi": {
-        "name": "sugar-post-4-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-l-1.ansi": {
+        "name": "candy-mail-4-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "152x32",
         "width": 152,
         "height": 32,
@@ -34377,9 +34377,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-l-2.ansi": {
-        "name": "sugar-post-4-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-l-2.ansi": {
+        "name": "candy-mail-4-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -34389,9 +34389,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-m-1.ansi": {
-        "name": "sugar-post-4-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-m-1.ansi": {
+        "name": "candy-mail-4-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "80x21",
         "width": 80,
         "height": 21,
@@ -34401,9 +34401,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-m-2.ansi": {
-        "name": "sugar-post-4-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-m-2.ansi": {
+        "name": "candy-mail-4-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -34413,9 +34413,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-m-3.ansi": {
-        "name": "sugar-post-4-256-m-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-m-3.ansi": {
+        "name": "candy-mail-4-256-m-3.ansi",
+        "category": "candy-mail",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -34425,9 +34425,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-s-1.ansi": {
-        "name": "sugar-post-4-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-s-1.ansi": {
+        "name": "candy-mail-4-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "62x6",
         "width": 62,
         "height": 6,
@@ -34437,9 +34437,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-s-2.ansi": {
-        "name": "sugar-post-4-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-s-2.ansi": {
+        "name": "candy-mail-4-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "52x11",
         "width": 52,
         "height": 11,
@@ -34449,9 +34449,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-256-s-3.ansi": {
-        "name": "sugar-post-4-256-s-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-256-s-3.ansi": {
+        "name": "candy-mail-4-256-s-3.ansi",
+        "category": "candy-mail",
         "resolution": "50x6",
         "width": 50,
         "height": 6,
@@ -34461,9 +34461,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-l-1.ansi": {
-        "name": "sugar-post-4-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-l-1.ansi": {
+        "name": "candy-mail-4-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -34473,9 +34473,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-l-2.ansi": {
-        "name": "sugar-post-4-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-l-2.ansi": {
+        "name": "candy-mail-4-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "162x34",
         "width": 162,
         "height": 34,
@@ -34485,9 +34485,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-m-1.ansi": {
-        "name": "sugar-post-4-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-m-1.ansi": {
+        "name": "candy-mail-4-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "82x24",
         "width": 82,
         "height": 24,
@@ -34497,9 +34497,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-m-2.ansi": {
-        "name": "sugar-post-4-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-m-2.ansi": {
+        "name": "candy-mail-4-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -34509,9 +34509,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-s-1.ansi": {
-        "name": "sugar-post-4-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-s-1.ansi": {
+        "name": "candy-mail-4-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -34521,21 +34521,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-s-2.ansi": {
-        "name": "sugar-post-4-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-s-2.ansi": {
+        "name": "candy-mail-4-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
         "depth": "truecolor",
         "colors": 49,
-        "description": "mini press extruding a SugarPost Gazette sheet over a gradient bed",
+        "description": "mini press extruding a CandyMail Gazette sheet over a gradient bed",
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-4-tc-s-3.ansi": {
-        "name": "sugar-post-4-tc-s-3.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-4-tc-s-3.ansi": {
+        "name": "candy-mail-4-tc-s-3.ansi",
+        "category": "candy-mail",
         "resolution": "54x8",
         "width": 54,
         "height": 8,
@@ -34545,9 +34545,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-256-l-1.ansi": {
-        "name": "sugar-post-5-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-256-l-1.ansi": {
+        "name": "candy-mail-5-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "136x32",
         "width": 136,
         "height": 32,
@@ -34557,9 +34557,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-256-l-2.ansi": {
-        "name": "sugar-post-5-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-256-l-2.ansi": {
+        "name": "candy-mail-5-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "125x30",
         "width": 125,
         "height": 30,
@@ -34569,9 +34569,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-256-m-1.ansi": {
-        "name": "sugar-post-5-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-256-m-1.ansi": {
+        "name": "candy-mail-5-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "72x19",
         "width": 72,
         "height": 19,
@@ -34581,9 +34581,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-256-m-2.ansi": {
-        "name": "sugar-post-5-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-256-m-2.ansi": {
+        "name": "candy-mail-5-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "79x20",
         "width": 79,
         "height": 20,
@@ -34593,9 +34593,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-256-s-1.ansi": {
-        "name": "sugar-post-5-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-256-s-1.ansi": {
+        "name": "candy-mail-5-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "63x13",
         "width": 63,
         "height": 13,
@@ -34605,9 +34605,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-256-s-2.ansi": {
-        "name": "sugar-post-5-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-256-s-2.ansi": {
+        "name": "candy-mail-5-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "48x15",
         "width": 48,
         "height": 15,
@@ -34617,9 +34617,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-tc-l-1.ansi": {
-        "name": "sugar-post-5-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-tc-l-1.ansi": {
+        "name": "candy-mail-5-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "145x29",
         "width": 145,
         "height": 29,
@@ -34629,9 +34629,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-tc-l-2.ansi": {
-        "name": "sugar-post-5-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-tc-l-2.ansi": {
+        "name": "candy-mail-5-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "133x29",
         "width": 133,
         "height": 29,
@@ -34641,9 +34641,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-tc-m-1.ansi": {
-        "name": "sugar-post-5-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-tc-m-1.ansi": {
+        "name": "candy-mail-5-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "79x21",
         "width": 79,
         "height": 21,
@@ -34653,9 +34653,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-tc-m-2.ansi": {
-        "name": "sugar-post-5-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-tc-m-2.ansi": {
+        "name": "candy-mail-5-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "77x19",
         "width": 77,
         "height": 19,
@@ -34665,9 +34665,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-tc-s-1.ansi": {
-        "name": "sugar-post-5-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-tc-s-1.ansi": {
+        "name": "candy-mail-5-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "59x11",
         "width": 59,
         "height": 11,
@@ -34677,9 +34677,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-tc-s-2.ansi": {
-        "name": "sugar-post-5-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-5-tc-s-2.ansi": {
+        "name": "candy-mail-5-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "59x10",
         "width": 59,
         "height": 10,
@@ -34689,9 +34689,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-256-l-1.ansi": {
-        "name": "sugar-post-6-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-256-l-1.ansi": {
+        "name": "candy-mail-6-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "138x31",
         "width": 138,
         "height": 31,
@@ -34701,9 +34701,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-256-l-2.ansi": {
-        "name": "sugar-post-6-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-256-l-2.ansi": {
+        "name": "candy-mail-6-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -34713,9 +34713,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-256-m-1.ansi": {
-        "name": "sugar-post-6-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-256-m-1.ansi": {
+        "name": "candy-mail-6-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -34725,9 +34725,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-256-m-2.ansi": {
-        "name": "sugar-post-6-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-256-m-2.ansi": {
+        "name": "candy-mail-6-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "79x22",
         "width": 79,
         "height": 22,
@@ -34737,9 +34737,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-256-s-1.ansi": {
-        "name": "sugar-post-6-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-256-s-1.ansi": {
+        "name": "candy-mail-6-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -34749,9 +34749,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-256-s-2.ansi": {
-        "name": "sugar-post-6-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-256-s-2.ansi": {
+        "name": "candy-mail-6-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "59x12",
         "width": 59,
         "height": 12,
@@ -34761,9 +34761,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-tc-l-1.ansi": {
-        "name": "sugar-post-6-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-tc-l-1.ansi": {
+        "name": "candy-mail-6-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "170x37",
         "width": 170,
         "height": 37,
@@ -34773,9 +34773,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-tc-l-2.ansi": {
-        "name": "sugar-post-6-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-tc-l-2.ansi": {
+        "name": "candy-mail-6-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "160x35",
         "width": 160,
         "height": 35,
@@ -34785,9 +34785,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-tc-m-1.ansi": {
-        "name": "sugar-post-6-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-tc-m-1.ansi": {
+        "name": "candy-mail-6-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -34797,9 +34797,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-tc-m-2.ansi": {
-        "name": "sugar-post-6-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-tc-m-2.ansi": {
+        "name": "candy-mail-6-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -34809,9 +34809,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-tc-s-1.ansi": {
-        "name": "sugar-post-6-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-tc-s-1.ansi": {
+        "name": "candy-mail-6-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -34821,9 +34821,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-6-tc-s-2.ansi": {
-        "name": "sugar-post-6-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-6-tc-s-2.ansi": {
+        "name": "candy-mail-6-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -34833,9 +34833,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-256-l-1.ansi": {
-        "name": "sugar-post-7-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-256-l-1.ansi": {
+        "name": "candy-mail-7-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "170x39",
         "width": 170,
         "height": 39,
@@ -34845,9 +34845,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-256-l-2.ansi": {
-        "name": "sugar-post-7-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-256-l-2.ansi": {
+        "name": "candy-mail-7-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "160x37",
         "width": 160,
         "height": 37,
@@ -34857,9 +34857,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-256-m-1.ansi": {
-        "name": "sugar-post-7-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-256-m-1.ansi": {
+        "name": "candy-mail-7-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "88x25",
         "width": 88,
         "height": 25,
@@ -34869,9 +34869,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-256-m-2.ansi": {
-        "name": "sugar-post-7-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-256-m-2.ansi": {
+        "name": "candy-mail-7-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "85x25",
         "width": 85,
         "height": 25,
@@ -34881,9 +34881,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-256-s-1.ansi": {
-        "name": "sugar-post-7-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-256-s-1.ansi": {
+        "name": "candy-mail-7-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -34893,9 +34893,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-256-s-2.ansi": {
-        "name": "sugar-post-7-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-256-s-2.ansi": {
+        "name": "candy-mail-7-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -34905,9 +34905,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-tc-l-1.ansi": {
-        "name": "sugar-post-7-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-tc-l-1.ansi": {
+        "name": "candy-mail-7-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "182x41",
         "width": 182,
         "height": 41,
@@ -34917,9 +34917,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-tc-l-2.ansi": {
-        "name": "sugar-post-7-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-tc-l-2.ansi": {
+        "name": "candy-mail-7-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "172x38",
         "width": 172,
         "height": 38,
@@ -34929,9 +34929,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-tc-m-1.ansi": {
-        "name": "sugar-post-7-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-tc-m-1.ansi": {
+        "name": "candy-mail-7-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -34941,9 +34941,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-tc-m-2.ansi": {
-        "name": "sugar-post-7-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-tc-m-2.ansi": {
+        "name": "candy-mail-7-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -34953,9 +34953,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-tc-s-1.ansi": {
-        "name": "sugar-post-7-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-tc-s-1.ansi": {
+        "name": "candy-mail-7-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -34965,9 +34965,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-tc-s-2.ansi": {
-        "name": "sugar-post-7-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-7-tc-s-2.ansi": {
+        "name": "candy-mail-7-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -34977,9 +34977,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-256-l-1.ansi": {
-        "name": "sugar-post-8-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-256-l-1.ansi": {
+        "name": "candy-mail-8-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "188x38",
         "width": 188,
         "height": 38,
@@ -34989,9 +34989,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-256-l-2.ansi": {
-        "name": "sugar-post-8-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-256-l-2.ansi": {
+        "name": "candy-mail-8-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "182x36",
         "width": 182,
         "height": 36,
@@ -35001,9 +35001,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-256-m-1.ansi": {
-        "name": "sugar-post-8-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-256-m-1.ansi": {
+        "name": "candy-mail-8-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -35013,9 +35013,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-256-m-2.ansi": {
-        "name": "sugar-post-8-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-256-m-2.ansi": {
+        "name": "candy-mail-8-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -35025,9 +35025,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-256-s-1.ansi": {
-        "name": "sugar-post-8-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-256-s-1.ansi": {
+        "name": "candy-mail-8-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -35037,9 +35037,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-256-s-2.ansi": {
-        "name": "sugar-post-8-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-256-s-2.ansi": {
+        "name": "candy-mail-8-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "64x15",
         "width": 64,
         "height": 15,
@@ -35049,9 +35049,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-tc-l-1.ansi": {
-        "name": "sugar-post-8-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-tc-l-1.ansi": {
+        "name": "candy-mail-8-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -35061,9 +35061,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-tc-l-2.ansi": {
-        "name": "sugar-post-8-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-tc-l-2.ansi": {
+        "name": "candy-mail-8-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "186x38",
         "width": 186,
         "height": 38,
@@ -35073,9 +35073,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-tc-m-1.ansi": {
-        "name": "sugar-post-8-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-tc-m-1.ansi": {
+        "name": "candy-mail-8-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "88x25",
         "width": 88,
         "height": 25,
@@ -35085,9 +35085,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-tc-m-2.ansi": {
-        "name": "sugar-post-8-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-tc-m-2.ansi": {
+        "name": "candy-mail-8-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -35097,9 +35097,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-tc-s-1.ansi": {
-        "name": "sugar-post-8-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-tc-s-1.ansi": {
+        "name": "candy-mail-8-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -35109,9 +35109,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-tc-s-2.ansi": {
-        "name": "sugar-post-8-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-8-tc-s-2.ansi": {
+        "name": "candy-mail-8-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -35121,9 +35121,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-256-l-1.ansi": {
-        "name": "sugar-post-9-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-256-l-1.ansi": {
+        "name": "candy-mail-9-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "158x32",
         "width": 158,
         "height": 32,
@@ -35133,9 +35133,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-256-l-2.ansi": {
-        "name": "sugar-post-9-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-256-l-2.ansi": {
+        "name": "candy-mail-9-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -35145,9 +35145,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-256-m-1.ansi": {
-        "name": "sugar-post-9-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-256-m-1.ansi": {
+        "name": "candy-mail-9-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -35157,9 +35157,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-256-m-2.ansi": {
-        "name": "sugar-post-9-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-256-m-2.ansi": {
+        "name": "candy-mail-9-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -35169,9 +35169,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-256-s-1.ansi": {
-        "name": "sugar-post-9-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-256-s-1.ansi": {
+        "name": "candy-mail-9-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -35181,9 +35181,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-256-s-2.ansi": {
-        "name": "sugar-post-9-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-256-s-2.ansi": {
+        "name": "candy-mail-9-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -35193,9 +35193,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-tc-l-1.ansi": {
-        "name": "sugar-post-9-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-tc-l-1.ansi": {
+        "name": "candy-mail-9-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -35205,9 +35205,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-tc-l-2.ansi": {
-        "name": "sugar-post-9-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-tc-l-2.ansi": {
+        "name": "candy-mail-9-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "158x30",
         "width": 158,
         "height": 30,
@@ -35217,9 +35217,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-tc-m-1.ansi": {
-        "name": "sugar-post-9-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-tc-m-1.ansi": {
+        "name": "candy-mail-9-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -35229,9 +35229,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-tc-m-2.ansi": {
-        "name": "sugar-post-9-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-tc-m-2.ansi": {
+        "name": "candy-mail-9-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -35241,9 +35241,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-tc-s-1.ansi": {
-        "name": "sugar-post-9-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-tc-s-1.ansi": {
+        "name": "candy-mail-9-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -35253,9 +35253,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-9-tc-s-2.ansi": {
-        "name": "sugar-post-9-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-9-tc-s-2.ansi": {
+        "name": "candy-mail-9-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "64x15",
         "width": 64,
         "height": 15,
@@ -35265,9 +35265,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-16-l-1.ansi": {
-        "name": "sugar-post-10-16-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-16-l-1.ansi": {
+        "name": "candy-mail-10-16-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "148x30",
         "width": 148,
         "height": 30,
@@ -35277,9 +35277,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-10-16-m-1.ansi": {
-        "name": "sugar-post-10-16-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-16-m-1.ansi": {
+        "name": "candy-mail-10-16-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -35289,9 +35289,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-10-16-s-2.ansi": {
-        "name": "sugar-post-10-16-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-16-s-2.ansi": {
+        "name": "candy-mail-10-16-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "44x15",
         "width": 44,
         "height": 15,
@@ -35301,9 +35301,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-10-256-l-1.ansi": {
-        "name": "sugar-post-10-256-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-256-l-1.ansi": {
+        "name": "candy-mail-10-256-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "158x32",
         "width": 158,
         "height": 32,
@@ -35313,9 +35313,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-256-l-2.ansi": {
-        "name": "sugar-post-10-256-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-256-l-2.ansi": {
+        "name": "candy-mail-10-256-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -35325,9 +35325,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-256-m-1.ansi": {
-        "name": "sugar-post-10-256-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-256-m-1.ansi": {
+        "name": "candy-mail-10-256-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -35337,9 +35337,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-256-m-2.ansi": {
-        "name": "sugar-post-10-256-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-256-m-2.ansi": {
+        "name": "candy-mail-10-256-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -35349,9 +35349,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-256-s-1.ansi": {
-        "name": "sugar-post-10-256-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-256-s-1.ansi": {
+        "name": "candy-mail-10-256-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -35361,9 +35361,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-256-s-2.ansi": {
-        "name": "sugar-post-10-256-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-256-s-2.ansi": {
+        "name": "candy-mail-10-256-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -35373,9 +35373,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-tc-l-1.ansi": {
-        "name": "sugar-post-10-tc-l-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-tc-l-1.ansi": {
+        "name": "candy-mail-10-tc-l-1.ansi",
+        "category": "candy-mail",
         "resolution": "165x34",
         "width": 165,
         "height": 34,
@@ -35385,9 +35385,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-tc-l-2.ansi": {
-        "name": "sugar-post-10-tc-l-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-tc-l-2.ansi": {
+        "name": "candy-mail-10-tc-l-2.ansi",
+        "category": "candy-mail",
         "resolution": "160x32",
         "width": 160,
         "height": 32,
@@ -35397,9 +35397,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-tc-m-1.ansi": {
-        "name": "sugar-post-10-tc-m-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-tc-m-1.ansi": {
+        "name": "candy-mail-10-tc-m-1.ansi",
+        "category": "candy-mail",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -35409,9 +35409,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-tc-m-2.ansi": {
-        "name": "sugar-post-10-tc-m-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-tc-m-2.ansi": {
+        "name": "candy-mail-10-tc-m-2.ansi",
+        "category": "candy-mail",
         "resolution": "80x21",
         "width": 80,
         "height": 21,
@@ -35421,21 +35421,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-tc-s-1.ansi": {
-        "name": "sugar-post-10-tc-s-1.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-tc-s-1.ansi": {
+        "name": "candy-mail-10-tc-s-1.ansi",
+        "category": "candy-mail",
         "resolution": "50x15",
         "width": 50,
         "height": 15,
         "depth": "truecolor",
         "colors": 19,
-        "description": "painted front door with brass letter-flap ajar, TO: YOU envelope riding the slot, SugarPost doormat",
+        "description": "painted front door with brass letter-flap ajar, TO: YOU envelope riding the slot, CandyMail doormat",
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-10-tc-s-2.ansi": {
-        "name": "sugar-post-10-tc-s-2.ansi",
-        "category": "sugar-post",
+    "candy-mail/candy-mail-10-tc-s-2.ansi": {
+        "name": "candy-mail-10-tc-s-2.ansi",
+        "category": "candy-mail",
         "resolution": "60x12",
         "width": 60,
         "height": 12,

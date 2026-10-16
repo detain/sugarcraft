@@ -70,14 +70,14 @@ public function items(): array
 
 **Severity:** HIGH
 
-**What:** Implement `onEnter()` and `onLeave()` calls in `NavStack` when items become current/leave current state. Call `$top->onLeave()` before `pop()` and `$newTop->onEnter()` after `push()`.
+**What:** Implement `onEnter()` and `onLeave()` calls in `NavStack` when items become current/leave current state. Call `$top->onLeave()` before `pop()` and `$newTop->onEnter()` after `push()`. <!-- @rename-keep -->
 
 **Why:** The Closable interface and NavigationItem's implementations exist but are dead code; lifecycle events never fire, making the interface useless.
 
 **Related Code:**
 
 - `src/NavStack.php:52-56` — `push()` method
-- `src/NavStack.php:64-70` — `pop()` method
+- `src/NavStack.php:64-70` — `pop()` method <!-- @rename-keep -->
 - `src/NavigationItem.php:27-39` — `onEnter()`/`onLeave()` implementations
 - `src/Closable.php:13-22` — interface definition
 - `tests/ClosableTest.php` — existing tests for Closable (only test no-op behavior)
@@ -99,7 +99,7 @@ public function push(string $title, mixed $data = null): self
     return $this;
 }
 
-// src/NavStack.php pop() — call onLeave on popped item:
+// src/NavStack.php pop() — call onLeave on popped item: <!-- @rename-keep -->
 public function pop(): ?NavigationItem
 {
     if ($this->items === []) {

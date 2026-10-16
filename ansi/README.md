@@ -3256,163 +3256,163 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-datepicker-9-tc-s-2.ansi` | 64x10 | truecolor | 13 | race-day wind window, eight hourly knot bars colored flat-to-gust with start-window callout |
 <!-- END sugar-datepicker SLOTS -->
 
-<!-- BEGIN sugar-post SLOTS -->
-### sugar-post — slot series
+<!-- BEGIN candy-mail SLOTS -->
+### candy-mail — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `sugar-post-1-16-l-1.ansi` | 150x30 | 16 | 13 | grand sorting hall panorama — truss roof, lamps, 45 pigeonholes, gear-driven 12-lane machine, huge wordmark |
-| `sugar-post-1-16-l-2.ansi` | 140x28 | 16 | 12 | night collection round: skyline under stars, three pillar boxes, lamp posts and a SUGAR POST delivery van |
-| `sugar-post-1-16-m-2.ansi` | 82x20 | 16 | 7 | full-bleed airmail letter with red-white-blue border, handwritten body, stamp and double-ring postmark |
-| `sugar-post-1-16-s-1.ansi` | 62x15 | 16 | 9 | airmail-striped border frames an envelope at speed with streaks, flap chevrons and a 250 OK, block wordmark below |
-| `sugar-post-1-16-s-2.ansi` | 58x14 | 16 | 6 | moonlit red pillar box with SUGAR-POST nameplate, raised collecting flag, stars over a quiet street |
-| `sugar-post-1-16-s-3.ansi` | 64x16 | 16 | 7 | SMTP conversation (220/EHLO/MAIL FROM/250 queued) climbed as a lit rail ladder at relay.sugar.post |
-| `sugar-post-1-256-l-1.ansi` | 160x32 | 256 | 51 | sunset sea with glint path from the sinking sun, envelope fleet riding ≈ waves, plane contrail overhead |
-| `sugar-post-1-256-l-2.ansi` | 170x30 | 256 | 33 | four SMTP relay towers lobbing envelopes in dotted arcs across dune seas, every hop 250 OK |
-| `sugar-post-1-256-m-1.ansi` | 86x22 | 256 | 15 | relay constellation of @ nodes stitched over gradient night sky, envelope moon, EHLO 250 log lines |
-| `sugar-post-1-256-m-2.ansi` | 88x23 | 256 | 35 | mail train steaming into SUGAR POST STN at sunset with departures board under a warm gradient sky |
-| `sugar-post-1-256-m-3.ansi` | 84x21 | 256 | 13 | resend retry ellipse of dotted gradient arrows around a re-sealed envelope, attempt 1 429 attempt 2 200 |
-| `sugar-post-1-256-s-1.ansi` | 60x13 | 256 | 21 | cardboard sugar parcel in warm gradient with pink ribbon cross, red wax seal stamped S, fragile notice |
-| `sugar-post-1-256-s-2.ansi` | 64x12 | 256 | 18 | three envelope kites with ✈ contrails drifting across banded navy sky above a cool-gradient wordmark |
-| `sugar-post-1-256-s-3.ansi` | 62x11 | 256 | 19 | loading screen — amber-to-magenta progress bar over queued/relay/resend lane status lines, 62 percent |
-| `sugar-post-1-tc-l-1.ansi` | 175x34 | truecolor | 2857 | galactic post office — nebula sky, ringed planet, envelope-hull station lifting a letter on a green tractor beam |
-| `sugar-post-1-tc-l-2.ansi` | 185x36 | truecolor | 99 | grand glass arcade terminus at night: twin mail trains, steam, departures board, silhouetted parcel porters |
-| `sugar-post-1-tc-m-1.ansi` | 86x22 | truecolor | 86 | sugar forge — hot lamp cone on a glowing envelope, wax drip sealing an S stamp, sparks on maroon dark |
-| `sugar-post-1-tc-m-2.ansi` | 86x24 | truecolor | 38 | night terminal: glowing lamps, hanging SUGAR POST TERMINAL sign, departures board, travelers with parcels |
-| `sugar-post-1-tc-m-3.ansi` | 88x23 | truecolor | 84 | aurora ribbons waving over a snowfield as a red courier sled hauls one envelope past wordmark light |
-| `sugar-post-1-tc-s-1.ansi` | 66x14 | truecolor | 34 | dawn gradient sky, half-sun on horizon, envelope locomotive on rails past a sugar-post station sign |
-| `sugar-post-1-tc-s-2.ansi` | 58x15 | truecolor | 97 | giant candy-gradient envelope with letter peeking out (Subject: for you), stamp corner, hot wordmark |
-| `sugar-post-1-tc-s-3.ansi` | 60x14 | truecolor | 23 | lone glowing envelope drifting on a midnight static sea under stars and a pale moon, 250 OK whisper |
-| `sugar-post-10-16-l-1.ansi` | 148x30 | 16 | 6 | grand receiving wall panorama — seven tomb boxes I–VII with collection times, gas lamps, carved frieze |
-| `sugar-post-10-16-m-1.ansi` | 80x20 | 16 | 7 | post-office screen room: brass-railed annunciator with LED numbers, curtain, velvet rope, tiled floor |
-| `sugar-post-10-16-s-2.ansi` | 44x15 | 16 | 7 | revolving postcard rack — six greeting cards hung off a central post on a weighted base |
-| `sugar-post-10-256-l-1.ansi` | 158x32 | 256 | 17 | queue hall: vault arc, dot-matrix board 0421/0422, pillar clock, six service windows, stanchions and ropes |
-| `sugar-post-10-256-l-2.ansi` | 150x30 | 256 | 16 | sweepstakes lobby: glass drum of seventy entries on an ENTRY-counter pedestal, twin WIN-A-YEAR posters, confetti |
-| `sugar-post-10-256-m-1.ansi` | 86x22 | 256 | 13 | six world-city cancels PARIS to LIMA in six inks on a slate tray, reverse CANCELLED plate |
-| `sugar-post-10-256-m-2.ansi` | 84x23 | 256 | 15 | warehouse parcel helix: roof intake, four-ring spiral carrying FR1 GB2 JP3 DE4 down to sort bins |
-| `sugar-post-10-256-s-1.ansi` | 58x11 | 256 | 8 | brass franking meter: PSI gauge, amber counter wheel 0421758, postage-paid strip printed off the bed |
-| `sugar-post-10-256-s-2.ansi` | 52x12 | 256 | 9 | queue annunciator — brass bell over green LED digits 042, ticket chip columns, NEXT WINDOW PLEASE |
-| `sugar-post-10-tc-l-1.ansi` | 165x34 | truecolor | 72 | receiving hall in gaslight — nine lit wall tombs with glow cones, brass frieze, polished floor reflections |
-| `sugar-post-10-tc-l-2.ansi` | 160x32 | truecolor | 47 | franking hall: five pressure gauges, three counter machines, crimson ring cancels riding a meter-mark ribbon |
-| `sugar-post-10-tc-m-1.ansi` | 84x22 | truecolor | 99 | postman's satchel still-life in a lamp pool on a bench — buckle, strap coil, three spilled letters, mail key |
-| `sugar-post-10-tc-m-2.ansi` | 80x21 | truecolor | 57 | one receiving tomb in stone: brass slot under a MAIL IN envelope, gas-lamp cone, 1867 plaque |
-| `sugar-post-10-tc-s-1.ansi` | 50x15 | truecolor | 19 | painted front door with brass letter-flap ajar, TO: YOU envelope riding the slot, SugarPost doormat |
-| `sugar-post-10-tc-s-2.ansi` | 60x12 | truecolor | 21 | seaside card rack at dusk: gradient sky, setting sun ring, four cards on a crossbar |
-| `sugar-post-2-16-l-1.ansi` | 149x28 | 16 | 7 | split-pane console: POST request with headers left, SMTP dialogue right, timing footer |
-| `sugar-post-2-16-l-2.ansi` | 134x28 | 16 | 7 | tall shaded wordmark over a post-office pack board of status-code stamps |
-| `sugar-post-2-16-m-1.ansi` | 82x19 | 16 | 7 | magenta-framed console window with POST request, headers, JSON body and timing bar |
-| `sugar-post-2-16-m-2.ansi` | 76x20 | 16 | 7 | parcel airmailed along dotted express wire over the Post Office No.1 counter |
-| `sugar-post-2-16-s-1.ansi` | 55x10 | 16 | 7 | block wordmark over POST envelope line with sender and attachment |
-| `sugar-post-2-16-s-2.ansi` | 53x9 | 16 | 13 | rainbow method-chip bar with SUGARPOST wordmark and OK response |
-| `sugar-post-2-256-l-1.ansi` | 148x28 | 256 | 22 | client box ferrying gradient packets down the candy-wire to the relay box |
-| `sugar-post-2-256-l-2.ansi` | 160x29 | 256 | 26 | huge two-tone 256 wordmark banner with status chips and three transport lines |
-| `sugar-post-2-256-m-1.ansi` | 77x21 | 256 | 13 | wordmark above a syntax-colored JSON mail payload with cc/bcc/attachment branches |
-| `sugar-post-2-256-m-2.ansi` | 73x19 | 256 | 30 | mosaic of sixteen 256-palette HTTP/SMTP status chips with SugarPost wordmark |
-| `sugar-post-2-256-s-1.ansi` | 55x10 | 256 | 11 | xterm-palette wordmark above a tiny JSON sweet payload card |
-| `sugar-post-2-256-s-2.ansi` | 43x9 | 256 | 8 | perforated postage stamp reading SUGARPOST 201 CREATED with wavy postmark |
-| `sugar-post-2-tc-l-1.ansi` | 178x35 | truecolor | 178 | aurora ribbon night-sky with riding packets, drifting envelope and dual-gradient wordmark |
-| `sugar-post-2-tc-l-2.ansi` | 150x31 | truecolor | 120 | relay mosaic: eight-column parcel grid fed by three transports into a gradient rail |
-| `sugar-post-2-tc-m-1.ansi` | 86x23 | truecolor | 142 | cream envelopes with shade trails drifting over a violet aurora sky grid |
-| `sugar-post-2-tc-m-2.ansi` | 84x21 | truecolor | 79 | gradient response bar and dark aurora panel with headers, JSON and glowing wordmark |
-| `sugar-post-2-tc-s-1.ansi` | 55x8 | truecolor | 22 | truecolor pink-to-amber wordmark with gradient POST chip and JSON receipt |
-| `sugar-post-2-tc-s-2.ansi` | 60x12 | truecolor | 169 | three smooth gradient wires carrying packet blocks into a sky-mint wordmark |
-| `sugar-post-3-16-l-1.ansi` | 128x30 | 16 | 7 | grand split-flap dispatch board: twenty backends, retries and statuses |
-| `sugar-post-3-16-l-2.ansi` | 134x30 | 16 | 7 | pigeon-post almanac: moon phases, flight timetable and storm log |
-| `sugar-post-3-16-m-1.ansi` | 86x23 | 16 | 7 | approach-control radar with sweep, contacts and outbound flight strips |
-| `sugar-post-3-16-m-2.ansi` | 88x19 | 16 | 6 | payload packaging station: belt, five wrap stages, base64 tape, chutes |
-| `sugar-post-3-16-s-1.ansi` | 52x9 | 16 | 7 | carrier relay hop map with hub, relays, pigeon hops and endpoint legend |
-| `sugar-post-3-16-s-2.ansi` | 44x14 | 16 | 6 | perforated SUGAR POST pigeon stamp with one-cent bird and status glyphs |
-| `sugar-post-3-256-l-1.ansi` | 166x28 | 256 | 6 | fan-out machine schematic from stdin and transports to eight ack rails |
-| `sugar-post-3-256-l-2.ansi` | 120x29 | 256 | 15 | doppler storm board: intensity radar with relay alert panel |
-| `sugar-post-3-256-m-1.ansi` | 88x19 | 256 | 9 | carrier-pigeon relay atlas: lofts, trunk and spare arcs, sea lanes, legend |
-| `sugar-post-3-256-m-2.ansi` | 86x19 | 256 | 9 | mail room at the christmas rush: garland, sacks, tree and count board |
-| `sugar-post-3-256-s-1.ansi` | 48x10 | 256 | 11 | outbox tray board: six colour-coded transport stacks with count bars |
-| `sugar-post-3-256-s-2.ansi` | 44x9 | 256 | 6 | delivery status tape with queued/sending/250-OK/retry/bounce meters |
-| `sugar-post-3-tc-l-1.ansi` | 150x32 | truecolor | 714 | aurora dusk mega wordmark over a relay skyline with tower lights |
-| `sugar-post-3-tc-l-2.ansi` | 176x34 | truecolor | 102 | dawn relay panorama: sun, loft towers, rainbow delivery arcs, glitter sea |
-| `sugar-post-3-tc-m-1.ansi` | 88x24 | truecolor | 170 | retry-storm wirecast: gradient storm cells, isobar spacing, lightning |
-| `sugar-post-3-tc-m-2.ansi` | 86x20 | truecolor | 61 | inbox-zero zen garden: raked gradient sand, stones, gate, a still 0 |
-| `sugar-post-3-tc-s-1.ansi` | 56x11 | truecolor | 34 | sunset gradient sky behind a checked sent-envelope plate and wordmark |
-| `sugar-post-3-tc-s-2.ansi` | 58x8 | truecolor | 66 | composer node fanning five rainbow-gradient arms to inbox endpoints |
-| `sugar-post-3-tc-s-3.ansi` | 60x10 | truecolor | 70 | dawn courier: envelope riding a rainbow trail arc above a gradient wordmark |
-| `sugar-post-4-16-l-1.ansi` | 148x30 | 16 | 7 | panorama of two cranes, container yard and the ship mv RETRY leaving berth 9 |
-| `sugar-post-4-16-l-2.ansi` | 142x30 | 16 | 10 | newsletter print shop: press No.7, paper web with Dispatch headlines, type cases and ink |
-| `sugar-post-4-256-l-1.ansi` | 152x32 | 256 | 11 | grand telegraph exchange: brass wordmark signboard, three ticker tapes, twelve operator desks |
-| `sugar-post-4-256-l-2.ansi` | 150x32 | 256 | 7 | express tube route map: priority/standard/bulk lines, stations, capsules and legend |
-| `sugar-post-4-256-m-1.ansi` | 80x21 | 256 | 8 | pneumatic station rack: departures board, incoming lines and eight labelled ports |
-| `sugar-post-4-256-m-2.ansi` | 86x22 | 256 | 10 | toll plaza at dusk: gantry rate sign, raised and lowered barriers, packet-cars queued |
-| `sugar-post-4-256-m-3.ansi` | 80x18 | 256 | 7 | webhook ballistics: payload fired from POST cannon in an arc to a 200 endpoint |
-| `sugar-post-4-256-s-1.ansi` | 62x6 | 256 | 7 | pneumatic tube cross-section with capsule 0482 gliding toward the queue |
-| `sugar-post-4-256-s-2.ansi` | 52x11 | 256 | 8 | packet radio mast with wave arcs, signal ladder and QSL call |
-| `sugar-post-4-256-s-3.ansi` | 50x6 | 256 | 6 | retry bay status strip: spinner attempts 1/5 to 5/5 with 429 throttle |
-| `sugar-post-4-tc-l-1.ansi` | 168x34 | truecolor | 57 | sunrise panorama: layered ridges, great lattice tower, wave rings and satellite uplink |
-| `sugar-post-4-tc-l-2.ansi` | 162x34 | truecolor | 55 | dead letter office by moonlight: iron gates, willow, raven and eight named tombstones |
-| `sugar-post-4-tc-m-1.ansi` | 82x24 | truecolor | 35 | packet radio tower on a hill at sunset with beacon glow, wave rings and station hut |
-| `sugar-post-4-tc-m-2.ansi` | 84x24 | truecolor | 32 | moonlit graveyard of bounces: chapel, fog and epitaph stones 410 to 204 |
-| `sugar-post-4-tc-s-1.ansi` | 60x12 | truecolor | 14 | dead-letter field at dusk: gradient sky, sun and four tiny numbered tombstones |
-| `sugar-post-4-tc-s-2.ansi` | 64x10 | truecolor | 49 | mini press extruding a SugarPost Gazette sheet over a gradient bed |
-| `sugar-post-4-tc-s-3.ansi` | 54x8 | truecolor | 10 | incoming feed tray dropping RSS, Atom, JSON and webhook cards into the inbox |
-| `sugar-post-5-256-l-1.ansi` | 136x32 | 256 | 11 | balloon race mass start at sunrise: nine entrants over dark valley hills |
-| `sugar-post-5-256-l-2.ansi` | 125x30 | 256 | 11 | aurora over a long snowy country road converging on a small red mailbox |
-| `sugar-post-5-256-m-1.ansi` | 72x19 | 256 | 8 | pigeon aviary split-flap departures board, amber flaps, hawk delays |
-| `sugar-post-5-256-m-2.ansi` | 79x20 | 256 | 7 | lighthouse in a storm guiding envelope-balloons to shelter, logbook open |
-| `sugar-post-5-256-s-1.ansi` | 63x13 | 256 | 7 | rural mailbox with raised red flag at the end of a snowy RT.7 |
-| `sugar-post-5-256-s-2.ansi` | 48x15 | 256 | 7 | museum exhibit: giant fax machine on a mahogany plinth, do-not-feed placard |
-| `sugar-post-5-tc-l-1.ansi` | 145x29 | truecolor | 86 | underwater recovery of a message-in-a-bottle: light rays, coral, glowing sand |
-| `sugar-post-5-tc-l-2.ansi` | 133x29 | truecolor | 727 | orbital night-side relay: glowing arcs between city hubs over Earth's limb |
-| `sugar-post-5-tc-m-1.ansi` | 79x21 | truecolor | 12 | lantern flotilla of paper boats under bridge St. Envelope, gradient canal |
-| `sugar-post-5-tc-m-2.ansi` | 77x19 | truecolor | 297 | mail capsule re-entry with plasma trail through gradient dawn atmosphere |
-| `sugar-post-5-tc-s-1.ansi` | 59x11 | truecolor | 46 | paper-boat letters sailing a moonlit canal, gradient water |
-| `sugar-post-5-tc-s-2.ansi` | 59x10 | truecolor | 113 | postal routes drawn as glowing arcs over the curvature of night Earth |
-| `sugar-post-6-256-l-1.ansi` | 138x31 | 256 | 49 | mail cannon factory floor: brass barrel, muzzle flash, inbox vault |
-| `sugar-post-6-256-l-2.ansi` | 150x32 | 256 | 40 | cable-laying ship at dusk paying circuit 1 into the shore-end hut |
-| `sugar-post-6-256-m-1.ansi` | 82x21 | 256 | 13 | drone dispatch hangar: three bays, charging pads, route status board |
-| `sugar-post-6-256-m-2.ansi` | 79x22 | 256 | 26 | lighthouse-shaped pillar box sweeping its red beam over the channel |
-| `sugar-post-6-256-s-1.ansi` | 62x12 | 256 | 21 | interoffice mail cannon No.7 firing canister 042 into the inbox safe |
-| `sugar-post-6-256-s-2.ansi` | 59x12 | 256 | 26 | submarine cable washing ashore to a lamp-lit shore-end terminal hut |
-| `sugar-post-6-tc-l-1.ansi` | 170x37 | truecolor | 62 | satellite dish farm panorama at sunrise with telemetry overlay |
-| `sugar-post-6-tc-l-2.ansi` | 160x35 | truecolor | 116 | noir rooftop panorama: rain, neon counter, envelope lantern line |
-| `sugar-post-6-tc-m-1.ansi` | 86x23 | truecolor | 54 | uplink control room at dawn: spectrum monitor, log CRT, dish field |
-| `sugar-post-6-tc-m-2.ansi` | 80x20 | truecolor | 48 | envelope-headed signal flare rising off a night beach, SOS in stones |
-| `sugar-post-6-tc-s-1.ansi` | 60x10 | truecolor | 19 | two dishes at sunrise: gradient dawn sky, uplink lock acquired |
-| `sugar-post-6-tc-s-2.ansi` | 58x12 | truecolor | 18 | noir raven courier on a rainy chimney holding a glowing letter |
-| `sugar-post-7-256-l-1.ansi` | 170x39 | 256 | 18 | wireless mail station K-7 floor: studio horn, sorting cubbies, rainy mast window |
-| `sugar-post-7-256-l-2.ansi` | 160x37 | 256 | 19 | bottle-mail workshop: six-stage bottling bench, bay window, tide tables, day log |
-| `sugar-post-7-256-m-1.ansi` | 88x25 | 256 | 19 | pneumatic-post courier in the downpour past lamp glow and station inlet 7 |
-| `sugar-post-7-256-m-2.ansi` | 85x25 | 256 | 16 | 1920s broadcast station mailing letters: horn, chute, cubby wall, ON AIR |
-| `sugar-post-7-256-s-1.ansi` | 62x13 | 256 | 14 | 1920s radio hut: horn transmitter beaming, letters tumbling into the mail basket |
-| `sugar-post-7-256-s-2.ansi` | 58x12 | 256 | 10 | submarine post sacks resting on the seabed, bubbles rising through deep water |
-| `sugar-post-7-tc-l-1.ansi` | 182x41 | truecolor | 75 | Martian colony relay panorama: three glow domes, tube lines, mail rover, orbiter uplink |
-| `sugar-post-7-tc-l-2.ansi` | 172x38 | truecolor | 42 | undersea post office rotunda: round windows, anglerfish courier, stacked sea sacks |
-| `sugar-post-7-tc-m-1.ansi` | 88x24 | truecolor | 39 | submarine post vault: porthole view of sorted sacks under light shafts |
-| `sugar-post-7-tc-m-2.ansi` | 84x24 | truecolor | 26 | Mars colony relay dome interior: dust board, relay masts, dawn console |
-| `sugar-post-7-tc-s-1.ansi` | 60x12 | truecolor | 22 | Martian relay dome on rust dunes at dusk with parked mail rover |
-| `sugar-post-7-tc-s-2.ansi` | 58x13 | truecolor | 15 | balloon post drifting over the Alps at dawn, sling-bag of letters lowered |
-| `sugar-post-8-256-l-1.ansi` | 188x38 | 256 | 13 | server message-queue table: queue ids, recipients, sizes, retries and color-coded states |
-| `sugar-post-8-256-l-2.ansi` | 182x36 | 256 | 11 | perforated stamp sheet of eight denominated subjects with SUGARPOST microtext |
-| `sugar-post-8-256-m-1.ansi` | 86x24 | 256 | 9 | SMTP handshake terminal: EHLO / MAIL FROM / RCPT TO climbing to a 250 queued reply |
-| `sugar-post-8-256-m-2.ansi` | 82x22 | 256 | 10 | parcel tipping a brass balance scale, pans hanging, OVER POSTAGE flag raised |
-| `sugar-post-8-256-s-1.ansi` | 60x13 | 256 | 10 | melted wax seal disc stamped with an S closing a cream envelope flap |
-| `sugar-post-8-256-s-2.ansi` | 64x15 | 256 | 9 | return-to-sender parcel with a tilted purple NOT-DELIVERABLE label and a curved arrow home |
-| `sugar-post-8-tc-l-1.ansi` | 190x40 | truecolor | 15 | registered number strip: barcode, torn edge, scan trail and postage meter mark |
-| `sugar-post-8-tc-l-2.ansi` | 186x38 | truecolor | 45 | correspondence desk at lamplight: open envelope, quill, inkpot, signed recommendation |
-| `sugar-post-8-tc-m-1.ansi` | 88x25 | truecolor | 10 | hard-bounce NDR: a letter ricocheting off the recipient wall, 550 user-unknown banner |
-| `sugar-post-8-tc-m-2.ansi` | 84x23 | truecolor | 10 | dead letter office shelves of faded unclaimed envelopes with drifting dust motes |
-| `sugar-post-8-tc-s-1.ansi` | 62x14 | truecolor | 11 | rocket mail igniting on the pad, orange-to-red flame gradient, payload crate is letters |
-| `sugar-post-8-tc-s-2.ansi` | 58x12 | truecolor | 10 | DKIM hexagon sigil sealed over an envelope, b=hQ== verified green, glow ring in truecolor |
-| `sugar-post-9-256-l-1.ansi` | 158x32 | 256 | 23 | stamp-mill perfecting works: paper reel over rollers into needle-bar perforator, holed sheets and flywheel |
-| `sugar-post-9-256-l-2.ansi` | 160x30 | 256 | 34 | parcel-locker wall at a dusk tram halt: numbered doors, one open on a package, keypad and wet-road reflections |
-| `sugar-post-9-256-m-1.ansi` | 86x24 | 256 | 22 | pneumatic despatch motor-pool: six capsule vans 9A-9F at roof hooks with charged air hoses |
-| `sugar-post-9-256-m-2.ansi` | 84x22 | 256 | 29 | carrier-pigeon banding station: birds rung on a rail, leg-ledger vol IX, pliers, loupe and celluloid rolls |
-| `sugar-post-9-256-s-1.ansi` | 66x14 | 256 | 26 | sealing-wax mill kettle pouring a hot 256-gradient river into cooling stick trough |
-| `sugar-post-9-256-s-2.ansi` | 62x13 | 256 | 40 | railway sorting-van dock: netted mail sacks stacked under a lamp-glow, hooks at the door |
-| `sugar-post-9-tc-l-1.ansi` | 160x34 | truecolor | 88 | night-letter press room: great gilt dial at 23:59 over composing table, TO: heaps and PRESS-9 silhouette |
-| `sugar-post-9-tc-l-2.ansi` | 158x30 | truecolor | 215 | carrier's round map pinned to the office wall: red-ink serpentine route past numbered blocks, corner pins and legend |
-| `sugar-post-9-tc-m-1.ansi` | 86x24 | truecolor | 56 | postal-order engraving shop: rose engine cutting hue-ringed orbits beside a guilloche ONE SHILLING plate |
-| `sugar-post-9-tc-m-2.ansi` | 86x24 | truecolor | 42 | dovecote domes at sunrise with dotted flight arcs climbing from three holes to the high sun |
-| `sugar-post-9-tc-s-1.ansi` | 66x15 | truecolor | 34 | hotel bell-pull corridor: five brass bells with request tags FRANK to NIGHTBAG under lamp glow, truecolor |
-| `sugar-post-9-tc-s-2.ansi` | 64x15 | truecolor | 32 | courier bicycle at flower-market dawn: spoked wheel above tulip crates, sun sliver on gradient sky |
-<!-- END sugar-post SLOTS -->
+| `candy-mail-1-16-l-1.ansi` | 150x30 | 16 | 13 | grand sorting hall panorama — truss roof, lamps, 45 pigeonholes, gear-driven 12-lane machine, huge wordmark |
+| `candy-mail-1-16-l-2.ansi` | 140x28 | 16 | 12 | night collection round: skyline under stars, three pillar boxes, lamp posts and a SUGAR POST delivery van |
+| `candy-mail-1-16-m-2.ansi` | 82x20 | 16 | 7 | full-bleed airmail letter with red-white-blue border, handwritten body, stamp and double-ring postmark |
+| `candy-mail-1-16-s-1.ansi` | 62x15 | 16 | 9 | airmail-striped border frames an envelope at speed with streaks, flap chevrons and a 250 OK, block wordmark below |
+| `candy-mail-1-16-s-2.ansi` | 58x14 | 16 | 6 | moonlit red pillar box with SUGAR-POST nameplate, raised collecting flag, stars over a quiet street |
+| `candy-mail-1-16-s-3.ansi` | 64x16 | 16 | 7 | SMTP conversation (220/EHLO/MAIL FROM/250 queued) climbed as a lit rail ladder at relay.sugar.post |
+| `candy-mail-1-256-l-1.ansi` | 160x32 | 256 | 51 | sunset sea with glint path from the sinking sun, envelope fleet riding ≈ waves, plane contrail overhead |
+| `candy-mail-1-256-l-2.ansi` | 170x30 | 256 | 33 | four SMTP relay towers lobbing envelopes in dotted arcs across dune seas, every hop 250 OK |
+| `candy-mail-1-256-m-1.ansi` | 86x22 | 256 | 15 | relay constellation of @ nodes stitched over gradient night sky, envelope moon, EHLO 250 log lines |
+| `candy-mail-1-256-m-2.ansi` | 88x23 | 256 | 35 | mail train steaming into SUGAR POST STN at sunset with departures board under a warm gradient sky |
+| `candy-mail-1-256-m-3.ansi` | 84x21 | 256 | 13 | resend retry ellipse of dotted gradient arrows around a re-sealed envelope, attempt 1 429 attempt 2 200 |
+| `candy-mail-1-256-s-1.ansi` | 60x13 | 256 | 21 | cardboard sugar parcel in warm gradient with pink ribbon cross, red wax seal stamped S, fragile notice |
+| `candy-mail-1-256-s-2.ansi` | 64x12 | 256 | 18 | three envelope kites with ✈ contrails drifting across banded navy sky above a cool-gradient wordmark |
+| `candy-mail-1-256-s-3.ansi` | 62x11 | 256 | 19 | loading screen — amber-to-magenta progress bar over queued/relay/resend lane status lines, 62 percent |
+| `candy-mail-1-tc-l-1.ansi` | 175x34 | truecolor | 2857 | galactic post office — nebula sky, ringed planet, envelope-hull station lifting a letter on a green tractor beam |
+| `candy-mail-1-tc-l-2.ansi` | 185x36 | truecolor | 99 | grand glass arcade terminus at night: twin mail trains, steam, departures board, silhouetted parcel porters |
+| `candy-mail-1-tc-m-1.ansi` | 86x22 | truecolor | 86 | sugar forge — hot lamp cone on a glowing envelope, wax drip sealing an S stamp, sparks on maroon dark |
+| `candy-mail-1-tc-m-2.ansi` | 86x24 | truecolor | 38 | night terminal: glowing lamps, hanging SUGAR POST TERMINAL sign, departures board, travelers with parcels |
+| `candy-mail-1-tc-m-3.ansi` | 88x23 | truecolor | 84 | aurora ribbons waving over a snowfield as a red courier sled hauls one envelope past wordmark light |
+| `candy-mail-1-tc-s-1.ansi` | 66x14 | truecolor | 34 | dawn gradient sky, half-sun on horizon, envelope locomotive on rails past a candy-mail station sign |
+| `candy-mail-1-tc-s-2.ansi` | 58x15 | truecolor | 97 | giant candy-gradient envelope with letter peeking out (Subject: for you), stamp corner, hot wordmark |
+| `candy-mail-1-tc-s-3.ansi` | 60x14 | truecolor | 23 | lone glowing envelope drifting on a midnight static sea under stars and a pale moon, 250 OK whisper |
+| `candy-mail-10-16-l-1.ansi` | 148x30 | 16 | 6 | grand receiving wall panorama — seven tomb boxes I–VII with collection times, gas lamps, carved frieze |
+| `candy-mail-10-16-m-1.ansi` | 80x20 | 16 | 7 | post-office screen room: brass-railed annunciator with LED numbers, curtain, velvet rope, tiled floor |
+| `candy-mail-10-16-s-2.ansi` | 44x15 | 16 | 7 | revolving postcard rack — six greeting cards hung off a central post on a weighted base |
+| `candy-mail-10-256-l-1.ansi` | 158x32 | 256 | 17 | queue hall: vault arc, dot-matrix board 0421/0422, pillar clock, six service windows, stanchions and ropes |
+| `candy-mail-10-256-l-2.ansi` | 150x30 | 256 | 16 | sweepstakes lobby: glass drum of seventy entries on an ENTRY-counter pedestal, twin WIN-A-YEAR posters, confetti |
+| `candy-mail-10-256-m-1.ansi` | 86x22 | 256 | 13 | six world-city cancels PARIS to LIMA in six inks on a slate tray, reverse CANCELLED plate |
+| `candy-mail-10-256-m-2.ansi` | 84x23 | 256 | 15 | warehouse parcel helix: roof intake, four-ring spiral carrying FR1 GB2 JP3 DE4 down to sort bins |
+| `candy-mail-10-256-s-1.ansi` | 58x11 | 256 | 8 | brass franking meter: PSI gauge, amber counter wheel 0421758, postage-paid strip printed off the bed |
+| `candy-mail-10-256-s-2.ansi` | 52x12 | 256 | 9 | queue annunciator — brass bell over green LED digits 042, ticket chip columns, NEXT WINDOW PLEASE |
+| `candy-mail-10-tc-l-1.ansi` | 165x34 | truecolor | 72 | receiving hall in gaslight — nine lit wall tombs with glow cones, brass frieze, polished floor reflections |
+| `candy-mail-10-tc-l-2.ansi` | 160x32 | truecolor | 47 | franking hall: five pressure gauges, three counter machines, crimson ring cancels riding a meter-mark ribbon |
+| `candy-mail-10-tc-m-1.ansi` | 84x22 | truecolor | 99 | postman's satchel still-life in a lamp pool on a bench — buckle, strap coil, three spilled letters, mail key |
+| `candy-mail-10-tc-m-2.ansi` | 80x21 | truecolor | 57 | one receiving tomb in stone: brass slot under a MAIL IN envelope, gas-lamp cone, 1867 plaque |
+| `candy-mail-10-tc-s-1.ansi` | 50x15 | truecolor | 19 | painted front door with brass letter-flap ajar, TO: YOU envelope riding the slot, CandyMail doormat |
+| `candy-mail-10-tc-s-2.ansi` | 60x12 | truecolor | 21 | seaside card rack at dusk: gradient sky, setting sun ring, four cards on a crossbar |
+| `candy-mail-2-16-l-1.ansi` | 149x28 | 16 | 7 | split-pane console: POST request with headers left, SMTP dialogue right, timing footer |
+| `candy-mail-2-16-l-2.ansi` | 134x28 | 16 | 7 | tall shaded wordmark over a post-office pack board of status-code stamps |
+| `candy-mail-2-16-m-1.ansi` | 82x19 | 16 | 7 | magenta-framed console window with POST request, headers, JSON body and timing bar |
+| `candy-mail-2-16-m-2.ansi` | 76x20 | 16 | 7 | parcel airmailed along dotted express wire over the Post Office No.1 counter |
+| `candy-mail-2-16-s-1.ansi` | 55x10 | 16 | 7 | block wordmark over POST envelope line with sender and attachment |
+| `candy-mail-2-16-s-2.ansi` | 53x9 | 16 | 13 | rainbow method-chip bar with SUGARPOST wordmark and OK response |
+| `candy-mail-2-256-l-1.ansi` | 148x28 | 256 | 22 | client box ferrying gradient packets down the candy-wire to the relay box |
+| `candy-mail-2-256-l-2.ansi` | 160x29 | 256 | 26 | huge two-tone 256 wordmark banner with status chips and three transport lines |
+| `candy-mail-2-256-m-1.ansi` | 77x21 | 256 | 13 | wordmark above a syntax-colored JSON mail payload with cc/bcc/attachment branches |
+| `candy-mail-2-256-m-2.ansi` | 73x19 | 256 | 30 | mosaic of sixteen 256-palette HTTP/SMTP status chips with CandyMail wordmark |
+| `candy-mail-2-256-s-1.ansi` | 55x10 | 256 | 11 | xterm-palette wordmark above a tiny JSON sweet payload card |
+| `candy-mail-2-256-s-2.ansi` | 43x9 | 256 | 8 | perforated postage stamp reading SUGARPOST 201 CREATED with wavy postmark |
+| `candy-mail-2-tc-l-1.ansi` | 178x35 | truecolor | 178 | aurora ribbon night-sky with riding packets, drifting envelope and dual-gradient wordmark |
+| `candy-mail-2-tc-l-2.ansi` | 150x31 | truecolor | 120 | relay mosaic: eight-column parcel grid fed by three transports into a gradient rail |
+| `candy-mail-2-tc-m-1.ansi` | 86x23 | truecolor | 142 | cream envelopes with shade trails drifting over a violet aurora sky grid |
+| `candy-mail-2-tc-m-2.ansi` | 84x21 | truecolor | 79 | gradient response bar and dark aurora panel with headers, JSON and glowing wordmark |
+| `candy-mail-2-tc-s-1.ansi` | 55x8 | truecolor | 22 | truecolor pink-to-amber wordmark with gradient POST chip and JSON receipt |
+| `candy-mail-2-tc-s-2.ansi` | 60x12 | truecolor | 169 | three smooth gradient wires carrying packet blocks into a sky-mint wordmark |
+| `candy-mail-3-16-l-1.ansi` | 128x30 | 16 | 7 | grand split-flap dispatch board: twenty backends, retries and statuses |
+| `candy-mail-3-16-l-2.ansi` | 134x30 | 16 | 7 | pigeon-post almanac: moon phases, flight timetable and storm log |
+| `candy-mail-3-16-m-1.ansi` | 86x23 | 16 | 7 | approach-control radar with sweep, contacts and outbound flight strips |
+| `candy-mail-3-16-m-2.ansi` | 88x19 | 16 | 6 | payload packaging station: belt, five wrap stages, base64 tape, chutes |
+| `candy-mail-3-16-s-1.ansi` | 52x9 | 16 | 7 | carrier relay hop map with hub, relays, pigeon hops and endpoint legend |
+| `candy-mail-3-16-s-2.ansi` | 44x14 | 16 | 6 | perforated SUGAR POST pigeon stamp with one-cent bird and status glyphs |
+| `candy-mail-3-256-l-1.ansi` | 166x28 | 256 | 6 | fan-out machine schematic from stdin and transports to eight ack rails |
+| `candy-mail-3-256-l-2.ansi` | 120x29 | 256 | 15 | doppler storm board: intensity radar with relay alert panel |
+| `candy-mail-3-256-m-1.ansi` | 88x19 | 256 | 9 | carrier-pigeon relay atlas: lofts, trunk and spare arcs, sea lanes, legend |
+| `candy-mail-3-256-m-2.ansi` | 86x19 | 256 | 9 | mail room at the christmas rush: garland, sacks, tree and count board |
+| `candy-mail-3-256-s-1.ansi` | 48x10 | 256 | 11 | outbox tray board: six colour-coded transport stacks with count bars |
+| `candy-mail-3-256-s-2.ansi` | 44x9 | 256 | 6 | delivery status tape with queued/sending/250-OK/retry/bounce meters |
+| `candy-mail-3-tc-l-1.ansi` | 150x32 | truecolor | 714 | aurora dusk mega wordmark over a relay skyline with tower lights |
+| `candy-mail-3-tc-l-2.ansi` | 176x34 | truecolor | 102 | dawn relay panorama: sun, loft towers, rainbow delivery arcs, glitter sea |
+| `candy-mail-3-tc-m-1.ansi` | 88x24 | truecolor | 170 | retry-storm wirecast: gradient storm cells, isobar spacing, lightning |
+| `candy-mail-3-tc-m-2.ansi` | 86x20 | truecolor | 61 | inbox-zero zen garden: raked gradient sand, stones, gate, a still 0 |
+| `candy-mail-3-tc-s-1.ansi` | 56x11 | truecolor | 34 | sunset gradient sky behind a checked sent-envelope plate and wordmark |
+| `candy-mail-3-tc-s-2.ansi` | 58x8 | truecolor | 66 | composer node fanning five rainbow-gradient arms to inbox endpoints |
+| `candy-mail-3-tc-s-3.ansi` | 60x10 | truecolor | 70 | dawn courier: envelope riding a rainbow trail arc above a gradient wordmark |
+| `candy-mail-4-16-l-1.ansi` | 148x30 | 16 | 7 | panorama of two cranes, container yard and the ship mv RETRY leaving berth 9 |
+| `candy-mail-4-16-l-2.ansi` | 142x30 | 16 | 10 | newsletter print shop: press No.7, paper web with Dispatch headlines, type cases and ink |
+| `candy-mail-4-256-l-1.ansi` | 152x32 | 256 | 11 | grand telegraph exchange: brass wordmark signboard, three ticker tapes, twelve operator desks |
+| `candy-mail-4-256-l-2.ansi` | 150x32 | 256 | 7 | express tube route map: priority/standard/bulk lines, stations, capsules and legend |
+| `candy-mail-4-256-m-1.ansi` | 80x21 | 256 | 8 | pneumatic station rack: departures board, incoming lines and eight labelled ports |
+| `candy-mail-4-256-m-2.ansi` | 86x22 | 256 | 10 | toll plaza at dusk: gantry rate sign, raised and lowered barriers, packet-cars queued |
+| `candy-mail-4-256-m-3.ansi` | 80x18 | 256 | 7 | webhook ballistics: payload fired from POST cannon in an arc to a 200 endpoint |
+| `candy-mail-4-256-s-1.ansi` | 62x6 | 256 | 7 | pneumatic tube cross-section with capsule 0482 gliding toward the queue |
+| `candy-mail-4-256-s-2.ansi` | 52x11 | 256 | 8 | packet radio mast with wave arcs, signal ladder and QSL call |
+| `candy-mail-4-256-s-3.ansi` | 50x6 | 256 | 6 | retry bay status strip: spinner attempts 1/5 to 5/5 with 429 throttle |
+| `candy-mail-4-tc-l-1.ansi` | 168x34 | truecolor | 57 | sunrise panorama: layered ridges, great lattice tower, wave rings and satellite uplink |
+| `candy-mail-4-tc-l-2.ansi` | 162x34 | truecolor | 55 | dead letter office by moonlight: iron gates, willow, raven and eight named tombstones |
+| `candy-mail-4-tc-m-1.ansi` | 82x24 | truecolor | 35 | packet radio tower on a hill at sunset with beacon glow, wave rings and station hut |
+| `candy-mail-4-tc-m-2.ansi` | 84x24 | truecolor | 32 | moonlit graveyard of bounces: chapel, fog and epitaph stones 410 to 204 |
+| `candy-mail-4-tc-s-1.ansi` | 60x12 | truecolor | 14 | dead-letter field at dusk: gradient sky, sun and four tiny numbered tombstones |
+| `candy-mail-4-tc-s-2.ansi` | 64x10 | truecolor | 49 | mini press extruding a CandyMail Gazette sheet over a gradient bed |
+| `candy-mail-4-tc-s-3.ansi` | 54x8 | truecolor | 10 | incoming feed tray dropping RSS, Atom, JSON and webhook cards into the inbox |
+| `candy-mail-5-256-l-1.ansi` | 136x32 | 256 | 11 | balloon race mass start at sunrise: nine entrants over dark valley hills |
+| `candy-mail-5-256-l-2.ansi` | 125x30 | 256 | 11 | aurora over a long snowy country road converging on a small red mailbox |
+| `candy-mail-5-256-m-1.ansi` | 72x19 | 256 | 8 | pigeon aviary split-flap departures board, amber flaps, hawk delays |
+| `candy-mail-5-256-m-2.ansi` | 79x20 | 256 | 7 | lighthouse in a storm guiding envelope-balloons to shelter, logbook open |
+| `candy-mail-5-256-s-1.ansi` | 63x13 | 256 | 7 | rural mailbox with raised red flag at the end of a snowy RT.7 |
+| `candy-mail-5-256-s-2.ansi` | 48x15 | 256 | 7 | museum exhibit: giant fax machine on a mahogany plinth, do-not-feed placard |
+| `candy-mail-5-tc-l-1.ansi` | 145x29 | truecolor | 86 | underwater recovery of a message-in-a-bottle: light rays, coral, glowing sand |
+| `candy-mail-5-tc-l-2.ansi` | 133x29 | truecolor | 727 | orbital night-side relay: glowing arcs between city hubs over Earth's limb |
+| `candy-mail-5-tc-m-1.ansi` | 79x21 | truecolor | 12 | lantern flotilla of paper boats under bridge St. Envelope, gradient canal |
+| `candy-mail-5-tc-m-2.ansi` | 77x19 | truecolor | 297 | mail capsule re-entry with plasma trail through gradient dawn atmosphere |
+| `candy-mail-5-tc-s-1.ansi` | 59x11 | truecolor | 46 | paper-boat letters sailing a moonlit canal, gradient water |
+| `candy-mail-5-tc-s-2.ansi` | 59x10 | truecolor | 113 | postal routes drawn as glowing arcs over the curvature of night Earth |
+| `candy-mail-6-256-l-1.ansi` | 138x31 | 256 | 49 | mail cannon factory floor: brass barrel, muzzle flash, inbox vault |
+| `candy-mail-6-256-l-2.ansi` | 150x32 | 256 | 40 | cable-laying ship at dusk paying circuit 1 into the shore-end hut |
+| `candy-mail-6-256-m-1.ansi` | 82x21 | 256 | 13 | drone dispatch hangar: three bays, charging pads, route status board |
+| `candy-mail-6-256-m-2.ansi` | 79x22 | 256 | 26 | lighthouse-shaped pillar box sweeping its red beam over the channel |
+| `candy-mail-6-256-s-1.ansi` | 62x12 | 256 | 21 | interoffice mail cannon No.7 firing canister 042 into the inbox safe |
+| `candy-mail-6-256-s-2.ansi` | 59x12 | 256 | 26 | submarine cable washing ashore to a lamp-lit shore-end terminal hut |
+| `candy-mail-6-tc-l-1.ansi` | 170x37 | truecolor | 62 | satellite dish farm panorama at sunrise with telemetry overlay |
+| `candy-mail-6-tc-l-2.ansi` | 160x35 | truecolor | 116 | noir rooftop panorama: rain, neon counter, envelope lantern line |
+| `candy-mail-6-tc-m-1.ansi` | 86x23 | truecolor | 54 | uplink control room at dawn: spectrum monitor, log CRT, dish field |
+| `candy-mail-6-tc-m-2.ansi` | 80x20 | truecolor | 48 | envelope-headed signal flare rising off a night beach, SOS in stones |
+| `candy-mail-6-tc-s-1.ansi` | 60x10 | truecolor | 19 | two dishes at sunrise: gradient dawn sky, uplink lock acquired |
+| `candy-mail-6-tc-s-2.ansi` | 58x12 | truecolor | 18 | noir raven courier on a rainy chimney holding a glowing letter |
+| `candy-mail-7-256-l-1.ansi` | 170x39 | 256 | 18 | wireless mail station K-7 floor: studio horn, sorting cubbies, rainy mast window |
+| `candy-mail-7-256-l-2.ansi` | 160x37 | 256 | 19 | bottle-mail workshop: six-stage bottling bench, bay window, tide tables, day log |
+| `candy-mail-7-256-m-1.ansi` | 88x25 | 256 | 19 | pneumatic-post courier in the downpour past lamp glow and station inlet 7 |
+| `candy-mail-7-256-m-2.ansi` | 85x25 | 256 | 16 | 1920s broadcast station mailing letters: horn, chute, cubby wall, ON AIR |
+| `candy-mail-7-256-s-1.ansi` | 62x13 | 256 | 14 | 1920s radio hut: horn transmitter beaming, letters tumbling into the mail basket |
+| `candy-mail-7-256-s-2.ansi` | 58x12 | 256 | 10 | submarine post sacks resting on the seabed, bubbles rising through deep water |
+| `candy-mail-7-tc-l-1.ansi` | 182x41 | truecolor | 75 | Martian colony relay panorama: three glow domes, tube lines, mail rover, orbiter uplink |
+| `candy-mail-7-tc-l-2.ansi` | 172x38 | truecolor | 42 | undersea post office rotunda: round windows, anglerfish courier, stacked sea sacks |
+| `candy-mail-7-tc-m-1.ansi` | 88x24 | truecolor | 39 | submarine post vault: porthole view of sorted sacks under light shafts |
+| `candy-mail-7-tc-m-2.ansi` | 84x24 | truecolor | 26 | Mars colony relay dome interior: dust board, relay masts, dawn console |
+| `candy-mail-7-tc-s-1.ansi` | 60x12 | truecolor | 22 | Martian relay dome on rust dunes at dusk with parked mail rover |
+| `candy-mail-7-tc-s-2.ansi` | 58x13 | truecolor | 15 | balloon post drifting over the Alps at dawn, sling-bag of letters lowered |
+| `candy-mail-8-256-l-1.ansi` | 188x38 | 256 | 13 | server message-queue table: queue ids, recipients, sizes, retries and color-coded states |
+| `candy-mail-8-256-l-2.ansi` | 182x36 | 256 | 11 | perforated stamp sheet of eight denominated subjects with SUGARPOST microtext |
+| `candy-mail-8-256-m-1.ansi` | 86x24 | 256 | 9 | SMTP handshake terminal: EHLO / MAIL FROM / RCPT TO climbing to a 250 queued reply |
+| `candy-mail-8-256-m-2.ansi` | 82x22 | 256 | 10 | parcel tipping a brass balance scale, pans hanging, OVER POSTAGE flag raised |
+| `candy-mail-8-256-s-1.ansi` | 60x13 | 256 | 10 | melted wax seal disc stamped with an S closing a cream envelope flap |
+| `candy-mail-8-256-s-2.ansi` | 64x15 | 256 | 9 | return-to-sender parcel with a tilted purple NOT-DELIVERABLE label and a curved arrow home |
+| `candy-mail-8-tc-l-1.ansi` | 190x40 | truecolor | 15 | registered number strip: barcode, torn edge, scan trail and postage meter mark |
+| `candy-mail-8-tc-l-2.ansi` | 186x38 | truecolor | 45 | correspondence desk at lamplight: open envelope, quill, inkpot, signed recommendation |
+| `candy-mail-8-tc-m-1.ansi` | 88x25 | truecolor | 10 | hard-bounce NDR: a letter ricocheting off the recipient wall, 550 user-unknown banner |
+| `candy-mail-8-tc-m-2.ansi` | 84x23 | truecolor | 10 | dead letter office shelves of faded unclaimed envelopes with drifting dust motes |
+| `candy-mail-8-tc-s-1.ansi` | 62x14 | truecolor | 11 | rocket mail igniting on the pad, orange-to-red flame gradient, payload crate is letters |
+| `candy-mail-8-tc-s-2.ansi` | 58x12 | truecolor | 10 | DKIM hexagon sigil sealed over an envelope, b=hQ== verified green, glow ring in truecolor |
+| `candy-mail-9-256-l-1.ansi` | 158x32 | 256 | 23 | stamp-mill perfecting works: paper reel over rollers into needle-bar perforator, holed sheets and flywheel |
+| `candy-mail-9-256-l-2.ansi` | 160x30 | 256 | 34 | parcel-locker wall at a dusk tram halt: numbered doors, one open on a package, keypad and wet-road reflections |
+| `candy-mail-9-256-m-1.ansi` | 86x24 | 256 | 22 | pneumatic despatch motor-pool: six capsule vans 9A-9F at roof hooks with charged air hoses |
+| `candy-mail-9-256-m-2.ansi` | 84x22 | 256 | 29 | carrier-pigeon banding station: birds rung on a rail, leg-ledger vol IX, pliers, loupe and celluloid rolls |
+| `candy-mail-9-256-s-1.ansi` | 66x14 | 256 | 26 | sealing-wax mill kettle pouring a hot 256-gradient river into cooling stick trough |
+| `candy-mail-9-256-s-2.ansi` | 62x13 | 256 | 40 | railway sorting-van dock: netted mail sacks stacked under a lamp-glow, hooks at the door |
+| `candy-mail-9-tc-l-1.ansi` | 160x34 | truecolor | 88 | night-letter press room: great gilt dial at 23:59 over composing table, TO: heaps and PRESS-9 silhouette |
+| `candy-mail-9-tc-l-2.ansi` | 158x30 | truecolor | 215 | carrier's round map pinned to the office wall: red-ink serpentine route past numbered blocks, corner pins and legend |
+| `candy-mail-9-tc-m-1.ansi` | 86x24 | truecolor | 56 | postal-order engraving shop: rose engine cutting hue-ringed orbits beside a guilloche ONE SHILLING plate |
+| `candy-mail-9-tc-m-2.ansi` | 86x24 | truecolor | 42 | dovecote domes at sunrise with dotted flight arcs climbing from three holes to the high sun |
+| `candy-mail-9-tc-s-1.ansi` | 66x15 | truecolor | 34 | hotel bell-pull corridor: five brass bells with request tags FRANK to NIGHTBAG under lamp glow, truecolor |
+| `candy-mail-9-tc-s-2.ansi` | 64x15 | truecolor | 32 | courier bicycle at flower-market dawn: spoked wheel above tulip crates, sun sliver on gradient sky |
+<!-- END candy-mail SLOTS -->
 
 <!-- BEGIN candy-ansi-inspect SLOTS -->
 ### candy-ansi-inspect — slot series

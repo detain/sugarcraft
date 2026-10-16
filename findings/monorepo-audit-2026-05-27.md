@@ -13,7 +13,7 @@ The SugarCraft monorepo is a well-organized collection of 48 PHP TUI library por
 
 However, this audit reveals **systemic architectural drift**, **incomplete implementations wired silently**, **copy-paste duplication**, and **cross-package inconsistencies** that require attention before a 1.0 release. The most pressing issues are:
 
-1. **Broken path-repo symlinks** (sugar-post missing `I18n/Lang.php`) causing 2 test failures
+1. **Broken path-repo symlinks** (candy-mail missing `I18n/Lang.php`) causing 2 test failures
 2. **Stub features wired silently** (sugar-readline Highlight no-op, sugar-toast animation deferred)
 3. **33 cloned `Lang.php` files** adding ~700 lines of boilerplate
 4. **`with()` methods that can't set `0` values** (candy-boxer, sugar-bits) due to `?: ` sentinel pattern
@@ -21,7 +21,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 6. **Inverted dependency** (candy-scriptui → sugar-*) per prior improvements.md
 7. **Incomplete candy-forms extraction** leaving candy-forms as a facade with no implementation
 
-**Test Suite Status:** 7,633+ tests across 48 packages. Two packages have failing tests: sugar-post (2 failures due to missing Lang base class in path-repo symlink).
+**Test Suite Status:** 7,633+ tests across 48 packages. Two packages have failing tests: candy-mail (2 failures due to missing Lang base class in path-repo symlink).
 
 **Recommendation:** This monorepo is suitable for continued development but requires remediation of the Critical/High issues before production deployment. The architectural foundations are solid; most issues are correctable with focused refactoring.
 
@@ -79,7 +79,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-log | 96 ✓ | APPROVE | 0 | 0 | 0 | 0 |
 | candy-metrics | 61 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 
-**candy-mosaic** — **BLOCKED**: `SugarCraft\Core\I18n\Lang` base class missing in path-repo symlink. 2 tests fail with `Error: Class not found`. This cascades from the same symlink issue affecting sugar-post. Run `composer reinstall` in affected packages.
+**candy-mosaic** — **BLOCKED**: `SugarCraft\Core\I18n\Lang` base class missing in path-repo symlink. 2 tests fail with `Error: Class not found`. This cascades from the same symlink issue affecting candy-mail. Run `composer reinstall` in affected packages.
 
 **candy-palette** — Color detection/ICC profiles. Clean, 85 tests. Minor: `ColorProfile::default()` constructor takes no args but is private — static factory is only entry point.
 
@@ -168,14 +168,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 8: sugar-crush, sugar-crumbs, sugar-dash, sugar-post
+### Group 8: sugar-crush, sugar-crumbs, sugar-dash, candy-mail
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-crush | 158 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 | sugar-crumbs | 75 ✓ | REQUEST_CHANGES | 0 | 0 | 3 | 0 |
 | sugar-dash | 5409 ✓ | APPROVE | 0 | 0 | 2 | 0 |
-| sugar-post | 54 ⚠️ | BLOCKED | 2 | 2 | 3 | 0 |
+| candy-mail | 54 ⚠️ | BLOCKED | 2 | 2 | 3 | 0 |
 
 **sugar-crush** — Chat TUI. Clean, 158 tests. Minor: `@proc_open` suppressions; no PHP version guard for `bypass_shell`.
 
@@ -183,7 +183,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **sugar-dash** — Dashboard library. Massive (5409 tests, 99.98% pass). Clean architecture throughout.
 
-**sugar-post** — **BLOCKED**: Path-repo symlink for candy-core is incomplete/missing `I18n/Lang.php`. Two tests fail with `"Class 'SugarCraft\Core\I18n\Lang' not found"`. Run `composer reinstall` in sugar-post. Issues: `Attachment::fromPath()` silently returns empty on missing file; SMTPTransport has no connection timeout.
+**candy-mail** — **BLOCKED**: Path-repo symlink for candy-core is incomplete/missing `I18n/Lang.php`. Two tests fail with `"Class 'SugarCraft\Core\I18n\Lang' not found"`. Run `composer reinstall` in candy-mail. Issues: `Attachment::fromPath()` silently returns empty on missing file; SMTPTransport has no connection timeout.
 
 ---
 
@@ -238,9 +238,9 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ### 🔴 Critical Systemic Issues
 
-1. **Broken path-repo symlinks** (sugar-post, candy-mosaic)
-   - `I18n/Lang.php` missing from candy-core symlink in sugar-post/vendor
-   - Affects: sugar-post (2 test failures), candy-mosaic (test failures)
+1. **Broken path-repo symlinks** (candy-mail, candy-mosaic)
+   - `I18n/Lang.php` missing from candy-core symlink in candy-mail/vendor
+   - Affects: candy-mail (2 test failures), candy-mosaic (test failures)
    - Fix: `cd <package> && composer reinstall`
 
 2. **candy-forms is a facade with no implementation**
@@ -292,7 +292,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - No API change — `Lang::t()` continues to work
 
 2. **Fix broken path-repo symlinks**
-   - Run `composer reinstall` in sugar-post and candy-mosaic
+   - Run `composer reinstall` in candy-mail and candy-mosaic
    - Add CI check: `tools/check-path-repos.php` already exists (enhanced in PR #880)
 
 3. **Complete candy-forms extraction**
@@ -355,7 +355,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **Cloned boilerplate** | HIGH | 33 packages | 33× Lang.php, repeated patterns |
 | **God classes** | HIGH | super-candy, candy-git | 915L and 1201L classes |
 | **Stub features** | MEDIUM | sugar-readline, sugar-toast | Features wired but non-functional |
-| **Path-repo symlinks** | MEDIUM | sugar-post, candy-mosaic | composer reinstall needed |
+| **Path-repo symlinks** | MEDIUM | candy-mail, candy-mosaic | composer reinstall needed |
 | **Inverted dependencies** | MEDIUM | candy-scriptui | Fixed via candy-forms extraction (in progress) |
 | **Constructor bloat** | MEDIUM | super-candy (14), candy-git (22) | DTO/value object refactor needed |
 | **Static singletons** | LOW | candy-mouse, candy-forms | Inject via constructor or clear test cleanup |
@@ -425,7 +425,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ### Immediate (Before Next Merge)
 
-1. **[FIX]** Run `composer reinstall` in sugar-post and candy-mosaic to fix broken path-repo symlinks
+1. **[FIX]** Run `composer reinstall` in candy-mail and candy-mosaic to fix broken path-repo symlinks
 2. **[FIX]** candy-vcr: Remove or implement `PhpGifEncoder` stub (don't leave throwing stub in public API)
 3. **[FIX]** honey-bounce: Fix `CubicBezier::easeInOutCirc()` duplicate (should be `(0.85, 0.00, 0.15, 1.00)` per CSS spec)
 4. **[FIX]** candy-tetris: Fix `Das::withKeyDown()` to actually use the `$state` parameter
@@ -464,7 +464,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## High-Risk Areas
 
-1. **sugar-post / candy-mosaic test failures** — broken composer setup, affects CI
+1. **candy-mail / candy-mosaic test failures** — broken composer setup, affects CI
 2. **candy-forms facade** — unclear ownership of Form implementation
 3. **super-candy Manager** (915 lines) — high bug risk, hard to modify safely
 4. **candy-git App** (1201 lines) — same god class issue
@@ -569,7 +569,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
-| 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
+| 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
 | 9 | candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |

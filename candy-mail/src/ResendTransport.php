@@ -1,0 +1,148 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Mail;
+
+use SugarCraft\Async\CancellationToken;
+use SugarCraft\Mail\Lang;
+
+/**
+ * Sends email via the Resend REST API.
+ *
+ * @see https://resend.com/docs/api-reference/emails/send-email
+ */
+final class ResendTransport implements Transport
+{
+    private string $apiKey;
+
+    /**
+     * @param string $apiKey Resend API key. If empty, reads from RESEND_API_KEY env var.
+     */
+    public function __construct(string $apiKey = '')
+    {
+        if ($apiKey === '') {
+            $apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true) ?: '';
+        }
+        $this->apiKey = $apiKey;
+    }
+
+    public function send(Email $email, ?CancellationToken $token = null): void
+    {
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException(Lang::t('resend.send_cancelled'));
+        }
+
+        $payload = $this->buildPayload($email);
+        $json = \json_encode($payload, \JSON_THROW_ON_ERROR);
+
+        $ch = \curl_init('https://api.resend.com/emails');
+        \curl_setopt_array($ch, $this->curlOptions($json));
+
+        $body  = \curl_exec($ch);
+        $code  = \curl_getinfo($ch, \CURLINFO_HTTP_CODE);
+        $error = \curl_error($ch);
+        unset($ch);
+
+        if ($error !== '') {
+            throw new \RuntimeException(Lang::t('resend.network_error', ['error' => $error]));
+        }
+
+        if ($code < 200 || $code >= 300) {
+            throw new \RuntimeException(Lang::t('resend.api_error', [
+                'status' => $code,
+                'body'   => \substr((string) $body, 0, 500),
+            ]));
+        }
+    }
+
+    public function name(): string
+    {
+        return 'resend';
+    }
+
+    /**
+     * Build the curl option map for the send request.
+     *
+     * Extracted so the network hardening — a bounded TCP-connect timeout and
+     * explicit TLS peer/host verification — is assertable without issuing a
+     * real HTTP request.
+     *
+     * @return array<int, mixed>
+     */
+    protected function curlOptions(string $json): array
+    {
+        return [
+            \CURLOPT_POST           => true,
+            \CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $this->apiKey,
+                'Content-Type: application/json',
+            ],
+            \CURLOPT_POSTFIELDS     => $json,
+            \CURLOPT_RETURNTRANSFER => true,
+            // Cap the TCP handshake separately from the overall transfer so a
+            // black-holed host fails fast instead of consuming the full timeout.
+            \CURLOPT_CONNECTTIMEOUT => 10,
+            \CURLOPT_TIMEOUT        => 30,
+            // Verify the API's TLS certificate explicitly rather than trusting
+            // curl's build-time defaults for this credential-bearing request.
+            \CURLOPT_SSL_VERIFYPEER => true,
+            \CURLOPT_SSL_VERIFYHOST => 2,
+        ];
+    }
+
+    /**
+     * Build the Resend API payload array.
+     *
+     * @return array<string, mixed>
+     */
+    protected function buildPayload(Email $email): array
+    {
+        $payload = [
+            'from'    => $this->firstAddr($email->from),
+            'to'      => $email->to,
+            'subject' => $email->subject ?? '(no subject)',
+        ];
+
+        $body = $email->bodyWithSignature();
+        if ($email->htmlBody !== null) {
+            $payload['html'] = $email->htmlBody;
+            if ($body !== null) {
+                $payload['text'] = $body;
+            }
+        } elseif ($body !== null) {
+            $payload['text'] = $body;
+        }
+
+        if ($email->cc !== []) {
+            $payload['cc'] = \implode(', ', $email->cc);
+        }
+
+        if ($email->bcc !== []) {
+            $payload['bcc'] = \implode(', ', $email->bcc);
+        }
+
+        if ($email->replyTo !== null) {
+            $payload['reply_to'] = $email->replyTo;
+        }
+
+        // Attachments (Resend accepts base64-encoded content)
+        $resendAtts = [];
+        foreach ($email->attachments as $att) {
+            $resendAtts[] = [
+                'filename' => $att->filename,
+                'content'  => \base64_encode($att->getContent()),
+            ];
+        }
+        if ($resendAtts !== []) {
+            $payload['attachments'] = $resendAtts;
+        }
+
+        return $payload;
+    }
+
+    private function firstAddr(array $addrs): string
+    {
+        return $addrs[0] ?? 'unknown@localhost';
+    }
+}

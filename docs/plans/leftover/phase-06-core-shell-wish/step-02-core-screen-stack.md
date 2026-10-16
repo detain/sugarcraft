@@ -16,7 +16,7 @@ breadcrumb tracking.
 - `candy-core/src/Screen.php` — value object: `Model`, optional title,
   `onEnter` / `onExit` lifecycle closures.
 - `candy-core/src/ScreenStack.php` — immutable stack with `push(Screen)`,
-  `pop(): self`, `current(): Screen`, `breadcrumb(): array<string>`.
+  `pop(): self`, `current(): Screen`, `breadcrumb(): array<string>`. <!-- @rename-keep -->
 - `candy-core/src/Cmd/PushScreenCmd.php` + `PopScreenCmd.php`.
 
 **Modify:**

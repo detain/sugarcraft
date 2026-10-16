@@ -416,7 +416,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `Viewport/Tree/TextArea/Tabs/Stopwatch/Scrollbar/Paginator/Help`+root (≈17→a/b).
 - **5.2** `sugar-boxer`(3,low), `sugar-datepicker`(6,low), `sugar-crumbs`(8,low),
   `candy-kv`(8,med), `candy-ansi-inspect`(8,med), `sugar-stickers`(7,med), `sugar-wishlist`(6,med),
-  `sugar-post`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
+  `candy-mail`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
   `sugar-veil`(7,high) — one step each (all small), in dependency order.
 - **5.3** `candy-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
@@ -490,7 +490,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init |
 | sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
 | sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) |
-| sugar-post | high | 7 | ctor-promotion, mixed, named-args, php8-strfn, readonly |
+| candy-mail | high | 7 | ctor-promotion, mixed, named-args, php8-strfn, readonly |
 | sugar-reel | high | 19 | backed-enum, enum-with-methods, ctor-promotion, first-class-callable, match — **in progress** |
 | candy-git | high | 14 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, new-in-init |
 | sugar-table | high | 8 | enum, match, mixed, named-args, nullsafe, php8-strfn, readonly |

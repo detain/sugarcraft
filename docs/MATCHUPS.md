@@ -85,7 +85,7 @@ called out in the table below.
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **SugarWishlist** (`sugar-wishlist/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
 | **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
-| **SugarPost** (`sugar-post/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
+| **CandyMail** (`candy-mail/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | **CandyGitServer** (`candy-git-server/`) | 🟢 ready | Self-hostable Git server over SSH (authorized keys), Git daemon, and HTTP — users, repos, access control, optional LFS. |
 | **SugarCrush** (`sugar-crush/`) | 🟢 ready | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions. |
 | **SugarCrushWeb** (`sugar-crush-web/`) | 🟡 in progress | Browser UI for sugar-crush's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. MVP today (one session: transcript, tool cards, diffs, approvals, composer). |
@@ -198,7 +198,7 @@ reference projects supplied the ideas, not the code.
 | SugarGallery (sugar-gallery/) | [bubbles](https://github.com/charmbracelet/bubbles) (list/viewport) · phlix web media grid (loosely) |
 | CandyMdview (candy-mdview/) | [glow](https://github.com/charmbracelet/glow) |
 | SugarMcp (sugar-mcp/) | none — first-party |
-| SugarPost (sugar-post/) | [pop](https://github.com/charmbracelet/pop) |
+| CandyMail (candy-mail/) | [pop](https://github.com/charmbracelet/pop) |
 | CandyForms (candy-forms/) | [huh](https://github.com/charmbracelet/huh) |
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
 | SugarReel (sugar-reel/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |

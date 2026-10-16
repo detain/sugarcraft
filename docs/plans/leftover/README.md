@@ -275,7 +275,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 
 Each writes a plan file only — no implementation.
 
-1. `step-01-sugar-post-identity.md`
+1. `step-01-candy-mail-identity.md`
 2. `step-02-candy-git-server-tui.md`
 3. `step-03-candy-vt-graphics.md`
 4. `step-04-candy-flip-mosaic-split.md`

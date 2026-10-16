@@ -90,7 +90,7 @@ To implement an item:
 | **candy-kv** | [research/libraries/candy-kv-research.md](libraries/candy-kv-research.md) | 1. JSON export, 2. Levenshtein, 3. TTL |
 | **candy-git** | [research/libraries/candy-git-research.md](libraries/candy-git-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
 | **sugar-crush** | [research/libraries/sugar-crush-research.md](libraries/sugar-crush-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
-| **sugar-post** | [research/libraries/sugar-post-research.md](libraries/sugar-post-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
+| **candy-mail** | [research/libraries/candy-mail-research.md](libraries/candy-mail-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
 | **candy-sql** | [research/libraries/candy-sql-research.md](libraries/candy-sql-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
 | **candy-lister** | [research/libraries/candy-lister-research.md](libraries/candy-lister-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
 | **super-candy** | [research/libraries/super-candy-research.md](libraries/super-candy-research.md) | 1. Copy/move, 2. Bookmarks, 3. Preview |
