@@ -10,9 +10,9 @@ Pattern: Render output tests use `SugarCraft\Testing\Snapshot\Assertions::assert
 Anti-pattern: Do NOT use string equality (`assertEquals`) for ANSI output — ESC sequences in a mismatch produce an unreadable diff. Always use `assertGoldenAnsi` or `assertAnsiEquals`.
 Source: step-15 ai/sugar-forms-shared
 
-### 2026-05-29 — FuzzyMatcher back-compat shim (candy-fuzzy)
+### 2026-05-29 — FuzzyMatcher back-compat shim (sugar-fuzzy)
 Pattern: `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07) is now a deprecated alias for `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. There is zero behavioural divergence — the internal Select/MultiSelect filter uses `SmithWatermanMatcher` directly. The public `withFilter(callable)` API is preserved; callers injecting a custom filter are unaffected.
-Anti-pattern: None identified. Do not re-implement scoring logic in sugar-forms when candy-fuzzy provides it.
+Anti-pattern: None identified. Do not re-implement scoring logic in sugar-forms when sugar-fuzzy provides it.
 Source: step-15 ai/sugar-forms-shared
 
 ## Spinner absorbed from sugar-widgets
@@ -93,5 +93,5 @@ Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.
 - **[pattern:fuzzy-smith-waterman-two-row]** FuzzyMatcher uses a two-row DP matrix instead of a full O(m×n) table for Smith-Waterman local alignment scoring. Rows are swapped (not copied) on each query-character iteration, keeping space at O(c) where c is candidate length. Adjacent consecutive matches receive a +5 bonus; mismatches cost -3. This is the canonical pattern for any in-memory fuzzy string scoring in PHP where memory must stay bounded. (Folded in from the retired prompt façade's learnings.)
 - **[pattern:async-suggestions-debounce]** `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` on Input/Select uses `React\EventLoop\Loop::addTimer()` for debouncing, `React\Async\defer()` for async fetch wrapping, and dispatches `SugarCraft\Core\Msg\SuggestionsReadyMsg` when results arrive. The 150 ms default balances responsiveness against API call volume.
 - **[pattern:validator-short-form-methods]** Input field exposes short-form validator chains (`required()`, `email()`, `minlength(int)`, `maxlength(int)`) that delegate to `withValidator(new ValidatorType(...))`. This reduces boilerplate from `Input::new('x')->withValidator(new Required())->withValidator(new Email())` to `Input::new('x')->required()->email()`.
-- **[pattern:fuzzy-alias-repoint-with-back-compat]** The `Fuzzy\FuzzyMatcher` class was repointed to delegate to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` (the candy-fuzzy implementation) with a back-compat shim kept at the old FQN so existing call sites resolve unchanged. When repointing a class_alias, always verify the oldFQN is still loadable and add a dedicated alias-resolution test to catch accidental breakage.
+- **[pattern:fuzzy-alias-repoint-with-back-compat]** The `Fuzzy\FuzzyMatcher` class was repointed to delegate to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` (the sugar-fuzzy implementation) with a back-compat shim kept at the old FQN so existing call sites resolve unchanged. When repointing a class_alias, always verify the oldFQN is still loadable and add a dedicated alias-resolution test to catch accidental breakage.
 - **[anti-pattern:vim-keybindings-per-lib]** Do NOT add new vim keybindings to per-lib branching logic. Vim mode is handled by `sugar-forms/src/Vim/VimKeyHandler` (shared). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-widgets, sugar-forms, and sugar-readline all benefit at once. Mirrors: `docs/repo_map_step_24.md`.

@@ -354,7 +354,7 @@ keystone, so they come first within the phase.
   conversions — establishes the §4.3 pattern; extra review.)*
 - **1.3** `candy-buffer` (17 src, medium) — split into **1.3a** root+`Diff/` and **1.3b**
   `Cell/Style/Position/Hyperlink/...`; heavy `readonly`+promotion, 8 nullsafe.
-- **1.4** `candy-fuzzy` (6 src, low).
+- **1.4** `candy-fuzzy` (6 src, low). <!-- @rename-keep historical provenance -->
 - **1.5** `candy-layout` (13 src, low) — 1 enum, `readonly class`.
 - **1.6** `candy-input` (11 src, high) — union types, `readonly class`, mixed; no deps so safe early.
 
@@ -522,7 +522,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-ssh-launcher | medium | 6 | ctor-promotion, first-class-callable, match, mixed, named-args; pcntl |
 | candy-files | medium | 14 | backed-enum, ctor-promotion, enum-with-methods, match, named-args |
 | candy-ansi | low | 11 | attribute, backed-enum, ctor-promotion, enum-with-methods, fiber*, first-class-callable |
-| candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly |
+| candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly | <!-- @rename-keep historical provenance -->
 | candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |
 | candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void |
 | candy-starter | low | 1 | ctor-promotion, match, readonly |
@@ -537,7 +537,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 
 ## 9. Appendix B — Dependency tiers (topological)
 
-- **Level 0 (no sugarcraft deps):** candy-ansi, candy-async, candy-buffer, candy-fuzzy,
+- **Level 0 (no sugarcraft deps):** candy-ansi, candy-async, candy-buffer, candy-fuzzy, <!-- @rename-keep historical provenance -->
   candy-input, candy-layout.
 - **Keystone (cyclic):** candy-core ↔ candy-pty (+ candy-sprinkles right after).
 - **Level 1 (everything else):** depends on core/buffer/sprinkles/etc.; backport strictly after

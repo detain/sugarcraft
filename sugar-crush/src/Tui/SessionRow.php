@@ -20,7 +20,7 @@ use SugarCraft\Forms\ItemList\ItemList;
  * The picker paints its own chrome ({@see SessionPicker::render()}) so this
  * row object never reaches the screen — it exists to give the widget a stable
  * item identity per session id. Filtering is the picker's own (`/`, ranked by
- * candy-fuzzy over title, last prompt, agent, id and branch); the widget's
+ * sugar-fuzzy over title, last prompt, agent, id and branch); the widget's
  * filter path stays disabled, so {@see filterValue()} composes nothing. The
  * row text arrives sanitized by
  * {@see \SugarCraft\Crush\Chat::sanitizeSessionField()} upstream.

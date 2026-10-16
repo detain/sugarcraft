@@ -269,7 +269,7 @@ final class CommandRegistry
      * the query is an in-order subsequence of the rest of the name. The rest
      * is placed by the same full-query matcher (so it carries one index per
      * remaining query character, positioned the way the matcher would
-     * highlight them) and shifted past the anchor. Folding is candy-fuzzy's
+     * highlight them) and shifted past the anchor. Folding is sugar-fuzzy's
      * {@see CharFold}, the matcher's own, so this test and the matcher never
      * disagree about which characters are equal; both index spaces are code
      * points of the original string.
@@ -304,14 +304,14 @@ final class CommandRegistry
 
     /**
      * The "/" popup's one matcher, built on first use with `requireFullQuery`
-     * (candy-fuzzy #3) - the coverage rule this class used to hand-roll by
+     * (sugar-fuzzy #3) - the coverage rule this class used to hand-roll by
      * comparing `count($matchedIndices)` with the prefix length.
      */
     private static ?SmithWatermanMatcher $matcher = null;
 
     /**
      * Ranked, anchored matches ({@see anchored()}) per prefix for the name
-     * list they were computed over (candy-fuzzy #2). The popup asks for its rows several times per
+     * list they were computed over (sugar-fuzzy #2). The popup asks for its rows several times per
      * keystroke - the key arms, the menu-visibility guard, the renderer -
      * over a name list that does not change between keystrokes, so each
      * (prefix, names) pair is aligned once. A different name list (a custom

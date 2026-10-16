@@ -14,7 +14,7 @@ namespace SugarCraft\Crush\Session;
  * strip shows.
  *
  * `search` is a SQL `LIKE` PREFILTER over name, last prompt preview and id,
- * not a ranking: the picker ranks what comes back with candy-fuzzy, so the
+ * not a ranking: the picker ranks what comes back with sugar-fuzzy, so the
  * store only has to keep obviously-unrelated rows out of the page.
  *
  * Mirrors the shape of opencode's `Session.list({ search, limit })`; there is

@@ -9,13 +9,13 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 /**
  * Fuzzy substring matcher using Smith-Waterman-style local alignment scoring.
  *
- * Thin delegating shim over the candy-fuzzy SSOT
+ * Thin delegating shim over the sugar-fuzzy SSOT
  * ({@see SmithWatermanMatcher}). sugar-treelist historically shipped a
  * bit-identical copy of the Smith-Waterman scorer; the DP core now lives in
- * candy-fuzzy, and the default {@see ScoringProfile} is bit-equivalent to the
+ * sugar-fuzzy, and the default {@see ScoringProfile} is bit-equivalent to the
  * classic constants, so scores and rankings are preserved for inputs within
- * candy-fuzzy's DoS length caps — apart from the per-codepoint case-fold
- * deviations candy-fuzzy's CharFold now applies deliberately (see score()).
+ * sugar-fuzzy's DoS length caps — apart from the per-codepoint case-fold
+ * deviations sugar-fuzzy's CharFold now applies deliberately (see score()).
  *
  * Over-cap input (query past {@see SmithWatermanMatcher::DEFAULT_MAX_QUERY_LENGTH},
  * candidate past {@see SmithWatermanMatcher::DEFAULT_MAX_CANDIDATE_LENGTH}
@@ -63,13 +63,13 @@ final class FuzzyMatch
      *
      * Only considers alignments where the query characters appear in ORDER
      * within the candidate (not necessarily contiguously). Delegates to the
-     * candy-fuzzy SSOT; case folding is per code point (CharFold: each code
+     * sugar-fuzzy SSOT; case folding is per code point (CharFold: each code
      * point lowercases individually and compares whole-element, keeping the
      * fold 1:1 with the original string), so scores match sugar-treelist's
      * historical whole-string mb_strtolower scorer on every input except the
      * expansion/context-sensitive folds (U+0130, final sigma) where the old
      * byte-for-byte match desynced match indices — there the deviation is
-     * intentional; see candy-fuzzy's CharFold contract.
+     * intentional; see sugar-fuzzy's CharFold contract.
      *
      * @param string $query     The search query (needle)
      * @param string $candidate The candidate string to score

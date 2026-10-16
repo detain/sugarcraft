@@ -126,3 +126,8 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   pre-rename slug (`.ansi` content is C.3-excluded); redraw optional at owner triage.
 - `sugar-focus/.vhs/focus-ring.gif` — demo GIF frames show the pre-rename prompt wordmark; CI <!-- @rename-keep -->
   `.github/workflows/vhs.yml` re-renders from the already-rewritten `.tape` on the next tape run; do not hand-patch.
+
+## C13 candy-fuzzy → sugar-fuzzy (2026-10-16) <!-- @rename-keep -->
+- `ansi/candy-forms/candy-forms-2-256-m-1.ansi`, `ansi/sugarcraft/sugarcraft-4-256-l-1.ansi`, <!-- @rename-keep -->
+  `ansi/sugarcraft/sugarcraft-5-256-l-1.ansi` — art CONTENT carries the pre-rename `candy-fuzzy` <!-- @rename-keep -->
+  wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->

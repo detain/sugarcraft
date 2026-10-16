@@ -102,7 +102,7 @@ final readonly class PosterCard
      * a styled title is emitted verbatim (only ANSI-aware *truncated*, never
      * stripped) — stripping C0 would destroy the very SGR escapes it exists to
      * carry. The CALLER therefore owns that escaping: pass ONLY styling you
-     * produced yourself over already-safe text (e.g. a candy-fuzzy highlight of
+     * produced yourself over already-safe text (e.g. a sugar-fuzzy highlight of
      * a sanitised title), NEVER raw untrusted / DB-sourced bytes. When the
      * source is untrusted, leave this unset and rely on the plain
      * {@see $title} — that is the sanitised path.

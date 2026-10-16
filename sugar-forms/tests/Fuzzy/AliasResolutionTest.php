@@ -12,11 +12,11 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * Guards the deprecated {@see FuzzyMatcher} backward-compatibility shim.
  *
  * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` used to carry its own hand-rolled
- * Smith-Waterman DP core, a byte-for-byte duplicate of the candy-fuzzy SSOT.
+ * Smith-Waterman DP core, a byte-for-byte duplicate of the sugar-fuzzy SSOT.
  * It is now a thin delegating shim over {@see SmithWatermanMatcher}. These
  * tests prove:
  *  - the deprecated class still resolves and instantiates;
- *  - it genuinely delegates to the candy-fuzzy SSOT (not a re-diverged copy);
+ *  - it genuinely delegates to the sugar-fuzzy SSOT (not a re-diverged copy);
  *  - its scores stay bit-equivalent to the historical algorithm over an ASCII
  *    corpus captured BEFORE the conversion (see fixtures/legacy_ascii_scores.json);
  *  - its legacy `match(query, array)` ranking is identical to driving the SSOT
@@ -36,7 +36,7 @@ final class AliasResolutionTest extends TestCase
         );
     }
 
-    public function testDelegatesToCandyFuzzySsot(): void
+    public function testDelegatesToSugarFuzzySsot(): void
     {
         $matcher = new FuzzyMatcher();
 
@@ -46,7 +46,7 @@ final class AliasResolutionTest extends TestCase
         $this->assertInstanceOf(
             SmithWatermanMatcher::class,
             $delegate,
-            'FuzzyMatcher must delegate to the candy-fuzzy SmithWatermanMatcher SSOT.'
+            'FuzzyMatcher must delegate to the sugar-fuzzy SmithWatermanMatcher SSOT.'
         );
     }
 
@@ -106,7 +106,7 @@ final class AliasResolutionTest extends TestCase
         $this->assertSame(
             SmithWatermanMatcher::new()->score($query, $candidate),
             (new FuzzyMatcher())->score($query, $candidate),
-            'Shim score must match the candy-fuzzy SSOT for non-empty candidates.'
+            'Shim score must match the sugar-fuzzy SSOT for non-empty candidates.'
         );
     }
 
@@ -129,7 +129,7 @@ final class AliasResolutionTest extends TestCase
             $this->assertSame(
                 $expected,
                 (new FuzzyMatcher())->match($query, $candidates),
-                "match('{$query}', ...) must equal driving the candy-fuzzy SSOT directly."
+                "match('{$query}', ...) must equal driving the sugar-fuzzy SSOT directly."
             );
         }
     }

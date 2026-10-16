@@ -1,5 +1,5 @@
 {
-    "name": "sugarcraft/candy-fuzzy",
+    "name": "sugarcraft/sugar-fuzzy",
     "description": "Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem.",
     "type": "library",
     "license": "MIT",
@@ -12,7 +12,7 @@
         "charmbracelet",
         "gum"
     ],
-    "homepage": "https://github.com/sugarcraft/candy-fuzzy",
+    "homepage": "https://github.com/sugarcraft/sugar-fuzzy",
     "authors": [
         {
             "name": "Joe Huss",
@@ -21,9 +21,9 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/sugarcraft/candy-fuzzy/issues",
-        "source": "https://github.com/sugarcraft/candy-fuzzy",
-        "docs": "https://github.com/sugarcraft/candy-fuzzy/blob/master/README.md"
+        "issues": "https://github.com/sugarcraft/sugar-fuzzy/issues",
+        "source": "https://github.com/sugarcraft/sugar-fuzzy",
+        "docs": "https://github.com/sugarcraft/sugar-fuzzy/blob/master/README.md"
     },
     "require": {
         "php": "^8.3"

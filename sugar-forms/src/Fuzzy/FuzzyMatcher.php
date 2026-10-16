@@ -10,7 +10,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * Fuzzy substring matcher using Smith-Waterman-style local alignment scoring.
  *
  * Backward-compatibility shim. The former hand-rolled two-row DP core has been
- * removed; all scoring now delegates to the canonical candy-fuzzy SSOT
+ * removed; all scoring now delegates to the canonical sugar-fuzzy SSOT
  * {@see SmithWatermanMatcher} with its default {@see \SugarCraft\Fuzzy\ScoringProfile},
  * which is bit-equivalent to the historical constants for ASCII input. This
  * class survives only to preserve the legacy `match(string, array): list<[string, int]>`

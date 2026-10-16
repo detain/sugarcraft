@@ -1,31 +1,31 @@
-# Step 07 — Create candy-fuzzy
+# Step 07 — Create sugar-fuzzy
 
-**Branch:** `ai/candy-fuzzy-new`
+**Branch:** `ai/sugar-fuzzy-new`
 **Depends on:** step-00 ✅
 **Blocks:** step-14 (sugar-widgets uses it), step-15 (sugar-forms uses it), step-16 (sugar-forms uses it), step-19 (candy-scriptui uses it)
 
 ## Goal
 
-Create the `candy-fuzzy` foundation package — extracts `FuzzyMatcher` from `sugar-forms/src/Fuzzy/FuzzyMatcher.php` (canonical Smith-Waterman impl) and the mirror in `sugar-treelist/src/FuzzyMatch.php`. **The key new feature: ranked matches WITH the scored matched character indices**, so UI filter highlighting becomes possible (currently impossible across the ecosystem).
+Create the `sugar-fuzzy` foundation package — extracts `FuzzyMatcher` from `sugar-forms/src/Fuzzy/FuzzyMatcher.php` (canonical Smith-Waterman impl) and the mirror in `sugar-treelist/src/FuzzyMatch.php`. **The key new feature: ranked matches WITH the scored matched character indices**, so UI filter highlighting becomes possible (currently impossible across the ecosystem).
 
 Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matched indices), §387.1 (4-way reinvention).
 
 ## Files expected to be created
 
-- `candy-fuzzy/composer.json`
-- `candy-fuzzy/phpunit.xml`
-- `candy-fuzzy/README.md`
-- `candy-fuzzy/CALIBER_LEARNINGS.md`
-- `candy-fuzzy/src/FuzzyMatcher.php` — interface.
-- `candy-fuzzy/src/MatchResult.php` — readonly (score: int, candidate: string, indices: list<int>).
-- `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php` — canonical impl (port of sugar-forms/sugar-treelist).
-- `candy-fuzzy/src/Matcher/SahilmMatcher.php` — gum-style scoring (port of `sahilm/fuzzy` algorithm).
-- `candy-fuzzy/src/Highlighter.php` — small helper: given a MatchResult, wrap matched indices in `<style>` tokens (a presentation-neutral callable interface).
-- `candy-fuzzy/tests/SmithWatermanMatcherTest.php`, `SahilmMatcherTest.php`, `HighlighterTest.php`.
+- `sugar-fuzzy/composer.json`
+- `sugar-fuzzy/phpunit.xml`
+- `sugar-fuzzy/README.md`
+- `sugar-fuzzy/CALIBER_LEARNINGS.md`
+- `sugar-fuzzy/src/FuzzyMatcher.php` — interface.
+- `sugar-fuzzy/src/MatchResult.php` — readonly (score: int, candidate: string, indices: list<int>).
+- `sugar-fuzzy/src/Matcher/SmithWatermanMatcher.php` — canonical impl (port of sugar-forms/sugar-treelist).
+- `sugar-fuzzy/src/Matcher/SahilmMatcher.php` — gum-style scoring (port of `sahilm/fuzzy` algorithm).
+- `sugar-fuzzy/src/Highlighter.php` — small helper: given a MatchResult, wrap matched indices in `<style>` tokens (a presentation-neutral callable interface).
+- `sugar-fuzzy/tests/SmithWatermanMatcherTest.php`, `SahilmMatcherTest.php`, `HighlighterTest.php`.
 
 ## Files expected to be modified
 
-- Root composer.json, MATCHUPS, PROJECT_NAMES, README, docs/index.html, docs/lib/candy-fuzzy.html, codecov.yml.
+- Root composer.json, MATCHUPS, PROJECT_NAMES, README, docs/index.html, docs/lib/sugar-fuzzy.html, codecov.yml.
 - **Deprecation shims** (NOT removal — that's later steps):
   - `sugar-forms/src/Fuzzy/FuzzyMatcher.php` — add `@deprecated since 1.x; use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` docblock. Keep behavior identical.
   - `sugar-treelist/src/FuzzyMatch.php` — same shim.
@@ -46,14 +46,14 @@ Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matche
 
 ## Coder brief
 
-1. **Invoke `scaffold-library`** with slug `candy-fuzzy`, namespace `SugarCraft\Fuzzy\`, role "Fuzzy matching with scored matched indices (extracted from sugar-forms)".
-2. **Copy `sugar-forms/src/Fuzzy/FuzzyMatcher.php`** to `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php`, rename class, rewrite namespace.
+1. **Invoke `scaffold-library`** with slug `sugar-fuzzy`, namespace `SugarCraft\Fuzzy\`, role "Fuzzy matching with scored matched indices (extracted from sugar-forms)".
+2. **Copy `sugar-forms/src/Fuzzy/FuzzyMatcher.php`** to `sugar-fuzzy/src/Matcher/SmithWatermanMatcher.php`, rename class, rewrite namespace.
 3. **Add the matched-indices output**: walk the Smith-Waterman traceback matrix to extract indices of matched characters. The existing code computes the score but discards the traceback — preserve it.
 4. **Spawn a Researcher** with: "What's the sahilm/fuzzy scoring algorithm? Specifically: char-class bonus (consecutive same-class), separator bonus (`/`, `_`, `-`, ` `, `.`), camel-case bonus, exact-prefix bonus. Include the integer weights from the upstream source."
 5. **Implement SahilmMatcher** per Researcher findings.
 6. **Highlighter** helper: takes a MatchResult + a styler `callable(string $matched): string` and returns the candidate with matched runs styled. Pure presentation — no terminal coupling.
-7. **Back-compat shim**: in `sugar-forms/src/Fuzzy/FuzzyMatcher.php`, keep the class but mark deprecated; internally delegate to `\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Same for `sugar-treelist/src/FuzzyMatch.php`. **Add `path-repo-closure`** for sugar-forms + sugar-treelist to require candy-fuzzy.
-8. Run phpunit in candy-fuzzy + sugar-forms + sugar-treelist + sugar-forms + check-path-repos.
+7. **Back-compat shim**: in `sugar-forms/src/Fuzzy/FuzzyMatcher.php`, keep the class but mark deprecated; internally delegate to `\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Same for `sugar-treelist/src/FuzzyMatch.php`. **Add `path-repo-closure`** for sugar-forms + sugar-treelist to require sugar-fuzzy.
+8. Run phpunit in sugar-fuzzy + sugar-forms + sugar-treelist + sugar-forms + check-path-repos.
 
 ## Tester brief
 
@@ -70,26 +70,26 @@ Reference: `docs/repo_map_update.md` §345.3 (FuzzyMatcher interface with matche
 - CALIBER_LEARNINGS: "matched-indices is the value-add over the existing impl. Don't drop the traceback walk."
 - MATCHUPS: row citing `sahilm/fuzzy` (Go) + sugar-forms (internal) as inputs. 🟢 — improvement over both upstreams.
 - PROJECT_NAMES Candy table.
-- Docs/index.html tile + docs/lib/candy-fuzzy.html.
-- Update `sugar-forms/README.md` + `sugar-treelist/README.md` with one-line "Fuzzy matching moved to candy-fuzzy in 1.x; current API delegates" note.
+- Docs/index.html tile + docs/lib/sugar-fuzzy.html.
+- Update `sugar-forms/README.md` + `sugar-treelist/README.md` with one-line "Fuzzy matching moved to sugar-fuzzy in 1.x; current API delegates" note.
 
 ## Ship brief
 
-- **PR title**: `candy-fuzzy: extract FuzzyMatcher + add scored matched indices`
+- **PR title**: `sugar-fuzzy: extract FuzzyMatcher + add scored matched indices`
 - **PR body**:
   ```
   ## Summary
-  - New foundation lib candy-fuzzy extracts the canonical Smith-Waterman matcher from sugar-forms.
+  - New foundation lib sugar-fuzzy extracts the canonical Smith-Waterman matcher from sugar-forms.
   - MatchResult now includes scored matched indices — unblocks filter-highlighting UI across the ecosystem.
   - Adds SahilmMatcher (gum-style scoring) as a second algorithm.
-  - sugar-forms + sugar-treelist keep their existing API as deprecated shims delegating to candy-fuzzy.
+  - sugar-forms + sugar-treelist keep their existing API as deprecated shims delegating to sugar-fuzzy.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-fuzzy (≥95% coverage)
+  - [x] vendor/bin/phpunit in sugar-fuzzy (≥95% coverage)
   - [x] Golden parity vs sugar-forms FuzzyMatcher (all existing fixtures preserved)
   - [x] vendor/bin/phpunit in sugar-forms / sugar-treelist / sugar-forms — all green (shims working)
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_07.md, docs/repo_map_update.md §345.3, §387.1
   ```
-- Commit subject: `candy-fuzzy: scored fuzzy matching with matched indices`.
+- Commit subject: `sugar-fuzzy: scored fuzzy matching with matched indices`.

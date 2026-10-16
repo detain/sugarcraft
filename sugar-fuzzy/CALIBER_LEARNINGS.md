@@ -1,7 +1,7 @@
-# Caliber Learnings — candy-fuzzy
+# Caliber Learnings — sugar-fuzzy
 
 <!--
-  Accumulated lessons from implementing and maintaining candy-fuzzy.
+  Accumulated lessons from implementing and maintaining sugar-fuzzy.
   Add entries as they are discovered — do not delete anything.
 -->
 

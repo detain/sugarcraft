@@ -13,7 +13,7 @@ use SugarCraft\QuickPick\{FilteredItem, QuickPick, Item};
 use PHPUnit\Framework\TestCase;
 
 /**
- * The candy-fuzzy pluggable ranker: setRanker() makes a non-empty filter rank
+ * The sugar-fuzzy pluggable ranker: setRanker() makes a non-empty filter rank
  * items by descending fuzzy score (true subsequence) and highlight the scored
  * runes, instead of the default contiguous-substring/anchor filter.
  */

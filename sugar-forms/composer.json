@@ -29,7 +29,7 @@
         "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-fuzzy": "dev-master",
+        "sugarcraft/sugar-fuzzy": "dev-master",
         "sugarcraft/candy-layout": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     },

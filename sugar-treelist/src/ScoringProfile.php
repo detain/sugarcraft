@@ -7,7 +7,7 @@ namespace SugarCraft\TreeList;
 /**
  * Scoring constants for the FuzzyMatch algorithm.
  *
- * Back-compat re-export of the candy-fuzzy SSOT
+ * Back-compat re-export of the sugar-fuzzy SSOT
  * {@see \SugarCraft\Fuzzy\ScoringProfile}, whose API (constructor named params +
  * canonical()/strict()/lenient(), plus the deprecated default() alias) is a
  * superset of sugar-treelist's original copy with identical canonical/strict/

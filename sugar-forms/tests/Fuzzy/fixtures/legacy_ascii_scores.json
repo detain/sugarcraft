@@ -1,5 +1,5 @@
 {
-    "_comment": "Bit-equivalence characterization corpus for SugarCraft\\Forms\\Fuzzy\\FuzzyMatcher. Captured from the historical byte-based DP algorithm BEFORE it was converted to a candy-fuzzy delegating shim (PR ai/sugar-forms-fuzzy-shim). ASCII-only: the shim now delegates to the multibyte-aware SmithWatermanMatcher SSOT, so these legacy byte-based scores hold exactly for ASCII (the entire realistic caller domain) while multibyte scoring intentionally follows the SSOT. Each entry is [query, candidate, expectedScore].",
+    "_comment": "Bit-equivalence characterization corpus for SugarCraft\\Forms\\Fuzzy\\FuzzyMatcher. Captured from the historical byte-based DP algorithm BEFORE it was converted to a sugar-fuzzy delegating shim (PR ai/sugar-forms-fuzzy-shim). ASCII-only: the shim now delegates to the multibyte-aware SmithWatermanMatcher SSOT, so these legacy byte-based scores hold exactly for ASCII (the entire realistic caller domain) while multibyte scoring intentionally follows the SSOT. Each entry is [query, candidate, expectedScore].",
     "scores": [
         [
             "app",

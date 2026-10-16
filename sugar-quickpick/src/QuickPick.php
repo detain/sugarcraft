@@ -83,7 +83,7 @@ final class QuickPick
 
     /**
      * Optional fuzzy ranker. When set, a non-empty filter text is scored against
-     * every item's value via candy-fuzzy (true subsequence matching) and the
+     * every item's value via sugar-fuzzy (true subsequence matching) and the
      * filtered list is ordered by descending score instead of the default
      * substring/anchor filter; match highlighting follows the scored indices.
      */
@@ -229,7 +229,7 @@ final class QuickPick
     }
 
     /**
-     * Set (or clear, with null) a candy-fuzzy ranker. When set, a non-empty
+     * Set (or clear, with null) a sugar-fuzzy ranker. When set, a non-empty
      * filter text ranks items by descending fuzzy score (true subsequence match)
      * instead of the default contiguous-substring/anchor filter, and match
      * highlighting follows the scored indices. The custom filterFn still applies
@@ -702,7 +702,7 @@ final class QuickPick
     }
 
     /**
-     * Rank items by descending candy-fuzzy score for a non-empty filter text,
+     * Rank items by descending sugar-fuzzy score for a non-empty filter text,
      * keeping only positive-scoring items that also pass the filterFn predicate.
      * Ties break on the items' original order so ranking is stable.
      *
@@ -894,7 +894,7 @@ final class QuickPick
     }
 
     /**
-     * Highlight the candy-fuzzy-matched runes in a formatted item string,
+     * Highlight the sugar-fuzzy-matched runes in a formatted item string,
      * following the ranker's scored indices (a subsequence match) rather than a
      * contiguous substring. Falls back to the plain printable text when the
      * ranker reports no match for the displayed string.

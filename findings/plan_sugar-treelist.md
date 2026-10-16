@@ -11,7 +11,7 @@ updated: 2026-10-01
 `status: not-started` was stale (audit finding #18). Most Phase-1/2 items have since landed:
 `View()`→`catch(\Throwable)`, `setLineOffset()`, `cursorPage*`/`cursorToStart`/`cursorToEnd`,
 full-frame reset on filter change, SGR-only style validation (setter **and** splice point),
-viewport dimension + area guards, and the Smith-Waterman delegation to candy-fuzzy.
+viewport dimension + area guards, and the Smith-Waterman delegation to sugar-fuzzy.
 The fix wave additionally landed the 4 MAJORs (#1 viewport-follow tail duplication, #2 filter
 re-apply clobber, #3 quadratic `bufferFromOutput`, #4 immutable-setter docs/examples), the 4
 MEDIUMs (#5 cell-budgeted split, #6 prefix column width, #7 private config + accessors,

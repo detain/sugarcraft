@@ -54,7 +54,7 @@ _The shared-foundation refactor outlined above ran across <N> PRs, creating <8> 
 - ✅ candy-ansi (step-01, PR #<n>)
 - ✅ sugar-mouse (step-05, PR #<n>)
 - ✅ candy-input (step-06, PR #<n>)
-- (also created: candy-fuzzy step-07, candy-async step-08)
+- (also created: sugar-fuzzy step-07, candy-async step-08)
 
 ### §344 Shared Components/Abstractions — covered by:
 ...

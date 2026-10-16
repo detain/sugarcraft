@@ -220,7 +220,7 @@ renders every failed field's message above the form when submit fails.
 ### Fuzzy suggestions
 
 `Input` and `Select` support `withFuzzySuggestions()` — candidates are
-ranked by Smith-Waterman local-alignment score (candy-fuzzy) and filtered to
+ranked by Smith-Waterman local-alignment score (sugar-fuzzy) and filtered to
 positive scores. The `fuzzy()` short alias is equivalent. For programmatic
 scoring use `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` directly
 (`SugarCraft\Forms\Fuzzy\FuzzyMatcher` remains a deprecated alias of it;
@@ -287,7 +287,7 @@ sugar-forms is built on five shared packages:
 - **[candy-testing](/sugarcraft/candy-testing)** — `Assertions::assertGoldenAnsi` and
   `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
   `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
-- **[candy-fuzzy](/sugarcraft/candy-fuzzy)** — `SmithWatermanMatcher` scores.
+- **[sugar-fuzzy](/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scores.
   Select / MultiSelect filter delegates to it internally; the existing public
   `withFilter(callable)` injection point is preserved for custom filters.
 - **[candy-async](/sugarcraft/candy-async)** — `Async\Await` + `CancelledException`

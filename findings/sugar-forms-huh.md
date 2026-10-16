@@ -2,7 +2,7 @@
 
 ## Summary
 
-`sugar-forms` is almost entirely a backward-compatibility facade / re-export layer over `sugar-forms` (`SugarCraft\Forms\*`). Of the 21 PHP source files in `src/`, **20 are `class_alias` re-exports** pointing to `sugar-forms`, `candy-fuzzy`, or other foundation packages. Only one file contains any real implementation logic:
+`sugar-forms` is almost entirely a backward-compatibility facade / re-export layer over `sugar-forms` (`SugarCraft\Forms\*`). Of the 21 PHP source files in `src/`, **20 are `class_alias` re-exports** pointing to `sugar-forms`, `sugar-fuzzy`, or other foundation packages. Only one file contains any real implementation logic:
 
 - **`src/Spinner.php`** (193 lines) — A blocking "loading spinner" that uses `pcntl_fork` to run an action in a child process while animating a spinner on the parent.
 

@@ -37,7 +37,7 @@ $form = Form::new(
         -&gt;withAsyncSuggestions(fn($q) =&gt; fetchRepos($q), 150),
 );
 
-// Fuzzy scoring — candy-fuzzy, the engine behind withFuzzySuggestions():
+// Fuzzy scoring — sugar-fuzzy, the engine behind withFuzzySuggestions():
 $matcher = SmithWatermanMatcher::new();
 $score = $matcher-&gt;score('js', 'JavaScript');                   // 3
 $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResult: Python, score 11</code></pre>
@@ -49,7 +49,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
       <div class="feature"><strong>Hidden fields &amp; groups</strong><span><code>Form</code> honours <code>Field::isHidden()</code> in values, errors, validation, navigation, submit and view; focus never rests on a hidden field and fully hidden groups are skipped. A <code>Group::withHideFunc()</code> predicate sees the same view <code>values()</code> returns — the visible fields of every visible earlier group.</span></div>
       <div class="feature"><strong>Bounded editing</strong><span>TextInput / TextArea clip a paste or insert to the remaining <code>charLimit</code> budget (newlines count), and TextArea pans to keep the cursor row visible.</span></div>
       <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit. Five built-in validators: <code>Required</code>, <code>Email</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>Pattern</code>. Chain multiple with <code>->withValidator(new Validator())</code>. Cross-field validation via <code>Form::validateAll(): array&lt;string,string&gt;</code> after submit. Enable error summary with <code>Form::withErrorSummary(true)</code> to show all errors at once.</span></div>
-      <div class="feature"><strong>Fuzzy suggestions</strong><span><code>->withFuzzySuggestions([...])</code> on Input and Select — Smith-Waterman scoring ranks candidates by match quality (extracted to candy-fuzzy). Use candy-fuzzy’s <code>SmithWatermanMatcher</code> directly for programmatic scoring: <code>$matcher->score($query, $candidate)</code>.</span></div>
+      <div class="feature"><strong>Fuzzy suggestions</strong><span><code>->withFuzzySuggestions([...])</code> on Input and Select — Smith-Waterman scoring ranks candidates by match quality (extracted to sugar-fuzzy). Use sugar-fuzzy’s <code>SmithWatermanMatcher</code> directly for programmatic scoring: <code>$matcher->score($query, $candidate)</code>.</span></div>
       <div class="feature"><strong>Async suggestions</strong><span><code>->withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)</code> on Input and Select — fetches suggestions asynchronously with a configurable debounce delay. The <code>SuggestionsReadyMsg</code> message is dispatched via the event loop when results are available.</span></div>
       <div class="feature"><strong>MultiSelect vim keys</strong><span><code>j</code> / <code>k</code> navigate, <code>Space</code> toggles selection — mirrors vim-style keybindings.</span></div>
       <div class="feature"><strong>Select enum mode</strong><span><code>Select::withEnum(\BackedEnum::class)</code> coerces the selected value to the given enum type automatically.</span></div>
@@ -104,8 +104,8 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Validator\Email</td><td>validate(mixed)</td><td>Check valid email format</td></tr>
 <tr><td>Spinner\Spinner</td><td>new(?Style)</td><td>Create a spinner with style</td></tr>
 <tr><td>ActionSpinner</td><td>new() / run()</td><td>Fork-isolated spinner action with a bounded runtime ceiling</td></tr>
-<tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int) — delegates to candy-fuzzy</td></tr>
-<tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>match(query, candidates): list&lt;[string, int]&gt;</td><td>Legacy ranking shape — for <code>?MatchResult</code> / <code>matchAll()</code> use candy-fuzzy's <code>SmithWatermanMatcher</code> directly</td></tr>
+<tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int) — delegates to sugar-fuzzy</td></tr>
+<tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>match(query, candidates): list&lt;[string, int]&gt;</td><td>Legacy ranking shape — for <code>?MatchResult</code> / <code>matchAll()</code> use sugar-fuzzy's <code>SmithWatermanMatcher</code> directly</td></tr>
 <tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>
 </table>
   </div>

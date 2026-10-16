@@ -10,10 +10,10 @@ use SugarCraft\TreeList\ScoringProfile;
 use SugarCraft\TreeList\StringItem;
 
 /**
- * Guards the delegation wiring to the candy-fuzzy / candy-async SSOTs.
+ * Guards the delegation wiring to the sugar-fuzzy / candy-async SSOTs.
  *
  * `SugarCraft\TreeList\ScoringProfile` is a class_alias re-export of
- * `SugarCraft\Fuzzy\ScoringProfile` (candy-fuzzy's superset). These assertions
+ * `SugarCraft\Fuzzy\ScoringProfile` (sugar-fuzzy's superset). These assertions
  * fail loudly if the alias file is dropped, the target namespace drifts, or the
  * candy-async dependency (referenced by Model doc-comments) goes missing.
  */
@@ -30,7 +30,7 @@ final class AliasResolutionTest extends TestCase
         $this->assertSame(
             \SugarCraft\Fuzzy\ScoringProfile::class,
             (new \ReflectionClass(ScoringProfile::class))->getName(),
-            'ScoringProfile must resolve to the candy-fuzzy SSOT class.',
+            'ScoringProfile must resolve to the sugar-fuzzy SSOT class.',
         );
     }
 
@@ -62,7 +62,7 @@ final class AliasResolutionTest extends TestCase
 
     public function testLibrarySourceAvoidsDeprecatedScoringProfileDefault(): void
     {
-        // candy-fuzzy deprecated ScoringProfile::default() in favour of
+        // sugar-fuzzy deprecated ScoringProfile::default() in favour of
         // canonical(); this lib's own code must not call the deprecated spelling.
         $offenders = [];
         $files = new \RecursiveIteratorIterator(
@@ -82,7 +82,7 @@ final class AliasResolutionTest extends TestCase
 
     public function testOverCapCandidateScoresOnTheSameScale(): void
     {
-        // candy-fuzzy aligns an over-cap candidate on its prefix rather than
+        // sugar-fuzzy aligns an over-cap candidate on its prefix rather than
         // handing it to a differently-scaled Sahilm fallback, so a very long
         // item ranks consistently against short ones in match().
         $matcher = new FuzzyMatch();

@@ -141,11 +141,11 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
   - TerminalProbe already in candy-mdview dependency tree (via candy-shine -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
 
-- [2026-05-31 | step-33 | coder] candy-kv + candy-ssh-launcher + candy-git: adopt candy-fuzzy:
-  - Added `sugarcraft/candy-fuzzy: dev-master` + path-repo to all three libs' composer.json
+- [2026-05-31 | step-33 | coder] candy-kv + candy-ssh-launcher + candy-git: adopt sugar-fuzzy:
+  - Added `sugarcraft/sugar-fuzzy: dev-master` + path-repo to all three libs' composer.json
   - candy-ssh-launcher: replaced `Picker::filterMatches()` `str_contains`-style filter with `SmithWatermanMatcher::matchAll()` — scored ranking + match-highlight indices wired into renderer via `highlightLine()` (ANSI bold+cyan on matched grapheme clusters)
-  - candy-kv: no interactive filter UI present — only glob-to-SQLLIKE pattern filtering in `Database::buildGlobQuery()`. Added candy-fuzzy dependency as infrastructure for future fuzzy key search (Levenshtein `suggestSimilar()` remains typo-suggestion only).
-  - candy-git: no interactive filter UI present — StashManager has cursor navigation but no type-to-search. Added candy-fuzzy dependency as infrastructure for future fuzzy stash search.
+  - candy-kv: no interactive filter UI present — only glob-to-SQLLIKE pattern filtering in `Database::buildGlobQuery()`. Added sugar-fuzzy dependency as infrastructure for future fuzzy key search (Levenshtein `suggestSimilar()` remains typo-suggestion only).
+  - candy-git: no interactive filter UI present — StashManager has cursor navigation but no type-to-search. Added sugar-fuzzy dependency as infrastructure for future fuzzy stash search.
   - Tests: candy-ssh-launcher 70 pass (180 assertions), candy-kv 66 pass (122 assertions), candy-git 116 pass (333 assertions, 2 skipped)
   - Path-repo closure: clean (55 libs scanned)
   - Branch: ai/filter-consumers
@@ -177,7 +177,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch ai/docs-site merged to master
   - 17 files changed, 47 insertions(+)
   - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
-  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, candy-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
+  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
 

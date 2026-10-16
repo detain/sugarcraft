@@ -140,8 +140,8 @@ flag_management:
     - name: sugar-gallery
       paths: ["sugar-gallery/src/**"]
       carryforward: true
-    - name: candy-fuzzy
-      paths: ["candy-fuzzy/src/**"]
+    - name: sugar-fuzzy
+      paths: ["sugar-fuzzy/src/**"]
       carryforward: true
     - name: candy-flappy
       paths: ["candy-flappy/src/**"]
@@ -433,12 +433,12 @@ component_management:
         - "sugar-gallery/src/**"
       flag_regexes:
         - "^sugar-gallery$"
-    - component_id: candy-fuzzy
-      name: candy-fuzzy
+    - component_id: sugar-fuzzy
+      name: sugar-fuzzy
       paths:
-        - "candy-fuzzy/src/**"
+        - "sugar-fuzzy/src/**"
       flag_regexes:
-        - "^candy-fuzzy$"
+        - "^sugar-fuzzy$"
     - component_id: candy-flappy
       name: candy-flappy
       paths:

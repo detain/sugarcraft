@@ -30,7 +30,7 @@ For each sugarcraft/* package used:
 
 - candy-core, candy-sprinkles, candy-layout, candy-async, candy-ansi, candy-input
 - sugar-table, sugar-toast, sugar-charts, sugar-dash, candy-buffer, sugar-forms
-- candy-fuzzy, candy-pty, sugar-widgets, candy-kit
+- sugar-fuzzy, candy-pty, sugar-widgets, candy-kit
 
 ## Check for Missing
 Run: `grep -h "sugarcraft/" /home/sites/sugarcraft/candy-sql/composer.json | grep -v "sugarcraft/candy-sql"`

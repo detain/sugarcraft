@@ -16,7 +16,7 @@ Address all findings from `findings/sugar-forms.md` through systematic, severity
 |----------|-----------|--------|
 | Critical correctness bugs (pendingAsyncSeq, empty-string hasErrors, revalidate no-op) must be fixed before any performance work | These cause incorrect behavior, not just slow code | `findings/sugar-forms.md:9-26` |
 | Group related fixes into cohesive PRs of 2-4 items | Per AGENTS.md PR size guidance | `AGENTS.md:PR workflow` |
-| Deprecation of FuzzyMatcher should use SmithWatermanMatcher from candy-fuzzy | candy-fuzzy is already a dep; external lib is proper replacement | `findings/sugar-forms.md:10-11` |
+| Deprecation of FuzzyMatcher should use SmithWatermanMatcher from sugar-fuzzy | sugar-fuzzy is already a dep; external lib is proper replacement | `findings/sugar-forms.md:10-11` |
 | Duplicate Field interface files must be consolidated | Field.php (top-level) is canonical; Field/Field.php is unused | `findings/sugar-forms.md:13` |
 | Two-pass validateAll() traversal is correctness + performance | Reduces O(2n) to O(n) | `findings/sugar-forms.md:33` |
 
@@ -27,7 +27,7 @@ Address all findings from `findings/sugar-forms.md` through systematic, severity
 - [ ] **1.1** `Input.php:434-437` — `pendingAsyncSeq` captured by value in closure, never updated on instance → Fix: increment on instance before capturing, or use array-box pattern. Same issue in Select.php:320. → `ref:investigation`
 - [ ] **1.2** `Form.php:646-649` — `hasErrors()` returns true for empty-string errors (`''`) → Fix: check `$e !== ''` in hasErrors or skip empty strings in errors() → `ref:investigation`
 - [ ] **1.3** `Field/Select.php:377` — `revalidate()` is a no-op with no doc comment → Fix: add clarifying doc comment explaining Select has no validators (correct no-op) → `ref:investigation`
-- [ ] **1.4** `Fuzzy/FuzzyMatcher.php:39-49` — byte-oriented `strlen`/`strtolower` for UTF-8 strings → Fix: migrate Input::withFuzzySuggestions to use SmithWatermanMatcher from candy-fuzzy (already a dep) → `ref:investigation`
+- [ ] **1.4** `Fuzzy/FuzzyMatcher.php:39-49` — byte-oriented `strlen`/`strtolower` for UTF-8 strings → Fix: migrate Input::withFuzzySuggestions to use SmithWatermanMatcher from sugar-fuzzy (already a dep) → `ref:investigation`
 - [ ] **1.5** `Field/Select.php:126-139` — workerPool parameter accepted but never used in scheduleAsyncSuggestions → Fix: either implement worker pool offloading or remove dead parameter from both Input and Select → `ref:investigation`
 - [ ] **1.6** `Field/Field.php` — duplicate interface file, never imported by any implementation → Fix: delete Field/Field.php, keep only top-level Field.php (which already has revalidate at line 97) → `ref:investigation`
 - [ ] **1.7** `Confirm.php:59-64` — `withValidator()` bypasses mutate() via clone + direct property write → Fix: add `?Closure $validator` param to mutate() and use `mutate(validator: $fn)` in withValidator() → `ref:investigation`

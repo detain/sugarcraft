@@ -283,7 +283,7 @@ cd candy-scriptui && composer install && vendor/bin/phpunit
 
 ## Shared foundations
 
-The `filter` command uses [candy-fuzzy](../candy-fuzzy/README.md) for
+The `filter` command uses [sugar-fuzzy](../sugar-fuzzy/README.md) for
 fuzzy-matching via `FilterModel` → `SmithWatermanMatcher`. The shell-style
 flag parser (`SubStyleParser`) operates on style-flag strings in
 isolation and has no fuzzy logic.

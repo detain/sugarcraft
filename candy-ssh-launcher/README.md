@@ -143,7 +143,7 @@ $sshEndpoints = Config::importFromSshConfig('/home/user/.ssh/config');
 
 ## Shared foundations
 
-candy-ssh-launcher uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker now surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched characters) for ranked, highlighted filter results.
+candy-ssh-launcher uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker now surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched characters) for ranked, highlighted filter results.
 
 ## Status
 

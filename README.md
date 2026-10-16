@@ -43,7 +43,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-sprinkles.png" width="48" alt=""> | **[CandySprinkles](candy-sprinkles/)** | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor). |
 | <img src="media/icons/candy-testing.png" width="48" alt=""> | **[CandyTesting](candy-testing/)** | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | <img src="media/icons/honey-bounce.png" width="48" alt=""> | **[HoneyBounce](honey-bounce/)** | Damped spring physics + Newtonian projectile simulation. |
-| <img src="media/icons/candy-fuzzy.png" width="48" alt=""> | **[CandyFuzzy](candy-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |
+| <img src="media/icons/sugar-fuzzy.png" width="48" alt=""> | **[CandyFuzzy](sugar-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |
 | <img src="media/icons/sugar-widgets.png" width="48" alt=""> | **[SugarWidgets](sugar-widgets/)** | Components: TextInput, TextArea, ItemList, Table, Tabs, Tree, Scrollbar, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. |
 | <img src="media/icons/candy-vt.png" width="48" alt=""> | **[CandyVt](candy-vt/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. |
 | <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay candy-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. |

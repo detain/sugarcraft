@@ -136,7 +136,7 @@ $msg = Lang::t('git.error', ['stderr' => $stderr]);
 
 ## Shared foundations
 
-candy-git uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
+candy-git uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
 
 ## Test
 

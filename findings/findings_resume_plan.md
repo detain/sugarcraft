@@ -841,25 +841,25 @@ Same branch/PR check as Phase 0/1.
 
 ### Group 3-A (3 agents)
 
-#### 3.1 🟢 candy-fuzzy: matchAllGenerator (Item 3.1)
+#### 3.1 🟢 sugar-fuzzy: matchAllGenerator (Item 3.1)
 
-**Plan:** `findings/plan_candy-fuzzy.md` — Item 3.1
+**Plan:** `findings/plan_sugar-fuzzy.md` — Item 3.1
 **Fix:** Add generator-based `matchAllGenerator()` to `FuzzyMatcher` interface and both implementations
-**Files:** `candy-fuzzy/src/FuzzyMatcher.php`, `candy-fuzzy/src/Matcher/SahilmMatcher.php`, `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php`
+**Files:** `sugar-fuzzy/src/FuzzyMatcher.php`, `sugar-fuzzy/src/Matcher/SahilmMatcher.php`, `sugar-fuzzy/src/Matcher/SmithWatermanMatcher.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.2 🟢 candy-fuzzy: FuzzyMatcherFactory (Item 3.2)
+#### 3.2 🟢 sugar-fuzzy: FuzzyMatcherFactory (Item 3.2)
 
-**Plan:** `findings/plan_candy-fuzzy.md` — Item 3.2
+**Plan:** `findings/plan_sugar-fuzzy.md` — Item 3.2
 **Fix:** Create `src/Matcher/FuzzyMatcherFactory.php` with static `create()` method
-**Files:** `candy-fuzzy/src/Matcher/FuzzyMatcherFactory.php` (new)
+**Files:** `sugar-fuzzy/src/Matcher/FuzzyMatcherFactory.php` (new)
 **Agent:** Same coder agent as 3.1 (grouped — same lib)
 
-#### 3.3 🟢 candy-fuzzy: MatchResultSorter (Item 3.3)
+#### 3.3 🟢 sugar-fuzzy: MatchResultSorter (Item 3.3)
 
-**Plan:** `findings/plan_candy-fuzzy.md` — Item 3.3
+**Plan:** `findings/plan_sugar-fuzzy.md` — Item 3.3
 **Fix:** Create `src/MatchResultSorter.php`; update both matchers to use it (remove duplicated sorting logic)
-**Files:** `candy-fuzzy/src/MatchResultSorter.php` (new)
+**Files:** `sugar-fuzzy/src/MatchResultSorter.php` (new)
 **Agent:** Same coder agent as 3.1 (grouped — same lib)
 
 ---
@@ -1278,9 +1278,8 @@ Same verification as previous phases.
 | `plan_candy-ansi.md` | 3.5, 3.6, 4.1-4.3 | MAX_STRING_BUFFER constant, 65535 magic number, test coverage |
 | `plan_candy-buffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
 | `plan_candy-codeshot.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
-| `plan_candy-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
-| `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests |
-| `plan_candy-kit.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
+| `plan_sugar-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
+| `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests || `plan_candy-kit.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
 | `plan_sugar-treelist.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
 | `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
 | `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |

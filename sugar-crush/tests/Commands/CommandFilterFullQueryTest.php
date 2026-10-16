@@ -11,8 +11,8 @@ use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
- * The "/" popup's filter on candy-fuzzy's `requireFullQuery` mode, plus its
- * per-(prefix, names) memo (crush_libs candy-fuzzy #2/#3).
+ * The "/" popup's filter on sugar-fuzzy's `requireFullQuery` mode, plus its
+ * per-(prefix, names) memo (crush_libs sugar-fuzzy #2/#3).
  *
  * The hand-rolled coverage check it replaced compared the matched-index count
  * of plain mode's best LOCAL alignment with the prefix length, so an in-order

@@ -90,7 +90,7 @@ class Picker
                         $before = $this->filter;
                         // Codepoint-granular trim. readKey() delivers whole
                         // UTF-8 codepoints, and the matcher/highlighter index
-                        // the filter by codepoint too (candy-fuzzy CharFold,
+                        // the filter by codepoint too (sugar-fuzzy CharFold,
                         // see highlightLine()), so the delete unit must be the
                         // codepoint. A byte-wise substr here stranded dangling
                         // continuation bytes mid-character and echoed invalid
@@ -228,7 +228,7 @@ class Picker
      *
      * The $line argument is the sanitized display string; $result contains
      * matchedIndices computed against that same string in filterMatches().
-     * We walk CODEPOINTS — the same index domain candy-fuzzy scores in
+     * We walk CODEPOINTS — the same index domain sugar-fuzzy scores in
      * (CharFold::foldSplit is 1:1 with original codepoints, see
      * SmithWatermanMatcher), so matched indices land on the characters the
      * matcher actually aligned. A grapheme walk here (the old /\X/u) would

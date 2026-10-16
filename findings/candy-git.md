@@ -37,20 +37,20 @@ Consider introducing an async git driver interface (e.g., `AsyncGitDriver`) that
 
 ---
 
-### 🔴 C-2: Missing candy-fuzzy path repository for transitive dependency
+### 🔴 C-2: Missing sugar-fuzzy path repository for transitive dependency
 
 **Location:** `composer.json:94-100`
 
 **Description:**
-The `composer.json` lists `sugarcraft/candy-fuzzy: dev-master` as a dependency (required by `StashManager::fuzzyFilter()` at line 98 of `StashManager.php`), and includes the path repository for candy-fuzzy itself. However, the CALIBER_LEARNINGS.md notes that path-repo closure must propagate to the FULL transitive dependency graph. The candy-fuzzy library may itself have path repository requirements that are not fully wired in candy-git's `repositories[]` array, which would cause `composer install` to fail or pull the package from packagist instead of the local path.
+The `composer.json` lists `sugarcraft/sugar-fuzzy: dev-master` as a dependency (required by `StashManager::fuzzyFilter()` at line 98 of `StashManager.php`), and includes the path repository for sugar-fuzzy itself. However, the CALIBER_LEARNINGS.md notes that path-repo closure must propagate to the FULL transitive dependency graph. The sugar-fuzzy library may itself have path repository requirements that are not fully wired in candy-git's `repositories[]` array, which would cause `composer install` to fail or pull the package from packagist instead of the local path.
 
 **Impact:**
 
-- `composer install` may fail if candy-fuzzy is not available as a local path
-- If candy-fuzzy has its own path dependencies, those may not resolve correctly
+- `composer install` may fail if sugar-fuzzy is not available as a local path
+- If sugar-fuzzy has its own path dependencies, those may not resolve correctly
 
 **Recommendation:**
-Run `composer validate --no-check-all` (without `--strict`, as noted in AGENTS.md) and verify candy-fuzzy resolves from the local path repository. If candy-fuzzy has its own path deps, propagate those repositories into candy-git's `repositories[]` array following the pattern documented in `sugar-charts/composer.json`.
+Run `composer validate --no-check-all` (without `--strict`, as noted in AGENTS.md) and verify sugar-fuzzy resolves from the local path repository. If sugar-fuzzy has its own path deps, propagate those repositories into candy-git's `repositories[]` array following the pattern documented in `sugar-charts/composer.json`.
 
 **Confidence:** 85%
 
@@ -241,7 +241,7 @@ The inline multi-character text collection pattern (commit message, branch name,
 
 | Severity | Count | Issues |
 |----------|-------|--------|
-| 🔴 Critical | 2 | C-1 (blocking exec), C-2 (candy-fuzzy path closure) |
+| 🔴 Critical | 2 | C-1 (blocking exec), C-2 (sugar-fuzzy path closure) |
 | 🟠 Major | 2 | M-1 (duplicate removeDir), M-2 (interactive rebase no execution) |
 | 🟡 Minor | 4 | N-1 (no per-lib CI), N-2 (no per-lib codecov), N-3 (DiffViewer edge case), N-4 (HistoryManager refactor) |
 | 🟢 Positive | 6 | O-1 through O-6 |
@@ -250,7 +250,7 @@ The inline multi-character text collection pattern (commit message, branch name,
 
 ## Recommended Fix Order
 
-1. **C-2** (candy-fuzzy path closure) — unblocks `composer install`
+1. **C-2** (sugar-fuzzy path closure) — unblocks `composer install`
 2. **M-1** (duplicate removeDir) — trivial extraction to shared trait
 3. **N-1, N-2** (missing CI/codecov) — infrastructure, low risk
 4. **C-1** (blocking exec) — significant architectural decision needed (async vs. documented limitation)

@@ -86,14 +86,14 @@ Duplicate documentation creates maintenance confusion and wastes lines. The docb
 **Investigation notes:**
 ```php
 /**
- * Rank items by descending candy-fuzzy score for a non-empty filter text,
+ * Rank items by descending sugar-fuzzy score for a non-empty filter text,
  * keeping only positive-scoring items that also pass the filterFn predicate.
  * Ties break on the items' original order so ranking is stable.
  *
  * @return list<Item>
  */
 /**
- * Rank items by descending candy-fuzzy score for a non-empty filter text,  <-- DUPLICATE
+ * Rank items by descending sugar-fuzzy score for a non-empty filter text,  <-- DUPLICATE
  * keeping only positive-scoring items that also pass the filterFn predicate.
  * Ties break on the items' original order so ranking is stable.
  *

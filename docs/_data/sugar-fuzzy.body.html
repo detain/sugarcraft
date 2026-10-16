@@ -1,7 +1,7 @@
 <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>which characters matched and their score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from sugar-forms; back-compat shims left in sugar-forms and sugar-treelist for migration.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-fuzzy:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-fuzzy:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Fuzzy\FuzzyMatcher;
@@ -64,9 +64,9 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-fuzzy">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-fuzzy/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-fuzzy/tree/main/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-fuzzy">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-fuzzy/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-fuzzy/tree/main/tests">Test suite</a></li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
