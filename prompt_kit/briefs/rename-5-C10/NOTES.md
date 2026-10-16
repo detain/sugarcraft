@@ -3,7 +3,7 @@
 <!-- @rename-keep: this file is the lane work-record; old-name mentions below are AS WRITTEN history. -->
 
 ## Verdict
-(IN PROGRESS)
+DONE — rename executed, gated on committed clean tree, branch rename/c10 pushed. R8/R9 (packagist create + re-run) OWED BY WELD per lane law.
 
 ## Entry facts (verified)
 
@@ -28,14 +28,18 @@
 ## Steps
 
 - R0 tag-prep: baseline :37/:79, CONTEXT.md 13 untagged history lines (590,879,927,941,942,943,961,987,988,1018,1019,1354,1356), rename-2.2:34,85,88 + rename-2.3:26 + rename-4-B4:16 tagged. Baseline gate figures measured in-tree pre-R3.
-- R1 dry-run:
-- R2 remote rename:
-- R3 tool run (EXACTLY ONCE):
-- R4 manual: formerly-notice, keywords+huh, gen-docs comment fix, followups entry, glue sweeps.
-- R5 wiring: root composer update sugarcraft/sugar-forms --no-install + refresh-deps linked (forms+consumers) + gen-docs + --check + gen-ansi --check.
-- R6 gates: residue 0 BEFORE staging; lib suite EXACT; consumers full-suite (timeout 600); crush sharded K=8 CONSERVATION; tools/tests 426T/1484A; path-repos + child-lifetimes rc0.
-- R7 commit + renames.json (status renamed + fold-line new bump) + push rename/c10 ONLY.
+- R1 dry-run: RC0, 431-line plan — 255 content files, 173 path renames; totals R2=46 R3=2102 R4=1 R6=1, R1 ABSENT (same-ns verified: rule generated only when ns_old!=ns_new, rename-lib.php:529). Tool handled same-ns cleanly, no refusal, no --no-move needed. <!-- @rename-keep -->
+- R2 remote rename: scripts/rename-remote.sh candy-forms sugar-forms -> record name=sugar-forms, 301 redirect live. <!-- @rename-keep -->
+- R3 tool run: `timeout 600 php tools/rename-lib.php --old=candy-forms` RC0 once; totals byte-match dry-run; 45 changed .php php -l clean; Lang.php namespace byte-identical. REDO NOTE: first R3+R4+R5 pass was accidentally clobbered by a probe `git checkout rename/c10 -- .` mid-diagnostic (branch tip had only R0); recovered via `git reset --hard <R0>` + deterministic redo — R3 output byte-identical (proven via sugar-crush dir cmp vs backup), R4 re-applied 1:1. Clobber left zero trace in final commit. <!-- @rename-keep -->
+- R4 manual (redo): formerly-notice under `# SugarForms` (no ns line — ns unchanged); composer keywords += huh; gen-docs.php redirect_stubs docblock falsified sentence fixed (candy-mouse-only example); followups C10 section (art wordmarks, desc-vs-art drift, png bytes, .vhs gifs, sugarcraft banners) every old-token line tagged; glue sweeps: `_candy-forms`/`plan_candy-forms`/`sugarcraft_candy-forms` live pointers rewritten (Select.php:152, Input.php:332, repo_map update_* x6, findings_resume_plan x2, findings/plan.md x1, worklog x1, backlog x2) + backlog CANDY-FORMS caps heads x2 tagged; renames.json :30 status=renamed + :61 fold-entry new bumped PRE-gen-docs (redirect chain must follow executed entries). <!-- @rename-keep -->
+- R5 wiring: root composer update sugarcraft/sugar-forms --no-install RC0 (sugar-forms locked 4b2256b, sibling dev-master re-resolves benign); gen-docs + --check OK (79 files, 18 stubs — candy-forms.html AND sugar-prompt.html both redirect sugar-forms.html); gen-ansi-readme + --check OK (3595 pieces); refresh-deps --mode=linked all 7 libs, dangling candy-forms vendor links purged, escaping=0. <!-- @rename-keep -->
+- R6 gates: residue 0 (tool; plus manual case-insensitive audit — tool blind to glued/caps when ns unchanged, see Gates log). All suites EXACT vs pre-R3 base: sugar-forms 2343T/4564A, sugar-bits 570/1246, sugar-readline 336/1076, candy-sql 1580/11900, candy-scriptui 334/694, tools/tests 426/1484. Crush K=8 on COMMITTED CLEAN tree: T=22564 CONSERVED EXACT, F=1 == known pre-existing base-red (ChildStderrCapture ReelDependencyTest:49), S=2, A +427 tree-scan wobble. Five-guard filter 130T/13567A green (no staleness — lane adds zero tests). path-repos + child-lifetimes rc0.
+- R7 commit `sugar-forms: rename from candy-forms` (author/committer detain verified, no Co-Authored-By, 598 files); renames.json edits rode in-commit; NOTES record second commit; push rename/c10 ONLY. <!-- @rename-keep -->
 
 ## Gates log
 
-(pending)
+- Base (pre-R3, clean tree): all six lib/tool figures + crush K=8 base sums 22564T/423770A/1F/0E/2S (1F known base-red family, never fix).
+- CRUSH TRIO FINDING (save future rename lanes): first post-R3 runs showed EngineBackend maxSteps / TaskGrantMemo / StepPressureCheck reds. ROOT CAUSE = NOT the rename: `EngineBackend` injects a `<turn-context>` UserMessage embedding `git status` output; an uncommitted 570-entry rename diff bloats it ~+16KB (21113 vs 4982 bytes measured via temporary ContextPressure instrumentation, fully restored after) and trips the context-pressure wrap-up guards. Executable code proven byte-identical base-vs-lane (all crush + sibling diffs comment-only). RESOLUTION: commit EARLY, run the crush gate on the clean committed tree — trio green, full K=8 conservation exact. This is also the standing defense of the commit-before-gate cadence.
+- Residue-tool blindness (same-ns lanes): check-rename-residue shares rename-lib rules; with ns_old==ns_new no R1 rule exists, `_candy-forms` glued fails the lookbehind, ALL-CAPS invisible to case-sensitive rules — 129 untagged case-insensitive hits existed under a 0-findings report. Manual B5/B7 sweep mandatory (exempt zones: docs/old/, plan_rename.md, composer.lock, renames.json old-field, .pyc). <!-- @rename-keep -->
+- Clobber incident: mid-diagnostic `git checkout <tip> -- .` in an all-uncommitted worktree reverted R3; full deterministic redo proven byte-equal. Law: stage/commit at each procedure step end, never probe against uncommitted WIP.
+
