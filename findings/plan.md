@@ -21,7 +21,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
 | honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-mold | `ref:honey-bounce-audit` |
 | candy-git path-repo closure check deferred | candy-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
-| sugar-tick plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:sugar-tick-audit` |
+| candy-codetime plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:candy-codetime-audit` |
 
 ## Dependency Graph (Summary)
 
@@ -257,7 +257,7 @@ The following plans have findings marked as no-action — only documentation/cla
 | candy-core | Renderer token cache growth | Monitor for memory issues; add LRU cap if needed |
 | candy-core | reconcileWantedSubscriptions() double-call | Pre-loop call handles edge cases; removing could break timing |
 | candy-vt | `mutate()` helper extraction (Phase 9.1) | Current explicit pattern is documented as intentional |
-| sugar-tick | Entire plan | False positive — no `src/Tick.php`; not a TUI component |
+| candy-codetime | Entire plan | False positive — no `src/Tick.php`; not a TUI component |
 
 ## Critical Context for All Subagents
 
@@ -292,4 +292,4 @@ All tests must pass with `failOnWarning="true"` before committing.
 - Groups are ordered by dependency criticality: foundation → consumers → leaf → DRY extraction
 - Within each group, libs are ordered by finding count (most findings first within group)
 - Each subagent should spawn a sub-subagent for actual code changes, then run review/fix cycles
-- `findings/plan_sugar-tick.md` is a false positive — the plan is not for a TUI component and should be skipped
+- `findings/plan_candy-codetime.md` is a false positive — the plan is not for a TUI component and should be skipped

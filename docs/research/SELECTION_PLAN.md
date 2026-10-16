@@ -471,7 +471,7 @@ All 45 research documents available at:
 | candy-git | 23KB |
 | sugar-stickers | 14KB |
 | sugar-table | 19KB |
-| sugar-tick | 19KB |
+| candy-codetime | 19KB |
 | sugar-toast | 20KB |
 | sugar-veil | 21KB |
 | sugar-wishlist | 16KB |

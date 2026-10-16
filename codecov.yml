@@ -116,8 +116,8 @@ flag_management:
     - name: candy-sql
       paths: ["candy-sql/src/**"]
       carryforward: true
-    - name: sugar-tick
-      paths: ["sugar-tick/src/**"]
+    - name: candy-codetime
+      paths: ["candy-codetime/src/**"]
       carryforward: true
     - name: candy-minesweeper
       paths: ["candy-minesweeper/src/**"]
@@ -385,12 +385,12 @@ component_management:
         - "candy-sql/src/**"
       flag_regexes:
         - "^candy-sql$"
-    - component_id: sugar-tick
-      name: sugar-tick
+    - component_id: candy-codetime
+      name: candy-codetime
       paths:
-        - "sugar-tick/src/**"
+        - "candy-codetime/src/**"
       flag_regexes:
-        - "^sugar-tick$"
+        - "^candy-codetime$"
     - component_id: candy-minesweeper
       name: candy-minesweeper
       paths:

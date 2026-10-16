@@ -17,7 +17,7 @@ LIBS=(
     candy-shine candy-kit candy-freeze candy-mdview candy-ansi-inspect
     candy-wish sugar-wishlist candy-metrics
     candy-mold candy-tetris super-candy sugar-crush
-    candy-git candy-sql sugar-tick
+    candy-git candy-sql candy-codetime
     candy-minesweeper candy-flip candy-top candy-flappy
 )
 

@@ -117,7 +117,7 @@ public function withSeriesColorFn(?\Closure $fn): self;
 No `withSeriesColors` map is added — that path already exists via `legendItems()` (Audit-F11). Routing rule:
 stroke/point paint resolves `seriesColor(dataset, x, value)` → closure → existing per-series
 legend/DATASET_COLORS resolution (byte-identical default when the closure is unset — regression guarantee for
-existing consumers sugar-query, sugar-tick). **Tests:** snapshot byte — closure returns red for value>50 / blue
+existing consumers sugar-query, sugar-tick). **Tests:** snapshot byte — closure returns red for value>50 / blue <!-- @rename-keep -->
 below, assert raw SGR runs differ across the high/low segments of one series (per-point granularity, not
 per-series); coercion — non-callable throws at the door (`Finite`-style fail-fast per charting §1.2);
 immutability pin on `with*`.
@@ -130,7 +130,7 @@ directly on `BarChart.php`); default unchanged. Snapshot + coercion tests as abo
 Files touched: `LineChart.php`, `BarChart.php`, tests only. Est. ~120 LOC src + ~200 LOC tests.
 **Regression risk:** sugar-query (uses charts LineChart + the `MultiSeriesCell` workaround — do NOT remove the
 workaround in this lane; its docblock rationale is half-superseded by F11, retirement is a follow-up decision,
-§8-4/§8-8), sugar-tick, candy-query dashboard. Run at lane
+§8-4/§8-8), sugar-tick, candy-query dashboard. Run at lane <!-- @rename-keep -->
 end: full `sugar-charts` suite, then `candy-query` suite (its 1483T/4203A era figure, tea-era record) to prove
 zero behavior drift on default path.
 
@@ -549,7 +549,7 @@ Remaining per AGENTS.md "Adding a lib — checklist":
   via `SugarCraft\Vt\Terminal`, behavior `update()`→[Model,?Cmd], coercion clamp edges; stream-write slice idiom
   per `candy-core/tests/RendererTest.php`).
 - **Every lane end (Phase 2):** that lib's FULL suite, plus every listed consumer suite in the same session
-  (L1/L2/L3/L4 → sugar-charts + sugar-dash + candy-query filter + sugar-tick + sugar-prompt; L5 → candy-sprinkles
+  (L1/L2/L3/L4 → sugar-charts + sugar-dash + candy-query filter + sugar-tick + sugar-prompt; L5 → candy-sprinkles <!-- @rename-keep -->
   + sugar-boxer; L6/L7/L8 → dash/bits + consumers named).
 - **Review gate:** independent reviewer per commit → fix → re-review until APPROVE 0C/0M, then commit direct to
   master (campaign cadence: small review-gated steps; author Joe Huss <[EMAIL]> via split-var env, no

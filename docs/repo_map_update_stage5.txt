@@ -1,7 +1,7 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
 Sourced from 11 update docs: candy-kit, candy-flip, candy-mail, candy-sql,
-candy-minesweeper, candy-tetris, candy-mold, candy-flappy, super-candy, sugar-tick.
+candy-minesweeper, candy-tetris, candy-mold, candy-flappy, super-candy, candy-codetime.
 
 ---
 
@@ -13,13 +13,13 @@ no `Program::withInput()/withOutput()`, no snapshot testing utilities. This is
 not a per-package gap — it is an ecosystem gap. bubble-tea issue #1654 (6+
 years old) confirms the Go world never solved this. SugarCraft can lead here.
 Affected: candy-mold (critical), candy-sql, candy-minesweeper, candy-tetris,
-super-candy, sugar-tick.
+super-candy, candy-codetime.
 
 ### B. Concurrent Write Safety — Data Corruption Risk
-sugar-tick's JSONL append is unsafe across multiple editors. candy-flip's
+candy-codetime's JSONL append is unsafe across multiple editors. candy-flip's
 DISPOSAL_PREVIOUS mode can race in the same way. Any package doing file
 append without flock() is one `Ctrl+C` away from corrupt data.
-Affected: sugar-tick (critical, P0), candy-flip (DISPOSAL_PREVIOUS canvas race).
+Affected: candy-codetime (critical, P0), candy-flip (DISPOSAL_PREVIOUS canvas race).
 
 ### C. Progress Feedback Missing From Async Operations
 super-candy's AsyncOps fires copy/move without any progress callback — the
@@ -75,7 +75,7 @@ candy-sprinkles-style object reference management.
 ## 4. Top 2 Immediate-Win Roadmap Items
 
 ### A. File locking on append — 1 line, P0
-Add `flock()` to `Store::append()` in sugar-tick. Same pattern applies to
+Add `flock()` to `Store::append()` in candy-codetime. Same pattern applies to
 any JSONL/append-write package. Eliminates the critical concurrent-write
 corruption risk. Complexity: Low. Impact: Critical (data safety).
 

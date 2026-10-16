@@ -1,4 +1,4 @@
-# Step 35 — sugar-tick + candy-mail + candy-git-server adopt candy-async
+# Step 35 — candy-codetime + candy-mail + candy-git-server adopt candy-async
 
 **Branch:** `ai/async-adopters`
 **Depends on:** step-08 (candy-async), step-30 (audit)
@@ -6,14 +6,14 @@
 
 ## Goal
 
-Three I/O-heavy libs adopt candy-async: sugar-tick (JSONL append loop), candy-mail (message posting), candy-git-server (server). Each gains cancellation, retry, and timeout semantics for free.
+Three I/O-heavy libs adopt candy-async: candy-codetime (JSONL append loop), candy-mail (message posting), candy-git-server (server). Each gains cancellation, retry, and timeout semantics for free.
 
-Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of this plan's scope (deferred follow-up); we don't touch it here. We only add async-side improvements.
+Reference: step-30 audit. Note: candy-codetime's `flock()` issue (§157) is OUT of this plan's scope (deferred follow-up); we don't touch it here. We only add async-side improvements.
 
 ## Files expected to be modified
 
 - 3 composer.json — add `sugarcraft/candy-async` via `path-repo-closure`.
-- sugar-tick async writer (if any) → CancellationToken + retry.
+- candy-codetime async writer (if any) → CancellationToken + retry.
 - candy-mail send queue → AsyncOps::withTimeout.
 - candy-git-server request handlers → Subscriptions for graceful shutdown.
 
@@ -28,7 +28,7 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 
 1. Step-30 audit per lib.
 2. **path-repo closure**.
-3. sugar-tick: wrap any background work in CancellationToken.
+3. candy-codetime: wrap any background work in CancellationToken.
 4. candy-mail: AsyncOps::withTimeout on send.
 5. candy-git-server: Subscriptions for connection cleanup.
 6. Run phpunit + check-path-repos.
@@ -44,13 +44,13 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 
 ## Ship brief
 
-- **PR title**: `sugar-tick + candy-mail + candy-git-server: adopt candy-async`
+- **PR title**: `candy-codetime + candy-mail + candy-git-server: adopt candy-async`
 - **PR body**:
   ```
   ## Summary
   - Three I/O-heavy libs adopt candy-async.
   - Cancellation, retry, timeout patterns standardised.
-  - sugar-tick's flock() issue NOT addressed in this plan (deferred follow-up).
+  - candy-codetime's flock() issue NOT addressed in this plan (deferred follow-up).
 
   ## Test plan
   - [x] vendor/bin/phpunit in 3 libs (≥95% each)
@@ -59,4 +59,4 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 
   Refs: docs/repo_map_step_35.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `sugar-tick + candy-mail + candy-git-server: adopt candy-async`.
+- Commit subject: `candy-codetime + candy-mail + candy-git-server: adopt candy-async`.

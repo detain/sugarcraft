@@ -70,3 +70,7 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   render the pre-rename `SUGARPOST` wordmark. Content is rename-excluded (.ansi); re-generate via the ansi toolchain when triaged.
 - `candy-mail/.vhs/showcase.gif` — demo GIF renamed with the dir; its frames still show the pre-rename wordmark. CI
   `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.
+- `candy-codetime/.vhs/dashboard.gif` — demo GIF renamed with the dir; its frames still show the pre-rename `SugarTick` wordmark // @rename-keep
+  and `sugar-tick` titles. CI `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch. // @rename-keep
+- `candy-codetime/README.md` push-demo image line references `.vhs/push.gif`, which was never committed (dangling reference pre-dates // @rename-keep
+  the rename — verified absent at base tree; recorded honestly, not B10-caused). (B10 lane note, 2026-10-16.)

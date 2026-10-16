@@ -187,14 +187,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 9: candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil
+### Group 9: candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-ansi-inspect | 147 ✓ | APPROVE | 0 | 0 | 1 | 0 |
 | sugar-stickers | 60 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
 | sugar-table | 129 ✓ | APPROVE | 0 | 0 | 4 | 0 |
-| sugar-tick | 106 ✓ | REQUEST_CHANGES | 0 | 3 | 3 | 0 |
+| candy-codetime | 106 ✓ | REQUEST_CHANGES | 0 | 3 | 3 | 0 |
 | sugar-veil | 97 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 
 **candy-ansi-inspect** — ANSI inspector. Clean, 147 tests.
@@ -203,7 +203,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **sugar-table** — Interactive table. Issues: `filteredSortedRows()` public method name suggests internal state; `pageSize` defaults to 0 (no pagination) but docs don't make this clear; missing README.
 
-**sugar-tick** — Time tracker. Issues: `SqliteBackend` has no `close()` method (resource leak); `ExporterInterface` API mismatch (interface defines `headers()`/`rows()` but actual exporters have `export()`); `Milestone` uses mutable properties while `Heartbeat` uses readonly (inconsistency); `saveHighScore()` returns `true` even when `file_put_contents()` fails.
+**candy-codetime** — Time tracker. Issues: `SqliteBackend` has no `close()` method (resource leak); `ExporterInterface` API mismatch (interface defines `headers()`/`rows()` but actual exporters have `export()`); `Milestone` uses mutable properties while `Heartbeat` uses readonly (inconsistency); `saveHighScore()` returns `true` even when `file_put_contents()` fails.
 
 **sugar-veil** — Overlay compositor. Issues: `Scale::apply()` uses `max(1, ...)` so progress 0 always shows 1 line; `getManager()` deprecated but still present; `VeilStack::compositeAll()` ignores per-veil position (always uses TOP/LEFT).
 
@@ -264,7 +264,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder |
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
-| **Inconsistent mutability** | sugar-tick/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
+| **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
 | **Path-repo closure gaps** | candy-mdview, sugar-stickers, sugar-wishlist | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
 ### 🟡 Cross-Package Inconsistencies
@@ -273,7 +273,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 2. **Lang facade pattern**: 33 copies of nearly identical `Lang extends Core\I18n\Lang` with only NAMESPACE/DIR constants differing
 3. **`with*()` method naming**: Some use `with*()`, some use `copy()`, some use `mutate()`
 4. **Factory naming**: Most follow `::new()` + bare-named factories, but not enforced
-5. **Package type**: Some are `"type": "library"`, some `"type": "project"` (sugar-tick, candy-mold, candy-git)
+5. **Package type**: Some are `"type": "library"`, some `"type": "project"` (candy-codetime, candy-mold, candy-git)
 6. **Packagist namespace**: `sugarcore/` vs `sugarcraft/` inconsistency
 7. **`mutate()` helper signature**: Named-param vs positional vs named+sentinel bools — 3 different shapes
 8. **CALIBER_LEARNINGS.md presence**: sugar-datepicker missing; others have it
@@ -398,7 +398,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ### ❌ What's Broken
 
-1. **Immutability claims vs reality** — candy-lister/Model, sugar-tick/Milestone mutate
+1. **Immutability claims vs reality** — candy-lister/Model, candy-codetime/Milestone mutate
 2. **Facade packages** — candy-forms has no real code
 3. **Stub features** — sugar-readline/Highlight, sugar-toast/animation do nothing
 4. **Path-repo dependency graph** — still has gaps (despite fixes in PR #880)
@@ -449,8 +449,8 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 16. **[EXTRACT]** Create `SugarCraft\Core\Tests\TestCase` base + `StreamHelper` trait
 17. **[DOCS]** Add CALIBER_LEARNINGS.md to sugar-datepicker
 18. **[FIX]** candy-kv: Replace reflection in YamlImporter with public method
-19. **[FIX]** sugar-tick: Add `close()` to SqliteBackend
-20. **[FIX]** sugar-tick: Fix ExporterInterface mismatch
+19. **[FIX]** candy-codetime: Add `close()` to SqliteBackend
+20. **[FIX]** candy-codetime: Fix ExporterInterface mismatch
 
 ### Long Term (Post 1.0)
 
@@ -483,7 +483,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 4. **sugar-readline**: Make `Highlight::highlight()` throw `BadMethodCallException`
 5. **candy-flappy**: Make `saveHighScore()` return `false` when `file_put_contents()` fails
 6. **candy-tetris**: Add `escapeshellarg()` to `Repo::branches()` path
-7. **sugar-tick**: Add `close()` method to SqliteBackend (even if a no-op)
+7. **candy-codetime**: Add `close()` method to SqliteBackend (even if a no-op)
 8. **sugar-datepicker**: Add `CALIBER_LEARNINGS.md` (copy from another package)
 
 ---
@@ -570,7 +570,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
-| 9 | candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
+| 9 | candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 

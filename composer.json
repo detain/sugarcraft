@@ -95,7 +95,7 @@
         "sugarcraft/candy-git": "dev-master",
         "sugarcraft/sugar-stickers": "dev-master",
         "sugarcraft/sugar-table": "dev-master",
-        "sugarcraft/sugar-tick": "dev-master",
+        "sugarcraft/candy-codetime": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
         "sugarcraft/sugar-veil": "dev-master",
         "sugarcraft/sugar-wishlist": "dev-master",
@@ -496,7 +496,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-tick",
+            "url": "candy-codetime",
             "options": {
                 "symlink": true
             }

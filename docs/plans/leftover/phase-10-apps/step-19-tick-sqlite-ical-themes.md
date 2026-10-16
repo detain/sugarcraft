@@ -1,6 +1,6 @@
-# Step 10.19 — sugar-tick SQLite backend + milestones + iCal export + auto-backups + theme system
+# Step 10.19 — candy-codetime SQLite backend + milestones + iCal export + auto-backups + theme system
 
-**Source:** `leftover_updates_later.md` sugar-tick MEDIUM
+**Source:** `leftover_updates_later.md` candy-codetime MEDIUM
 **Branch:** `ai/tick-sqlite-ical-themes`
 
 ## Deliverable
@@ -13,7 +13,7 @@
 
 ## Files
 
-**Create:** `sugar-tick/src/Storage/SqliteBackend.php`,
+**Create:** `candy-codetime/src/Storage/SqliteBackend.php`,
 `Milestone.php`, `Export/IcalExporter.php`, `Backup/AutoBackup.php`.
 
 **Modify:** add candy-sprinkles dep.
@@ -24,7 +24,7 @@
 
 ## Acceptance
 
-- `cd sugar-tick && vendor/bin/phpunit` green.
+- `cd candy-codetime && vendor/bin/phpunit` green.
 
 ---
 

@@ -1,0 +1,54 @@
+{
+    "name": "sugarcraft/candy-codetime",
+    "description": "Privacy-first coding-time tracker \u2014 port of Rtarun3606k/TakaTime on the SugarCraft stack.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "cli",
+        "time-tracking",
+        "wakatime",
+        "takatime",
+        "codetime",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-codetime.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-codetime/issues",
+        "source": "https://github.com/sugarcraft/candy-codetime",
+        "docs": "https://sugarcraft.github.io/lib/candy-codetime.html"
+    },
+    "bin": [
+        "bin/candy-codetime"
+    ],
+    "require": {
+        "php": ">=8.3",
+        "ext-sqlite3": "*",
+        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-charts": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\CodeTime\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\CodeTime\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

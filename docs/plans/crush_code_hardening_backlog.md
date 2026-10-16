@@ -12482,7 +12482,7 @@ individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled bef
 | sugar-dash | 5853 / 9154 | 0 |
 | candy-ansi-inspect | 205 / 659 | 0 |
 | candy-kv | 206 / 427 | 0 |
-| sugar-tick | 144 / 349 | 0 |
+| candy-codetime | 144 / 349 | 0 |
 | candy-git | 218 / 606 | 0 |
 
 Every one rc 0. **The six reporting PHPUnit's `OK (…)` form had ZERO skips**, which is the part that makes
@@ -20684,7 +20684,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 ### E719 [CLOSED] — candy-kv has never been audited: the ONLY lib with no findings file and no plan — zero mentions anywhere
 
-**What:** phase-4 audit-material inventory: every sibling lib carries a `findings/<slug>.md` audit (120 files under `findings/`) EXCEPT `candy-kv` — no findings file, no plan file, ZERO mentions in `findings/` (grep-verified at mint time). The 9-file lib never got the 2026-06-30 P0/P1/P2 pass. Its raw sweep hits are benign (7 shell-family matches are all PDO::exec SQL — the candy-sql/sugar-tick false-positive class). **Acceptance:** `findings/candy-kv.md` + `findings/plan_sugar-skate.md` minted in the 2026-06-30 house format (P0/P1/P2 severity table + remediation plan), index rows in `findings/README.md` / `findings/plan.md` IN-STEP — AUDIT ONLY, zero fixes in this row. **Conf:** MED.
+**What:** phase-4 audit-material inventory: every sibling lib carries a `findings/<slug>.md` audit (120 files under `findings/`) EXCEPT `candy-kv` — no findings file, no plan file, ZERO mentions in `findings/` (grep-verified at mint time). The 9-file lib never got the 2026-06-30 P0/P1/P2 pass. Its raw sweep hits are benign (7 shell-family matches are all PDO::exec SQL — the candy-sql/candy-codetime false-positive class). **Acceptance:** `findings/candy-kv.md` + `findings/plan_sugar-skate.md` minted in the 2026-06-30 house format (P0/P1/P2 severity table + remediation plan), index rows in `findings/README.md` / `findings/plan.md` IN-STEP — AUDIT ONLY, zero fixes in this row. **Conf:** MED.
 
 
 
