@@ -56,7 +56,7 @@ enum Pane: string
     /**
      * The tab cycle as a {@see FocusRing}.
      *
-     * `candy-focus` exists for exactly this and is dependency-free, so the
+     * `sugar-focus` exists for exactly this and is dependency-free, so the
      * traversal — including the wrap at both ends, which is the part a
      * hand-rolled `match` chain gets subtly wrong — is the library's problem
      * rather than this enum's. Built per call because a PHP enum may not hold

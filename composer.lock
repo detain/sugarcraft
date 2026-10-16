@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9c4ccaeaa31c6a05ce073734e28972b8",
+    "content-hash": "6b6302c222953adc05e3eb3fdcb8cf06",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3998,61 +3998,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-focus",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-focus",
-                "reference": "1281c1329a24220103ea7674d80cb1acfb08fa7e"
-            },
-            "require": {
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Focus\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Focus\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Focus-ring state machine — an ordered set of focusable regions with wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Dependency-free.",
-            "homepage": "https://github.com/sugarcraft/candy-focus",
-            "keywords": [
-                "focus",
-                "keyboard",
-                "navigation",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-focus/issues",
-                "source": "https://github.com/sugarcraft/candy-focus",
-                "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-forms",
             "version": "dev-master",
             "dist": {
@@ -6409,7 +6354,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "d61ae27b6c2dc76104b5c10ce73497c09cc123f3"
+                "reference": "907e0ea53835995564b3cbf09729b4025e46ab32"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -6426,7 +6371,6 @@
                 "react/promise": "^3.3",
                 "react/socket": "^1.16",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-focus": "@dev",
                 "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-fuzzy": "dev-master",
                 "sugarcraft/candy-kit": "@dev",
@@ -6437,6 +6381,7 @@
                 "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
+                "sugarcraft/sugar-focus": "@dev",
                 "sugarcraft/sugar-mcp": "dev-master",
                 "sugarcraft/sugar-reel": "@dev",
                 "sugarcraft/sugar-toast": "dev-master",
@@ -6590,14 +6535,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dash",
-                "reference": "ec729fee0733b55dcc31454a9bcb05ec21f25e91"
+                "reference": "6780062f813ec59fbddc37bb4e9843be60e05711"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-focus": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-focus": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master"
             },
             "require-dev": {
@@ -6762,6 +6707,61 @@
                 "issues": "https://github.com/sugarcraft/sugar-diff/issues",
                 "source": "https://github.com/sugarcraft/sugar-diff",
                 "docs": "https://github.com/sugarcraft/sugar-diff/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-focus",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-focus",
+                "reference": "a3540f159ff407b82ff6267946bb9278828869f8"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Focus\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Focus\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Focus-ring state machine — an ordered set of focusable regions with wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Dependency-free.",
+            "homepage": "https://github.com/sugarcraft/sugar-focus",
+            "keywords": [
+                "focus",
+                "keyboard",
+                "navigation",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-focus/issues",
+                "source": "https://github.com/sugarcraft/sugar-focus",
+                "docs": "https://sugarcraft.github.io/lib/sugar-focus.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8591,7 +8591,6 @@
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flappy": 20,
         "sugarcraft/candy-flip": 20,
-        "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-fuzzy": 20,
         "sugarcraft/candy-gifview": 20,
@@ -8632,6 +8631,7 @@
         "sugarcraft/sugar-dash": 20,
         "sugarcraft/sugar-datepicker": 20,
         "sugarcraft/sugar-diff": 20,
+        "sugarcraft/sugar-focus": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-mcp": 20,
         "sugarcraft/sugar-readline": 20,

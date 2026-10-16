@@ -324,7 +324,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // NOT WALKED. In no autoload section of any lib in the closure, and
         // nothing in any lib's autoloaded source runs one. MEASURED, and named
         // because the reader who finds them should not conclude the guard
-        // missed them: `candy-focus/examples/focus-ring.php` really does hold
+        // missed them: `sugar-focus/examples/focus-ring.php` really does hold
         // exposed spawns, and it is a demo a human runs by hand.
         'examples' => [
             'walked' => false,
@@ -409,7 +409,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * process however many spawns they contain. `examples/` appears in no
      * autoload section of any lib in the closure and is unreachable for the
      * same reason - stated rather than left to be inferred, because
-     * candy-focus's examples do hold exposed spawns and a reader who found
+     * sugar-focus's examples do hold exposed spawns and a reader who found
      * them would otherwise think this guard had missed them.
      *
      * THE GAP THIS ARGUMENT DOES NOT COVER, because "loadable" is not the same

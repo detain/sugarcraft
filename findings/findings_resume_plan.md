@@ -479,11 +479,11 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `candy-lister/src/Model.php:513`
 **Agent:** Same coder agent as 1.11 (grouped — same lib)
 
-#### 1.15 🟡 candy-focus: next()/previous() code duplication (Items 2.1-2.4)
+#### 1.15 🟡 sugar-focus: next()/previous() code duplication (Items 2.1-2.4)
 
-**Plan:** `findings/plan_candy-focus.md` — Items 2.1-2.4
+**Plan:** `findings/plan_sugar-focus.md` — Items 2.1-2.4
 **Fix:** Extract `enabledPositions(): ?array` helper; update `next()` and `previous()` to use it
-**Files:** `candy-focus/src/FocusRing.php:213-219, 258-264`
+**Files:** `sugar-focus/src/FocusRing.php:213-219, 258-264`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
@@ -864,25 +864,25 @@ Same branch/PR check as Phase 0/1.
 
 ---
 
-#### 3.4 🟢 candy-focus: enabledCount/disabeledCount (Items 3.1-3.2)
+#### 3.4 🟢 sugar-focus: enabledCount/disabeledCount (Items 3.1-3.2)
 
-**Plan:** `findings/plan_candy-focus.md` — Items 3.1-3.2
+**Plan:** `findings/plan_sugar-focus.md` — Items 3.1-3.2
 **Fix:** Add `enabledCount(): int` and `disabledCount(): int` methods
-**Files:** `candy-focus/src/FocusRing.php`
+**Files:** `sugar-focus/src/FocusRing.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.5 🟢 candy-focus: IteratorAggregate (Item 3.3)
+#### 3.5 🟢 sugar-focus: IteratorAggregate (Item 3.3)
 
-**Plan:** `findings/plan_candy-focus.md` — Item 3.3
+**Plan:** `findings/plan_sugar-focus.md` — Item 3.3
 **Fix:** Implement `\IteratorAggregate` on `FocusRing`; add `getIterator(): \ArrayIterator`
-**Files:** `candy-focus/src/FocusRing.php`
+**Files:** `sugar-focus/src/FocusRing.php`
 **Agent:** Same coder agent as 3.4 (grouped — same lib)
 
-#### 3.6 🟢 candy-focus: JsonSerializable (Item 3.4)
+#### 3.6 🟢 sugar-focus: JsonSerializable (Item 3.4)
 
-**Plan:** `findings/plan_candy-focus.md` — Item 3.4
+**Plan:** `findings/plan_sugar-focus.md` — Item 3.4
 **Fix:** Implement `\JsonSerializable` on `FocusRing`; add `jsonSerialize(): array`
-**Files:** `candy-focus/src/FocusRing.php`
+**Files:** `sugar-focus/src/FocusRing.php`
 **Agent:** Same coder agent as 3.4 (grouped — same lib)
 
 ---

@@ -1,4 +1,6 @@
-# candy-focus
+# sugar-focus
+
+> Formerly published as `sugarcraft/candy-focus` (renamed 2026-10). <!-- @rename-keep -->
 
 A tiny, dependency-free **focus ring** for full-window terminal UIs: an ordered
 set of focusable regions with a single focused member and wrap-around
@@ -14,7 +16,7 @@ dependencies.
 ## Install
 
 ```sh
-composer require sugarcraft/candy-focus
+composer require sugarcraft/sugar-focus
 ```
 
 ## Quick start

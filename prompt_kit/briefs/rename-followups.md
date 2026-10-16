@@ -79,3 +79,9 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
   still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
   already-rewritten `.tape` files on the next tape run; do not hand-patch.
+
+## C12 candy-focus → sugar-focus (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-2-16-l-1.ansi` + `sugarcraft-3-16-l-2.ansi` — wordmark art content lists the <!-- @rename-keep -->
+  pre-rename slug (`.ansi` content is C.3-excluded); redraw optional at owner triage.
+- `sugar-focus/.vhs/focus-ring.gif` — demo GIF frames show the pre-rename prompt wordmark; CI <!-- @rename-keep -->
+  `.github/workflows/vhs.yml` re-renders from the already-rewritten `.tape` on the next tape run; do not hand-patch.

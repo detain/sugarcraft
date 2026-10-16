@@ -12,7 +12,7 @@ use SugarCraft\Focus\FocusRing;
 /**
  * Characterization net for {@see FocusManager}.
  *
- * Written BEFORE recomposing FocusManager onto an internal candy-focus
+ * Written BEFORE recomposing FocusManager onto an internal sugar-focus
  * {@see FocusRing}: these tests pin the pre-existing wrap-around traversal and
  * persistence behavior so the recompose can be proven byte-for-byte identical.
  * The single structural test ({@see testTraversalIsBackedByFocusRing}) is the
@@ -302,7 +302,7 @@ final class FocusManagerTest extends TestCase
     public function testTraversalIsBackedByFocusRing(): void
     {
         // This is the load-bearing "dedup is real" assertion: FocusManager holds
-        // an internal candy-focus FocusRing that owns the ordered traversal set.
+        // an internal sugar-focus FocusRing that owns the ordered traversal set.
         // Reverting the recompose (hand-rolled modulo wrap) drops this property
         // and fails here, while every behavioral test above stays green.
         $fm = $this->withPanels();

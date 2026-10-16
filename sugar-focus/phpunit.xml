@@ -7,7 +7,7 @@
          cacheDirectory=".phpunit.cache"
 >
     <testsuites>
-        <testsuite name="candy-focus">
+        <testsuite name="sugar-focus">
             <directory>tests</directory>
         </testsuite>
     </testsuites>

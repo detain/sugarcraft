@@ -38,7 +38,7 @@
         "php": "^8.3",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-focus": "dev-master",
+        "sugarcraft/sugar-focus": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/sugar-toast": "dev-master"
     },

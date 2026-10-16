@@ -1,4 +1,4 @@
-# candy-focus — session learnings
+# sugar-focus — session learnings
 
 Patterns and anti-patterns specific to this lib. Treat as project-specific rules.
 

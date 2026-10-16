@@ -21,7 +21,7 @@ use SugarCraft\Crush\Tui\Pane;
  * Tab could only ever go forward: {@see Pane} had `next()` and nothing else,
  * and {@see KeyboardHandler} bound no Shift+Tab anywhere, so overshooting a
  * pane cost five more presses to come back round. The cycle is now a
- * `candy-focus` {@see \SugarCraft\Focus\FocusRing}, which supplies both
+ * `sugar-focus` {@see \SugarCraft\Focus\FocusRing}, which supplies both
  * directions from one declared traversal order.
  *
  * Three separate things have to be true for the binding to work, and each is

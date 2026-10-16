@@ -26,7 +26,7 @@ $libs = [
     'candy-mosaic' => 'Mosaic',
     'candy-mouse' => 'Mouse',
     'candy-layout' => 'Layout',
-    'candy-focus' => 'Focus',
+    'sugar-focus' => 'Focus',
     'candy-kit' => 'Kit',
     'candy-pty' => 'Pty',
 ];

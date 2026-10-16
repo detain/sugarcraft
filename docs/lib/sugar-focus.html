@@ -1,7 +1,58 @@
-<p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any candy-core model without pulling in dependencies. Original SugarCraft component.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — SugarFocus</title>
+<meta name="description" content="SugarFocus: Dependency-free focus ring — an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal for full-window TUI layouts.">
+<meta property="og:title" content="SugarCraft — SugarFocus">
+<meta property="og:description" content="Focus-ring state machine for full-window TUIs: register each focusable region, map Tab to next() and Shift-Tab to previous(), and accent-border the region current() returns. Immutable, dependency-free.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-focus.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-focus.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-focus.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-focus.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-focus.png" alt="SugarFocus">
+      <div>
+        <h2>SugarFocus</h2>
+        <p class="detail-sub">Focus-ring state machine — ordered focusable regions with Tab/Shift-Tab traversal</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">original — no 1:1 Go counterpart</span>
+          <span class="tag-chip">focus</span>
+          <span class="tag-chip">layout</span>
+          <span class="tag-chip">navigation</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-focus"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-focus" alt="SugarFocus code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any candy-core model without pulling in dependencies. Original SugarCraft component.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-focus</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-focus</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Focus\FocusRing;
@@ -53,9 +104,9 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-focus">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-focus/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-focus/tree/main/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-focus">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-focus/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-focus/tree/master/tests">Test suite</a></li>
       <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
     </ul>
 
@@ -89,3 +140,37 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
 </table>
   </div>
 </section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-focus">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-focus/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

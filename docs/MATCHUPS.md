@@ -54,7 +54,7 @@ called out in the table below.
 | **CandyBuffer** (`candy-buffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
 | **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay candy-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **CandyPty** (`candy-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Spawn`, `Child`) remain @deprecated through v1.x. Windows ConPTY planned. |
-| **CandyFocus** (`candy-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
+| **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
 | **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional candy-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **CandyFuzzy** (`candy-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from candy-forms. |
 | **CandyLayout** (`candy-layout/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
@@ -156,7 +156,7 @@ reference projects supplied the ideas, not the code.
 | CandyBuffer (candy-buffer/) | [vte](https://github.com/charmbracelet/vte) |
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
 | CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |
-| CandyFocus (candy-focus/) | [bubbles](https://github.com/charmbracelet/bubbles) (focus behavior) |
+| SugarFocus (sugar-focus/) | [bubbles](https://github.com/charmbracelet/bubbles) (focus behavior) |
 | CandyCodeshot (candy-codeshot/) | [freeze](https://github.com/charmbracelet/freeze) |
 | CandyFuzzy (candy-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
 | CandyHermit (candy-hermit/) | [theHermit](https://github.com/Genekkion/theHermit) |

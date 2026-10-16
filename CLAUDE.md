@@ -7,7 +7,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+,
 
 ## Layout
 
-Per-lib skeleton (concrete example `candy-focus/`): `candy-focus/composer.json` · `candy-focus/phpunit.xml` · `candy-focus/README.md` · `candy-focus/CALIBER_LEARNINGS.md` · `candy-focus/src/` (PSR-4 `SugarCraft\Focus\`) · `candy-focus/tests/` · `candy-focus/.vhs/` · `candy-focus/examples/`. Data/codec libs vary the shape: `candy-files/` carries `candy-files/bin`, `candy-files/lang`, and `candy-files/.assets`; `candy-flip/` adds `candy-flip/bin`, `candy-flip/examples`, and `candy-flip/.assets` alongside its `.vhs`. The `sugar-crush/` agent app extends it again: `sugar-crush/bin/`, `sugar-crush/docs/`, `sugar-crush/scripts/`, `sugar-crush/workflows/`, `sugar-crush/examples/workflows/`, `sugar-crush/python_port/src/` (incubating Python port), plus a runtime config dir `.sugar-crush/` (agent presets + `config.json`/`config.dev.json`).
+Per-lib skeleton (concrete example `sugar-focus/`): `sugar-focus/composer.json` · `sugar-focus/phpunit.xml` · `sugar-focus/README.md` · `sugar-focus/CALIBER_LEARNINGS.md` · `sugar-focus/src/` (PSR-4 `SugarCraft\Focus\`) · `sugar-focus/tests/` · `sugar-focus/.vhs/` · `sugar-focus/examples/`. Data/codec libs vary the shape: `candy-files/` carries `candy-files/bin`, `candy-files/lang`, and `candy-files/.assets`; `candy-flip/` adds `candy-flip/bin`, `candy-flip/examples`, and `candy-flip/.assets` alongside its `.vhs`. The `sugar-crush/` agent app extends it again: `sugar-crush/bin/`, `sugar-crush/docs/`, `sugar-crush/scripts/`, `sugar-crush/workflows/`, `sugar-crush/examples/workflows/`, `sugar-crush/python_port/src/` (incubating Python port), plus a runtime config dir `.sugar-crush/` (agent presets + `config.json`/`config.dev.json`).
 
 Repo-root tooling dirs: `.opencode/` (agents, commands, memory, plugins, `.opencode/ocx.jsonc`, `.opencode/opencode.jsonc`) · `.ocx/` (`.ocx/receipt.jsonc`) · `.remember/` (`.remember/now.md`, `.remember/archive.md`) · `.benchmark/` (`.benchmark/player-benchmark.php`) · `.logs/` (`.logs/subtask2.log`) · `prompt_kit/` (`prompt_kit/CONTEXT.md`, `prompt_kit/briefs/`, `prompt_kit/findings/`, `prompt_kit/tools/` — cite these instead of a `/tmp` scratchpad).
 
@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `candy-forms` `candy-focus` `candy-files` `candy-flip` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `candy-shine` `candy-scriptui` `candy-kit` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-bits` `sugar-charts` `sugar-dash` `sugar-crush` `sugar-table` `sugar-veil` … **Physics** (`honey-*`): `honey-bounce`.
+**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `candy-forms` `candy-files` `candy-flip` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `candy-shine` `candy-scriptui` `candy-kit` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-bits` `sugar-charts` `sugar-dash` `sugar-crush` `sugar-table` `sugar-veil` `sugar-focus` … **Physics** (`honey-*`): `honey-bounce`.
 
 ## Commands
 
