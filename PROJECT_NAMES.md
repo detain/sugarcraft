@@ -128,7 +128,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **HoneyBounce** | honey is sticky / springy; bounce = spring physics. ✓✓ |
 | **SugarCharts** | sugar + charts = charts. literal. |
 | **SugarTable** | sugar + table = data table. literal. |
-| **SugarCalendar** | sugar + calendar = date picker. literal. |
+| **SugarDatepicker** | sugar + datepicker = date picker. literal. |
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarCrumbs** | crumbs = breadcrumbs nav IS the function. delightful. |
 | **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |

@@ -77,7 +77,7 @@
         "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-bits": "dev-master",
         "sugarcraft/sugar-boxer": "dev-master",
-        "sugarcraft/sugar-calendar": "dev-master",
+        "sugarcraft/sugar-datepicker": "dev-master",
         "sugarcraft/sugar-charts": "dev-master",
         "sugarcraft/sugar-crumbs": "dev-master",
         "sugarcraft/sugar-crush": "dev-master",
@@ -370,7 +370,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-calendar",
+            "url": "sugar-datepicker",
             "options": {
                 "symlink": true
             }

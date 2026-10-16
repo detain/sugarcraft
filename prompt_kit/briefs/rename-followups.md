@@ -13,3 +13,14 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   from `.vhs/play.tape` (already rewritten) on the next change to the lib. Left as-is per R4.10.
 - `candy-flappy/.assets/icon.png` and `media/icons/candy-flappy.png` — binary icon may depict old
   branding; content untouched (binary exclusion). Redraw if the icon carries wordmarks.
+
+## sugar-calendar → sugar-datepicker (Batch A entry 3) <!-- @rename-keep -->
+
+- `ansi/sugar-datepicker/*.ansi` — 114 of 147 art files still render the word `Calendar`/`CALENDAR`
+  inside the captured picker UI (title labels). Art CONTENT is excluded from the rewrite (Part C.3);
+  only paths/keys were renamed. Redraw owed by whoever next touches the ansi corpus
+  (`php tools/gen-ansi-readme.php` after any redraw).
+- `sugar-datepicker/.vhs/{basic,constraints}.gif` — rendered demos show the old prompt path; CI re-renders
+  from the (already rewritten) `.tape` files on the next change to the lib. Left as-is per R4.10.
+- `sugar-datepicker/.assets/icon.png` and `media/icons/sugar-datepicker.png` — binary icon content
+  untouched (binary exclusion). Redraw if the icon carries wordmarks.

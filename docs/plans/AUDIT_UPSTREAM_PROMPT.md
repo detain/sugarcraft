@@ -167,7 +167,7 @@ that are tiny but together justify a PR.
 - Genekkion/theHermit → candy-hermit
 - Evertras/bubble-table → sugar-table
 - erikgeiser/promptkit → sugar-readline
-- EthanEFung/bubble-datepicker → sugar-calendar
+- EthanEFung/bubble-datepicker → sugar-datepicker
 - daltonsw/bubbleup → sugar-toast
 - 76creates/stickers → sugar-stickers
 

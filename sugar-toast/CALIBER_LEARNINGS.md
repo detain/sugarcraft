@@ -15,7 +15,7 @@ sugar-toast.
 
 When adding i18n to a leaf library that has no internal deps other than
 `candy-core`, follow the canonical pattern established by sugar-wishlist,
-sugar-calendar, and sugar-table:
+sugar-datepicker, and sugar-table:
 
 1. **`lang/en.php`** — flat `array<string, string>` keyed by translation
 

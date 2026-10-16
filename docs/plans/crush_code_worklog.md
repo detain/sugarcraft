@@ -11764,7 +11764,7 @@ reviewed APPROVE-class; all twelve lanes shipped.
   overlap between the upstream delta and the four picks before any cherry-pick (no `sugar-crush/` path
   touched; pick libs untouched), the weld went onto the LIVE tip, all four picks landed stat-identical,
   and ff-only into master was preserved. Deviation documented in the closeout REPORT.
-- **The base moved a SECOND time, mid-closeout** (PR #1436 sugar-toast/sugar-calendar ANSI16 indexing +
+- **The base moved a SECOND time, mid-closeout** (PR #1436 sugar-toast/sugar-datepicker ANSI16 indexing +
   origin-sync merge → `a12aed306`, again ZERO overlap with every weld path — verified via diff --stat).
   Because the closeout docs had already committed and cite the eight weld SHAs, the correct absorb is a
   MERGE (`git merge a12aed306` onto the weld branch → `14428ef61`), NOT a rebase — rebasing would have

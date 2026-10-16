@@ -56,12 +56,12 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-31 candy-pty: adopted candy-input + candy-ansi (PR #910)
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + candy-mouse + candy-testing (PR #911)
 - step-33 sugar-skate + sugar-wishlist + sugar-stash: adopted candy-fuzzy (PR #912, hotfix PR #913)
-- step-34 sugar-calendar + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
+- step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 sugar-tick + sugar-post + candy-serve: adopted candy-async (PR #915)
 - step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, sugar-skate, sugar-wishlist, sugar-stash, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).
@@ -127,7 +127,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 *(Findings mentioned across 3+ packages/stages)*
 
-1. **No snapshot/golden file testing for ANSI rendering output** — The single most-cited gap. candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, sugar-spark, sugar-calendar all explicitly cite zero ANSI byte-level assertions on `view()` output. Upstream repos (bubbletea, huh, ratatui, pterm with 28,952 tests) all use golden files. Without them, any regression in SGR codes, cursor positioning, or layout is invisible until runtime.
+1. **No snapshot/golden file testing for ANSI rendering output** — The single most-cited gap. candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, sugar-spark, sugar-datepicker all explicitly cite zero ANSI byte-level assertions on `view()` output. Upstream repos (bubbletea, huh, ratatui, pterm with 28,952 tests) all use golden files. Without them, any regression in SGR codes, cursor positioning, or layout is invisible until runtime.
 
 2. **Byte-level string operations break UTF-8/grapheme content** — candy-hermit's `highlightMatches()` uses byte indexing; candy-freeze's 0.6 font aspect ratio fails on CJK/multi-byte content; sugar-spark's parser has C1 limitations due to PHP's native UTF-8 handling. The ecosystem re-implements byte-loop parsing instead of using a shared state machine.
 
@@ -532,7 +532,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **candy-palette > colorprofile** — 12-step detection hierarchy with infocmp Phase 2, full NO_COLOR/CLICOLOR/CLICOLOR_FORCE/COLORTERM/terminfo compliance, good test coverage.
 
-6. **sugar-calendar > EthanEFung/bubble-datepicker** — Immutable + fluent, date range selection, 16-locale i18n, pure ANSI renderer, event store architecture.
+6. **sugar-datepicker > EthanEFung/bubble-datepicker** — Immutable + fluent, date range selection, 16-locale i18n, pure ANSI renderer, event store architecture.
 
 7. **sugar-toast > daltonsw/bubbleup** — Queue-based multi-alert (upstream single-alert), 9 positions (upstream 6), progress bar, action buttons, history log, UTF-8 multibyte fixes.
 

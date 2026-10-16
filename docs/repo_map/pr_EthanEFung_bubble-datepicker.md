@@ -60,7 +60,7 @@ From `repo_map/EthanEFung_bubble-datepicker.md`:
 - **Content**: Request to review and update project to support Bubbletea v2.0.0
 - **Context**: Bubbletea v2 introduced breaking changes; this is a blocking concern for the project's continued viability
 - **Related PR**: #10 (community PR addressing this exact issue)
-- **Strategic Insight for SugarCraft**: The v2 migration pain point demonstrates that framework-dependent components must track upstream breaking changes. SugarCraft's `sugar-calendar` (if it exists) should have explicit version-locking strategy.
+- **Strategic Insight for SugarCraft**: The v2 migration pain point demonstrates that framework-dependent components must track upstream breaking changes. SugarCraft's `sugar-datepicker` (if it exists) should have explicit version-locking strategy.
 
 ### Issue #7: Configurable First Day of Week (Feb 17, 2026)
 
@@ -70,7 +70,7 @@ From `repo_map/EthanEFung_bubble-datepicker.md`:
 - **Content**: Inspired by jQuery UI Datepicker's `firstDay` option. The calendar grid is hardcoded to start on Sunday; proposal adds `FirstDay time.Weekday` field to Model
 - **Acceptance criteria**: Non-breaking change (zero value = Sunday preserves default), rotates header row, realigns grid layout
 - **Strategic Insight**: This is a pure i18n concern. Many locales require Monday-start weeks. SugarCraft should implement this as a first-class configurable option, not an afterthought.
-- **Direct Risk to SugarCraft**: HIGH — `sugar-calendar` will face the same i18n pressure
+- **Direct Risk to SugarCraft**: HIGH — `sugar-datepicker` will face the same i18n pressure
 
 ### Issue #4: Adding Specific Date/Time Ranges (Jan 27, 2026)
 
@@ -635,8 +635,8 @@ func (m *Model) updateUp() (tea.Model, tea.Cmd) {
 
 ### 23.1 SugarCraft Date Component Gap
 
-**Opportunity**: SugarCraft currently has `sugar-calendar` — if it doesn't implement date range constraints and i18n, it will face the same feature requests
-**Action**: Audit `sugar-calendar` for:
+**Opportunity**: SugarCraft currently has `sugar-datepicker` — if it doesn't implement date range constraints and i18n, it will face the same feature requests
+**Action**: Audit `sugar-datepicker` for:
 
 - Min/Max date constraints
 - First day of week configuration
@@ -646,7 +646,7 @@ func (m *Model) updateUp() (tea.Model, tea.Cmd) {
 ### 23.2 Comprehensive TUI Component Suite
 
 **Opportunity**: The bubble-datepicker shows that Charmbracelet's upstream has gaps. SugarCraft could be the definitive source for well-maintained, full-featured TUI components
-**Action**: Consider whether `sugar-calendar` should absorb datepicker functionality or remain separate
+**Action**: Consider whether `sugar-datepicker` should absorb datepicker functionality or remain separate
 
 ### 23.3 i18n-First Design
 
@@ -738,7 +738,7 @@ Not found in standard datepickers:
 **ROI**: HIGH — prevents the same issues from appearing in SugarCraft
 **Approach**:
 
-- Check `sugar-calendar` for range constraints, i18n support, highlighted dates
+- Check `sugar-datepicker` for range constraints, i18n support, highlighted dates
 - If missing, prioritize adding them before users request them
 - Reference bubble-datepicker's implementation for patterns
 

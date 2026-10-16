@@ -49,7 +49,7 @@ hunk level (not line level):
 ## [pattern:sugar-stash-i18n] Per-library i18n facade
 
 When adding i18n to sugar-stash (a leaf app lib that shells out to `git`),
-follow the canonical pattern established by sugar-wishlist, sugar-calendar,
+follow the canonical pattern established by sugar-wishlist, sugar-datepicker,
 and sugar-toast:
 
 1. **`lang/en.php`** — flat `array<string, string>` keyed by translation

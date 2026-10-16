@@ -3102,159 +3102,159 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-gallery-9-tc-s-2.ansi` | 64x15 | truecolor | 45 | headland domes at dusk — graded sunset, sun disc on water, three small observatory domes on the ridge |
 <!-- END sugar-gallery SLOTS -->
 
-<!-- BEGIN sugar-calendar SLOTS -->
-### sugar-calendar — slot series
+<!-- BEGIN sugar-datepicker SLOTS -->
+### sugar-datepicker — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `sugar-calendar-1-16-l-1.ansi` | 150x30 | 16 | 10 | wide board: block-letter title, three month grids, year-select list, nav hints |
-| `sugar-calendar-1-16-m-1.ansi` | 78x20 | 16 | 10 | bordered SugarCalendar panel: Nov 2026 grid, cursor/today/picked, key hints, nav |
-| `sugar-calendar-1-16-m-2.ansi` | 84x20 | 16 | 9 | twelve season-tinted month boxes for 2026 with footer season legend |
-| `sugar-calendar-1-16-s-1.ansi` | 56x10 | 16 | 10 | September picker week: coral today cell, blue picked, today/picked/nav legend, amber title |
-| `sugar-calendar-1-16-s-2.ansi` | 60x9 | 16 | 8 | boxed May mini date-picker with violet today, cyan weekday header |
-| `sugar-calendar-1-256-l-1.ansi` | 160x34 | 256 | 17 | cathedral rose window of rainbow petal rings over a May 2026 grid panel |
-| `sugar-calendar-1-256-l-2.ansi` | 160x28 | 256 | 12 | solstice machine: meshed month cogs with lettered rim and footer |
-| `sugar-calendar-1-256-m-1.ansi` | 82x22 | 256 | 15 | arched stained-glass window of leaded color panes with May 2026 grid inset |
-| `sugar-calendar-1-256-m-2.ansi` | 80x24 | 256 | 22 | four vertical seasonal gradient bands, month markers, wordmark band |
-| `sugar-calendar-1-256-s-1.ansi` | 64x9 | 256 | 15 | plum-coral-gold-mint sugar ribbon gradient with centered wordmark |
-| `sugar-calendar-1-256-s-2.ansi` | 58x11 | 256 | 7 | teal-to-moss gradient card, October grid with coral today |
-| `sugar-calendar-1-tc-l-1.ansi` | 180x30 | truecolor | 64 | four-seasons panorama: arcing suns, sky gradient, center May card, block wordmark |
-| `sugar-calendar-1-tc-l-2.ansi` | 170x36 | truecolor | 274 | starfield time-galaxy with orbiting months, December 2026 grid and truecolor title |
-| `sugar-calendar-1-tc-m-1.ansi` | 80x22 | truecolor | 31 | violet gradient picker card: June 2026, orchid selected and coral today glow |
-| `sugar-calendar-1-tc-m-2.ansi` | 82x24 | truecolor | 102 | hue-wheel ring of twelve months around a SUGAR/CALENDAR hub |
-| `sugar-calendar-1-tc-s-1.ansi` | 66x7 | truecolor | 130 | dusk sky with truecolor block-letter SUGAR (coral-gold) and CALENDAR (teal-orchid) |
-| `sugar-calendar-1-tc-s-2.ansi` | 60x12 | truecolor | 24 | sunset gradient with radial sun disc and glowing horizon line |
-| `sugar-calendar-10-16-l-1.ansi` | 176x30 | 16 | 7 | Game-bird shooting season: drive-day bars from Glorious Twelfth to close |
-| `sugar-calendar-10-16-m-1.ansi` | 84x26 | 16 | 6 | Turnpike toll-gate ledger: twelve month cart-count bars with peak flags |
-| `sugar-calendar-10-256-l-1.ansi` | 172x29 | 256 | 25 | Shipping berth roster: eight quay occupancy bars across the tidal day |
-| `sugar-calendar-10-256-l-2.ansi` | 182x32 | 256 | 24 | Lectionary of feasts arc: movable and fixed church seasons over the year |
-| `sugar-calendar-10-256-m-1.ansi` | 80x22 | 256 | 25 | Ice harvest ledger: six-week pond cut in graded cakes with thaw flag |
-| `sugar-calendar-10-256-m-2.ansi` | 88x19 | 256 | 14 | Village cricket fixture season: Apr-Jun home/away/cup match panels |
-| `sugar-calendar-10-256-s-1.ansi` | 60x15 | 256 | 22 | Beaufort wind-force month log: force 0-storm distribution bars |
-| `sugar-calendar-10-256-s-2.ansi` | 66x16 | 256 | 22 | Mussel long-line farm rotation: spat-to-harvest grow-out bars |
-| `sugar-calendar-10-tc-l-1.ansi` | 188x29 | truecolor | 38 | Tram depot overhaul rota: overnight/weekly/heavy service panels of tasks |
-| `sugar-calendar-10-tc-l-2.ansi` | 186x31 | truecolor | 118 | Observing-night almanac arc: monthly dark-sky windows across the year |
-| `sugar-calendar-10-tc-m-1.ansi` | 88x21 | truecolor | 58 | Grand circus tour arc: twelve big-top pitches plotted as an itinerary |
-| `sugar-calendar-10-tc-m-2.ansi` | 88x22 | truecolor | 82 | Census enumeration canvass: six district completion bars with flags |
-| `sugar-calendar-10-tc-s-1.ansi` | 62x16 | truecolor | 38 | Eclipse prediction folio: shaded sun/moon disc with magnitude bars |
-| `sugar-calendar-10-tc-s-2.ansi` | 68x16 | truecolor | 31 | Haute fashion maison arc of collection show seasons |
-| `sugar-calendar-2-16-l-1.ansi` | 150x38 | 16 | 9 | block-letter wordmark banner above full-year grid |
-| `sugar-calendar-2-16-l-2.ansi` | 200x30 | 16 | 9 | 53-week ribbon spine with month seams and event ledger |
-| `sugar-calendar-2-16-m-1.ansi` | 88x24 | 16 | 11 | planner: framed month plus dotted agenda rail |
-| `sugar-calendar-2-16-m-2.ansi` | 88x26 | 16 | 9 | year 2026 panorama, 12 season-tinted mini months |
-| `sugar-calendar-2-16-s-1.ansi` | 46x13 | 16 | 8 | mini month card with wordmark bar, today red, selected underlined |
-| `sugar-calendar-2-256-l-1.ansi` | 190x36 | 256 | 101 | command dashboard: month, agenda bars, year heat matrix |
-| `sugar-calendar-2-256-l-2.ansi` | 160x42 | 256 | 87 | banner lettering over 4x3 framed seasonal months |
-| `sugar-calendar-2-256-m-1.ansi` | 84x22 | 256 | 40 | datepicker with season rail, legend and week fills |
-| `sugar-calendar-2-256-m-2.ansi` | 86x24 | 256 | 121 | four seasonal quadrants and a month colour ramp |
-| `sugar-calendar-2-256-s-1.ansi` | 58x12 | 256 | 58 | month-tab picker with 256 week-load heat ramp |
-| `sugar-calendar-2-256-s-2.ansi` | 52x15 | 256 | 25 | double-bordered datepicker popup with drop shadow |
-| `sugar-calendar-2-tc-l-1.ansi` | 220x44 | truecolor | 1209 | year in bloom — 12 months on blending season gradients |
-| `sugar-calendar-2-tc-l-2.ansi` | 180x36 | truecolor | 214 | time weave: gradient thread loom with woven wordmark |
-| `sugar-calendar-2-tc-m-1.ansi` | 88x24 | truecolor | 793 | aurora planner on smooth night gradient |
-| `sugar-calendar-2-tc-m-2.ansi` | 82x20 | truecolor | 664 | sunrise datepicker with truecolor sun disc |
-| `sugar-calendar-2-tc-s-1.ansi` | 60x11 | truecolor | 116 | truecolor gradient banner over september flow card |
-| `sugar-calendar-2-tc-s-2.ansi` | 44x10 | truecolor | 234 | glowing today card, huge gradient 06 numeral |
-| `sugar-calendar-3-16-l-1.ansi` | 126x30 | 16 | 9 | Tear-off daily wall page: giant block date 06, month grid, burn-down and perforation |
-| `sugar-calendar-3-16-l-2.ansi` | 123x28 | 16 | 7 | Confectioner's almanac: two-column candy-holiday ledger for the whole year with legend |
-| `sugar-calendar-3-256-l-1.ansi` | 142x29 | 256 | 27 | Deadline war-room board: six project lanes on a 28-day ruler under a giant block T-minus eleven |
-| `sugar-calendar-3-256-l-2.ansi` | 156x28 | 256 | 17 | Anniversary decade timeline: a river of years 2016-2026 with event drops and a receipts ledger |
-| `sugar-calendar-3-256-m-1.ansi` | 86x19 | 256 | 26 | World-clock wall of eight city tiles over a 24-hour day-night colour river with markers |
-| `sugar-calendar-3-256-m-2.ansi` | 85x21 | 256 | 13 | Tape of the 24 East-Asian solar terms in four seasonal colour bands with dates and pips |
-| `sugar-calendar-3-256-m-3.ansi` | 82x19 | 256 | 15 | Decade-anniversary layer cake in cream and raspberry hues with lit candles on a plate |
-| `sugar-calendar-3-256-s-1.ansi` | 57x9 | 256 | 12 | Lunation bridge: silver-gradient phase walkies new-to-full and back on light rails |
-| `sugar-calendar-3-256-s-2.ansi` | 51x7 | 256 | 8 | Neon shop sign for FEB 29: pink halo lettering hung on cyan brackets with vacancy tag |
-| `sugar-calendar-3-tc-l-1.ansi` | 161x29 | truecolor | 245 | World-clock wall of nine vertical gradient sky panels, sun/moon arcs and local readouts |
-| `sugar-calendar-3-tc-l-2.ansi` | 151x28 | truecolor | 361 | Anatomy plate of FEB 29 2028: giant gradient 29, leap statistics, full glowing month grid |
-| `sugar-calendar-3-tc-m-1.ansi` | 88x18 | truecolor | 155 | Lunations of 2026 panorama: thirteen silver moons named and dated on a midnight gradient rail |
-| `sugar-calendar-3-tc-m-2.ansi` | 86x18 | truecolor | 84 | Candy-holiday news ticker: rainbow banner, glazed item chips and a sugar-o-meter gradient bar |
-| `sugar-calendar-3-tc-s-1.ansi` | 58x9 | truecolor | 28 | Sunrise day-card: per-cell indigo-to-peach sky gradient with a glowing half sun |
-| `sugar-calendar-3-tc-s-2.ansi` | 69x16 | truecolor | 81 | Leap hourglass: amber sand gradient draining from 1461 days into a single FEB 29 grain |
-| `sugar-calendar-4-16-m-1.ansi` | 84x24 | 16 | 10 | week as a metro map: day-lines, hour-stations, lunch interchange |
-| `sugar-calendar-4-16-m-2.ansi` | 86x22 | 16 | 9 | Julian vs Gregorian October 1582 twin grids, vanished days boxed |
-| `sugar-calendar-4-16-s-1.ansi` | 52x13 | 16 | 8 | desk calendar card mid page-flip with curling shaded leaf |
-| `sugar-calendar-4-256-l-1.ansi` | 200x30 | 256 | 24 | single-day gantt 07:00-21:00, hue-coded intention lanes, red NOW rail |
-| `sugar-calendar-4-256-l-2.ansi` | 150x40 | 256 | 11 | elliptical orbit dial of eight phase moons around a September hub card |
-| `sugar-calendar-4-256-m-1.ansi` | 82x24 | 256 | 18 | October grid with radial glow heat around today and cyan range links |
-| `sugar-calendar-4-256-m-2.ansi` | 86x22 | 256 | 13 | airport split-flap board clacking down 042 days to release |
-| `sugar-calendar-4-256-s-1.ansi` | 48x9 | 256 | 39 | date-range week strip with violet selection ramp and hold meter |
-| `sugar-calendar-4-256-s-2.ansi` | 66x15 | 256 | 7 | twelve-month year dial of week dots with September lit amber |
-| `sugar-calendar-4-tc-l-1.ansi` | 180x44 | truecolor | 804 | truecolor year wheel: season-gradient month band ringing a 365-day tick orbit |
-| `sugar-calendar-4-tc-l-2.ansi` | 200x42 | truecolor | 113 | golden-hour scene: spiral desk calendar flipping a sunlit page in truecolor |
-| `sugar-calendar-4-tc-m-1.ansi` | 88x26 | truecolor | 30 | tetris well where meeting blocks tetromino the working hours away |
-| `sugar-calendar-4-tc-m-2.ansi` | 86x24 | truecolor | 204 | island vacation map, depth-shaded sea, three date pins and dotted route |
-| `sugar-calendar-4-tc-s-1.ansi` | 44x8 | truecolor | 144 | sunset-gradient TODAY pill badge with sparkle accents |
-| `sugar-calendar-4-tc-s-2.ansi` | 50x12 | truecolor | 173 | coastline map fragment with two numbered truecolor date pins |
-| `sugar-calendar-5-16-l-1.ansi` | 160x28 | 16 | 8 | jazz-club billboard gig calendar: bulb marquee, fourteen dated sets, sold-out nights in red |
-| `sugar-calendar-5-16-m-1.ansi` | 82x23 | 16 | 11 | apartment-block calendar: day-windows leased across five floors, lobby wordmark, letting legend |
-| `sugar-calendar-5-16-m-2.ansi` | 86x24 | 16 | 5 | postage-stamp sheet: twelve perforated month stamps with pictograms and day counts |
-| `sugar-calendar-5-256-l-1.ansi` | 148x28 | 256 | 16 | beehive honeycomb calendar: staggered amber day-cells, red queen cell, nectar milestones |
-| `sugar-calendar-5-256-l-2.ansi` | 158x28 | 256 | 21 | tide-chart month: thirty day-columns of graded seawater with high-water marks and lunar notes |
-| `sugar-calendar-5-256-m-1.ansi` | 86x20 | 256 | 21 | birthday flower garden: numbered date stakes under ten blooms on graded stems |
-| `sugar-calendar-5-256-m-2.ansi` | 88x22 | 256 | 15 | film-strip month: twenty-four numbered frames with scene glyphs between sprocket rails |
-| `sugar-calendar-5-256-s-1.ansi` | 62x12 | 256 | 12 | moon-phase cookie tin: five cookies per week baked to their lunar phase, dated underneath |
-| `sugar-calendar-5-256-s-2.ansi` | 67x13 | 256 | 7 | tea-time tag calendar: eight numbered tags steeping on twine above a steaming cup |
-| `sugar-calendar-5-tc-l-1.ansi` | 188x30 | truecolor | 1855 | aurora year wall: truecolor night sky with six sine curtains over twelve lit month-pane windows |
-| `sugar-calendar-5-tc-l-2.ansi` | 176x28 | truecolor | 504 | vineyard harvest ledger: sunset gradient over five vine rows of dated grape clusters and a pressing schedule |
-| `sugar-calendar-5-tc-m-1.ansi` | 84x19 | truecolor | 104 | greenhouse shelf month: glass-roof gradient panes over pot benches with staked bloom dates |
-| `sugar-calendar-5-tc-m-2.ansi` | 84x18 | truecolor | 410 | bakery oven-glow board: radiant mouth gradient with five dated trays and a heat ladder |
-| `sugar-calendar-5-tc-s-1.ansi` | 64x14 | truecolor | 140 | candy-cane year timeline: striped sugar cane over a twelve-stripe seasonal gradient bar |
-| `sugar-calendar-5-tc-s-2.ansi` | 62x13 | truecolor | 37 | sunrise week strip: dawn gradient sky with emerging sun disc over a seven-day label rail |
-| `sugar-calendar-6-256-l-1.ansi` | 165x38 | 256 | 22 | cheese cave aging wall: twelve month-wheels on oak planks, rinded and dated by weeks of affinage |
-| `sugar-calendar-6-256-l-2.ansi` | 170x44 | 256 | 13 | fairground ferris wheel: twelve glowing month-cabins on a spoke wheel turning one full year-revolution |
-| `sugar-calendar-6-256-m-1.ansi` | 88x23 | 256 | 18 | bookbinder atelier: twelve gilt month-volumes shelved over a cloth press, deckle-edge year imprint |
-| `sugar-calendar-6-256-m-2.ansi` | 88x22 | 256 | 21 | vinyl record shelf: twelve month-sleeves in a hue ramp with side-A/B tracklist and 365 grooves |
-| `sugar-calendar-6-256-s-1.ansi` | 64x11 | 256 | 8 | radio tuning dial: twelve month-stations on a glowing scale, needle locked on June |
-| `sugar-calendar-6-256-s-2.ansi` | 60x16 | 256 | 7 | chess tournament board: 28 week-cells on checkered ranks with file/round notation |
-| `sugar-calendar-6-tc-l-1.ansi` | 175x42 | truecolor | 78 | seasonal grist mill: a month-paddled waterwheel turning over a gradient millrace against a dusk sky |
-| `sugar-calendar-6-tc-l-2.ansi` | 180x46 | truecolor | 54 | balloon festival ascent: twelve rainbow month-balloons rising a sunset sky gradient over a ground year-line |
-| `sugar-calendar-6-tc-m-1.ansi` | 88x22 | truecolor | 71 | architect blueprint: the year drafted to 1:365 scale, twelve month-rooms, dimensioned over a glowing T-square |
-| `sugar-calendar-6-tc-m-2.ansi` | 90x22 | truecolor | 7 | newspaper front page: ink-on-newsprint masthead, lead stories and a boxed twelve-month month-grid ticker |
-| `sugar-calendar-6-tc-s-1.ansi` | 58x11 | truecolor | 44 | blacksmith forge: a glowing leap-day bar hammering on the anvil with truecolor heat gradient |
-| `sugar-calendar-6-tc-s-2.ansi` | 50x13 | truecolor | 17 | chandlery candle: one hand-dipped June day burning down to 172/365 with wax drip and flame glow |
-| `sugar-calendar-7-16-m-2.ansi` | 80x22 | 16 | 9 | School class-period bell-schedule grid by day and room |
-| `sugar-calendar-7-256-l-1.ansi` | 158x36 | 256 | 11 | Full-school master timetable board across two weeks |
-| `sugar-calendar-7-256-l-2.ansi` | 158x36 | 256 | 13 | Observatory transit-schedule dome with wide star table |
-| `sugar-calendar-7-256-m-1.ansi` | 80x22 | 256 | 11 | Frost-zone 6B planting calendar, 12-month band and crop bars |
-| `sugar-calendar-7-256-m-2.ansi` | 80x22 | 256 | 11 | Monthly duty roster grid, names against days with shifts |
-| `sugar-calendar-7-256-s-1.ansi` | 54x13 | 256 | 10 | Monastery bell-hours rota board, eight canonical hours |
-| `sugar-calendar-7-256-s-2.ansi` | 54x13 | 256 | 6 | Clock-in time card grid with punched day tickets |
-| `sugar-calendar-7-tc-l-1.ansi` | 158x36 | truecolor | 7 | Grand truecolour clepsydra water clock with hour scale |
-| `sugar-calendar-7-tc-l-2.ansi` | 158x36 | truecolor | 11 | Grand truecolour monthly duty roster grid of shifts |
-| `sugar-calendar-7-tc-m-1.ansi` | 80x22 | truecolor | 11 | Truecolour seed-packet shed wall, richer hanging packs |
-| `sugar-calendar-7-tc-m-2.ansi` | 80x22 | truecolor | 7 | Truecolour clock punch card with glowing tickets |
-| `sugar-calendar-7-tc-s-1.ansi` | 54x13 | truecolor | 10 | Observatory hemisphere dome above a star-transit schedule |
-| `sugar-calendar-7-tc-s-2.ansi` | 54x13 | truecolor | 6 | Clepsydra water clock with graduated hour scale |
-| `sugar-calendar-8-16-s-1.ansi` | 49x16 | 16 | 7 | gardener's almanac wheel — 12 month sectors with sow/tend/reap rings |
-| `sugar-calendar-8-256-l-1.ansi` | 170x29 | 256 | 35 | shepherd's lambing paddock map — 6 fields by ewe density, weekly draft chart |
-| `sugar-calendar-8-256-l-2.ansi` | 166x29 | 256 | 54 | postmaster's parcel sorting wall — 10 chutes × 26 bins, zone key, chute load bars |
-| `sugar-calendar-8-256-m-1.ansi` | 82x20 | 256 | 25 | fisherman's tide almanac page — week of heights as blue gradient bars, moon phases |
-| `sugar-calendar-8-256-m-2.ansi` | 84x23 | 256 | 16 | gardener's companion-planting matrix — 10 crops ✓/✗ grid + sowing strips |
-| `sugar-calendar-8-256-s-1.ansi` | 57x13 | 256 | 32 | pilot's flight-log fuel-remaining semicircle gauge with needle |
-| `sugar-calendar-8-256-s-2.ansi` | 62x12 | 256 | 10 | projector film-festival lineup strip — sprocket holes, 4 reels |
-| `sugar-calendar-8-tc-l-1.ansi` | 194x34 | truecolor | 728 | gardener's soil-temperature year wheel — RGB temp ring, sow-by temp list, bed calendar |
-| `sugar-calendar-8-tc-l-2.ansi` | 188x31 | truecolor | 145 | pilot's x-country log — coastal route map, fuel rings per waypoint, elevation profile |
-| `sugar-calendar-8-tc-m-1.ansi` | 84x25 | truecolor | 17 | brewer's mash schedule — step-rest temperature curve cold-blue to strike-red |
-| `sugar-calendar-8-tc-m-2.ansi` | 84x22 | truecolor | 32 | lambing heatmap — 16 ewes × 7 weeks, due-proximity gradient with legend |
-| `sugar-calendar-8-tc-s-1.ansi` | 66x15 | truecolor | 62 | pilot's night-flight fuel dial — starfield, RGB glow arc, needle at 47% |
-| `sugar-calendar-8-tc-s-2.ansi` | 64x14 | truecolor | 39 | seaside screening ticket stubs — hue-per-evening with perforation edges |
-| `sugar-calendar-9-16-m-1.ansi` | 86x18 | 16 | 7 | Cellar tasting-flight board: nine dated bottles in vertical flight with score bars and release dates |
-| `sugar-calendar-9-16-m-2.ansi` | 86x21 | 16 | 7 | Excavation grid plan: 8x7 trench squares keyed by layer with a dated find ledger |
-| `sugar-calendar-9-16-s-1.ansi` | 64x13 | 16 | 7 | Stratigraphic dig ledger: six dated soil layers of trench IV with finds and lot codes |
-| `sugar-calendar-9-256-l-1.ansi` | 170x29 | 256 | 21 | Regatta season chart: sixteen dated meetings plotted day-by-day June to September with fleet legend |
-| `sugar-calendar-9-256-l-2.ansi` | 176x28 | 256 | 21 | Tasting-flight ledger: fifteen dated bottles in three poured flights with score rails and drinking-window bars to 2044 |
-| `sugar-calendar-9-256-m-1.ansi` | 88x18 | 256 | 18 | Winery release calendar: twelve dated drops with point-by-point score bars and allocation status |
-| `sugar-calendar-9-256-m-2.ansi` | 86x19 | 256 | 13 | Yearbook milestone rail: eleven sections plotting copy-due to press-lock across a twenty-week ruler |
-| `sugar-calendar-9-256-m-3.ansi` | 88x19 | 256 | 12 | Finds register: fourteen numbered artifacts with dated contexts and color-keyed material chips |
-| `sugar-calendar-9-256-s-1.ansi` | 68x10 | 256 | 18 | Trench section profile: six dated stratigraphic bands from turf to sterile with lot codes |
-| `sugar-calendar-9-256-s-2.ansi` | 64x8 | 256 | 15 | Regatta signal-flag card: five dated hoists drawn as flag blocks with start-sequence times |
-| `sugar-calendar-9-tc-l-1.ansi` | 179x28 | truecolor | 64 | the year as an archaeological trench, six earth-gradient month strata with six dated finds on a 365-day ruler |
-| `sugar-calendar-9-tc-l-2.ansi` | 178x28 | truecolor | 232 | regatta course chart over a five-tone water gradient - marks, lines and fleet beside a dated eight-race fixture rail |
-| `sugar-calendar-9-tc-m-1.ansi` | 88x19 | truecolor | 35 | yearbook month-tab rail, twelve tinted tabs over fifteen department deadline tracks with copy markers |
-| `sugar-calendar-9-tc-m-2.ansi` | 88x19 | truecolor | 110 | vintage horizon release ledger, sixteen wines aged/released/held across 2026-2036 with tinted cellar bars |
-| `sugar-calendar-9-tc-s-1.ansi` | 62x10 | truecolor | 33 | excavation day-light card, sunrise-to-lantern sky gradient rail over six timed dig actions |
-| `sugar-calendar-9-tc-s-2.ansi` | 64x10 | truecolor | 13 | race-day wind window, eight hourly knot bars colored flat-to-gust with start-window callout |
-<!-- END sugar-calendar SLOTS -->
+| `sugar-datepicker-1-16-l-1.ansi` | 150x30 | 16 | 10 | wide board: block-letter title, three month grids, year-select list, nav hints |
+| `sugar-datepicker-1-16-m-1.ansi` | 78x20 | 16 | 10 | bordered SugarDatepicker panel: Nov 2026 grid, cursor/today/picked, key hints, nav |
+| `sugar-datepicker-1-16-m-2.ansi` | 84x20 | 16 | 9 | twelve season-tinted month boxes for 2026 with footer season legend |
+| `sugar-datepicker-1-16-s-1.ansi` | 56x10 | 16 | 10 | September picker week: coral today cell, blue picked, today/picked/nav legend, amber title |
+| `sugar-datepicker-1-16-s-2.ansi` | 60x9 | 16 | 8 | boxed May mini date-picker with violet today, cyan weekday header |
+| `sugar-datepicker-1-256-l-1.ansi` | 160x34 | 256 | 17 | cathedral rose window of rainbow petal rings over a May 2026 grid panel |
+| `sugar-datepicker-1-256-l-2.ansi` | 160x28 | 256 | 12 | solstice machine: meshed month cogs with lettered rim and footer |
+| `sugar-datepicker-1-256-m-1.ansi` | 82x22 | 256 | 15 | arched stained-glass window of leaded color panes with May 2026 grid inset |
+| `sugar-datepicker-1-256-m-2.ansi` | 80x24 | 256 | 22 | four vertical seasonal gradient bands, month markers, wordmark band |
+| `sugar-datepicker-1-256-s-1.ansi` | 64x9 | 256 | 15 | plum-coral-gold-mint sugar ribbon gradient with centered wordmark |
+| `sugar-datepicker-1-256-s-2.ansi` | 58x11 | 256 | 7 | teal-to-moss gradient card, October grid with coral today |
+| `sugar-datepicker-1-tc-l-1.ansi` | 180x30 | truecolor | 64 | four-seasons panorama: arcing suns, sky gradient, center May card, block wordmark |
+| `sugar-datepicker-1-tc-l-2.ansi` | 170x36 | truecolor | 274 | starfield time-galaxy with orbiting months, December 2026 grid and truecolor title |
+| `sugar-datepicker-1-tc-m-1.ansi` | 80x22 | truecolor | 31 | violet gradient picker card: June 2026, orchid selected and coral today glow |
+| `sugar-datepicker-1-tc-m-2.ansi` | 82x24 | truecolor | 102 | hue-wheel ring of twelve months around a SUGAR/CALENDAR hub |
+| `sugar-datepicker-1-tc-s-1.ansi` | 66x7 | truecolor | 130 | dusk sky with truecolor block-letter SUGAR (coral-gold) and CALENDAR (teal-orchid) |
+| `sugar-datepicker-1-tc-s-2.ansi` | 60x12 | truecolor | 24 | sunset gradient with radial sun disc and glowing horizon line |
+| `sugar-datepicker-10-16-l-1.ansi` | 176x30 | 16 | 7 | Game-bird shooting season: drive-day bars from Glorious Twelfth to close |
+| `sugar-datepicker-10-16-m-1.ansi` | 84x26 | 16 | 6 | Turnpike toll-gate ledger: twelve month cart-count bars with peak flags |
+| `sugar-datepicker-10-256-l-1.ansi` | 172x29 | 256 | 25 | Shipping berth roster: eight quay occupancy bars across the tidal day |
+| `sugar-datepicker-10-256-l-2.ansi` | 182x32 | 256 | 24 | Lectionary of feasts arc: movable and fixed church seasons over the year |
+| `sugar-datepicker-10-256-m-1.ansi` | 80x22 | 256 | 25 | Ice harvest ledger: six-week pond cut in graded cakes with thaw flag |
+| `sugar-datepicker-10-256-m-2.ansi` | 88x19 | 256 | 14 | Village cricket fixture season: Apr-Jun home/away/cup match panels |
+| `sugar-datepicker-10-256-s-1.ansi` | 60x15 | 256 | 22 | Beaufort wind-force month log: force 0-storm distribution bars |
+| `sugar-datepicker-10-256-s-2.ansi` | 66x16 | 256 | 22 | Mussel long-line farm rotation: spat-to-harvest grow-out bars |
+| `sugar-datepicker-10-tc-l-1.ansi` | 188x29 | truecolor | 38 | Tram depot overhaul rota: overnight/weekly/heavy service panels of tasks |
+| `sugar-datepicker-10-tc-l-2.ansi` | 186x31 | truecolor | 118 | Observing-night almanac arc: monthly dark-sky windows across the year |
+| `sugar-datepicker-10-tc-m-1.ansi` | 88x21 | truecolor | 58 | Grand circus tour arc: twelve big-top pitches plotted as an itinerary |
+| `sugar-datepicker-10-tc-m-2.ansi` | 88x22 | truecolor | 82 | Census enumeration canvass: six district completion bars with flags |
+| `sugar-datepicker-10-tc-s-1.ansi` | 62x16 | truecolor | 38 | Eclipse prediction folio: shaded sun/moon disc with magnitude bars |
+| `sugar-datepicker-10-tc-s-2.ansi` | 68x16 | truecolor | 31 | Haute fashion maison arc of collection show seasons |
+| `sugar-datepicker-2-16-l-1.ansi` | 150x38 | 16 | 9 | block-letter wordmark banner above full-year grid |
+| `sugar-datepicker-2-16-l-2.ansi` | 200x30 | 16 | 9 | 53-week ribbon spine with month seams and event ledger |
+| `sugar-datepicker-2-16-m-1.ansi` | 88x24 | 16 | 11 | planner: framed month plus dotted agenda rail |
+| `sugar-datepicker-2-16-m-2.ansi` | 88x26 | 16 | 9 | year 2026 panorama, 12 season-tinted mini months |
+| `sugar-datepicker-2-16-s-1.ansi` | 46x13 | 16 | 8 | mini month card with wordmark bar, today red, selected underlined |
+| `sugar-datepicker-2-256-l-1.ansi` | 190x36 | 256 | 101 | command dashboard: month, agenda bars, year heat matrix |
+| `sugar-datepicker-2-256-l-2.ansi` | 160x42 | 256 | 87 | banner lettering over 4x3 framed seasonal months |
+| `sugar-datepicker-2-256-m-1.ansi` | 84x22 | 256 | 40 | datepicker with season rail, legend and week fills |
+| `sugar-datepicker-2-256-m-2.ansi` | 86x24 | 256 | 121 | four seasonal quadrants and a month colour ramp |
+| `sugar-datepicker-2-256-s-1.ansi` | 58x12 | 256 | 58 | month-tab picker with 256 week-load heat ramp |
+| `sugar-datepicker-2-256-s-2.ansi` | 52x15 | 256 | 25 | double-bordered datepicker popup with drop shadow |
+| `sugar-datepicker-2-tc-l-1.ansi` | 220x44 | truecolor | 1209 | year in bloom — 12 months on blending season gradients |
+| `sugar-datepicker-2-tc-l-2.ansi` | 180x36 | truecolor | 214 | time weave: gradient thread loom with woven wordmark |
+| `sugar-datepicker-2-tc-m-1.ansi` | 88x24 | truecolor | 793 | aurora planner on smooth night gradient |
+| `sugar-datepicker-2-tc-m-2.ansi` | 82x20 | truecolor | 664 | sunrise datepicker with truecolor sun disc |
+| `sugar-datepicker-2-tc-s-1.ansi` | 60x11 | truecolor | 116 | truecolor gradient banner over september flow card |
+| `sugar-datepicker-2-tc-s-2.ansi` | 44x10 | truecolor | 234 | glowing today card, huge gradient 06 numeral |
+| `sugar-datepicker-3-16-l-1.ansi` | 126x30 | 16 | 9 | Tear-off daily wall page: giant block date 06, month grid, burn-down and perforation |
+| `sugar-datepicker-3-16-l-2.ansi` | 123x28 | 16 | 7 | Confectioner's almanac: two-column candy-holiday ledger for the whole year with legend |
+| `sugar-datepicker-3-256-l-1.ansi` | 142x29 | 256 | 27 | Deadline war-room board: six project lanes on a 28-day ruler under a giant block T-minus eleven |
+| `sugar-datepicker-3-256-l-2.ansi` | 156x28 | 256 | 17 | Anniversary decade timeline: a river of years 2016-2026 with event drops and a receipts ledger |
+| `sugar-datepicker-3-256-m-1.ansi` | 86x19 | 256 | 26 | World-clock wall of eight city tiles over a 24-hour day-night colour river with markers |
+| `sugar-datepicker-3-256-m-2.ansi` | 85x21 | 256 | 13 | Tape of the 24 East-Asian solar terms in four seasonal colour bands with dates and pips |
+| `sugar-datepicker-3-256-m-3.ansi` | 82x19 | 256 | 15 | Decade-anniversary layer cake in cream and raspberry hues with lit candles on a plate |
+| `sugar-datepicker-3-256-s-1.ansi` | 57x9 | 256 | 12 | Lunation bridge: silver-gradient phase walkies new-to-full and back on light rails |
+| `sugar-datepicker-3-256-s-2.ansi` | 51x7 | 256 | 8 | Neon shop sign for FEB 29: pink halo lettering hung on cyan brackets with vacancy tag |
+| `sugar-datepicker-3-tc-l-1.ansi` | 161x29 | truecolor | 245 | World-clock wall of nine vertical gradient sky panels, sun/moon arcs and local readouts |
+| `sugar-datepicker-3-tc-l-2.ansi` | 151x28 | truecolor | 361 | Anatomy plate of FEB 29 2028: giant gradient 29, leap statistics, full glowing month grid |
+| `sugar-datepicker-3-tc-m-1.ansi` | 88x18 | truecolor | 155 | Lunations of 2026 panorama: thirteen silver moons named and dated on a midnight gradient rail |
+| `sugar-datepicker-3-tc-m-2.ansi` | 86x18 | truecolor | 84 | Candy-holiday news ticker: rainbow banner, glazed item chips and a sugar-o-meter gradient bar |
+| `sugar-datepicker-3-tc-s-1.ansi` | 58x9 | truecolor | 28 | Sunrise day-card: per-cell indigo-to-peach sky gradient with a glowing half sun |
+| `sugar-datepicker-3-tc-s-2.ansi` | 69x16 | truecolor | 81 | Leap hourglass: amber sand gradient draining from 1461 days into a single FEB 29 grain |
+| `sugar-datepicker-4-16-m-1.ansi` | 84x24 | 16 | 10 | week as a metro map: day-lines, hour-stations, lunch interchange |
+| `sugar-datepicker-4-16-m-2.ansi` | 86x22 | 16 | 9 | Julian vs Gregorian October 1582 twin grids, vanished days boxed |
+| `sugar-datepicker-4-16-s-1.ansi` | 52x13 | 16 | 8 | desk calendar card mid page-flip with curling shaded leaf |
+| `sugar-datepicker-4-256-l-1.ansi` | 200x30 | 256 | 24 | single-day gantt 07:00-21:00, hue-coded intention lanes, red NOW rail |
+| `sugar-datepicker-4-256-l-2.ansi` | 150x40 | 256 | 11 | elliptical orbit dial of eight phase moons around a September hub card |
+| `sugar-datepicker-4-256-m-1.ansi` | 82x24 | 256 | 18 | October grid with radial glow heat around today and cyan range links |
+| `sugar-datepicker-4-256-m-2.ansi` | 86x22 | 256 | 13 | airport split-flap board clacking down 042 days to release |
+| `sugar-datepicker-4-256-s-1.ansi` | 48x9 | 256 | 39 | date-range week strip with violet selection ramp and hold meter |
+| `sugar-datepicker-4-256-s-2.ansi` | 66x15 | 256 | 7 | twelve-month year dial of week dots with September lit amber |
+| `sugar-datepicker-4-tc-l-1.ansi` | 180x44 | truecolor | 804 | truecolor year wheel: season-gradient month band ringing a 365-day tick orbit |
+| `sugar-datepicker-4-tc-l-2.ansi` | 200x42 | truecolor | 113 | golden-hour scene: spiral desk calendar flipping a sunlit page in truecolor |
+| `sugar-datepicker-4-tc-m-1.ansi` | 88x26 | truecolor | 30 | tetris well where meeting blocks tetromino the working hours away |
+| `sugar-datepicker-4-tc-m-2.ansi` | 86x24 | truecolor | 204 | island vacation map, depth-shaded sea, three date pins and dotted route |
+| `sugar-datepicker-4-tc-s-1.ansi` | 44x8 | truecolor | 144 | sunset-gradient TODAY pill badge with sparkle accents |
+| `sugar-datepicker-4-tc-s-2.ansi` | 50x12 | truecolor | 173 | coastline map fragment with two numbered truecolor date pins |
+| `sugar-datepicker-5-16-l-1.ansi` | 160x28 | 16 | 8 | jazz-club billboard gig calendar: bulb marquee, fourteen dated sets, sold-out nights in red |
+| `sugar-datepicker-5-16-m-1.ansi` | 82x23 | 16 | 11 | apartment-block calendar: day-windows leased across five floors, lobby wordmark, letting legend |
+| `sugar-datepicker-5-16-m-2.ansi` | 86x24 | 16 | 5 | postage-stamp sheet: twelve perforated month stamps with pictograms and day counts |
+| `sugar-datepicker-5-256-l-1.ansi` | 148x28 | 256 | 16 | beehive honeycomb calendar: staggered amber day-cells, red queen cell, nectar milestones |
+| `sugar-datepicker-5-256-l-2.ansi` | 158x28 | 256 | 21 | tide-chart month: thirty day-columns of graded seawater with high-water marks and lunar notes |
+| `sugar-datepicker-5-256-m-1.ansi` | 86x20 | 256 | 21 | birthday flower garden: numbered date stakes under ten blooms on graded stems |
+| `sugar-datepicker-5-256-m-2.ansi` | 88x22 | 256 | 15 | film-strip month: twenty-four numbered frames with scene glyphs between sprocket rails |
+| `sugar-datepicker-5-256-s-1.ansi` | 62x12 | 256 | 12 | moon-phase cookie tin: five cookies per week baked to their lunar phase, dated underneath |
+| `sugar-datepicker-5-256-s-2.ansi` | 67x13 | 256 | 7 | tea-time tag calendar: eight numbered tags steeping on twine above a steaming cup |
+| `sugar-datepicker-5-tc-l-1.ansi` | 188x30 | truecolor | 1855 | aurora year wall: truecolor night sky with six sine curtains over twelve lit month-pane windows |
+| `sugar-datepicker-5-tc-l-2.ansi` | 176x28 | truecolor | 504 | vineyard harvest ledger: sunset gradient over five vine rows of dated grape clusters and a pressing schedule |
+| `sugar-datepicker-5-tc-m-1.ansi` | 84x19 | truecolor | 104 | greenhouse shelf month: glass-roof gradient panes over pot benches with staked bloom dates |
+| `sugar-datepicker-5-tc-m-2.ansi` | 84x18 | truecolor | 410 | bakery oven-glow board: radiant mouth gradient with five dated trays and a heat ladder |
+| `sugar-datepicker-5-tc-s-1.ansi` | 64x14 | truecolor | 140 | candy-cane year timeline: striped sugar cane over a twelve-stripe seasonal gradient bar |
+| `sugar-datepicker-5-tc-s-2.ansi` | 62x13 | truecolor | 37 | sunrise week strip: dawn gradient sky with emerging sun disc over a seven-day label rail |
+| `sugar-datepicker-6-256-l-1.ansi` | 165x38 | 256 | 22 | cheese cave aging wall: twelve month-wheels on oak planks, rinded and dated by weeks of affinage |
+| `sugar-datepicker-6-256-l-2.ansi` | 170x44 | 256 | 13 | fairground ferris wheel: twelve glowing month-cabins on a spoke wheel turning one full year-revolution |
+| `sugar-datepicker-6-256-m-1.ansi` | 88x23 | 256 | 18 | bookbinder atelier: twelve gilt month-volumes shelved over a cloth press, deckle-edge year imprint |
+| `sugar-datepicker-6-256-m-2.ansi` | 88x22 | 256 | 21 | vinyl record shelf: twelve month-sleeves in a hue ramp with side-A/B tracklist and 365 grooves |
+| `sugar-datepicker-6-256-s-1.ansi` | 64x11 | 256 | 8 | radio tuning dial: twelve month-stations on a glowing scale, needle locked on June |
+| `sugar-datepicker-6-256-s-2.ansi` | 60x16 | 256 | 7 | chess tournament board: 28 week-cells on checkered ranks with file/round notation |
+| `sugar-datepicker-6-tc-l-1.ansi` | 175x42 | truecolor | 78 | seasonal grist mill: a month-paddled waterwheel turning over a gradient millrace against a dusk sky |
+| `sugar-datepicker-6-tc-l-2.ansi` | 180x46 | truecolor | 54 | balloon festival ascent: twelve rainbow month-balloons rising a sunset sky gradient over a ground year-line |
+| `sugar-datepicker-6-tc-m-1.ansi` | 88x22 | truecolor | 71 | architect blueprint: the year drafted to 1:365 scale, twelve month-rooms, dimensioned over a glowing T-square |
+| `sugar-datepicker-6-tc-m-2.ansi` | 90x22 | truecolor | 7 | newspaper front page: ink-on-newsprint masthead, lead stories and a boxed twelve-month month-grid ticker |
+| `sugar-datepicker-6-tc-s-1.ansi` | 58x11 | truecolor | 44 | blacksmith forge: a glowing leap-day bar hammering on the anvil with truecolor heat gradient |
+| `sugar-datepicker-6-tc-s-2.ansi` | 50x13 | truecolor | 17 | chandlery candle: one hand-dipped June day burning down to 172/365 with wax drip and flame glow |
+| `sugar-datepicker-7-16-m-2.ansi` | 80x22 | 16 | 9 | School class-period bell-schedule grid by day and room |
+| `sugar-datepicker-7-256-l-1.ansi` | 158x36 | 256 | 11 | Full-school master timetable board across two weeks |
+| `sugar-datepicker-7-256-l-2.ansi` | 158x36 | 256 | 13 | Observatory transit-schedule dome with wide star table |
+| `sugar-datepicker-7-256-m-1.ansi` | 80x22 | 256 | 11 | Frost-zone 6B planting calendar, 12-month band and crop bars |
+| `sugar-datepicker-7-256-m-2.ansi` | 80x22 | 256 | 11 | Monthly duty roster grid, names against days with shifts |
+| `sugar-datepicker-7-256-s-1.ansi` | 54x13 | 256 | 10 | Monastery bell-hours rota board, eight canonical hours |
+| `sugar-datepicker-7-256-s-2.ansi` | 54x13 | 256 | 6 | Clock-in time card grid with punched day tickets |
+| `sugar-datepicker-7-tc-l-1.ansi` | 158x36 | truecolor | 7 | Grand truecolour clepsydra water clock with hour scale |
+| `sugar-datepicker-7-tc-l-2.ansi` | 158x36 | truecolor | 11 | Grand truecolour monthly duty roster grid of shifts |
+| `sugar-datepicker-7-tc-m-1.ansi` | 80x22 | truecolor | 11 | Truecolour seed-packet shed wall, richer hanging packs |
+| `sugar-datepicker-7-tc-m-2.ansi` | 80x22 | truecolor | 7 | Truecolour clock punch card with glowing tickets |
+| `sugar-datepicker-7-tc-s-1.ansi` | 54x13 | truecolor | 10 | Observatory hemisphere dome above a star-transit schedule |
+| `sugar-datepicker-7-tc-s-2.ansi` | 54x13 | truecolor | 6 | Clepsydra water clock with graduated hour scale |
+| `sugar-datepicker-8-16-s-1.ansi` | 49x16 | 16 | 7 | gardener's almanac wheel — 12 month sectors with sow/tend/reap rings |
+| `sugar-datepicker-8-256-l-1.ansi` | 170x29 | 256 | 35 | shepherd's lambing paddock map — 6 fields by ewe density, weekly draft chart |
+| `sugar-datepicker-8-256-l-2.ansi` | 166x29 | 256 | 54 | postmaster's parcel sorting wall — 10 chutes × 26 bins, zone key, chute load bars |
+| `sugar-datepicker-8-256-m-1.ansi` | 82x20 | 256 | 25 | fisherman's tide almanac page — week of heights as blue gradient bars, moon phases |
+| `sugar-datepicker-8-256-m-2.ansi` | 84x23 | 256 | 16 | gardener's companion-planting matrix — 10 crops ✓/✗ grid + sowing strips |
+| `sugar-datepicker-8-256-s-1.ansi` | 57x13 | 256 | 32 | pilot's flight-log fuel-remaining semicircle gauge with needle |
+| `sugar-datepicker-8-256-s-2.ansi` | 62x12 | 256 | 10 | projector film-festival lineup strip — sprocket holes, 4 reels |
+| `sugar-datepicker-8-tc-l-1.ansi` | 194x34 | truecolor | 728 | gardener's soil-temperature year wheel — RGB temp ring, sow-by temp list, bed calendar |
+| `sugar-datepicker-8-tc-l-2.ansi` | 188x31 | truecolor | 145 | pilot's x-country log — coastal route map, fuel rings per waypoint, elevation profile |
+| `sugar-datepicker-8-tc-m-1.ansi` | 84x25 | truecolor | 17 | brewer's mash schedule — step-rest temperature curve cold-blue to strike-red |
+| `sugar-datepicker-8-tc-m-2.ansi` | 84x22 | truecolor | 32 | lambing heatmap — 16 ewes × 7 weeks, due-proximity gradient with legend |
+| `sugar-datepicker-8-tc-s-1.ansi` | 66x15 | truecolor | 62 | pilot's night-flight fuel dial — starfield, RGB glow arc, needle at 47% |
+| `sugar-datepicker-8-tc-s-2.ansi` | 64x14 | truecolor | 39 | seaside screening ticket stubs — hue-per-evening with perforation edges |
+| `sugar-datepicker-9-16-m-1.ansi` | 86x18 | 16 | 7 | Cellar tasting-flight board: nine dated bottles in vertical flight with score bars and release dates |
+| `sugar-datepicker-9-16-m-2.ansi` | 86x21 | 16 | 7 | Excavation grid plan: 8x7 trench squares keyed by layer with a dated find ledger |
+| `sugar-datepicker-9-16-s-1.ansi` | 64x13 | 16 | 7 | Stratigraphic dig ledger: six dated soil layers of trench IV with finds and lot codes |
+| `sugar-datepicker-9-256-l-1.ansi` | 170x29 | 256 | 21 | Regatta season chart: sixteen dated meetings plotted day-by-day June to September with fleet legend |
+| `sugar-datepicker-9-256-l-2.ansi` | 176x28 | 256 | 21 | Tasting-flight ledger: fifteen dated bottles in three poured flights with score rails and drinking-window bars to 2044 |
+| `sugar-datepicker-9-256-m-1.ansi` | 88x18 | 256 | 18 | Winery release calendar: twelve dated drops with point-by-point score bars and allocation status |
+| `sugar-datepicker-9-256-m-2.ansi` | 86x19 | 256 | 13 | Yearbook milestone rail: eleven sections plotting copy-due to press-lock across a twenty-week ruler |
+| `sugar-datepicker-9-256-m-3.ansi` | 88x19 | 256 | 12 | Finds register: fourteen numbered artifacts with dated contexts and color-keyed material chips |
+| `sugar-datepicker-9-256-s-1.ansi` | 68x10 | 256 | 18 | Trench section profile: six dated stratigraphic bands from turf to sterile with lot codes |
+| `sugar-datepicker-9-256-s-2.ansi` | 64x8 | 256 | 15 | Regatta signal-flag card: five dated hoists drawn as flag blocks with start-sequence times |
+| `sugar-datepicker-9-tc-l-1.ansi` | 179x28 | truecolor | 64 | the year as an archaeological trench, six earth-gradient month strata with six dated finds on a 365-day ruler |
+| `sugar-datepicker-9-tc-l-2.ansi` | 178x28 | truecolor | 232 | regatta course chart over a five-tone water gradient - marks, lines and fleet beside a dated eight-race fixture rail |
+| `sugar-datepicker-9-tc-m-1.ansi` | 88x19 | truecolor | 35 | yearbook month-tab rail, twelve tinted tabs over fifteen department deadline tracks with copy markers |
+| `sugar-datepicker-9-tc-m-2.ansi` | 88x19 | truecolor | 110 | vintage horizon release ledger, sixteen wines aged/released/held across 2026-2036 with tinted cellar bars |
+| `sugar-datepicker-9-tc-s-1.ansi` | 62x10 | truecolor | 33 | excavation day-light card, sunrise-to-lantern sky gradient rail over six timed dig actions |
+| `sugar-datepicker-9-tc-s-2.ansi` | 64x10 | truecolor | 13 | race-day wind window, eight hourly knot bars colored flat-to-gust with start-window callout |
+<!-- END sugar-datepicker SLOTS -->
 
 <!-- BEGIN sugar-post SLOTS -->
 ### sugar-post — slot series

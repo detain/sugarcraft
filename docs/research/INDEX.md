@@ -48,7 +48,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **sugar-readline** | [research/libraries/sugar-readline-research.md](libraries/sugar-readline-research.md) | 1. History interface, 2. ↑/↓ navigation, 3. Vi/Emacs mode |
-| **sugar-calendar** | [research/libraries/sugar-calendar-research.md](libraries/sugar-calendar-research.md) | 1. Date range, 2. Focus nav, 3. Event store |
+| **sugar-datepicker** | [research/libraries/sugar-datepicker-research.md](libraries/sugar-datepicker-research.md) | 1. Date range, 2. Focus nav, 3. Event store |
 | **sugar-toast** | [research/libraries/sugar-toast-research.md](libraries/sugar-toast-research.md) | 1. ESC dismiss, 2. Stack fix, 3. Progress toasts |
 | **sugar-spark** | [research/libraries/sugar-spark-research.md](libraries/sugar-spark-research.md) | 1. C0/C1 codes, 2. SGR styles, 3. JSON output |
 
@@ -147,7 +147,7 @@ To implement an item:
 - **candy-forms**: Built-in validators, vim keys, fuzzy suggestions
 - **sugar-readline**: History persistence, auto-suggest, vi mode
 - **sugar-bits**: validate_on timing, restrict regex, table sorting
-- **sugar-calendar**: Date range picker, event store, localization
+- **sugar-datepicker**: Date range picker, event store, localization
 
 ### Terminal Capabilities
 

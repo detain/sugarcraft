@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0e4d1b552387167dcb53a4442aebe390",
+    "content-hash": "7b8d5b4d82ba587261dfad4869285a63",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -5844,63 +5844,6 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-calendar",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-calendar",
-                "reference": "b162d9d4ba594764828eafded77b5ddf35cfedfb"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Calendar\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Calendar\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of EthanEFung/bubble-datepicker — interactive date picker component for terminal UIs. Supports month/year navigation, keyboard navigation, date selection with visual cursor, and customizable styling.",
-            "homepage": "https://github.com/sugarcraft/sugar-calendar",
-            "keywords": [
-                "bubble",
-                "calendar",
-                "date",
-                "datepicker",
-                "sugarcraft",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-calendar/issues",
-                "source": "https://github.com/sugarcraft/sugar-calendar"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/sugar-charts",
             "version": "dev-master",
             "dist": {
@@ -6270,6 +6213,63 @@
                 "issues": "https://github.com/sugarcraft/sugar-dash/issues",
                 "source": "https://github.com/sugarcraft/sugar-dash",
                 "docs": "https://sugarcraft.github.io/lib/sugar-dash.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-datepicker",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-datepicker",
+                "reference": "5c2f30bf0fed6759137796fbeae95a19310a5907"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-buffer": "dev-master",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\DatePicker\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\DatePicker\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of EthanEFung/bubble-datepicker — interactive date picker component for terminal UIs. Supports month/year navigation, keyboard navigation, date selection with visual cursor, and customizable styling.",
+            "homepage": "https://github.com/sugarcraft/sugar-datepicker",
+            "keywords": [
+                "bubble",
+                "calendar",
+                "date",
+                "datepicker",
+                "sugarcraft",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-datepicker/issues",
+                "source": "https://github.com/sugarcraft/sugar-datepicker"
             },
             "transport-options": {
                 "symlink": true,
@@ -8617,12 +8617,12 @@
         "sugarcraft/honey-bounce": 20,
         "sugarcraft/sugar-bits": 20,
         "sugarcraft/sugar-boxer": 20,
-        "sugarcraft/sugar-calendar": 20,
         "sugarcraft/sugar-charts": 20,
         "sugarcraft/sugar-crumbs": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dash": 20,
+        "sugarcraft/sugar-datepicker": 20,
         "sugarcraft/sugar-diff": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-glow": 20,

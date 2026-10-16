@@ -414,7 +414,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **5.1** `sugar-bits`(49,high, many deps) → **5.1a** `Table` (5), **5.1b** `TextInput/Timer/
   Progress` (12), **5.1c** `Spinner/Key/ItemList/FilePicker/Cursor` (≈15→a/b), **5.1d**
   `Viewport/Tree/TextArea/Tabs/Stopwatch/Scrollbar/Paginator/Help`+root (≈17→a/b).
-- **5.2** `sugar-boxer`(3,low), `sugar-calendar`(6,low), `sugar-crumbs`(8,low),
+- **5.2** `sugar-boxer`(3,low), `sugar-datepicker`(6,low), `sugar-crumbs`(8,low),
   `sugar-skate`(8,med), `sugar-spark`(8,med), `sugar-stickers`(7,med), `sugar-wishlist`(6,med),
   `sugar-post`(7,high), `sugar-stash`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
   `sugar-veil`(7,high) — one step each (all small), in dependency order.
@@ -529,7 +529,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly | <!-- @rename-keep historical provenance -->
 | candy-flappy | low | 6 | ctor-promotion, named-args, readonly |
 | sugar-boxer | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |
-| sugar-calendar | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |
+| sugar-datepicker | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |
 | sugar-crumbs | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |
 | candy-forms | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
 

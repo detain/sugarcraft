@@ -142,7 +142,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 
 ### Phase 05 — i18n rollout (`phase-05-i18n/`)
 
-1. `step-01-sugar-calendar.md`
+1. `step-01-sugar-datepicker.md`
 2. `step-02-sugar-table.md`
 3. `step-03-sugar-toast.md`
 4. `step-04-sugar-boxer.md`

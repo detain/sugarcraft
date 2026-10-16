@@ -22543,9 +22543,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-16-l-1.ansi": {
-        "name": "sugar-calendar-1-16-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-16-l-1.ansi": {
+        "name": "sugar-datepicker-1-16-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -22555,21 +22555,21 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-16-m-1.ansi": {
-        "name": "sugar-calendar-1-16-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-16-m-1.ansi": {
+        "name": "sugar-datepicker-1-16-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "78x20",
         "width": 78,
         "height": 20,
         "depth": "16",
         "colors": 10,
-        "description": "bordered SugarCalendar panel: Nov 2026 grid, cursor/today/picked, key hints, nav",
+        "description": "bordered SugarDatepicker panel: Nov 2026 grid, cursor/today/picked, key hints, nav",
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-16-m-2.ansi": {
-        "name": "sugar-calendar-1-16-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-16-m-2.ansi": {
+        "name": "sugar-datepicker-1-16-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -22579,9 +22579,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-16-s-1.ansi": {
-        "name": "sugar-calendar-1-16-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-16-s-1.ansi": {
+        "name": "sugar-datepicker-1-16-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -22591,9 +22591,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-16-s-2.ansi": {
-        "name": "sugar-calendar-1-16-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-16-s-2.ansi": {
+        "name": "sugar-datepicker-1-16-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "60x9",
         "width": 60,
         "height": 9,
@@ -22603,9 +22603,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-256-l-1.ansi": {
-        "name": "sugar-calendar-1-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-256-l-1.ansi": {
+        "name": "sugar-datepicker-1-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -22615,9 +22615,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-256-l-2.ansi": {
-        "name": "sugar-calendar-1-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-256-l-2.ansi": {
+        "name": "sugar-datepicker-1-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -22627,9 +22627,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-256-m-1.ansi": {
-        "name": "sugar-calendar-1-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-256-m-1.ansi": {
+        "name": "sugar-datepicker-1-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -22639,9 +22639,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-256-m-2.ansi": {
-        "name": "sugar-calendar-1-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-256-m-2.ansi": {
+        "name": "sugar-datepicker-1-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -22651,9 +22651,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-256-s-1.ansi": {
-        "name": "sugar-calendar-1-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-256-s-1.ansi": {
+        "name": "sugar-datepicker-1-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x9",
         "width": 64,
         "height": 9,
@@ -22663,9 +22663,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-256-s-2.ansi": {
-        "name": "sugar-calendar-1-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-256-s-2.ansi": {
+        "name": "sugar-datepicker-1-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -22675,9 +22675,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-tc-l-1.ansi": {
-        "name": "sugar-calendar-1-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-tc-l-1.ansi": {
+        "name": "sugar-datepicker-1-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "180x30",
         "width": 180,
         "height": 30,
@@ -22687,9 +22687,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-tc-l-2.ansi": {
-        "name": "sugar-calendar-1-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-tc-l-2.ansi": {
+        "name": "sugar-datepicker-1-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "170x36",
         "width": 170,
         "height": 36,
@@ -22699,9 +22699,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-tc-m-1.ansi": {
-        "name": "sugar-calendar-1-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-tc-m-1.ansi": {
+        "name": "sugar-datepicker-1-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -22711,9 +22711,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-tc-m-2.ansi": {
-        "name": "sugar-calendar-1-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-tc-m-2.ansi": {
+        "name": "sugar-datepicker-1-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x24",
         "width": 82,
         "height": 24,
@@ -22723,9 +22723,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-tc-s-1.ansi": {
-        "name": "sugar-calendar-1-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-tc-s-1.ansi": {
+        "name": "sugar-datepicker-1-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "66x7",
         "width": 66,
         "height": 7,
@@ -22735,9 +22735,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-1-tc-s-2.ansi": {
-        "name": "sugar-calendar-1-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-1-tc-s-2.ansi": {
+        "name": "sugar-datepicker-1-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -22747,9 +22747,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-16-l-1.ansi": {
-        "name": "sugar-calendar-2-16-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-16-l-1.ansi": {
+        "name": "sugar-datepicker-2-16-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "150x38",
         "width": 150,
         "height": 38,
@@ -22759,9 +22759,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-16-l-2.ansi": {
-        "name": "sugar-calendar-2-16-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-16-l-2.ansi": {
+        "name": "sugar-datepicker-2-16-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "200x30",
         "width": 200,
         "height": 30,
@@ -22771,9 +22771,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-16-m-1.ansi": {
-        "name": "sugar-calendar-2-16-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-16-m-1.ansi": {
+        "name": "sugar-datepicker-2-16-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -22783,9 +22783,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-16-m-2.ansi": {
-        "name": "sugar-calendar-2-16-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-16-m-2.ansi": {
+        "name": "sugar-datepicker-2-16-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x26",
         "width": 88,
         "height": 26,
@@ -22795,9 +22795,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-16-s-1.ansi": {
-        "name": "sugar-calendar-2-16-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-16-s-1.ansi": {
+        "name": "sugar-datepicker-2-16-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "46x13",
         "width": 46,
         "height": 13,
@@ -22807,9 +22807,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-256-l-1.ansi": {
-        "name": "sugar-calendar-2-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-256-l-1.ansi": {
+        "name": "sugar-datepicker-2-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "190x36",
         "width": 190,
         "height": 36,
@@ -22819,9 +22819,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-256-l-2.ansi": {
-        "name": "sugar-calendar-2-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-256-l-2.ansi": {
+        "name": "sugar-datepicker-2-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "160x42",
         "width": 160,
         "height": 42,
@@ -22831,9 +22831,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-256-m-1.ansi": {
-        "name": "sugar-calendar-2-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-256-m-1.ansi": {
+        "name": "sugar-datepicker-2-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -22843,9 +22843,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-256-m-2.ansi": {
-        "name": "sugar-calendar-2-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-256-m-2.ansi": {
+        "name": "sugar-datepicker-2-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -22855,9 +22855,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-256-s-1.ansi": {
-        "name": "sugar-calendar-2-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-256-s-1.ansi": {
+        "name": "sugar-datepicker-2-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -22867,9 +22867,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-256-s-2.ansi": {
-        "name": "sugar-calendar-2-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-256-s-2.ansi": {
+        "name": "sugar-datepicker-2-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "52x15",
         "width": 52,
         "height": 15,
@@ -22879,9 +22879,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-tc-l-1.ansi": {
-        "name": "sugar-calendar-2-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-tc-l-1.ansi": {
+        "name": "sugar-datepicker-2-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "220x44",
         "width": 220,
         "height": 44,
@@ -22891,9 +22891,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-tc-l-2.ansi": {
-        "name": "sugar-calendar-2-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-tc-l-2.ansi": {
+        "name": "sugar-datepicker-2-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "180x36",
         "width": 180,
         "height": 36,
@@ -22903,9 +22903,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-tc-m-1.ansi": {
-        "name": "sugar-calendar-2-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-tc-m-1.ansi": {
+        "name": "sugar-datepicker-2-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -22915,9 +22915,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-tc-m-2.ansi": {
-        "name": "sugar-calendar-2-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-tc-m-2.ansi": {
+        "name": "sugar-datepicker-2-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -22927,9 +22927,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-tc-s-1.ansi": {
-        "name": "sugar-calendar-2-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-tc-s-1.ansi": {
+        "name": "sugar-datepicker-2-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -22939,9 +22939,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-tc-s-2.ansi": {
-        "name": "sugar-calendar-2-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-2-tc-s-2.ansi": {
+        "name": "sugar-datepicker-2-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "44x10",
         "width": 44,
         "height": 10,
@@ -22951,9 +22951,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-16-l-1.ansi": {
-        "name": "sugar-calendar-3-16-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-16-l-1.ansi": {
+        "name": "sugar-datepicker-3-16-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "126x30",
         "width": 126,
         "height": 30,
@@ -22963,9 +22963,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-16-l-2.ansi": {
-        "name": "sugar-calendar-3-16-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-16-l-2.ansi": {
+        "name": "sugar-datepicker-3-16-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "123x28",
         "width": 123,
         "height": 28,
@@ -22975,9 +22975,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-l-1.ansi": {
-        "name": "sugar-calendar-3-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-l-1.ansi": {
+        "name": "sugar-datepicker-3-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "142x29",
         "width": 142,
         "height": 29,
@@ -22987,9 +22987,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-l-2.ansi": {
-        "name": "sugar-calendar-3-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-l-2.ansi": {
+        "name": "sugar-datepicker-3-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "156x28",
         "width": 156,
         "height": 28,
@@ -22999,9 +22999,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-m-1.ansi": {
-        "name": "sugar-calendar-3-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-m-1.ansi": {
+        "name": "sugar-datepicker-3-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -23011,9 +23011,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-m-2.ansi": {
-        "name": "sugar-calendar-3-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-m-2.ansi": {
+        "name": "sugar-datepicker-3-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "85x21",
         "width": 85,
         "height": 21,
@@ -23023,9 +23023,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-m-3.ansi": {
-        "name": "sugar-calendar-3-256-m-3.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-m-3.ansi": {
+        "name": "sugar-datepicker-3-256-m-3.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -23035,9 +23035,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-s-1.ansi": {
-        "name": "sugar-calendar-3-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-s-1.ansi": {
+        "name": "sugar-datepicker-3-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "57x9",
         "width": 57,
         "height": 9,
@@ -23047,9 +23047,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-256-s-2.ansi": {
-        "name": "sugar-calendar-3-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-256-s-2.ansi": {
+        "name": "sugar-datepicker-3-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "51x7",
         "width": 51,
         "height": 7,
@@ -23059,9 +23059,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-tc-l-1.ansi": {
-        "name": "sugar-calendar-3-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-tc-l-1.ansi": {
+        "name": "sugar-datepicker-3-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "161x29",
         "width": 161,
         "height": 29,
@@ -23071,9 +23071,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-tc-l-2.ansi": {
-        "name": "sugar-calendar-3-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-tc-l-2.ansi": {
+        "name": "sugar-datepicker-3-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "151x28",
         "width": 151,
         "height": 28,
@@ -23083,9 +23083,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-tc-m-1.ansi": {
-        "name": "sugar-calendar-3-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-tc-m-1.ansi": {
+        "name": "sugar-datepicker-3-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -23095,9 +23095,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-tc-m-2.ansi": {
-        "name": "sugar-calendar-3-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-tc-m-2.ansi": {
+        "name": "sugar-datepicker-3-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -23107,9 +23107,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-tc-s-1.ansi": {
-        "name": "sugar-calendar-3-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-tc-s-1.ansi": {
+        "name": "sugar-datepicker-3-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "58x9",
         "width": 58,
         "height": 9,
@@ -23119,9 +23119,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-tc-s-2.ansi": {
-        "name": "sugar-calendar-3-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-3-tc-s-2.ansi": {
+        "name": "sugar-datepicker-3-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "69x16",
         "width": 69,
         "height": 16,
@@ -23131,9 +23131,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-16-m-1.ansi": {
-        "name": "sugar-calendar-4-16-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-16-m-1.ansi": {
+        "name": "sugar-datepicker-4-16-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -23143,9 +23143,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-16-m-2.ansi": {
-        "name": "sugar-calendar-4-16-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-16-m-2.ansi": {
+        "name": "sugar-datepicker-4-16-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -23155,9 +23155,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-16-s-1.ansi": {
-        "name": "sugar-calendar-4-16-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-16-s-1.ansi": {
+        "name": "sugar-datepicker-4-16-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "52x13",
         "width": 52,
         "height": 13,
@@ -23167,9 +23167,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-256-l-1.ansi": {
-        "name": "sugar-calendar-4-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-256-l-1.ansi": {
+        "name": "sugar-datepicker-4-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "200x30",
         "width": 200,
         "height": 30,
@@ -23179,9 +23179,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-256-l-2.ansi": {
-        "name": "sugar-calendar-4-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-256-l-2.ansi": {
+        "name": "sugar-datepicker-4-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "150x40",
         "width": 150,
         "height": 40,
@@ -23191,9 +23191,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-256-m-1.ansi": {
-        "name": "sugar-calendar-4-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-256-m-1.ansi": {
+        "name": "sugar-datepicker-4-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x24",
         "width": 82,
         "height": 24,
@@ -23203,9 +23203,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-256-m-2.ansi": {
-        "name": "sugar-calendar-4-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-256-m-2.ansi": {
+        "name": "sugar-datepicker-4-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -23215,9 +23215,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-256-s-1.ansi": {
-        "name": "sugar-calendar-4-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-256-s-1.ansi": {
+        "name": "sugar-datepicker-4-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "48x9",
         "width": 48,
         "height": 9,
@@ -23227,9 +23227,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-256-s-2.ansi": {
-        "name": "sugar-calendar-4-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-256-s-2.ansi": {
+        "name": "sugar-datepicker-4-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -23239,9 +23239,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-tc-l-1.ansi": {
-        "name": "sugar-calendar-4-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-tc-l-1.ansi": {
+        "name": "sugar-datepicker-4-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "180x44",
         "width": 180,
         "height": 44,
@@ -23251,9 +23251,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-tc-l-2.ansi": {
-        "name": "sugar-calendar-4-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-tc-l-2.ansi": {
+        "name": "sugar-datepicker-4-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "200x42",
         "width": 200,
         "height": 42,
@@ -23263,9 +23263,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-tc-m-1.ansi": {
-        "name": "sugar-calendar-4-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-tc-m-1.ansi": {
+        "name": "sugar-datepicker-4-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x26",
         "width": 88,
         "height": 26,
@@ -23275,9 +23275,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-tc-m-2.ansi": {
-        "name": "sugar-calendar-4-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-tc-m-2.ansi": {
+        "name": "sugar-datepicker-4-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -23287,9 +23287,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-tc-s-1.ansi": {
-        "name": "sugar-calendar-4-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-tc-s-1.ansi": {
+        "name": "sugar-datepicker-4-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "44x8",
         "width": 44,
         "height": 8,
@@ -23299,9 +23299,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-tc-s-2.ansi": {
-        "name": "sugar-calendar-4-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-4-tc-s-2.ansi": {
+        "name": "sugar-datepicker-4-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "50x12",
         "width": 50,
         "height": 12,
@@ -23311,9 +23311,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-16-l-1.ansi": {
-        "name": "sugar-calendar-5-16-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-16-l-1.ansi": {
+        "name": "sugar-datepicker-5-16-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -23323,9 +23323,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-16-m-1.ansi": {
-        "name": "sugar-calendar-5-16-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-16-m-1.ansi": {
+        "name": "sugar-datepicker-5-16-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x23",
         "width": 82,
         "height": 23,
@@ -23335,9 +23335,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-16-m-2.ansi": {
-        "name": "sugar-calendar-5-16-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-16-m-2.ansi": {
+        "name": "sugar-datepicker-5-16-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -23347,9 +23347,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-256-l-1.ansi": {
-        "name": "sugar-calendar-5-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-256-l-1.ansi": {
+        "name": "sugar-datepicker-5-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "148x28",
         "width": 148,
         "height": 28,
@@ -23359,9 +23359,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-256-l-2.ansi": {
-        "name": "sugar-calendar-5-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-256-l-2.ansi": {
+        "name": "sugar-datepicker-5-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "158x28",
         "width": 158,
         "height": 28,
@@ -23371,9 +23371,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-256-m-1.ansi": {
-        "name": "sugar-calendar-5-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-256-m-1.ansi": {
+        "name": "sugar-datepicker-5-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -23383,9 +23383,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-256-m-2.ansi": {
-        "name": "sugar-calendar-5-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-256-m-2.ansi": {
+        "name": "sugar-datepicker-5-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -23395,9 +23395,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-256-s-1.ansi": {
-        "name": "sugar-calendar-5-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-256-s-1.ansi": {
+        "name": "sugar-datepicker-5-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -23407,9 +23407,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-256-s-2.ansi": {
-        "name": "sugar-calendar-5-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-256-s-2.ansi": {
+        "name": "sugar-datepicker-5-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "67x13",
         "width": 67,
         "height": 13,
@@ -23419,9 +23419,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-tc-l-1.ansi": {
-        "name": "sugar-calendar-5-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-tc-l-1.ansi": {
+        "name": "sugar-datepicker-5-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "188x30",
         "width": 188,
         "height": 30,
@@ -23431,9 +23431,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-tc-l-2.ansi": {
-        "name": "sugar-calendar-5-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-tc-l-2.ansi": {
+        "name": "sugar-datepicker-5-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "176x28",
         "width": 176,
         "height": 28,
@@ -23443,9 +23443,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-tc-m-1.ansi": {
-        "name": "sugar-calendar-5-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-tc-m-1.ansi": {
+        "name": "sugar-datepicker-5-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x19",
         "width": 84,
         "height": 19,
@@ -23455,9 +23455,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-tc-m-2.ansi": {
-        "name": "sugar-calendar-5-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-tc-m-2.ansi": {
+        "name": "sugar-datepicker-5-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -23467,9 +23467,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-tc-s-1.ansi": {
-        "name": "sugar-calendar-5-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-tc-s-1.ansi": {
+        "name": "sugar-datepicker-5-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -23479,9 +23479,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-tc-s-2.ansi": {
-        "name": "sugar-calendar-5-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-5-tc-s-2.ansi": {
+        "name": "sugar-datepicker-5-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -23491,9 +23491,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-256-l-1.ansi": {
-        "name": "sugar-calendar-6-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-256-l-1.ansi": {
+        "name": "sugar-datepicker-6-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "165x38",
         "width": 165,
         "height": 38,
@@ -23503,9 +23503,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-256-l-2.ansi": {
-        "name": "sugar-calendar-6-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-256-l-2.ansi": {
+        "name": "sugar-datepicker-6-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "170x44",
         "width": 170,
         "height": 44,
@@ -23515,9 +23515,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-256-m-1.ansi": {
-        "name": "sugar-calendar-6-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-256-m-1.ansi": {
+        "name": "sugar-datepicker-6-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -23527,9 +23527,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-256-m-2.ansi": {
-        "name": "sugar-calendar-6-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-256-m-2.ansi": {
+        "name": "sugar-datepicker-6-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -23539,9 +23539,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-256-s-1.ansi": {
-        "name": "sugar-calendar-6-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-256-s-1.ansi": {
+        "name": "sugar-datepicker-6-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -23551,9 +23551,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-256-s-2.ansi": {
-        "name": "sugar-calendar-6-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-256-s-2.ansi": {
+        "name": "sugar-datepicker-6-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
@@ -23563,9 +23563,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-tc-l-1.ansi": {
-        "name": "sugar-calendar-6-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-tc-l-1.ansi": {
+        "name": "sugar-datepicker-6-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "175x42",
         "width": 175,
         "height": 42,
@@ -23575,9 +23575,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-tc-l-2.ansi": {
-        "name": "sugar-calendar-6-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-tc-l-2.ansi": {
+        "name": "sugar-datepicker-6-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "180x46",
         "width": 180,
         "height": 46,
@@ -23587,9 +23587,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-tc-m-1.ansi": {
-        "name": "sugar-calendar-6-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-tc-m-1.ansi": {
+        "name": "sugar-datepicker-6-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -23599,9 +23599,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-tc-m-2.ansi": {
-        "name": "sugar-calendar-6-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-tc-m-2.ansi": {
+        "name": "sugar-datepicker-6-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "90x22",
         "width": 90,
         "height": 22,
@@ -23611,9 +23611,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-tc-s-1.ansi": {
-        "name": "sugar-calendar-6-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-tc-s-1.ansi": {
+        "name": "sugar-datepicker-6-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -23623,9 +23623,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-tc-s-2.ansi": {
-        "name": "sugar-calendar-6-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-6-tc-s-2.ansi": {
+        "name": "sugar-datepicker-6-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "50x13",
         "width": 50,
         "height": 13,
@@ -23635,9 +23635,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-16-m-2.ansi": {
-        "name": "sugar-calendar-7-16-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-16-m-2.ansi": {
+        "name": "sugar-datepicker-7-16-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -23647,9 +23647,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-256-l-1.ansi": {
-        "name": "sugar-calendar-7-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-256-l-1.ansi": {
+        "name": "sugar-datepicker-7-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "158x36",
         "width": 158,
         "height": 36,
@@ -23659,9 +23659,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-256-l-2.ansi": {
-        "name": "sugar-calendar-7-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-256-l-2.ansi": {
+        "name": "sugar-datepicker-7-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "158x36",
         "width": 158,
         "height": 36,
@@ -23671,9 +23671,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-256-m-1.ansi": {
-        "name": "sugar-calendar-7-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-256-m-1.ansi": {
+        "name": "sugar-datepicker-7-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -23683,9 +23683,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-256-m-2.ansi": {
-        "name": "sugar-calendar-7-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-256-m-2.ansi": {
+        "name": "sugar-datepicker-7-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -23695,9 +23695,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-256-s-1.ansi": {
-        "name": "sugar-calendar-7-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-256-s-1.ansi": {
+        "name": "sugar-datepicker-7-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -23707,9 +23707,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-256-s-2.ansi": {
-        "name": "sugar-calendar-7-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-256-s-2.ansi": {
+        "name": "sugar-datepicker-7-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -23719,9 +23719,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-tc-l-1.ansi": {
-        "name": "sugar-calendar-7-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-tc-l-1.ansi": {
+        "name": "sugar-datepicker-7-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "158x36",
         "width": 158,
         "height": 36,
@@ -23731,9 +23731,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-tc-l-2.ansi": {
-        "name": "sugar-calendar-7-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-tc-l-2.ansi": {
+        "name": "sugar-datepicker-7-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "158x36",
         "width": 158,
         "height": 36,
@@ -23743,9 +23743,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-tc-m-1.ansi": {
-        "name": "sugar-calendar-7-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-tc-m-1.ansi": {
+        "name": "sugar-datepicker-7-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -23755,9 +23755,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-tc-m-2.ansi": {
-        "name": "sugar-calendar-7-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-tc-m-2.ansi": {
+        "name": "sugar-datepicker-7-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -23767,9 +23767,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-tc-s-1.ansi": {
-        "name": "sugar-calendar-7-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-tc-s-1.ansi": {
+        "name": "sugar-datepicker-7-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -23779,9 +23779,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-tc-s-2.ansi": {
-        "name": "sugar-calendar-7-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-7-tc-s-2.ansi": {
+        "name": "sugar-datepicker-7-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -23791,9 +23791,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-16-s-1.ansi": {
-        "name": "sugar-calendar-8-16-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-16-s-1.ansi": {
+        "name": "sugar-datepicker-8-16-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "49x16",
         "width": 49,
         "height": 16,
@@ -23803,9 +23803,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-256-l-1.ansi": {
-        "name": "sugar-calendar-8-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-256-l-1.ansi": {
+        "name": "sugar-datepicker-8-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "170x29",
         "width": 170,
         "height": 29,
@@ -23815,9 +23815,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-256-l-2.ansi": {
-        "name": "sugar-calendar-8-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-256-l-2.ansi": {
+        "name": "sugar-datepicker-8-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "166x29",
         "width": 166,
         "height": 29,
@@ -23827,9 +23827,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-256-m-1.ansi": {
-        "name": "sugar-calendar-8-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-256-m-1.ansi": {
+        "name": "sugar-datepicker-8-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -23839,9 +23839,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-256-m-2.ansi": {
-        "name": "sugar-calendar-8-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-256-m-2.ansi": {
+        "name": "sugar-datepicker-8-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -23851,9 +23851,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-256-s-1.ansi": {
-        "name": "sugar-calendar-8-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-256-s-1.ansi": {
+        "name": "sugar-datepicker-8-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "57x13",
         "width": 57,
         "height": 13,
@@ -23863,9 +23863,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-256-s-2.ansi": {
-        "name": "sugar-calendar-8-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-256-s-2.ansi": {
+        "name": "sugar-datepicker-8-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -23875,9 +23875,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-tc-l-1.ansi": {
-        "name": "sugar-calendar-8-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-tc-l-1.ansi": {
+        "name": "sugar-datepicker-8-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "194x34",
         "width": 194,
         "height": 34,
@@ -23887,9 +23887,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-tc-l-2.ansi": {
-        "name": "sugar-calendar-8-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-tc-l-2.ansi": {
+        "name": "sugar-datepicker-8-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "188x31",
         "width": 188,
         "height": 31,
@@ -23899,9 +23899,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-tc-m-1.ansi": {
-        "name": "sugar-calendar-8-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-tc-m-1.ansi": {
+        "name": "sugar-datepicker-8-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x25",
         "width": 84,
         "height": 25,
@@ -23911,9 +23911,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-tc-m-2.ansi": {
-        "name": "sugar-calendar-8-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-tc-m-2.ansi": {
+        "name": "sugar-datepicker-8-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -23923,9 +23923,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-tc-s-1.ansi": {
-        "name": "sugar-calendar-8-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-tc-s-1.ansi": {
+        "name": "sugar-datepicker-8-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -23935,9 +23935,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-tc-s-2.ansi": {
-        "name": "sugar-calendar-8-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-8-tc-s-2.ansi": {
+        "name": "sugar-datepicker-8-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -23947,9 +23947,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-16-m-1.ansi": {
-        "name": "sugar-calendar-9-16-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-16-m-1.ansi": {
+        "name": "sugar-datepicker-9-16-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -23959,9 +23959,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-16-m-2.ansi": {
-        "name": "sugar-calendar-9-16-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-16-m-2.ansi": {
+        "name": "sugar-datepicker-9-16-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -23971,9 +23971,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-16-s-1.ansi": {
-        "name": "sugar-calendar-9-16-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-16-s-1.ansi": {
+        "name": "sugar-datepicker-9-16-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -23983,9 +23983,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-l-1.ansi": {
-        "name": "sugar-calendar-9-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-l-1.ansi": {
+        "name": "sugar-datepicker-9-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "170x29",
         "width": 170,
         "height": 29,
@@ -23995,9 +23995,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-l-2.ansi": {
-        "name": "sugar-calendar-9-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-l-2.ansi": {
+        "name": "sugar-datepicker-9-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "176x28",
         "width": 176,
         "height": 28,
@@ -24007,9 +24007,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-m-1.ansi": {
-        "name": "sugar-calendar-9-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-m-1.ansi": {
+        "name": "sugar-datepicker-9-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -24019,9 +24019,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-m-2.ansi": {
-        "name": "sugar-calendar-9-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-m-2.ansi": {
+        "name": "sugar-datepicker-9-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -24031,9 +24031,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-m-3.ansi": {
-        "name": "sugar-calendar-9-256-m-3.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-m-3.ansi": {
+        "name": "sugar-datepicker-9-256-m-3.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -24043,9 +24043,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-s-1.ansi": {
-        "name": "sugar-calendar-9-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-s-1.ansi": {
+        "name": "sugar-datepicker-9-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "68x10",
         "width": 68,
         "height": 10,
@@ -24055,9 +24055,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-256-s-2.ansi": {
-        "name": "sugar-calendar-9-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-256-s-2.ansi": {
+        "name": "sugar-datepicker-9-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x8",
         "width": 64,
         "height": 8,
@@ -24067,9 +24067,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-tc-l-1.ansi": {
-        "name": "sugar-calendar-9-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-tc-l-1.ansi": {
+        "name": "sugar-datepicker-9-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "179x28",
         "width": 179,
         "height": 28,
@@ -24079,9 +24079,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-tc-l-2.ansi": {
-        "name": "sugar-calendar-9-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-tc-l-2.ansi": {
+        "name": "sugar-datepicker-9-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "178x28",
         "width": 178,
         "height": 28,
@@ -24091,9 +24091,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-tc-m-1.ansi": {
-        "name": "sugar-calendar-9-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-tc-m-1.ansi": {
+        "name": "sugar-datepicker-9-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -24103,9 +24103,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-tc-m-2.ansi": {
-        "name": "sugar-calendar-9-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-tc-m-2.ansi": {
+        "name": "sugar-datepicker-9-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -24115,9 +24115,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-tc-s-1.ansi": {
-        "name": "sugar-calendar-9-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-tc-s-1.ansi": {
+        "name": "sugar-datepicker-9-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -24127,9 +24127,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-tc-s-2.ansi": {
-        "name": "sugar-calendar-9-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-9-tc-s-2.ansi": {
+        "name": "sugar-datepicker-9-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
@@ -24139,9 +24139,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-16-l-1.ansi": {
-        "name": "sugar-calendar-10-16-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-16-l-1.ansi": {
+        "name": "sugar-datepicker-10-16-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "176x30",
         "width": 176,
         "height": 30,
@@ -24151,9 +24151,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-16-m-1.ansi": {
-        "name": "sugar-calendar-10-16-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-16-m-1.ansi": {
+        "name": "sugar-datepicker-10-16-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "84x26",
         "width": 84,
         "height": 26,
@@ -24163,9 +24163,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-256-l-1.ansi": {
-        "name": "sugar-calendar-10-256-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-256-l-1.ansi": {
+        "name": "sugar-datepicker-10-256-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "172x29",
         "width": 172,
         "height": 29,
@@ -24175,9 +24175,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-256-l-2.ansi": {
-        "name": "sugar-calendar-10-256-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-256-l-2.ansi": {
+        "name": "sugar-datepicker-10-256-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "182x32",
         "width": 182,
         "height": 32,
@@ -24187,9 +24187,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-256-m-1.ansi": {
-        "name": "sugar-calendar-10-256-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-256-m-1.ansi": {
+        "name": "sugar-datepicker-10-256-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -24199,9 +24199,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-256-m-2.ansi": {
-        "name": "sugar-calendar-10-256-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-256-m-2.ansi": {
+        "name": "sugar-datepicker-10-256-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -24211,9 +24211,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-256-s-1.ansi": {
-        "name": "sugar-calendar-10-256-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-256-s-1.ansi": {
+        "name": "sugar-datepicker-10-256-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -24223,9 +24223,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-256-s-2.ansi": {
-        "name": "sugar-calendar-10-256-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-256-s-2.ansi": {
+        "name": "sugar-datepicker-10-256-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "66x16",
         "width": 66,
         "height": 16,
@@ -24235,9 +24235,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-tc-l-1.ansi": {
-        "name": "sugar-calendar-10-tc-l-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-tc-l-1.ansi": {
+        "name": "sugar-datepicker-10-tc-l-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "188x29",
         "width": 188,
         "height": 29,
@@ -24247,9 +24247,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-tc-l-2.ansi": {
-        "name": "sugar-calendar-10-tc-l-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-tc-l-2.ansi": {
+        "name": "sugar-datepicker-10-tc-l-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "186x31",
         "width": 186,
         "height": 31,
@@ -24259,9 +24259,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-tc-m-1.ansi": {
-        "name": "sugar-calendar-10-tc-m-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-tc-m-1.ansi": {
+        "name": "sugar-datepicker-10-tc-m-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x21",
         "width": 88,
         "height": 21,
@@ -24271,9 +24271,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-tc-m-2.ansi": {
-        "name": "sugar-calendar-10-tc-m-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-tc-m-2.ansi": {
+        "name": "sugar-datepicker-10-tc-m-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -24283,9 +24283,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-tc-s-1.ansi": {
-        "name": "sugar-calendar-10-tc-s-1.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-tc-s-1.ansi": {
+        "name": "sugar-datepicker-10-tc-s-1.ansi",
+        "category": "sugar-datepicker",
         "resolution": "62x16",
         "width": 62,
         "height": 16,
@@ -24295,9 +24295,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-tc-s-2.ansi": {
-        "name": "sugar-calendar-10-tc-s-2.ansi",
-        "category": "sugar-calendar",
+    "sugar-datepicker/sugar-datepicker-10-tc-s-2.ansi": {
+        "name": "sugar-datepicker-10-tc-s-2.ansi",
+        "category": "sugar-datepicker",
         "resolution": "68x16",
         "width": 68,
         "height": 16,

@@ -64,7 +64,7 @@
 | [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-bits, sugar-table |
 | [daltonsw/bubbleup](#daltonswbubbleup) | Go | ~50 | sugar-toast |
 | [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | candy-forms |
-| [EthanEFung/bubble-datepicker](#ethanefungbubble-datepicker) | Go | ~40 | sugar-calendar |
+| [EthanEFung/bubble-datepicker](#ethanefungbubble-datepicker) | Go | ~40 | sugar-datepicker |
 | [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-bits |
 | [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-bits |
 | [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-bits, candy-shell |
@@ -181,7 +181,7 @@
 - `sugar-bits` → Primary target (all components)
 - `candy-forms` → TextInput, TextArea
 - `sugar-table` → Table
-- `sugar-calendar` → Timer/Stopwatch
+- `sugar-datepicker` → Timer/Stopwatch
 
 **Strengths:** Bubble Tea integration, immutable builders, comprehensive test coverage.
 **Weaknesses:** Go-only, some gaps vs upstream (ItemList fuzzy filter), PHP port still incomplete.
@@ -1115,7 +1115,7 @@
 **Features:** Focus state machine, 7-column calendar grid algorithm, vim-style keybindings (hjkl).
 
 **SugarCraft Mapping:**
-- `sugar-calendar` → Primary port
+- `sugar-datepicker` → Primary port
 
 ---
 

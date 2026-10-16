@@ -4837,7 +4837,7 @@ fix (its first assertion PINNED the flags defect) and was repointed at this live
 flags case as a fixed-and-pinned equality. Worth its own finding if anyone wants the bound closed.
 
 **Also found, out of scope:** the `grapheme_str_split() -> mb_str_split()` cascade that caused this is
-duplicated in `sugar-charts` (3 sites), `sugar-table` (2), `sugar-stickers` (1) and `sugar-calendar`
+duplicated in `sugar-charts` (3 sites), `sugar-table` (2), `sugar-stickers` (1) and `sugar-datepicker`
 (1) — **seven sites in four libs**. Each degrades to codepoint splitting on PHP 8.3 exactly as `Width`
 did.
 

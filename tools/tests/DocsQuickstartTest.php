@@ -38,7 +38,7 @@ declare(strict_types=1);
  * The first full run found, beyond the four parse errors: invented classes
  * (candy-ansi `AnsiState`, sugar-dash's `Layout\StackedGrid`, sugar-skate's
  * `Backend\MemoryStore`), invented methods (candy-serve `Repo::create()` and
- * `SSHServer::listen()`, sugar-calendar `withMinDate()`, sugar-post `from()`),
+ * `SSHServer::listen()`, sugar-datepicker `withMinDate()`, sugar-post `from()`),
  * wrong arguments (sugar-reel `cols:`/`rows:`, candy-log `with('k', 'v')`), a
  * private constructor (sugar-table `new Table()`), and two `Model`
  * implementations without `subscriptions()` (candy-core, sugar-bits). The

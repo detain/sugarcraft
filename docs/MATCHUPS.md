@@ -68,7 +68,7 @@ called out in the table below.
 | **CandyHermit** (`candy-hermit/`) | 🟢 ready | Fuzzy finder overlay — renders over your app's view string while the background keeps updating; type to filter, arrow keys to select, Enter to confirm. |
 | **SugarTable** (`sugar-table/`) | 🟢 ready | Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows/cols. |
 | **SugarReadline** (`sugar-readline/`) | 🟢 ready | Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency. |
-| **SugarCalendar** (`sugar-calendar/`) | 🟢 ready | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
+| **SugarDatepicker** (`sugar-datepicker/`) | 🟢 ready | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
 | **SugarStickers** (`sugar-stickers/`) | 🟢 ready | FlexBox layout engine + simple sort/filter table — ratio-based sizing, gap, justify, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter region model). |
@@ -187,7 +187,7 @@ reference projects supplied the ideas, not the code.
 | CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
 | SugarBits (sugar-bits/) | [bubbles](https://github.com/charmbracelet/bubbles) |
 | SugarBoxer (sugar-boxer/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
-| SugarCalendar (sugar-calendar/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
+| SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |
 | SugarCraft (candy-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
 | SugarCrush (sugar-crush/) | [Crush](https://github.com/charmbracelet/crush) |

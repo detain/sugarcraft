@@ -44,7 +44,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-shell | Shell injection in env-var fallback | Application.php:137 | escapeshellarg→stripslashes→trim chain not safe |
 | candy-shell | Env var exfiltration via template mode | FormatCommand.php:99 | getenv() accessible in templates — cred leak risk |
 | candy-vcr | Undefined $cassette variable | TapeToGif.php:70 | Variable used before assignment — runtime fatal |
-| sugar-calendar | Cell output not capped to viewport width | View.php | Cells rendered beyond viewport width |
+| sugar-datepicker | Cell output not capped to viewport width | View.php | Cells rendered beyond viewport width |
 | sugar-gallery | No file type validation | Gallery.php:78 | Non-image files passed to decoder — crash/exploit |
 | sugar-gallery | FFI buffer not explicitly freed | FFIDecoder.php | C memory must be explicitly free()'d — leak |
 | sugar-stickers | UTF-8 multibyte corruption in sanitize | Column.php:112, FlexBox.php:302 | Bytes 0x80-0x9F stripped — corrupts CJK text |
@@ -105,7 +105,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-stickers | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |
 | sugar-crush | 2 HIGH, 3 MED, 2 LOW | EOF buffer drain, mouse coordinate off-by-one |
 | sugar-readline | 0 HIGH, 5 MED, 6 LOW | Unbounded history, blocking save, Vi cursor off-by-one |
-| sugar-calendar | 1 HIGH, 2 MED, 4 LOW | Viewport overflow, month re-render per view() |
+| sugar-datepicker | 1 HIGH, 2 MED, 4 LOW | Viewport overflow, month re-render per view() |
 | sugar-toast | 0 HIGH, 3 MED, 3 LOW | Viewport overflow, non-cancellable timer, no action buttons |
 | candy-tetris | 1 HIGH, 2 MED, 5 LOW | AI rotation bug, garbage overflow off-by-one |
 | candy-mouse | 0 HIGH, 2 MED, 4 LOW | current() returns null, switchTo() no bounds check |

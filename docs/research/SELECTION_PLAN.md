@@ -457,7 +457,7 @@ All 45 research documents available at:
 | candy-flappy | 11KB |
 | sugar-bits | 26KB |
 | sugar-boxer | 16KB |
-| sugar-calendar | 19KB |
+| sugar-datepicker | 19KB |
 | sugar-charts | 23KB |
 | sugar-crumbs | 14KB |
 | sugar-crush | 15KB |

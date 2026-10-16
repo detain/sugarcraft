@@ -67,8 +67,8 @@ _All items in this section have been resolved by the completion of steps 20–40
 - [RESOLVED | 2026-05-31 | step-30 | coder] Ecosystem audit: adoption opportunity matrix for 19 remaining libs — MERGED PR #909:
   - Created docs/repo_map_update_followups.md; Branch ai/ecosystem-audit merged to master
 
-- [RESOLVED | 2026-06-01 | step-34 | coder] sugar-calendar + sugar-toast: adopt candy-buffer + candy-testing — MERGED PR #914:
-  - sugar-calendar: DatePicker widget + candy-testing golden-files; sugar-toast: border styling + queue management
+- [RESOLVED | 2026-06-01 | step-34 | coder] sugar-datepicker + sugar-toast: adopt candy-buffer + candy-testing — MERGED PR #914:
+  - sugar-datepicker: DatePicker widget + candy-testing golden-files; sugar-toast: border styling + queue management
   - Branch ai/widget-shared merged to master
 
 - [RESOLVED | 2026-06-01 | step-36 | shipper] candy-flip + candy-kit + honey-bounce + candy-flappy: adopt candy-testing — MERGED PR #916:

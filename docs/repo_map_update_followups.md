@@ -38,7 +38,7 @@ The 8 shared packages:
 | Step 31 | candy-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
 | Step 33 | sugar-skate, sugar-wishlist, sugar-stash | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
-| Step 34 | sugar-calendar, sugar-toast | candy-buffer, candy-layout, candy-testing |
+| Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, sugar-post, candy-serve | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
@@ -151,7 +151,7 @@ The 8 shared packages:
 
 ---
 
-### sugar-calendar
+### sugar-datepicker
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -228,7 +228,7 @@ The 8 shared packages:
 | candy-buffer | Banner/Logo/Section/StatusLine render via string — Buffer would standardize ANSI composition | S |
 | candy-layout | Stage.php constrains section widths manually — LayoutSolver would replace ad-hoc sizing | S |
 
-**Notes:** Already listed above under step 36. Note: candy-kit ships components that other libs (sugar-calendar, sugar-toast) will build on — buffer/layout adoption here propagates downstream benefit.
+**Notes:** Already listed above under step 36. Note: candy-kit ships components that other libs (sugar-datepicker, sugar-toast) will build on — buffer/layout adoption here propagates downstream benefit.
 
 ---
 
@@ -298,8 +298,8 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-calendar (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, sugar-stash (buffer+mouse), sugar-calendar (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, sugar-stash (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
 
 ---
 

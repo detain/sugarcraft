@@ -1,0 +1,11 @@
+{
+    "title": "SugarDatepicker — SugarCraft",
+    "description": "SugarDatepicker: Interactive date picker.",
+    "ogTitle": "SugarDatepicker — SugarCraft",
+    "ogDescription": "Interactive date picker.",
+    "emoji": "",
+    "displayName": "SugarDatepicker",
+    "tagline": "Interactive date picker",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/EthanEFung/bubble-datepicker\" style=\"color: inherit;\">EthanEFung/bubble-datepicker</a></span>\n          <span class=\"tag-chip\">date</span><span class=\"tag-chip\">picker</span><span class=\"tag-chip\">calendar</span><span class=\"tag-chip\">input</span>"
+}

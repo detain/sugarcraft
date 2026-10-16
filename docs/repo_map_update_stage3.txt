@@ -1,7 +1,7 @@
 # SugarCraft Stage 3 Update Analysis
 
 Cross-cutting analysis of 9 update documents covering sugar-spark, candy-freeze,
-sugar-calendar, candy-metrics, sugar-toast, sugar-skate, candy-serve, sugar-wishlist,
+sugar-datepicker, candy-metrics, sugar-toast, sugar-skate, candy-serve, sugar-wishlist,
 candy-hermit.
 
 ---
@@ -46,7 +46,7 @@ manual parsing instead of sharing the state machine.
 requires modifying core loops rather than registering handlers.
 
 ### B. No Golden File / Snapshot Testing Infrastructure
-sugar-spark has 116 unit tests but zero golden file regression tests. sugar-calendar
+sugar-spark has 116 unit tests but zero golden file regression tests. sugar-datepicker
 has 57 tests but no snapshot tests for `View()` output. candy-freeze's WindowStyleTest
 tests SVG structure but could use full render comparison. Only sugar-skate and
 candy-hermit have what could be called structured test coverage.
@@ -107,7 +107,7 @@ Adding `--format png` to the CLI is trivial wiring. This closes the CLI/API pari
 
 ## 5. Packages Already Superior to Upstream
 
-### sugar-calendar > EthanEFung/bubble-datepicker
+### sugar-datepicker > EthanEFung/bubble-datepicker
 - Immutable + fluent architecture (upstream is mutable)
 - Date range selection (NOT in upstream Go)
 - 16-locale i18n with completeness testing

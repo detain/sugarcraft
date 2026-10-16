@@ -1,6 +1,6 @@
-# Step 10.20 — sugar-calendar date range select + kb nav + EventStore
+# Step 10.20 — sugar-datepicker date range select + kb nav + EventStore
 
-**Source:** `leftover_updates_later.md` sugar-calendar §3.1 + Phase 2
+**Source:** `leftover_updates_later.md` sugar-datepicker §3.1 + Phase 2
 **Branch:** `ai/calendar-range-eventstore`
 
 ## Deliverable
@@ -11,7 +11,7 @@
 
 ## Files
 
-**Create:** `sugar-calendar/src/DateRange.php`, `EventStore.php`,
+**Create:** `sugar-datepicker/src/DateRange.php`, `EventStore.php`,
 `Navigation.php`.
 
 **Modify:** `DatePicker.php`.
@@ -22,7 +22,7 @@
 
 ## Acceptance
 
-- `cd sugar-calendar && vendor/bin/phpunit` green.
+- `cd sugar-datepicker && vendor/bin/phpunit` green.
 
 ---
 

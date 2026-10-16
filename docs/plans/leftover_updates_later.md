@@ -173,7 +173,7 @@ Canonical pattern: `sugar-wishlist/src/Lang.php` wraps `\SugarCraft\Core\I18n\T`
 
 **Libs verified missing `Lang.php` / `lang/`:**
 
-- `sugar-calendar` — only ships `DatePicker.php`; user-facing date strings hardcoded.
+- `sugar-datepicker` — only ships `DatePicker.php`; user-facing date strings hardcoded.
 - `sugar-table` — header / pagination / empty-state strings hardcoded.
 - `sugar-toast` — alert level labels (Info/Warning/Error) hardcoded.
 - `sugar-stickers` — when feature work lands, must include Lang.
@@ -513,7 +513,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Gaps detection / untracked-period reports (HIGH).
 - SQLite backend, milestones, iCal export, auto-backups, theme system (MEDIUM).
 
-### sugar-calendar
+### sugar-datepicker
 
 - Date range selection (§3.1, HIGH).
 - Focus-based keyboard navigation (Phase 2).

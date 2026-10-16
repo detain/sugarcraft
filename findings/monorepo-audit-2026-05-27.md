@@ -149,16 +149,16 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 7: sugar-calendar, sugar-glow, candy-forms, sugar-toast
+### Group 7: sugar-datepicker, sugar-glow, candy-forms, sugar-toast
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| sugar-calendar | 70 ✓ | APPROVE | 0 | 0 | 4 | 0 |
+| sugar-datepicker | 70 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | sugar-glow | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | candy-forms | 299 ✓ | REQUEST_CHANGES | 1 | 1 | 3 | 0 |
 | sugar-toast | 99 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 
-**sugar-calendar** — Date picker. Issues: `EventStore` uses `time()` (second precision) instead of `microtime(true)`; missing `CALIBER_LEARNINGS.md`; `firstOfViewMonth()` can return false but callers don't consistently handle it.
+**sugar-datepicker** — Date picker. Issues: `EventStore` uses `time()` (second precision) instead of `microtime(true)`; missing `CALIBER_LEARNINGS.md`; `firstOfViewMonth()` can return false but callers don't consistently handle it.
 
 **sugar-glow** — Markdown viewer. Issues: `Application::VERSION` hardcoded as `'0.1.0'` instead of reading from composer; `ChromaJsonHighlighter` regex tokenizer is explicitly a proof-of-concept (matches any word followed by `(` as function); theme JSON structure mismatch with GlamourTheme::fromJson().
 
@@ -276,7 +276,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 5. **Package type**: Some are `"type": "library"`, some `"type": "project"` (sugar-tick, candy-mold, sugar-stash)
 6. **Packagist namespace**: `sugarcore/` vs `sugarcraft/` inconsistency
 7. **`mutate()` helper signature**: Named-param vs positional vs named+sentinel bools — 3 different shapes
-8. **CALIBER_LEARNINGS.md presence**: sugar-calendar missing; others have it
+8. **CALIBER_LEARNINGS.md presence**: sugar-datepicker missing; others have it
 9. **Test file organization**: Some use `tests/` subdirs, some don't
 10. **phpunit.xml self-reference in repositories[]**: Some have it, some don't
 
@@ -342,7 +342,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Lang facade | 33 copies | Use `LangFactory::for()` or shared trait |
 | with() sentinel | `value ?: $existing` | Use `null` as sentinel, allow `0`/`false` |
 | Factory naming | Mostly `::new()` + bare names | Document/enforce in CLAUDE.md |
-| CALIBER_LEARNINGS.md | Most packages have it | Add to sugar-calendar (missing) |
+| CALIBER_LEARNINGS.md | Most packages have it | Add to sugar-datepicker (missing) |
 | composer.json self-ref | Inconsistent | Always include `{"type": "path", "url": ".."}` for testing |
 | Test directory layout | Varies | Adopt `tests/<Class>Test.php` flat layout |
 
@@ -411,7 +411,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Item | Status | Notes |
 |------|--------|-------|
 | README quickstarts | ✅ 43/43 libs | All have `composer require` + 5-line snippets |
-| CALIBER_LEARNINGS.md | ⚠️ 32/33 | sugar-calendar missing |
+| CALIBER_LEARNINGS.md | ⚠️ 32/33 | sugar-datepicker missing |
 | examples/ coverage | ✅ 42/43 libs | super-candy intentionally has no examples (it's a binary) |
 | Error messages via Lang::t() | ✅ Full | No bare English strings in exception paths |
 | Type signatures | ✅ Full | `mixed` only where genuinely heterogeneous |
@@ -447,7 +447,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 14. **[EXTRACT]** Create `SugarCraft\Core\I18n\LangFactory` and migrate 33 Lang.php files
 15. **[EXTRACT]** Extract `TickMsg` base class from candy-tetris/candy-minesweeper/candy-flappy
 16. **[EXTRACT]** Create `SugarCraft\Core\Tests\TestCase` base + `StreamHelper` trait
-17. **[DOCS]** Add CALIBER_LEARNINGS.md to sugar-calendar
+17. **[DOCS]** Add CALIBER_LEARNINGS.md to sugar-datepicker
 18. **[FIX]** sugar-skate: Replace reflection in YamlImporter with public method
 19. **[FIX]** sugar-tick: Add `close()` to SqliteBackend
 20. **[FIX]** sugar-tick: Fix ExporterInterface mismatch
@@ -484,7 +484,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 5. **candy-flappy**: Make `saveHighScore()` return `false` when `file_put_contents()` fails
 6. **candy-tetris**: Add `escapeshellarg()` to `Repo::branches()` path
 7. **sugar-tick**: Add `close()` method to SqliteBackend (even if a no-op)
-8. **sugar-calendar**: Add `CALIBER_LEARNINGS.md` (copy from another package)
+8. **sugar-datepicker**: Add `CALIBER_LEARNINGS.md` (copy from another package)
 
 ---
 
@@ -568,7 +568,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, sugar-skate, sugar-stash | 1,190 | ⚠️ stash 2 skipped |
-| 7 | sugar-calendar, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
+| 7 | sugar-datepicker, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
 | 9 | sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |

@@ -3,7 +3,7 @@
   "entries": [
     {"batch":"A","kind":"rename","old":"honey-flap","new":"candy-flappy","ns_old":"Flap","ns_new":"Flappy","type":"app","bins":{"bin/honey-flap":"bin/candy-flappy"},"status":"packagist-done"},
     {"batch":"A","kind":"rename","old":"candy-mines","new":"candy-minesweeper","ns_old":"Mines","ns_new":"Minesweeper","type":"app","bins":{"bin/candy-mines":"bin/candy-minesweeper"},"status":"packagist-done"},
-    {"batch":"A","kind":"rename","old":"sugar-calendar","new":"sugar-datepicker","ns_old":"Calendar","ns_new":"DatePicker","type":"lib","bins":{},"status":"pending"},
+    {"batch":"A","kind":"rename","old":"sugar-calendar","new":"sugar-datepicker","ns_old":"Calendar","ns_new":"DatePicker","type":"lib","bins":{},"status":"renamed"},
 
     {"batch":"B","kind":"rename","old":"sugar-stash","new":"candy-git","ns_old":"Stash","ns_new":"Git","type":"app","bins":{"bin/sugar-stash":"bin/candy-git"},"status":"pending"},
     {"batch":"B","kind":"rename","old":"candy-query","new":"candy-sql","ns_old":"Query","ns_new":"Sql","type":"app","bins":{"bin/candy-query":"bin/candy-sql"},"status":"pending"},
