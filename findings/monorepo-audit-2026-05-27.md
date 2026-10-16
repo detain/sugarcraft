@@ -89,20 +89,20 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 4: candy-tetris, candy-minesweeper, candy-flip, sugar-treelist
+### Group 4: candy-tetris, candy-minesweeper, candy-flip, sugar-treelist <!-- @rename-keep -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-tetris | 117 ✓ | APPROVE | 0 | 3 | 2 | 0 |
 | candy-minesweeper | 91 ✓ | APPROVE | 0 | 1 | 3 | 0 |
-| candy-flip | 53 ✓ | APPROVE | 0 | 2 | 2 | 0 |
+| candy-flip | 53 ✓ | APPROVE | 0 | 2 | 2 | 0 | <!-- @rename-keep -->
 | sugar-treelist | 39 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 
 **candy-tetris** — Full Tetris with SRS, T-Spin, VS mode. Issues: `Das::withKeyDown()` ignores state parameter; `Ansi::sgr()` with 4 args in ghost rendering; VS Computer moves on every tick not own schedule.
 
 **candy-minesweeper** — Minesweeper. Issue: `Renderer::status()` type annotation says `?int` but `Game::elapsed()` returns `?float` — type mismatch at runtime.
 
-**candy-flip** — GIF decoder. Issues: LZW sub-block parsing fails on `0x80` byte (valid length byte misidentified as control); `FloydSteinberg::dither()` calls `imagecolorat()` 3× per pixel instead of once.
+**candy-flip** — GIF decoder. Issues: LZW sub-block parsing fails on `0x80` byte (valid length byte misidentified as control); `FloydSteinberg::dither()` calls `imagecolorat()` 3× per pixel instead of once. <!-- @rename-keep -->
 
 **sugar-treelist** — List view. Issues: `Model` claims immutability but has many public mutable properties; `addItem()` returns `$this` (mutates in place, not clone); `FuzzyMatch::score()` uses byte operations on potential UTF-8.
 
@@ -264,7 +264,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder |
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
-| **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, sugar-treelist/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
+| **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, sugar-treelist/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes | <!-- @rename-keep -->
 | **Path-repo closure gaps** | candy-mdview, sugar-flexbox, candy-ssh-launcher | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
 ### 🟡 Cross-Package Inconsistencies
@@ -565,7 +565,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 1 | candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
 | 2 | candy-sql, candy-starter, candy-kit, candy-codeshot | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
-| 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass |
+| 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass | <!-- @rename-keep -->
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues | <!-- @rename-keep historical provenance -->
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped  <!-- @rename-keep historical provenance --> |
 | 7 | sugar-datepicker, candy-mdview, sugar-forms, sugar-toast | 534 | ⚠️ prompt arch concern |

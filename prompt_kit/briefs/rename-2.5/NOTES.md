@@ -61,7 +61,7 @@ defects in the 34-commit chain being CI'd for the first time, plus one infra fam
 2. candy-core Test 8.3/8.4/Coverage — DescriptorSinkArgumentCensusTest::
    testEverySiteThatConsumesADescriptorIsJudgedInTheRoster red: 'candy-gifview/src/
    Cli.php::SizeIoctl::query(1)' [LITERAL_INT] missing from ROSTER — introduced by step
-   1.3 split (commit 4d6f81799), REPRODUCED LOCALLY deterministic (1F). candy-flip/
+   1.3 split (commit 4d6f81799), REPRODUCED LOCALLY deterministic (1F). candy-flip/ <!-- @rename-keep -->
    Renderer.php keeps its own 2 query(1) sites; its roster rows stay. Fix = add one
    judged roster row in candy-core/tests. NOT committed here (outside 2.5 path scope).
 3. candy-core macOS — same census red + ProgramRuntimeTeardownTest::

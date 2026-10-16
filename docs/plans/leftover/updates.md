@@ -46,7 +46,7 @@ this before spawning the next subagent.)
 
   This is NOT a chart duplication problem. Per CALIBER_LEARNINGS entry 38 [pattern:dual-foundation-ssot]: "The 5 retained types are intentionally distinct from same-named canonical types in candy-sprinkles/candy-core/candy-vt due to different upstream lineage." The same applies here. **The step should be closed as "not actionable"** — there is nothing to delete and no dependency to add. sugar-dash chart components serve dashboard-specific visualization needs; sugar-charts serves canonical chart primitives. The boundary is already correct.   Supervisor decision needed: should this step be dropped from the rollout, or should I attempt a different interpretation (e.g., adding sugar-charts as a dep even without deleting anything)? <!-- @rename-keep -->
 
-- **step 07.15** (candy-mosaic animation support): ~~BLOCKED~~ **RESOLVED via PR#660 (step 11.04)** — strategic plan `plans/candy-flip-mosaic-split.md` shipped 2026-05-19. Decision: Animation lives in `candy-mosaic`; `Animation` ctor takes `list<ImageSource>` + per-frame delays (frame-source-agnostic); candy-mosaic does **not** require candy-flip — drop the `"sugarcraft/candy-flip": "@dev"` bullet from step 07.15's Modify list. Future GIF→Mosaic bridge (if any) lives in candy-flip, not in mosaic. See plan §3 for the answer table, §4 for API contract.
+- **step 07.15** (candy-mosaic animation support): ~~BLOCKED~~ **RESOLVED via PR#660 (step 11.04)** — strategic plan `plans/candy-flip-mosaic-split.md` shipped 2026-05-19. Decision: Animation lives in `candy-mosaic`; `Animation` ctor takes `list<ImageSource>` + per-frame delays (frame-source-agnostic); candy-mosaic does **not** require candy-flip — drop the `"sugarcraft/candy-flip": "@dev"` bullet from step 07.15's Modify list. Future GIF→Mosaic bridge (if any) lives in candy-flip, not in mosaic. See plan §3 for the answer table, §4 for API contract. <!-- @rename-keep -->
 
 ---
 
@@ -330,7 +330,7 @@ step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2
 review for step 11.03 · clean · PR#658
 tests-ci for step 11.03 · clean
 docs for step 11.03 · clean
-step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo (Option C — neither lib depends on the other; Animation lives in candy-mosaic with ImageSource[] ctor; resolves step 07.15 blocker — drop the candy-flip require from 07.15's Modify list)
+step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo (Option C — neither lib depends on the other; Animation lives in candy-mosaic with ImageSource[] ctor; resolves step 07.15 blocker — drop the candy-flip require from 07.15's Modify list) <!-- @rename-keep -->
 fix for step 11.04 · PR#662 · resolved 5 findings (§1.2 totals 21/3236→22/3426; MosaicBuilder row merged into Mosaic.php note; §6.1+§6.4 phantom sugar-dash/sugar-charts consumers reframed to "no current consumers"; §4.1 withFrame() body filled in with clone-mutate pattern + sketch pointer; §3 divergence note explaining Option A→C deviation from step file framing) <!-- @rename-keep -->
 tests-ci for step 11.04 · clean
 docs for step 11.04 · clean
@@ -412,15 +412,15 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
    step 08.14 · PR#707 · candy-codeshot: VS Code/chroma JSON theme loaders + font embed + line highlight (leftover-rollout step 08.14)
    review for step 08.14 · clean · PR#707
    docs for step 08.14 · direct-to-master · document VsCodeThemeLoader/ChromaThemeLoader/withFont/withHighlight in README/end-user HTML/CALIBER_LEARNINGS.md
-    step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01)
+    step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01) <!-- @rename-keep -->
     review for step 09.01 · clean · PR#708
     tests-ci for step 09.01 · clean
     docs for step 09.01 · PR#709 · document imagecreatefromstring() decode in README + new CALIBER_LEARNINGS.md (leftover-rollout step 09.01)
-    step 09.02 · PR#710 · candy-flip: area downsample + Floyd-Steinberg dithering + per-frame local color tables + GCE transparency/disposal
+    step 09.02 · PR#710 · candy-flip: area downsample + Floyd-Steinberg dithering + per-frame local color tables + GCE transparency/disposal <!-- @rename-keep -->
     fix for step 09.02 · PR#711 · resolved 1 finding
     tests-ci for step 09.02 · clean
     docs for step 09.02 · PR#713 · document Downsampler/FloydSteinberg in README + end-user HTML (leftover-rollout step 09.02)
-    step 09.03 · PR#714 · candy-flip: adaptive cell size via SizeIoctl + frame cache (leftover-rollout step 09.03)
+    step 09.03 · PR#714 · candy-flip: adaptive cell size via SizeIoctl + frame cache (leftover-rollout step 09.03) <!-- @rename-keep -->
     review for step 09.03 · clean · PR#714
     tests-ci for step 09.03 · clean
     docs for step 09.03 · PR#715 · document withAdaptiveSize() and FrameCache in README + end-user HTML + CALIBER_LEARNINGS

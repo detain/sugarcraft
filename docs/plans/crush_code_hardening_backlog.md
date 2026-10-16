@@ -12568,7 +12568,7 @@ that. Rule 15/25 applies: a fixture whose expected value is what a dead instrume
 **Recorded 2026-08-24 by round-52 lane a; AMENDED the same day, after review, by the fix agent.**
 Severity: correctness — five latent, **one live on every `2>file` invocation**. Measured, PHP 8.3.6.
 **Every remaining site is OUT OF LANE — `candy-core/src/Util/Tty/PosixBackend.php` and
-`candy-flip/src/Renderer.php` are not on this lane's file list. Reported, not fixed.**
+`candy-flip/src/Renderer.php` are not on this lane's file list. Reported, not fixed.** <!-- @rename-keep -->
 
 #### WHAT THIS ENTRY FIRST SAID, AND WHY IT CHANGED
 
@@ -12612,7 +12612,7 @@ re-derive this list. Do not trust the count in this paragraph — re-derive it.
 | 3 | `PosixBackend::size()`, `/dev/tty` arm | `(int) $tty[0]` | resource id | **wrong on every run** |
 | 4 | `PosixBackend::enableRawMode()` | `(int) $this->stream` | resource id | latent |
 | 5 | `PosixBackend::restoreLast()` | `(int) STDIN` | descriptor 1 (STDOUT) | wrong on every run |
-| 6 | `Renderer::withAdaptiveSize()` (candy-flip) | `(int) STDOUT` | descriptor 2 (STDERR) | **NOT latent — see below** |
+| 6 | `Renderer::withAdaptiveSize()` (candy-flip) | `(int) STDOUT` | descriptor 2 (STDERR) | **NOT latent — see below** | <!-- @rename-keep -->
 
 Sites 3, 5 and 6 were all missed by the first census, and all three for the alphabet reason above.
 
@@ -12631,7 +12631,7 @@ over descriptors 0, 1, 2.
 
 #### SITE 6 IS NOT LATENT, AND IT IS THE REASON THIS AMENDMENT MATTERS
 
-`candy-flip`'s `Renderer::withAdaptiveSize()` calls `SizeIoctl::query((int) STDOUT)`. `(int) STDOUT` is
+`candy-flip`'s `Renderer::withAdaptiveSize()` calls `SizeIoctl::query((int) STDOUT)`. `(int) STDOUT` is <!-- @rename-keep -->
 **2**; STDOUT's descriptor is **1**. So it asks the kernel for **STDERR's** window size while its own
 doc-block promises `@throws \RuntimeException if STDOUT is not a TTY`.
 
@@ -13618,7 +13618,7 @@ row), which is the point of writing it that way — but the person who hits it w
 package they never touched.
 
 Mutation-verified against the census alone (`--filter DescriptorSinkArgumentCensusTest`): reintroducing
-the cast in `candy-flip/src/Renderer.php`, in `candy-pty/src/SizeIoctl.php`, and in
+the cast in `candy-flip/src/Renderer.php`, in `candy-pty/src/SizeIoctl.php`, and in <!-- @rename-keep -->
 `candy-shine/src/Theme.php` each reds it — the last of those being a library no earlier scoping of this
 census would have looked at.
 
@@ -15161,7 +15161,7 @@ wiring finally lands. Revisit only if the help page is ever restructured into pe
 
 The documented restore is `check-path-repos.php --fix --strict-closure` → `composer update` →
 `git checkout -- '*/composer.json'`. MEASURED after the round-54 `composer update` sweep, that procedure
-left **`candy-flip` at 4/6 and `candy-pty` at 3/7** by `is_link()` + `realpath()`. Two independent gaps:
+left **`candy-flip` at 4/6 and `candy-pty` at 3/7** by `is_link()` + `realpath()`. Two independent gaps: <!-- @rename-keep -->
 
 1. **The tool walks the `require` graph only.** Its own `--help` says so. Every miss was a `require-dev`
    sibling — `candy-buffer`, `candy-testing`, `candy-vcr`, `candy-vt` — so a lib whose test harness comes
@@ -15604,7 +15604,7 @@ What is **not** established is that no caller pattern anywhere wants a stable re
 `close()`. "No test notices" is a much weaker claim than "no reachable caller was found", and the
 difference is exactly the kind of sentence this plan has had to retract before. Someone closing this owes
 a generator: a census of `PosixMasterPty::close()` callers across the monorepo (`candy-pty`,
-`candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the
+`candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the <!-- @rename-keep -->
 descriptor number across the call. Until then the block stays and the comment says what it does not know.
 
 ### E467 [CLOSED] — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
