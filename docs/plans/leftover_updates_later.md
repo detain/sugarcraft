@@ -369,7 +369,7 @@ because research adds three items the PTY plan did not call out:)
 - Kitty/WezTerm graphics-protocol output path (P10) — overlap with candy-mosaic; pick one home. **Recommendation:** Kitty/WezTerm rendering belongs in candy-mosaic; candy-flip emits frame bytes only.
 - Frame cache (P12).
 
-### candy-hermit
+### sugar-quickpick
 
 - `Item` interface + numbered items (§3.1 P1).
 - Filter function injection `setFilterFn()` (§3.2 P2).

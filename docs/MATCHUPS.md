@@ -65,7 +65,7 @@ called out in the table below.
 | **SugarOverlay** (`sugar-overlay/`) | 🟢 ready | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | **SugarNavstack** (`sugar-navstack/`) | 🟢 ready | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
 | **SugarDash** (`sugar-dash/`) | 🟢 ready | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
-| **CandyHermit** (`candy-hermit/`) | 🟢 ready | Fuzzy finder overlay — renders over your app's view string while the background keeps updating; type to filter, arrow keys to select, Enter to confirm. |
+| **SugarQuickpick** (`sugar-quickpick/`) | 🟢 ready | Fuzzy finder overlay — renders over your app's view string while the background keeps updating; type to filter, arrow keys to select, Enter to confirm. |
 | **SugarTable** (`sugar-table/`) | 🟢 ready | Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows/cols. |
 | **SugarReadline** (`sugar-readline/`) | 🟢 ready | Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency. |
 | **SugarDatepicker** (`sugar-datepicker/`) | 🟢 ready | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
@@ -159,7 +159,7 @@ reference projects supplied the ideas, not the code.
 | CandyFocus (candy-focus/) | [bubbles](https://github.com/charmbracelet/bubbles) (focus behavior) |
 | CandyCodeshot (candy-codeshot/) | [freeze](https://github.com/charmbracelet/freeze) |
 | CandyFuzzy (candy-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
-| CandyHermit (candy-hermit/) | [theHermit](https://github.com/Genekkion/theHermit) |
+| SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
 | CandyInput (candy-input/) | none — first-party |
 | CandyKit (candy-kit/) | [fang](https://github.com/charmbracelet/fang) |
 | CandyLayout (candy-layout/) | [ratatui](https://github.com/ratatui/ratatui) |

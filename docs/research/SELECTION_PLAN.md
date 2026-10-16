@@ -187,12 +187,12 @@
 - **Effort**: 1 hour
 - **Research**: `libraries/sugar-navstack-research.md`
 
-### candy-hermit
+### sugar-quickpick
 
 ### [ ] Add Item interface + Numbered Items
 
 - **Effort**: 2-3 hours
-- **Research**: `libraries/candy-hermit-research.md`
+- **Research**: `libraries/sugar-quickpick-research.md`
 
 ### candy-codeshot
 
@@ -435,7 +435,7 @@ All 45 research documents available at:
 | candy-core | 17KB |
 | candy-flip | 16KB |
 | candy-codeshot | 23KB |
-| candy-hermit | 21KB |
+| sugar-quickpick | 21KB |
 | candy-lister | 15KB |
 | candy-log | 17KB |
 | candy-metrics | 20KB |

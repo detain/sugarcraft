@@ -1,0 +1,49 @@
+{
+    "name": "sugarcraft/sugar-quickpick",
+    "description": "PHP port of Genekkion/theHermit \u2014 fuzzy finder / quick-fix overlay for terminal UIs. Wraps a background view, renders a filterable list overlay on top, background continues to update underneath.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "fuzzy",
+        "finder",
+        "overlay",
+        "quickfix",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-quickpick",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-quickpick/issues",
+        "source": "https://github.com/sugarcraft/sugar-quickpick"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-ansi": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/candy-pty": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\QuickPick\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\QuickPick\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

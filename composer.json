@@ -51,7 +51,7 @@
         "sugarcraft/candy-codeshot": "dev-master",
         "sugarcraft/candy-fuzzy": "dev-master",
         "sugarcraft/candy-gifview": "dev-master",
-        "sugarcraft/candy-hermit": "dev-master",
+        "sugarcraft/sugar-quickpick": "dev-master",
         "sugarcraft/candy-kit": "dev-master",
         "sugarcraft/candy-lister": "dev-master",
         "sugarcraft/candy-log": "dev-master",
@@ -174,7 +174,7 @@
         },
         {
             "type": "path",
-            "url": "candy-hermit",
+            "url": "sugar-quickpick",
             "options": {
                 "symlink": true
             }

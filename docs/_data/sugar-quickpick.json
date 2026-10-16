@@ -1,0 +1,11 @@
+{
+    "title": "SugarQuickpick — SugarCraft",
+    "description": "SugarQuickpick: Fuzzy finder overlay for terminal UIs.",
+    "ogTitle": "SugarQuickpick — SugarCraft",
+    "ogDescription": "Fuzzy finder overlay for terminal UIs.",
+    "emoji": "",
+    "displayName": "SugarQuickpick",
+    "tagline": "Fuzzy finder overlay for terminal UIs",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/Genekkion/theHermit\" style=\"color: inherit;\">Genekkion/theHermit</a></span>\n          <span class=\"tag-chip\">fuzzy</span><span class=\"tag-chip\">finder</span><span class=\"tag-chip\">overlay</span><span class=\"tag-chip\">search</span>"
+}

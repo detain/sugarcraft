@@ -60,7 +60,7 @@ To implement an item:
 | **candy-log** | [research/libraries/candy-log-research.md](libraries/candy-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values |
 | **candy-wish** | [research/libraries/candy-wish-research.md](libraries/candy-wish-research.md) | 1. Context propagation, 2. Channel events, 3. Session metadata |
 | **candy-ssh-launcher** | [research/libraries/candy-ssh-launcher-research.md](libraries/candy-ssh-launcher-research.md) | 1. proxy_jump, 2. SSH config import, 3. Identity files |
-| **candy-hermit** | [research/libraries/candy-hermit-research.md](libraries/candy-hermit-research.md) | 1. Item interface, 2. Filter injection, 3. Persistent history |
+| **sugar-quickpick** | [research/libraries/sugar-quickpick-research.md](libraries/sugar-quickpick-research.md) | 1. Item interface, 2. Filter injection, 3. Persistent history |
 
 ### Rendering & Media
 
@@ -111,7 +111,7 @@ To implement an item:
 | 5 | sugar-toast | Stack offset fix | 1h | [link](libraries/sugar-toast-research.md) |
 | 6 | candy-ansi-inspect | SGR underline styles | 1h | [link](libraries/candy-ansi-inspect-research.md) |
 | 7 | candy-ansi-inspect | C0/C1 codes | 1-2h | [link](libraries/candy-ansi-inspect-research.md) |
-| 8 | candy-hermit | Item interface | 2-3h | [link](libraries/candy-hermit-research.md) |
+| 8 | sugar-quickpick | Item interface | 2-3h | [link](libraries/sugar-quickpick-research.md) |
 | 9 | sugar-navstack | Fix examples | 1h | [link](libraries/sugar-navstack-research.md) |
 | 10 | sugar-navstack | Separator escaping | 1h | [link](libraries/sugar-navstack-research.md) |
 | 11 | candy-codeshot | Background colors | 2h | [link](libraries/candy-codeshot-research.md) |

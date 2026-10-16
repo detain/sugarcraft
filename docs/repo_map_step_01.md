@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-ansi-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-12 (candy-vt → candy-ansi), step-20 (candy-ansi-inspect/candy-hermit/candy-codeshot → candy-ansi)
+**Blocks:** step-12 (candy-vt → candy-ansi), step-20 (candy-ansi-inspect/sugar-quickpick/candy-codeshot → candy-ansi)
 
 ## Goal
 
@@ -104,7 +104,7 @@ Use the `write-phpunit-test` skill. Mirror the namespace `SugarCraft\Ansi\Tests`
   ## Summary
   - New foundation lib candy-ansi extracts the ECMA-48 / charmbracelet/x/ansi state machine from candy-vt/src/Parser/.
   - candy-vt is unchanged this PR; the migration onto candy-ansi happens in step-12 to keep the rollback window open.
-  - Sets up candy-ansi as the future shared parser for candy-ansi-inspect, candy-hermit, candy-codeshot (step-20).
+  - Sets up candy-ansi as the future shared parser for candy-ansi-inspect, sugar-quickpick, candy-codeshot (step-20).
 
   ## Test plan
   - [x] vendor/bin/phpunit in candy-ansi (≥95% coverage)

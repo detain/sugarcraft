@@ -394,34 +394,34 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 
 ---
 
-#### 1.4 🟡 candy-hermit: Highlighter new instance every call (Item 2.1)
+#### 1.4 🟡 sugar-quickpick: Highlighter new instance every call (Item 2.1)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 2.1
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 2.1
 **Fix:** Add static `$highlighter` property or `getHighlighter()` method on `Hermit.php`
-**Files:** `candy-hermit/src/Hermit.php:810`
+**Files:** `sugar-quickpick/src/Hermit.php:810`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.5 🟡 candy-hermit: ANSI parser new instance every call (Item 2.2)
+#### 1.5 🟡 sugar-quickpick: ANSI parser new instance every call (Item 2.2)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 2.2
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 2.2
 **Fix:** Cache the anonymous class handler and Parser instance on `Hermit` instead of recreating each `printableText()` call
-**Files:** `candy-hermit/src/Hermit.php:704-753`
+**Files:** `sugar-quickpick/src/Hermit.php:704-753`
 **Agent:** Same coder agent as 1.4 (grouped — same lib)
 
-#### 1.6 🟡 candy-hermit: StatusBar::segments() returns internal array (Item 2.3)
+#### 1.6 🟡 sugar-quickpick: StatusBar::segments() returns internal array (Item 2.3)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 2.3
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 2.3
 **Fix:** Return `array_values($this->segments)` to return a copy
-**Files:** `candy-hermit/src/StatusBar.php:92-96`
+**Files:** `sugar-quickpick/src/StatusBar.php:92-96`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 1.7 🟡 candy-hermit: HelpBar::shortcuts() same issue (Item 2.4)
+#### 1.7 🟡 sugar-quickpick: HelpBar::shortcuts() same issue (Item 2.4)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 2.4
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 2.4
 **Fix:** Return `array_values($this->shortcuts)`
-**Files:** `candy-hermit/src/HelpBar.php:67-71`
+**Files:** `sugar-quickpick/src/HelpBar.php:67-71`
 **Agent:** Same coder agent as 1.6 (grouped — same lib)
 
 #### 1.8 🟡 candy-kit: Section::header multi-cell rune formula (Item 1.1)
@@ -701,29 +701,29 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `sugar-dash/src/Chart.php:436-690`
 **Agent:** Same coder agent as 2.4 (grouped — same lib)
 
-#### 2.6 🟢 candy-hermit: computeWidth() redundant call (Item 3.1)
+#### 2.6 🟢 sugar-quickpick: computeWidth() redundant call (Item 3.1)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 3.1
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 3.1
 **Fix:** Compute width once in `View()` and pass as parameter to `compositeOver()` instead of recomputing
-**Files:** `candy-hermit/src/Hermit.php:476, 823`
+**Files:** `sugar-quickpick/src/Hermit.php:476, 823`
 **Agent:** Same coder agent as 2.4 (grouped — same lib)
 
 ---
 
 ### Group 2-C (3 agents)
 
-#### 2.7 🟢 candy-hermit: withItems filter redundancy (Item 3.2)
+#### 2.7 🟢 sugar-quickpick: withItems filter redundancy (Item 3.2)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 3.2
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 3.2
 **Fix:** Early return when `filterText === ''` — skip `applyFilter()` call
-**Files:** `candy-hermit/src/Hermit.php:122-129`
+**Files:** `sugar-quickpick/src/Hermit.php:122-129`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 2.8 🟢 candy-hermit: applyFilter array_filter (Item 3.3)
+#### 2.8 🟢 sugar-quickpick: applyFilter array_filter (Item 3.3)
 
-**Plan:** `findings/plan_candy-hermit.md` — Item 3.3
+**Plan:** `findings/plan_sugar-quickpick.md` — Item 3.3
 **Fix:** Use `foreach` loop instead of `\array_filter()` + `\array_values()` pattern
-**Files:** `candy-hermit/src/Hermit.php:582-608`
+**Files:** `sugar-quickpick/src/Hermit.php:582-608`
 **Agent:** Same coder agent as 2.7 (grouped — same lib)
 
 #### 2.9 🟢 sugar-bits: sortedRows() single-pass (Item 2.2)
@@ -1279,7 +1279,7 @@ Same verification as previous phases.
 | `plan_candy-buffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
 | `plan_candy-codeshot.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
 | `plan_candy-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
-| `plan_candy-hermit.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests |
+| `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests |
 | `plan_candy-kit.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
 | `plan_candy-lister.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
 | `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
