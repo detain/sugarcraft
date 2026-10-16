@@ -76,3 +76,7 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 - consumers (comment-only edits, no composer deps): candy-ansi OK 360T/901A EXACT; candy-ansi-inspect OK 278T/1412A EXACT.
 - tools/tests OK 426T/1484A EXACT (via candy-core vendor after its relink; earlier fail = my own bash `&` grouping swallowed the cd — harness lesson: `cd X; ( wd ) &` NOT `cd X && ( wd ) &`).
 - child-lifetimes rc0. Branch diff 166 files (+969/−907); generic-freeze audit line-by-line: all +/- freeze↔codeshot pairs legit.
+
+## R9 fire (weld 2026-10-16)
+- create candy-codeshot: HTTP 202 success clean, no 406. No polls per batch-B law; end-of-campaign verification.
+- WELD INCIDENT on this merge (eb7f9f586→9a1b5ae8d): merge stage swallowed the foreign untracked 413MB oc.7z from the main-dir working tree (git add -A shape) — push rejected GH001; fixed pre-push by filter-branch --index-filter removing ONLY oc.7z across the 20-commit unpushed chain (diff vs pre-rewrite tip = oc.7z deletion alone; all lane branch tips remain ancestors; b9/b10 merges kept SHAs). oc.7z NOT found on disk afterwards and NOT in any pushed object — owner re-supply owed if still wanted.
