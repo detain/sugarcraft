@@ -51,7 +51,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-palette | 529 | 5537 | 0 | 0 | 1 | 0 |  |
 | candy-pty | — | — | — | — | — | 137 | HUNG: lib's own HangWatchdog SIGKILLed the runner at 53% (418/708) — PosixPumpTest::testRunWithNullChildReturnsZero in-flight 90.5s > 90s budget (child stuck in do_select with [true] defunct zombie). Pre-existing under this env; see /tmp/opencode/rename-baseline/candy-pty.txt forensic dump |
 | candy-query | 1580 | 11900 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
-| candy-serve | 354 | 875 | 0 | 0 | 0 | 0 |  |
+| candy-serve | 354 | 875 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
 | candy-shell | 334 | 694 | 0 | 0 | 0 | 0 |  |
 | candy-shine | 938 | 2378 | 0 | 0 | 0 | 0 |  |
 | candy-sprinkles | 865 | 2896 | 0 | 0 | 0 | 0 |  |
@@ -121,7 +121,7 @@ Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E67
 
 ## Method notes / hazards recorded for later steps
 
-- Suite loops MUST run with stdin `</dev/null`: the first candy-serve attempt STOPPED (state T,
+- Suite loops MUST run with stdin `</dev/null`: the first candy-serve attempt STOPPED (state T, <!-- @rename-keep historical hazard note -->
   SIGTTIN) because its git-server children read stdin while the loop ran under a PTY session;
-  with `</dev/null` candy-serve passed 354T/875A in <1 min. Not a pre-existing defect.
+  with `</dev/null` candy-serve passed 354T/875A in <1 min. Not a pre-existing defect. <!-- @rename-keep historical hazard note -->
 - 61 lib suites + sugar-crush sharded = 62 test surfaces baselined.

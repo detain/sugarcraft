@@ -24,7 +24,7 @@ Procedure R chain from base `6bac4090d` (== origin at start; tree clean except f
 - User-data paths: ZERO (no .config/.local/share/.cache/HOME/XDG usage in src/bin) → no LegacyPaths shim.
 - MATCHUPS + index.html section move (R4.8 plan example): **MOOT** — sugar-stash row (MATCHUPS:94) and tile (index.html:813) already sit under Apps/`id="apps"`; the lib was always typed app. No moves made. <!-- @rename-keep -->
 - `docs/js/search-index.json` IS auto-rewritten by the tool (R2:1 R3:2) — not hand-maintained as feared; no generator exists, client-side search.js just fetches it.
-- Bare `SugarCraft\Git` collision: none tree-wide outside the lib itself (candy-serve's `SugarCraft\Serve\Git\` sub-ns is a distinct PSR-4 prefix — verified). Forward note: `docs/repo_map/update_sugarcraft_candy-wish.md` contains 3 aspirational mentions of a FUTURE `candy-git` leaf library (git middleware concept) — pre-existing prose, now name-clashing with this app; left as historical record.
+- Bare `SugarCraft\Git` collision: none tree-wide outside the lib itself (candy-serve's `SugarCraft\Serve\Git\` sub-ns is a distinct PSR-4 prefix — verified). Forward note: `docs/repo_map/update_sugarcraft_candy-wish.md` contains 3 aspirational mentions of a FUTURE `candy-git` leaf library (git middleware concept) — pre-existing prose, now name-clashing with this app; left as historical record. <!-- @rename-keep historical record -->
 - `sugar-crush` src docblocks used loose path-style `sugar-stash\DiffViewer` → now `candy-git\DiffViewer` (kept — same loose style as before, prose reference not a FQN). <!-- @rename-keep -->
 
 ## R5 wiring
