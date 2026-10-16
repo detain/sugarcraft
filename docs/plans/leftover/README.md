@@ -149,7 +149,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 5. `step-05-sugar-crumbs.md`
 6. `step-06-super-candy.md`
 7. `step-07-candy-git.md`
-8. `step-08-sugar-stickers.md`
+8. `step-08-sugar-flexbox.md`
 
 ### Phase 06 — Core / Shell / Wish features (`phase-06-core-shell-wish/`)
 

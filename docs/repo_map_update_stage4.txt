@@ -3,7 +3,7 @@
 ## 1. Top 3 Critical Gaps
 
 ### 1.1 Buffer Diffing / Dirty-Region Tracking
-**Affects:** sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister
+**Affects:** sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-flexbox, candy-lister
 All do full re-render every frame. External repos (ultraviolet, ratatui, php-tui) track touched lines and emit only delta ANSI sequences via ECH/REP/ICH/DCH escape sequences. Critical for SSH connections and live dashboards.
 
 **Why critical:** Without diffing, every render sends the full viewport — wastefully for unchanged regions, causes flicker on some terminals, and prevents smooth animations.
@@ -15,7 +15,7 @@ sugar-readline cannot read actual terminal keypresses — only processes pre-dec
 **Why critical:** Libraries without input drivers are demo-only; cannot be used in production CLI tools without significant additional wiring.
 
 ### 1.3 Constraint-Based Layout (Cassowary Solver)
-**Affects:** sugar-boxer, sugar-dash, candy-git, sugar-stickers
+**Affects:** sugar-boxer, sugar-dash, candy-git, sugar-flexbox
 Tree-based weighted distribution cannot express constraints like "column A = 30% but never less than 10". External repos (ratatui, php-tui) use Cassowary constraint solver with Min/Max/Percent/Ratio/Fill constraints.
 
 **Why critical:** Complex responsive dashboards need constraint solving — sidebar at 20% width with min 20 / max 40 cells, main content filling remaining space.
@@ -50,7 +50,7 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 
 ### 3.3 charmbracelet/lipgloss (cited 5+ times)
 **Purpose:** Pure-value Style type, CSS-like API, CIELAB color blending, borders, layer compositing, Canvas cell buffer.
-**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-stickers, sugar-veil), border system (candy-git), width measurement (candy-lister).
+**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-flexbox, sugar-veil), border system (candy-git), width measurement (candy-lister).
 **Key citation:** "Style system with bitmask properties, per-side borders, CIELAB color blending, layer compositing"
 
 ---
@@ -62,7 +62,7 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 **Impact:** High for international users; correctness bug causing visual artifacts
 **Citation:** "Wide Character Handling — When overwriting part of a wide character, fills remaining width with blank cells to avoid rendering artifacts"
 
-### 4.2 ContentGenerator Pattern (sugar-stickers)
+### 4.2 ContentGenerator Pattern (sugar-flexbox)
 **Complexity:** Low — add `Node::withContentGenerator(Closure(int $maxX, int $maxY): string)`
 **Impact:** Enables per-cell adaptive text truncation/wrapping without pre-measuring; upstream stickers feature not yet ported
 **Citation:** "Cells can hold either static content or dynamic content via SetContentGenerator(func(maxX, maxY) string) for per-cell adaptive text wrapping/display"
@@ -115,4 +115,4 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 
 ## Summary
 
-The SugarCraft ecosystem shares three critical gaps across multiple packages: buffer diffing (full re-render everywhere), input driver infrastructure (sugar-readline blocking real usage), and constraint-based layout (Cassowary solver needed). Two architectural weaknesses permeate the codebase: mixed state/rendering instead of StatefulWidget separation, and inconsistent mouse hit-testing. The most-cited external repos are ratatui (constraint layout/diffing), bubbletea (TEA pattern/input), and lipgloss (styling). Two immediate wins stand out: fixing wide-char overflow in sugar-boxer and adding ContentGenerator to sugar-stickers. Several packages already exceed their upstreams in functionality, but the ecosystem as a whole needs foundational investments in input handling, buffer diffing, and constraint solving to close the gap with the leading Go/Rust TUI ecosystems.
+The SugarCraft ecosystem shares three critical gaps across multiple packages: buffer diffing (full re-render everywhere), input driver infrastructure (sugar-readline blocking real usage), and constraint-based layout (Cassowary solver needed). Two architectural weaknesses permeate the codebase: mixed state/rendering instead of StatefulWidget separation, and inconsistent mouse hit-testing. The most-cited external repos are ratatui (constraint layout/diffing), bubbletea (TEA pattern/input), and lipgloss (styling). Two immediate wins stand out: fixing wide-char overflow in sugar-boxer and adding ContentGenerator to sugar-flexbox. Several packages already exceed their upstreams in functionality, but the ecosystem as a whole needs foundational investments in input handling, buffer diffing, and constraint solving to close the gap with the leading Go/Rust TUI ecosystems.

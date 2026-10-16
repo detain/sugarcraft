@@ -52,7 +52,7 @@ the lib genuinely is a grab-bag of helpers. Examples that read well:
 | Domain          | Good functional words |
 |-----------------|------------------------|
 | Components / widgets | Bits, Parts, Chips, Widgets |
-| Layout         | Layout, Grid, Boxer, Stickers |
+| Layout         | Layout, Grid, Boxer, Flexbox |
 | Styling        | Style, Paint, Color, Sprinkles |
 | Charts         | Charts, Plots, Graph, Pie |
 | Forms / prompts | Prompt, Form, Ask, Input |

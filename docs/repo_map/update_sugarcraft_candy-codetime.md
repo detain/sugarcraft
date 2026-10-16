@@ -102,7 +102,7 @@ candy-codetime/
 - **Implementation ideas:**
   - Add `CalendarView` model with month navigation
   - Use sugar-charts for daily bars in calendar grid
-  - Integrate with sugar-stickers FlexBox for date grid layout
+  - Integrate with sugar-flexbox FlexBox for date grid layout
 - **Complexity:** Medium — requires new view model + rendering
 - **Impact:** High — competitive differentiator
 
@@ -427,7 +427,7 @@ foreach ($this->beats as $b) {
 
 ## Medium-Term (2-8 weeks)
 
-5. **Interactive calendar view** — Month navigation + day selection via sugar-stickers FlexBox
+5. **Interactive calendar view** — Month navigation + day selection via sugar-flexbox FlexBox
 6. **Retroactive editing** — Edit/delete past heartbeats via SQLite backend
 7. **Productivity analytics** — Week-over-week comparison in dashboard
 8. **GitHub Actions workflow** — Publish action for automated README stats

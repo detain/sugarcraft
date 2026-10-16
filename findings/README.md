@@ -47,7 +47,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-datepicker | Cell output not capped to viewport width | View.php | Cells rendered beyond viewport width |
 | sugar-gallery | No file type validation | Gallery.php:78 | Non-image files passed to decoder — crash/exploit |
 | sugar-gallery | FFI buffer not explicitly freed | FFIDecoder.php | C memory must be explicitly free()'d — leak |
-| sugar-stickers | UTF-8 multibyte corruption in sanitize | Column.php:112, FlexBox.php:302 | Bytes 0x80-0x9F stripped — corrupts CJK text |
+| sugar-flexbox | UTF-8 multibyte corruption in sanitize | Column.php:112, FlexBox.php:302 | Bytes 0x80-0x9F stripped — corrupts CJK text |
 | sugar-boxer | Division by zero in distribute() | SugarBoxer.php:792 | 0/0 = NaN when all weights are zero |
 | candy-flappy | Collision/scoring frame mismatch | Game.php:273, Pipe.php:33 | Score increments one frame before collision fires |
 | candy-git-server | Hardcoded LFS bearer token | LFSHandler.php:200 | "lfs-token" placeholder in all LFS responses |
@@ -83,7 +83,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-vcr | Negative dt not validated | RelativeFormat.php:201 | Timestamps can go backwards |
 | sugar-readline | History search O(n) — no indexing | History.php | 10K+ history entries = slow Ctrl+R |
 | sugar-readline | History grows unbounded | History.php | No maxHistory enforcement |
-| sugar-stickers | Cursor resets to 0 on every rebuildView | Table.php:274 | Sort/filter always resets cursor to top |
+| sugar-flexbox | Cursor resets to 0 on every rebuildView | Table.php:274 | Sort/filter always resets cursor to top |
 | sugar-gallery | No format fallback — crash on unsupported | Gallery.php | Unhandled decoder errors crash gallery |
 | sugar-gallery | Blocking image decode — UI freeze | FFIDecoder.php | Large images block event loop |
 
@@ -102,7 +102,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
 | candy-starter | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |
 | candy-flappy | 2 HIGH, 3 MED, 5 LOW | Collision off-by-one, non-atomic file I/O |
-| sugar-stickers | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |
+| sugar-flexbox | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |
 | sugar-crush | 2 HIGH, 3 MED, 2 LOW | EOF buffer drain, mouse coordinate off-by-one |
 | sugar-readline | 0 HIGH, 5 MED, 6 LOW | Unbounded history, blocking save, Vi cursor off-by-one |
 | sugar-datepicker | 1 HIGH, 2 MED, 4 LOW | Viewport overflow, month re-render per view() |
@@ -140,7 +140,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 ### 3. Performance Optimization
 
 - Cache Style objects in hot render loops (candy-starter, candy-flappy, candy-shine)
-- Pre-compute visible column indices before row iteration (sugar-stickers, sugar-table)
+- Pre-compute visible column indices before row iteration (sugar-flexbox, sugar-table)
 - Add caching to SmithWatermanMatcher in fuzzy filter (candy-scriptui, sugar-crush)
 - Use array rewind + single-pass iteration instead of multiple array_map passes
 

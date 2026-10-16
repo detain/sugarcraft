@@ -469,7 +469,7 @@ All 45 research documents available at:
 | candy-kv | 21KB |
 | candy-ansi-inspect | 13KB |
 | candy-git | 23KB |
-| sugar-stickers | 14KB |
+| sugar-flexbox | 14KB |
 | sugar-table | 19KB |
 | candy-codetime | 19KB |
 | sugar-toast | 20KB |

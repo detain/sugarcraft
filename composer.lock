@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9c4ccaeaa31c6a05ce073734e28972b8",
+    "content-hash": "127682c00eca8d4ab1cb80c45ca7d482",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -6769,6 +6769,65 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-flexbox",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-flexbox",
+                "reference": "c57e5d663453f9fe65af85d606836db0b0cd6dfe"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-bits": "@dev"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Flexbox\\": "src/",
+                    "SugarCraft\\Flexbox\\Flex\\": "src/Flex/",
+                    "SugarCraft\\Flexbox\\Table\\": "src/Table/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Flexbox\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of 76creates/stickers — Lipgloss utility components. FlexBox (CSS flexbox-like responsive grid layout) and Table (sortable, filterable data table with column definitions).",
+            "homepage": "https://github.com/sugarcraft/sugar-flexbox",
+            "keywords": [
+                "flexbox",
+                "grid",
+                "layout",
+                "stickers",
+                "sugarcraft",
+                "table",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-flexbox/issues",
+                "source": "https://github.com/sugarcraft/sugar-flexbox"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-gallery",
             "version": "dev-master",
             "dist": {
@@ -7005,64 +7064,6 @@
                 "issues": "https://github.com/sugarcraft/sugar-reel/issues",
                 "source": "https://github.com/sugarcraft/sugar-reel",
                 "docs": "https://sugarcraft.github.io/lib/sugar-reel.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/sugar-stickers",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-stickers",
-                "reference": "9074c5d47fc46a0b0d0aeed8fbf631bba5027f7e"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-bits": "@dev"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Stickers\\": "src/",
-                    "SugarCraft\\Stickers\\Flex\\": "src/Flex/",
-                    "SugarCraft\\Stickers\\Table\\": "src/Table/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Stickers\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of 76creates/stickers — Lipgloss utility components. FlexBox (CSS flexbox-like responsive grid layout) and Table (sortable, filterable data table with column definitions).",
-            "homepage": "https://github.com/sugarcraft/sugar-stickers",
-            "keywords": [
-                "flexbox",
-                "grid",
-                "layout",
-                "sugarcraft",
-                "table",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-stickers/issues",
-                "source": "https://github.com/sugarcraft/sugar-stickers"
             },
             "transport-options": {
                 "symlink": true,
@@ -8632,11 +8633,11 @@
         "sugarcraft/sugar-dash": 20,
         "sugarcraft/sugar-datepicker": 20,
         "sugarcraft/sugar-diff": 20,
+        "sugarcraft/sugar-flexbox": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-mcp": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-reel": 20,
-        "sugarcraft/sugar-stickers": 20,
         "sugarcraft/sugar-table": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-veil": 20

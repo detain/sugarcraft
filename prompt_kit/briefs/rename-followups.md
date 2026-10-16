@@ -79,3 +79,12 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
   still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
   already-rewritten `.tape` files on the next tape run; do not hand-patch.
+
+## C2 sugar-stickers → sugar-flexbox (2026-10-16) <!-- @rename-keep -->
+- `sugar-flexbox/.vhs/{flexbox,sort-filter,table}.gif` — 3 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
+  may still show the pre-rename wordmark. CI `.github/workflows/vhs.yml` re-renders from the already-rewritten <!-- @rename-keep -->
+  `.tape` files on the next tape run; do not hand-patch.
+- `ansi/sugarcraft/sugarcraft-3-16-l-2.ansi` — monorepo roster grid art carries an old-name cell (line 18); <!-- @rename-keep -->
+  `.ansi` content is rename-excluded; re-generate via the ansi toolchain when triaged.
+- `media/icons/sugar-flexbox.png` + `docs/img/icons/sugar-flexbox.png` — icon PNG path renamed; bytes unchanged <!-- @rename-keep -->
+  (generate_icons.py prompt describes literal sticker imagery — semantically fine, redraw optional at owner triage).

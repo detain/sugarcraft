@@ -16,7 +16,7 @@ The plan file should cover:
   charmbracelet/soft-serve's TUI.
 - **Architecture** — how it sits on top of candy-wish (SSH transport)
   + candy-vt (terminal state) + candy-scriptui (CLI subcommand) +
-  candy-git (git ops) + candy-mdview (markdown render) + sugar-stickers
+  candy-git (git ops) + candy-mdview (markdown render) + sugar-flexbox
   (viewport).
 - **User stories** — what a user does with it.
 - **Layout sketch** — text mockup of the main screens (repo list,

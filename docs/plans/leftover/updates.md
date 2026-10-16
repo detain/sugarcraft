@@ -195,9 +195,9 @@ review for step 03.08 · clean · PR#541
   carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix
   step 04.01 · PR#564 · sugar-boxer: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
   docs for step 04.01 · PR#565 · sugar-boxer: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-boxer.html quickstart + API table
-  step 04.02 · PR#566 · sugar-stickers: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
+  step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
 review for step 04.02 · clean · PR#566
-docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-stickers.html
+docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-flexbox.html
 step 04.03 · PR#568 · sugar-crumbs: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep
 review for step 04.03 · clean · PR#568
 tests-ci for step 04.03 · clean
@@ -227,7 +227,7 @@ step 05.07 · PR#578 · candy-git: add i18n via Lang::t() (key-hints, error pref
 review for step 05.07 · PR#578 · 3 files (lang/en.php, src/Renderer.php, tests/LangCoverageTest.php); all Lang::t() keys in src/ verified present in lang/en.php; READMEs missing i18n section
 tests-ci for step 05.07 · clean
 docs for step 05.07 · PR#579 · add i18n section to README + docs/lib/candy-git.html + create CALIBER_LEARNINGS.md
-step 05.08 · PR#580 · sugar-stickers: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no user-facing strings — purely computational lib)
+step 05.08 · PR#580 · sugar-flexbox: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no user-facing strings — purely computational lib)
 review for step 05.08 · clean · PR#580
 tests-ci for step 05.08 · clean
 docs for step 05.08 · clean
@@ -549,7 +549,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.11 · PR#776 · sugar-table: multi-line row support + candy-sprinkles Border integration (leftover-rollout step 10.11)
     fix for step 10.11 · PR#777 · resolved 2 findings (CALIBER_LEARNINGS: add [pattern:border-from-sprinkles] + [pattern:multilineMode-row-height]; README: document withBorder() + withMultilineMode())
     docs for step 10.11 · PR#778 · document withBorder/withMultilineMode/withBorderStyle docblocks + docs/lib/sugar-table.html feature grid + API table
-    step 10.12 · PR#779 · sugar-stickers: sticky header/footer + scroll sync (leftover-rollout step 10.12)
+    step 10.12 · PR#779 · sugar-flexbox: sticky header/footer + scroll sync (leftover-rollout step 10.12)
     step 10.13 · PR#780 · sugar-readline: FileHistory/InMemoryHistory + ↑/↓ history navigation in TextPrompt (leftover-rollout step 10.13)
     step 10.14 · PR#781 · sugar-readline: vi mode + emacs mode key-binding modes (ModeInterface/ViMode/EmacsMode + withMode/handleKeyDirect on TextPrompt)
     step 10.15 · PR#782 · sugar-readline: autosuggest from history (fish-style gray dim completion) + undo/redo (UndoManager + Key::Undo/Key::Redo) + Highlight stub (awaiting candy-mdview step 10.24)

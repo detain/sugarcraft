@@ -169,7 +169,7 @@ that are tiny but together justify a PR.
 - erikgeiser/promptkit → sugar-readline
 - EthanEFung/bubble-datepicker → sugar-datepicker
 - daltonsw/bubbleup → sugar-toast
-- 76creates/stickers → sugar-stickers
+- 76creates/stickers → sugar-flexbox
 
 ### Apps
 

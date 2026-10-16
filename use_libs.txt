@@ -7,7 +7,7 @@ https://sugarcraft.github.io/lib/sugar-dash.html
 https://sugarcraft.github.io/lib/candy-hermit.html
 https://sugarcraft.github.io/lib/candy-input.html
 https://sugarcraft.github.io/lib/candy-fuzzy.html
-https://sugarcraft.github.io/lib/sugar-stickers.html
+https://sugarcraft.github.io/lib/sugar-flexbox.html
 https://sugarcraft.github.io/lib/sugar-toast.html
 https://sugarcraft.github.io/lib/sugar-readline.html
 https://sugarcraft.github.io/lib/sugar-table.html

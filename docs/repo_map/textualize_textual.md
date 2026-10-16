@@ -281,7 +281,7 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `Input`, `TextArea`, `MaskedInput` | `candy-forms/` | Form input components |
 | `DataTable` | `sugar-table/` | Tabular data display |
 | `sparkline`, `ProgressBar` | `sugar-charts/` | Chart widgets |
-| `Tabs`, `TabbedContent`, `TabPane` | `sugar-stickers/` | Tab container widgets |
+| `Tabs`, `TabbedContent`, `TabPane` | `sugar-flexbox/` | Tab container widgets |
 | `Switch`, `Checkbox`, `RadioButton`, `RadioSet` | `sugar-bits/` | Toggle/selection controls |
 | `Button` | `sugar-bits/` | Button widget |
 | `Toast`, `Notification` | `sugar-toast/` | Toast notifications |

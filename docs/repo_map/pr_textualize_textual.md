@@ -48,7 +48,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Input, TextArea, MaskedInput | `candy-forms/` | ✅ Mapped |
 | DataTable | `sugar-table/` | ✅ Mapped |
 | sparkline, ProgressBar | `sugar-charts/` | ✅ Mapped |
-| Tabs, TabbedContent, TabPane | `sugar-stickers/` | ✅ Mapped |
+| Tabs, TabbedContent, TabPane | `sugar-flexbox/` | ✅ Mapped |
 | Switch, Checkbox, RadioButton, RadioSet | `sugar-bits/` | ✅ Mapped |
 | Button | `sugar-bits/` | ✅ Mapped |
 | Toast, Notification | `sugar-toast/` | ✅ Mapped |

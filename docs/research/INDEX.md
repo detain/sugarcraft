@@ -38,7 +38,7 @@ To implement an item:
 | **sugar-table** | [research/libraries/sugar-table-research.md](libraries/sugar-table-research.md) | 1. StyleFunc, 2. Flex columns, 3. Viewport virtualization |
 | **sugar-charts** | [research/libraries/sugar-charts-research.md](libraries/sugar-charts-research.md) | 1. Nice ticks, 2. Streaming, 3. Area fill |
 | **sugar-veil** | [research/libraries/sugar-veil-research.md](libraries/sugar-veil-research.md) | 1. Backdrop, 2. Animation, 3. Border chrome |
-| **sugar-stickers** | [research/libraries/sugar-stickers-research.md](libraries/sugar-stickers-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
+| **sugar-flexbox** | [research/libraries/sugar-flexbox-research.md](libraries/sugar-flexbox-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
 | **sugar-boxer** | [research/libraries/sugar-boxer-research.md](libraries/sugar-boxer-research.md) | 1. Box styles enum, 2. Text alignment, 3. Box titles |
 | **sugar-crumbs** | [research/libraries/sugar-crumbs-research.md](libraries/sugar-crumbs-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
 | **MySQL Workbench status & performance dashboard** (candy-sql parity study) | [mysql_workbench_dash.md](mysql_workbench_dash.md) | 1. Performance page metrics, 2. Two-connection cache model, 3. Page lifecycle / event-task model |
@@ -134,7 +134,7 @@ To implement an item:
 - **sugar-dash**: Constraint layout, StatefulWidget separation
 - **sugar-veil**: Backdrop, animation, overlay stacking
 - **sugar-boxer**: Multiple box styles, text alignment, titles
-- **sugar-stickers**: Viewport component, sticky positioning
+- **sugar-flexbox**: Viewport component, sticky positioning
 
 ### Data Visualization
 

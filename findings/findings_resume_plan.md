@@ -1314,7 +1314,7 @@ Same verification as previous phases.
 | `plan_sugar-boxer.md` | 1.1, 2.1-2.5, 3.1, 3.3-3.7 | Division guard, MAX_CARRY, func_num_args, WeakMap cache, flex separator docs, empty() check, function_exists cache, static regex, sentinel class |
 | `plan_sugar-calendar.md` | 2.1-2.2, 3.1, 4.1, 5.1 | Viewport width config, month grid cache, week-boundary docs, ISO week column |
 | `plan_sugar-readline.md` | 1.1, 1.2, 2.1, 2.3-2.4, 3.1-3.3, 4.1, 5.1 | Ctrl+R search, Vi cursor off-by-one, history race, unbounded growth, chmod 0600, Emacs incremental search, Vi text objects, architecture docs |
-| `plan_sugar-stickers.md` | 1.1, 2.1-2.2, 3.1-3.3 | FlexBox multibyte, Justify import, cursor reset docs, scroll default, perf docs |
+| `plan_sugar-flexbox.md` | 1.1, 2.1-2.2, 3.1-3.3 | FlexBox multibyte, Justify import, cursor reset docs, scroll default, perf docs |
 | `plan_honey-bounce.md` | 2.2, 2.6, 3.2-3.4, 4.2-4.5 | SETTLING_THRESHOLD constant, EasingFunction interface, __toString, SpringChain::build, JsonSerializable, fps float, ReducedMotionTest parallel-unsafe, examples autoload |
 
 ---

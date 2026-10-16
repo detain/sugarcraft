@@ -1,11 +1,11 @@
-# Step 04.02 — sugar-stickers composes sugar-bits Viewport/Scrollbar
+# Step 04.02 — sugar-flexbox composes sugar-bits Viewport/Scrollbar
 
-**Source:** `leftover_updates_later.md` SSOT-03 + sugar-stickers research Priority 1 + 3
+**Source:** `leftover_updates_later.md` SSOT-03 + sugar-flexbox research Priority 1 + 3
 **Branch:** `ai/stickers-composes-bits`
 
 ## Deliverable
 
-sugar-stickers research lists `Viewport` (Priority 1) and `Scrollbar`
+sugar-flexbox research lists `Viewport` (Priority 1) and `Scrollbar`
 (Priority 3) as missing — but both already exist in
 `sugar-bits/src/Viewport/Viewport.php` and `sugar-bits/src/Scrollbar/`.
 Compose them; don't reinvent.
@@ -14,10 +14,10 @@ Compose them; don't reinvent.
 
 **Modify:**
 
-- `sugar-stickers/src/Viewport.php` — `final class Viewport extends \SugarCraft\Bits\Viewport\Viewport`
+- `sugar-flexbox/src/Viewport.php` — `final class Viewport extends \SugarCraft\Bits\Viewport\Viewport`
   (or composition wrapper). Add sticker-specific extras (sticky
   positioning headers/footers as you scroll).
-- `sugar-stickers/composer.json` — add `"sugarcraft/sugar-bits": "@dev"`
+- `sugar-flexbox/composer.json` — add `"sugarcraft/sugar-bits": "@dev"`
   + path-repo.
 
 **Defer** the sticky-positioning + scroll-sync behaviour to step 10.12
@@ -25,9 +25,9 @@ Compose them; don't reinvent.
 
 ## Acceptance
 
-- `grep -rn "class Viewport\b\|class Scrollbar\b" sugar-stickers/src`
+- `grep -rn "class Viewport\b\|class Scrollbar\b" sugar-flexbox/src`
   shows it extending or composing sugar-bits, not reimplementing.
-- `cd sugar-stickers && vendor/bin/phpunit` green.
+- `cd sugar-flexbox && vendor/bin/phpunit` green.
 
 ---
 

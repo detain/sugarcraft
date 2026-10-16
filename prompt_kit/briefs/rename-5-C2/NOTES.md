@@ -31,11 +31,11 @@
 
 ## Steps
 
-- tag-prep:
-- R1 dry-run:
-- R2 remote rename:
-- R3 tool run:
-- R4 manual:
-- R5 wiring:
-- R6 gates:
-- R7 commit:
+- tag-prep: ffd4732cc — tagged prompt_kit/CONTEXT.md:1356 + rename-baseline.md:85; NOTES created.
+- R1 dry-run: clean eye-review — 79 files (11 path renames incl findings/plan_sugar-stickers.md auto-move), hits R1=69 R2=21 R3=216 R6=1. Evidence /tmp/opencode/c2-rename-dryrun.txt. <!-- @rename-keep -->
+- R2 remote rename: `scripts/rename-remote.sh sugar-stickers sugar-flexbox` rc=0 (split repo sugarcraft/sugar-flexbox, description/homepage/topics synced). Post-R4 GitHub topic `stickers` added (`gh repo edit`). <!-- @rename-keep -->
+- R3 tool run: rc=0, 78 files, R1=69 R2=21 R3=215 R6=1 (−1 vs dry-run = my NOTES tag). php -l sweep over changed files clean. No plan_ git mv needed (tool moved it).
+- R4 manual: cap-hyphen `Sugar-Stickers` ×3 (findings/sugar-flexbox.md:1, research doc ×2); glued cites fixed (repo_map update_sugarcraft_sugar-boxer.md:575, findings_resume_plan.md:1317); tests/StickersTest.php→FlexboxTest.php + class (git mv); Lang.php docblock 'stickers'→'flexbox'; README formerly-notice + namespace-changed lines (tagged); keywords +`"stickers"` (upstream convention, deviation #1); crush_code_RESUME.md 3 shorthand sites REVERTED (deviation #2 — historical figures roster, siblings keep old per B-lane precedent); PROJECT_NAMES.md:55 `Stickers`→`Flexbox` manual fix (deviation #3 — bare word invisible to tool; living rulebook; C1 will touch same line for Boxer→Panels → expect weld conflict, benign). ENV/DATA: honest none (verified — zero getenv/_ENV/XDG/.config in src+bin, no shims shipped).
+- R5 wiring: root composer.json auto-rewritten by R3 (require :96 + repositories :485); `composer update sugarcraft/sugar-flexbox --no-install` → lock −sugar-stickers/+sugar-flexbox + content-hash only; `refresh-deps --mode=linked --libs=sugar-flexbox` rc=0; gen-docs regenerated (78 files; 40 libs/21 apps; --check OK); gen-ansi-readme --check OK. FOLLOWUPS: 3 .vhs GIFs (old wordmark pixels → CI re-render), ansi/sugarcraft/sugarcraft-3-16-l-2.ansi:18 roster cell (art), icon PNGs bytes unchanged → appended to rename-followups.md. <!-- @rename-keep -->
+- R6 gates: residue 0 findings pre-staging AND final (status=renamed). sugar-flexbox suite `timeout 600 env -u LINES -u COLUMNS vendor/bin/phpunit </dev/null`: **221T/476A/0F/0E/0S rc0 EXACT vs baseline**. Consumers: NONE (zero requires). tools/tests (runner: sugar-flexbox/vendor/bin/phpunit --bootstrap tools/tests/_bootstrap.php --no-configuration tools/tests): **426T/1484A rc0 exact**. check-child-lifetimes rc=0 (60 libs, 8 findings/8 accounted). check-path-repos --no-lib-path-repos rc=0 (61 libs).
+- R7 commit: single commit — full rename + renames.json line 22 status→renamed (compact sed) + gen-docs re-run minting docs/lib/sugar-stickers.html redirect stub. Zero legacy shims (no env/data paths existed — honest none). <!-- @rename-keep -->
