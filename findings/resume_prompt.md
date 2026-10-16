@@ -68,7 +68,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 0-A | 0.1–0.3 | candy-files (trash path, path traversal), candy-git-server (git ref shell injection) | 1 coder |
 | 0-B | 0.4–0.5 | candy-git-server (SSHServer path traversal, LFSHandler bearer, empty password, git init, array iteration, temp file leak) | 1 coder |
 | 0-C | 0.6–0.9 | candy-pty (FD reuse race, encoding artifact), candy-vcr (undefined cassette, shared tileCache), candy-wish (async blocking, promise rejection loss) | 1 coder |
-| 0-D | 0.10–0.12 | candy-scriptui (shell injection env-var), sugar-reel (SIGCONT), candy-flappy (score wrong x) | 1 coder |
+| 0-D | 0.10–0.12 | candy-scriptui (shell injection env-var), sugar-reel (SIGCONT), candy-flappy (score wrong x) | 1 coder | <!-- @rename-keep -->
 | 0-E | 0.13–0.15 | sugar-forms (undefined $status), sugar-toast (unclamped maxWidth), candy-metrics (hard-coupled wish, missing flush(), re-emit all) | 1 coder |
 | 0-F | 0.16–0.18 | candy-sql (SQLite str_replace), candy-mouse (OSC bounds), candy-flip (fixed interval), candy-async (markCancelled visibility) | 1 coder | <!-- @rename-keep historical provenance -->
 | 0-G | 0.19–0.20 | candy-log (Phive directory, PSR-3 context array type) | 1 coder |
@@ -85,7 +85,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 1-F | 1.18 | candy-palette (DetectionChain creation + refactor — large, give extra time) |
 | 1-G | 1.19–1.23 | candy-palette (StandardColors cache), sugar-dash (EventDispatcher mutation, Chart render mutation, SystemModule mutation, array_search false) | <!-- @rename-keep -->
 | 1-H | 1.24–1.27 | candy-git (removeDir DRY, interactive rebase), candy-vcr (FrameStream mutation, negative dt, double iteration) |
-| 1-I | 1.28–1.30 | sugar-reel (rebuildAudio extraction, PNG buffer unbounded, DecoderInterface reopen) |
+| 1-I | 1.28–1.30 | sugar-reel (rebuildAudio extraction, PNG buffer unbounded, DecoderInterface reopen) | <!-- @rename-keep -->
 | 1-J | 1.31–1.33 | honey-bounce (CubicBezier validation, SpringConfig silent clamping) |
 
 ### Phase 2: DRY Refactoring and Architecture
@@ -110,7 +110,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), sugar-treelist (navigation methods, setLineOffset fluent, sort O(n) cursor) |
 | 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
 | 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), candy-palette (AsyncProbe), honey-bounce (reducedMotionOverride, Vector methods, EasingFunction interface) |
-| 3-G | 3.24–3.30 | candy-git-server (Async GitDaemon — deferred ⏭️), sugar-reel (Seeking callback — deferred ⏭️), candy-log (StreamHandler type, HookRegistry return, JsonFormatter coercion, RemoveHandler void, Styles return) |
+| 3-G | 3.24–3.30 | candy-git-server (Async GitDaemon — deferred ⏭️), sugar-reel (Seeking callback — deferred ⏭️), candy-log (StreamHandler type, HookRegistry return, JsonFormatter coercion, RemoveHandler void, Styles return) | <!-- @rename-keep -->
 
 ### Phase 4: Documentation and CALIBER_LEARNINGS
 

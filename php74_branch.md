@@ -433,8 +433,8 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `Components/Modal`+`Modal/Msg` (17→2), `Components/Form` (10), `Events` (9),
   `Components/Select` (9), `Components/Nav` (9), `Module` (8), `Keys` (7),
   `Components/Toast` (7), `Plugin` (5) + remaining root files.
-- **5.7** `candy-codetime`(16,high, async+core+sprinkles+sugar‑charts), `sugar-reel`(19,high, many
-  deps incl. mosaic/flip). ⚠️ **`sugar-reel` is in active development** (working‑tree changes to
+- **5.7** `candy-codetime`(16,high, async+core+sprinkles+sugar‑charts), `sugar-reel`(19,high, many <!-- @rename-keep -->
+  deps incl. mosaic/flip). ⚠️ **`sugar-reel` is in active development** (working‑tree changes to <!-- @rename-keep -->
   `Player.php`/`AudioPlayer.php` at audit time) — schedule **last**, re‑audit the lib immediately
   before its step, and coordinate so the backport rebases on the finished feature.
 - **5.8** `candy-files`(14,med, core+mosaic+sprinkles).
@@ -491,7 +491,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
 | sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) | <!-- @rename-keep -->
 | candy-mail | high | 7 | ctor-promotion, mixed, named-args, php8-strfn, readonly |
-| sugar-reel | high | 19 | backed-enum, enum-with-methods, ctor-promotion, first-class-callable, match — **in progress** |
+| sugar-reel | high | 19 | backed-enum, enum-with-methods, ctor-promotion, first-class-callable, match — **in progress** | <!-- @rename-keep -->
 | candy-git | high | 14 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, new-in-init |
 | sugar-table | high | 8 | enum, match, mixed, named-args, nullsafe, php8-strfn, readonly |
 | candy-codetime | high | 16 | ctor-promotion, first-class-callable, intdiv, named-args, new-in-init |
