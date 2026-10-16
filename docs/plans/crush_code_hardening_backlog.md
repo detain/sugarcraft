@@ -15011,7 +15011,7 @@ kinds of real code sit outside that set:
   in no autoload section, so no instrument reads it. It happens to be clean today — `proc_open` appears
   in it exactly twice and both are comments — so the gap is currently silent, which is why it needs
   writing down rather than leaving for the first person whose shim spawns something.
-- **Code shipped as an example.** `candy-focus/examples/focus-ring.php` holds **two** `proc_open()` calls
+- **Code shipped as an example.** `candy-focus/examples/focus-ring.php` holds **two** `proc_open()` calls <!-- @rename-keep -->
   that the scanner classifies as exposed. Unreachable by autoload, so out of the guard's scope by the same
   derived reason as `tests/` — but unlike `tests/`, an example is code a user is invited to run.
 

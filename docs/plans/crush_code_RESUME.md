@@ -453,7 +453,7 @@ the 2026-09-12 adjudication.
 ### 3. 🔴 THE VENDOR CLOSURE WAS SILENTLY BROKEN, AND IT COST THIS SESSION A WHOLE SUITE RUN
 
 **MEASURED 2026-09-10, before any of the figures above were trusted.** `sugar-crush/vendor/sugarcraft/`
-held **14 entries where the manifest's closure needs 18**. `candy-forms`, `candy-focus` and
+held **14 entries where the manifest's closure needs 18**. `candy-forms`, `candy-focus` and <!-- @rename-keep -->
 `candy-kit` — all three named directly in `sugar-crush/composer.json`'s `require` — were **absent
 from vendor entirely**, and four more (`candy-fuzzy`, `candy-mouse`, `honey-bounce`, `sugar-veil`)
 were real Packagist directories where the other ten were monorepo symlinks. `refresh-deps.php

@@ -738,7 +738,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    standalone; the registration line is applied by the supervisor at commit
    time. Lane T never edits `Bootstrap.php`.
 2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`candy-forms`, #19
-   wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil`
+   wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil` <!-- @rename-keep -->
    and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work.
    Add all three missing deps in **one prep commit** before U or W reach them.
 3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
@@ -6271,7 +6271,7 @@ fatal to anyone cloning the split `sugarcraft/<lib>` repo, where `../candy-buffe
 does not exist. That third case is why they had to go.
 
 `3bc5d269` first completed the **root** closure, which was genuinely broken:
-56 requires, 54 path repos. `candy-focus` carried a stale `vcs` entry (the only
+56 requires, 54 path repos. `candy-focus` carried a stale `vcs` entry (the only <!-- @rename-keep -->
 non-path repository in the file) and `sugar-gallery` had none, so
 `vendor/sugarcraft/` held **56 symlinks and 4 real directories** — those two plus
 transitive-only `candy-input`/`candy-layout`, each locked `dist=zip src=git`.
@@ -8861,7 +8861,7 @@ then a `.lane-provenance` file per lane recording source HEAD + `git status` md5
 
 Verified per lane, not assumed: **18** `vendor/sugarcraft/*` symlinks, **0** broken,
 `SugarCraft\Core\Model` → `<lane>/candy-core/src/Model.php` and `SugarCraft\Focus\FocusRing` →
-`<lane>/candy-focus/src/FocusRing.php`. That second one matters: it proves `ddd9560d`'s new
+`<lane>/candy-focus/src/FocusRing.php`. That second one matters: it proves `ddd9560d`'s new <!-- @rename-keep -->
 dependency propagated into the sandboxes, which a lib-only sandbox could never have shown.
 
 **A `pgrep` gotcha worth recording:** `pgrep -c -f 'bin/phpunit'` returned **2** on a genuinely idle

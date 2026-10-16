@@ -13,7 +13,7 @@ Resume the SugarCraft audit-fixing workflow from where it left off. This documen
 
 ## What Was Done
 
-The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
+The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce. <!-- @rename-keep -->
 
 **The plan files themselves were NOT marked ✅ — the fixes landed but bookkeeping was not done.**
 
@@ -81,7 +81,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 1-B | 1.4–1.7 | candy-hermit (Highlighter cache, ANSI parser cache, StatusBar/HelpBar returns copy) |
 | 1-C | 1.8–1.9 | candy-kit (Section header rune formula, rule min-width) |
 | 1-D | 1.10–1.14 | candy-kit (Theme type guard), candy-lister (RuntimeException→Throwable, dead enum case, UTF-8 grapheme, ANSI injection) |
-| 1-E | 1.15–1.17 | candy-focus (next/previous DRY), candy-input (Shift+scroll tests, equals docblock) |
+| 1-E | 1.15–1.17 | candy-focus (next/previous DRY), candy-input (Shift+scroll tests, equals docblock) | <!-- @rename-keep -->
 | 1-F | 1.18 | candy-palette (DetectionChain creation + refactor — large, give extra time) |
 | 1-G | 1.19–1.23 | candy-palette (StandardColors cache), sugar-dash (EventDispatcher mutation, Chart render mutation, SystemModule mutation, array_search false) |
 | 1-H | 1.24–1.27 | candy-git (removeDir DRY, interactive rebase), candy-vcr (FrameStream mutation, negative dt, double iteration) |
@@ -105,7 +105,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 3-A | 3.1–3.3 | candy-fuzzy (matchAllGenerator, FuzzyMatcherFactory, MatchResultSorter) |
-| 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable) |
+| 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable) | <!-- @rename-keep -->
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) |
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), candy-lister (navigation methods, setLineOffset fluent, sort O(n) cursor) |
 | 3-E | 3.13–3.18 | candy-lister (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
