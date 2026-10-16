@@ -12,7 +12,7 @@
 
 ## Architecture
 
-`Veil` is the core overlay compositor — a `final readonly` class with a `mutate()` helper for immutable fluent chaining. `VeilStack` provides ordered multi-overlay rendering sorted by z-index. `Position` enum provides 9 anchor positions. `AnimationKind` + `Slide`/`Fade`/`Scale` provide transition animations via honey-bounce `CubicBezier`.
+`Veil` is the core overlay compositor — a `final readonly` class with a `mutate()` helper for immutable fluent chaining. `VeilStack` provides ordered multi-overlay rendering sorted by z-index. `Position` enum provides 9 anchor positions. `AnimationKind` + `Slide`/`Fade`/`Scale` provide transition animations via sugar-spring `CubicBezier`.
 
 ```
 SugarCraft\Overlay\Veil (final class, readonly props)
@@ -353,7 +353,7 @@ interface Renderable {
 
 ## 4. CubicBezier Animation Easing
 
-**Current:** Slide uses `easeOut()`, Fade uses `easeInOut()`, Scale uses `easeOut()` from honey-bounce.
+**Current:** Slide uses `easeOut()`, Fade uses `easeInOut()`, Scale uses `easeOut()` from sugar-spring.
 **External:** textuaalize/textual has an `Animator` class with configurable easing functions and transitions. lipgloss uses no built-in animation (no easing).
 
 **Why external is better:** textual's Animator supports configurable duration, automatic tick loop, and transition states.

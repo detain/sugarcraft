@@ -237,7 +237,7 @@ Both wrap frames in `Ansi::syncBegin()` / `Ansi::syncEnd()` (DEC 2026 synchroniz
 
 **Implementation ideas:**
 
-- Port Cassowary algorithm (already partially exists in `honey-bounce`?)
+- Port Cassowary algorithm (already partially exists in `sugar-spring`?)
 
 - Add `Layout` class with `Constraint` enum: `Length()`, `Percentage()`, `Ratio()`, `Fill()`, `Min()`, `Max()`
 
@@ -245,7 +245,7 @@ Both wrap frames in `Ansi::syncBegin()` / `Ansi::syncEnd()` (DEC 2026 synchroniz
 
 - Document use in `view()` methods
 
-- Consider adopting from `honey-bounce` if Cassowary port exists there
+- Consider adopting from `sugar-spring` if Cassowary port exists there
 
 **Estimated complexity:** Medium-High — algorithm port + API design + documentation
 
@@ -426,7 +426,7 @@ $program->withExceptionHandler(fn(\Throwable $e) => ...);
 
 **Title:** `Animator` class with easing functions and `Transition` objects
 
-**Description:** textual has `Animator` with easing functions. `honey-bounce` provides spring physics but no animation driver.
+**Description:** textual has `Animator` with easing functions. `sugar-spring` provides spring physics but no animation driver.
 
 **Source:** `docs/repo_map/textualize_textual.md` — "Animation System: Animator with easing functions and transitions"
 
@@ -723,7 +723,7 @@ $options = ProgramOptions::create()
 
 3. **Command palette** — extend `sugar-cli` with fuzzy search
 
-4. **Animation support** — smooth transitions via `honey-bounce` integration
+4. **Animation support** — smooth transitions via `sugar-spring` integration
 
 ---
 
@@ -918,7 +918,7 @@ $options = ProgramOptions::create()
 
 3. **CSS-like stylesheet** — `Stylesheet` parser + cascading
 
-4. **Animation engine** — `Animator` + `honey-bounce` integration
+4. **Animation engine** — `Animator` + `sugar-spring` integration
 
 5. **Hot reload** — watch source files, recompile without restart
 

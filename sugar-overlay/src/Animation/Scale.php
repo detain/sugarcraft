@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Animation;
 
-use SugarCraft\Bounce\Easing\CubicBezier;
+use SugarCraft\Spring\Easing\CubicBezier;
 use SugarCraft\Overlay\Lines;
 
 /**

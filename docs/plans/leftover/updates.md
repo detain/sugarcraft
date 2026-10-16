@@ -510,11 +510,11 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     review for step 09.16 · clean · PR#742
     tests-ci for step 09.16 · clean
     docs for step 09.16 · PR#743 · document SnippetStore/ExplainView/ResultTable in README (architecture table + 3 feature sections) + end-user HTML (feature grid + API table rows) + CALIBER_LEARNINGS.md (file-backed-json-store, horizontal-scroll-table patterns)
-    step 09.17 · PR#744 · honey-bounce: SpringPreset enum (Gentle/Wobbly/Stiff/Slow/Molasses) + SpringConfig (tension/friction/mass → angularFreq/dampingRatio) + CubicBezier easing (CSS-standard Newton-Raphson algorithm) + Spring::fromPreset() factory (leftover-rollout step 09.17)
-    step 09.18 · PR#747 · honey-bounce: SpringChain (sequenced springs, settle triggers next) + reduced-motion support via Probe::reducedMotion() (leftover-rollout step 09.18)
+    step 09.17 · PR#744 · honey-bounce: SpringPreset enum (Gentle/Wobbly/Stiff/Slow/Molasses) + SpringConfig (tension/friction/mass → angularFreq/dampingRatio) + CubicBezier easing (CSS-standard Newton-Raphson algorithm) + Spring::fromPreset() factory (leftover-rollout step 09.17) <!-- @rename-keep historical provenance -->
+    step 09.18 · PR#747 · honey-bounce: SpringChain (sequenced springs, settle triggers next) + reduced-motion support via Probe::reducedMotion() (leftover-rollout step 09.18) <!-- @rename-keep historical provenance -->
     review for step 09.18 · clean · PR#747
     tests-ci for step 09.18 · clean
-    docs for step 09.17 · PR#746 · document SpringPreset/SpringConfig/CubicBezier in README + create docs/lib/honey-bounce.md end-user guide + create honey-bounce/CALIBER_LEARNINGS.md (3 patterns)
+    docs for step 09.17 · PR#746 · document SpringPreset/SpringConfig/CubicBezier in README + create docs/lib/honey-bounce.md end-user guide + create honey-bounce/CALIBER_LEARNINGS.md (3 patterns) <!-- @rename-keep historical provenance -->
     review for step 09.17 · clean · PR#744
     fix for step 09.17 · duplicate docblock in CubicBezier::evaluate() · PR#745
     tests-ci for step 09.17 · clean

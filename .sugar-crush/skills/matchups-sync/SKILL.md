@@ -82,7 +82,7 @@ If the lib uses a new prefix:
 ```
 candy  foundation/system   candy-core, candy-sprinkles
 sugar  components/data     sugar-widgets, sugar-charts
-honey  math/physics        honey-bounce, honey-fizz
+honey  math/physics        sugar-spring, honey-fizz
 ```
 
 If the lib adds a new slug under an existing prefix, add it to the examples list.

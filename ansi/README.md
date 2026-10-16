@@ -309,7 +309,7 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugarcraft-2-tc-l-2.ansi` | 176x46 | truecolor | 786 | candy moon shift: cratered pastel moon with halo, three sine dunes, oasis band with moonlight reflection |
 | `sugarcraft-2-tc-l-3.ansi` | 147x28 | truecolor | 27 | PHP IDE mockup: tab bar, guttered syntax-colored bubbletea port, live preview pane, naming legend status line |
 | `sugarcraft-2-tc-m-1.ansi` | 86x25 | truecolor | 1158 | aurora ribbons green/violet + magenta/cyan over a snowy ridge under stars, teal-violet wordmark |
-| `sugarcraft-2-tc-m-2.ansi` | 70x23 | truecolor | 364 | gummy bear sprite: red-to-orange depth gradient, rim shading, shine pixels, starfield, honey-bounce caption |
+| `sugarcraft-2-tc-m-2.ansi` | 70x23 | truecolor | 364 | gummy bear sprite: red-to-orange depth gradient, rim shading, shine pixels, starfield, sugar-spring caption |
 | `sugarcraft-2-tc-s-1.ansi` | 46x14 | truecolor | 389 | iridescent gumball sphere with angular hue sheen and specular highlight on a violet stage |
 | `sugarcraft-2-tc-s-2.ansi` | 66x14 | truecolor | 126 | sugar-rush ECG: glowing pulse trace over crimson gradient, hot-pink to amber wordmark |
 | `sugarcraft-3-16-l-1.ansi` | 134x32 | 16 | 8 | CI matrix scoreboard: double-ruled board, runner grid over PHP versions, coverage bar, giant rainbow wordmark |
@@ -428,7 +428,7 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugarcraft-8-tc-s-1.ansi` | 54x12 | truecolor | 39 | capsule under plasma bell glow |
 | `sugarcraft-8-tc-s-2.ansi` | 58x13 | truecolor | 38 | buoy band light on the night swell |
 | `sugarcraft-9-16-l-1.ansi` | 176x32 | 16 | 9 | house of mirrors pavilion: bulb marquee, striped awning, three warped glass panels and a ticket queue |
-| `sugarcraft-9-16-l-2.ansi` | 180x30 | 16 | 9 | honey-bounce inflatable castle: turrets, netted door, slide, blower hose and four bouncers in mid-air |
+| `sugarcraft-9-16-l-2.ansi` | 180x30 | 16 | 9 | sugar-spring inflatable castle: turrets, netted door, slide, blower hose and four bouncers in mid-air |
 | `sugarcraft-9-16-m-1.ansi` | 84x22 | 16 | 7 | liquorice weaving loom: warp ends on two shafts, shuttle in the shed, candy-striped cloth on the breast beam |
 | `sugarcraft-9-16-m-2.ansi` | 86x22 | 16 | 7 | bubblegum blowing contest: five contestants, growing pink bubbles, one POP burst on the mat |
 | `sugarcraft-9-16-s-1.ansi` | 64x13 | 16 | 8 | jelly mould tier stand: three shelves of floured wobble moulds on a brass post with shine marks and foot bar |
@@ -2369,183 +2369,183 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-flappy-9-tc-s-2.ansi` | 52x12 | truecolor | 31 | samara helicopter seeds spinning through a fence gap |
 <!-- END candy-flappy SLOTS -->
 
-<!-- BEGIN honey-bounce SLOTS -->
-### honey-bounce — slot series
+<!-- BEGIN sugar-spring SLOTS -->
+### sugar-spring — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `honey-bounce-1-16-l-1.ansi` | 158x38 | 16 | 9 | Response dashboard: under/critical/over-damped panels, envelopes, preset table, phase circle |
-| `honey-bounce-1-16-l-2.ansi` | 172x42 | 16 | 10 | Ballistic canopy: seven angle-distributed dotted arcs fanning from ◉ launch to a timed impact grid |
-| `honey-bounce-1-16-m-2.ansi` | 84x22 | 16 | 8 | Projectile canyon: three velocity parabolas with apex stars launched over platforms inside a frame |
-| `honey-bounce-1-16-s-1.ansi` | 62x12 | 16 | 9 | Damped step-response strip: honey/magenta ring-down between green e^-zt envelopes on a grey axis |
-| `honey-bounce-1-16-s-2.ansi` | 66x12 | 16 | 7 | Ballistic mini-arc: dotted honey-to-red parabola, apex ◕, green v0 arrow over a y-down g=9.81 floor |
-| `honey-bounce-1-256-l-1.ansi` | 150x40 | 256 | 12 | Phase portrait: gold-to-rust spiral winding into the attractor, ripple rings, decaying tail plot |
-| `honey-bounce-1-256-l-2.ansi` | 178x36 | 256 | 11 | Spring roller-coaster: decaying double-rail coil helix with cart ◉, speed streaks, support bents |
-| `honey-bounce-1-256-m-1.ansi` | 84x22 | 256 | 8 | Spring-mass-damper schematic: ▒ coil, damper, blue mass, F=-kx-cv arrow, settling-dot response |
-| `honey-bounce-1-256-m-2.ansi` | 80x24 | 256 | 9 | Pendulum field: four angled ropes with magenta bobs, dotted swing arcs, mg vectors on night blue |
-| `honey-bounce-1-256-s-1.ansi` | 66x15 | 256 | 8 | Three damping regimes ζ=0.1/1.0/2.5 as pink/green/cyan wavelets on amber target lines |
-| `honey-bounce-1-256-s-2.ansi` | 60x16 | 256 | 7 | Bounce-decay ball: cyan hop arcs shrinking by e=0.62 with honey apex dots, BounceOut caption |
-| `honey-bounce-1-tc-l-1.ansi` | 176x34 | truecolor | 43 | Suspended masses: gradient block-wordmark over six hanging springs with ζ-labeled resting offsets |
-| `honey-bounce-1-tc-l-2.ansi` | 166x44 | truecolor | 155 | Damped spring sea: radial arrow field, five bobbing honey balls, sunset-to-ocean gradient sky |
-| `honey-bounce-1-tc-m-1.ansi` | 86x23 | truecolor | 81 | One perfect parabola: gold-to-hot honey trajectory with v0 components, apex drop, impact burst |
-| `honey-bounce-1-tc-m-2.ansi` | 82x22 | truecolor | 16 | Field of oscillators: four violet cells each trapping a gold-cyan damped wave, preset captions |
-| `honey-bounce-1-tc-s-1.ansi` | 64x14 | truecolor | 75 | Underdamped ring-down in truecolor honey-rust gradient with teal exponential envelope guides |
-| `honey-bounce-1-tc-s-2.ansi` | 58x16 | truecolor | 23 | Molasses drip: half-block honey stream falling into a jar, concentric pool ripples on violet dusk |
-| `honey-bounce-10-16-l-2.ansi` | 168x32 | 16 | 7 | Escalator handrail tension loop: stepped flight + return rail and a start-up tension overshoot that damps |
-| `honey-bounce-10-16-m-1.ansi` | 84x21 | 16 | 7 | Windshield wiper park-position sweep chart: pivot arm + theta-vs-time reversal overshoot damping to band |
-| `honey-bounce-10-16-m-2.ansi` | 86x22 | 16 | 7 | Ski mogul-line absorption profile: bumpy fall-line + damped vertical-travel trace of legs absorbing bumps |
-| `honey-bounce-10-16-s-1.ansi` | 56x12 | 16 | 7 | Gavel strike decay: 3 shrinking impulse spikes on a zero axis beside a wooden gavel + sound block |
-| `honey-bounce-10-16-s-2.ansi` | 60x11 | 16 | 7 | Pop-bottle cork hops: damped rebound envelope of the cork arc over a bottle, e=0.55 tag |
-| `honey-bounce-10-256-l-1.ansi` | 170x36 | 256 | 69 | Shock-absorber test-bench datasheet plaque: damper schematic, spec rows, and an asymmetric F-v dyno curve |
-| `honey-bounce-10-256-l-2.ansi` | 166x34 | 256 | 78 | Espresso pressure-profiling shot: pump ramp, preinfusion damped ripple settling to 9bar, flow columns |
-| `honey-bounce-10-256-m-1.ansi` | 84x22 | 256 | 11 | Punching-bag combo damping log: three shrinking kick-energy impulses and the bag's damped pendulum swing |
-| `honey-bounce-10-256-m-2.ansi` | 82x23 | 256 | 7 | Merchant two-pan balance needle settling: ghost tilts of the beam to level + pointer-angle decay to zero |
-| `honey-bounce-10-256-s-1.ansi` | 58x13 | 256 | 36 | Tyre-pressure bounce thermometer: gauge needle overshoots, PSI-vs-time ripple damps to setpoint |
-| `honey-bounce-10-256-s-2.ansi` | 54x13 | 256 | 8 | Cat's tongue-flick sequence: four frames of a batted-toy reach collapsing geometrically (whimsical damping) |
-| `honey-bounce-10-tc-l-1.ansi` | 171x38 | truecolor | 40 | Bubble-wrap pop decay ledger: bubble grid bursting in a wave, pop-energy spectrogram columns damping out |
-| `honey-bounce-10-tc-l-2.ansi` | 166x36 | truecolor | 88 | Record-player tonearm cue-down settle: platter + arm geometry and a stylus vertical oscillation damping to groove |
-| `honey-bounce-10-tc-m-1.ansi` | 83x22 | truecolor | 217 | Squeegee wiping a soap-film oscillation: thin-film interference bands collapse as the blade clears the glass |
-| `honey-bounce-10-tc-m-2.ansi` | 89x24 | truecolor | 35 | Spring-mattress coil comfort-rating board: pocket-spring section + per-zone load sag that damps to settle |
-| `honey-bounce-10-tc-s-1.ansi` | 42x14 | truecolor | 56 | Gong strike glow: truecolor boss + radiating decay rings collapsing to silence, warm bronze gradient |
-| `honey-bounce-10-tc-s-2.ansi` | 57x12 | truecolor | 16 | Hammock load-sag on porch: successive sag overshoots (ghost arcs) damp to a resting catenary under a load |
-| `honey-bounce-2-16-l-1.ansi` | 152x32 | 16 | 6 | five-column preset sheet with filled step-response bars and formulas |
-| `honey-bounce-2-16-l-2.ansi` | 148x34 | 16 | 8 | boxed spring-rack panel: six zigzag coils hung from a rail with block masses and ω tags, tick-ruler axis, velocity-magnitude bar strip and F=−kx−cv formula row |
-| `honey-bounce-2-16-m-1.ansi` | 86x20 | 16 | 7 | oscilloscope grid: damped cosine with dotted decay envelope |
-| `honey-bounce-2-16-m-2.ansi` | 86x21 | 16 | 7 | projectile arcs bouncing on an accented ground line with apex stars |
-| `honey-bounce-2-16-s-1.ansi` | 66x12 | 16 | 7 | block-letter HONEY BOUNCE wordmark with honey-dipper drip and pool |
-| `honey-bounce-2-16-s-2.ansi` | 52x10 | 16 | 6 | three sparkline step responses: bounce, elastic, wobbly spring |
-| `honey-bounce-2-256-l-1.ansi` | 140x32 | 256 | 11 | 2×4 gallery of easing curve tiles with dotted linear references |
-| `honey-bounce-2-256-l-2.ansi` | 168x33 | 256 | 15 | full-bleed dripping honey field with gradient block wordmark on dark plate and strobe balls |
-| `honey-bounce-2-256-m-1.ansi` | 86x22 | 256 | 8 | decaying sine with dashed exponential envelope, color graded by decay |
-| `honey-bounce-2-256-m-2.ansi` | 80x22 | 256 | 17 | spiral phase portrait fading amber→violet→blue toward the origin |
-| `honey-bounce-2-256-s-1.ansi` | 66x12 | 256 | 6 | three boxed easing-curve tiles: out-bounce, elastic-out, out-back |
-| `honey-bounce-2-256-s-2.ansi` | 70x12 | 256 | 7 | rainbow-shaded block wordmark with vertical falling-drip gauge beside it |
-| `honey-bounce-2-tc-l-1.ansi` | 172x34 | truecolor | 101 | sunset ripple-field scene: stacked sine wavelets, strobe ball, floating gradient wordmark |
-| `honey-bounce-2-tc-l-2.ansi` | 150x32 | truecolor | 348 | stacked gradient wordmark monument flanked by nested bounce arcs and a spectrum decay wave |
-| `honey-bounce-2-tc-m-1.ansi` | 88x24 | truecolor | 159 | velocity-tinted damped wave with glow row on a navy gradient field |
-| `honey-bounce-2-tc-m-2.ansi` | 89x23 | truecolor | 46 | metallic two-strand coil spring dripping honey, with a config readout card |
-| `honey-bounce-2-tc-s-1.ansi` | 62x10 | truecolor | 71 | glowing apex marker on a warm gradient projectile arc over a shaded floor |
-| `honey-bounce-2-tc-s-2.ansi` | 61x11 | truecolor | 22 | monumental gradient block wordmark with soft drop shadow |
-| `honey-bounce-3-16-l-1.ansi` | 150x34 | 16 | 6 | Grand spectacular: curtained arena, huge decaying flight arcs, judge scores, rainbow wordmark |
-| `honey-bounce-3-16-l-2.ansi` | 160x32 | 16 | 7 | Rube Goldberg works panorama: roll-topple-strike-turn-pour chain lighting a HONEY sign |
-| `honey-bounce-3-16-m-1.ansi` | 84x24 | 16 | 6 | Arena act: block HONEY BOUNCE wordmark above a trampoline, three figures along the flight arc |
-| `honey-bounce-3-16-m-2.ansi` | 86x22 | 16 | 6 | Rube Goldberg honey machine: ramp, seesaw, spring launcher and pouring pot into a glass jar |
-| `honey-bounce-3-16-s-3.ansi` | 52x10 | 16 | 6 | Energy ledger: block bars of successive bounce heights 100% down to 2% with % tags |
-| `honey-bounce-3-256-l-1.ansi` | 170x34 | 256 | 9 | Grand bounce saga: five acts of shrinking flight arcs with decay bars and judges' scores |
-| `honey-bounce-3-256-l-2.ansi` | 150x36 | 256 | 14 | Trampoline park plan: six boxed ζ-coded nets on a dotted floor with hot-to-cold bounce legend |
-| `honey-bounce-3-256-m-1.ansi` | 88x25 | 256 | 11 | Four-beat impulse: trampoline beds sagging touch/compress/release/airborne with stored-E bars |
-| `honey-bounce-3-256-m-2.ansi` | 85x20 | 256 | 17 | Stiffness dial board: molasses→steel gradient rail with kiddie vs olympic needles and k decades |
-| `honey-bounce-3-256-s-1.ansi` | 64x14 | 256 | 10 | Slow-shutter strobe drop: amber→rust ball ghosts accelerating down a numbered ruler |
-| `honey-bounce-3-256-s-2.ansi` | 66x13 | 256 | 7 | Spring filmstrip: eight sprocketed frames marching a ● through easeOutBounce |
-| `honey-bounce-3-256-s-3.ansi` | 60x13 | 256 | 10 | Orbital sketch: dashed ellipse, glowing block star with halo rings, body with velocity arrow |
-| `honey-bounce-3-tc-l-1.ansi` | 200x44 | truecolor | 118 | Drop study photo wall: eight framed truecolor exposures from rise to mirror-calm puddle |
-| `honey-bounce-3-tc-l-2.ansi` | 190x40 | truecolor | 357 | Easing mural: six glowing haloed curve frames on warm wallpaper above a gradient wordmark |
-| `honey-bounce-3-tc-m-1.ansi` | 88x26 | truecolor | 123 | Gallery wall: three spotlit frames of bounce/elastic/back curves over a gradient block wordmark |
-| `honey-bounce-3-tc-m-2.ansi` | 86x23 | truecolor | 54 | Slow-mo six-pack: framed truecolor honey-drop sequence from fall to settled puddle |
-| `honey-bounce-3-tc-s-1.ansi` | 50x16 | truecolor | 32 | Truecolor molasses cinema: stretched honey drop in gradient half-blocks with timecode ticks |
-| `honey-bounce-3-tc-s-2.ansi` | 58x12 | truecolor | 71 | Loaded bed sag: gradient ball compressing a teal half-block net into a static equilibrium well |
-| `honey-bounce-4-16-l-1.ansi` | 150x30 | 16 | 8 | Framed block wordmark, zeta regime table, equation and a big decaying-flight arc |
-| `honey-bounce-4-16-l-2.ansi` | 160x30 | 16 | 8 | Four-lane step-response seismograph from pure oscillator to creeping over-damped |
-| `honey-bounce-4-16-m-2.ansi` | 80x21 | 16 | 7 | Three panels plotting under/critical/over-damped step responses above a wordmark |
-| `honey-bounce-4-16-s-1.ansi` | 48x13 | 16 | 6 | Honey-sphere Newton cradle, one ball lifted on a magenta string over a rail |
-| `honey-bounce-4-256-l-1.ansi` | 140x34 | 256 | 20 | Three nested ramp spirals in a boxed arena with legend and gradient wordmark |
-| `honey-bounce-4-256-l-2.ansi` | 130x28 | 256 | 22 | Seven honey spheres on a long rail, first lifted, momentum arrow, wide wordmark |
-| `honey-bounce-4-256-m-1.ansi` | 78x24 | 256 | 15 | Ramp-colored spiral collapsing to a gold target on labeled axes |
-| `honey-bounce-4-256-m-2.ansi` | 84x20 | 256 | 19 | Gradient wordmark above six boxed ride tickets each tagged with a zeta |
-| `honey-bounce-4-256-s-1.ansi` | 46x13 | 256 | 8 | Concentric amber→cyan decay rings radiating from a splash point on a dark pool |
-| `honey-bounce-4-256-s-2.ansi` | 52x10 | 256 | 5 | Tilted plank on a fulcrum with two masses, critical-damping balance demo |
-| `honey-bounce-4-tc-l-1.ansi` | 180x30 | truecolor | 251 | Sky over a rippling pool with splash, concentric truecolor rings and wordmark |
-| `honey-bounce-4-tc-l-2.ansi` | 200x36 | truecolor | 153 | Five boxed ride panels each with its zeta curve under a shimmering wordmark |
-| `honey-bounce-4-tc-m-1.ansi` | 78x23 | truecolor | 9 | Bungee figure with mg/kx/bv force vectors and gradient wordmark banner |
-| `honey-bounce-4-tc-m-2.ansi` | 82x21 | truecolor | 242 | Two-source truecolor ripple field with bright crest bands and node troughs |
-| `honey-bounce-4-tc-s-1.ansi` | 44x15 | truecolor | 6 | Wavy gold cord from a platform to a stick figure mid-recoil, truecolor sky |
-| `honey-bounce-4-tc-s-2.ansi` | 52x12 | truecolor | 7 | Gradient honey jelly block with wobbly top and probe grid on a table |
-| `honey-bounce-5-16-l-1.ansi` | 150x30 | 16 | 5 | Seismic station cartoon: severed-cord anvil drop with BOING and floor cracks beside a boxed seismograph spike train and event log |
-| `honey-bounce-5-16-l-2.ansi` | 150x30 | 16 | 5 | Red kangaroo traverse: six shrinking dotted hop arcs, ASCII roos at apexes, mesa-and-sun outback, apex-decay bar ledger |
-| `honey-bounce-5-16-m-1.ansi` | 84x22 | 16 | 7 | Half-court shot chart: swish/bank/airball dotted parabolas into a red rim with backboard, height ruler, physics captions |
-| `honey-bounce-5-16-m-2.ansi` | 80x20 | 16 | 6 | Chandelier sway: candle crown with red sticks, ghost side positions, dashed swing arc, theta decay formula, blue light pools |
-| `honey-bounce-5-16-s-1.ansi` | 56x11 | 16 | 6 | Swing-set phase study: two riders on magenta ropes at opposite lean, cyan beam, amber sun, theta/zeta captions |
-| `honey-bounce-5-16-s-2.ansi` | 54x9 | 16 | 6 | Harmonic ladder: red node dots with green-up/magenta-down lobe chains for n=1..4 and tap labels |
-| `honey-bounce-5-256-l-1.ansi` | 146x34 | 256 | 19 | Honey Bounce 101 supertall in a gale: cabled 660 t sphere lagging on a dashed sway arc, wind chevrons, stroke ruler, data card |
-| `honey-bounce-5-256-l-2.ansi` | 150x30 | 256 | 16 | Buzzer-beater arena: crowd static, hanging scoreboard 98-96, bounce pass plus a glowing fourteen-row arc into the right rim with sparks |
-| `honey-bounce-5-256-m-1.ansi` | 84x20 | 256 | 8 | Slinky descending seven grey steps: pink coil straddling a nosing, numbered tangle/pitch/reform phases, k-zeta card |
-| `honey-bounce-5-256-m-2.ansi` | 80x20 | 256 | 10 | Yo-yo sleeper to return: hand and string with ghost travel dots, hot-pink wheel with spin arcs, PE/KE bars and omega dial |
-| `honey-bounce-5-256-s-1.ansi` | 60x13 | 256 | 7 | Marshmallow bag spill: chocolate bag labeled HB with cream marshmallows escaping along a dotted arc, e=0.71 caption |
-| `honey-bounce-5-256-s-2.ansi` | 62x13 | 256 | 8 | Pogo freestyle three frames load/recoil/float with amber hop trails and a right-side amplitude gauge |
-| `honey-bounce-5-256-s-3.ansi` | 64x12 | 256 | 9 | Pogo Cup finals scoreboard: four tricks with graded amplitude bars and judge scores in a cyan frame |
-| `honey-bounce-5-tc-l-1.ansi` | 160x33 | truecolor | 320 | Grand-salle chandelier with radial violet glow halo, crystal drops, dashed nine-degree sway arc and graded floor light pool |
-| `honey-bounce-5-tc-l-2.ansi` | 168x31 | truecolor | 108 | Outback dusk panorama: layered sky gradient, stars, sun disc, kangaroo silhouettes striding fading glow-hop arcs with apex ruler |
-| `honey-bounce-5-tc-m-1.ansi` | 86x21 | truecolor | 55 | Fretboard harmonics: four standing waves across a wood-grain gradient, cool-blue to hot-pink amplitude shading, bright node diamonds |
-| `honey-bounce-5-tc-m-2.ansi` | 84x22 | truecolor | 38 | Marshmallow hero shot squashed mid-rebound on a walnut counter with soft shadow, sparkles and a gold product tag card |
-| `honey-bounce-5-tc-m-3.ansi` | 84x22 | truecolor | 39 | Anvil impact shock rings: concentric white-to-ember rings on a gradient plate, spike seismogram strip, P/S wave captions |
-| `honey-bounce-5-tc-s-1.ansi` | 66x13 | truecolor | 20 | Water-balloon slow-mo triptych: gradient blue balloon drop, squash and skinny rebound inside dark film frames with timecodes |
-| `honey-bounce-5-tc-s-2.ansi` | 58x14 | truecolor | 25 | Golden-hour silhouette swing set on a violet-to-amber sky gradient with radial sun and two riders mid-phase |
-| `honey-bounce-6-16-l-1.ansi` | 168x33 | 16 | 6 | bouncing-bomb skip map over reservoir: four geometric-decay hops to dam wall breach |
-| `honey-bounce-6-16-l-2.ansi` | 168x32 | 16 | 5 | olive-harvest shaker rig: forced-vibration branch, fruit follow-through damped arcs onto spring net |
-| `honey-bounce-6-16-m-1.ansi` | 86x22 | 16 | 5 | squirrel fence-hop trajectory study: four damped arcs over fence posts with rail sag |
-| `honey-bounce-6-16-m-2.ansi` | 86x19 | 16 | 5 | dominoes on torsion springs mid-chain-reaction, snap-back overshoot with coil bases |
-| `honey-bounce-6-16-s-1.ansi` | 62x10 | 16 | 6 | springboard judging panel: scores per dive, ripple score and medal line |
-| `honey-bounce-6-16-s-2.ansi` | 58x11 | 16 | 6 | squirrel fence-hop field-guide legend with apex decay formula |
-| `honey-bounce-6-16-s-3.ansi` | 56x13 | 16 | 6 | lattice damper post part nameplate in a boxed tag, spring glyph |
-| `honey-bounce-6-256-l-1.ansi` | 168x36 | 256 | 11 | sea-cave tide pool cross-section: standing sloshing wave, node/antinode callouts, gradient depth |
-| `honey-bounce-6-256-l-2.ansi` | 168x34 | 256 | 8 | mainspring bench: barrel with coil, gear train, torque-droop plateau chart, escapement tape |
-| `honey-bounce-6-256-m-1.ansi` | 86x23 | 256 | 6 | jump-rope world record: mode-2 standing wave with node gates and airborne stick figure |
-| `honey-bounce-6-256-m-2.ansi` | 86x22 | 256 | 7 | weather sat HONEY-1 twin decay ellipses clipped at horizon, apogee/perigee markers |
-| `honey-bounce-6-256-s-1.ansi` | 60x12 | 256 | 5 | tide-pool resonance dial gauge with needle at 0.111 Hz lock |
-| `honey-bounce-6-256-s-2.ansi` | 60x11 | 256 | 9 | mainspring torque readout: coil glyph, bar meters, ratchet ticks |
-| `honey-bounce-6-256-s-3.ansi` | 64x12 | 256 | 5 | egg-drop contest scorecard, honey-cake shell wins on bounce distance |
-| `honey-bounce-6-tc-l-1.ansi` | 168x40 | truecolor | 65 | night-side orbital decay atlas: gradient sky, atmosphere bands, comet-trail satellite, telemetry panel |
-| `honey-bounce-6-tc-l-2.ansi` | 168x38 | truecolor | 198 | jump-rope night final: floodlight cones, crowd noise row, gradient standing wave, lit scoreboard |
-| `honey-bounce-6-tc-m-1.ansi` | 86x24 | truecolor | 53 | platform dive with gradient pool, takeoff parabola to no-ripple entry and score row |
-| `honey-bounce-6-tc-m-2.ansi` | 86x24 | truecolor | 79 | hydraulic press vs honey cube in three stages: glowing gradient cubes squash and rebound |
-| `honey-bounce-6-tc-s-1.ansi` | 62x11 | truecolor | 94 | hydraulic press line gauge: gradient pressure bar over honey cube strain stats |
-| `honey-bounce-6-tc-s-2.ansi` | 62x12 | truecolor | 191 | material restitution e-map heatmap: six substances on gradient bars |
-| `honey-bounce-7-16-l-1.ansi` | 172x30 | 16 | 7 | trampoline routine timeline: 12 skills over a damped spring bed + TOF histogram |
-| `honey-bounce-7-256-l-1.ansi` | 180x28 | 256 | 10 | six-cylinder engine timing board, firing-order pressure heat map + valve lift |
-| `honey-bounce-7-256-l-2.ansi` | 172x28 | 256 | 7 | popcorn factory explosion heat map, kernal burst batches by oil temperature |
-| `honey-bounce-7-256-m-1.ansi` | 88x22 | 256 | 6 | popcorn cinema explosion scatter chart, hull-debris energy rows |
-| `honey-bounce-7-256-m-2.ansi` | 84x18 | 256 | 6 | stone-skip contest lake, three throwers' decay parabola lanes on shared range |
-| `honey-bounce-7-256-s-1.ansi` | 58x9 | 256 | 5 | piston compression mini-gauge with a 256 heat ramp and spark-timing ladder |
-| `honey-bounce-7-256-s-2.ansi` | 52x7 | 256 | 7 | geyser eruption interval timer bars, plume height coded by basin |
-| `honey-bounce-7-tc-l-1.ansi` | 192x35 | truecolor | 39 | geyser basin eruption atlas: superheated truecolor plume field across the basin |
-| `honey-bounce-7-tc-l-2.ansi` | 184x39 | truecolor | 17 | grand stone-skip lake competition, six decay-arc lanes on gradient water |
-| `honey-bounce-7-tc-m-1.ansi` | 86x18 | truecolor | 11 | piston engine cutaway, four bores with compression-cycle combustion glow |
-| `honey-bounce-7-tc-m-2.ansi` | 84x18 | truecolor | 86 | geyser eruption timing ledger, truecolor plume-height gradient bars + cadence spark |
-| `honey-bounce-7-tc-s-1.ansi` | 60x11 | truecolor | 84 | rubber-duck bob strip on a truecolor gradient bath, damped buoyancy frequencies |
-| `honey-bounce-7-tc-s-2.ansi` | 54x6 | truecolor | 9 | castle portcullis torsion-spring drop with gradient counterweight travel bars |
-| `honey-bounce-8-16-l-1.ansi` | 168x36 | 16 | 9 | wind-chime array normal modes, six tubes with node/antinode maps |
-| `honey-bounce-8-16-m-2.ansi` | 84x22 | 16 | 11 | torque balance beam on spring fulcrum, unequal masses tilting |
-| `honey-bounce-8-256-l-1.ansi` | 168x36 | 256 | 18 | taffy-pull folding cycles, layer doubling 2^n with damped relax |
-| `honey-bounce-8-256-l-2.ansi` | 168x36 | 256 | 8 | basketball swish 8-frame slow-mo montage + velocity-time graph |
-| `honey-bounce-8-256-m-1.ansi` | 84x22 | 256 | 12 | swish trajectory analysis, parabolic entry over rim + net mesh |
-| `honey-bounce-8-256-m-2.ansi` | 84x22 | 256 | 16 | tennis racket string bed deformation, ball-pocket dwell decay |
-| `honey-bounce-8-256-s-1.ansi` | 54x13 | 256 | 9 | clean basketball swish, converging net strands damping ball to rest |
-| `honey-bounce-8-256-s-2.ansi` | 54x13 | 256 | 10 | wind-chime tube set hung from bar, clapper striking varied lengths |
-| `honey-bounce-8-tc-l-1.ansi` | 168x44 | truecolor | 14 | chronograph escapement wheel train, mainspring to balance hairspring |
-| `honey-bounce-8-tc-l-2.ansi` | 168x40 | truecolor | 43 | drop-hammer pile rig elevation, blow-energy decay + penetration log |
-| `honey-bounce-8-tc-m-1.ansi` | 84x22 | truecolor | 24 | pile driver impact decay bar log, geometric blow energy falloff |
-| `honey-bounce-8-tc-m-2.ansi` | 84x22 | truecolor | 11 | lever escapement plate, escape wheel + anchor + pendulum + train |
-| `honey-bounce-8-tc-s-1.ansi` | 54x13 | truecolor | 13 | taffy-fold ribbon layers, gradient stretch bands |
-| `honey-bounce-8-tc-s-2.ansi` | 54x13 | truecolor | 8 | pile-driver hammer-blow radial impact force star with e value |
-| `honey-bounce-9-16-l-1.ansi` | 168x32 | 16 | 6 | Jackhammer isolation-pad transmissibility: pad stack + T-vs-frequency-ratio curve, resonance peak, r>sqrt2 zone |
-| `honey-bounce-9-16-l-2.ansi` | 168x34 | 16 | 8 | Suspension-bridge resonant-wind mode shapes: elevation with towers/cable/hangers + three deflected mode panels |
-| `honey-bounce-9-16-m-1.ansi` | 84x22 | 16 | 7 | Weather-vane flutter record: compass dial with hunting vane + overshooting heading-vs-time trace |
-| `honey-bounce-9-16-m-2.ansi` | 84x22 | 16 | 7 | Cannon recoil run-out: barrel/carriage schematic + single-excursion damped-return displacement |
-| `honey-bounce-9-16-s-1.ansi` | 56x12 | 16 | 8 | Mousetrap snap-through dwell: set/arm/snap/hold stage strip + coil schematic + snap-force spike settle |
-| `honey-bounce-9-16-s-2.ansi` | 62x12 | 16 | 7 | Snooker cushion rebound top-view: incidence=reflection dotted paths, normal, restitution e=0.92 |
-| `honey-bounce-9-256-l-1.ansi` | 168x34 | 256 | 11 | Landing-gear oleo-strut touchdown bounce log: airframe+gear schematic + main/nose stroke-decay traces |
-| `honey-bounce-9-256-l-2.ansi` | 168x36 | 256 | 11 | Hammer-throw wire-tension polar: thrower circle + tension-vs-angle ratcheting curve with turn markers |
-| `honey-bounce-9-256-m-1.ansi` | 84x22 | 256 | 13 | Damper dyno wheel velocity: spring-piston schematic + rebound/compression damped trace, ζ1 readout |
-| `honey-bounce-9-256-m-2.ansi` | 84x22 | 256 | 15 | Fidget-spinner spin-down tachymeter: three-lobe rotor + violet-to-cyan RPM decay curve, friction torque |
-| `honey-bounce-9-256-s-1.ansi` | 60x13 | 256 | 12 | Spinning-top nutation decay: tilted disc silhouette, precession arc, shrinking wobble-amplitude bars |
-| `honey-bounce-9-256-s-2.ansi` | 60x13 | 256 | 11 | Door-closer sweep/latch chart: hinge schematic + two-phase angle-decay curve (fast sweep, slow latch) |
-| `honey-bounce-9-tc-l-1.ansi` | 180x44 | truecolor | 29 | Wind-turbine blade flap/edge damping atlas: gradient 3-blade rotor + three mode-shape deflection curves |
-| `honey-bounce-9-tc-l-2.ansi` | 180x38 | truecolor | 20 | Crash-pulse deceleration study: three g-vs-t lanes (flat/steel/crumple) + airbag trigger marker |
-| `honey-bounce-9-tc-m-1.ansi` | 84x24 | truecolor | 20 | Parachute deployment velocity profile: canopy scene + terminal-to-deploy-spike-to-damped-swing trace |
-| `honey-bounce-9-tc-m-2.ansi` | 84x24 | truecolor | 17 | Railroad draft-gear hysteresis: force-deflection loading/unloading loop, energy-absorbed hatch + legend |
-| `honey-bounce-9-tc-s-1.ansi` | 62x13 | truecolor | 38 | Reed-valve flutter trace: gradient valve-lift vs crank angle off a gold seat, chatter envelope |
-| `honey-bounce-9-tc-s-2.ansi` | 62x13 | truecolor | 18 | Solenoid plunger contact bounce: position/t step with decaying chatter spikes + debounce window |
-<!-- END honey-bounce SLOTS -->
+| `sugar-spring-1-16-l-1.ansi` | 158x38 | 16 | 9 | Response dashboard: under/critical/over-damped panels, envelopes, preset table, phase circle |
+| `sugar-spring-1-16-l-2.ansi` | 172x42 | 16 | 10 | Ballistic canopy: seven angle-distributed dotted arcs fanning from ◉ launch to a timed impact grid |
+| `sugar-spring-1-16-m-2.ansi` | 84x22 | 16 | 8 | Projectile canyon: three velocity parabolas with apex stars launched over platforms inside a frame |
+| `sugar-spring-1-16-s-1.ansi` | 62x12 | 16 | 9 | Damped step-response strip: honey/magenta ring-down between green e^-zt envelopes on a grey axis |
+| `sugar-spring-1-16-s-2.ansi` | 66x12 | 16 | 7 | Ballistic mini-arc: dotted honey-to-red parabola, apex ◕, green v0 arrow over a y-down g=9.81 floor |
+| `sugar-spring-1-256-l-1.ansi` | 150x40 | 256 | 12 | Phase portrait: gold-to-rust spiral winding into the attractor, ripple rings, decaying tail plot |
+| `sugar-spring-1-256-l-2.ansi` | 178x36 | 256 | 11 | Spring roller-coaster: decaying double-rail coil helix with cart ◉, speed streaks, support bents |
+| `sugar-spring-1-256-m-1.ansi` | 84x22 | 256 | 8 | Spring-mass-damper schematic: ▒ coil, damper, blue mass, F=-kx-cv arrow, settling-dot response |
+| `sugar-spring-1-256-m-2.ansi` | 80x24 | 256 | 9 | Pendulum field: four angled ropes with magenta bobs, dotted swing arcs, mg vectors on night blue |
+| `sugar-spring-1-256-s-1.ansi` | 66x15 | 256 | 8 | Three damping regimes ζ=0.1/1.0/2.5 as pink/green/cyan wavelets on amber target lines |
+| `sugar-spring-1-256-s-2.ansi` | 60x16 | 256 | 7 | Bounce-decay ball: cyan hop arcs shrinking by e=0.62 with honey apex dots, BounceOut caption |
+| `sugar-spring-1-tc-l-1.ansi` | 176x34 | truecolor | 43 | Suspended masses: gradient block-wordmark over six hanging springs with ζ-labeled resting offsets |
+| `sugar-spring-1-tc-l-2.ansi` | 166x44 | truecolor | 155 | Damped spring sea: radial arrow field, five bobbing honey balls, sunset-to-ocean gradient sky |
+| `sugar-spring-1-tc-m-1.ansi` | 86x23 | truecolor | 81 | One perfect parabola: gold-to-hot honey trajectory with v0 components, apex drop, impact burst |
+| `sugar-spring-1-tc-m-2.ansi` | 82x22 | truecolor | 16 | Field of oscillators: four violet cells each trapping a gold-cyan damped wave, preset captions |
+| `sugar-spring-1-tc-s-1.ansi` | 64x14 | truecolor | 75 | Underdamped ring-down in truecolor honey-rust gradient with teal exponential envelope guides |
+| `sugar-spring-1-tc-s-2.ansi` | 58x16 | truecolor | 23 | Molasses drip: half-block honey stream falling into a jar, concentric pool ripples on violet dusk |
+| `sugar-spring-10-16-l-2.ansi` | 168x32 | 16 | 7 | Escalator handrail tension loop: stepped flight + return rail and a start-up tension overshoot that damps |
+| `sugar-spring-10-16-m-1.ansi` | 84x21 | 16 | 7 | Windshield wiper park-position sweep chart: pivot arm + theta-vs-time reversal overshoot damping to band |
+| `sugar-spring-10-16-m-2.ansi` | 86x22 | 16 | 7 | Ski mogul-line absorption profile: bumpy fall-line + damped vertical-travel trace of legs absorbing bumps |
+| `sugar-spring-10-16-s-1.ansi` | 56x12 | 16 | 7 | Gavel strike decay: 3 shrinking impulse spikes on a zero axis beside a wooden gavel + sound block |
+| `sugar-spring-10-16-s-2.ansi` | 60x11 | 16 | 7 | Pop-bottle cork hops: damped rebound envelope of the cork arc over a bottle, e=0.55 tag |
+| `sugar-spring-10-256-l-1.ansi` | 170x36 | 256 | 69 | Shock-absorber test-bench datasheet plaque: damper schematic, spec rows, and an asymmetric F-v dyno curve |
+| `sugar-spring-10-256-l-2.ansi` | 166x34 | 256 | 78 | Espresso pressure-profiling shot: pump ramp, preinfusion damped ripple settling to 9bar, flow columns |
+| `sugar-spring-10-256-m-1.ansi` | 84x22 | 256 | 11 | Punching-bag combo damping log: three shrinking kick-energy impulses and the bag's damped pendulum swing |
+| `sugar-spring-10-256-m-2.ansi` | 82x23 | 256 | 7 | Merchant two-pan balance needle settling: ghost tilts of the beam to level + pointer-angle decay to zero |
+| `sugar-spring-10-256-s-1.ansi` | 58x13 | 256 | 36 | Tyre-pressure bounce thermometer: gauge needle overshoots, PSI-vs-time ripple damps to setpoint |
+| `sugar-spring-10-256-s-2.ansi` | 54x13 | 256 | 8 | Cat's tongue-flick sequence: four frames of a batted-toy reach collapsing geometrically (whimsical damping) |
+| `sugar-spring-10-tc-l-1.ansi` | 171x38 | truecolor | 40 | Bubble-wrap pop decay ledger: bubble grid bursting in a wave, pop-energy spectrogram columns damping out |
+| `sugar-spring-10-tc-l-2.ansi` | 166x36 | truecolor | 88 | Record-player tonearm cue-down settle: platter + arm geometry and a stylus vertical oscillation damping to groove |
+| `sugar-spring-10-tc-m-1.ansi` | 83x22 | truecolor | 217 | Squeegee wiping a soap-film oscillation: thin-film interference bands collapse as the blade clears the glass |
+| `sugar-spring-10-tc-m-2.ansi` | 89x24 | truecolor | 35 | Spring-mattress coil comfort-rating board: pocket-spring section + per-zone load sag that damps to settle |
+| `sugar-spring-10-tc-s-1.ansi` | 42x14 | truecolor | 56 | Gong strike glow: truecolor boss + radiating decay rings collapsing to silence, warm bronze gradient |
+| `sugar-spring-10-tc-s-2.ansi` | 57x12 | truecolor | 16 | Hammock load-sag on porch: successive sag overshoots (ghost arcs) damp to a resting catenary under a load |
+| `sugar-spring-2-16-l-1.ansi` | 152x32 | 16 | 6 | five-column preset sheet with filled step-response bars and formulas |
+| `sugar-spring-2-16-l-2.ansi` | 148x34 | 16 | 8 | boxed spring-rack panel: six zigzag coils hung from a rail with block masses and ω tags, tick-ruler axis, velocity-magnitude bar strip and F=−kx−cv formula row |
+| `sugar-spring-2-16-m-1.ansi` | 86x20 | 16 | 7 | oscilloscope grid: damped cosine with dotted decay envelope |
+| `sugar-spring-2-16-m-2.ansi` | 86x21 | 16 | 7 | projectile arcs bouncing on an accented ground line with apex stars |
+| `sugar-spring-2-16-s-1.ansi` | 66x12 | 16 | 7 | block-letter HONEY BOUNCE wordmark with honey-dipper drip and pool |
+| `sugar-spring-2-16-s-2.ansi` | 52x10 | 16 | 6 | three sparkline step responses: bounce, elastic, wobbly spring |
+| `sugar-spring-2-256-l-1.ansi` | 140x32 | 256 | 11 | 2×4 gallery of easing curve tiles with dotted linear references |
+| `sugar-spring-2-256-l-2.ansi` | 168x33 | 256 | 15 | full-bleed dripping honey field with gradient block wordmark on dark plate and strobe balls |
+| `sugar-spring-2-256-m-1.ansi` | 86x22 | 256 | 8 | decaying sine with dashed exponential envelope, color graded by decay |
+| `sugar-spring-2-256-m-2.ansi` | 80x22 | 256 | 17 | spiral phase portrait fading amber→violet→blue toward the origin |
+| `sugar-spring-2-256-s-1.ansi` | 66x12 | 256 | 6 | three boxed easing-curve tiles: out-bounce, elastic-out, out-back |
+| `sugar-spring-2-256-s-2.ansi` | 70x12 | 256 | 7 | rainbow-shaded block wordmark with vertical falling-drip gauge beside it |
+| `sugar-spring-2-tc-l-1.ansi` | 172x34 | truecolor | 101 | sunset ripple-field scene: stacked sine wavelets, strobe ball, floating gradient wordmark |
+| `sugar-spring-2-tc-l-2.ansi` | 150x32 | truecolor | 348 | stacked gradient wordmark monument flanked by nested bounce arcs and a spectrum decay wave |
+| `sugar-spring-2-tc-m-1.ansi` | 88x24 | truecolor | 159 | velocity-tinted damped wave with glow row on a navy gradient field |
+| `sugar-spring-2-tc-m-2.ansi` | 89x23 | truecolor | 46 | metallic two-strand coil spring dripping honey, with a config readout card |
+| `sugar-spring-2-tc-s-1.ansi` | 62x10 | truecolor | 71 | glowing apex marker on a warm gradient projectile arc over a shaded floor |
+| `sugar-spring-2-tc-s-2.ansi` | 61x11 | truecolor | 22 | monumental gradient block wordmark with soft drop shadow |
+| `sugar-spring-3-16-l-1.ansi` | 150x34 | 16 | 6 | Grand spectacular: curtained arena, huge decaying flight arcs, judge scores, rainbow wordmark |
+| `sugar-spring-3-16-l-2.ansi` | 160x32 | 16 | 7 | Rube Goldberg works panorama: roll-topple-strike-turn-pour chain lighting a HONEY sign |
+| `sugar-spring-3-16-m-1.ansi` | 84x24 | 16 | 6 | Arena act: block HONEY BOUNCE wordmark above a trampoline, three figures along the flight arc |
+| `sugar-spring-3-16-m-2.ansi` | 86x22 | 16 | 6 | Rube Goldberg honey machine: ramp, seesaw, spring launcher and pouring pot into a glass jar |
+| `sugar-spring-3-16-s-3.ansi` | 52x10 | 16 | 6 | Energy ledger: block bars of successive bounce heights 100% down to 2% with % tags |
+| `sugar-spring-3-256-l-1.ansi` | 170x34 | 256 | 9 | Grand bounce saga: five acts of shrinking flight arcs with decay bars and judges' scores |
+| `sugar-spring-3-256-l-2.ansi` | 150x36 | 256 | 14 | Trampoline park plan: six boxed ζ-coded nets on a dotted floor with hot-to-cold bounce legend |
+| `sugar-spring-3-256-m-1.ansi` | 88x25 | 256 | 11 | Four-beat impulse: trampoline beds sagging touch/compress/release/airborne with stored-E bars |
+| `sugar-spring-3-256-m-2.ansi` | 85x20 | 256 | 17 | Stiffness dial board: molasses→steel gradient rail with kiddie vs olympic needles and k decades |
+| `sugar-spring-3-256-s-1.ansi` | 64x14 | 256 | 10 | Slow-shutter strobe drop: amber→rust ball ghosts accelerating down a numbered ruler |
+| `sugar-spring-3-256-s-2.ansi` | 66x13 | 256 | 7 | Spring filmstrip: eight sprocketed frames marching a ● through easeOutBounce |
+| `sugar-spring-3-256-s-3.ansi` | 60x13 | 256 | 10 | Orbital sketch: dashed ellipse, glowing block star with halo rings, body with velocity arrow |
+| `sugar-spring-3-tc-l-1.ansi` | 200x44 | truecolor | 118 | Drop study photo wall: eight framed truecolor exposures from rise to mirror-calm puddle |
+| `sugar-spring-3-tc-l-2.ansi` | 190x40 | truecolor | 357 | Easing mural: six glowing haloed curve frames on warm wallpaper above a gradient wordmark |
+| `sugar-spring-3-tc-m-1.ansi` | 88x26 | truecolor | 123 | Gallery wall: three spotlit frames of bounce/elastic/back curves over a gradient block wordmark |
+| `sugar-spring-3-tc-m-2.ansi` | 86x23 | truecolor | 54 | Slow-mo six-pack: framed truecolor honey-drop sequence from fall to settled puddle |
+| `sugar-spring-3-tc-s-1.ansi` | 50x16 | truecolor | 32 | Truecolor molasses cinema: stretched honey drop in gradient half-blocks with timecode ticks |
+| `sugar-spring-3-tc-s-2.ansi` | 58x12 | truecolor | 71 | Loaded bed sag: gradient ball compressing a teal half-block net into a static equilibrium well |
+| `sugar-spring-4-16-l-1.ansi` | 150x30 | 16 | 8 | Framed block wordmark, zeta regime table, equation and a big decaying-flight arc |
+| `sugar-spring-4-16-l-2.ansi` | 160x30 | 16 | 8 | Four-lane step-response seismograph from pure oscillator to creeping over-damped |
+| `sugar-spring-4-16-m-2.ansi` | 80x21 | 16 | 7 | Three panels plotting under/critical/over-damped step responses above a wordmark |
+| `sugar-spring-4-16-s-1.ansi` | 48x13 | 16 | 6 | Honey-sphere Newton cradle, one ball lifted on a magenta string over a rail |
+| `sugar-spring-4-256-l-1.ansi` | 140x34 | 256 | 20 | Three nested ramp spirals in a boxed arena with legend and gradient wordmark |
+| `sugar-spring-4-256-l-2.ansi` | 130x28 | 256 | 22 | Seven honey spheres on a long rail, first lifted, momentum arrow, wide wordmark |
+| `sugar-spring-4-256-m-1.ansi` | 78x24 | 256 | 15 | Ramp-colored spiral collapsing to a gold target on labeled axes |
+| `sugar-spring-4-256-m-2.ansi` | 84x20 | 256 | 19 | Gradient wordmark above six boxed ride tickets each tagged with a zeta |
+| `sugar-spring-4-256-s-1.ansi` | 46x13 | 256 | 8 | Concentric amber→cyan decay rings radiating from a splash point on a dark pool |
+| `sugar-spring-4-256-s-2.ansi` | 52x10 | 256 | 5 | Tilted plank on a fulcrum with two masses, critical-damping balance demo |
+| `sugar-spring-4-tc-l-1.ansi` | 180x30 | truecolor | 251 | Sky over a rippling pool with splash, concentric truecolor rings and wordmark |
+| `sugar-spring-4-tc-l-2.ansi` | 200x36 | truecolor | 153 | Five boxed ride panels each with its zeta curve under a shimmering wordmark |
+| `sugar-spring-4-tc-m-1.ansi` | 78x23 | truecolor | 9 | Bungee figure with mg/kx/bv force vectors and gradient wordmark banner |
+| `sugar-spring-4-tc-m-2.ansi` | 82x21 | truecolor | 242 | Two-source truecolor ripple field with bright crest bands and node troughs |
+| `sugar-spring-4-tc-s-1.ansi` | 44x15 | truecolor | 6 | Wavy gold cord from a platform to a stick figure mid-recoil, truecolor sky |
+| `sugar-spring-4-tc-s-2.ansi` | 52x12 | truecolor | 7 | Gradient honey jelly block with wobbly top and probe grid on a table |
+| `sugar-spring-5-16-l-1.ansi` | 150x30 | 16 | 5 | Seismic station cartoon: severed-cord anvil drop with BOING and floor cracks beside a boxed seismograph spike train and event log |
+| `sugar-spring-5-16-l-2.ansi` | 150x30 | 16 | 5 | Red kangaroo traverse: six shrinking dotted hop arcs, ASCII roos at apexes, mesa-and-sun outback, apex-decay bar ledger |
+| `sugar-spring-5-16-m-1.ansi` | 84x22 | 16 | 7 | Half-court shot chart: swish/bank/airball dotted parabolas into a red rim with backboard, height ruler, physics captions |
+| `sugar-spring-5-16-m-2.ansi` | 80x20 | 16 | 6 | Chandelier sway: candle crown with red sticks, ghost side positions, dashed swing arc, theta decay formula, blue light pools |
+| `sugar-spring-5-16-s-1.ansi` | 56x11 | 16 | 6 | Swing-set phase study: two riders on magenta ropes at opposite lean, cyan beam, amber sun, theta/zeta captions |
+| `sugar-spring-5-16-s-2.ansi` | 54x9 | 16 | 6 | Harmonic ladder: red node dots with green-up/magenta-down lobe chains for n=1..4 and tap labels |
+| `sugar-spring-5-256-l-1.ansi` | 146x34 | 256 | 19 | Honey Bounce 101 supertall in a gale: cabled 660 t sphere lagging on a dashed sway arc, wind chevrons, stroke ruler, data card |
+| `sugar-spring-5-256-l-2.ansi` | 150x30 | 256 | 16 | Buzzer-beater arena: crowd static, hanging scoreboard 98-96, bounce pass plus a glowing fourteen-row arc into the right rim with sparks |
+| `sugar-spring-5-256-m-1.ansi` | 84x20 | 256 | 8 | Slinky descending seven grey steps: pink coil straddling a nosing, numbered tangle/pitch/reform phases, k-zeta card |
+| `sugar-spring-5-256-m-2.ansi` | 80x20 | 256 | 10 | Yo-yo sleeper to return: hand and string with ghost travel dots, hot-pink wheel with spin arcs, PE/KE bars and omega dial |
+| `sugar-spring-5-256-s-1.ansi` | 60x13 | 256 | 7 | Marshmallow bag spill: chocolate bag labeled HB with cream marshmallows escaping along a dotted arc, e=0.71 caption |
+| `sugar-spring-5-256-s-2.ansi` | 62x13 | 256 | 8 | Pogo freestyle three frames load/recoil/float with amber hop trails and a right-side amplitude gauge |
+| `sugar-spring-5-256-s-3.ansi` | 64x12 | 256 | 9 | Pogo Cup finals scoreboard: four tricks with graded amplitude bars and judge scores in a cyan frame |
+| `sugar-spring-5-tc-l-1.ansi` | 160x33 | truecolor | 320 | Grand-salle chandelier with radial violet glow halo, crystal drops, dashed nine-degree sway arc and graded floor light pool |
+| `sugar-spring-5-tc-l-2.ansi` | 168x31 | truecolor | 108 | Outback dusk panorama: layered sky gradient, stars, sun disc, kangaroo silhouettes striding fading glow-hop arcs with apex ruler |
+| `sugar-spring-5-tc-m-1.ansi` | 86x21 | truecolor | 55 | Fretboard harmonics: four standing waves across a wood-grain gradient, cool-blue to hot-pink amplitude shading, bright node diamonds |
+| `sugar-spring-5-tc-m-2.ansi` | 84x22 | truecolor | 38 | Marshmallow hero shot squashed mid-rebound on a walnut counter with soft shadow, sparkles and a gold product tag card |
+| `sugar-spring-5-tc-m-3.ansi` | 84x22 | truecolor | 39 | Anvil impact shock rings: concentric white-to-ember rings on a gradient plate, spike seismogram strip, P/S wave captions |
+| `sugar-spring-5-tc-s-1.ansi` | 66x13 | truecolor | 20 | Water-balloon slow-mo triptych: gradient blue balloon drop, squash and skinny rebound inside dark film frames with timecodes |
+| `sugar-spring-5-tc-s-2.ansi` | 58x14 | truecolor | 25 | Golden-hour silhouette swing set on a violet-to-amber sky gradient with radial sun and two riders mid-phase |
+| `sugar-spring-6-16-l-1.ansi` | 168x33 | 16 | 6 | bouncing-bomb skip map over reservoir: four geometric-decay hops to dam wall breach |
+| `sugar-spring-6-16-l-2.ansi` | 168x32 | 16 | 5 | olive-harvest shaker rig: forced-vibration branch, fruit follow-through damped arcs onto spring net |
+| `sugar-spring-6-16-m-1.ansi` | 86x22 | 16 | 5 | squirrel fence-hop trajectory study: four damped arcs over fence posts with rail sag |
+| `sugar-spring-6-16-m-2.ansi` | 86x19 | 16 | 5 | dominoes on torsion springs mid-chain-reaction, snap-back overshoot with coil bases |
+| `sugar-spring-6-16-s-1.ansi` | 62x10 | 16 | 6 | springboard judging panel: scores per dive, ripple score and medal line |
+| `sugar-spring-6-16-s-2.ansi` | 58x11 | 16 | 6 | squirrel fence-hop field-guide legend with apex decay formula |
+| `sugar-spring-6-16-s-3.ansi` | 56x13 | 16 | 6 | lattice damper post part nameplate in a boxed tag, spring glyph |
+| `sugar-spring-6-256-l-1.ansi` | 168x36 | 256 | 11 | sea-cave tide pool cross-section: standing sloshing wave, node/antinode callouts, gradient depth |
+| `sugar-spring-6-256-l-2.ansi` | 168x34 | 256 | 8 | mainspring bench: barrel with coil, gear train, torque-droop plateau chart, escapement tape |
+| `sugar-spring-6-256-m-1.ansi` | 86x23 | 256 | 6 | jump-rope world record: mode-2 standing wave with node gates and airborne stick figure |
+| `sugar-spring-6-256-m-2.ansi` | 86x22 | 256 | 7 | weather sat HONEY-1 twin decay ellipses clipped at horizon, apogee/perigee markers |
+| `sugar-spring-6-256-s-1.ansi` | 60x12 | 256 | 5 | tide-pool resonance dial gauge with needle at 0.111 Hz lock |
+| `sugar-spring-6-256-s-2.ansi` | 60x11 | 256 | 9 | mainspring torque readout: coil glyph, bar meters, ratchet ticks |
+| `sugar-spring-6-256-s-3.ansi` | 64x12 | 256 | 5 | egg-drop contest scorecard, honey-cake shell wins on bounce distance |
+| `sugar-spring-6-tc-l-1.ansi` | 168x40 | truecolor | 65 | night-side orbital decay atlas: gradient sky, atmosphere bands, comet-trail satellite, telemetry panel |
+| `sugar-spring-6-tc-l-2.ansi` | 168x38 | truecolor | 198 | jump-rope night final: floodlight cones, crowd noise row, gradient standing wave, lit scoreboard |
+| `sugar-spring-6-tc-m-1.ansi` | 86x24 | truecolor | 53 | platform dive with gradient pool, takeoff parabola to no-ripple entry and score row |
+| `sugar-spring-6-tc-m-2.ansi` | 86x24 | truecolor | 79 | hydraulic press vs honey cube in three stages: glowing gradient cubes squash and rebound |
+| `sugar-spring-6-tc-s-1.ansi` | 62x11 | truecolor | 94 | hydraulic press line gauge: gradient pressure bar over honey cube strain stats |
+| `sugar-spring-6-tc-s-2.ansi` | 62x12 | truecolor | 191 | material restitution e-map heatmap: six substances on gradient bars |
+| `sugar-spring-7-16-l-1.ansi` | 172x30 | 16 | 7 | trampoline routine timeline: 12 skills over a damped spring bed + TOF histogram |
+| `sugar-spring-7-256-l-1.ansi` | 180x28 | 256 | 10 | six-cylinder engine timing board, firing-order pressure heat map + valve lift |
+| `sugar-spring-7-256-l-2.ansi` | 172x28 | 256 | 7 | popcorn factory explosion heat map, kernal burst batches by oil temperature |
+| `sugar-spring-7-256-m-1.ansi` | 88x22 | 256 | 6 | popcorn cinema explosion scatter chart, hull-debris energy rows |
+| `sugar-spring-7-256-m-2.ansi` | 84x18 | 256 | 6 | stone-skip contest lake, three throwers' decay parabola lanes on shared range |
+| `sugar-spring-7-256-s-1.ansi` | 58x9 | 256 | 5 | piston compression mini-gauge with a 256 heat ramp and spark-timing ladder |
+| `sugar-spring-7-256-s-2.ansi` | 52x7 | 256 | 7 | geyser eruption interval timer bars, plume height coded by basin |
+| `sugar-spring-7-tc-l-1.ansi` | 192x35 | truecolor | 39 | geyser basin eruption atlas: superheated truecolor plume field across the basin |
+| `sugar-spring-7-tc-l-2.ansi` | 184x39 | truecolor | 17 | grand stone-skip lake competition, six decay-arc lanes on gradient water |
+| `sugar-spring-7-tc-m-1.ansi` | 86x18 | truecolor | 11 | piston engine cutaway, four bores with compression-cycle combustion glow |
+| `sugar-spring-7-tc-m-2.ansi` | 84x18 | truecolor | 86 | geyser eruption timing ledger, truecolor plume-height gradient bars + cadence spark |
+| `sugar-spring-7-tc-s-1.ansi` | 60x11 | truecolor | 84 | rubber-duck bob strip on a truecolor gradient bath, damped buoyancy frequencies |
+| `sugar-spring-7-tc-s-2.ansi` | 54x6 | truecolor | 9 | castle portcullis torsion-spring drop with gradient counterweight travel bars |
+| `sugar-spring-8-16-l-1.ansi` | 168x36 | 16 | 9 | wind-chime array normal modes, six tubes with node/antinode maps |
+| `sugar-spring-8-16-m-2.ansi` | 84x22 | 16 | 11 | torque balance beam on spring fulcrum, unequal masses tilting |
+| `sugar-spring-8-256-l-1.ansi` | 168x36 | 256 | 18 | taffy-pull folding cycles, layer doubling 2^n with damped relax |
+| `sugar-spring-8-256-l-2.ansi` | 168x36 | 256 | 8 | basketball swish 8-frame slow-mo montage + velocity-time graph |
+| `sugar-spring-8-256-m-1.ansi` | 84x22 | 256 | 12 | swish trajectory analysis, parabolic entry over rim + net mesh |
+| `sugar-spring-8-256-m-2.ansi` | 84x22 | 256 | 16 | tennis racket string bed deformation, ball-pocket dwell decay |
+| `sugar-spring-8-256-s-1.ansi` | 54x13 | 256 | 9 | clean basketball swish, converging net strands damping ball to rest |
+| `sugar-spring-8-256-s-2.ansi` | 54x13 | 256 | 10 | wind-chime tube set hung from bar, clapper striking varied lengths |
+| `sugar-spring-8-tc-l-1.ansi` | 168x44 | truecolor | 14 | chronograph escapement wheel train, mainspring to balance hairspring |
+| `sugar-spring-8-tc-l-2.ansi` | 168x40 | truecolor | 43 | drop-hammer pile rig elevation, blow-energy decay + penetration log |
+| `sugar-spring-8-tc-m-1.ansi` | 84x22 | truecolor | 24 | pile driver impact decay bar log, geometric blow energy falloff |
+| `sugar-spring-8-tc-m-2.ansi` | 84x22 | truecolor | 11 | lever escapement plate, escape wheel + anchor + pendulum + train |
+| `sugar-spring-8-tc-s-1.ansi` | 54x13 | truecolor | 13 | taffy-fold ribbon layers, gradient stretch bands |
+| `sugar-spring-8-tc-s-2.ansi` | 54x13 | truecolor | 8 | pile-driver hammer-blow radial impact force star with e value |
+| `sugar-spring-9-16-l-1.ansi` | 168x32 | 16 | 6 | Jackhammer isolation-pad transmissibility: pad stack + T-vs-frequency-ratio curve, resonance peak, r>sqrt2 zone |
+| `sugar-spring-9-16-l-2.ansi` | 168x34 | 16 | 8 | Suspension-bridge resonant-wind mode shapes: elevation with towers/cable/hangers + three deflected mode panels |
+| `sugar-spring-9-16-m-1.ansi` | 84x22 | 16 | 7 | Weather-vane flutter record: compass dial with hunting vane + overshooting heading-vs-time trace |
+| `sugar-spring-9-16-m-2.ansi` | 84x22 | 16 | 7 | Cannon recoil run-out: barrel/carriage schematic + single-excursion damped-return displacement |
+| `sugar-spring-9-16-s-1.ansi` | 56x12 | 16 | 8 | Mousetrap snap-through dwell: set/arm/snap/hold stage strip + coil schematic + snap-force spike settle |
+| `sugar-spring-9-16-s-2.ansi` | 62x12 | 16 | 7 | Snooker cushion rebound top-view: incidence=reflection dotted paths, normal, restitution e=0.92 |
+| `sugar-spring-9-256-l-1.ansi` | 168x34 | 256 | 11 | Landing-gear oleo-strut touchdown bounce log: airframe+gear schematic + main/nose stroke-decay traces |
+| `sugar-spring-9-256-l-2.ansi` | 168x36 | 256 | 11 | Hammer-throw wire-tension polar: thrower circle + tension-vs-angle ratcheting curve with turn markers |
+| `sugar-spring-9-256-m-1.ansi` | 84x22 | 256 | 13 | Damper dyno wheel velocity: spring-piston schematic + rebound/compression damped trace, ζ1 readout |
+| `sugar-spring-9-256-m-2.ansi` | 84x22 | 256 | 15 | Fidget-spinner spin-down tachymeter: three-lobe rotor + violet-to-cyan RPM decay curve, friction torque |
+| `sugar-spring-9-256-s-1.ansi` | 60x13 | 256 | 12 | Spinning-top nutation decay: tilted disc silhouette, precession arc, shrinking wobble-amplitude bars |
+| `sugar-spring-9-256-s-2.ansi` | 60x13 | 256 | 11 | Door-closer sweep/latch chart: hinge schematic + two-phase angle-decay curve (fast sweep, slow latch) |
+| `sugar-spring-9-tc-l-1.ansi` | 180x44 | truecolor | 29 | Wind-turbine blade flap/edge damping atlas: gradient 3-blade rotor + three mode-shape deflection curves |
+| `sugar-spring-9-tc-l-2.ansi` | 180x38 | truecolor | 20 | Crash-pulse deceleration study: three g-vs-t lanes (flat/steel/crumple) + airbag trigger marker |
+| `sugar-spring-9-tc-m-1.ansi` | 84x24 | truecolor | 20 | Parachute deployment velocity profile: canopy scene + terminal-to-deploy-spike-to-damped-swing trace |
+| `sugar-spring-9-tc-m-2.ansi` | 84x24 | truecolor | 17 | Railroad draft-gear hysteresis: force-deflection loading/unloading loop, energy-absorbed hatch + legend |
+| `sugar-spring-9-tc-s-1.ansi` | 62x13 | truecolor | 38 | Reed-valve flutter trace: gradient valve-lift vs crank angle off a gold seat, chatter envelope |
+| `sugar-spring-9-tc-s-2.ansi` | 62x13 | truecolor | 18 | Solenoid plunger contact bounce: position/t step with decaying chatter spikes + debounce window |
+<!-- END sugar-spring SLOTS -->
 
 <!-- BEGIN sugar-charts SLOTS -->
 ### sugar-charts — slot series

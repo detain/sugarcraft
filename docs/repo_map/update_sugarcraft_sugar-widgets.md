@@ -55,7 +55,7 @@ interface Model {
 - **Tabs zone-based mouse** — not in upstream
 - Good test coverage with behavioral and snapshot tests
 - i18n support with 16 locales
-- Spring physics animation via `honey-bounce`
+- Spring physics animation via `sugar-spring`
 
 ### Weaknesses
 

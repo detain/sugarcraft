@@ -344,7 +344,7 @@ jobs:
       # Cap concurrent cells so 45+ matrix jobs don't all hammer
       # GITHUB_TOKEN's checkout auth at workflow start — secondary
       # rate limiting was causing "could not read Username" failures
-      # on random cells (see flakes on candy-wish, honey-bounce).
+      # on random cells (see flakes on candy-wish, honey-bounce). @rename-keep historical provenance
       max-parallel: 10
       matrix: ${{ fromJSON(needs.build-matrix.outputs.test_matrix) }}
 

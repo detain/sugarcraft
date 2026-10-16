@@ -407,19 +407,19 @@
 - **Effort**: 3-4 hours
 - **Research**: `libraries/candy-tetris-research.md`
 
-### honey-bounce
+### sugar-spring
 
 ### [ ] SpringConfig presets (gentle, wobbly, stiff, slow)
 
 - **Priority**: P1 - High
 - **Effort**: 2 days
-- **Research**: `libraries/honey-bounce-research.md`
+- **Research**: `libraries/sugar-spring-research.md`
 
 ### [ ] CubicBezier easing
 
 - **Priority**: P1 - High
 - **Effort**: 1.5 days
-- **Research**: `libraries/honey-bounce-research.md`
+- **Research**: `libraries/sugar-spring-research.md`
 
 ---
 
@@ -453,7 +453,7 @@ All 45 research documents available at:
 | candy-vt | 26KB |
 | candy-wish | 24KB |
 | sugar-mouse | 14KB |
-| honey-bounce | 25KB |
+| sugar-spring | 25KB |
 | candy-flappy | 11KB |
 | sugar-widgets | 26KB |
 | sugar-panels | 16KB |

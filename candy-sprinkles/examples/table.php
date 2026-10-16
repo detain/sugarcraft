@@ -25,7 +25,7 @@ $table = Table::new()
         ['CandySprinkles', '92', '2026'],
         ['SugarWidgets',     '88', '2026'],
         ['CandyScriptui',    '76', '2026'],
-        ['HoneyBounce',   '54', '2026'],
+        ['SugarSpring',   '54', '2026'],
     ])
     ->headerAlign(Align::Center)
     ->rowAlign(Align::Left)

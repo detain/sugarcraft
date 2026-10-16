@@ -12,7 +12,7 @@
 ## Animation System
 
 - `AnimationKind` is a pure (unit) enum with three cases: `SLIDE`, `FADE`, `SCALE`
-- All three animations consume `SugarCraft\Bounce\Easing\CubicBezier` (honey-bounce)
+- All three animations consume `SugarCraft\Spring\Easing\CubicBezier` (sugar-spring)
 - Default easing per animation:
   - `Slide` → `CubicBezier::easeOut()`
   - `Fade`  → `CubicBezier::easeInOut()`

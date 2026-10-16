@@ -215,7 +215,7 @@ function ansi_row(string $label, array $entry, bool $withDepth): string
 {
     // A description may legitimately contain a pipe — "ruler and|v|strips" does —
     // and an unescaped one silently splits the row into extra cells. That is not a
-    // hypothetical: it is why the honey-bounce row read as undocumented to the first
+    // hypothetical: it is why the honey-bounce row read as undocumented to the first // @rename-keep historical provenance
     // parser written against this table.
     $description = str_replace('|', '\\|', $entry['description']);
 

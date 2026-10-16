@@ -114,14 +114,14 @@ Supporting classes: `NavigationItem` (title + data payload), `Closable` (onEnter
 ### 3. Animation/transition support
 
 **Title:** Add animated transitions between navigation states
-**Description:** bubbleo's View() renders immediately. textualize and charmbracelet/harmonica (honey-bounce) provide animated transitions.
+**Description:** bubbleo's View() renders immediately. textualize and charmbracelet/harmonica (sugar-spring) provide animated transitions.
 **Why it matters:** Smooth transitions between screens improve perceived quality and help users understand spatial relationships in navigation.
 **Source repo:** `textualize/textual` (animator system), `charmbracelet/lipgloss` v2 (layer transitions)
 **Implementation ideas:**
 
 - Add `withTransition(Transition $t)` to Shell
 - Implement fade/slide transitions in Breadcrumb renderer
-- Coordinate with `honey-bounce` for spring animations
+- Coordinate with `sugar-spring` for spring animations
 
 **Estimated complexity:** Medium
 **Expected impact:** Medium — polish feature
@@ -503,7 +503,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
 ## Major Architectural Upgrades (future)
 
 8. **Animation/transition system**
-   - Coordinate with `honey-bounce` for spring animations
+   - Coordinate with `sugar-spring` for spring animations
    - High complexity
 
 9. **Tab group for parallel stacks**

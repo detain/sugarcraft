@@ -77,7 +77,7 @@ depends?      array?   — optional Scoop dependencies
 | `sequin.json` | `sugar-widgets` (ANSI sequences) | Human-readable ANSI sequences — parsing/encoding ANSI escape codes; SugarCraft TUI libs handle ANSI but no dedicated library exists |
 | `skate.json` | **none** (key-value store) | Personal key-value store — out of TUI scope; if it were a TUI around key-value data, `sugar-bits` could provide the view layer | <!-- @rename-keep -->
 | `markscribe.json` | **none** (templating) | Markdown scribe with template engine + GitHub/RSS — templating is out of SugarCraft scope; could be a `sugar-template` leaf lib |
-| `confettysh.json` | `honey-bounce` (animation) | Confetti animation over SSH — `honey-bounce` spring/physics animation could port the confetti effect |
+| `confettysh.json` | `sugar-spring` (animation) | Confetti animation over SSH — `sugar-spring` spring/physics animation could port the confetti effect |
 | `crush.json` | **none** | AI coding assistant — would need `sugar-ai` |
 
 **Summary**: SugarCraft has strong coverage for TUI-facing tools (`charm-gum`, `vhs`, `freeze`, `confettysh`) but **no mapping** for infrastructure tools (git server, email, SSH key management, AI assistants, key-value store).

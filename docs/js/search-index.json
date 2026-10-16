@@ -1,7 +1,7 @@
 [
   {"name": "SugarCraft", "slug": "candy-core", "category": "library", "description": "Elm-architecture TUI runtime — Model / Msg / Cmd / Program. Cursed cell-diff renderer for SSH bandwidth.", "url": "lib/candy-core.html"},
   {"name": "CandySprinkles", "slug": "candy-sprinkles", "category": "library", "description": "Declarative styling + layout. Style, Border, Table, List, Tree, Layout::join/Place, multi-layer Canvas.", "url": "lib/candy-sprinkles.html"},
-  {"name": "HoneyBounce", "slug": "honey-bounce", "category": "library", "description": "Damped spring physics + Newtonian projectile sim. The animation engine behind every smooth scroll in the stack.", "url": "lib/honey-bounce.html"},
+  {"name": "SugarSpring", "slug": "sugar-spring", "category": "library", "description": "Damped spring physics + Newtonian projectile sim. The animation engine behind every smooth scroll in the stack.", "url": "lib/sugar-spring.html"},
   {"name": "SugarMouse", "slug": "sugar-mouse", "category": "library", "description": "Mouse-zone tracker. Wrap rendered chunks, get back bounding boxes — clickable regions without coordinate math.", "url": "lib/sugar-mouse.html"},
   {"name": "SugarWidgets", "slug": "sugar-widgets", "category": "library", "description": "Fifteen components: TextInput, TextArea, ItemList, Table, Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer.", "url": "lib/sugar-widgets.html"},
   {"name": "SugarCharts", "slug": "sugar-charts", "category": "library", "description": "Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus Sixel / Kitty / iTerm2 image rendering.", "url": "lib/sugar-charts.html"},
@@ -44,5 +44,5 @@
   {"name": "CandyMinesweeper", "slug": "candy-minesweeper", "category": "app", "description": "Minesweeper — customisable board, recursive flood-fill, win/lose detection. Pure-state Board; first-click safety.", "url": "lib/candy-minesweeper.html"},
   {"name": "SugarAnimation", "slug": "sugar-animation", "category": "app", "description": "ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or ASCII.", "url": "lib/sugar-animation.html"},
   {"name": "CandyTop", "slug": "candy-top", "category": "app", "description": "btop-style system monitor — cpu, mem, net, disk and process panels with braille graphs and btop themes over Linux /proc + /sys collectors.", "url": "lib/candy-top.html"},
-  {"name": "CandyFlappy", "slug": "candy-flappy", "category": "app", "description": "Flappy-Bird in your terminal — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate.", "url": "lib/candy-flappy.html"}
+  {"name": "CandyFlappy", "slug": "candy-flappy", "category": "app", "description": "Flappy-Bird in your terminal — bird motion is a SugarSpring projectile, pipes scroll left at a fixed cell rate.", "url": "lib/candy-flappy.html"}
 ]

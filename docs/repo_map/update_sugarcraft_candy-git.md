@@ -191,14 +191,14 @@
 
 **Title:** Smooth transitions between states  
 **Description:** Add harmonica-style spring animations for cursor movement, pane switching, overlay appearance  
-**Why it matters:** SugarCraft has `honey-bounce` (harmonica port) available. Animations make the TUI feel polished and responsive.  
+**Why it matters:** SugarCraft has `sugar-spring` (harmonica port) available. Animations make the TUI feel polished and responsive.  
 **Source:** `docs/repo_map/charmbracelet_harmonica.md`, `docs/repo_map/sugarcraft_candy-git.md` (animation gap)  
 **Implementation ideas:**
 
 - Animate cursor movement (smooth scroll to new position)
 - Animate pane focus change (border color transition)
 - Animate overlay appearance (slide/fade in)
-- Use `honey-bounce` Spring + SpringConfig for physics-based animation
+- Use `sugar-spring` Spring + SpringConfig for physics-based animation
 - Add `REDUCE_MOTION` support for accessibility  
 
 **Estimated complexity:** Medium — requires subscription tick + animation state  
@@ -357,7 +357,7 @@
 
 **External (harmonica):** Analytically exact damped spring physics per time step, constant-time after setup.
 
-**Applicability:** `honey-bounce` is available in SugarCraft. Add animation subscriptions for cursor/overlay transitions.
+**Applicability:** `sugar-spring` is available in SugarCraft. Add animation subscriptions for cursor/overlay transitions.
 
 ---
 
@@ -549,7 +549,7 @@
 
 4. **Address performance** — async git operations and GitDriver caching would make the TUI feel more responsive, especially on slower systems or large repositories.
 
-5. **Consider ecosystem leverage** — `honey-bounce` (spring animations), `sugar-mouse` (mouse zones), and fuzzy search libraries could all be integrated to improve the TUI without significant new development.
+5. **Consider ecosystem leverage** — `sugar-spring` (spring animations), `sugar-mouse` (mouse zones), and fuzzy search libraries could all be integrated to improve the TUI without significant new development.
 
 **Competitive position:** candy-git competes directly with lazygit (Go) and offers a PHP-native alternative that integrates well with PHP tooling and workflows. The TypeScript/JS ecosystem has no direct equivalent, making candy-git a unique offering for PHP developers who prefer git TUI applications.
 

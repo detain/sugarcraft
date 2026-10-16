@@ -79,7 +79,7 @@ To implement an item:
 |---------|--------------|-------------------|
 | **candy-tetris** | [research/libraries/candy-tetris-research.md](libraries/candy-tetris-research.md) | 1. Full SRS, 2. T-Spin detection, 3. B2B bonus |
 | **candy-minesweeper** | [research/libraries/candy-minesweeper-research.md](libraries/candy-minesweeper-research.md) | 1. Chord clicks, 2. Win detection, 3. Timer precision |
-| **honey-bounce** | [research/libraries/honey-bounce-research.md](libraries/honey-bounce-research.md) | 1. SpringConfig presets, 2. CubicBezier, 3. SpringChain |
+| **sugar-spring** | [research/libraries/sugar-spring-research.md](libraries/sugar-spring-research.md) | 1. SpringConfig presets, 2. CubicBezier, 3. SpringChain |
 | **candy-flappy** | [research/libraries/candy-flappy-research.md](libraries/candy-flappy-research.md) | 1. Bird rotation, 2. Collision tests, 3. Variable gap |
 | **sugar-animation** | [research/libraries/sugar-animation-research.md](libraries/sugar-animation-research.md) | 1. imagecreatefromstring, 2. Frame timing, 3. Floyd-Steinberg |
 
@@ -167,7 +167,7 @@ To implement an item:
 
 - **candy-tetris**: Full SRS, T-Spin detection, B2B bonus
 - **candy-minesweeper**: Chord clicks, improved win detection
-- **honey-bounce**: SpringConfig presets, CubicBezier, SpringChain
+- **sugar-spring**: SpringConfig presets, CubicBezier, SpringChain
 - **candy-flappy**: Bird rotation, collision tests
 
 ---

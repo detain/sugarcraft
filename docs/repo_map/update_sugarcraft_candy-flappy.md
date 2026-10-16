@@ -2,7 +2,7 @@
 
 ## Overview
 
-candy-flappy is a Flappy Bird-style arcade game that demonstrates HoneyBounce projectile physics in a TUI context. It ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP, running on the SugarCraft stack. The package is production-ready (🟢 v1) with 28 passing tests, a VHS demo, and full documentation.
+candy-flappy is a Flappy Bird-style arcade game that demonstrates SugarSpring projectile physics in a TUI context. It ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP, running on the SugarCraft stack. The package is production-ready (🟢 v1) with 28 passing tests, a VHS demo, and full documentation.
 
 **Biggest opportunities:**
 
@@ -25,7 +25,7 @@ candy-flappy is a Flappy Bird-style arcade game that demonstrates HoneyBounce pr
 ```
 candy-flappy/src/
 ├── Game.php          # TEA Model: world state + init/update/view + game loop (265 lines)
-├── Bird.php          # Wraps HoneyBounce Projectile — physics-based vertical motion (71 lines)
+├── Bird.php          # Wraps SugarSpring Projectile — physics-based vertical motion (71 lines)
 ├── Pipe.php          # Single-column pipe pair with centred gap (45 lines)
 ├── PipeGenerator.php # Generates pipes with score-dependent gap height (56 lines)
 ├── Renderer.php      # Pure view: ANSI-styled playfield + border + HUD (83 lines)
@@ -40,7 +40,7 @@ candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| HoneyBounce physics | ✅ Implemented | Gravity 70 cells/sec², flap kick -22 cells/sec |
+| SugarSpring physics | ✅ Implemented | Gravity 70 cells/sec², flap kick -22 cells/sec |
 | 30 fps game loop | ✅ Implemented | Via `Cmd::tick(0.033, ...)` |
 | Difficulty scaling | ✅ Implemented | Gap shrinks 6→3 every 5 points |
 | PRNG injection | ✅ Implemented | Enables deterministic tests |
@@ -57,13 +57,13 @@ candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 
 ### Strengths
 
-1. **Physics-first design**: Bird motion uses HoneyBounce `Projectile` with gravity and velocity kick — not integer increment/decrement like upstream flapioca
+1. **Physics-first design**: Bird motion uses SugarSpring `Projectile` with gravity and velocity kick — not integer increment/decrement like upstream flapioca
 2. **Proper TEA pattern**: Full `Model::init()/update()/view()` contract, testable without rendering
 3. **Deterministic tests**: PRNG injection enables reproducible pipe layouts
 4. **Difficulty scaling**: Gap shrinkage keeps game challenging without becoming impossible
 5. **Immutable state**: All mutations return new instances — no spooky action
 6. **6× faster tick rate than upstream**: 30 Hz vs upstream's 5 Hz
-7. **Clean separation**: Physics (honey-bounce) is framework-agnostic, Game is physics-aware, Renderer is game-aware
+7. **Clean separation**: Physics (sugar-spring) is framework-agnostic, Game is physics-aware, Renderer is game-aware
 
 ### Weaknesses
 
@@ -129,7 +129,7 @@ candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 | 8 | Particle trail | Render trailing dots when bird is moving fast | Visual flourish that makes fast movement more legible | `docs/repo_map/sugarcraft_candy-flappy.md:607` | Track last 3-5 bird positions; render small `·` glyphs at those positions with decreasing opacity | Low | Low |
 | 9 | Verlet integration | Upgrade from Euler to Verlet for better numerical stability | Euler integration accumulates error; Verlet is more stable for game physics | `docs/repo_map/sugarcraft_candy-flappy.md:618` | Add `ProjectileVerlet` class: stores current + previous position, computes velocity as `pos - prevPos`; `update()` becomes position update only | High | Medium |
 | 10 | Multiplayer | Local two-player via split-screen or networked via WebSocket | Extends game beyond single-player experience | `docs/repo_map/sugarcraft_candy-flappy.md:618` | Split-screen: render two birds at different columns; networked: use ReactPHP WebSocket for real-time multi-player sync | High | Low |
-| 11 | Physics-based level elements | Moving platforms, bouncy pads, wind zones | Demonstrates honey-bounce versatility beyond simple projectile | `docs/repo_map/sugarcraft_candy-flappy.md:619` | Add `BouncyPad` class that applies upward force on collision; `WindZone` applies horizontal acceleration; both implement `PhysicsBody` interface | Medium | Low |
+| 11 | Physics-based level elements | Moving platforms, bouncy pads, wind zones | Demonstrates sugar-spring versatility beyond simple projectile | `docs/repo_map/sugarcraft_candy-flappy.md:619` | Add `BouncyPad` class that applies upward force on collision; `WindZone` applies horizontal acceleration; both implement `PhysicsBody` interface | Medium | Low |
 | 12 | Particle system | Explosion on crash, confetti on new high score | Visual celebration for key moments | `docs/repo_map/sugarcraft_candy-flappy.md:620` | On crash: spawn 8-12 particles at bird position with random velocity vectors; render as `*` glyphs; on high score: spawn confetti from top of screen | Medium | Low |
 
 ---
@@ -161,7 +161,7 @@ public function tickInPlace(): void {
 }
 ```
 
-This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method — see `docs/repo_map/sugarcraft_honey-bounce.md` for HoneyBounce internals.
+This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method — see `docs/repo_map/sugarcraft_sugar-spring.md` for SugarSpring internals.
 
 ---
 
@@ -193,8 +193,8 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 ## Documentation / Cookbook Opportunities
 
-1. **"Building a physics-based TUI game" tutorial**: Walking through candy-flappy's architecture, explaining how HoneyBounce physics integrates with a TEA model. Would cover:
-   - Designing the physics layer (honey-bounce)
+1. **"Building a physics-based TUI game" tutorial**: Walking through candy-flappy's architecture, explaining how SugarSpring physics integrates with a TEA model. Would cover:
+   - Designing the physics layer (sugar-spring)
    - Wrapping physics state in a Model (Game)
    - Building a pure view (Renderer)
    - Writing deterministic tests with PRNG injection
@@ -252,7 +252,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 2. **Add `candy-flappy` to SugarCraft website**: Create a demo page on sugarcraft.example.com that renders the game in a live terminal emulator (using go-termimg-style protocols or a web-based terminal). This could be powered by sugar-image for the fallback rendering.
 
-3. **Create `honey-bounce` game examples package**: A new `honey-games` package (or `sugar-games`) that ports multiple physics-based games (Flappy Bird, Angry Birds-style slingshot, space invaders with gravity) demonstrating honey-bounce versatility.
+3. **Create `sugar-spring` game examples package**: A new `honey-games` package (or `sugar-games`) that ports multiple physics-based games (Flappy Bird, Angry Birds-style slingshot, space invaders with gravity) demonstrating sugar-spring versatility.
 
 4. **Integrate with `sugar-charts` for score analytics**: Track session scores over time and render charts showing score distribution, high score progression, etc. This could use the existing sugar-charts library.
 
@@ -298,7 +298,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 ### Major upgrades (v3.0)
 
 1. **Verlet integration** — High complexity. Replace Euler with Verlet for better numerical stability.
-2. **Physics-based level elements** — Medium complexity. Add bouncy pads and wind zones using honey-bounce physics.
+2. **Physics-based level elements** — Medium complexity. Add bouncy pads and wind zones using sugar-spring physics.
 3. **Particle system** — Medium complexity. Explosion on crash, confetti on high score.
 
 ### Experimental
@@ -330,7 +330,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 ## Final Strategic Assessment
 
-candy-flappy is a **well-architected, production-ready** package that demonstrates the SugarCraft stack's capability for physics-based TUI games. Its use of HoneyBounce for projectile physics is a genuine differentiator — no other Flappy Bird clone in the TUI ecosystem uses real physics simulation.
+candy-flappy is a **well-architected, production-ready** package that demonstrates the SugarCraft stack's capability for physics-based TUI games. Its use of SugarSpring for projectile physics is a genuine differentiator — no other Flappy Bird clone in the TUI ecosystem uses real physics simulation.
 
 **Key differentiators from upstream (flapioca):**
 
@@ -342,7 +342,7 @@ candy-flappy is a **well-architected, production-ready** package that demonstrat
 
 **Areas where candy-flappy could lead the ecosystem:**
 
-1. Physics-based game development — candy-flappy + honey-bounce establishes a pattern for physics TUI games in PHP
+1. Physics-based game development — candy-flappy + sugar-spring establishes a pattern for physics TUI games in PHP
 2. Sound integration — adding audio feedback to TUI games is underexplored in the SugarCraft ecosystem
 3. Performance optimization — mutable physics variant would be a first for the ecosystem
 

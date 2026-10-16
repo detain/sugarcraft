@@ -543,7 +543,7 @@ final class CheckPathReposTest extends TestCase
      *
      * WHY A LITERAL AND NOT A DERIVATION: measured this round, the set of
      * packages `tools/tests/` files mention is wider than the set the name
-     * claims — `candy-core` and `honey-bounce` appear in FIXTURE strings here,
+     * claims — `candy-core` and `honey-bounce` appear in FIXTURE strings here, @rename-keep historical provenance
      * not as reach — so deriving the name from mentions would either red on
      * noise or need a second roster to excuse the noise. The name is one
      * human judgement; pin the judgement, and let renaming it be a decision

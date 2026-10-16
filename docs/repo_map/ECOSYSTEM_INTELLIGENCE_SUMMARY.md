@@ -98,7 +98,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos:** harmonica, bubbleup, confettysh, textualize, ratatui
 - **What users want:** Fade-in, slide transitions, particle effects
-- **SugarCraft opportunity:** `honey-bounce` already exists; add animation driver to `candy-core`
+- **SugarCraft opportunity:** `sugar-spring` already exists; add animation driver to `candy-core`
 - **Priority:** MEDIUM-TERM
 
 ### 6. Word Wrap with Style Preservation (🟡 MEDIUM DEMAND - 4+ repos)
@@ -180,7 +180,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Observation:** lipgloss, bubbleboxer, ratatui all reinventing layout
 - **Opportunity:** SugarCraft could unify with constraint-based Layout
-- **Action:** Port ratatui's Cassowary solver (already exists in `honey-bounce`?)
+- **Action:** Port ratatui's Cassowary solver (already exists in `sugar-spring`?)
 
 ---
 

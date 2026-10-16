@@ -21,7 +21,7 @@ accept), and future consumers all call a single API.
     profile after walking every env var in precedence order.
   - `Probe::isNoColor(): bool` — `NO_COLOR` set ⇒ true.
   - `Probe::isForceColor(): bool` — `CLICOLOR_FORCE=1` set ⇒ true.
-  - `Probe::reducedMotion(): bool` — for honey-bounce; reads
+  - `Probe::reducedMotion(): bool` — for sugar-spring; reads
     `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION`.
 - `candy-palette/src/ColorProfile.php` — enum: `NoTTY`, `Ascii`,
   `Ansi`, `Ansi256`, `TrueColor`.

@@ -402,7 +402,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   **4.1d** `Vim/Viewport/TextArea/Scrollbar`+root (≈18 → a/b).
 - **4.2** `sugar-quickpick`(7,med, ansi+pty+sprinkles), `candy-codeshot`(10,high,
   ansi+buffer+core+shine+sprinkles). <!-- @rename-keep historical provenance -->
-- **4.3** `honey-bounce`(12,high, core+palette; enum‑with‑methods), then `candy-flappy`(6,low,
+- **4.3** `sugar-spring`(12,high, core+palette; enum‑with‑methods), then `candy-flappy`(6,low,
   core+sprinkles+honey‑bounce).
 - **4.4** `candy-scriptui`(41,med, core+forms+fuzzy+pty+shine+sprinkles; symfony console→^5.4, <!-- @rename-keep historical provenance -->
   src attributes) → **4.4a** `Command/` (13→a/b), **4.4b** `Model/` (8), **4.4c** `Attribute/`
@@ -486,7 +486,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-sql | high | 14 | enum-with-methods, ctor-promotion, match, mixed, named-args; pdo_sqlite |
 | candy-shine | high | 9 | attribute, ctor-promotion, enum, match, named-args, nullsafe; commonmark | <!-- @rename-keep historical provenance -->
 | candy-vt | high | 40 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args |
-| honey-bounce | high | 12 | enum-with-methods, ctor-promotion, match, named-args, readonly |
+| honey-bounce | high | 12 | enum-with-methods, ctor-promotion, match, named-args, readonly | <!-- @rename-keep historical provenance -->
 | sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init | <!-- @rename-keep historical provenance -->
 | sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
 | sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) | <!-- @rename-keep -->

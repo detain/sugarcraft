@@ -554,11 +554,11 @@
 
 **Redundancy Check:**
 
-- No equivalent — `honey-bounce` has spring physics but not this specific particle system
+- No equivalent — `sugar-spring` has spring physics but not this specific particle system
 
 **Strategic Value:**
 
-- Particle system physics could inform `honey-bounce` animation improvements
+- Particle system physics could inform `sugar-spring` animation improvements
 
 - SSH middleware chain pattern useful if SugarCraft ever adds SSH server components
 
@@ -766,7 +766,7 @@
 | **Exponential backoff with header respect** | fantasy, mods | Robust HTTP retry handling for any future network clients |
 | **Tool call validation + repair** | fantasy | Quality pattern for structured input validation |
 | **Bubble Tea MVC composition** | confettysh, bubbletea-app-template | Reference for composing TUI components correctly |
-| **Particle physics (gravity, velocity)** | confettysh | Could enhance `honey-bounce` animation library |
+| **Particle physics (gravity, velocity)** | confettysh | Could enhance `sugar-spring` animation library |
 | **SSH middleware chain** | confettysh, soft-serve-action | Reference for composable SSH server behavior |
 
 ### Domains SugarCraft Should Consider Entering

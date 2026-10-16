@@ -175,7 +175,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Description:** Replace one-pass greedy solver with proper Cassowary algorithm for inter-constraint ratio support.
 **Why it matters:** Cannot express "column A is always at least twice as wide as column B" with current greedy solver.
 **Source:** `ratatui_ratatui.md` — Cassowary via `kasuari` crate; `php-tui_php-tui.md` — Cassowary via `php-tui/cassowary`; `76creates_stickers.md` — `calculateRatioWithMinimum` recursive algorithm
-**Implementation:** Extract constraint solver to `honey-bounce` package. Implement Cassowary simplex algorithm (~1000+ lines). Use `php-tui/cassowary` as reference implementation.
+**Implementation:** Extract constraint solver to `sugar-spring` package. Implement Cassowary simplex algorithm (~1000+ lines). Use `php-tui/cassowary` as reference implementation.
 **Estimated complexity:** High — algorithmic undertaking, ~1000+ lines
 **Expected impact:** High — enables truly responsive layouts with constraint relationships
 
@@ -260,7 +260,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 **Tradeoffs:** Cassowary is ~1000+ lines vs. current ~300 lines. Greedy handles 80% of common cases; Cassowary needed only for constraint relationships between columns/rows.
 
-**Applicability:** Medium — would transform layout solver but significant implementation cost. Consider `honey-bounce` extraction first.
+**Applicability:** Medium — would transform layout solver but significant implementation cost. Consider `sugar-spring` extraction first.
 
 ### Color Blending: Linear RGB vs. CIELAB
 
@@ -325,7 +325,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 6. **StyleRunes implementation** — `StyleRunes(string, indices, matched, unmatched)` for sub-string styling. ~50 lines using grapheme-aware index mapping.
 
-7. **Extract constraint solver to `honey-bounce`** — Reusable across sugar-charts (axis layout), sugar-widgets (component layout), future layout-sensitive libs. Mirror ratatui's layout crate separation.
+7. **Extract constraint solver to `sugar-spring`** — Reusable across sugar-charts (axis layout), sugar-widgets (component layout), future layout-sensitive libs. Mirror ratatui's layout crate separation.
 
 ## Long-term (new capabilities)
 
@@ -425,7 +425,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 6. **sugar-widgets progress bar using RGB.Fade()** — pterm's multi-stop gradient pattern for progress visualization.
 
-7. **`honey-bounce` extraction** — Constraint solver currently in candy-sprinkles should be extracted for reuse.
+7. **`sugar-spring` extraction** — Constraint solver currently in candy-sprinkles should be extracted for reuse.
 
 ---
 
@@ -459,7 +459,7 @@ func MapRangeToRange(fromMin, fromMax, toMin, toMax, current float32) int {
 ```
 Foundational utility for bar chart scaling, progress color fades, keyboard navigation offsets.
 **Reference:** `pterm_pterm.md` — internal/map_range_to_range.go
-**Lesson:** Should be in sugar-core or honey-bounce as `MapRange::map(float $value, float $fromMin, float $fromMax, float $toMin, float $toMax): float`.
+**Lesson:** Should be in sugar-core or sugar-spring as `MapRange::map(float $value, float $fromMin, float $fromMax, float $toMin, float $toMax): float`.
 
 ### textual: Spatial map for O(log n) hit testing
 
@@ -508,7 +508,7 @@ PHP could achieve similar via `__call` magic on strings returning `Span` instanc
 
 ## Major Architectural Upgrades
 
-13. **Cassowary constraint solver** — Extract to `honey-bounce`, implement full simplex algorithm
+13. **Cassowary constraint solver** — Extract to `sugar-spring`, implement full simplex algorithm
 14. **CSS flexbox layout engine** — TCSS parser + flexbox algorithm (long-term)
 15. **Canvas cell-buffer diffing** — Replace string composition with Cell grid
 
@@ -516,7 +516,7 @@ PHP could achieve similar via `__call` magic on strings returning `Span` instanc
 
 16. **Spatial map for Canvas hit-testing** — R-tree-like layer lookup by screen position
 17. **Terminal OSC 11 background detection** — Direct terminal query vs. COLORFGBG env var
-18. **`honey-bounce` extraction** — Separate constraint solver package for reuse
+18. **`sugar-spring` extraction** — Separate constraint solver package for reuse
 
 ---
 

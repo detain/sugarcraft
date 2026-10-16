@@ -58,10 +58,10 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-33 candy-kv + candy-ssh-launcher + candy-git: adopted sugar-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 candy-codetime + candy-mail + candy-git-server: adopted candy-async (PR #915)
-- step-36 sugar-animation + sugar-cli + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
+- step-36 sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
@@ -526,9 +526,9 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **sugar-forms / sugar-forms > huh** — ReactPHP async suggestions (not in Go upstream at all), Vim mode, smooth scroll with lerp, 7 built-in themes vs 5.
 
-3. **sugar-widgets > bubbles** — Per-cell `styleFunc` for Table, Vim mode, ValidateOn timing control, zone-based mouse for Tabs, spring physics via honey-bounce integration.
+3. **sugar-widgets > bubbles** — Per-cell `styleFunc` for Table, Vim mode, ValidateOn timing control, zone-based mouse for Tabs, spring physics via sugar-spring integration.
 
-4. **honey-bounce > harmonica** — REDUCE_MOTION accessibility, immutable `Projectile::update()`, UIKit spring presets, Easing/CubicBezier library (15 + 24 CSS), SpringChain/SpringCollection.
+4. **sugar-spring > harmonica** — REDUCE_MOTION accessibility, immutable `Projectile::update()`, UIKit spring presets, Easing/CubicBezier library (15 + 24 CSS), SpringChain/SpringCollection.
 
 5. **candy-palette > colorprofile** — 12-step detection hierarchy with infocmp Phase 2, full NO_COLOR/CLICOLOR/CLICOLOR_FORCE/COLORTERM/terminfo compliance, good test coverage.
 
@@ -570,7 +570,7 @@ The ecosystem has 5+ packages each doing their own layout, buffer rendering, fuz
 
 ### Position Superior Packages as Flagships
 
-candy-tetris, candy-minesweeper, sugar-cli, honey-bounce, candy-palette, and sugar-widgets all have genuine competitive advantages over their upstreams. These should be highlighted prominently — they represent proof that SugarCraft is not merely a porting effort but an active improvement on the originals.
+candy-tetris, candy-minesweeper, sugar-cli, sugar-spring, candy-palette, and sugar-widgets all have genuine competitive advantages over their upstreams. These should be highlighted prominently — they represent proof that SugarCraft is not merely a porting effort but an active improvement on the originals.
 
 ### Close the Input Driver Gap First
 

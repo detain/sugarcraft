@@ -60,7 +60,7 @@ sugar-widgets employs a **stratified alias pattern** where many components are r
   "sugarcraft/sugar-forms": "dev-master",        // Form primitives (most aliases)
   "sugarcraft/candy-sprinkles": "dev-master",   // Styling system
   "sugarcraft/sugar-mouse": "dev-master",          // Zone/mouse handling
-  "sugarcraft/honey-bounce": "dev-master"     // Spring physics (AnimatedProgress)
+  "sugarcraft/sugar-spring": "dev-master"     // Spring physics (AnimatedProgress)
 }
 ```
 
@@ -335,7 +335,7 @@ public function view(): string
 
 **Features:**
 
-- Spring-physics interpolation using honey-bounce
+- Spring-physics interpolation using sugar-spring
 
 - Settles to target percent with spring animation
 
@@ -691,9 +691,9 @@ $paginator = $table->paginator();
 echo $paginator->view();  // "● ○ ○ ○ ○" or "3/8"
 ```
 
-### Table + AnimatedProgress via honey-bounce
+### Table + AnimatedProgress via sugar-spring
 
-Progress uses honey-bounce for spring physics:
+Progress uses sugar-spring for spring physics:
 ```php
 use SugarCraft\Widgets\Progress\AnimatedProgress;
 use SugarCraft\Core\Cmd;

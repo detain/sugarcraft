@@ -1,6 +1,6 @@
-# Step 09.17 — honey-bounce SpringPreset + SpringConfig + CubicBezier
+# Step 09.17 — sugar-spring SpringPreset + SpringConfig + CubicBezier
 
-**Source:** `leftover_updates_later.md` honey-bounce §4.1-2 P1
+**Source:** `leftover_updates_later.md` sugar-spring §4.1-2 P1
 **Branch:** `ai/bounce-presets-cubicbezier`
 
 ## Deliverable
@@ -15,13 +15,13 @@
 
 **Create:**
 
-- `honey-bounce/src/SpringPreset.php` (enum).
-- `honey-bounce/src/SpringConfig.php`.
-- `honey-bounce/src/Easing/CubicBezier.php`.
+- `sugar-spring/src/SpringPreset.php` (enum).
+- `sugar-spring/src/SpringConfig.php`.
+- `sugar-spring/src/Easing/CubicBezier.php`.
 
 **Modify:**
 
-- `honey-bounce/src/Spring.php` — `fromPreset(SpringPreset)` factory.
+- `sugar-spring/src/Spring.php` — `fromPreset(SpringPreset)` factory.
 
 ## Tests
 
@@ -29,7 +29,7 @@
 
 ## Acceptance
 
-- `cd honey-bounce && vendor/bin/phpunit` green.
+- `cd sugar-spring && vendor/bin/phpunit` green.
 
 ---
 

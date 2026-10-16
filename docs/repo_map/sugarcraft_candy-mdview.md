@@ -397,7 +397,7 @@ Dependencies:
 - `symfony/console` — Application, Command
 
 Path repos in `composer.json`:
-- candy-core, sugar-markdown, sugar-widgets, candy-pty, candy-sprinkles, sugar-forms, sugar-mouse, honey-bounce, candy-palette
+- candy-core, sugar-markdown, sugar-widgets, candy-pty, candy-sprinkles, sugar-forms, sugar-mouse, sugar-spring, candy-palette
 
 ## Potential Enhancements
 

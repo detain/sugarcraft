@@ -438,7 +438,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Horizontal scrolling (P6).
 - JSON/NULL formatting (P7).
 
-### honey-bounce
+### sugar-spring
 
 - `SpringPreset` enum (Gentle/Wobbly/Stiff/Slow/Molasses) (§4.1 P1).
 - `SpringConfig` translating tension/friction/mass → angularFreq/dampingRatio (P1).

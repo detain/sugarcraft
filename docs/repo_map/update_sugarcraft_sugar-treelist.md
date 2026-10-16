@@ -622,7 +622,7 @@ If Model implements `tea.Model`, it can run inside `candy-core`'s `Program::run(
 
 15. **Cassowary layout** — If Model becomes layout-aware, use Cassowary constraint solver for responsive sizing.
 16. **Layer compositing** — If overlay rendering needed, adopt lipgloss-style `Layer`/`Compositor` pattern.
-17. **Animation** — Add spring-based cursor movement (via `honey-bounce`) for smooth navigation transitions.
+17. **Animation** — Add spring-based cursor movement (via `sugar-spring`) for smooth navigation transitions.
 
 ---
 

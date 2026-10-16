@@ -219,9 +219,9 @@ The style system maps to `candy-sprinkles`:
 - Text styling (`Text`, `Line`, `Span`, `SpanParser`, `Title`)
 - Borders and alignment (`Borders`, `BorderType`, `Borders`, `HorizontalAlignment`, `VerticalAlignment`)
 
-### honey-bounce (Layout Algorithm)
+### sugar-spring (Layout Algorithm)
 
-The Cassowary constraint solver integration maps to `honey-bounce`:
+The Cassowary constraint solver integration maps to `sugar-spring`:
 - `Layout`, `Constraint` hierarchy, `ConstraintSolver` interface
 - `Direction`, `Margin`
 
@@ -240,4 +240,4 @@ php-tui is a comprehensive, production-quality port of Rust's Ratatui library fo
 
 The architecture follows a clean separation of concerns: the `Backend` interface abstracts terminal control (currently implemented via `php-tui/term`), the `Display` class manages the render loop and double-buffering, `WidgetRenderer` implementations handle drawing each widget type to a `Buffer`, and the `Buffer` class provides cell-level manipulation with Unicode-aware text operations. The extension system allows the core to remain lean while adding optional functionality like BDF fonts and image support.
 
-The library is well-suited for building rich interactive CLI applications in PHP, competing with solutions like `psy/psysh` (which also builds TUIs) but offering a more general-purpose, widget-based approach. For SugarCraft, the port would involve mapping each component to the appropriate sub-package: core display/buffer infrastructure to `candy-core`, styling to `candy-sprinkles`, layout to `honey-bounce`, and individual widget groups to leaf libraries. The Cassowary algorithm is particularly notable as it's the same algorithm used by Apple's Auto Layout, enabling truly responsive terminal layouts that adapt gracefully to terminal resizing.
+The library is well-suited for building rich interactive CLI applications in PHP, competing with solutions like `psy/psysh` (which also builds TUIs) but offering a more general-purpose, widget-based approach. For SugarCraft, the port would involve mapping each component to the appropriate sub-package: core display/buffer infrastructure to `candy-core`, styling to `candy-sprinkles`, layout to `sugar-spring`, and individual widget groups to leaf libraries. The Cassowary algorithm is particularly notable as it's the same algorithm used by Apple's Auto Layout, enabling truly responsive terminal layouts that adapt gracefully to terminal resizing.

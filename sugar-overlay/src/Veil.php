@@ -24,7 +24,7 @@ use SugarCraft\Overlay\Animation\Slide;
  *
  * Composites a foreground string over a background string at a given
  * position with optional cell offsets (columns / rows). Supports backdrop dimming
- * and animated transitions via honey-bounce CubicBezier easing.
+ * and animated transitions via sugar-spring CubicBezier easing.
  *
  * Port of rmhubbert/bubbletea-overlay.
  *

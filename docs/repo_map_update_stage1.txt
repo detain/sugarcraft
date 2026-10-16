@@ -1,7 +1,7 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
 Sources: candy-core, candy-scriptui, sugar-forms, candy-sprinkles, sugar-widgets,
-sugar-forms, honey-bounce, candy-palette, sugar-markdown, candy-pty
+sugar-forms, sugar-spring, candy-palette, sugar-markdown, candy-pty
 
 ---
 
@@ -21,7 +21,7 @@ All rendering passes through string-based diffing.紫外线 (ultraviolet) and ra
 
 ### C. Cassowary Constraint Solver Absent or Incomplete (candy-core / candy-sprinkles / sugar-forms / sugar-widgets)
 
-candy-sprinkles has a one-pass greedy layout solver — cannot express "column A is always at least 2× column B". candy-core has no layout system at all (models manually pad strings). ratatui and ultraviolet both use Cassowary (same algorithm as Apple Auto Layout). php-tui uses `php-tui/cassowary`. honey-bounce has spring physics but the Cassowary constraint solver that enables truly responsive layouts is missing from all layout-sensitive packages.
+candy-sprinkles has a one-pass greedy layout solver — cannot express "column A is always at least 2× column B". candy-core has no layout system at all (models manually pad strings). ratatui and ultraviolet both use Cassowary (same algorithm as Apple Auto Layout). php-tui uses `php-tui/cassowary`. sugar-spring has spring physics but the Cassowary constraint solver that enables truly responsive layouts is missing from all layout-sensitive packages.
 
 **Impact**: Responsive dashboards that adapt to terminal resize require manual string padding. Declarative constraint specification is impossible.
 
@@ -113,16 +113,16 @@ The `SubStyleParser` for per-element styles already exists in candy-scriptui —
 - **Vim mode for TextInput** — not in upstream
 - **ValidateOn timing control** — not in upstream
 - **Zone-based mouse for Tabs** — not in upstream
-- **Spring physics animation** via honey-bounce integration — not in upstream
+- **Spring physics animation** via sugar-spring integration — not in upstream
 - **Note**: bubbles wins on LineInfo soft-wrap tracking, fuzzy filtering quality (sahilm/fuzzy), and half-block color blending
 
-### honey-bounce > harmonica (Partial Superiority)
+### sugar-spring > harmonica (Partial Superiority)
 - **REDUCE_MOTION accessibility support** — **zero in upstream**
 - **Immutable Projectile::update()** — upstream mutates in place
 - **UIKit-inspired spring presets** (Gentle, Wobbly, Stiff, Slow, Molasses) — not in upstream
 - **Easing/CubicBezier library** (15 easing curves + 24 CSS cubic-beziers) — not in upstream
 - **SpringChain/SpringCollection** for multi-spring orchestration — not in upstream
-- **Note**: harmonica has the canonical Ryan Juckett algorithm; honey-bounce's extensions are SugarCraft-only
+- **Note**: harmonica has the canonical Ryan Juckett algorithm; sugar-spring's extensions are SugarCraft-only
 
 ### candy-palette > colorprofile (Partial Superiority)
 - **12-step detection hierarchy** with infocmp Phase 2 upgrade — more comprehensive than upstream

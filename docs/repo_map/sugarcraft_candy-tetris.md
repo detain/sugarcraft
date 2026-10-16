@@ -483,15 +483,15 @@ private const WEIGHT_LINES   = 9.0;  // Reward completed rows
 
 ---
 
-## 12. Physics Integration (honey-bounce)
+## 12. Physics Integration (sugar-spring)
 
-**Reference:** `honey-bounce/src/` (Spring + Projectile physics library)
+**Reference:** `sugar-spring/src/` (Spring + Projectile physics library)
 
 ### Contrast: Discrete vs Continuous
 
-candy-tetris uses **discrete, frame-based gravity** (NES-style frames-per-row). honey-bounce provides **continuous physics** (damped springs, projectiles with acceleration).
+candy-tetris uses **discrete, frame-based gravity** (NES-style frames-per-row). sugar-spring provides **continuous physics** (damped springs, projectiles with acceleration).
 
-| honey-bounce | candy-tetris |
+| sugar-spring | candy-tetris |
 |--------------|--------------|
 | `Spring::update($pos, $vel, $target)` — returns new position/velocity | Gravity tick moves piece exactly 1 row per interval |
 | `Projectile::update()` — Euler integration: `pos += vel·dt; vel += acc·dt` | Gravity tick: piece falls 1 row instantly |
@@ -500,7 +500,7 @@ candy-tetris uses **discrete, frame-based gravity** (NES-style frames-per-row). 
 
 ### Potential Integration
 
-Currently **no direct integration** — candy-tetris implements its own discrete gravity via `Score::gravityIntervalUs()` and `GravityMsg` tick scheduling. honey-bounce could be used for:
+Currently **no direct integration** — candy-tetris implements its own discrete gravity via `Score::gravityIntervalUs()` and `GravityMsg` tick scheduling. sugar-spring could be used for:
 - Smooth piece falling animations (preview interpolation)
 
 - Particle effects on line clear
@@ -584,7 +584,7 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 
 3. **Hard Drop Scoring** — 2 points per cell dropped (guideline standard)
 
-4. **honey-bounce Integration** — Spring-animated ghost piece, line-clear particles
+4. **sugar-spring Integration** — Spring-animated ghost piece, line-clear particles
 
 5. **Initial Rotation System (IRS)** — Allow rotation during ARE before piece appears
 
@@ -623,4 +623,4 @@ candy-tetris is a **production-ready, well-architected** Tetris implementation t
 
 **Primary opportunity:** Wire the existing `SrsKickTable` into `Game::tryRotate()` to enable true SRS with vertical kicks, completing the full Guideline rotation system.
 
-**Secondary opportunity:** Integrate honey-bounce physics for smooth UI animations (ghost piece spring-easing, line-clear particles, camera shake on Tetris) to create a more polished visual experience.
+**Secondary opportunity:** Integrate sugar-spring physics for smooth UI animations (ghost piece spring-easing, line-clear particles, camera shake on Tetris) to create a more polished visual experience.

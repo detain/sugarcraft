@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flappy;
 
-use SugarCraft\Bounce\Point;
-use SugarCraft\Bounce\Projectile;
-use SugarCraft\Bounce\Spring;
-use SugarCraft\Bounce\Vector;
+use SugarCraft\Spring\Point;
+use SugarCraft\Spring\Projectile;
+use SugarCraft\Spring\Spring;
+use SugarCraft\Spring\Vector;
 
 /**
- * The bird's vertical motion is a HoneyBounce {@see Projectile} with
+ * The bird's vertical motion is a SugarSpring {@see Projectile} with
  * gravity pulling down at a constant rate. Tapping `flap` resets the
  * vertical velocity to a fixed upward kick — same trick the original
  * flapioca uses, just expressed as projectile state instead of an
@@ -69,7 +69,7 @@ final class Bird
     public function flap(): self
     {
         // Carry the current position, reset vertical velocity to the
-        // upward kick. (HoneyBounce projectile has no setter; rebuild
+        // upward kick. (SugarSpring projectile has no setter; rebuild
         // a fresh one off the current position.)
         return new self(
             $this->x,

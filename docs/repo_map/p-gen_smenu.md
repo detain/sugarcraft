@@ -192,7 +192,7 @@ The TST implementation in `index.c` maps to tree-based data structures. The bitm
 - Scrollable window rendering
 - Search with real-time highlighting
 
-### honey-bounce (Animation/motion)
+### sugar-spring (Animation/motion)
 
 The scrolling behavior and cursor movement in `smenu` could inform animation timing, but there's no direct SugarCraft equivalent.
 

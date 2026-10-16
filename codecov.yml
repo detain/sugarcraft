@@ -51,8 +51,8 @@ flag_management:
     - name: candy-sprinkles
       paths: ["candy-sprinkles/src/**"]
       carryforward: true
-    - name: honey-bounce
-      paths: ["honey-bounce/src/**"]
+    - name: sugar-spring
+      paths: ["sugar-spring/src/**"]
       carryforward: true
       carryforward: true
     - name: sugar-widgets
@@ -259,12 +259,12 @@ component_management:
         - "candy-sprinkles/src/**"
       flag_regexes:
         - "^candy-sprinkles$"
-    - component_id: honey-bounce
-      name: honey-bounce
+    - component_id: sugar-spring
+      name: sugar-spring
       paths:
-        - "honey-bounce/src/**"
+        - "sugar-spring/src/**"
       flag_regexes:
-        - "^honey-bounce$"
+        - "^sugar-spring$"
     - component_id: sugar-widgets
       name: sugar-widgets
       paths:

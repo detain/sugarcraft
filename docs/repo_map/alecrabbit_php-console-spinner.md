@@ -133,9 +133,9 @@
 - **Mapping**: A spinner/progress indicator component could be built as part of sugar-widgets using patterns from this library
 - **Note**: This library is too low-level to be a direct sugar-widgets dependency but could inspire component patterns
 
-### honey-bounce
+### sugar-spring
 
-- **Relevant**: No — honey-bounce is math/physics/motion
+- **Relevant**: No — sugar-spring is math/physics/motion
 - **No direct mapping**
 
 ### Other Observations

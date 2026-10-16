@@ -164,7 +164,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **sugar-forms** — **Critical Architecture Issue**: This package is a facade with no real implementation. All source files except `Spinner.php` are `class_alias()` stubs redirecting to `SugarCraft\Forms\*` (sugar-forms). Tests pass because they test sugar-forms, not sugar-forms's own code. **This package should be either documented as a facade or the actual implementation moved here.**
 
-**sugar-toast** — Notifications. Issues: Animation duration is explicit stub (honey-bounce deferred — no visual effect); action buttons rendered but no keyboard mechanism to trigger them; out-of-bounds toasts silently clipped; `HistoryLog` lost in stateless usage pattern.
+**sugar-toast** — Notifications. Issues: Animation duration is explicit stub (honey-bounce deferred — no visual effect); action buttons rendered but no keyboard mechanism to trigger them; out-of-bounds toasts silently clipped; `HistoryLog` lost in stateless usage pattern. <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -209,14 +209,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 10: sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy
+### Group 10: sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy <!-- @rename-keep historical provenance -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-panels | 35 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | sugar-readline | 139 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | candy-ssh-launcher | 70 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
-| honey-bounce | 121 ✓ | APPROVE | 0 | 3 | 2 | 0 |
+| honey-bounce | 121 ✓ | APPROVE | 0 | 3 | 2 | 0 | <!-- @rename-keep historical provenance -->
 | candy-flappy | 31 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | super-candy | 187 ✓ | REQUEST_CHANGES | 0 | 4 | 5 | 0 |
 
@@ -226,7 +226,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-ssh-launcher** — SSH launcher. Issues: `SshConfigParser::expandPath()` has broken POSIX logic (`posix_getpwuid() !== false` evaluates to `true` when it returns `false`, then accesses `['dir']` on false); YAML parser doesn't handle keys with hyphens or `@`; `Endpoint::toSshArgv()` only uses first identity file.
 
-**honey-bounce** — Physics library. Issues: `SpringChain::tick()` mutates internal array elements in-place; `CubicBezier::easeInOutCirc()` has duplicate control points (same as `easeInOutExpo` — copy-paste error from CSS spec); `SpringConfig` has public mutable properties.
+**honey-bounce** — Physics library. Issues: `SpringChain::tick()` mutates internal array elements in-place; `CubicBezier::easeInOutCirc()` has duplicate control points (same as `easeInOutExpo` — copy-paste error from CSS spec); `SpringConfig` has public mutable properties. <!-- @rename-keep historical provenance -->
 
 **candy-flappy** — Flappy Bird. Issues: Score detection has fragile timing dependency on `BIRD_COL - 1`; `saveHighScore()` returns `true` on write failure; `Bird` constants (FLAP_KICK=-22.0, GRAVITY=70.0) are magic numbers.
 
@@ -372,7 +372,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-vcr | `PhpGifEncoder` pure-PHP GIF encoding | HIGH |
 | sugar-forms | Real implementation (facade only) | HIGH |
 | sugar-readline | `Highlight::highlight()` implementation | HIGH |
-| sugar-toast | Animation duration (honey-bounce deferred) | MEDIUM |
+| sugar-toast | Animation duration (honey-bounce deferred) | MEDIUM | <!-- @rename-keep historical provenance -->
 | candy-mdview | Complete glamour v2 property support | MEDIUM |
 | sugar-charts | OHLC multi-series, Scatter per-point styling | MEDIUM |
 | sugar-flexbox | FlexBox tests, sticky header/footer | MEDIUM |
@@ -427,7 +427,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 1. **[FIX]** Run `composer reinstall` in candy-mail and candy-mosaic to fix broken path-repo symlinks <!-- @rename-keep historical provenance -->
 2. **[FIX]** candy-vcr: Remove or implement `PhpGifEncoder` stub (don't leave throwing stub in public API)
-3. **[FIX]** honey-bounce: Fix `CubicBezier::easeInOutCirc()` duplicate (should be `(0.85, 0.00, 0.15, 1.00)` per CSS spec)
+3. **[FIX]** honey-bounce: Fix `CubicBezier::easeInOutCirc()` duplicate (should be `(0.85, 0.00, 0.15, 1.00)` per CSS spec) <!-- @rename-keep historical provenance -->
 4. **[FIX]** candy-tetris: Fix `Das::withKeyDown()` to actually use the `$state` parameter
 5. **[FIX]** sugar-lister: Fix `Model::addItem()` to return clone, not mutate `$this`
 6. **[FIX]** candy-ssh-launcher: Fix `expandPath()` POSIX logic bug
@@ -470,7 +470,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 4. **candy-git App** (1201 lines) — same god class issue
 5. **candy-vcr PhpGifEncoder** — stub in public API that throws
 6. **sugar-readline Highlight** — silent no-op could cause user confusion
-7. **honey-bounce duplicate easing** — correctness bug in physics library
+7. **honey-bounce duplicate easing** — correctness bug in physics library <!-- @rename-keep historical provenance -->
 8. **candy-tetris Ansi::sgr()** — wrong parameter count could cause rendering failures
 
 ---
@@ -478,7 +478,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ## Quick Wins (Under 2 Hours Each)
 
 1. **candy-vcr**: Remove `PhpGifEncoder.php` or mark it `@internal` and throw in constructor
-2. **honey-bounce**: Fix `easeInOutCirc` duplicate value (1 line change)
+2. **honey-bounce**: Fix `easeInOutCirc` duplicate value (1 line change) <!-- @rename-keep historical provenance -->
 3. **candy-mdview**: Read version from `composer.json` instead of hardcoding
 4. **sugar-readline**: Make `Highlight::highlight()` throw `BadMethodCallException`
 5. **candy-flappy**: Make `saveHighScore()` return `false` when `file_put_contents()` fails
@@ -506,7 +506,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Current | Suggestion | Rationale |
 |---------|------------|-----------|
 | sugar-forms + sugar-forms | Consolidate into sugar-forms | sugar-forms is a facade; sugar-forms is the implementation |
-| honey-bounce.SpringChain mutation | Refactor to return new instances | Consistency with immutable pattern |
+| honey-bounce.SpringChain mutation | Refactor to return new instances | Consistency with immutable pattern | <!-- @rename-keep historical provenance -->
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
 | sugar-flexbox/Table vs sugar-table/Table | Rename sugar-flexbox Table to SimpleTable | Two different packages, same class name, confuses |
 | sugar-treelist + candy-ansi-inspect | No consolidation needed | Different purposes |
@@ -571,7 +571,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 7 | sugar-datepicker, candy-mdview, sugar-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked  <!-- @rename-keep historical provenance --> |
 | 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues  <!-- @rename-keep historical provenance --> |
-| 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
+| 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues | <!-- @rename-keep historical provenance -->
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 
 ---

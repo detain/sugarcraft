@@ -139,3 +139,27 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `scripts/generate_icons.py` art prose for the sugar-video key still says "film reel disc" — kept as common-English <!-- @rename-keep -->
   description of the existing artwork; regenerate when the icon art is next touched. <!-- @rename-keep -->
 
+## D4 candy-flip → sugar-animation (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-3-16-l-2.ansi` — art CONTENT carries the pre-rename `candy-flip` <!-- @rename-keep -->
+  wordmark (C.3 excludes *.ansi content); no `ansi/candy-flip/` dir existed. Redraw at owner triage. <!-- @rename-keep -->
+- `sugar-animation/.vhs/play.gif` — recorded GIF frames show the pre-rename prompt wordmark; CI <!-- @rename-keep -->
+  re-renders from the already-rewritten `.tape` on the next tape run; do not hand-patch.
+- `sugar-animation/tests` temp-name prefixes `sc_flip_*`/`flip-color-`/`flip-lct-` kept — bare <!-- @rename-keep -->
+  lowercase `flip` is C.4-rule-exempt opaque fixture noise, not brand prose.
+
+## D5 candy-kit → sugar-cli (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-{2-16-l-1,3-16-l-2}.ansi` + `ansi/sugar-crush/30-crush-terminal.ansi` — <!-- @rename-keep -->
+  art CONTENT embeds the pre-rename `candy-kit` slug (C.3 excludes *.ansi content). Redraw or leave <!-- @rename-keep -->
+  for the ansi tagger pass.
+- `sugar-cli/.vhs/cli-page.gif` — demo GIF frames show the pre-rename CandyKit wordmark; CI re-renders <!-- @rename-keep -->
+  from the already-rewritten `.tape` on the next vhs run; do not hand-patch.
+
+## D6 honey-bounce → sugar-spring (2026-10-16, lane rename/d6) <!-- @rename-keep -->
+- `ansi/sugar-spring/*.ansi` (171 files) still render the old **HONEY BOUNCE** / **HONEYBOUNCE** block <!-- @rename-keep -->
+  wordmarks — `*.ansi` content is C.3-excluded by design; needs hand-art re-roll at owner triage.
+- `ansi/sugarcraft/*.ansi` (15 files), `ansi/sugar-crush/{41,42,50}-*.ansi` (3) and `ansi/candy-flappy/*.ansi` (2) <!-- @rename-keep -->
+  embed the old slug/wordmark in pixel content (same C.3 exclusion; banners/captions list libs).
+- `media/icons/sugar-spring.png` + `docs/img/icons/sugar-spring.png`: bytes unchanged (old honey-jar artwork at new path). <!-- @rename-keep -->
+- `scripts/generate_icons.py:121` prompt still describes a honey jar (byte-true vs the PNG); rewrite together with the <!-- @rename-keep -->
+  Phase-9/10 prefix-family prose.
+- `sugar-spring/.vhs/*.gif` recorded frames show the pre-rename prompt; CI `vhs.yml` re-renders on next tape run. <!-- @rename-keep -->

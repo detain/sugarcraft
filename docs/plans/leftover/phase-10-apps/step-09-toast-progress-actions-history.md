@@ -8,7 +8,7 @@
 - Progress toasts (embedded progress bar).
 - Action buttons (clickable callbacks).
 - History log of dismissed toasts.
-- Fade animations (consume honey-bounce `CubicBezier` from step 09.17).
+- Fade animations (consume sugar-spring `CubicBezier` from step 09.17).
 
 ## Files
 

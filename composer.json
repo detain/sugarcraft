@@ -73,7 +73,7 @@
         "sugarcraft/candy-vcr": "dev-master",
         "sugarcraft/candy-vt": "dev-master",
         "sugarcraft/candy-wish": "dev-master",
-        "sugarcraft/honey-bounce": "dev-master",
+        "sugarcraft/sugar-spring": "dev-master",
         "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-widgets": "dev-master",
         "sugarcraft/sugar-panels": "dev-master",
@@ -342,7 +342,7 @@
         },
         {
             "type": "path",
-            "url": "honey-bounce",
+            "url": "sugar-spring",
             "options": {
                 "symlink": true
             }

@@ -65,7 +65,7 @@ the rename history. DocsQuickstart/tree guards green after edits.
 
 ## Eye-check (pilot: ≥10 files opened)
 candy-flappy/composer.json (name, keywords, PSR-4 `SugarCraft\Flappy\`, bins,
-honey-bounce dep untouched) · README.md (notices+badges) · bin/candy-flappy
+honey-bounce dep untouched) · README.md (notices+badges) · bin/candy-flappy <!-- @rename-keep historical provenance -->
 (LegacyPaths block before Program run) · src/Game.php (HIGH_SCORE_FILE now
 `.candy-flappy/scores.json`, `$isFlap` bare word correctly untouched) ·
 tests/GameTest.php · .vhs/play.tape (bin path) · golden fixtures (pure SGR) ·
