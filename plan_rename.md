@@ -993,6 +993,8 @@ Order (leaf-ish first): `sugar-boxer`, `sugar-stickers`, `sugar-crumbs`, `sugar-
 
 Entry status: `sugar-boxer` → `sugar-panels` ✅ **R1–R9 (batch-C R8/R9-LITE)** — lane c1 92dcacf3c + C-weld (merged chain to 8c30e631a); R8 remote verified 2026-10-16 (rename pre-landed at lane R2 — idempotent resync rc0; split master 32f24966f + legacy/sugar-boxer + sugar-boxer-final @4fa6ae8fa; sync run 38975301902 green on weld tip); R9-LITE create fired once = HTTP 202 clean; abandon checklist line appended; commit 5220dfa4e. Packagist indexing verification deferred to end-of-campaign batch pass.
 
+Entry status: `sugar-stickers` → `sugar-flexbox` ✅ **R1–R9 (batch-C R8/R9-LITE)** — lane c2 c75bb190c + C-weld; R8 remote verified 2026-10-16 (rename pre-landed at lane R2 — resync rc0; split master 5c73bda93 + legacy/sugar-stickers + sugar-stickers-final @4a514c9c4); R9-LITE create fired once = HTTP 202 clean; abandon checklist line appended; commit 322d87386. Packagist indexing verification deferred to end-of-campaign batch pass.
+
 ## Phase 6 — Batch D (media / rendering)
 
 Order: `honey-bounce`, `candy-palette`, `candy-kit`, `candy-flip`, `candy-mosaic`, `sugar-reel`, `candy-shine`. Notes:
