@@ -150,7 +150,7 @@ that are tiny but together justify a PR.
 - charmbracelet/bubbletea → candy-core
 - charmbracelet/lipgloss → candy-sprinkles
 - charmbracelet/harmonica → honey-bounce
-- lrstanley/bubblezone → candy-mouse
+- lrstanley/bubblezone → sugar-mouse
 - charmbracelet/bubbles → sugar-widgets
 - NimbleMarkets/ntcharts → sugar-charts
 - charmbracelet/huh → sugar-forms

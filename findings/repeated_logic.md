@@ -44,7 +44,7 @@ trait Mutable
 - `candy-ssh-launcher/src/Endpoint.php`
 - `candy-sql/src/App.php`
 - `candy-mail/src/Email.php`
-- `candy-mouse/src/ClickCounter.php`
+- `sugar-mouse/src/ClickCounter.php`
 - `candy-shine/src/Style/StyleSheet.php`
 - `candy-sql/src/Admin/PerfSchema/*` (6 setup classes)
 - `sugar-forms/src/TextArea/TextArea.php`

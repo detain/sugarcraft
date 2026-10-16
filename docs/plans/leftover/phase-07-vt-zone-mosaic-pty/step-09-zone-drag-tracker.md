@@ -1,6 +1,6 @@
-# Step 07.09 — candy-mouse DragTracker
+# Step 07.09 — sugar-mouse DragTracker
 
-**Source:** `leftover_updates_later.md` candy-mouse Priority 2
+**Source:** `leftover_updates_later.md` sugar-mouse Priority 2
 **Branch:** `ai/zone-drag-tracker`
 
 ## Deliverable
@@ -12,19 +12,19 @@ Tracks press → move → release sequences within and across zones.
 
 **Create:**
 
-- `candy-mouse/src/DragTracker.php`.
-- `candy-mouse/src/Msg/ZoneDragStartMsg.php`, `ZoneDragMoveMsg.php`,
+- `sugar-mouse/src/DragTracker.php`.
+- `sugar-mouse/src/Msg/ZoneDragStartMsg.php`, `ZoneDragMoveMsg.php`,
   `ZoneDragEndMsg.php`.
 
 ## Tests
 
-- `candy-mouse/tests/DragTrackerTest.php` — simulate press in zone-A,
+- `sugar-mouse/tests/DragTrackerTest.php` — simulate press in zone-A,
   move into zone-B, release; assert correct sequence with
   `originZone='A'`, `currentZone='B'`.
 
 ## Acceptance
 
-- `cd candy-mouse && vendor/bin/phpunit --filter DragTracker` green.
+- `cd sugar-mouse && vendor/bin/phpunit --filter DragTracker` green.
 
 ---
 

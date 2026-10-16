@@ -5,7 +5,7 @@
 All phases 0–6 are closed. Phase 0–5 items landed as the commit series
 through `b9c63b74`; the Phase 6 leftovers were re-verified against
 current source on 2026-07-04 and closed by: `a160cefd` (test
-skips/flake), `5f33c4b7` (candy-mouse contains, candy-wish StreamHelper
+skips/flake), `5f33c4b7` (sugar-mouse contains, candy-wish StreamHelper
 + pid()), `1920988f`/`09546125` (candy-git-server auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-scriptui), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
@@ -300,12 +300,12 @@ For each phase:
 **Agent:** BLOCKED — skip, document as WONTFIX pre-1.0
 **Note:** This item is blocked (dependency not available). Skip and mark ⏭️ WONTFIX pre-1.0.
 
-#### 0.26 🔴 candy-mouse: OSC terminator bounds check not fixed (Item 2.1)
+#### 0.26 🔴 sugar-mouse: OSC terminator bounds check not fixed (Item 2.1)
 
-**Plan:** `findings/plan_candy-mouse.md` — Item 2.1
+**Plan:** `findings/plan_sugar-mouse.md` — Item 2.1
 **Issue:** `Scan.php:133` — bounds check `if ($rendered[$j] === "\x1b" && ($rendered[$j + 1] ?? '') === '\\')` needs explicit `$j + 1 < $len` guard
 **Fix:** Add explicit bounds check before accessing `$j + 1`
-**Files:** `candy-mouse/src/Scan.php:133`
+**Files:** `sugar-mouse/src/Scan.php:133`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 0.27 🔴 candy-flip: Player::scheduleTick() uses fixed interval (Item 1.2)
@@ -1135,25 +1135,25 @@ Same verification as previous phases.
 
 ### Group 4-B (3 agents)
 
-#### 4.7 🟢 CALIBER_LEARNINGS: candy-mouse async gap (Item 5.1)
+#### 4.7 🟢 CALIBER_LEARNINGS: sugar-mouse async gap (Item 5.1)
 
-**Plan:** `findings/plan_candy-mouse.md` — Item 5.1
+**Plan:** `findings/plan_sugar-mouse.md` — Item 5.1
 **Fix:** Add note about synchronous-only design in CALIBER_LEARNINGS.md
-**Files:** `candy-mouse/CALIBER_LEARNINGS.md`
+**Files:** `sugar-mouse/CALIBER_LEARNINGS.md`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 4.8 🟢 CALIBER_LEARNINGS: candy-mouse spatial index gap (Item 5.2)
+#### 4.8 🟢 CALIBER_LEARNINGS: sugar-mouse spatial index gap (Item 5.2)
 
-**Plan:** `findings/plan_candy-mouse.md` — Item 5.2
+**Plan:** `findings/plan_sugar-mouse.md` — Item 5.2
 **Fix:** Add note about O(n) Scanner::hit() limitation and spatial index opportunity
-**Files:** `candy-mouse/CALIBER_LEARNINGS.md`
+**Files:** `sugar-mouse/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.7 (grouped — same lib)
 
-#### 4.9 🟢 CALIBER_LEARNINGS: candy-mouse memoization (Item 5.3)
+#### 4.9 🟢 CALIBER_LEARNINGS: sugar-mouse memoization (Item 5.3)
 
-**Plan:** `findings/plan_candy-mouse.md` — Item 5.3
+**Plan:** `findings/plan_sugar-mouse.md` — Item 5.3
 **Fix:** Add note about memoization opportunity for repeated scans
-**Files:** `candy-mouse/CALIBER_LEARNINGS.md`
+**Files:** `sugar-mouse/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.7 (grouped — same lib)
 
 ---
@@ -1285,7 +1285,7 @@ Same verification as previous phases.
 | `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
 | `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
 | `plan_candy-mosaic.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
-| `plan_candy-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
+| `plan_sugar-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
 | `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
 | `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
 | `plan_candy-git-server.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
@@ -1294,7 +1294,7 @@ Same verification as previous phases.
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |
 | `plan_candy-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |
 | `plan_candy-wish.md` | 2.1-2.4, 3.1-3.3 | Double getenv, rate limit atomicity, setTransport consistency, middleware error handling |
-| `plan_candy-mouse-zones.md` | 2.1 | Zone::contains() implementation |
+| `plan_sugar-mouse-zones.md` | 2.1 | Zone::contains() implementation |
 | `plan_candy-vcr.md` | 2.3, 2.6-2.9, 3.1, 3.3-3.5 | preg_replace error handling, async defers, Glyphs O(1), formatHunk, V1ToV2Migrator |
 
 ### sugar-* libs (remaining low-priority)

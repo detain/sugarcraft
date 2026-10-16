@@ -6,7 +6,7 @@
 
 ## Deliverable
 
-`MultiPump` shipped as a P6 stretch item. If `candy-mouse` (tmux-style
+`MultiPump` shipped as a P6 stretch item. If `sugar-mouse` (tmux-style
 panes) starts using it, profile against ~16 concurrent PTYs and
 promote to first-class with documented scaling claims.
 

@@ -45,7 +45,7 @@ use SugarCraft\Core\Util\Width;
  * one id: a layout pass that re-emits the escapes of a region it cut away
  * (Width::dropAnsi() does, to carry SGR state across the cut) leaves the
  * escape in front of some unrelated cell, and that orphan must not paint. The
- * window starts at U+E002 because U+E000/U+E001 are the candy-mouse click/frame
+ * window starts at U+E002 because U+E000/U+E001 are the sugar-mouse click/frame
  * zone sentinels (Sanitize::ZONE_SENTINEL_*). The surrounding cells of the
  * image box are ordinary spaces the widget emits itself, so the box reserves
  * the right area in the text layout.
@@ -56,7 +56,7 @@ final class ImageOverlay
 {
     /**
      * First Private-Use-Area codepoint used as an image marker. U+E000/U+E001
-     * are deliberately skipped: they are the candy-mouse zone sentinels and
+     * are deliberately skipped: they are the sugar-mouse zone sentinels and
      * Sanitize owns the reservation (a32c4faae ruling, follow-up 2 of 2).
      */
     private const MARKER_BASE = 0xE002;
@@ -66,7 +66,7 @@ final class ImageOverlay
      *
      * An OSC because every ANSI-aware width and cut helper in the stack
      * ({@see Width::string()}, {@see Width::truncateAnsi()},
-     * {@see Width::wrapAnsi()}, candy-mouse's zone scanner) already treats an
+     * {@see Width::wrapAnsi()}, sugar-mouse's zone scanner) already treats an
      * OSC as zero cells and never splits one, so a marker row lays out exactly
      * as the one-codepoint marker did. The non-numeric command keeps it inert
      * if a frame ever reaches a terminal unresolved (terminals ignore an OSC

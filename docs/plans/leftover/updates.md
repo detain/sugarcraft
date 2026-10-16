@@ -198,7 +198,7 @@ review for step 03.08 · clean · PR#541
   step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02) <!-- @rename-keep historical provenance -->
 review for step 04.02 · clean · PR#566
 docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-flexbox.html
-step 04.03 · PR#568 · sugar-navstack: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep
+step 04.03 · PR#568 · sugar-navstack: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep <!-- @rename-keep historical provenance -->
 review for step 04.03 · clean · PR#568
 tests-ci for step 04.03 · clean
 docs for step 04.03 · PR#569 · document withZoneManager() in README + CALIBER_LEARNINGS.md + docs/lib/sugar-navstack.html

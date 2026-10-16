@@ -18,14 +18,14 @@ use SugarCraft\Mouse\Sentinel;
  * chain (§8) — and for the defense-in-depth that outlived it.
  *
  * When `ImageOverlay::MARKER_BASE` was U+E000, the first image in a frame
- * emitted a byte-identical copy of candy-mouse's {@see Sentinel::OPEN} and the
+ * emitted a byte-identical copy of sugar-mouse's {@see Sentinel::OPEN} and the
  * second copied {@see Sentinel::CLOSE}; the scanner treated the rest of the
  * frame as one unterminated zone and silently dropped every zone after it.
  * The allocator has since moved to U+E002 + id (a32c4faae PUA-reservation
  * ruling, follow-up 2 of 2), so live markers are disjoint from the sentinel
  * pair by construction. What this guard now pins is the other half of that
  * story: a forged sentinel byte (or any stray Private-Use codepoint) reaching
- * a frame from model/tool text still must not break the scan. candy-mouse's
+ * a frame from model/tool text still must not break the scan. sugar-mouse's
  * parser no longer lets a lone sentinel swallow later zones (15a7f0c9f), but
  * it measures one as zero cells while the terminal paints it as one, so the
  * Renderer still masks the block out of the copy the SCANNER reads (never
@@ -61,7 +61,7 @@ final class ImageMarkerZoneCollisionTest extends TestCase
      * exactly this frame dropped tab2).
      *
      * A forged OPEN sentinel in the same slot no longer swallows the zones
-     * after it either — candy-mouse's `Scan::parse()` (15a7f0c9f) treats a
+     * after it either — sugar-mouse's `Scan::parse()` (15a7f0c9f) treats a
      * sentinel that does not begin a valid tag as a lone 3-byte skip. But it
      * measures that skip as ZERO cells, while {@see \SugarCraft\Crush\Renderer}
      * strips only well-formed `Mark` tags from the frame it sends, so the

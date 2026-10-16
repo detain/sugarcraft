@@ -37,7 +37,7 @@ called out in the table below.
 | **SugarCraft** (`candy-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
 | **CandySprinkles** (`candy-sprinkles/`) | 🟢 ready | Declarative styling + layout. |
 | **HoneyBounce** (`honey-bounce/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
-| **CandyMouse** (`candy-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
+| **CandyMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
 | **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture. |
 | **SugarForms** (`sugar-forms/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color. |
@@ -55,7 +55,7 @@ called out in the table below.
 | **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay candy-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **CandyPty** (`candy-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Spawn`, `Child`) remain @deprecated through v1.x. Windows ConPTY planned. |
 | **CandyFocus** (`candy-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
-| **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional candy-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
+| **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **CandyFuzzy** (`candy-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from sugar-forms. |
 | **CandyLayout** (`candy-layout/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
 | **CandyTesting** (`candy-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
@@ -168,7 +168,7 @@ reference projects supplied the ideas, not the code.
 | CandyMetrics (candy-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
 | CandyStarter (candy-starter/) | none — first-party |
-| CandyMouse (candy-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
+| SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | CandyMosaic (candy-mosaic/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
 | CandyPalette (candy-palette/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
 | CandyPty (candy-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |

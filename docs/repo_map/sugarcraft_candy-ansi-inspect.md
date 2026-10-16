@@ -144,7 +144,7 @@ However, unlike Go sequin which uses `charmbracelet/x/ansi` for parsing, candy-a
 | **CSI** | `ESC [` | Control Sequence Introducer — SGR, cursor, erase, modes | `Inspector.php` lines 63-79 |
 | **OSC** | `ESC ]` | Operating System Command — title, clipboard, hyperlinks | `Inspector.php` lines 82-99 |
 | **DCS** | `ESC P` | Device Control String — XTVERSION, sixel, DECRPSS | `Inspector.php` lines 114-129 |
-| **APC** | `ESC _` | Application Program Command — CandyMouse, kitty graphics | `Inspector.php` lines 133-148 |
+| **APC** | `ESC _` | Application Program Command — SugarMouse, kitty graphics | `Inspector.php` lines 133-148 |
 | **SS3** | `ESC O` | Single Shift 3 — F1-F4, cursor keys | `Inspector.php` lines 101-110 |
 | **ESC** | `ESC <c>` | Two-byte ESC sequences — save/restore cursor, keypad mode | `Inspector.php` lines 150-171 |
 | **C0** | `0x00-0x1F` | Control codes — NUL, BEL, LF, CR, etc. | `C0C1.php` lines 14-47 |
@@ -487,7 +487,7 @@ printf '\e]8;;https://charm.sh\e\\Charm\e]8;;\e\\' | candy-ansi-inspect
 echo "── DCS (XTVERSION reply) ────────────────────────"
 printf '\eP>|xterm(367)\e\\' | candy-ansi-inspect
 
-echo "── APC (CandyMouse marker) ───────────────────────"
+echo "── APC (SugarMouse marker) ───────────────────────"
 printf '\e_candyzone:S:btn:ok\e\\OK\e_candyzone:E:btn:ok\e\\' | candy-ansi-inspect
 ```
 
@@ -575,7 +575,7 @@ The demo runs `./examples/inspect.sh` showing:
 
 - DCS XTVERSION reply
 
-- APC CandyMouse markers
+- APC SugarMouse markers
 
 ```bash
 # Dimensions: 900x620, FontSize 13, TokyoNight theme

@@ -9,7 +9,7 @@ use SugarCraft\Crush\Renderer;
 use SugarCraft\Mouse\Mark;
 
 /**
- * Pins the candy-mouse malformed-markup matrix as {@see Renderer::scanRoot()}
+ * Pins the sugar-mouse malformed-markup matrix as {@see Renderer::scanRoot()}
  * experiences it, which is what the Renderer's zone comments
  * (`markPaneHeader()`, `fitStatusBar()`, the status-bar fit loop,
  * `DIVIDER_ZONE_PREFIX`) describe.

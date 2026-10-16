@@ -60,7 +60,7 @@
 
 - `isClickOutside(MouseMsg $mouse): bool` returns `false` when `clickOutsideDismiss` is `false`
 - Requires `scan($rendered)` to have been called first; otherwise throws `\RuntimeException`
-- When enabled and scanned, delegates to the self-contained candy-mouse `Scanner` via `hit($x, $y)` — a `null` hit means the click landed outside every zone (i.e., outside the veil)
+- When enabled and scanned, delegates to the self-contained sugar-mouse `Scanner` via `hit($x, $y)` — a `null` hit means the click landed outside every zone (i.e., outside the veil)
 
 ## Immutable Pattern
 
@@ -74,8 +74,8 @@
 
 ## Mouse hit-testing
 
-- Mouse hit-testing is self-contained via candy-mouse `Scanner` — no external Manager. `scan($rendered)` registers zones; `hit($col, $row)` queries them.
-- The inert candy-mouse `Manager` back-compat shim (`withManager()`/`manager()`) was removed — sugar-overlay no longer depends on candy-mouse.
+- Mouse hit-testing is self-contained via sugar-mouse `Scanner` — no external Manager. `scan($rendered)` registers zones; `hit($col, $row)` queries them.
+- The inert sugar-mouse `Manager` back-compat shim (`withManager()`/`manager()`) was removed — sugar-overlay no longer depends on sugar-mouse.
 
 ## Buffer diffing
 

@@ -452,7 +452,7 @@ All 45 research documents available at:
 | candy-vcr | 23KB |
 | candy-vt | 26KB |
 | candy-wish | 24KB |
-| candy-mouse | 14KB |
+| sugar-mouse | 14KB |
 | honey-bounce | 25KB |
 | candy-flappy | 11KB |
 | sugar-widgets | 26KB |

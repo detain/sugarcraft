@@ -31,7 +31,7 @@ renames.json (`old_slug_for` matches `new == $lib`), so a B→C hop names `legac
 ## Semantics implemented (plan-matching)
 
 - Guard fires ONLY for dirs that are the `new` side of a `kind:"rename"` entry → merge/fold
-  entries (candy-mouse, candy-forms batch-1) and the create entry (candy-gifview) never fire it. <!-- @rename-keep -->
+  entries (candy-mouse, candy-forms batch-1) and the create entry (candy-gifview) never fire it. <!-- @rename-keep historical provenance -->
 - `status` is deliberately NOT a filter inside the guard: if the dir name equals a rename entry's
   `new`, the dir has already moved (Procedure R7 moves dir + sets status in the same commit), so
   divergence is real regardless of bookkeeping state. Today every guard-relevant lookup returns
@@ -82,10 +82,10 @@ renames.json (`old_slug_for` matches `new == $lib`), so a B→C hop names `legac
 - Dry logic test (sourced real `old_slug_for()` from the extracted step, cwd=repo root):
   - `candy-flappy→honey-flap`, `sugar-markdown→candy-shine`, `candy-code→sugar-crush`, <!-- @rename-keep -->
     `candy-code-web→sugar-crush-web`, `sugar-core→candy-core` (post-rename names answer old slugs).
-  - `candy-mouse`, `candy-forms`, `candy-gifview`, `docs`, and every current pending-old dir <!-- @rename-keep -->
+  - `candy-mouse`, `candy-forms`, `candy-gifview`, `docs`, and every current pending-old dir <!-- @rename-keep historical provenance -->
     answer empty.
   - Name-set semantics vs disk: pending entries' `old` all exist as dirs, their `new` none exist;
-    batch-1 non-pending entries' `new` (candy-mouse/candy-forms/candy-gifview) exist as dirs → <!-- @rename-keep -->
+    batch-1 non-pending entries' `new` (candy-mouse/candy-forms/candy-gifview) exist as dirs → <!-- @rename-keep historical provenance -->
     "current-name set: all OK" and "guard fires for zero dirs today".
 - `php scripts/affected-libs.php --files tools/renames.json` → `force_all: True`.
 - `php scripts/affected-libs.php --all | head -c 300` → valid JSON, 61 all_libs.
@@ -124,5 +124,5 @@ fix sha = the commit containing this line — tracker row 2.2 intentionally stil
 
 Re-verification after fixes: `yaml.safe_load` OK; all 5 extracted run blocks `bash -n` OK; `php -l` on
 the extracted `old_slug_for` snippet OK; regression re-run against the REAL map: `candy-flappy→honey-flap`, <!-- @rename-keep -->
-`sugar-crush→''`, `candy-mouse→''`, and all 61 dirs of `affected-libs --all` still answer empty with
+`sugar-crush→''`, `candy-mouse→''`, and all 61 dirs of `affected-libs --all` still answer empty with <!-- @rename-keep historical provenance -->
 rc=0 ("fires=0, rc!=0 count=0"). Fresh-file `grep` of the shipped blk4 confirms the no-`|| true` line.

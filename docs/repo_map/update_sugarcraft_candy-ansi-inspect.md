@@ -58,7 +58,7 @@ candy-ansi-inspect/src/
 | CSI parsing | ✅ Full | All major final bytes (m, A, B, C, D, H, r, q, etc.) |
 | OSC parsing | ✅ Full | Commands 0-112 including title, hyperlink, clipboard |
 | DCS parsing | ✅ Full | XTVERSION, DECRPSS, sixel |
-| APC parsing | ✅ Full | CandyMouse markers, kitty graphics |
+| APC parsing | ✅ Full | SugarMouse markers, kitty graphics |
 | SS3 parsing | ✅ Full | F1-F4, cursor keys |
 | Two-byte ESC | ✅ Full | DECSC, DECRC, keypad mode |
 | C0 control codes | ✅ Full | 0x00-0x1F lookup table |

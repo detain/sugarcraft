@@ -71,7 +71,7 @@ echo $bc->render($stack);  // "Home › Settings › Display"
 
 ### Click-Region Tracking
 
-Attach a self-contained `Scanner` from `sugarcraft/candy-mouse` for mouse-click zone routing:
+Attach a self-contained `Scanner` from `sugarcraft/sugar-mouse` for mouse-click zone routing:
 
 ```php
 use SugarCraft\NavStack\Breadcrumb;
@@ -93,7 +93,7 @@ if ($zone !== null && \preg_match('/crumb-(\d+)/', $zone->id, $m)) {
 
 ## Shared foundations
 
-Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.
+Mouse hit-testing is self-contained via [sugar-mouse](https://github.com/detain/sugarcraft-sugar-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.
 
 ## License
 

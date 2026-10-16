@@ -20,7 +20,7 @@ namespace SugarCraft\Core\Util;
  *   - {@see untrusted()}    — full ANSI strip for plain-text module sinks,
  *     C1 controls removed in both their raw 8-bit and UTF-8-encoded forms.
  *   - {@see untrustedForMarkedFrames()} — {@see untrusted()} plus the zone
- *     sentinel strip, for text destined for a frame that carries candy-mouse
+ *     sentinel strip, for text destined for a frame that carries sugar-mouse
  *     zone markup. The Private-Use codepoints it removes are the reason a
  *     separate policy is needed: see the reservation note below.
  *   - {@see untrustedForDisplay()} — {@see untrusted()} plus carriage-return
@@ -37,7 +37,7 @@ namespace SugarCraft\Core\Util;
  *     For a gate — a permission prompt, a confirmation — where the user must
  *     see exactly what they are approving, and a strip would hide part of it.
  *
- * **The Private-Use reservation.** A TUI frame is not only text: candy-mouse's
+ * **The Private-Use reservation.** A TUI frame is not only text: sugar-mouse's
  * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
  * U+E001 (close), and {@see \SugarCraft\Core\ImageOverlay} allocates the
  * cell half of each image marker from the rest of the block (U+E002 + id; the
@@ -76,10 +76,10 @@ final class Sanitize
     /** Last codepoint of the reserved BMP Private Use Area (U+F8FF). */
     public const PUA_BMP_LAST = 0xF8FF;
 
-    /** U+E000 — the zone-OPEN sentinel candy-mouse's Mark emits / Scan parses. */
+    /** U+E000 — the zone-OPEN sentinel sugar-mouse's Mark emits / Scan parses. */
     public const ZONE_SENTINEL_OPEN = "\xEE\x80\x80";
 
-    /** U+E001 — the zone-CLOSE sentinel candy-mouse's Mark emits / Scan parses. */
+    /** U+E001 — the zone-CLOSE sentinel sugar-mouse's Mark emits / Scan parses. */
     public const ZONE_SENTINEL_CLOSE = "\xEE\x80\x81";
 
     /**
@@ -229,7 +229,7 @@ final class Sanitize
      *
      * Declared scope boundary: Private-Use codepoints are well-formed text, not
      * control bytes, so U+E000–U+F8FF survives this method. That is fine for a
-     * plain-text sink and unsafe for a frame carrying candy-mouse zone markup —
+     * plain-text sink and unsafe for a frame carrying sugar-mouse zone markup —
      * for the latter use {@see untrustedForMarkedFrames()}, or add
      * {@see stripZoneSentinels()} to a path that must keep other PUA glyphs.
      *
@@ -577,7 +577,7 @@ final class Sanitize
 
     /**
      * The policy for text that originated outside this process AND lands in a
-     * frame carrying candy-mouse zone markup: {@see untrusted()} plus
+     * frame carrying sugar-mouse zone markup: {@see untrusted()} plus
      * {@see stripZoneSentinels()}.
      *
      * {@see untrusted()} alone is not enough there, because a Private-Use

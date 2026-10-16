@@ -155,7 +155,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyLayout** | candy + layout = constraint-based layout solver. Implements the Cassowary constraint system (Badros & Borning, 2001) behind a LayoutSolver interface: CassowarySolver (simplex) + GreedySolver (5-phase fallback from candy-sprinkles). |
 | **CandyTesting** | candy + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
 | **CandyInput** | candy + input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
-| **CandyMouse** | candy + mouse = self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |
+| **SugarMouse** | plain descriptive — took this name in the 2026-10 rename; the “candy + mouse” wordplay retired with it. Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |
 | **CandyMinesweeper** | plain descriptive — took this name in the 2026-10 rename; the “candy + mines” wordplay retired with it. |
 | **SugarTreelist** | candy + lister = scrollable tree/list view component. literal. |
 | **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |

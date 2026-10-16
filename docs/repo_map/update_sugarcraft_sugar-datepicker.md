@@ -171,7 +171,7 @@ Enforcement in `dateAtCursor()` and `SelectDate()` returning null or clamping.
 - Use bubblezone's zero-width ANSI marker pattern for zone tracking
 - Map mouse clicks to cursor position via coordinate calculation
 - Track zone bounds via state-machine scanner over rendered output
-- `candy-mouse` equivalent for mouse zone hit detection
+- `sugar-mouse` equivalent for mouse zone hit detection
 
 **Estimated complexity:** High — requires zone tracking architecture separate from DatePicker
 **Expected impact:** High — modern UX expectation
@@ -586,7 +586,7 @@ Calendar view in table:
 
 ## 3. Integration with candy-scriptui (Mouse Input)
 
-Zone-based mouse tracking via candy-mouse:
+Zone-based mouse tracking via sugar-mouse:
 
 ```php
 $picker = DatePicker::new()
@@ -657,7 +657,7 @@ ratatui's Calendar widget uses a `DateStyler` trait enabling custom per-day styl
 
 ## Major Architectural Upgrades (Future)
 
-9. **Mouse Interaction** — zone-based hit detection via candy-mouse integration
+9. **Mouse Interaction** — zone-based hit detection via sugar-mouse integration
 10. **DateTimePicker Variant** — compose DatePicker + TimeInput
 11. **DateSelect Compound Widget** — input field + dropdown calendar
 12. **Snapshot Testing Infrastructure** — golden files for View() output
@@ -718,7 +718,7 @@ SugarDatepicker is a well-architected PHP port that meaningfully enhances its up
 **Architectural recommendation:**
 Adopt ratatui's DateStyler trait pattern to decouple day styling from core DatePicker, enabling custom event markers and holiday highlights without modifying the calendar core. This is the highest-leverage architectural improvement.
 
-**Mouse interaction** should be pursued via the bubblezone zero-width ANSI marker pattern, implemented as a separate `candy-mouse` integration rather than modifying DatePicker directly. This keeps concerns separated and enables mouse tracking reuse across all sugar-widgets components.
+**Mouse interaction** should be pursued via the bubblezone zero-width ANSI marker pattern, implemented as a separate `sugar-mouse` integration rather than modifying DatePicker directly. This keeps concerns separated and enables mouse tracking reuse across all sugar-widgets components.
 
 The focus zone system from upstream Go is valuable for power users but adds complexity; implement after constraints and mouse support are stable.
 

@@ -13,7 +13,7 @@ Resume the SugarCraft audit-fixing workflow from where it left off. This documen
 
 ## What Was Done
 
-The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, sugar-quickpick, candy-focus, sugar-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
+The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, sugar-quickpick, candy-focus, sugar-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce. <!-- @rename-keep historical provenance -->
 
 **The plan files themselves were NOT marked ✅ — the fixes landed but bookkeeping was not done.**
 
@@ -70,7 +70,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 0-C | 0.6–0.9 | candy-pty (FD reuse race, encoding artifact), candy-vcr (undefined cassette, shared tileCache), candy-wish (async blocking, promise rejection loss) | 1 coder |
 | 0-D | 0.10–0.12 | candy-scriptui (shell injection env-var), sugar-reel (SIGCONT), candy-flappy (score wrong x) | 1 coder |
 | 0-E | 0.13–0.15 | sugar-forms (undefined $status), sugar-toast (unclamped maxWidth), candy-metrics (hard-coupled wish, missing flush(), re-emit all) | 1 coder |
-| 0-F | 0.16–0.18 | candy-sql (SQLite str_replace), candy-mouse (OSC bounds), candy-flip (fixed interval), candy-async (markCancelled visibility) | 1 coder |
+| 0-F | 0.16–0.18 | candy-sql (SQLite str_replace), candy-mouse (OSC bounds), candy-flip (fixed interval), candy-async (markCancelled visibility) | 1 coder | <!-- @rename-keep historical provenance -->
 | 0-G | 0.19–0.20 | candy-log (Phive directory, PSR-3 context array type) | 1 coder |
 
 ### Phase 1: High Priority Functional Fixes
@@ -117,9 +117,9 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 4-A | 4.1–4.3 | CALIBER_LEARNINGS (new-factory-required, mutable trait, AsyncOps ADR) |
-| 4-B | 4.4–4.6 | sugar-veil (scanner state docs, RenderSession frame counter), candy-git (sync-only docs) | <!-- @rename-keep historical provenance -->
-| 4-C | 4.7–4.9 | candy-mouse (async gap, spatial index, memoization) |
-| 4-D | 4.10–4.12 | candy-palette (async gap), sugar-bits (transitional architecture, ReactPHP/async note) | <!-- @rename-keep historical provenance -->
+| 4-B | 4.4–4.6 | sugar-veil (scanner state docs, RenderSession frame counter), candy-git (sync-only docs) |
+| 4-C | 4.7–4.9 | candy-mouse (async gap, spatial index, memoization) | <!-- @rename-keep historical provenance -->
+| 4-D | 4.10–4.12 | candy-palette (async gap), sugar-bits (transitional architecture, ReactPHP/async note) |
 
 ### Phase 5: Test Coverage Additions
 

@@ -6,10 +6,10 @@ Accumulated patterns and gotchas from building and shipping this library.
 
 ## [pattern:zone-marking-composition]
 
-**Zone-marking composition — self-contained click regions via candy-mouse**
+**Zone-marking composition — self-contained click regions via sugar-mouse**
 
 `sugar-navstack` renders breadcrumbs as plain strings by default. To enable
-mouse-click routing, a self-contained `Scanner` from `sugarcraft/candy-mouse`
+mouse-click routing, a self-contained `Scanner` from `sugarcraft/sugar-mouse`
 is attached via `Breadcrumb::withScanner(?Scanner)`.
 
 When attached, each crumb item is wrapped in a named zone marker
@@ -29,5 +29,5 @@ See: `Breadcrumb::withScanner()`, `Breadcrumb::scan()`, `Breadcrumb::hit()`,
 
 ## Mouse hit-testing
 
-- Mouse hit-testing self-contained via candy-mouse. No external zone manager
+- Mouse hit-testing self-contained via sugar-mouse. No external zone manager
   is needed — attach a `Scanner` with `withScanner()`.

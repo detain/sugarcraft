@@ -219,7 +219,7 @@ Accessors: `border(): ?Border`
 
 ## Click-Outside Dismiss
 
-Use `withClickOutsideDismiss(bool $enabled = true)` to flag a veil for dismissal when a mouse click falls outside its rendered zone. The self-contained `Scanner` (from [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse)) handles hit testing locally — call `scan($rendered)` after rendering to register the veil zone, then use `isClickOutside()` or `hit()` to query it.
+Use `withClickOutsideDismiss(bool $enabled = true)` to flag a veil for dismissal when a mouse click falls outside its rendered zone. The self-contained `Scanner` (from [sugar-mouse](https://github.com/detain/sugarcraft-sugar-mouse)) handles hit testing locally — call `scan($rendered)` after rendering to register the veil zone, then use `isClickOutside()` or `hit()` to query it.
 
 ```php
 use SugarCraft\Overlay\Veil;
@@ -254,7 +254,7 @@ the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then repla
 Frames are modeled as candy-buffer cell grids with terminal-faithful layout: wide
 graphemes (CJK, emoji) occupy two cells with a continuation tail, SGR sequences set
 a per-cell style pen, OSC 8 hyperlinks attach real `Hyperlink` metadata, and the
-invisible candy-mouse zone sentinels consume no columns. Style-only, link-only and
+invisible sugar-mouse zone sentinels consume no columns. Style-only, link-only and
 backdrop-opacity-only frame changes therefore produce correct deltas instead of
 empty ones.
 
@@ -279,7 +279,7 @@ than a bit-masked wrap-around or an out-of-range pen.
 
 ## Shared foundations
 
-Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally via `scan()` / `hit()`.
+Mouse hit-testing is self-contained via [sugar-mouse](https://github.com/detain/sugarcraft-sugar-mouse). The `Scanner` class handles zone registration and hit testing locally via `scan()` / `hit()`.
 
 ## License
 

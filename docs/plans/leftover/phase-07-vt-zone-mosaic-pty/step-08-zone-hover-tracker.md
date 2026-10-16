@@ -1,6 +1,6 @@
-# Step 07.08 — candy-mouse ZoneHoverTracker
+# Step 07.08 — sugar-mouse ZoneHoverTracker
 
-**Source:** `leftover_updates_later.md` candy-mouse Priority 1
+**Source:** `leftover_updates_later.md` sugar-mouse Priority 1
 **Branch:** `ai/zone-hover-tracker`
 
 ## Deliverable
@@ -13,19 +13,19 @@ messages on boundary crossings.
 
 **Create:**
 
-- `candy-mouse/src/ZoneHoverTracker.php` — wraps `Manager`; tracks
+- `sugar-mouse/src/ZoneHoverTracker.php` — wraps `Manager`; tracks
   `?string $currentZone` across consecutive move events; emits Msg
   on transitions.
-- `candy-mouse/src/Msg/ZoneEnterMsg.php`, `ZoneExitMsg.php`.
+- `sugar-mouse/src/Msg/ZoneEnterMsg.php`, `ZoneExitMsg.php`.
 
 ## Tests
 
-- `candy-mouse/tests/ZoneHoverTrackerTest.php` — simulate mouse-move
+- `sugar-mouse/tests/ZoneHoverTrackerTest.php` — simulate mouse-move
   events across zones; assert enter/exit sequence.
 
 ## Acceptance
 
-- `cd candy-mouse && vendor/bin/phpunit --filter ZoneHover` green.
+- `cd sugar-mouse && vendor/bin/phpunit --filter ZoneHover` green.
 
 ---
 

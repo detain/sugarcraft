@@ -108,7 +108,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 5: candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse
+### Group 5: candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse <!-- @rename-keep historical provenance -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
@@ -116,7 +116,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-vt | 58 ✓ | APPROVE | 0 | 1 | 2 | 0 |
 | candy-vcr | 90 ✓ | REQUEST_CHANGES | 1 | 1 | 4 | 0 |
 | candy-wish | 80 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
-| candy-mouse | 70 ✓ | APPROVE | 0 | 1 | 4 | 0 |
+| candy-mouse | 70 ✓ | APPROVE | 0 | 1 | 4 | 0 | <!-- @rename-keep historical provenance -->
 
 **candy-pty** — PTY/Fork wrapper. Clean. Issue: `@proc_open()` error suppression hides legitimate errors.
 
@@ -126,7 +126,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-wish** — SSH middleware. Issues: `InProcessTransport::runChild()` is 108 lines doing too much; `Auth::fingerprint()` reads `$_SERVER` directly instead of using normalized environment.
 
-**candy-mouse** — Mouse zone tracker. Issues: Static singleton in `Zones` facade makes testing harder; `Manager::scan()` uses byte inspection on what may be multibyte sequences; DCS sequences not handled.
+**candy-mouse** — Mouse zone tracker. Issues: Static singleton in `Zones` facade makes testing harder; `Manager::scan()` uses byte inspection on what may be multibyte sequences; DCS sequences not handled. <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -260,7 +260,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **33 cloned Lang.php files** | All 33 packages | Same ~31-line shape, only NAMESPACE/DIR differ; ~700 lines of boilerplate |
 | **God classes** | super-candy/Manager (915L), candy-git/App (1201L) | Single class handling too many responsibilities |
 | **Stub features wired silently** | sugar-readline/Highlight, sugar-toast/AnimationDuration | Feature exists in API but does nothing; no warning to consumers |
-| **Static singleton facades** | candy-mouse/Zones, candy-prompt | Makes testing harder, causes state leakage |
+| **Static singleton facades** | candy-mouse/Zones, candy-prompt | Makes testing harder, causes state leakage | <!-- @rename-keep historical provenance -->
 | **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder |
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
@@ -358,7 +358,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **Path-repo symlinks** | MEDIUM | candy-mail, candy-mosaic | composer reinstall needed |
 | **Inverted dependencies** | MEDIUM | candy-scriptui | Fixed via sugar-forms extraction (in progress) |
 | **Constructor bloat** | MEDIUM | super-candy (14), candy-git (22) | DTO/value object refactor needed |
-| **Static singletons** | LOW | candy-mouse, sugar-forms | Inject via constructor or clear test cleanup |
+| **Static singletons** | LOW | candy-mouse, sugar-forms | Inject via constructor or clear test cleanup | <!-- @rename-keep historical provenance -->
 | **Inconsistent mutability** | LOW | Multiple packages | Some classes readonly, some not in same package |
 | **Magic numbers** | LOW | candy-flappy, candy-tetris | Comments explaining gameplay constants |
 | **@ suppression** | LOW | super-candy, candy-pty | Use explicit error handling |
@@ -566,7 +566,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 2 | candy-sql, candy-starter, candy-kit, candy-codeshot | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass |
-| 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
+| 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues | <!-- @rename-keep historical provenance -->
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, sugar-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |

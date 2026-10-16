@@ -59,7 +59,7 @@ sugar-widgets employs a **stratified alias pattern** where many components are r
   "sugarcraft/candy-core": "dev-master",      // TUI framework foundation
   "sugarcraft/sugar-forms": "dev-master",        // Form primitives (most aliases)
   "sugarcraft/candy-sprinkles": "dev-master",   // Styling system
-  "sugarcraft/candy-mouse": "dev-master",          // Zone/mouse handling
+  "sugarcraft/sugar-mouse": "dev-master",          // Zone/mouse handling
   "sugarcraft/honey-bounce": "dev-master"     // Spring physics (AnimatedProgress)
 }
 ```

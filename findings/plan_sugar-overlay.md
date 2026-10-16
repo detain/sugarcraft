@@ -348,7 +348,7 @@ private readonly ?Manager $manager;
 /**
  * Set the zone manager for click-outside hit testing.
  *
- * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
+ * @deprecated Self-contained sugar-mouse Scanner replaces external Manager.
  *   A self-contained Scanner is always used for hit-testing. The Manager
  *   parameter is stored for back-compat only. Prefer scan()/hit() instead.
  */
@@ -361,7 +361,7 @@ public function withManager(Manager $manager): self
 /**
  * Zone manager for click-outside hit testing.
  *
- * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
+ * @deprecated Self-contained sugar-mouse Scanner replaces external Manager.
  *   Use the self-contained scanner via scan()/hit() instead.
  */
 public function manager(): ?Manager

@@ -279,7 +279,7 @@ final class Breadcrumb
      * to the correct crumb. Used after the final item list is known
      * (post-truncation).
      *
-     * Uses candy-mouse Mark::wrap() internally — no external Manager needed.
+     * Uses sugar-mouse Mark::wrap() internally — no external Manager needed.
      *
      * @param list<string> $titles  Items in display order (oldest→newest)
      */

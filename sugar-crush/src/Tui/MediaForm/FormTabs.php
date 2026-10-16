@@ -13,7 +13,7 @@ use SugarCraft\Crush\Theme;
  * sections.
  *
  * Deliberately crush-local over sugar-widgets Tabs: the same reasoning that
- * keeps SettingsTabStrip local (its candy-mouse hit-testing pairs with the
+ * keeps SettingsTabStrip local (its sugar-mouse hit-testing pairs with the
  * mouse layer this form already speaks) applies one level up — no new dep
  * to repaint six labels with.
  *

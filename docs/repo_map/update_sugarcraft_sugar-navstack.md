@@ -454,7 +454,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
 ### bubblezone zero-width ANSI markers
 
 **Source:** `docs/repo_map/lrstanley_bubblezone.md`
-**Relevance:** 🟢 Already integrated — sugar-navstack uses `candy-mouse/Manager` for zone marking
+**Relevance:** 🟢 Already integrated — sugar-navstack uses `sugar-mouse/Manager` for zone marking
 **Lesson:** Zone marking pattern is sound — maintain composition over inheritance
 
 ### lipgloss v2 layer/compositor

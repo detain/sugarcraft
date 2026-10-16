@@ -827,31 +827,31 @@ Document that each Model instance has its own `$idCounter` starting at 0. Cloned
 
 ---
 
-### 8.4 Document candy-mouse integration intent for Finding #17
+### 8.4 Document sugar-mouse integration intent for Finding #17
 
 **File:** `sugar-treelist/CALIBER_LEARNINGS.md`
 
 **What is expected:**
-Add an explicit note that mouse interaction (Finding #17) is deferred to `candy-mouse` integration per project conventions, with a link to the candy-mouse library. This makes the decision explicit and traceable.
+Add an explicit note that mouse interaction (Finding #17) is deferred to `sugar-mouse` integration per project conventions, with a link to the sugar-mouse library. This makes the decision explicit and traceable.
 
-**Why:** Finding #17 (no mouse interaction support) was noted as being handled by `candy-mouse` per CALIBER_LEARNINGS.md: "Mouse hit-testing self-contained via candy-mouse." However, there is no formal task tracking this decision in the implementation plan.
+**Why:** Finding #17 (no mouse interaction support) was noted as being handled by `sugar-mouse` per CALIBER_LEARNINGS.md: "Mouse hit-testing self-contained via sugar-mouse." However, there is no formal task tracking this decision in the implementation plan.
 
 **Severity:** informational
 
 **Conditions for success:**
 
-1. CALIBER_LEARNINGS.md has a note explicitly linking Finding #17 to candy-mouse integration intent
+1. CALIBER_LEARNINGS.md has a note explicitly linking Finding #17 to sugar-mouse integration intent
 2. The note documents the expected integration points (hit-testing, click handlers)
 
 **Related code:**
 
 - `CALIBER_LEARNINGS.md:11-13` — existing mouse integration note
-- `candy-mouse/src/ZoneClickTracker.php` — zone-based click tracking
-- `candy-mouse/src/Scanner.php` — mouse event scanning
+- `sugar-mouse/src/ZoneClickTracker.php` — zone-based click tracking
+- `sugar-mouse/src/Scanner.php` — mouse event scanning
 - `src/Model.php` — current mouse event handling (none)
 
 **Investigation notes:**
-The CALIBER_LEARNINGS.md already states "Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code." This is the correct architectural decision — mouse hit-testing is a separate concern that should be handled by `candy-mouse` which owns the `ZoneClickTracker`, `Scanner`, and `MouseEvent` classes. The integration would involve calling `candy-mouse`'s `Scanner` to convert ANSI coordinates to item indices, then calling `Model::setCursor()` or `Model::withFilterFn()` accordingly. This finding requires no code changes in `sugar-treelist` itself, only documentation of the integration intent.
+The CALIBER_LEARNINGS.md already states "Mouse hit-testing self-contained via sugar-mouse. Don't pass Managers around for new code." This is the correct architectural decision — mouse hit-testing is a separate concern that should be handled by `sugar-mouse` which owns the `ZoneClickTracker`, `Scanner`, and `MouseEvent` classes. The integration would involve calling `sugar-mouse`'s `Scanner` to convert ANSI coordinates to item indices, then calling `Model::setCursor()` or `Model::withFilterFn()` accordingly. This finding requires no code changes in `sugar-treelist` itself, only documentation of the integration intent.
 
 ---
 
@@ -896,7 +896,7 @@ cd /home/sites/sugarcraft && php tools/check-path-repos.php
 ## Notes
 
 - **2026-06-30:** Plan created from code review findings (`findings/sugar-treelist.md`). Investigation covered: `src/Model.php`, `src/FilterState.php`, `src/FuzzyMatch.php`, `src/DefaultPrefixer.php`, `src/DefaultSuffixer.php`, `src/Item.php`, `src/StringItem.php`, `src/Prefixer.php`, `src/Suffixer.php`, `src/Lang.php`, `tests/ModelTest.php`, `composer.json`, `CALIBER_LEARNINGS.md`, `candy-core/src/Util/Width.php`, `candy-async/src/CancellationToken.php`, `lang/en.php`.
-- **Finding #17 (no mouse interaction)** is tracked as a `candy-mouse` integration concern per CALIBER_LEARNINGS.md: "Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code." This is a separate library integration, not an in-lib implementation item.
+- **Finding #17 (no mouse interaction)** is tracked as a `sugar-mouse` integration concern per CALIBER_LEARNINGS.md: "Mouse hit-testing self-contained via sugar-mouse. Don't pass Managers around for new code." This is a separate library integration, not an in-lib implementation item.
 - **Finding #4 is a duplicate of finding #1** (both about exception handling in `View()`). They are consolidated in Phase 1, task 1.1.
 - **Finding #33 is a duplicate of finding #6** (`splitOverWidth()` UTF-8). They are consolidated in Phase 1, task 1.4.
 - **Total: 32 findings, consolidated to 28 actionable tasks across 8 phases.**

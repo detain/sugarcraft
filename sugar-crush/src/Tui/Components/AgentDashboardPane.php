@@ -425,7 +425,7 @@ final class AgentDashboardPane
      *
      * The slot label is a plain ASCII digit on purpose. Private-Use
      * codepoints (U+E000–U+F8FF) are where candy-core's image markers and
-     * candy-mouse's zone sentinels both live, so a decorative glyph from that
+     * sugar-mouse's zone sentinels both live, so a decorative glyph from that
      * block here would be mistaken for one of them by
      * {@see \SugarCraft\Crush\Renderer::maskImageMarkers()}.
      */
@@ -702,7 +702,7 @@ final class AgentDashboardPane
      *   reserved, and a lone CR lets session output overwrite the pane border.
      *   Losing an output line's indentation is the accepted price.
      * - The Private-Use sweep removes a block `untrusted()` leaves alone
-     *   because it is printable. Without it a session could echo candy-mouse's
+     *   because it is printable. Without it a session could echo sugar-mouse's
      *   zone sentinels or candy-core's image markers back at us and forge a
      *   clickable region in our own frame.
      *

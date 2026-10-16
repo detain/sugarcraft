@@ -23,9 +23,9 @@ C = tracker commit updating plan_rename.md row 2.3 → ✅.
 Step 2.2's `prefixes_for` walks renames.json WITHOUT a status filter (git history: pending
 entries are future facts). For URL redirects that reading is refuted by the plan's own
 **Done when**: "stubs for candy-zone and sugar-prompt exist now, pointing at candy-mouse and <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
-candy-forms" — while `candy-mouse→sugar-mouse` and `candy-forms→sugar-forms` sit pending in the <!-- @rename-keep -->
+sugar-forms" — while `sugar-mouse→sugar-mouse` and `sugar-forms→sugar-forms` sit pending in the <!-- @rename-keep historical provenance -->
 map. So `resolve_final_slug()` follows **executed (status ≠ pending) hops only**: every stub
-lands on a page that exists today, and when a later batch executes candy-mouse→sugar-mouse the
+lands on a page that exists today, and when a later batch executes candy-mouse→sugar-mouse the <!-- @rename-keep historical provenance -->
 candy-zone stub automatically re-targets two hops ahead (test `renamesFixture()` pins exactly <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
 this with a pending tail). Cycle → `RuntimeException` (fail-loud; authored-data defect, no
 silent depth cap).
@@ -35,7 +35,7 @@ silent depth cap).
   candy-zone and sugar-prompt" is FALSE against the tree** — `grep -c '<!--' docs/index.html` = 0, <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
   and steps 1.1/1.2 (plan lines 540, 588) prescribed retargeting the tile links themselves
   (verified in `git show 6eb05734f -- docs/index.html`: the candy-zone icon link became the <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
-  candy-mouse link; no markers were ever added). Plan step 2.3 says nothing about index markers.
+  candy-mouse link; no markers were ever added). Plan step 2.3 says nothing about index markers. <!-- @rename-keep historical provenance -->
   Therefore NO marker emission was added; verification #3 is satisfied the other allowed way:
   **index.html is byte-identical after regen** (`git show 6b3a7c618 --stat` = only the two stubs;
   `git status` clean after `php tools/gen-docs.php`).

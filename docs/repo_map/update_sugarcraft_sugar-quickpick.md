@@ -708,9 +708,9 @@ Add golden file tests for `View()` output at various states:
 public function withListRenderer(ListRenderer $renderer): self;
 ```
 
-## 2. Integration with `candy-mouse`
+## 2. Integration with `sugar-mouse`
 
-Add mouse support via `candy-mouse` for clickable item selection:
+Add mouse support via `sugar-mouse` for clickable item selection:
 ```php
 public function withMouseSelection(): self;
 ```
@@ -844,7 +844,7 @@ Document using Hermit as the search mechanism for desktop launcher integration.
    - Support cancellation
 
 10. **Mouse selection support**
-    - Integration with `candy-mouse` for click handling
+    - Integration with `sugar-mouse` for click handling
 
     - Track item regions for hit testing
 

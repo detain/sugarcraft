@@ -108,8 +108,8 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-datepicker | 1 HIGH, 2 MED, 4 LOW | Viewport overflow, month re-render per view() |
 | sugar-toast | 0 HIGH, 3 MED, 3 LOW | Viewport overflow, non-cancellable timer, no action buttons |
 | candy-tetris | 1 HIGH, 2 MED, 5 LOW | AI rotation bug, garbage overflow off-by-one |
-| candy-mouse | 0 HIGH, 2 MED, 4 LOW | current() returns null, switchTo() no bounds check |
-| candy-mouse | (see findings/candy-mouse.md) | Comprehensive mouse event handling audit |
+| sugar-mouse | 0 HIGH, 2 MED, 4 LOW | current() returns null, switchTo() no bounds check |
+| sugar-mouse | (see findings/sugar-mouse.md) | Comprehensive mouse event handling audit |
 | sugar-widgets | (see findings/sugar-widgets.md) | Stopwatch/teardown patterns |
 | sugar-dashboard | (see findings/sugar-dashboard.md) | Largest sugar-* project — 52KB findings |
 | candy-vt | (see findings/candy-vt.md) | Terminal emulation |
@@ -175,7 +175,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 - `README.md` — this file (collation of all findings)
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
-- `candy-ansi.md` through `candy-mouse.md` — 34 candy-* project audits
+- `candy-ansi.md` through `sugar-mouse.md` — 34 candy-* project audits
 - `honey-bounce.md`, `candy-flappy.md` — 2 honey-* project audits
 - `sugar-widgets.md` through `candy-ssh-launcher.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
 - `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08

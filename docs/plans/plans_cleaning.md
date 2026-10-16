@@ -66,7 +66,7 @@
 - sugar-toast: placeAnsiStringAt
 - candy-kit: Stage microtime
 - candy-ssh-launcher: Config non-scalar cast
-- candy-mouse: Scan duplicate zone
+- sugar-mouse: Scan duplicate zone
 - candy-git-server: SEC issues
 - candy-sql: SQL logging
 - candy-mail: STARTTLS

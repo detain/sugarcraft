@@ -739,7 +739,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    time. Lane T never edits `Bootstrap.php`.
 2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`sugar-forms`, #19
    wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil`
-   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work.
+   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work. <!-- @rename-keep historical provenance -->
    Add all three missing deps in **one prep commit** before U or W reach them.
 3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
    owns it exclusively; other lanes file requests rather than editing.

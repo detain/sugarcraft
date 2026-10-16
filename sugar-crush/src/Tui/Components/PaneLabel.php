@@ -60,7 +60,7 @@ final class PaneLabel
      * INSIDE a bordered pane rather than on a label row.
      *
      * `untrusted()` leaves the Private-Use block alone because it is printable,
-     * and the block hosts both candy-mouse's zone sentinels (U+E000/U+E001)
+     * and the block hosts both sugar-mouse's zone sentinels (U+E000/U+E001)
      * and candy-core's image markers (U+E002 upward), so a model or tool that
      * echoes one back forges a clickable region (or a graphics placeholder) in
      * our own frame. Every
