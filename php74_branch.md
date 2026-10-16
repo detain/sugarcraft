@@ -400,7 +400,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **4.1** `candy-forms`(48,med, async+buffer+core+fuzzy+layout+sprinkles) → **4.1a** `Field/` (8),
   **4.1b** `Validator/` (6), **4.1c** `TextInput/Spinner/ItemList/FilePicker/Cursor` (≈16 → a/b),
   **4.1d** `Vim/Viewport/TextArea/Scrollbar`+root (≈18 → a/b).
-- **4.2** `candy-hermit`(7,med, ansi+pty+sprinkles), `candy-freeze`(10,high,
+- **4.2** `candy-hermit`(7,med, ansi+pty+sprinkles), `candy-codeshot`(10,high,
   ansi+buffer+core+shine+sprinkles).
 - **4.3** `honey-bounce`(12,high, core+palette; enum‑with‑methods), then `candy-flappy`(6,low,
   core+sprinkles+honey‑bounce).
@@ -477,7 +477,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | Lib | diff | src | Key PHP 8+ constructs present |
 |---|---|---:|---|
 | candy-core | high | 118 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args, readonly |
-| candy-freeze | high | 10 | ctor-promotion, enum, match, mixed, new-in-init, php8-strfn |
+| candy-codeshot | high | 10 | ctor-promotion, enum, match, mixed, new-in-init, php8-strfn |
 | candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union |
 | candy-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
 | candy-minesweeper | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |

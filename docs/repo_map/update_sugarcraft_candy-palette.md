@@ -1,6 +1,6 @@
 # Overview
 
-candy-palette is a well-engineered PHP port of charmbracelet/colorprofile (~111 stars Go library) that provides terminal color profile detection and automatic ANSI color degradation for PHP CLI applications. It is the foundational terminal color infrastructure within SugarCraft, consumed directly by candy-log, candy-mosaic, candy-freeze, and candy-vt.
+candy-palette is a well-engineered PHP port of charmbracelet/colorprofile (~111 stars Go library) that provides terminal color profile detection and automatic ANSI color degradation for PHP CLI applications. It is the foundational terminal color infrastructure within SugarCraft, consumed directly by candy-log, candy-mosaic, candy-codeshot, and candy-vt.
 
 **Biggest opportunity areas:**
 

@@ -399,17 +399,17 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   step 08.12 · PR#704 · candy-sprinkles: BorderGradientBlend N-color (1-5) + Style::patch() + rapidBlink(SGR 6) (leftover-rollout step 08.12)
   review for step 08.12 · clean · PR#704
   tests-ci for step 08.12 · clean
-  step 08.13 · PR#705 · candy-freeze: Segment::$bg + SvgRenderer::withLigatures() + LanguageDetector (shebang/extension/content; 44 filter tests; leftover-rollout step 08.13)
+  step 08.13 · PR#705 · candy-codeshot: Segment::$bg + SvgRenderer::withLigatures() + LanguageDetector (shebang/extension/content; 44 filter tests; leftover-rollout step 08.13)
   review for step 08.13 · clean · PR#705
   tests-ci for step 08.13 · clean
-  step 08.14 · PR#707 · candy-freeze: VsCode/ChromaThemeLoader + SvgRenderer withFont() (base64 TTF embed) + withHighlight() (line bg rect) + 30 new tests (leftover-rollout step 08.14)
+  step 08.14 · PR#707 · candy-codeshot: VsCode/ChromaThemeLoader + SvgRenderer withFont() (base64 TTF embed) + withHighlight() (line bg rect) + 30 new tests (leftover-rollout step 08.14)
   review for step 08.14 · clean · PR#707
   tests-ci for step 08.14 · clean
   docs for step 08.12 · direct-to-master · document BorderGradientBlend/Style::patch/rapidBlink
-  step 08.13 · PR#705 · candy-freeze: Segment bg field + AnsiParser background SGR + SvgRenderer per-segment rect + withLigatures + LanguageDetector (leftover-rollout step 08.13)
+  step 08.13 · PR#705 · candy-codeshot: Segment bg field + AnsiParser background SGR + SvgRenderer per-segment rect + withLigatures + LanguageDetector (leftover-rollout step 08.13)
    review for step 08.13 · clean · PR#705
    docs for step 08.13 · PR#706 · document Segment::$bg/withBg + SvgRenderer::withLigatures + LanguageDetector in README/end-user HTML/CALIBER_LEARNINGS.md
-   step 08.14 · PR#707 · candy-freeze: VS Code/chroma JSON theme loaders + font embed + line highlight (leftover-rollout step 08.14)
+   step 08.14 · PR#707 · candy-codeshot: VS Code/chroma JSON theme loaders + font embed + line highlight (leftover-rollout step 08.14)
    review for step 08.14 · clean · PR#707
    docs for step 08.14 · direct-to-master · document VsCodeThemeLoader/ChromaThemeLoader/withFont/withHighlight in README/end-user HTML/CALIBER_LEARNINGS.md
     step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01)

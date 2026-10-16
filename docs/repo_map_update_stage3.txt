@@ -1,6 +1,6 @@
 # SugarCraft Stage 3 Update Analysis
 
-Cross-cutting analysis of 9 update documents covering candy-ansi-inspect, candy-freeze,
+Cross-cutting analysis of 9 update documents covering candy-ansi-inspect, candy-codeshot,
 sugar-datepicker, candy-metrics, sugar-toast, candy-kv, candy-git-server, sugar-wishlist,
 candy-hermit.
 
@@ -23,9 +23,9 @@ incremental gaps.
 **Pattern:** Ported packages deliver CLI/library features but defer the interactive TUI
 layer that defines the upstream experience.
 
-### C. UTF-8 Grapheme / ANSI Width Blindness (candy-hermit, candy-ansi-inspect, candy-freeze)
+### C. UTF-8 Grapheme / ANSI Width Blindness (candy-hermit, candy-ansi-inspect, candy-codeshot)
 candy-hermit's `highlightMatches()` uses byte-level indexing — breaks on emoji, CJK,
-combining characters. candy-freeze's 0.6 font aspect ratio approximation works for ASCII
+combining characters. candy-codeshot's 0.6 font aspect ratio approximation works for ASCII
 but fails for multi-byte content. candy-ansi-inspect's manual parsing has C1 limitation due to
 PHP's UTF-8 handling.
 
@@ -47,7 +47,7 @@ requires modifying core loops rather than registering handlers.
 
 ### B. No Golden File / Snapshot Testing Infrastructure
 candy-ansi-inspect has 116 unit tests but zero golden file regression tests. sugar-datepicker
-has 57 tests but no snapshot tests for `View()` output. candy-freeze's WindowStyleTest
+has 57 tests but no snapshot tests for `View()` output. candy-codeshot's WindowStyleTest
 tests SVG structure but could use full render comparison. Only candy-kv and
 candy-hermit have what could be called structured test coverage.
 
@@ -68,7 +68,7 @@ The canonical TUI framework reference. Every package either:
 **Why:** It is the dominant Go TUI framework and the upstream source for half the
 SugarCraft ecosystem's component designs.
 
-### 2. charmbracelet/x/ansi (cited in candy-ansi-inspect, candy-hermit, candy-freeze)
+### 2. charmbracelet/x/ansi (cited in candy-ansi-inspect, candy-hermit, candy-codeshot)
 Provides the ECMA-48 state machine parser (`ansi.Parser`), ANSI width calculation via
 `clipperhouse/displaywidth`, and C0/C1 control code tables. This is the foundational
 parsing layer for the entire ANSI-inspection and terminal emulation stack.
@@ -96,8 +96,8 @@ This is a single-method change with real workflow impact. Upstream has this feat
 **Complexity:** Low — one method change + test
 **Impact:** Full SSH feature parity for users with per-environment keys
 
-### B. Wire PNG Renderer to candy-freeze CLI (`--format png`)
-candy-freeze's `PngRenderer` exists (373 lines) but the CLI only exposes SVG output.
+### B. Wire PNG Renderer to candy-codeshot CLI (`--format png`)
+candy-codeshot's `PngRenderer` exists (373 lines) but the CLI only exposes SVG output.
 Adding `--format png` to the CLI is trivial wiring. This closes the CLI/API parity gap.
 
 **Complexity:** Low — expose existing renderer via flag
@@ -129,7 +129,7 @@ Adding `--format png` to the CLI is trivial wiring. This closes the CLI/API pari
 - Glob pattern matching translated to SQL LIKE
 - Multi-database via suffix syntax (`key@dbname`)
 
-### candy-freeze > charmbracelet/freeze
+### candy-codeshot > charmbracelet/freeze
 - 5 window decoration styles (upstream is macOS-only)
 - TTF font embedding via base64 `@font-face` in SVG
 - Line highlighting via `withHighlight()`

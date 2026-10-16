@@ -20,7 +20,7 @@ body:
         - candy-scriptui (CLI)
         - candy-shine (Markdown)
         - candy-kit (CLI helpers)
-        - candy-freeze (SVG screenshots)
+        - candy-codeshot (SVG screenshots)
         - candy-mdview (Markdown viewer)
         - candy-ansi-inspect (ANSI inspector)
         - other / multiple

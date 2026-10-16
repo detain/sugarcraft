@@ -71,8 +71,8 @@ flag_management:
     - name: candy-kit
       paths: ["candy-kit/src/**"]
       carryforward: true
-    - name: candy-freeze
-      paths: ["candy-freeze/src/**"]
+    - name: candy-codeshot
+      paths: ["candy-codeshot/src/**"]
       carryforward: true
     - name: candy-mdview
       paths: ["candy-mdview/src/**"]
@@ -295,12 +295,12 @@ component_management:
         - "candy-kit/src/**"
       flag_regexes:
         - "^candy-kit$"
-    - component_id: candy-freeze
-      name: candy-freeze
+    - component_id: candy-codeshot
+      name: candy-codeshot
       paths:
-        - "candy-freeze/src/**"
+        - "candy-codeshot/src/**"
       flag_regexes:
-        - "^candy-freeze$"
+        - "^candy-codeshot$"
     - component_id: candy-mdview
       name: candy-mdview
       paths:

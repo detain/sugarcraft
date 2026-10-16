@@ -2206,7 +2206,7 @@ Source: [media] — full audit of candy-mosaic/sugar-reel/overlay transport, the
 | Out-of-band overlay paint into diff-rendered frames | `candy-core/src/ImageOverlay.php` — `MARKER_BASE=0xE002:62`, `marker:97`, `markerBlock:112`, `resolve:145`, `paint:229`, `signature:249`, `coveredRows:267`; consumed in `candy-core/src/Program.php:1353-1377` | **exists** |
 | Image placement lifecycle (multi image, release) | `candy-mosaic/src/ImageLayer.php` — `digestFor:99`, `place:112`, `placeTracked:136`, `release:210`, `releaseAllExcept:234` | **exists** |
 | tmux handling | `Capability::*(..., bool $inTmux)` + `TmuxPassthroughDecorator.php` (DCSS passthrough) | **exists** |
-| Terminal→PNG/SVG export (inverse) | `candy-freeze/src/PngRenderer.php`/`SvgRenderer.php`; ANSI→GIF `candy-vcr/src/Encode/FfmpegGifEncoder.php:24-118` | exists (not requested) |
+| Terminal→PNG/SVG export (inverse) | `candy-codeshot/src/PngRenderer.php`/`SvgRenderer.php`; ANSI→GIF `candy-vcr/src/Encode/FfmpegGifEncoder.php:24-118` | exists (not requested) |
 | SSRF-guarded remote image fetch | `ImageSource::fromUrl:1119` + `overrideHostResolver:1181`; async `fromUrlAsync:1428` | **exists** |
 | Audio (out of scope) | `sugar-reel/src/AudioPlayer.php:15-104` — ffplay `-nodisp -autoexit` / mpv `--no-video` via `proc_open` array form | exists |
 

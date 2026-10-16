@@ -1,12 +1,12 @@
-# Step 08.14 — candy-freeze VS Code/chroma JSON theme + font embed + line highlight
+# Step 08.14 — candy-codeshot VS Code/chroma JSON theme + font embed + line highlight
 
-**Source:** `leftover_updates_later.md` candy-freeze §4.1.3 + §4.2.1 + §4.3.2
+**Source:** `leftover_updates_later.md` candy-codeshot §4.1.3 + §4.2.1 + §4.3.2
 **Branch:** `ai/freeze-themes-font-linehighlight`
 
 ## Deliverable
 
 - VS Code / chroma JSON theme compatibility (load `*.json` theme
-  files; map their token names to candy-freeze styles).
+  files; map their token names to candy-codeshot styles).
 - Font embedding in SVG via base64 TTF.
 - Line highlighting (`--highlight 5-10` adds a background-color
   range).
@@ -15,12 +15,12 @@
 
 **Create:**
 
-- `candy-freeze/src/Theme/VsCodeThemeLoader.php`.
-- `candy-freeze/src/Theme/ChromaThemeLoader.php`.
+- `candy-codeshot/src/Theme/VsCodeThemeLoader.php`.
+- `candy-codeshot/src/Theme/ChromaThemeLoader.php`.
 
 **Modify:**
 
-- `candy-freeze/src/Renderer/SvgRenderer.php` — `--font path/to/font.ttf`
+- `candy-codeshot/src/Renderer/SvgRenderer.php` — `--font path/to/font.ttf`
   embeds. `--highlight start-end` adds.
 
 ## Tests
@@ -29,7 +29,7 @@
 
 ## Acceptance
 
-- `cd candy-freeze && vendor/bin/phpunit --filter "VsCode|Chroma|FontEmbed|LineHighlight"` green.
+- `cd candy-codeshot && vendor/bin/phpunit --filter "VsCode|Chroma|FontEmbed|LineHighlight"` green.
 
 ---
 

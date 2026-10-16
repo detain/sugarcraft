@@ -439,7 +439,7 @@ final class SubparamsAwareHandlerTest extends TestCase
 
     /**
      * Regression pin for the legacy pull route that candy-vt
-     * (`attachSubparamsProvider`) and candy-freeze (`bindParser`) still use: a
+     * (`attachSubparamsProvider`) and candy-codeshot (`bindParser`) still use: a
      * NON-capable handler consulting {@see Parser::subparams()} mid-dispatch must
      * still resolve colon SGRs, and resolve them to exactly what the new push
      * delivers. That equivalence is the contract vt-B relies on when it migrates

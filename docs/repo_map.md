@@ -24,7 +24,7 @@
 | [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, candy-forms, candy-shine |
 | [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | candy-kit |
 | [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
-| [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-freeze |
+| [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-codeshot |
 | [charmbracelet/glamour](#charmbraceletglamour) | Go | ~3400 | candy-shine |
 | [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | candy-mdview, sugar-bits, candy-shine |
 | [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-bits |
@@ -380,10 +380,10 @@
 
 **SugarCraft Mapping:**
 - `candy-shine` → ANSI parsing, styling
-- `candy-freeze` → Primary port
+- `candy-codeshot` → Primary port
 - `sugar-bits` → Theme registry, PTY execution
 
-**Note:** Port exists as `candy-freeze` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-codeshot` (🟢 in MATCHUPS.md).
 
 ---
 

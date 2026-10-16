@@ -154,7 +154,7 @@ Found in `candy-mosaic/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Cont
 **Actions:**
 
 - SSOT-08a — Pull all env-var probes into `candy-palette/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
-- SSOT-08b — `candy-log`, `candy-mosaic`, `candy-freeze` (themes), `candy-vt` (truecolor accept) all consume it.
+- SSOT-08b — `candy-log`, `candy-mosaic`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
 - SSOT-08c — Implement the missing candy-palette items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
 
 ### SSOT-09 — `Module\Module` contract aligns with candy-core `Model`
@@ -347,7 +347,7 @@ because research adds three items the PTY plan did not call out:)
 - `Style::patch()` incremental modification (#7).
 - Rapid blink variant (#8).
 
-### candy-freeze
+### candy-codeshot
 
 - Per-segment background color (`Segment.php:13` TODO).
 - Ligature `font-variant-ligatures` flag (§4.2.2).

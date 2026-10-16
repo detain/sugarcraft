@@ -262,11 +262,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/freeze → candy-freeze
+## charmbracelet/freeze → candy-codeshot
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-freeze | Notes |
+| Upstream | Title | Status in candy-codeshot | Notes |
 |---|---|:--:|---|
 | [#265](https://github.com/charmbracelet/freeze/pull/265) (2026-05-04) | chore(deps): bump chroma | ⚪ | Dep only |
 | [#254](https://github.com/charmbracelet/freeze/pull/254) (2026-03-16) | security: update go version | ⚪ | Security fix, no semantic change |

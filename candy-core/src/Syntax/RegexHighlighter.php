@@ -14,7 +14,7 @@ namespace SugarCraft\Core\Syntax;
  *
  * This is the pure tokenisation half extracted from candy-shine's
  * SyntaxHighlighter: it carries no colour/ANSI/theme dependency, so any
- * consumer (candy-shine's Markdown renderer, candy-freeze, ...) can map the
+ * consumer (candy-shine's Markdown renderer, candy-codeshot, ...) can map the
  * span classes onto its own presentation while sharing one lexer.
  */
 final class RegexHighlighter implements Highlighter

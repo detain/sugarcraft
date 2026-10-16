@@ -194,17 +194,17 @@
 - **Effort**: 2-3 hours
 - **Research**: `libraries/candy-hermit-research.md`
 
-### candy-freeze
+### candy-codeshot
 
 ### [ ] Add background color support
 
 - **Effort**: 2 hours
-- **Research**: `libraries/candy-freeze-research.md`
+- **Research**: `libraries/candy-codeshot-research.md`
 
 ### [ ] Add ligature flag
 
 - **Effort**: 1 hour
-- **Research**: `libraries/candy-freeze-research.md`
+- **Research**: `libraries/candy-codeshot-research.md`
 
 ### candy-minesweeper
 
@@ -434,7 +434,7 @@ All 45 research documents available at:
 |---------|-----------|
 | candy-core | 17KB |
 | candy-flip | 16KB |
-| candy-freeze | 23KB |
+| candy-codeshot | 23KB |
 | candy-hermit | 21KB |
 | candy-lister | 15KB |
 | candy-log | 17KB |

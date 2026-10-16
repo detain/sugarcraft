@@ -70,3 +70,8 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   render the pre-rename `SUGARPOST` wordmark. Content is rename-excluded (.ansi); re-generate via the ansi toolchain when triaged.
 - `candy-mail/.vhs/showcase.gif` — demo GIF renamed with the dir; its frames still show the pre-rename wordmark. CI
   `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.
+
+## B11 candy-freeze → candy-codeshot (2026-10-16) <!-- @rename-keep -->
+- `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
+  still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
+  already-rewritten `.tape` files on the next tape run; do not hand-patch.

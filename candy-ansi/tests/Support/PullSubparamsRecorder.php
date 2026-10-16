@@ -9,7 +9,7 @@ namespace SugarCraft\Ansi\Tests\Support;
  * colon flags the legacy way — through a late-bound closure over the owning
  * parser's accessor, which is exactly what
  * `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()` and
- * `SugarCraft\Freeze\SgrStateHandler::bindParser()` do.
+ * `SugarCraft\CodeShot\SgrStateHandler::bindParser()` do.
  *
  * It exists to pin the back-compat half of the
  * {@see \SugarCraft\Ansi\Parser\SubparamsAwareHandler} change: introducing the

@@ -794,18 +794,18 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 
 ### Group 2-E (3 agents)
 
-#### 2.16 🟢 candy-freeze: LayoutCalculator extraction (Item 3.1)
+#### 2.16 🟢 candy-codeshot: LayoutCalculator extraction (Item 3.1)
 
-**Plan:** `findings/plan_candy-freeze.md` — Item 3.1
+**Plan:** `findings/plan_candy-codeshot.md` — Item 3.1
 **Fix:** Extract shared `LayoutCalculator.php` from duplicate sizing logic in SvgRenderer and PngRenderer
-**Files:** `candy-freeze/src/LayoutCalculator.php` (new)
+**Files:** `candy-codeshot/src/LayoutCalculator.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 2.17 🟢 candy-freeze: match expression in applySgr (Item 3.3)
+#### 2.17 🟢 candy-codeshot: match expression in applySgr (Item 3.3)
 
-**Plan:** `findings/plan_candy-freeze.md` — Item 3.3
+**Plan:** `findings/plan_candy-codeshot.md` — Item 3.3
 **Fix:** Replace 20+ `if/continue` with `match (true)` expression in `AnsiParser.php:122-133`
-**Files:** `candy-freeze/src/AnsiParser.php:122-133`
+**Files:** `candy-codeshot/src/AnsiParser.php:122-133`
 **Agent:** Same coder agent as 2.16 (grouped — same lib)
 
 #### 2.18 🟢 candy-testing: O(n) array_shift (Item 2.3)
@@ -1277,7 +1277,7 @@ Same verification as previous phases.
 | ---- | ----- | ------- |
 | `plan_candy-ansi.md` | 3.5, 3.6, 4.1-4.3 | MAX_STRING_BUFFER constant, 65535 magic number, test coverage |
 | `plan_candy-buffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
-| `plan_candy-freeze.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
+| `plan_candy-codeshot.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
 | `plan_candy-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
 | `plan_candy-hermit.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests |
 | `plan_candy-kit.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |

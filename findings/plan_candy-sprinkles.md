@@ -9,7 +9,7 @@ Address findings in candy-sprinkles library, mapping each issue to actual file l
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Findings file references non-existent files | 8 files in findings do not exist in candy-sprinkles | investigation |
-| ANSI Parser in candy-freeze | Actual AnsiParser is in candy-freeze/src/AnsiParser.php | investigation |
+| ANSI Parser in candy-codeshot | Actual AnsiParser is in candy-codeshot/src/AnsiParser.php | investigation |
 | Width utility in candy-core | Actual Width is in candy-core/src/Util/Width.php | investigation |
 | Upstream is lipgloss not bubbles | candy-sprinkles ports charmbracelet/lipgloss | composer.json |
 | Border/BoxDrawing.php does not exist | Only Border.php and related exist | glob search |
@@ -17,7 +17,7 @@ Address findings in candy-sprinkles library, mapping each issue to actual file l
 
 ## Phase 1: Security Issues [CLOSED — all misreferenced]
 
-- [x] 1.1 ANSI Parser SGR State Machine — ⏭️ N/A (misreferenced; candy-freeze/src/AnsiParser.php already delegates to candy-ansi's Parser/SgrState — verified 2026-07-04, no fix outstanding)
+- [x] 1.1 ANSI Parser SGR State Machine — ⏭️ N/A (misreferenced; candy-codeshot/src/AnsiParser.php already delegates to candy-ansi's Parser/SgrState — verified 2026-07-04, no fix outstanding)
 
 ## Phase 2: Bugs [CLOSED — all misreferenced]
 
@@ -43,7 +43,7 @@ Address findings in candy-sprinkles library, mapping each issue to actual file l
 
 The findings file for candy-sprinkles has significant discrepancies:
 - 8 referenced files do not exist in candy-sprinkles
-- Actual issues are in candy-freeze, candy-core, candy-forms, and sugar-dash
+- Actual issues are in candy-codeshot, candy-core, candy-forms, and sugar-dash
 - Upstream is incorrectly stated as bubbles instead of lipgloss
 
 ## Files Verified as Existing in candy-sprinkles

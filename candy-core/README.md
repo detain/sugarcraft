@@ -234,7 +234,7 @@ builds on it. From the same monorepo:
 - **CandyMouse** — mouse-zone tracker.
 - **HoneyBounce** — spring physics + Newtonian projectile sim.
 - **CandyKit** — opinionated CLI presentation helpers.
-- **CandyFreeze** — code → SVG screenshot.
+- **CandyCodeshot** — code → SVG screenshot.
 - **CandyWish** — SSH server middleware framework.
 - **CandyAnsiInspect** — ANSI escape-sequence inspector.
 

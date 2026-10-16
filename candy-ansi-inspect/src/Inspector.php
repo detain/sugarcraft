@@ -243,7 +243,7 @@ final class Inspector
      * <p>The slot may also be omitted entirely, and the two spellings are
      * genuinely ambiguous on their face — `38:2:1:2:3` is either CS 1 with a
      * missing blue, or bare R:G:B. The rule applied here (and in
-     * `SugarCraft\Freeze\SgrStateHandler`, measured to agree on every
+     * `SugarCraft\CodeShot\SgrStateHandler`, measured to agree on every
      * colour-resolving shape both suites pin) is xterm's count rule: four
      * sub-parameters after the mode are `cs:r:g:b`, three are bare `r:g:b`. A
      * future change to one parser's rule must be mirrored in the other, or the
@@ -251,7 +251,7 @@ final class Inspector
      * rendered output. A group that resolves in neither lib may still be
      * *described* differently: this one labels what the bytes say
      * (`38:2::;1;2;3` is a truncated truecolor group and no colour is
-     * invented for it), candy-freeze falls back to reading the flat parameter
+     * invented for it), candy-codeshot falls back to reading the flat parameter
      * list and paints `#000001`. Both sides pin that divergence literally:
      * `ByteFidelityTest::testColonTruncatedExtendedColoursAreReportedAsTruncated`
      * here, `AnsiParserColonSubparametersTest::testUnresolvableColonGroupFallsBackAcrossParameterBoundaries`

@@ -174,7 +174,7 @@ that are tiny but together justify a PR.
 ### Apps
 
 - charmbracelet/gum → candy-scriptui
-- charmbracelet/freeze → candy-freeze
+- charmbracelet/freeze → candy-codeshot
 - charmbracelet/glow → candy-mdview
 - charmbracelet/sequin → candy-ansi-inspect
 - charmbracelet/wishlist → sugar-wishlist

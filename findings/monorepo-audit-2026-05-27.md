@@ -51,14 +51,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 2: candy-sql, candy-mold, candy-kit, candy-freeze
+### Group 2: candy-sql, candy-mold, candy-kit, candy-codeshot
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-sql | 123 ✓ | REQUEST_CHANGES | 0 | 1 | 2 | 0 |
 | candy-mold | 8 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | candy-kit | 41 ✓ | APPROVE | 0 | 1 | 1 | 0 |
-| candy-freeze | 111 ✓ | APPROVE | 0 | 1 | 3 | 0 |
+| candy-codeshot | 111 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 
 **candy-sql** — SQLite browser TUI. SQL injection surface exists but is by design (it's a SQL browser). Inconsistent prepared statement usage vs string interpolation.
 
@@ -66,7 +66,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-kit** — CLI presentation helpers. Clean, 41 tests. Issue: `Logo::withColor()` returns styled string instead of preserving original ASCII for subsequent `render()` calls.
 
-**candy-freeze** — Screenshot renderer. 111 tests. Issue: `PngRenderer::allocateColor()` uses static cache keyed only by hex color, not image context — could reuse colors from wrong image.
+**candy-codeshot** — Screenshot renderer. 111 tests. Issue: `PngRenderer::allocateColor()` uses static cache keyed only by hex color, not image context — could reuse colors from wrong image.
 
 ---
 
@@ -563,7 +563,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Group | Packages | Tests | Status |
 |-------|----------|-------|--------|
 | 1 | candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
-| 2 | candy-sql, candy-mold, candy-kit, candy-freeze | 283 | ✅ All pass |
+| 2 | candy-sql, candy-mold, candy-kit, candy-codeshot | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |

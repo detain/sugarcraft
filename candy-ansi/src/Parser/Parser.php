@@ -241,7 +241,7 @@ final class Parser
      * after `feed()` for the last completed sequence; they reset when the next
      * sequence's params start accumulating. This is the PULL route.
      *
-     * The alternative — the one the candy-vt and candy-freeze sinks now use — is
+     * The alternative — the one the candy-vt and candy-codeshot sinks now use — is
      * the PUSH: implement {@see SubparamsAwareHandler} and be handed the same
      * flags in the dispatch call chain, so the handler needs no back-reference to
      * the parser dispatching it. {@see SubparamsAwareHandler::setSubparams()}
@@ -525,7 +525,7 @@ final class Parser
      * capability existed: no extra call, no changed argument. The in-tree sinks
      * DO opt in and read the push — candy-vt's `ScreenHandler` (emulator) and
      * `RendererHandler` (renderer, forwarding to `CsiHandlerImpl`), and
-     * candy-freeze's `SgrStateHandler` — so none of them needs the late-bound
+     * candy-codeshot's `SgrStateHandler` — so none of them needs the late-bound
      * back-reference any more. {@see subparams()} remains public for a program
      * that owns a Parser directly; see {@see SubparamsAwareHandler}.
      */
