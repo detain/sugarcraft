@@ -13,7 +13,7 @@ use RecursiveIteratorIterator;
  * reason it is not is recorded in the manifest.
  *
  * E453, AND THE FINDING IS NOT THE DEPENDENCY. `sugar-crush` requires
- * `sugarcraft/candy-kit`, nothing in `src/` reaches it, and CI's
+ * `sugarcraft/sugar-cli`, nothing in `src/` reaches it, and CI's
  * `path-repo-check` job has been RED on master over it - while the merge
  * checklist ran `check-path-repos.php --no-lib-path-repos`, got 0, and
  * concluded the tree was clean. Those two checks ask different questions, and
@@ -31,15 +31,15 @@ use RecursiveIteratorIterator;
  * rather than this one. What a per-package suite can own is the property of
  * ITS OWN manifest, which is exactly the row CI failed on.
  *
- * WHAT `candy-kit` TURNED OUT TO BE, because the next reader will want the
+ * WHAT `sugar-cli` TURNED OUT TO BE, because the next reader will want the
  * short version and the manifest carries the long one. Not spent: commit
  * ddd9560d0 added it for one named, still-open item - restyling
- * `Cli\Help::screen()` with candy-kit's presentation primitives - and the
+ * `Cli\Help::screen()` with sugar-cli's presentation primitives - and the
  * restyle was costed and deferred rather than forgotten. The obvious fix, the
  * one the tool's own report recommends, was the wrong one; deleting a
  * foundation lib's require because the wiring it was added for has not landed
  * yet is how the wiring stops being possible. THE WIRING HAS SINCE LANDED
- * (crush_libs rerun lane A6, 2026-10-08): candy-kit grew the multi-line-
+ * (crush_libs rerun lane A6, 2026-10-08): sugar-cli grew the multi-line-
  * preserving `HelpText::renderPage()` the restyle needed — `render()`
  * flattens newlines and would have collapsed the one-page catalogue screen
  * onto a single row — and `Cli\Help::screen()` now passes the page through
@@ -422,17 +422,17 @@ final class ManifestDependencyReachTest extends TestCase
         );
 
         // E453 CLOSED (crush_libs rerun lane A6, 2026-10-08): the one row this
-        // package ever recorded was the candy-kit deferral, and its wiring
+        // package ever recorded was the sugar-cli deferral, and its wiring
         // landed — `Cli\Help::screen()` renders through HelpText::renderPage().
         // The row is gone per its own rule, so the floor below replaces the
         // Rule 25 control pair as this manifest's permanent anti-vacuity pin:
-        // if the `use SugarCraft\Kit\` reference ever disappears from src/,
-        // candy-kit becomes a dead require again and this reddes before the
+        // if the `use SugarCraft\Cli\` reference ever disappears from src/,
+        // sugar-cli becomes a dead require again and this reddes before the
         // arm after it can lull anybody.
         self::assertArrayHasKey(
-            'sugarcraft/candy-kit',
+            'sugarcraft/sugar-cli',
             $reached,
-            'src/ no longer reaches candy-kit. If the E453 wiring regressed, restore it; if it '
+            'src/ no longer reaches sugar-cli. If the E453 wiring regressed, restore it; if it '
                 . 'was deliberately removed, delete the require too — and reinstate the Rule 25 '
                 . 'control pair (see git log on this file) for whenever a row is recorded again.',
         );

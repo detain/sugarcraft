@@ -328,7 +328,7 @@ candy-git-server/
 
 **Implementation ideas:**
 
-- Implement `CommandPalette` component using `candy-kit`
+- Implement `CommandPalette` component using `sugar-cli`
 - Add fuzzy search with scoring
 - Support custom command providers
 

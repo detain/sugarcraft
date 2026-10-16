@@ -52,7 +52,7 @@ final class HelpTest extends TestCase
 
     /**
      * E453 (campaign rerun lane A6): screen() routes the one-page catalogue
-     * entry through candy-kit's HelpText::renderPage() — and for the clean
+     * entry through sugar-cli's HelpText::renderPage() — and for the clean
      * English page that render is byte-identity: sanitizing without a width
      * strips nothing that is there and re-wraps nothing. Every exact-substring
      * and line-anchor pin in this class leans on that; this is the pin that

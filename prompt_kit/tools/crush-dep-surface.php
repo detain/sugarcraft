@@ -27,7 +27,7 @@ $libs = [
     'sugar-mouse' => 'Mouse',
     'candy-layout' => 'Layout',
     'sugar-focus' => 'Focus',
-    'candy-kit' => 'Kit',
+    'sugar-cli' => 'Cli',
     'candy-pty' => 'Pty',
 ];
 

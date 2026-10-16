@@ -76,7 +76,7 @@
   - Composer pkg: `sugarcraft/candy-kv`
   - Namespace: `SugarCraft\Kv`
   - Status: 🟢 v1.0.0 equivalent — local-only KV store with Badger-equivalent storage in PHP
-  - Maps to: `candy-core` (base runtime), `candy-sprinkles` (styling), `candy-kit` (presentation helpers)
+  - Maps to: `candy-core` (base runtime), `candy-sprinkles` (styling), `sugar-cli` (presentation helpers)
 - **Potential future ports**:
   - **SugarPersist** — if someone wanted to extract a generalized KV storage abstraction layer
   - **SugarDB** — multi-database file-based storage pattern could inspire a SugarCraft data abstraction lib
@@ -87,4 +87,4 @@
 
 As of v1.0.0, skate severed its Charm Cloud sync feature, shifting to fully local-only operation — a pragmatic privacy decision. The implementation is straightforward: all operations (`set`, `get`, `list`, `delete`) are thin wrappers around Badger transactions, with proper resource cleanup via `defer db.Close()` and a `wrap()` helper function. The `list` command uses Badger's iterator API with options for reverse traversal, key-only iteration, and value-only iteration — the same cursor/iterator pattern common in embedded database libraries.
 
-**For SugarCraft**: The skate port (`candy-kv`) maps cleanly as a top-level application using the `SugarCraft\Kv` namespace. It would consume `candy-core` for the runtime contract, `candy-sprinkles` for any TUI styling output, and `candy-kit` for presentation helpers. The storage layer in PHP would need to replicate Badger's semantics — likely using SQLite as a PHP-native embeddable KV store, since there's no direct Badger equivalent in PHP. The `@db` multi-database pattern translates naturally to SQLite `ATTACH` or separate database files.
+**For SugarCraft**: The skate port (`candy-kv`) maps cleanly as a top-level application using the `SugarCraft\Kv` namespace. It would consume `candy-core` for the runtime contract, `candy-sprinkles` for any TUI styling output, and `sugar-cli` for presentation helpers. The storage layer in PHP would need to replicate Badger's semantics — likely using SQLite as a PHP-native embeddable KV store, since there's no direct Badger equivalent in PHP. The `@db` multi-database pattern translates naturally to SQLite `ATTACH` or separate database files.

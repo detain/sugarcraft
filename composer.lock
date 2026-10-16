@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ee305de6efeed88a824a4e54b5e08847",
+    "content-hash": "55c6727f916efe46d79c2ad91363fa5c",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4259,66 +4259,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-kit",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-kit",
-                "reference": "523771a5c3544b2be022249cb0ffe21b9bfb068a"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Kit\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Kit\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers: StatusLine (✓/✗/⚠/ℹ), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
-            "homepage": "https://github.com/sugarcraft/candy-kit",
-            "keywords": [
-                "banner",
-                "cli",
-                "console",
-                "fang",
-                "help",
-                "presentation",
-                "status-line",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-kit/issues",
-                "source": "https://github.com/sugarcraft/candy-kit",
-                "docs": "https://sugarcraft.github.io/lib/candy-kit.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-kv",
             "version": "dev-master",
             "dist": {
@@ -5146,7 +5086,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sql",
-                "reference": "da971928ecd68ffd969479988099716081608373"
+                "reference": "3a87957dafedd215fdc1fafe83412302348c1124"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -5157,10 +5097,10 @@
                 "react/promise-timer": "^1.9",
                 "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-kit": "dev-master",
                 "sugarcraft/candy-layout": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-charts": "dev-master",
+                "sugarcraft/sugar-cli": "dev-master",
                 "sugarcraft/sugar-dashboard": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-table": "dev-master",
@@ -5873,12 +5813,72 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-cli",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-cli",
+                "reference": "59682fa97b3e6070040434c7ca882e782eb684b7"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Cli\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Cli\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers: StatusLine (✓/✗/⚠/ℹ), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
+            "homepage": "https://github.com/sugarcraft/sugar-cli",
+            "keywords": [
+                "banner",
+                "cli",
+                "console",
+                "fang",
+                "help",
+                "presentation",
+                "status-line",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-cli/issues",
+                "source": "https://github.com/sugarcraft/sugar-cli",
+                "docs": "https://sugarcraft.github.io/lib/sugar-cli.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-crush",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "6a6dd4c6d46e0ff33258dbfe8dd978f2ad1a6984"
+                "reference": "b5091dd51f6883ff5511ee6ad75632f4b3648a6e"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5895,12 +5895,12 @@
                 "react/promise": "^3.3",
                 "react/socket": "^1.16",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-kit": "@dev",
                 "sugarcraft/candy-layout": "dev-master",
                 "sugarcraft/candy-mosaic": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-cli": "@dev",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-focus": "@dev",
                 "sugarcraft/sugar-forms": "dev-master",
@@ -8598,7 +8598,6 @@
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
         "sugarcraft/candy-git-server": 20,
-        "sugarcraft/candy-kit": 20,
         "sugarcraft/candy-kv": 20,
         "sugarcraft/candy-log": 20,
         "sugarcraft/candy-mail": 20,
@@ -8622,6 +8621,7 @@
         "sugarcraft/candy-wish": 20,
         "sugarcraft/honey-bounce": 20,
         "sugarcraft/sugar-charts": 20,
+        "sugarcraft/sugar-cli": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dashboard": 20,

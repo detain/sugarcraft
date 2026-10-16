@@ -1295,7 +1295,7 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `sugar-toast` (the toast a settings save reports through),
 `sugar-reel` (the video the player screen renders through),
 `candy-mosaic`, `sugar-mouse`,
-`candy-layout` (dock geometry), `sugar-focus`, `candy-kit`, `candy-pty`
+`candy-layout` (dock geometry), `sugar-focus`, `sugar-cli`, `candy-pty`
 (the pseudo-terminal interactive tool output is captured through).
 
 `ext-sqlite3` is declared, and `src/` constructs it in exactly one place:

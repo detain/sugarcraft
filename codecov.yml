@@ -68,8 +68,8 @@ flag_management:
     - name: candy-shine
       paths: ["candy-shine/src/**"]
       carryforward: true
-    - name: candy-kit
-      paths: ["candy-kit/src/**"]
+    - name: sugar-cli
+      paths: ["sugar-cli/src/**"]
       carryforward: true
     - name: candy-codeshot
       paths: ["candy-codeshot/src/**"]
@@ -289,12 +289,12 @@ component_management:
         - "candy-shine/src/**"
       flag_regexes:
         - "^candy-shine$"
-    - component_id: candy-kit
-      name: candy-kit
+    - component_id: sugar-cli
+      name: sugar-cli
       paths:
-        - "candy-kit/src/**"
+        - "sugar-cli/src/**"
       flag_regexes:
-        - "^candy-kit$"
+        - "^sugar-cli$"
     - component_id: candy-codeshot
       name: candy-codeshot
       paths:

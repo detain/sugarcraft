@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCli — SugarCraft</title>
+<meta name="description" content="SugarCli: Ready-made CLI widgets — status line, banner, section, stage, and help text for terminal apps.">
+<meta property="og:title" content="SugarCli — SugarCraft">
+<meta property="og:description" content="Ready-made CLI widgets — status line, banner, section, stage, and help text for terminal apps.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-cli.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-cli.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-cli.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-cli.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-cli.png" alt="SugarCli">
+      <div>
+        <h2>🎁 SugarCli</h2>
+        <p class="detail-sub">CLI presentation helpers</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/fang" style="color: inherit;">charmbracelet/fang</a></span>
+          <span class="tag-chip">cli</span>
+          <span class="tag-chip">presentation</span>
+          <span class="tag-chip">library-only</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-cli"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-cli" alt="SugarCli code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">StatusLine, Banner, Section, Stage, HelpText. Library-only — no Symfony Console requirement. Drop into any Composer project to give CLI output the same look as the rest of the stack.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-cli</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Cli\{StatusLine, Banner};
+
+echo Banner::title('CandyApp', 'v0.1.0'), "\n\n";
+echo StatusLine::info   ('connecting to https://example.com'), "\n";
+echo StatusLine::success('done in 0.4s'), "\n";
+echo StatusLine::warn   ('disk almost full'), "\n";
+echo StatusLine::error  ('connection refused'), "\n";</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>StatusLine</strong><span><code>success</code> / <code>error</code> / <code>warn</code> / <code>info</code> / <code>prompt</code> static helpers — glyph + message styled per the active theme.</span></div>
+      <div class="feature"><strong>Banner</strong><span>Bordered title block with optional subtitle, rounded by default. Useful for app intros / <code>--version</code> output. Title and subtitle are single display lines — embedded escapes, newlines and control bytes are stripped.</span></div>
+      <div class="feature"><strong>Theme</strong><span>Palette of <code>Sprinkles\Style</code> objects keyed by status level. <code>Theme::ansi()</code> ships the colourful palette; <code>Theme::detect()</code> downgrades it to what the output can show via candy-core's <code>ColorProfile::detect()</code> — no escape bytes when STDOUT is not a tty, colour dropped but bold kept under <code>NO_COLOR</code> on a terminal, full colour under <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code>. Every presenter called without a theme uses <code>Theme::detect()</code>; apply the same downgrade to a preset with <code>withColorProfile()</code>.</span></div>
+      <div class="feature"><strong>Section</strong><span>One-line themed dividers — <code>header()</code> label + fill rule, bare <code>rule()</code>, indented <code>subHeader()</code>. An explicit width is a hard cap: an over-long label is cut with <code>…</code> rather than overflowing.</span></div>
+      <div class="feature"><strong>Stage</strong><span>Per-line step renderers — numbered <code>step()</code>, <code>subStep()</code>, and <code>subStepWithProgress()</code> (bar or spinner).</span></div>
+      <div class="feature"><strong>HelpText</strong><span>fang-style <code>--help</code> page: <code>USAGE</code>, an optional description, and titled two-column key/description sections. Wraps to <code>width</code> (default 80, <code>null</code> = never wrap): long descriptions continue at the description column, and switch to a stacked layout when the key column leaves fewer than 16 cells.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-cli">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-cli/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-cli/tree/master/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/fang">fang</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>StatusLine</td><td>success(msg, ?theme)</td><td>Render a success line</td></tr>
+<tr><td>StatusLine</td><td>error(msg, ?theme)</td><td>Render an error line</td></tr>
+<tr><td>StatusLine</td><td>warn(msg, ?theme)</td><td>Render a warning line</td></tr>
+<tr><td>StatusLine</td><td>info(msg, ?theme)</td><td>Render an info line</td></tr>
+<tr><td>StatusLine</td><td>prompt(msg, ?theme)</td><td>Render a prompt line</td></tr>
+<tr><td>Banner</td><td>title(title, subtitle = '', ?theme, ?border)</td><td>Bordered title banner (control bytes stripped from caller text)</td></tr>
+<tr><td>Section</td><td>header(label, ?theme, leftPad = 2, ?width = 80, rune = '─')</td><td>Label + fill rule; a non-null width is a hard cap (long labels end in …)</td></tr>
+<tr><td>Section</td><td>rule(?theme, ?width = 80, rune = '─') / subHeader(label, ?theme, indent = 4, ?width = 80, rune = '·')</td><td>Bare divider / indented nested heading</td></tr>
+<tr><td>Stage</td><td>step() / subStep() / subStepWithProgress()</td><td>Numbered step, sub-step, and sub-step with a bar or spinner</td></tr>
+<tr><td>HelpText</td><td>render(usage, sections, description = '', ?theme, ?width = 80)</td><td>Full --help page; wraps to width, null = never wrap, width &lt; 1 throws</td></tr>
+<tr><td>HelpText</td><td>renderRows(rows, ?theme, ?width = 80)</td><td>One two-column block; stacked layout below MIN_DESCRIPTION_WIDTH (16) cells</td></tr>
+<tr><td>Theme</td><td>ansi() / detect(?env, ?stream) / plain()</td><td>Colourful palette / palette downgraded to the stream's ColorProfile / no styling</td></tr>
+<tr><td>Theme</td><td>withColorProfile(ColorProfile $profile)</td><td>Downgrade any theme to a colour profile</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/cli-page.gif" alt="CLI page">
+                <h3>CLI page</h3>
+                <span class="demo-caption">StatusLine + Banner + Stage forming a cohesive CLI page.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/logo.gif" alt="Logo">
+                <h3>Logo</h3>
+                <span class="demo-caption">Logo::sugarcraft() preset + custom color + fromAscii.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/section.gif" alt="Section">
+                <h3>Section</h3>
+                <span class="demo-caption">Styled section with title and themeable body content.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/stage.gif" alt="Stage">
+                <h3>Stage</h3>
+                <span class="demo-caption">Multi-section presentation container.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-cli">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-cli/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

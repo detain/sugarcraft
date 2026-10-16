@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Terminal;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Kit\Frame;
+use SugarCraft\Cli\Frame;
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\Db\Flavor;
@@ -17,7 +17,7 @@ use SugarCraft\Sprinkles\Style;
  *
  * The generic full-screen chrome — the double-line box, the exact-height
  * normalisation, ANSI-width-aware padding, and the constant line count the
- * frame-diff renderer relies on — lives in {@see Frame} (candy-kit). This class
+ * frame-diff renderer relies on — lives in {@see Frame} (sugar-cli). This class
  * is the candy-sql-specific adapter: it measures the terminal, builds the
  * app's title bar (name / table count / dsn / server version) and status bar
  * (context-sensitive keybar), and hands them to Frame.

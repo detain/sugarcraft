@@ -424,29 +424,29 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `sugar-quickpick/src/HelpBar.php:67-71`
 **Agent:** Same coder agent as 1.6 (grouped — same lib)
 
-#### 1.8 🟡 candy-kit: Section::header multi-cell rune formula (Item 1.1)
+#### 1.8 🟡 sugar-cli: Section::header multi-cell rune formula (Item 1.1)
 
-**Plan:** `findings/plan_candy-kit.md` — Item 1.1
+**Plan:** `findings/plan_sugar-cli.md` — Item 1.1
 **Fix:** Change `$leftPad` semantics to "rune count" with `str_repeat($rune, max(0, $leftPad))` (remove intdiv)
-**Files:** `candy-kit/src/Section.php:33-34`
+**Files:** `sugar-cli/src/Section.php:33-34`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.9 🟡 candy-kit: Section::rule minimum width inconsistency (Item 1.2)
+#### 1.9 🟡 sugar-cli: Section::rule minimum width inconsistency (Item 1.2)
 
-**Plan:** `findings/plan_candy-kit.md` — Item 1.2
+**Plan:** `findings/plan_sugar-cli.md` — Item 1.2
 **Fix:** Make `?? 2` consistent with header() or document the difference
-**Files:** `candy-kit/src/Section.php:58`
+**Files:** `sugar-cli/src/Section.php:58`
 **Agent:** Same coder agent as 1.8 (grouped — same lib)
 
 ---
 
 ### Group 1-B (3 agents)
 
-#### 1.10 🟡 candy-kit: Theme::byName type guard (Item 2.1)
+#### 1.10 🟡 sugar-cli: Theme::byName type guard (Item 2.1)
 
-**Plan:** `findings/plan_candy-kit.md` — Item 2.1
+**Plan:** `findings/plan_sugar-cli.md` — Item 2.1
 **Fix:** Add `\InvalidArgumentException` for non-string input before `strtolower()`
-**Files:** `candy-kit/src/Theme.php:113-124`
+**Files:** `sugar-cli/src/Theme.php:113-124`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 1.11 🟡 sugar-treelist: View() catches RuntimeException not Throwable (Item 1.1)
@@ -889,18 +889,18 @@ Same branch/PR check as Phase 0/1.
 
 ### Group 3-B (3 agents)
 
-#### 3.7 🟢 candy-kit: Theme getters for Style properties (Item 3.4)
+#### 3.7 🟢 sugar-cli: Theme getters for Style properties (Item 3.4)
 
-**Plan:** `findings/plan_candy-kit.md` — Item 3.4
+**Plan:** `findings/plan_sugar-cli.md` — Item 3.4
 **Fix:** Add `success(): Style`, `error(): Style`, etc. getter methods to `Theme`
-**Files:** `candy-kit/src/Theme.php`
+**Files:** `sugar-cli/src/Theme.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.8 🟢 candy-kit: Banner::title Style caching (Item 3.1)
+#### 3.8 🟢 sugar-cli: Banner::title Style caching (Item 3.1)
 
-**Plan:** `findings/plan_candy-kit.md` — Item 3.1
+**Plan:** `findings/plan_sugar-cli.md` — Item 3.1
 **Fix:** Cache `Style::new()` instance in `Banner::title()` instead of recreating each call
-**Files:** `candy-kit/src/Banner.php:28-31`
+**Files:** `sugar-cli/src/Banner.php:28-31`
 **Agent:** Same coder agent as 3.7 (grouped — same lib)
 
 #### 3.9 🟢 sugar-table: column() accessor (Item 4.1)
@@ -1279,7 +1279,7 @@ Same verification as previous phases.
 | `plan_candy-buffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
 | `plan_candy-codeshot.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
 | `plan_sugar-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
-| `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests || `plan_candy-kit.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
+| `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests || `plan_sugar-cli.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
 | `plan_sugar-treelist.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
 | `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
 | `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |

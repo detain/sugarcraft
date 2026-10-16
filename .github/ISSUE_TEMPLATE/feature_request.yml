@@ -19,7 +19,7 @@ body:
         - sugar-forms (forms)
         - candy-scriptui (CLI)
         - candy-shine (Markdown)
-        - candy-kit (CLI helpers)
+        - sugar-cli (CLI helpers)
         - candy-codeshot (SVG screenshots)
         - candy-mdview (Markdown viewer)
         - candy-ansi-inspect (ANSI inspector)

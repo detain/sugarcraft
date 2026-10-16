@@ -491,9 +491,9 @@ class ReadlineInputField implements Field {
 }
 ```
 
-## 3. candy-kit Command Palette Integration
+## 3. sugar-cli Command Palette Integration
 
-The command palette in `candy-kit` could use sugar-readline prompts for fuzzy-filtered command selection.
+The command palette in `sugar-cli` could use sugar-readline prompts for fuzzy-filtered command selection.
 
 ## 4. ReactPHP Integration
 

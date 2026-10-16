@@ -37,11 +37,11 @@ import "charm.land/fang/v2"
 
 ## 2. Existing SugarCraft Mapping
 
-From the first-stage analysis, SugarCraft's direct equivalent is **candy-kit** (`candy-kit/`). The mapping relationship:
+From the first-stage analysis, SugarCraft's direct equivalent is **sugar-cli** (`sugar-cli/`). The mapping relationship:
 
 | SugarCraft Lib | Relationship | Fang Equivalent |
 |---|---|---|
-| **CandyKit** | Direct port | `fang` — CLI presentation helpers |
+| **SugarCli** | Direct port | `fang` — CLI presentation helpers |
 | **CandyShine** | Thematic cousin | Terminal styling via Glamour port |
 | **CandyLog** | Indirect complement | Styled terminal output |
 | **CandyPalette** | Dependency | Terminal color detection |
@@ -88,7 +88,7 @@ The first-stage analysis identified these weaknesses:
 - **Content:** Cobra supports non-runnable commands displayed under "Additional help topics:" heading. Fang ignores this and puts them in the commands section.
 - **Root Cause:** Fang's `helpFn` does not respect Cobra's help topic handling for non-runnable commands.
 - **Impact:** Semantic incorrectness; help output structure differs from standard Cobra behavior.
-- **Direct Risk to candy-kit:** If implementing custom command grouping, must handle "Additional help topics" semantics.
+- **Direct Risk to sugar-cli:** If implementing custom command grouping, must handle "Additional help topics" semantics.
 
 ### Issue #82: "Support for custom help sections or hooks to extend help output" (Open, Dec 2025)
 
@@ -100,7 +100,7 @@ The first-stage analysis identified these weaknesses:
   2. `WithCustomSections` annotation-based built-in
   3. Export `helpFn` and `makeStyles`
 - **PR #88 Status:** Open since Mar 2026, awaiting review
-- **Direct Risk to candy-kit:** HIGH — Extensibility is a common requirement; lacking hooks forces users to fork or copy.
+- **Direct Risk to sugar-cli:** HIGH — Extensibility is a common requirement; lacking hooks forces users to fork or copy.
 
 ### Issue #76: "Style --version command" (Open, Sep 2025)
 
@@ -109,7 +109,7 @@ The first-stage analysis identified these weaknesses:
 - **Content:** `fang.WithVersion()` prints unstyled output.
 - **Maintainer Response:** Cobra has `SetVersionTemplate` but not `SetVersionFunc`; styling requires terminal profile evaluation which can't happen pre-flight.
 - **PR #98 Status:** Open (May 2026), proposes styling version output with `Program.Name` and `FlagDefault`.
-- **Direct Risk to candy-kit:** MEDIUM — Version output styling is desirable for consistent UX.
+- **Direct Risk to sugar-cli:** MEDIUM — Version output styling is desirable for consistent UX.
 
 ### Issue #75: "Flag formatting loses table spacing making it harder to read" (Open, Sep 2025)
 
@@ -118,7 +118,7 @@ The first-stage analysis identified these weaknesses:
 - **Content:** Switching to fang loses Cobra's table-like flag alignment. Help text wraps into flag column making it confusing.
 - **Image Evidence:** Side-by-side comparison shows Cobra's aligned output vs fang's wrapped/misaligned output.
 - **Workaround:** Nadim147c created `fang.WithShorthandPadding()` in a fork.
-- **Direct Risk to candy-kit:** HIGH — Flag layout is a fundamental UX issue; users will notice immediately.
+- **Direct Risk to sugar-cli:** HIGH — Flag layout is a fundamental UX issue; users will notice immediately.
 
 ### Issue #74: "--version only shows VCS information when using go install" (Open, Sep 2025)
 
@@ -127,7 +127,7 @@ The first-stage analysis identified these weaknesses:
 - **Content:** `debug.ReadBuildInfo` only populates `Version.Sum` field via `go install`. `go build` produces build info but without Sum field, causing fang to show "unknown (built from source)".
 - **Maintainer Response:** Use ldflags to inject version, or use `WithVersion()` for custom version string.
 - **Documentation Gap:** README claims "automatic --version" but doesn't explain the `go install` requirement.
-- **Direct Risk to candy-kit:** MEDIUM — Build system integration complexity; PHP build systems differ.
+- **Direct Risk to sugar-cli:** MEDIUM — Build system integration complexity; PHP build systems differ.
 
 ### Issue #64/65: "Missing flag input types" / "Add flag types on help screen" (Open, Aug 2025)
 
@@ -136,7 +136,7 @@ The first-stage analysis identified these weaknesses:
 - **Content:** Cobra shows flag types (e.g., `[string]`, `[bool]`) in help; fang omits them.
 - **Maintainer Position:** caarlos0 dislikes showing types ("should either be obvious or in help itself"), but left open for team input.
 - **Workaround:** Nadim147c created `fang.WithFlagTypes` fork.
-- **Direct Risk to candy-kit:** MEDIUM — Flag types aid discoverability; maintainer resistance suggests optional approach.
+- **Direct Risk to sugar-cli:** MEDIUM — Flag types aid discoverability; maintainer resistance suggests optional approach.
 
 ### Issue #61: "Styling missing for 'unknown help topic' errors" (Open, Jul 2025)
 
@@ -146,7 +146,7 @@ The first-stage analysis identified these weaknesses:
 - **Root Cause:** Cobra's default help command prints directly to stdout and returns nil, so fang's ErrorHandler never sees it.
 - **Maintainer Investigation:** Tried overriding help command Run behavior but couldn't find working approach.
 - **PR #99 Status:** Open (May 2026), proposes returning error for unknown topics so error handler picks it up.
-- **Direct Risk to candy-kit:** LOW — Edge case, but fix is straightforward.
+- **Direct Risk to sugar-cli:** LOW — Edge case, but fix is straightforward.
 
 ### Issue #60: "Interrupts while trying to read from stdin can cause the application to hang" (Open, Jul 2025)
 
@@ -156,14 +156,14 @@ The first-stage analysis identified these weaknesses:
 - **Root Cause:** Race condition at theme.go:118 where `mustColorscheme` reads `os.Stdin` to detect terminal background while user code also reads stdin.
 - **Proposed Fix:** Pre-compute styles in `Execute()` before running cobra command.
 - **Workaround:** DanStough has a working fork fix.
-- **Direct Risk to candy-kit:** HIGH — Signal handling + stdin reading is common pattern; PHP equivalents may have similar issues.
+- **Direct Risk to sugar-cli:** HIGH — Signal handling + stdin reading is common pattern; PHP equivalents may have similar issues.
 
 ### Issue #41: "Add More Code Snippets" (Open, Jun 2025)
 
 - **Author:** slavakurilyak
 - **Signal:** 2 reactions (❤️)
 - **Content:** Request for more usage examples for AI agents/MCP servers ( Context7).
-- **Direct Risk to candy-kit:** LOW — Documentation request.
+- **Direct Risk to sugar-cli:** LOW — Documentation request.
 
 ---
 
@@ -214,7 +214,7 @@ go mod why github.com/charmbracelet/lipgloss
 
 1. Migrate everything to lipgloss v2 (breaking)
 2. Pin specific cellbuf version as workaround
-**Strategic Implication for candy-kit:** SugarCraft should pin exact lipgloss equivalent version and document compatibility matrix.
+**Strategic Implication for sugar-cli:** SugarCraft should pin exact lipgloss equivalent version and document compatibility matrix.
 
 ### Pain Point 2: Windows ANSI Support
 
@@ -223,7 +223,7 @@ go mod why github.com/charmbracelet/lipgloss
 **Impact:** Broken UX on Windows 10/11 without Windows Terminal.
 **Root Cause:** Go's standard library doesn't enable VT processing on Windows.
 **Evidence:** fang_windows.go has `enableVirtualTerminalProcessing()` no-op on other platforms.
-**Strategic Implication for candy-kit:** Must handle Windows VT processing explicitly; PHP's output handling differs but similar concerns exist.
+**Strategic Implication for sugar-cli:** Must handle Windows VT processing explicitly; PHP's output handling differs but similar concerns exist.
 
 ### Pain Point 3: Help Output Incompatibility with Cobra Defaults
 
@@ -231,7 +231,7 @@ go mod why github.com/charmbracelet/lipgloss
 **Pattern:** Fang's help rendering diverges from stock Cobra output.
 **Impact:** Users migrating from Cobra to fang experience unexpected layout changes.
 **Root Cause:** Custom rendering bypasses some Cobra internals.
-**Strategic Implication for candy-kit:** Should provide migration guide comparing default vs styled output.
+**Strategic Implication for sugar-cli:** Should provide migration guide comparing default vs styled output.
 
 ### Pain Point 4: Module Path Migration
 
@@ -239,7 +239,7 @@ go mod why github.com/charmbracelet/lipgloss
 **Pattern:** `go get charm.land/fang/v2@v2.0.1` fails if existing code imports `github.com/charmbracelet/fang`.
 **Impact:** Upgrade requires manual import rewriting.
 **Evidence:** Renovate bot PRs failing with module path mismatch.
-**Strategic Implication for candy-kit:** If doing major version bump, must provide codemod/script for import rewriting.
+**Strategic Implication for sugar-cli:** If doing major version bump, must provide codemod/script for import rewriting.
 
 ---
 
@@ -609,7 +609,7 @@ fang.Execute(ctx, root,
 ### Problem Category 1: Terminal Detection
 
 **Issue #60, #73:** Race conditions in terminal background detection.
-**Direct Risk to candy-kit:** HIGH — PHP's terminal detection may have similar race conditions with STDIN.
+**Direct Risk to sugar-cli:** HIGH — PHP's terminal detection may have similar race conditions with STDIN.
 
 **Mitigation:**
 
@@ -620,7 +620,7 @@ fang.Execute(ctx, root,
 ### Problem Category 2: lipgloss Version Conflicts
 
 **Issue #80:** Transitive dependency conflicts cascade.
-**Direct Risk to candy-kit:** MEDIUM — If using lipgloss-equivalent PHP libraries, version conflicts possible.
+**Direct Risk to sugar-cli:** MEDIUM — If using lipgloss-equivalent PHP libraries, version conflicts possible.
 
 **Mitigation:**
 
@@ -630,7 +630,7 @@ fang.Execute(ctx, root,
 ### Problem Category 3: Framework Integration
 
 **Issue #76, #61, #75:** Integration with Cobra's internals causes unexpected behavior.
-**Direct Risk to candy-kit:** HIGH — PHP CLI frameworks may have similar integration issues.
+**Direct Risk to sugar-cli:** HIGH — PHP CLI frameworks may have similar integration issues.
 
 **Mitigation:**
 
@@ -640,7 +640,7 @@ fang.Execute(ctx, root,
 ### Problem Category 4: Windows Support
 
 **Issues #72, #73:** Windows requires special handling for ANSI.
-**Direct Risk to candy-kit:** HIGH — PHP on Windows has same ANSI issues.
+**Direct Risk to sugar-cli:** HIGH — PHP on Windows has same ANSI issues.
 
 **Mitigation:**
 
@@ -650,7 +650,7 @@ fang.Execute(ctx, root,
 ### Problem Category 5: Module/Dependency Migration
 
 **Module path migration:** Breaking changes cascade to consumers.
-**Direct Risk to candy-kit:** MEDIUM — If SugarCraft does major version bump.
+**Direct Risk to sugar-cli:** MEDIUM — If SugarCraft does major version bump.
 
 **Mitigation:**
 
@@ -711,31 +711,31 @@ fang.Execute(ctx, root,
 
 **Observation:** Fang uses functional options (`Option func(*settings)`) which is good for configuration.
 **Problem:** But there's no extensibility hooks for the core rendering pipeline.
-**Implication for candy-kit:** Combine option pattern WITH hook points.
+**Implication for sugar-cli:** Combine option pattern WITH hook points.
 
 ### Lesson 2: Framework Integration Requires Monkey-Patching
 
 **Observation:** Fang must work around Cobra's internal behaviors (help command, version template).
 **Problem:** These workarounds are fragile and break on Cobra updates.
-**Implication for candy-kit:** If integrating with Symfony Console or other PHP frameworks, expect similar hacks.
+**Implication for sugar-cli:** If integrating with Symfony Console or other PHP frameworks, expect similar hacks.
 
 ### Lesson 3: lipgloss is a Hard Dependency
 
 **Observation:** Fang's value proposition is entirely built on lipgloss styling.
 **Problem:** lipgloss v1→v2 migration broke many consumers.
-**Implication for candy-kit:** If equivalent "lipgloss" has breaking changes, candy-kit breaks too.
+**Implication for sugar-cli:** If equivalent "lipgloss" has breaking changes, sugar-cli breaks too.
 
 ### Lesson 4: Cascading Dependency Conflicts
 
 **Observation:** When Fang uses lipgloss v2 and log uses lipgloss v1, consumers get both.
 **Problem:** Build tools can't resolve this automatically.
-**Implication for candy-kit:** Pin all transitive styling dependencies explicitly.
+**Implication for sugar-cli:** Pin all transitive styling dependencies explicitly.
 
 ### Lesson 5: Help Rendering is Complex
 
 **Observation:** Help rendering in `help.go` is ~481 lines of complex logic.
 **Problem:** Any change to this logic risks breaking existing behavior.
-**Implication for candy-kit:** Test help rendering extensively; golden file testing is essential.
+**Implication for sugar-cli:** Test help rendering extensively; golden file testing is essential.
 
 ---
 
@@ -773,7 +773,7 @@ fang.Execute(ctx, root,
 2. Codemod/tooling for import rewriting
 3. Transitional deprecation periods
 
-**Implementation:** For candy-kit major versions, provide sed commands or PHP refactoring tool.
+**Implementation:** For sugar-cli major versions, provide sed commands or PHP refactoring tool.
 
 ---
 
@@ -783,7 +783,7 @@ fang.Execute(ctx, root,
 
 **Observation:** Fang, bubbletea, and other Charm ecosystem libs market themselves as "batteries included."
 **Signal:** Users expect CLI libraries to handle common patterns (help, errors, version, completions).
-**SugarCraft Implication:** candy-kit should provide comprehensive CLI presentation, not just primitives.
+**SugarCraft Implication:** sugar-cli should provide comprehensive CLI presentation, not just primitives.
 
 ### Trend 2: Adaptive Terminal Themes
 
@@ -795,7 +795,7 @@ fang.Execute(ctx, root,
 
 **Observation:** lipgloss separates styling from rendering; Fang uses it for CLI output.
 **Signal:** Charm ecosystem is moving toward composable styling layers.
-**SugarCraft Implication:** candy-kit should use composable styling (CandySprinkles).
+**SugarCraft Implication:** sugar-cli should use composable styling (CandySprinkles).
 
 ### Trend 4: Extensibility via Hooks
 
@@ -816,7 +816,7 @@ fang.Execute(ctx, root,
 ### Opportunity 1: Framework-Agnostic Design
 
 **Observation:** Fang is Cobra-only; PHP has multiple CLI frameworks.
-**Opportunity:** Design candy-kit to work with any PHP CLI framework (Symfony Console, etc.).
+**Opportunity:** Design sugar-cli to work with any PHP CLI framework (Symfony Console, etc.).
 **Advantage:** Wider adoption; not locked to one framework.
 
 ### Opportunity 2: Comprehensive Help System
@@ -828,7 +828,7 @@ fang.Execute(ctx, root,
 ### Opportunity 3: Windows-First Design
 
 **Observation:** Fang's Windows support was added later and caused multiple bugs.
-**Opportunity:** Design candy-kit with Windows support from day one.
+**Opportunity:** Design sugar-cli with Windows support from day one.
 **Advantage:** PHP on Windows is common (XAMPP, etc.); few libraries handle it well.
 
 ### Opportunity 4: Comprehensive Documentation
@@ -928,19 +928,19 @@ fang.Execute(ctx, root,
 
 ## Summary
 
-SugarCraft's **candy-kit** port of charmbracelet/fang faces several strategic choices:
+SugarCraft's **sugar-cli** port of charmbracelet/fang faces several strategic choices:
 
-1. **Extensibility vs Completeness:** Fang's lack of help extensibility hooks has caused multiple issues; candy-kit should implement `WithHelpAppender` early.
+1. **Extensibility vs Completeness:** Fang's lack of help extensibility hooks has caused multiple issues; sugar-cli should implement `WithHelpAppender` early.
 
-2. **Framework Agnosticism:** Fang is Cobra-only, limiting its audience; candy-kit should support multiple PHP CLI frameworks.
+2. **Framework Agnosticism:** Fang is Cobra-only, limiting its audience; sugar-cli should support multiple PHP CLI frameworks.
 
-3. **Windows Support:** Fang's Windows bugs indicate it wasn't a design priority; candy-kit should design for Windows from day one.
+3. **Windows Support:** Fang's Windows bugs indicate it wasn't a design priority; sugar-cli should design for Windows from day one.
 
-4. **Dependency Management:** The lipgloss v1/v2 conflict shows cascading dependency problems; candy-kit must pin exact versions.
+4. **Dependency Management:** The lipgloss v1/v2 conflict shows cascading dependency problems; sugar-cli must pin exact versions.
 
-5. **Documentation:** Fang's documentation gaps (issue #74) led to support burden; comprehensive docs with limitations sections will differentiate candy-kit.
+5. **Documentation:** Fang's documentation gaps (issue #74) led to support burden; comprehensive docs with limitations sections will differentiate sugar-cli.
 
-The most important insight: **Community forks (Nadim147c, DanStough) indicate unsatisfied needs**. Rather than waiting for upstream, candy-kit should proactively implement fork features (flag types, custom help sections, Windows fixes) as opt-in options.
+The most important insight: **Community forks (Nadim147c, DanStough) indicate unsatisfied needs**. Rather than waiting for upstream, sugar-cli should proactively implement fork features (flag types, custom help sections, Windows fixes) as opt-in options.
 
 ---
 

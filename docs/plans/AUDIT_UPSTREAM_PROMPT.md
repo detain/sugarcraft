@@ -155,7 +155,7 @@ that are tiny but together justify a PR.
 - NimbleMarkets/ntcharts → sugar-charts
 - charmbracelet/huh → sugar-forms
 - charmbracelet/glamour → candy-shine
-- charmbracelet/fang → candy-kit
+- charmbracelet/fang → sugar-cli
 - charmbracelet/wish → candy-wish
 - charmbracelet/promwish → candy-metrics
 - charmbracelet/log → candy-log

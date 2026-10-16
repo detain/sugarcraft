@@ -58,10 +58,10 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-33 candy-kv + candy-ssh-launcher + candy-git: adopted sugar-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 candy-codetime + candy-mail + candy-git-server: adopted candy-async (PR #915)
-- step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
+- step-36 candy-flip + sugar-cli + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, candy-flip, sugar-cli, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
@@ -554,7 +554,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 16. **candy-minesweeper >> go-sweep** — O(1) win detection (vs O(n) grid scan), first-click safety, deterministic injectable RNG, iterative flood-fill. go-sweep is dormant; candy-minesweeper has clear headroom.
 
-17. **candy-kit** — Only framework-agnostic PHP CLI presenter library. No comparable pure-presentation PHP library exists. Occupies an empty, uncontested niche.
+17. **sugar-cli** — Only framework-agnostic PHP CLI presenter library. No comparable pure-presentation PHP library exists. Occupies an empty, uncontested niche.
 
 ---
 
@@ -570,7 +570,7 @@ The ecosystem has 5+ packages each doing their own layout, buffer rendering, fuz
 
 ### Position Superior Packages as Flagships
 
-candy-tetris, candy-minesweeper, candy-kit, honey-bounce, candy-palette, and sugar-widgets all have genuine competitive advantages over their upstreams. These should be highlighted prominently — they represent proof that SugarCraft is not merely a porting effort but an active improvement on the originals.
+candy-tetris, candy-minesweeper, sugar-cli, honey-bounce, candy-palette, and sugar-widgets all have genuine competitive advantages over their upstreams. These should be highlighted prominently — they represent proof that SugarCraft is not merely a porting effort but an active improvement on the originals.
 
 ### Close the Input Driver Gap First
 

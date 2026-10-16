@@ -54,7 +54,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Toast, Notification | `sugar-toast/` | ✅ Mapped |
 | _xterm_parser | `candy-vt/` | ✅ Mapped |
 | timer.Timer, worker.Worker | `candy-core/` | ✅ Mapped |
-| command.CommandPalette, Provider | `candy-kit/` | ✅ Mapped |
+| command.CommandPalette, Provider | `sugar-cli/` | ✅ Mapped |
 | binding.Binding | `candy-scriptui/` | ✅ Mapped |
 | Pilot (testing) | `candy-vcr/` | ✅ Mapped |
 | Logger + log() | `candy-log/` | ✅ Mapped |
@@ -758,7 +758,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 ### E. Command Palette Architecture
 
 - This is textual's best extensibility pattern
-- **Opportunity**: SugarCraft's `candy-kit` could provide similar provider-based system
+- **Opportunity**: SugarCraft's `sugar-cli` could provide similar provider-based system
 - **Benefit**: Community can add commands without core changes
 
 ### F. Snapshot Testing Infrastructure
@@ -931,7 +931,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 ### C. Command Palette Pattern
 
 - Textual's command palette is well-regarded
-- **Opportunity**: SugarCraft's `candy-kit` could replicate and extend
+- **Opportunity**: SugarCraft's `sugar-cli` could replicate and extend
 - **Benefit**: Provides familiar UX pattern for users migrating from Textual
 
 ### D. Async Pattern Documentation
@@ -1024,7 +1024,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 ### Short-term (Do Next)
 
 4. **Implement Command Palette Architecture**
-   - Provider-based pluggable system for `candy-kit`
+   - Provider-based pluggable system for `sugar-cli`
    - **Rationale**: Textual's most praised extensibility pattern
    - **Effort**: Medium | **Impact**: MEDIUM
 

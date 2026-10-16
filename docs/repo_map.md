@@ -13,7 +13,7 @@
 | [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-widgets |
 | [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-widgets, candy-core |
 | [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | candy-mosaic |
-| [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, candy-kit, sugar-forms |
+| [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, sugar-cli, sugar-forms |
 | [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-widgets, sugar-forms |
 | [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-widgets, candy-scriptui |
 | [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | candy-core |
@@ -22,7 +22,7 @@
 | [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, candy-palette |
 | [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | honey-bounce, sugar-charts |
 | [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, sugar-forms, candy-shine |
-| [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | candy-kit |
+| [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | sugar-cli |
 | [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
 | [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-codeshot |
 | [charmbracelet/glamour](#charmbraceletglamour) | Go | ~3400 | candy-shine |
@@ -157,7 +157,7 @@
 
 **SugarCraft Mapping:**
 - `candy-scriptui` → Command application framework
-- `candy-kit` → CLI options
+- `sugar-cli` → CLI options
 - `sugar-forms` → Prompter, Chooser
 
 **Strengths:** Mature (11yr), Levenshtein correction, completion generation, event system.
@@ -343,7 +343,7 @@
 **Features:** Single Execute() entry, functional options, help rendering with command grouping, theme system with light/dark adaptation, platform-specific Windows VT processing.
 
 **SugarCraft Mapping:**
-- `candy-kit` → Primary port (Output, Banner, Section, Stage, HelpText)
+- `sugar-cli` → Primary port (Output, Banner, Section, Stage, HelpText)
 - `candy-shine` → Styling
 - `candy-log` → Colored output
 

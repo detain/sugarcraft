@@ -104,7 +104,7 @@
 
 | SugarCraft Lib | Relationship | Notes |
 |---|---|---|
-| **CandyKit** (`candy-kit/`) | **Direct port** | `candy-kit` is SugarCraft's fang equivalent — `StatusLine`, `Banner`, `Section`, `Stage`, `HelpText` helpers |
+| **SugarCli** (`sugar-cli/`) | **Direct port** | `sugar-cli` is SugarCraft's fang equivalent — `StatusLine`, `Banner`, `Section`, `Stage`, `HelpText` helpers |
 | **CandyShine** (`candy-shine/`) | **Thematic cousin** | Both deal with terminal styling; fang for CLI help/errors, Glamour port for markdown rendering |
 | **CandyLog** (`candy-log/`) | **Indirect complement** | Both produce styled terminal output; fang styles CLI framework output, CandyLog is a logging library |
 | **CandyPalette** (`candy-palette/`) | **Dependency** | fang uses `colorprofile` for terminal color detection; both handle terminal capability detection |
@@ -116,4 +116,4 @@
 
 The theming system uses a `ColorScheme` struct that holds `color.Color` values for different elements (titles, flags, arguments, etc.) which are then converted to concrete `lipgloss.Style` instances via `makeStyles()`. The default scheme uses the Charm palette (`charmtone.Charple`, `charmtone.Malibu`, etc.) while an ANSI scheme provides basic colors. The `ColorSchemeFunc` signature accepts `lipgloss.LightDarkFunc` which enables the library to adapt colors based on terminal background without requiring callers to manage light/dark state manually.
 
-The `candy-kit` library in SugarCraft is the direct port of fang, providing PHP developers with similar CLI presentation helpers when building Cobra-based (or similar) PHP CLI applications. Unlike fang which is strictly tied to Cobra, SugarCraft's port may need to be framework-agnostic or work with a PHP CLI framework equivalent. The fang philosophy — "CLI starter kit" with "batteries included" — aligns with SugarCraft's goal of providing ready-to-use TUI building blocks.
+The `sugar-cli` library in SugarCraft is the direct port of fang, providing PHP developers with similar CLI presentation helpers when building Cobra-based (or similar) PHP CLI applications. Unlike fang which is strictly tied to Cobra, SugarCraft's port may need to be framework-agnostic or work with a PHP CLI framework equivalent. The fang philosophy — "CLI starter kit" with "batteries included" — aligns with SugarCraft's goal of providing ready-to-use TUI building blocks.

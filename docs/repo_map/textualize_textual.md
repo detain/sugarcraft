@@ -288,7 +288,7 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `_xterm_parser` | `candy-vt/` | Terminal escape sequence parsing |
 | `timer.Timer` | `candy-core/` | Timer functionality |
 | `worker.Worker`, `WorkerManager` | `candy-core/` | Background workers |
-| `command.CommandPalette`, `Provider` | `candy-kit/` | Command palette system |
+| `command.CommandPalette`, `Provider` | `sugar-cli/` | Command palette system |
 | `binding.Binding` | `candy-scriptui/` | Key binding configuration |
 | `Pilot` (testing) | `candy-vcr/` | Testing infrastructure |
 | `Logger` + `log()` | `candy-log/` | Logging system |

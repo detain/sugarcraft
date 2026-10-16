@@ -38,7 +38,7 @@ in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 | [x-vt](./x-vt.md) | `x/vt` | new lib `candy-vt` | 1-2 w | drafted |
 | [x-vcr](./x-vcr.md) | `x/vcr` | new lib `candy-vcr` | 3-5 d | drafted |
 | [x-xpty](./x-xpty.md) | `x/xpty` | new lib `candy-pty` (Linux/macOS) | 4-6 d | drafted |
-| [ratatui-widget-mining](./ratatui-widget-mining.md) | `ratatui/ratatui` (mined, not ported) | individual feature additions across candy-sprinkles / sugar-widgets / candy-kit / candy-log | ~9 d total | drafted |
+| [ratatui-widget-mining](./ratatui-widget-mining.md) | `ratatui/ratatui` (mined, not ported) | individual feature additions across candy-sprinkles / sugar-widgets / sugar-cli / candy-log | ~9 d total | drafted |
 
 ## Skipped (no plan)
 

@@ -170,7 +170,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 |---|---|---|
 | (the runtime, `candy-core`) | "SugarCraft" is also the umbrella; the sub-package needs a less-collision-prone name | `CakeStage`, `BatterCore`, `WhiskLoop`, `MochiCore` |
 | ~~**SugarBits**~~ → **SugarWidgets** | resolved by the 2026-10 rename — "Bits" was generic; the lib is a set of named widgets <!-- @rename-keep --> | `BiscuitWidgets`, `SprinkleParts`, `ChipParts` |
-| **CandyKit** | "Kit" is filler; the lib is CLI presentation primitives | `CupcakeKit`, `BentoCli`, `BiscuitCli` |
+| **SugarCli** | The slug says what the lib is: CLI presentation primitives (StatusLine, Banner, Section, Stage, HelpText, Logo, Theme) | `BentoCli`, `TerminalBranding` |
 | **CandyShine** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
 | **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
 | **CandySshLauncher** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |

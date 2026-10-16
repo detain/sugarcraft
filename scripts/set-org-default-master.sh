@@ -14,7 +14,7 @@ ORG="sugarcraft"
 LIBS=(
     candy-core candy-sprinkles honey-bounce sugar-mouse
     sugar-widgets sugar-charts sugar-forms candy-scriptui
-    candy-shine candy-kit candy-codeshot candy-mdview candy-ansi-inspect
+    candy-shine sugar-cli candy-codeshot candy-mdview candy-ansi-inspect
     candy-wish candy-ssh-launcher candy-metrics
     candy-starter candy-tetris super-candy sugar-crush
     candy-git candy-sql candy-codetime
