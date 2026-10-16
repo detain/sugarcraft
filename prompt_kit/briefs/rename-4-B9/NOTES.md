@@ -56,5 +56,5 @@ CONCURRENCY: lanes b10/b11/b12 run in parallel on other packages; stop after R7+
 - [x] tag-prep cd994cdf9 + R7 6d3b7eb40 on rename/b9 — present, merged to master d54a03abb at weld; residue --all-done + --old=sugar-wishlist 0 in merged tree; suite 257T/1160A EXACT (baseline row 90).
 - [x] R2 verified at weld: gh repo view sugarcraft/candy-ssh-launcher OK + sugar-wishlist 301s.
 - [x] R8 remote-done 503773fd4; R9 create fired once = HTTP 406 (sugarcraft/sugar-wishlist already exists — old reg holds URL), recorded, no retry per batch-B law.
-- [x] abandon checklist line appended; published PENDING.
+- [x] abandon checklist line appended; published d0b8419aa.
 - Wishlist generic-word audit + glued/env followups: see lane commit 6d3b7eb40 body; ~/.config/wishlist.* kept upstream-compat per plan exception.
