@@ -70,18 +70,18 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 3: candy-palette, candy-mosaic, candy-log, candy-metrics
+### Group 3: candy-palette, candy-mosaic, candy-log, candy-metrics <!-- @rename-keep historical provenance -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| candy-palette | 85 ✓ | APPROVE | 0 | 0 | 1 | 0 |
+| candy-palette | 85 ✓ | APPROVE | 0 | 0 | 1 | 0 | <!-- @rename-keep historical provenance -->
 | candy-mosaic | FAIL | BLOCKED | 1 | 1 | 2 | 0 |
 | candy-log | 96 ✓ | APPROVE | 0 | 0 | 0 | 0 |
 | candy-metrics | 61 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 
 **candy-mosaic** — **BLOCKED**: `SugarCraft\Core\I18n\Lang` base class missing in path-repo symlink. 2 tests fail with `Error: Class not found`. This cascades from the same symlink issue affecting candy-mail. Run `composer reinstall` in affected packages.
 
-**candy-palette** — Color detection/ICC profiles. Clean, 85 tests. Minor: `ColorProfile::default()` constructor takes no args but is private — static factory is only entry point.
+**candy-palette** — Color detection/ICC profiles. Clean, 85 tests. Minor: `ColorProfile::default()` constructor takes no args but is private — static factory is only entry point. <!-- @rename-keep historical provenance -->
 
 **candy-log** — Logging. 96 tests, clean.
 
@@ -564,7 +564,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 |-------|----------|-------|--------|
 | 1 | candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
 | 2 | candy-sql, candy-starter, candy-kit, candy-codeshot | 283 | ✅ All pass |
-| 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
+| 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked | <!-- @rename-keep historical provenance -->
 | 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues | <!-- @rename-keep historical provenance -->
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped  <!-- @rename-keep historical provenance --> |

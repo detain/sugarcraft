@@ -64,7 +64,7 @@ Commit `1239d87a8` `candy-top: NTFS-safe fixture paths (colon dirs)`.
 
 CI shape reproduced exactly: `php candy-core/vendor/bin/phpstan analyse
 --level=5 --no-progress -c candy-core/phpstan.neon` from repo root (candy-core
-is the only phpstan.neon lib affected in 40a4919fc..92ee5eaf5 — candy-palette/
+is the only phpstan.neon lib affected in 40a4919fc..92ee5eaf5 — candy-palette/ <!-- @rename-keep historical provenance -->
 vcr/vt untouched in the range, candy-gifview has no phpstan.neon so CI never
 analyses it). Result: 10 errors, 4 files:
   InputReader.php:471 smallerOrEqual.alwaysTrue

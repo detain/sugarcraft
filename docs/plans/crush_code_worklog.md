@@ -11739,7 +11739,7 @@ reviewed APPROVE-class; all twelve lanes shipped.
 |---|---|---|---|
 | W1 | r1 `5e979e696`→`141d5e227` (dash E733 2-of-3), r2 `c093c58bd`→`06cc8a7e9` (wish E734), r3 `5ea8bdc94`→`3acd2e76d` (vcr E732), r4 `8725ea5ec`→`5c815306c` (crush E737 test half, IN-LANE re-pin 12,009/172,461) | E732/E733(2/3)/E734 CLOSED-in-place, E737→PARTIAL, E738 MINTED | `9569e3e21` + EXACT-floor serial law re-proved; r5 completion `e4f6e7e23`→`76218c66e` + stamps `9f731a3d5` (E733 3/3, dash 5964/9823/1S) |
 | W2 | r6 `176a15725`→`40646bf86` (wish E730 single-settle), r7 `79abe8461`→`c1f618a04` (dash E731 RULING + ChartGridGeometry dedup), r8→`4545142c7` (E729 declined — vt unification DESIGN doc minted), r9 `c58168027`→`59ec5a6e3` (30 candy libs), r10 `14c73a0fb`→`d4e4df464` (20 sugar/honey libs), r11 `16249b740`→`30760dae6` (`/.mcp.json` gitignored) | E729 CLOSED-declined, E730 CLOSED, E731 PARTIAL-shipped-stays-open, E738 → 55/58 (residuals minted E739/E740), E737 housekeeping half | `16a5c56f7` |
-| upstream | PRs #1429–#1435 (candy-core canonical ANSI16 + sanitize contract pin, candy-palette ANSI16 unification, candy-vt DECALN-on-wire + DECSCUSR cursor-shape, candy-vcr DECALN pin) + operator config commit | ZERO sugar-crush files (verified negative control pre-weld) | W3 base `e2818fd15` |
+| upstream | PRs #1429–#1435 (candy-core canonical ANSI16 + sanitize contract pin, candy-palette ANSI16 unification, candy-vt DECALN-on-wire + DECSCUSR cursor-shape, candy-vcr DECALN pin) + operator config commit | ZERO sugar-crush files (verified negative control pre-weld) | W3 base `e2818fd15` | <!-- @rename-keep historical provenance -->
 | W3 | s2 `056366f62`→`f45b52a21` (metrics E740 door), s3 `65bca70db`→`a04c947c5` (pty ReactPump socketpair root cause), s1 `e86525c4a`→`7d5b03f9d` (freeze E739 live-feature repair), s4 `12470eb32`→`757327bdd` (crush E737 MCP-disable ruling) + companion `99727c5f6` (pty learnings correction) | E737 CLOSED (behavior ruling shipped), E738 **58/58**, E739/E740 CLOSED | re-pin `c9a0cafff` + this closeout |
 
 ### The floor
@@ -13902,7 +13902,7 @@ The merge check is what has to catch it, and now does.**
 
 ### AND A CORRECTION TO THE SUPERVISOR'S BRIEF
 
-Lane a was assigned `candy-palette/src/Probe/Detect.php` for E318. **`Detect` lives in `candy-mosaic`.**
+Lane a was assigned `candy-palette/src/Probe/Detect.php` for E318. **`Detect` lives in `candy-mosaic`.** <!-- @rename-keep historical provenance -->
 The lane found the right file, worked it, and flagged it as out-of-lane rather than silently following the
 wrong path.
 
@@ -13917,7 +13917,7 @@ descriptor 0 rather than closing it — costs **three named assertions**, not th
 message still quotes (E323), a stale figure that stalled this work for two rounds. E314: viability is now
 MEASURED rather than argued. E315 is the reason it matters beyond tidiness — the prepend residual is a
 data path from the runner's stdin to a model provider. The lane also closes **E318**, `Detect::stdinFd()`'s
-unguarded `?? STDIN` in `candy-palette`, which is the second of the two defects the round-49 candy-mosaic
+unguarded `?? STDIN` in `candy-palette`, which is the second of the two defects the round-49 candy-mosaic <!-- @rename-keep historical provenance -->
 investigation found and the supervisor's round-50 fix left open.
 
 ⚠️ The brief carries round 49's failed attempt explicitly: it closed fd 0 and reopened `/dev/null` on a
@@ -14123,7 +14123,7 @@ with `the roster says 2, the scan counts 1`.
 
 ### 🔴 A LIVE FATAL IN A SIBLING LIBRARY, FOUND ONLY BECAUSE A LANE BROKE SOMETHING ADJACENT
 
-`candy-mosaic/src/Mosaic.php:166` called `PaletteCapability::Iterm2Image`. `candy-palette`'s enum spells
+`candy-mosaic/src/Mosaic.php:166` called `PaletteCapability::Iterm2Image`. `candy-palette`'s enum spells <!-- @rename-keep historical provenance -->
 that case **`ITerm2`**. PHP resolves an enum case at USE time, so the file parsed, the class loaded, and
 `Mosaic::autoFromPalette()` threw `Error: Undefined constant` for **every terminal that did not match the
 Kitty branch first** — the whole no-TTY fallback was an unconditional fatal.

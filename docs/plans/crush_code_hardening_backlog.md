@@ -10072,9 +10072,9 @@ a fresh `php://stdin` handle made closing the descriptor free. WHAT IS TRUE: **t
 sentence looked in `sugar-crush/{src,bin,tests}`, and the reader that matters is in a SIBLING LIBRARY.**
 `SugarCraft\Mosaic\Detect` resolves its probe stream as `self::$probeStdin ?? STDIN` and hands it to
 `drainStdin()` with no `is_resource()` guard; `Mosaic::auto()` catches the resulting throw and falls into
-`autoFromPalette()`, which references a `Capability` case candy-palette does not have. **MEASURED, full
+`autoFromPalette()`, which references a `Capability` case candy-palette does not have. **MEASURED, full <!-- @rename-keep historical provenance -->
 suite, PHP 8.3.6, this lane: `9500 tests, 107 errors, rc 2`**, every error
-`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`. A closed `\STDIN` does not
+`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`. A closed `\STDIN` does not <!-- @rename-keep historical provenance -->
 cost one control assertion; it moves a whole library onto a code path that has never run. (That fallback
 is broken independently of this file — recorded separately as E302.)
 
@@ -10455,19 +10455,19 @@ at all — the combination means "drive this fd" and "wrap that stream", and the
 process's own descriptor 0 is the right answer to both.
 
 ---
-### E302 [CLOSED] — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+### E302 [CLOSED] — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have <!-- @rename-keep historical provenance -->
 
 🟢 **FIXED at `1a2caebb`**, with `candy-mosaic/tests/PaletteCapabilityReferenceTest.php` as a SOURCE-SCAN
 guard plus a known-positive control. candy-mosaic: 451 tests, 7707 assertions, rc 0.
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: live crash on a reachable path.
-**Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.**
+**Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.** <!-- @rename-keep historical provenance -->
 
 **What.** `candy-mosaic/src/Mosaic.php`'s `autoFromPalette()` — the fallback taken when `Detect::probe()`
 throws, i.e. whenever there is no usable TTY to probe — evaluates
 `$report->has(PaletteCapability::Iterm2Image)`. **There is no such case.**
-`candy-palette/src/Probe/Capability.php` spells it `ITerm2 = 'iterm2'`. The line is a fatal
-`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`, not a false.
+`candy-palette/src/Probe/Capability.php` spells it `ITerm2 = 'iterm2'`. The line is a fatal <!-- @rename-keep historical provenance -->
+`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`, not a false. <!-- @rename-keep historical provenance -->
 
 **Why nobody has hit it.** `Mosaic::auto()` wraps the probe in a try/catch and only reaches
 `autoFromPalette()` when the probe throws — and the probe's own stdin read normally succeeds (returning
@@ -10729,7 +10729,7 @@ round. **MEASURED, full suite, PHP 8.3.6, at `a43d4f94` in lane b.** Not shipped
 **WHAT E296 SAID.** "Option (a) is not merely a trade, it is unavailable while any reachable library
 reads that constant without a guard." The evidence was round 49's attempt 3: a full suite with fd 0
 replaced produced `9500 tests, 107 errors, rc 2`, every error
-`Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`.
+`Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`. <!-- @rename-keep historical provenance -->
 
 **WHAT IS TRUE NOW.** That was never 107 costs. It was ONE defect — `candy-mosaic`'s `autoFromPalette()`
 naming an enum case that does not exist — multiplied by every test that reached it. E302 fixed it at
@@ -11006,7 +11006,7 @@ that looks like good news.
 
 ### E318 [CLOSED] — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
 
-🟢 **FIXED in round 51 by lane a, in `candy-mosaic` (NOT candy-palette — see the round report).**
+🟢 **FIXED in round 51 by lane a, in `candy-mosaic` (NOT candy-palette — see the round report).** <!-- @rename-keep historical provenance -->
 `stdinFd()` answers null for a dead handle; `drainStdin()`/`readStdinTimed()` treat null as their existing
 no-answer case; the two inline `?? STDIN` spellings route through the guard; a closed INJECTED probe stream
 no longer short-circuits `isInteractiveTty()` to true. candy-mosaic suite: 451/7707/6-skipped before,
@@ -11016,7 +11016,7 @@ no longer short-circuits `isInteractiveTty()` to true. candy-mosaic suite: 451/7
 **Measured by symbol at `906fa666`. Out of lane — `candy-mosaic/` belongs to no lane.**
 
 **What.** E302 recorded two defects and `1a2caebb` fixed the first (`autoFromPalette()` named a
-`Capability` case candy-palette does not have). The second is untouched:
+`Capability` case candy-palette does not have). The second is untouched: <!-- @rename-keep historical provenance -->
 `SugarCraft\Mosaic\Detect::stdinFd()` is `return self::$probeStdin ?? STDIN;`, and `drainStdin()` passes
 that straight into `stream_select()` with no `is_resource()`; `probeXtwinoSize()` and
 `probeXtwinoCellCount()` each spell `self::$probeStdin ?? STDIN` inline and hand it to
@@ -11475,25 +11475,25 @@ bound violation without first checking whether the merge itself removed assertio
 
 ---
 
-### E334 [NO-FIX] — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
+### E334 [NO-FIX] — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file <!-- @rename-keep historical provenance -->
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: brief accuracy, on the item's whole subject.
 **Measured by `find`.**
 
-The round-51 lane a brief's ITEM 2 read "Close this one, in `candy-palette`, with its own guard", and its
-file list carried `candy-palette/src/Probe/Detect.php` and `candy-palette/tests/`. Neither exists. There is
+The round-51 lane a brief's ITEM 2 read "Close this one, in `candy-palette`, with its own guard", and its <!-- @rename-keep historical provenance -->
+file list carried `candy-palette/src/Probe/Detect.php` and `candy-palette/tests/`. Neither exists. There is <!-- @rename-keep historical provenance -->
 exactly ONE `Detect.php` outside `vendor/` in this monorepo and it is `candy-mosaic/src/Detect.php`, which
-is what E318 — the entry the brief cites — names correctly. `candy-palette/src` and `candy-palette/tests`
+is what E318 — the entry the brief cites — names correctly. `candy-palette/src` and `candy-palette/tests` <!-- @rename-keep historical provenance -->
 contain zero references to `STDIN`, `php://stdin`, `php://fd/0` or `/dev/stdin`, measured.
 
 **Why the confusion is worth an entry rather than a shrug.** E302 spans both libraries — the FAULT was a
 candy-mosaic caller naming `Capability::Iterm2Image`, and the enum it named wrongly is
-`candy-palette/src/Probe/Capability.php`. A summary that keeps "Probe" and "Capability" and swaps the
+`candy-palette/src/Probe/Capability.php`. A summary that keeps "Probe" and "Capability" and swaps the <!-- @rename-keep historical provenance -->
 library is the exact error a two-library finding invites. E318's own text is unambiguous ("Out of lane —
 `candy-mosaic/` belongs to no lane"), so the brief is the only place that was wrong.
 
 **What was done.** The fix landed in `candy-mosaic`, with a new `candy-mosaic/tests/DetectClosedStdinTest.php`.
-candy-palette's suite was run anyway, before and after: `266 tests, 529 assertions, 0 skipped, rc 0` both
+candy-palette's suite was run anyway, before and after: `266 tests, 529 assertions, 0 skipped, rc 0` both <!-- @rename-keep historical provenance -->
 times, unchanged.
 
 **Step.** None. Recorded so the next brief writer does not re-derive the same swap from E302.
@@ -11566,7 +11566,7 @@ on a closed resource, so an `is_resource()` guard has to come first — which `i
 Kept as a methodology instance, because the refutation came from the entry's own stated generator.
 
 **WHAT THIS ENTRY SAID**, drafted and committed: "`candy-mosaic/composer.lock` and
-`candy-palette/composer.lock` are present in the tree at `a85fcfd6`", filed against the rule that
+`candy-palette/composer.lock` are present in the tree at `a85fcfd6`", filed against the rule that <!-- @rename-keep historical provenance -->
 `AGENTS.md` and `CONTRIBUTING.md` both state — never commit a per-lib `composer.lock`, because
 `composer install` then resolves from it and silently ignores CI's path-repo injection.
 
@@ -11576,7 +11576,7 @@ every lib with a `vendor/` has. No rule is broken and there is nothing to remove
 `php tools/check-path-repos.php --no-lib-path-repos` exits 0 ("scanned 58 libs … no sibling path-repos in
 per-lib manifests").
 
-**WHY IT IS KEPT RATHER THAN DELETED.** The evidence was `ls candy-palette/` — a listing of the WORKING
+**WHY IT IS KEPT RATHER THAN DELETED.** The evidence was `ls candy-palette/` — a listing of the WORKING <!-- @rename-keep historical provenance -->
 TREE — used to support a claim about what is COMMITTED. Those are different questions and the cheap command
 answers the wrong one, silently and in the direction that looks like a finding. It is the same shape as
 round 44's `ls -l | grep -c '^l'` printing a correct-looking 18 over real directories, and as round 44's
@@ -12654,7 +12654,7 @@ cause. Unlike sites 2–5 this needs no unusual process state — only a shell r
 
 - `candy-git-server/src/StatsServer.php` casts a stream to `int` and is **not** an instance: the value is an
   array key for handle identity, which is precisely what a resource id is for.
-- `candy-palette/src/Probe/TerminalProbe.php` and `candy-shine/src/Theme.php` call `posix_isatty(STDOUT)`
+- `candy-palette/src/Probe/TerminalProbe.php` and `candy-shine/src/Theme.php` call `posix_isatty(STDOUT)` <!-- @rename-keep historical provenance -->
   passing the **resource itself**, with no cast. `posix_isatty()` accepts `resource|int`, so this is
   correct — and it is the shape the other sites should be moving toward, not away from.
 - `candy-vcr/src/Cli/RecordCommand.php` calls `TermiosFactory::open(0)` with a literal `0`. That is a real
@@ -20662,7 +20662,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 ### E715 [CLOSED] — candy-input shells out `'tput ' . $capability` unescaped — literal-only callers today, the sweep's sole soft spot of the unescaped-CLI class
 
-**What:** phase-4 sibling sweep (§5 rank-10, §3 CLI-interpolation judgement): `candy-input/src/Driver/SignalResizeDriver.php:107` runs `@shell_exec('tput ' . $capability . ' 2>/dev/null')` with NO escaping; today every caller passes only the literals `'cols'`/`'lines'` (:91-92) so it is theoretical — but it is the ONE surviving interpolation of the exact class the hardening campaign spent rounds closing (escapeshellarg law, AGENTS.md gotchas), and a future caller forwarding a terminal-derived capability turns it into command injection. The sweep verified every OTHER string-form site: candy-git-server git pipelines `escapeshellarg($repo->path())` ✓, candy-core Editor/Open + candy-palette probes ✓, candy-pty/mosaic/dash/reel/core all argv-array (no shell) — **zero confirmed unescaped user-input CLI sites**; this is the soft spot of the class. **Acceptance:** `$capability` validated against a static allowlist (bare termcap names, `^[a-z][a-z0-9]*$` shape) BEFORE the shell-out, non-allowlist values throw, pins BOTH polarities (literal passes; injected-shaped refused), full candy-input suite green. **Conf:** MED.
+**What:** phase-4 sibling sweep (§5 rank-10, §3 CLI-interpolation judgement): `candy-input/src/Driver/SignalResizeDriver.php:107` runs `@shell_exec('tput ' . $capability . ' 2>/dev/null')` with NO escaping; today every caller passes only the literals `'cols'`/`'lines'` (:91-92) so it is theoretical — but it is the ONE surviving interpolation of the exact class the hardening campaign spent rounds closing (escapeshellarg law, AGENTS.md gotchas), and a future caller forwarding a terminal-derived capability turns it into command injection. The sweep verified every OTHER string-form site: candy-git-server git pipelines `escapeshellarg($repo->path())` ✓, candy-core Editor/Open + candy-palette probes ✓, candy-pty/mosaic/dash/reel/core all argv-array (no shell) — **zero confirmed unescaped user-input CLI sites**; this is the soft spot of the class. **Acceptance:** `$capability` validated against a static allowlist (bare termcap names, `^[a-z][a-z0-9]*$` shape) BEFORE the shell-out, non-allowlist values throw, pins BOTH polarities (literal passes; injected-shaped refused), full candy-input suite green. **Conf:** MED. <!-- @rename-keep historical provenance -->
 
 
 

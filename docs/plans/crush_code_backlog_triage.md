@@ -752,7 +752,7 @@
 | **E320** | HIGH | "Step. No code change." - vendor/ is gitignored and deliberately not rostered |  |
 | **E326** | HIGH | "Severity: process" - a retrospective about brief assembly, no Step |  |
 | **E333** | MED | "Do NOT chase a mechanism from one observation" + a conditional next-time capture recipe | Unexplained flake with no reproducer; nothing schedulable until it reds again |
-| **E334** | HIGH | "Step. None. Recorded so the next brief writer does not re-derive the same swap" | candy-mosaic/tests/DetectClosedStdinTest.php confirmed present; no candy-palette/src/Probe/Detect.php exists. |
+| **E334** | HIGH | "Step. None. Recorded so the next brief writer does not re-derive the same swap" | candy-mosaic/tests/DetectClosedStdinTest.php confirmed present; no candy-palette/src/Probe/Detect.php exists. | <!-- @rename-keep historical provenance -->
 | **E335** | HIGH | "Severity: evidence, NOT mechanism ... it did not reproduce"; Step is conditional ("If anyone ever needs to justify ...") |  |
 | **E337** | HIGH | entry says "**Step.** None." and is a self-refutation ("WHAT IS TRUE... git ls-files returns nothing") |  |
 | **E344** | HIGH | entry is a correction of an already-fixed entry; its stated deliverable tests/Hooks/AuditHookConcurrentAppendTest.php exists |  |
