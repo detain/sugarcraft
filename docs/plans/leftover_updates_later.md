@@ -60,7 +60,7 @@ Today:
 | `Buffer` | `candy-vt/src/Buffer/Buffer.php` | `sugar-dash/src/Foundation/Buffer.php` (288 LOC) + `sugar-dash/src/Grid/Buffer.php` (legacy) |
 | `Cell` | `candy-vt/src/Cell/Cell.php` | `sugar-dash/src/Foundation/Cell.php` |
 | `Theme` | (none yet — gap) | `sugar-dash/src/Foundation/Theme.php` (349 LOC) |
-| `Border` / `BorderTitle` | `candy-sprinkles/src/Border/*` | sugar-boxer plans to add its own; sugar-dash has `Components/Modal` border re-rolls |
+| `Border` / `BorderTitle` | `candy-sprinkles/src/Border/*` | sugar-panels plans to add its own; sugar-dash has `Components/Modal` border re-rolls |
 | `Viewport` / `Scrollbar` | `sugar-bits/src/Viewport/`, `sugar-bits/src/Scrollbar/` | `sugar-stickers` research plans to add these from scratch |
 | `StyleParser` (`[text](fg:red,bg:blue)`) | `sugar-dash/src/Foundation/StyleParser.php` (251 LOC) | `candy-sprinkles` will likely want it too; pick one home before second consumer ships |
 
@@ -99,13 +99,13 @@ Today:
 
 **Acceptance:** `grep -rn "class Style\|class Color\|class Theme\|class Rect\|class Buffer\|class Cell\|class StyleParser" /home/sites/sugarcraft/*/src` shows exactly one canonical file per primitive; sugar-dash test suite green; `composer validate` clean per lib.
 
-### SSOT-02 — sugar-boxer composes, doesn't reinvent
+### SSOT-02 — sugar-panels composes, doesn't reinvent
 
-sugar-boxer research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hidden/Block), text alignment, box titles, colors, margin as missing features. **All five live in candy-sprinkles.** sugar-boxer should compose `\SugarCraft\Sprinkles\Style` + `\SugarCraft\Sprinkles\Border\Border` instead of rolling its own.
+sugar-panels research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hidden/Block), text alignment, box titles, colors, margin as missing features. **All five live in candy-sprinkles.** sugar-panels should compose `\SugarCraft\Sprinkles\Style` + `\SugarCraft\Sprinkles\Border\Border` instead of rolling its own.
 
 **Action:**
 
-- SSOT-02 — Refactor sugar-boxer to accept `Style` and `Border` from candy-sprinkles. Delete any internal `Border*`. Adds candy-sprinkles to require (transitive via candy-core OK; verify path-repo per `tools/check-path-repos.php`).
+- SSOT-02 — Refactor sugar-panels to accept `Style` and `Border` from candy-sprinkles. Delete any internal `Border*`. Adds candy-sprinkles to require (transitive via candy-core OK; verify path-repo per `tools/check-path-repos.php`).
 
 ### SSOT-03 — sugar-stickers composes sugar-bits
 
@@ -177,7 +177,7 @@ Canonical pattern: `candy-ssh-launcher/src/Lang.php` wraps `\SugarCraft\Core\I18
 - `sugar-table` — header / pagination / empty-state strings hardcoded.
 - `sugar-toast` — alert level labels (Info/Warning/Error) hardcoded.
 - `sugar-stickers` — when feature work lands, must include Lang.
-- `sugar-boxer` — alignment-mode labels in examples.
+- `sugar-panels` — alignment-mode labels in examples.
 - `sugar-crumbs` — separator + ellipsis labels.
 - `super-candy` — file-manager prompts.
 - `candy-git` — many user-facing strings (commit prompts, errors).
@@ -529,7 +529,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Separator escaping in titles (P5).
 - aria-current / semantic HTML rendering (P6).
 
-### sugar-boxer
+### sugar-panels
 
 - See SSOT-02. After consuming candy-sprinkles, the surface that's
   actually leftover: text alignment Left/Center/Right; margin (outer

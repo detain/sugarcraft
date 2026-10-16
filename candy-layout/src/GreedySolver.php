@@ -40,21 +40,21 @@ use SugarCraft\Layout\Region;
  * ── boxer-compat mode ──────────────────────────────────────────────────────
  * The default behaviour (floor split, rounding remainder handed to the FIRST
  * region, proportional overflow truncation) diverges on three axes from
- * sugar-boxer's hand-rolled distribute()/distributeFlex(). {@see compat()}
+ * sugar-panels's hand-rolled distribute()/distributeFlex(). {@see compat()}
  * (or the granular {@see withRoundSplit()}/{@see withRemainderToLast()}/
  * {@see withoutOverflowTruncation()} toggles) flips exactly those three so a
- * consumer can reproduce sugar-boxer's distribution byte-for-byte:
+ * consumer can reproduce sugar-panels's distribution byte-for-byte:
  *   1. round() instead of floor() for Percentage/Ratio proportional sizes;
  *   2. the rounding remainder is handed to the LAST region (or LAST Fill/Max)
  *      instead of the first;
  *   3. on overflow, each region keeps its full base size (layout runs
  *      off-grid) instead of being truncated proportionally.
  * These flags are immutable+fluent and default OFF, so the default solver is
- * unchanged. This exists only to let sugar-boxer retire its duplicated solver
+ * unchanged. This exists only to let sugar-panels retire its duplicated solver
  * (plan_missing.md W12) with golden parity.
  *
  * ── min-share floor ─────────────────────────────────────────────────────────
- * sugar-boxer's NON-flex distribute() carries a FOURTH quirk the three flags
+ * sugar-panels's NON-flex distribute() carries a FOURTH quirk the three flags
  * above do not cover: a bespoke "reserve ≥1 column per not-yet-placed child"
  * SEQUENTIAL clamp that guarantees the trailing region never collapses to 0 in
  * a tight viewport. {@see withMinShare()} reproduces it exactly. When the floor
@@ -73,17 +73,17 @@ use SugarCraft\Layout\Region;
 final class GreedySolver implements LayoutSolver
 {
     /**
-     * @param bool $roundSplit        round() (not floor()) Percentage/Ratio sizes — sugar-boxer distribute().
+     * @param bool $roundSplit        round() (not floor()) Percentage/Ratio sizes — sugar-panels distribute().
      *                                Float→int determinism contract in {@see self::withRoundSplit()}.
      * @param bool $remainderToLast   hand the rounding remainder to the LAST region/Fill/Max, not the first.
      * @param bool $truncateOverflow  proportionally shrink regions when demand exceeds the area (default);
-     *                                sugar-boxer keeps each region at full base size (pass false).
+     *                                sugar-panels keeps each region at full base size (pass false).
      * @param int  $minShare          0 = OFF (default). >0 engages the sequential min-share floor over Fill
      *                                weights, reserving this many cell(s) for every not-yet-placed region.
      * @param int  $reserveGap        extra cells reserved per ALREADY-placed region — models an inter-region
-     *                                gap that lives outside the solved content span (sugar-boxer spacing).
+     *                                gap that lives outside the solved content span (sugar-panels spacing).
      * @param int  $reserveLead       fixed cells reserved before the first region — models a leading margin
-     *                                outside the content span (sugar-boxer border pad).
+     *                                outside the content span (sugar-panels border pad).
      *
      * Public (not private) because candy-sprinkles' SolverFactory and
      * CassowarySolver already construct this via `new GreedySolver()`; the
@@ -128,8 +128,8 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * sugar-boxer parity mode: round-split + remainder-to-last + non-truncating
-     * overflow. Opt-in seam for retiring sugar-boxer's duplicated distribute()
+     * sugar-panels parity mode: round-split + remainder-to-last + non-truncating
+     * overflow. Opt-in seam for retiring sugar-panels's duplicated distribute()
      * /distributeFlex() (plan_missing.md W12) without regressing its goldens.
      */
     public static function compat(): self
@@ -185,13 +185,13 @@ final class GreedySolver implements LayoutSolver
      * Engage the sequential min-share floor: split the region proportionally
      * across its Fill weights while reserving at least `$cells` cell(s) for every
      * region NOT yet placed, so the trailing region never collapses to 0 in a
-     * tight viewport. This is the opt-in seam that lets sugar-boxer retire its
+     * tight viewport. This is the opt-in seam that lets sugar-panels retire its
      * hand-rolled NON-flex distribute() (plan_missing.md W12) with byte parity —
      * the fourth quirk compat()'s three flags cannot express.
      *
      * The floor path is inherently round-split + remainder-to-last, so it does
      * not need (and ignores) the compat() flags. Pass `$reserveGap`/`$reserveLead`
-     * to re-create distribute()'s absolute-position reservation frame: sugar-boxer
+     * to re-create distribute()'s absolute-position reservation frame: sugar-panels
      * seeds its running offset with the border pad ($reserveLead) and adds one
      * inter-child spacing per placed child ($reserveGap). With both 0 the floor
      * reserves purely in the content frame.
@@ -239,7 +239,7 @@ final class GreedySolver implements LayoutSolver
     {
         // Min-share floor short-circuits the whole greedy pipeline: it is a
         // self-contained sequential proportional split (see solveMinShare) that
-        // reproduces sugar-boxer's distribute(). Only engaged when opted in
+        // reproduces sugar-panels's distribute(). Only engaged when opted in
         // (minShare > 0), so the default solver below is untouched.
         if ($this->minShare > 0) {
             return $this->solveMinShare($area, $constraints);
@@ -336,9 +336,9 @@ final class GreedySolver implements LayoutSolver
                 }
             }
             // boxer-compat (truncateOverflow=false): leave every region at its
-            // full base size and let the layout run off-grid — sugar-boxer's
+            // full base size and let the layout run off-grid — sugar-panels's
             // distribute()/distributeFlex() never shrink fixed children, and
-            // truncating them here is what regressed sugar-boxer's
+            // truncating them here is what regressed sugar-panels's
             // testFixedPanelsOverflowDegradeGracefully. No slack distribution
             // runs in the overflow branch either way.
         } else {
@@ -410,7 +410,7 @@ final class GreedySolver implements LayoutSolver
                     $diff = $totalWidth - $used;
                     if ($this->remainderToLast === true) {
                         // boxer-compat: the LAST region absorbs the entire
-                        // remainder, mirroring sugar-boxer distribute() where the
+                        // remainder, mirroring sugar-panels distribute() where the
                         // final child = span - sum(others). The remainder can be
                         // negative (round() over-allocated); clamp the resulting
                         // width to >= 0 so Region stays non-negative.
@@ -444,7 +444,7 @@ final class GreedySolver implements LayoutSolver
                 // 2 cells), so adding a fixed ±1 under-corrects and the sizes
                 // fail to tile the region — assign the full $diff instead.
                 // boxer-compat scans from the LAST Fill/Max instead of the first
-                // (sugar-boxer distributeFlex() lets the final flex child absorb
+                // (sugar-panels distributeFlex() lets the final flex child absorb
                 // the remainder).
                 if ($totalDistWeight > 0) {
                     $usedWidth = 0;
@@ -493,7 +493,7 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * Sequential min-share floor — reproduces sugar-boxer's NON-flex
+     * Sequential min-share floor — reproduces sugar-panels's NON-flex
      * distribute() byte-for-byte (plan_missing.md W12).
      *
      * Walks the constraints left→right, giving each region its rounded

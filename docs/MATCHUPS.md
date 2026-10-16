@@ -61,7 +61,7 @@ called out in the table below.
 | **CandyTesting** (`candy-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | **CandyInput** (`candy-input/`) | 🟢 ready | Terminal escape sequence decoder — legacy keys, Kitty keyboard protocol (CSI ?u), SGR 1006 mouse, focus events, bracketed paste. Unblocks sugar-readline production use. |
 | **CandyLister** (`candy-lister/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
-| **SugarBoxer** (`sugar-boxer/`) | 🟢 ready | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
+| **SugarPanels** (`sugar-panels/`) | 🟢 ready | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | **SugarVeil** (`sugar-veil/`) | 🟢 ready | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | **SugarCrumbs** (`sugar-crumbs/`) | 🟢 ready | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
 | **SugarDash** (`sugar-dash/`) | 🟢 ready | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
@@ -186,7 +186,7 @@ reference projects supplied the ideas, not the code.
 | HoneyBounce (honey-bounce/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
 | SugarBits (sugar-bits/) | [bubbles](https://github.com/charmbracelet/bubbles) |
-| SugarBoxer (sugar-boxer/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
+| SugarPanels (sugar-panels/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
 | SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |
 | SugarCraft (candy-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |

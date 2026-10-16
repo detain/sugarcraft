@@ -23,7 +23,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **Clamping logic** — min/max clamping copied across 10+ projects with no shared utility
 - **Style object allocation** — hot-render loops creating Style chains per-frame (candy-starter, candy-flappy)
 - **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-scriptui)
-- **array_map over children** — double/triple iteration over same child array (sugar-boxer, sugar-table)
+- **array_map over children** — double/triple iteration over same child array (sugar-panels, sugar-table)
 - **WeakMap/registry patterns** — per-project implementations instead of shared candy-core utility
 - **i18n wrapper inconsistency** — Lang::t() vs SugarCraft\Core\I18n\T scattered across libs
 - **FFI cleanup** — every FFI project implements its own free() pattern instead of shared wrapper
@@ -48,7 +48,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-gallery | No file type validation | Gallery.php:78 | Non-image files passed to decoder — crash/exploit |
 | sugar-gallery | FFI buffer not explicitly freed | FFIDecoder.php | C memory must be explicitly free()'d — leak |
 | sugar-stickers | UTF-8 multibyte corruption in sanitize | Column.php:112, FlexBox.php:302 | Bytes 0x80-0x9F stripped — corrupts CJK text |
-| sugar-boxer | Division by zero in distribute() | SugarBoxer.php:792 | 0/0 = NaN when all weights are zero |
+| sugar-panels | Division by zero in distribute() | SugarPanels.php:792 | 0/0 = NaN when all weights are zero |
 | candy-flappy | Collision/scoring frame mismatch | Game.php:273, Pipe.php:33 | Score increments one frame before collision fires |
 | candy-git-server | Hardcoded LFS bearer token | LFSHandler.php:200 | "lfs-token" placeholder in all LFS responses |
 | candy-git-server | Path traversal in SSH repo lookup | SSHServer.php:97 | Regex allows .. in repo path |
@@ -97,7 +97,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-scriptui | 2 HIGH, 7 MED, 6 LOW | Shell injection, env var exposure, async blocking |
 | candy-vcr | 2 HIGH, 9 MED, 8 LOW | Undefined variable, Imagick cache sharing, blocking I/O |
 | candy-shine | 1 HIGH, 6 MED, 9 LOW | BlockStack state, string concat in loops, missing Write() parity |
-| sugar-boxer | 1 HIGH, 4 MED, 9 LOW | Division by zero, multibyte sanitization, flex separator gap |
+| sugar-panels | 1 HIGH, 4 MED, 9 LOW | Division by zero, multibyte sanitization, flex separator gap |
 | sugar-gallery | 3 HIGH, 6 MED, 2 LOW | Path traversal, FFI memory, no format fallback |
 | candy-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
 | candy-starter | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |

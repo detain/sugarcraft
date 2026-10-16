@@ -60,7 +60,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-log.png" width="48" alt=""> | **[CandyLog](candy-log/)** | Colorful leveled logger — Debug / Info / Warn / Error / Fatal with structured context, Text / JSON / Logfmt formatters, sub-loggers, and StandardLogAdapter. |
 | <img src="media/icons/candy-palette.png" width="48" alt=""> | **[CandyPalette](candy-palette/)** | Terminal color profile detection + ANSI / ANSI256 / TrueColor conversion. StandardColors and ProfileWriter. |
 | <img src="media/icons/candy-lister.png" width="48" alt=""> | **[CandyLister](candy-lister/)** | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
-| <img src="media/icons/sugar-boxer.png" width="48" alt=""> | **[SugarBoxer](sugar-boxer/)** | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
+| <img src="media/icons/sugar-panels.png" width="48" alt=""> | **[SugarPanels](sugar-panels/)** | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | <img src="media/icons/sugar-veil.png" width="48" alt=""> | **[SugarVeil](sugar-veil/)** | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | <img src="media/icons/sugar-crumbs.png" width="48" alt=""> | **[SugarCrumbs](sugar-crumbs/)** | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
 | <img src="media/icons/sugar-dash.png" width="48" alt="" onerror="this.style.display='none'"> | **[SugarDash](sugar-dash/)** | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |

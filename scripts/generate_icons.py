@@ -141,7 +141,7 @@ SUBJECTS: dict[str, str] = {
     "sugar-veil":      "a pair of glossy candy-pink theater curtains tied back with satin bows parting to reveal a single bright sparkle in the middle",
     "sugar-crumbs":    "a curving trail of three plump golden cookie crumbs of decreasing size with a few sparkles around them",
     "sugar-datepicker":  "a chubby glossy desk-calendar block made of candy showing a single heart shape on its page with two metal rings across the top",
-    "sugar-boxer":     "a glossy pastel candy gift box with a big satin ribbon bow on top, lid slightly ajar with sparkles peeking out",
+    "sugar-panels":     "a glossy pastel candy gift box with a big satin ribbon bow on top, lid slightly ajar with sparkles peeking out",
 
     # --- apps ---
     "super-candy":     "a chubby cartoon candy character wearing a tiny red superhero cape, fists on hips in a heroic pose",

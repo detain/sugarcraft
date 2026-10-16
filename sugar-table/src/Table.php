@@ -172,7 +172,7 @@ final class Table
      * Borderless mode: render NO outer box (no top/bottom border rows, no
      * left/right border columns) and use a single space between columns instead
      * of a vertical rule. Lets the table compose inside another bordered shell
-     * (e.g. a sugar-boxer content box) without a double border. The header
+     * (e.g. a sugar-panels content box) without a double border. The header
      * separator rule is still drawn when the header is shown.
      */
     private bool $borderless = false;

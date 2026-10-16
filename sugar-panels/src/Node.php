@@ -1,0 +1,384 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Panels;
+
+use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Sprinkles\VAlign;
+
+/**
+ * Immutable layout tree node.
+ *
+ * Every public dimension/style facet is a declared `readonly` property below;
+ * the `with*()` builders return new instances (audit #10: the previous
+ * @property mirror block drifted and cited a phantom `NodeKind` type).
+ */
+final class Node
+{
+    public const LEAF       = 'leaf';
+    public const HORIZONTAL = 'horizontal';
+    public const VERTICAL   = 'vertical';
+    public const NOBORDER   = 'noborder';
+
+    public readonly string $kind;
+    public readonly array $children;
+    public readonly string $content;
+    public readonly int $minWidth;
+    public readonly int $maxWidth;
+    public readonly int $minHeight;
+    public readonly int $maxHeight;
+    /** Flex/grow weight: 0 = fixed (sized by min*+border), >0 = fills leftover space by weight. */
+    public readonly int $flex;
+    public readonly int $padding;
+    public readonly bool $border;
+    public readonly int $spacing;
+    public readonly ?Border $borderStyle;
+    public readonly ?Style $style;
+    public readonly string $title;
+    /** @var array{int,int,int,int} */
+    public readonly array $margin;
+    public readonly ?Align $alignH;
+    public readonly ?VAlign $alignV;
+
+    /**
+     * @param array{int,int,int,int} $margin top, right, bottom, left
+     */
+    private function __construct(
+        string $kind,
+        string $content = '',
+        array $children = [],
+        int $minWidth = 0,
+        int $maxWidth = 0,
+        int $minHeight = 0,
+        int $maxHeight = 0,
+        int $padding = 0,
+        bool $border = true,
+        int $spacing = 0,
+        ?Border $borderStyle = null,
+        ?Style $style = null,
+        string $title = '',
+        array $margin = [0, 0, 0, 0],
+        ?Align $alignH = null,
+        ?VAlign $alignV = null,
+        int $flex = 0,
+    ) {
+        $this->kind        = $kind;
+        $this->content     = $content;
+        $this->children    = $children;
+        $this->minWidth    = $minWidth;
+        $this->maxWidth    = $maxWidth;
+        $this->minHeight   = $minHeight;
+        $this->maxHeight   = $maxHeight;
+        $this->flex        = $flex;
+        $this->padding     = $padding;
+        $this->border      = $border;
+        $this->spacing     = $spacing;
+        $this->borderStyle = $borderStyle;
+        $this->style       = $style;
+        $this->title       = $title;
+        $this->margin      = $margin;
+        $this->alignH       = $alignH;
+        $this->alignV       = $alignV;
+    }
+
+    // -------------------------------------------------------------------------
+    // Factory constructors
+    // -------------------------------------------------------------------------
+
+    public static function leaf(string $content = ''): self
+    {
+        return new self(self::LEAF, $content);
+    }
+
+    public static function horizontal(Node ...$children): self
+    {
+        return new self(self::HORIZONTAL, '', $children);
+    }
+
+    public static function vertical(Node ...$children): self
+    {
+        return new self(self::VERTICAL, '', $children);
+    }
+
+    /**
+     * No-border wrapper — children rendered flat without vertical separators.
+     */
+    public static function noBorder(Node $child): self
+    {
+        return new self(self::NOBORDER, '', [$child]);
+    }
+
+    // -------------------------------------------------------------------------
+    // With* builders
+    // -------------------------------------------------------------------------
+
+    public function withMinWidth(int $w): self
+    {
+        // Clamp negatives to 0 — a dimension can never be < 0. Mirrors withFlex().
+        return $this->with(minWidth: \max(0, $w));
+    }
+
+    public function withMaxWidth(int $w): self
+    {
+        return $this->with(maxWidth: \max(0, $w));
+    }
+
+    public function withMinHeight(int $h): self
+    {
+        return $this->with(minHeight: \max(0, $h));
+    }
+
+    public function withMaxHeight(int $h): self
+    {
+        return $this->with(maxHeight: \max(0, $h));
+    }
+
+    /**
+     * Mark this child as flexible: in a horizontal/vertical parent it grows to
+     * fill the space left after the fixed (non-flex) siblings take their natural
+     * size, sharing that leftover with other flex children in proportion to the
+     * weight. A weight of 0 means the child is fixed (non-flex).
+     */
+    public function withFlex(int $weight): self
+    {
+        return $this->with(flex: \max(0, $weight));
+    }
+
+    /** Shorthand for {@see withFlex}(1): this child fills the leftover space. */
+    public function withGrow(): self
+    {
+        return $this->withFlex(1);
+    }
+
+    public function withPadding(int $cells): self
+    {
+        // Clamp negatives to 0 — padding can never be < 0. Mirrors withFlex().
+        return $this->with(padding: \max(0, $cells));
+    }
+
+    public function withBorder(bool $show): self
+    {
+        // When enabling the border, use rounded chars as default if no
+        // borderStyle is set.  When disabling, leave borderStyle untouched —
+        // it can still be composed via withBorderStyle() later.
+        $borderStyle = $show === true
+            ? ($this->borderStyle ?? Border::rounded())
+            : $this->borderStyle;
+        return $this->with(border: $show, borderStyle: $borderStyle, borderStyleSet: true);
+    }
+
+    public function withSpacing(int $cells): self
+    {
+        // Clamp negatives to 0 — spacing can never be < 0. Mirrors withFlex().
+        return $this->with(spacing: \max(0, $cells));
+    }
+
+    /**
+     * Set the border character set from candy-sprinkles.
+     * Passing null CLEARS the style (audit #4): the frame then falls back to
+     * {@see Border::rounded()} at draw time. The border bool still controls
+     * visibility — clearing the style does not hide the border.
+     */
+    public function withBorderStyle(?Border $b): self
+    {
+        return $this->with(borderStyle: $b, borderStyleSet: true);
+    }
+
+    /**
+     * Set the canonical style from candy-sprinkles.
+     * Passing null CLEARS the style — content renders unstyled.
+     */
+    public function withStyle(?Style $s): self
+    {
+        return $this->with(style: $s, styleSet: true);
+    }
+
+    /**
+     * Set the box title text.
+     * Passing '' CLEARS the title — the top edge renders as an unbroken run.
+     */
+    public function withTitle(string $t): self
+    {
+        return $this->with(title: $t, titleSet: true);
+    }
+
+    /**
+     * Set outer margin (top, right, bottom, left).
+     * sugar-panels-specific: candy-sprinkles Style does not ship margin as a
+     * first-class concept.
+     *
+     * @param int      $top
+     * @param int|null $right  Defaults to $top when null
+     * @param int|null $bottom Defaults to $top when null
+     * @param int|null $left   Defaults to $right when null
+     */
+    public function withMargin(int $top, ?int $right = null, ?int $bottom = null, ?int $left = null): self
+    {
+        $right  ??= $top;
+        $bottom ??= $top;
+        $left   ??= $right;
+        // Clamp negatives to 0 — a margin can never be < 0. Mirrors withFlex().
+        $margin = [\max(0, $top), \max(0, $right), \max(0, $bottom), \max(0, $left)];
+        return $this->with(margin: $margin, marginSet: true);
+    }
+
+    /**
+     * Set horizontal text alignment (sugar-panels-specific).
+     * Passing null CLEARS the alignment — content renders left-aligned.
+     */
+    public function withAlignH(?Align $a): self
+    {
+        return $this->with(alignH: $a, alignHSet: true);
+    }
+
+    /**
+     * Set vertical text alignment (sugar-panels-specific).
+     * Passing null CLEARS the alignment — content renders top-aligned.
+     */
+    public function withAlignV(?VAlign $v): self
+    {
+        return $this->with(alignV: $v, alignVSet: true);
+    }
+
+    public function withContent(string $content): self
+    {
+        return $this->with(content: $content);
+    }
+
+    // -------------------------------------------------------------------------
+    // Dimension queries
+    // -------------------------------------------------------------------------
+
+    /** Total width including border, padding and the node's own left+right margin. */
+    public function totalWidth(): int
+    {
+        // The renderer insets each node's region by its own margin before laying
+        // it out (SugarPanels::renderNode), so a node's real horizontal footprint —
+        // the space a fixed sibling must reserve in flex layout — is its content
+        // width PLUS its left+right margin. Omitting it makes margined children
+        // under-claim, so the flex solver overlaps or clips them.
+        $marginW = $this->margin[3] + $this->margin[1]; // left + right
+
+        if ($this->kind === self::LEAF) {
+            $inner = $this->minWidth;
+            if ($this->border === true) $inner += 2;
+            if ($this->padding > 0) $inner += $this->padding * 2;
+            return $inner + $marginW;
+        }
+
+        $gaps = (\count($this->children) - 1) * $this->spacing;
+
+        // For HORIZONTAL, children sit side-by-side so width is their SUM and the
+        // border is shared once. Compute the child sum only on this branch — the
+        // VERTICAL branch below never uses it, so summing there was a wasted full
+        // subtree traversal (it already re-walks the children for the max).
+        if ($this->kind === self::HORIZONTAL) {
+            $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
+            $extra = $this->border === true ? 2 : 0;
+            return $childWidths + $gaps + $extra + $marginW;
+        }
+
+        // VERTICAL: use max child width
+        $maxChild = \count($this->children) > 0
+            ? \max(...\array_map(fn(Node $c) => $c->totalWidth(), $this->children))
+            : 0;
+        $extra = $this->border === true ? 2 : 0;
+        return $maxChild + $gaps + $extra + $marginW;
+    }
+
+    /** Total height including border, padding and the node's own top+bottom margin. */
+    public function totalHeight(): int
+    {
+        // See totalWidth(): the renderer insets by margin, so a node's real
+        // vertical footprint includes its own top+bottom margin.
+        $marginH = $this->margin[0] + $this->margin[2]; // top + bottom
+
+        if ($this->kind === self::LEAF) {
+            $inner = $this->minHeight;
+            if ($this->border === true) $inner += 2;
+            if ($this->padding > 0) $inner += $this->padding * 2;
+            return $inner + $marginH;
+        }
+
+        if ($this->kind === self::VERTICAL) {
+            $childHeights = \array_sum(\array_map(fn(Node $c) => $c->totalHeight(), $this->children));
+            $gaps = (\count($this->children) - 1) * $this->spacing;
+            $extra = $this->border === true ? 2 : 0;
+            return $childHeights + $gaps + $extra + $marginH;
+        }
+
+        // HORIZONTAL: use max child height
+        $maxChild = \count($this->children) > 0
+            ? \max(...\array_map(fn(Node $c) => $c->totalHeight(), $this->children))
+            : 0;
+        $extra = $this->border === true ? 2 : 0;
+        return $maxChild + $extra + $marginH;
+    }
+
+    // -------------------------------------------------------------------------
+    // Private
+    // -------------------------------------------------------------------------
+
+    /**
+     * Rebuild with the given overrides.
+     *
+     * House XSet law (AGENTS "nullable fields use a paired bool $XSet
+     * sentinel", canonical candy-sprinkles Style / candy-core Mutable): each
+     * clearable nullable field has a paired `...Set` flag. Omitting both keeps
+     * the current value; passing `field: $v, fieldSet: true` WRITES $v even
+     * when $v is null/''/[0,0,0,0] — so an explicit clear is observable
+     * (audit #4: the old Preserve-sentinel scheme let explicit nulls silently
+     * no-op, contradicting the docblocks and README).
+     *
+     * @param array{int,int,int,int}|null $margin
+     */
+    private function with(
+        ?string $content = null,
+        ?int $minWidth = null,
+        ?int $maxWidth = null,
+        ?int $minHeight = null,
+        ?int $maxHeight = null,
+        ?int $padding = null,
+        ?bool $border = null,
+        ?int $spacing = null,
+        ?Border $borderStyle = null,
+        bool $borderStyleSet = false,
+        ?Style $style = null,
+        bool $styleSet = false,
+        ?string $title = null,
+        bool $titleSet = false,
+        ?array $margin = null,
+        bool $marginSet = false,
+        ?Align $alignH = null,
+        bool $alignHSet = false,
+        ?VAlign $alignV = null,
+        bool $alignVSet = false,
+        ?int $flex = null,
+    ): self {
+        return new self(
+            $this->kind,
+            $content ?? $this->content,
+            $this->children,
+            $minWidth    ?? $this->minWidth,
+            $maxWidth    ?? $this->maxWidth,
+            $minHeight   ?? $this->minHeight,
+            $maxHeight   ?? $this->maxHeight,
+            $padding     ?? $this->padding,
+            // Preserve the existing border unless a with*() call set it explicitly
+            // — otherwise any later builder (withMinHeight, withGrow, …) would
+            // silently re-enable a border that withBorder(false) turned off.
+            $border ?? $this->border,
+            $spacing     ?? $this->spacing,
+            $borderStyleSet ? $borderStyle : $this->borderStyle,
+            $styleSet      ? $style        : $this->style,
+            $titleSet      ? (string) $title : $this->title,
+            $marginSet     ? $margin : $this->margin,
+            $alignHSet      ? $alignH     : $this->alignH,
+            $alignVSet      ? $alignV     : $this->alignV,
+            $flex           ?? $this->flex,
+        );
+    }
+}

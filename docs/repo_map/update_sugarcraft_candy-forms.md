@@ -446,7 +446,7 @@ Custom Smith-Waterman implementation with adjacent bonus scoring. Returns scored
 
 **Tradeoffs:** Significant implementation complexity; php-tui uses external `php-tui/cassowary` package.
 
-**Applicability:** Would benefit Group-level layout (multi-page form widths). Consider for future `sugar-boxer` (layout) integration.
+**Applicability:** Would benefit Group-level layout (multi-page form widths). Consider for future `sugar-panels` (layout) integration.
 
 ---
 
@@ -675,7 +675,7 @@ pterm's interactive printers use `atomicgo.dev/keyboard` which is a blocking cal
 
 ## textualize/textual CSS Layout
 
-textual's CSS-based layout (`display: flex`, `display: grid`) represents the most sophisticated TUI layout system available. While not directly portable, should inform future `sugar-boxer` (layout) development.
+textual's CSS-based layout (`display: flex`, `display: grid`) represents the most sophisticated TUI layout system available. While not directly portable, should inform future `sugar-panels` (layout) development.
 
 ---
 

@@ -456,7 +456,7 @@ All 45 research documents available at:
 | honey-bounce | 25KB |
 | candy-flappy | 11KB |
 | sugar-bits | 26KB |
-| sugar-boxer | 16KB |
+| sugar-panels | 16KB |
 | sugar-datepicker | 19KB |
 | sugar-charts | 23KB |
 | sugar-crumbs | 14KB |

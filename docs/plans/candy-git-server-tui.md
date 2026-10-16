@@ -92,7 +92,7 @@ candy-core  Program             (existing — Bubble Tea runtime)
 candy-git-server  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     │
     ├── candy-sprinkles  Style          (border, fg, bg, padding)
-    ├── sugar-boxer      SugarBoxer     (titled boxes / split panes)
+    ├── sugar-panels      SugarPanels     (titled boxes / split panes)
     ├── sugar-stickers   Viewport       (scrolling lists, scrollbar)
     ├── candy-shine      Renderer       (markdown → ANSI for README)
     ├── candy-shine      SyntaxHighlighter (file viewer colourisation)
@@ -165,8 +165,8 @@ in place; the TUI just composes them.
 
 ### 2.4 Layout primitives
 
-- **sugar-boxer** — titled bordered boxes via `SugarBoxer`
-  (`sugar-boxer/src/SugarBoxer.php`); we use it for the outer frame
+- **sugar-panels** — titled bordered boxes via `SugarPanels`
+  (`sugar-panels/src/SugarPanels.php`); we use it for the outer frame
   around each pane.
 - **sugar-stickers** — `Viewport` for the scrollable lists (repo list,
   file tree, commit log) and `Scrollbar` to render the indicator.
@@ -214,7 +214,7 @@ Non-stories (deliberately out of scope):
 ## 4. Layout sketch — main screens
 
 Mock-ups are 80×24 (the smallest size soft-serve targets). Boxes are
-sugar-boxer; arrow keys + `j`/`k` move; `Enter` activates; `Esc`/`q`
+sugar-panels; arrow keys + `j`/`k` move; `Enter` activates; `Esc`/`q`
 goes back; `?` opens help.
 
 ### 4.1 Repo list view (phase 1)
@@ -385,7 +385,7 @@ and the repo-list screen.
 
 - `candy-git-server/composer.json` — add `sugarcraft/candy-wish`,
   `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`,
-  `sugarcraft/candy-git`, `sugarcraft/sugar-boxer`,
+  `sugarcraft/candy-git`, `sugarcraft/sugar-panels`,
   `sugarcraft/sugar-stickers`, `sugarcraft/candy-shine` as `@dev` plus
   matching path-repo entries (closure via `tools/check-path-repos.php
   --fix`).
@@ -408,7 +408,7 @@ and the repo-list screen.
 **Acceptance:**
 
 - `ssh user@host` (with no command) starts the TUI and shows the repo
-  list rendered through candy-sprinkles + sugar-boxer.
+  list rendered through candy-sprinkles + sugar-panels.
 - `git clone ssh://user@host:23231/<repo>` still works (existing
   path).
 - `vendor/bin/phpunit` green in candy-git-server + all four consuming libs
@@ -560,7 +560,7 @@ Pre-conditions that **must** be true before phase-1 ships:
 | candy-shine SyntaxHighlighter | ✅ shipped | `candy-shine/src/SyntaxHighlighter.php` | file viewer |
 | sugar-stickers Viewport | ✅ shipped | `sugar-stickers/src/Viewport.php` | scrollable lists |
 | sugar-stickers FlexBox | ✅ shipped | `sugar-stickers/src/Flex/FlexBox.php` | 3-pane layout on RepoDetailView |
-| sugar-boxer SugarBoxer | ✅ shipped | `sugar-boxer/src/SugarBoxer.php` | bordered panes |
+| sugar-panels SugarPanels | ✅ shipped | `sugar-panels/src/SugarPanels.php` | bordered panes |
 | candy-git Git | 🟡 partial — phases 2–4 blocked on patches | `candy-git/src/Git.php` | only `status()`, `branches()`, `log(int $limit)`, `stage()`, `unstage()` shipped. Missing `tags()`, `show()`, `lsTree()`, `catFile()` and the `log($ref, $skip, $limit)` windowed signature — see §6.1 candy-git blockers below |
 
 ### 6.1 candy-git blockers (hard preconditions for phases 2–4)
@@ -650,7 +650,7 @@ A phase is "done" when:
    translations are a separate i18n carry-forward).
 6. `vendor/bin/phpunit` in **every** consumer lib that candy-git-server
    pulls in (candy-wish, candy-core, candy-git, candy-shine,
-   candy-sprinkles, sugar-boxer, sugar-stickers) still green.
+   candy-sprinkles, sugar-panels, sugar-stickers) still green.
 7. `php tools/check-path-repos.php` reports closure clean.
 
 ---
@@ -794,7 +794,7 @@ the wire-protocol port — the marquee TUI feature has not been built.
   OSC 52 emitter helper used by phase-5 clipboard keybind.
 - `candy-sprinkles/src/Style.php` + `candy-sprinkles/src/Theme.php` —
   styling.
-- `sugar-boxer/src/SugarBoxer.php` — bordered titled boxes.
+- `sugar-panels/src/SugarPanels.php` — bordered titled boxes.
 - `sugar-stickers/src/Viewport.php` + `sugar-stickers/src/Scrollbar.php`
   + `sugar-stickers/src/Flex/FlexBox.php` — scrolling lists + layout.
 - `candy-shine/src/Renderer.php` — README markdown.

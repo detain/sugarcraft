@@ -52,7 +52,7 @@ the lib genuinely is a grab-bag of helpers. Examples that read well:
 | Domain          | Good functional words |
 |-----------------|------------------------|
 | Components / widgets | Bits, Parts, Chips, Widgets |
-| Layout         | Layout, Grid, Boxer, Stickers |
+| Layout         | Layout, Grid, Panels, Stickers |
 | Styling        | Style, Paint, Color, Sprinkles |
 | Charts         | Charts, Plots, Graph, Pie |
 | Forms / prompts | Prompt, Form, Ask, Input |
@@ -189,7 +189,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 * **SweetShop** → sounds like a marketplace, not a library
 * **CookiePress** → reads as WordPress / browser cookies, not TUI
 * **CutieMarks** → niche reference, doesn't age
-* **HoneyComb** → considered for layout/grid, but that slot is already taken by **SugarBoxer**
+* **HoneyComb** → considered for layout/grid, but that slot is already taken by **SugarPanels**
 
 ---
 
@@ -203,7 +203,7 @@ matching package turns out to be.
 | **PancakeFlip** | image / video / GIF flipping (CandyFlip alternative) |
 | **PieChart** | another charts library |
 | **CookieClick** | mouse-zone tracker (CandyMouse alternative) |
-| **BentoBox** | layout (SugarBoxer alternative) |
+| **BentoBox** | layout (SugarPanels alternative) |
 | **BentoLauncher** | launcher / picker (CandySshLauncher alternative) |
 | **MarshmallowFilter** | fuzzy-finder (CandyHermit alternative) |
 | **HoneyTunnel** | SSH / tunnel (CandyWish alternative) |

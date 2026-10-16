@@ -161,7 +161,7 @@ that are tiny but together justify a PR.
 - charmbracelet/log → candy-log
 - charmbracelet/colorprofile → candy-palette
 - treilik/bubblelister → candy-lister
-- treilik/bubbleboxer → sugar-boxer
+- treilik/bubbleboxer → sugar-panels
 - rmhubbert/bubbletea-overlay → sugar-veil
 - KevM/bubbleo → sugar-crumbs
 - Genekkion/theHermit → candy-hermit

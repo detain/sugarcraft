@@ -76,7 +76,7 @@
         "sugarcraft/honey-bounce": "dev-master",
         "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-bits": "dev-master",
-        "sugarcraft/sugar-boxer": "dev-master",
+        "sugarcraft/sugar-panels": "dev-master",
         "sugarcraft/sugar-datepicker": "dev-master",
         "sugarcraft/sugar-charts": "dev-master",
         "sugarcraft/sugar-crumbs": "dev-master",
@@ -363,7 +363,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-boxer",
+            "url": "sugar-panels",
             "options": {
                 "symlink": true
             }

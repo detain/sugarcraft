@@ -29,7 +29,7 @@ sugar-table — a customizable interactive table component for terminal UIs, for
 - **Horizontal scroll**: max width with overflow, frozen columns stay visible
 - **Missing data indicator**: configurable placeholder for absent cells
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Sprinkles\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
-- **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-boxer content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
+- **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
 - **Width-exact rendering**: `withWidth(int $cols)` — pin the total render width; `ColumnWidth::Flex` columns fill exactly the room left after Fixed/Percent columns so every line is exactly `$cols` cells (deterministic for composition). Default `cellPadding` is 0 (flush)
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
