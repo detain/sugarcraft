@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\View;
 
-use SugarCraft\Flip\AnsiArt;
+use SugarCraft\Animation\AnsiArt;
 
 /**
  * The one frame of the chosen logo art an overlay paints right now, carried

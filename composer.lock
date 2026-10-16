@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ee305de6efeed88a824a4e54b5e08847",
+    "content-hash": "e548575fc1d1b7b37fa06b4e2f52f254",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3936,87 +3936,25 @@
             }
         },
         {
-            "name": "sugarcraft/candy-flip",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-flip",
-                "reference": "05bfce5cd05c8ed5bfde60319bcfc4892c123ac1"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "suggest": {
-                "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Flip\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Flip\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
-            "homepage": "https://sugarcraft.github.io/lib/candy-flip.html",
-            "keywords": [
-                "ansi-art",
-                "ascii-art",
-                "cli",
-                "gif",
-                "gifterm",
-                "sugarcraft",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-flip/issues",
-                "source": "https://github.com/sugarcraft/candy-flip",
-                "docs": "https://sugarcraft.github.io/lib/candy-flip.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-gifview",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-gifview",
-                "reference": "54e5d74d18a072575827251bf42cf48ea965bee5"
+                "reference": "6316b671587a9fc0c0c940fb53df7c3c579714d4"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-flip": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/sugar-animation": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
                 "sugarcraft/candy-testing": "dev-master"
             },
             "suggest": {
-                "ext-gd": "Required to decode GIF animations (via sugarcraft/candy-flip); ANSI art playback needs neither."
+                "ext-gd": "Required to decode GIF animations (via sugarcraft/sugar-animation); ANSI art playback needs neither."
             },
             "bin": [
                 "bin/candy-gifview"
@@ -4042,7 +3980,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Terminal GIF and .ansi-art viewer (gifterm port) — the command-line front end of sugarcraft/candy-flip.",
+            "description": "Terminal GIF and .ansi-art viewer (gifterm port) — the command-line front end of sugarcraft/sugar-animation.",
             "homepage": "https://sugarcraft.github.io/lib/candy-gifview.html",
             "keywords": [
                 "ansi-art",
@@ -4747,7 +4685,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "9694eb017c85d53ae1cbe69f7a3097fdb360ed61"
+                "reference": "4aa6d4b9ef97189d44c6c8fb77ad06ec691ff37e"
             },
             "require": {
                 "ext-gd": "*",
@@ -4755,8 +4693,8 @@
                 "php": "^8.3",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-flip": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/candy-palette": "dev-master",
+                "sugarcraft/sugar-animation": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -5468,15 +5406,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-top",
-                "reference": "f22f198f09dfa5579d70476c2966ac841efbda34"
+                "reference": "522d9cc5bacd14f2522f6b351520c96010a975dc"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "@dev",
-                "sugarcraft/candy-flip": "@dev",
                 "sugarcraft/candy-sprinkles": "@dev",
+                "sugarcraft/sugar-animation": "@dev",
                 "sugarcraft/sugar-dashboard": "@dev",
                 "sugarcraft/sugar-widgets": "@dev"
             },
@@ -5797,6 +5735,68 @@
                 "issues": "https://github.com/sugarcraft/honey-bounce/issues",
                 "source": "https://github.com/sugarcraft/honey-bounce",
                 "docs": "https://sugarcraft.github.io/lib/honey-bounce.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-animation",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-animation",
+                "reference": "3c651c1e7758ed1ccb197fe4e1219213ade74a1a"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "suggest": {
+                "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Animation\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Animation\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
+            "homepage": "https://sugarcraft.github.io/lib/sugar-animation.html",
+            "keywords": [
+                "ansi-art",
+                "ascii-art",
+                "cli",
+                "gif",
+                "gifterm",
+                "sugarcraft",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-animation/issues",
+                "source": "https://github.com/sugarcraft/sugar-animation",
+                "docs": "https://sugarcraft.github.io/lib/sugar-animation.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -6940,15 +6940,15 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-reel",
-                "reference": "682ca1818a65e6f59a91c51f7485358607d0ad5b"
+                "reference": "041adfd49a23c247e24b714d79112faa83f681b9"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-flip": "dev-master",
                 "sugarcraft/candy-mosaic": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/candy-palette": "dev-master",
+                "sugarcraft/sugar-animation": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -8594,7 +8594,6 @@
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flappy": 20,
-        "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
         "sugarcraft/candy-git-server": 20,
@@ -8621,6 +8620,7 @@
         "sugarcraft/candy-vt": 20,
         "sugarcraft/candy-wish": 20,
         "sugarcraft/honey-bounce": 20,
+        "sugarcraft/sugar-animation": 20,
         "sugarcraft/sugar-charts": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,

@@ -156,7 +156,7 @@ final class ImageSourceAnimatedFileTest extends TestCase
     }
 
     /**
-     * Round-1 review C2 pinned this 10-frame GIF as REFUSED because candy-flip's header
+     * Round-1 review C2 pinned this 10-frame GIF as REFUSED because sugar-animation's header
      * walk then mis-skipped image data and silently returned fewer frames. flip's walk
      * was resynced in `2d5117e1e`, and mosaic's clone of it (the offset-equality gate)
      * now mirrors the fix — so the valid file must load whole, every frame and delay

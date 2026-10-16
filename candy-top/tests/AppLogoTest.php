@@ -10,7 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\TickRequest;
-use SugarCraft\Flip\ArtLoop;
+use SugarCraft\Animation\ArtLoop;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Msg\ClockTickMsg;

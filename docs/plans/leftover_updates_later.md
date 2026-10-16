@@ -268,7 +268,7 @@ because research adds three items the PTY plan did not call out:)
 - Transparent background for `HalfBlockRenderer` (P1 #6).
 - 256-color Sixel fallback (P1 #7).
 - WezTerm detection bug — currently classified as both Kitty *and* iTerm2 candidate; restrict.
-- Animation/GIF support (P2 #8) — overlap with candy-flip; pick one home (see SSOT note below).
+- Animation/GIF support (P2 #8) — overlap with sugar-animation; pick one home (see SSOT note below).
 
 ### candy-git-server
 
@@ -357,7 +357,7 @@ because research adds three items the PTY plan did not call out:)
 - Line highlighting (§4.3.2).
 - Interactive TUI customization (§4.3.3) — depends on sugar-forms features.
 
-### candy-flip
+### sugar-animation
 
 - Replace temp-file frame extraction with `imagecreatefromstring()` (P1).
 - Per-frame timing from Graphic Control Extension (P2).
@@ -366,7 +366,7 @@ because research adds three items the PTY plan did not call out:)
 - Local color tables (P5).
 - Transparency / disposal-method handling (P6).
 - Adaptive cell size from `tput cols lines` (P7) — must use `\SugarCraft\Pty\SizeIoctl::query(STDOUT)`, not shell-out.
-- Kitty/WezTerm graphics-protocol output path (P10) — overlap with candy-mosaic; pick one home. **Recommendation:** Kitty/WezTerm rendering belongs in candy-mosaic; candy-flip emits frame bytes only.
+- Kitty/WezTerm graphics-protocol output path (P10) — overlap with candy-mosaic; pick one home. **Recommendation:** Kitty/WezTerm rendering belongs in candy-mosaic; sugar-animation emits frame bytes only.
 - Frame cache (P12).
 
 ### sugar-quickpick
@@ -889,10 +889,10 @@ until a real profiler trace flags the cost.
   its own; merits a `plans/candy-git-server-tui.md` milestone doc.
 - **candy-vt P3 graphics protocols** — Kitty image, Sixel decode. Each
   is months of work. Defer post-1.0 unless a specific app needs it.
-- **candy-flip vs candy-mosaic image-output split** — animation rendering
-  (P10) overlaps both libs. Recommendation: candy-flip emits frame
+- **sugar-animation vs candy-mosaic image-output split** — animation rendering
+  (P10) overlaps both libs. Recommendation: sugar-animation emits frame
   bytes; candy-mosaic owns Kitty/iTerm2/WezTerm protocol output and
-  consumes candy-flip's frames.
+  consumes sugar-animation's frames.
 
 ---
 

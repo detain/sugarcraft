@@ -42,7 +42,7 @@
   {"name": "CandySql", "slug": "candy-sql", "category": "app", "description": "SQLite browser TUI — list tables, peek at row data, run ad-hoc queries. SQLite-only at v1.", "url": "lib/candy-sql.html"},
   {"name": "CandyCodetime", "slug": "candy-codetime", "category": "app", "description": "Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard. No cloud, no MongoDB.", "url": "lib/candy-codetime.html"},
   {"name": "CandyMinesweeper", "slug": "candy-minesweeper", "category": "app", "description": "Minesweeper — customisable board, recursive flood-fill, win/lose detection. Pure-state Board; first-click safety.", "url": "lib/candy-minesweeper.html"},
-  {"name": "CandyFlip", "slug": "candy-flip", "category": "app", "description": "ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or ASCII.", "url": "lib/candy-flip.html"},
+  {"name": "SugarAnimation", "slug": "sugar-animation", "category": "app", "description": "ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or ASCII.", "url": "lib/sugar-animation.html"},
   {"name": "CandyTop", "slug": "candy-top", "category": "app", "description": "btop-style system monitor — cpu, mem, net, disk and process panels with braille graphs and btop themes over Linux /proc + /sys collectors.", "url": "lib/candy-top.html"},
   {"name": "CandyFlappy", "slug": "candy-flappy", "category": "app", "description": "Flappy-Bird in your terminal — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate.", "url": "lib/candy-flappy.html"}
 ]

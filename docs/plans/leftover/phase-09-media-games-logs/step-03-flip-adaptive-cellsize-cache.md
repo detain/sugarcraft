@@ -1,6 +1,6 @@
-# Step 09.03 — candy-flip adaptive cell size (via candy-pty SizeIoctl) + frame cache
+# Step 09.03 — sugar-animation adaptive cell size (via candy-pty SizeIoctl) + frame cache
 
-**Source:** `leftover_updates_later.md` candy-flip P7 + P12
+**Source:** `leftover_updates_later.md` sugar-animation P7 + P12
 **Branch:** `ai/flip-adaptive-cache`
 
 ## Deliverable
@@ -15,20 +15,20 @@
 
 **Modify:**
 
-- `candy-flip/src/Renderer.php` — `withAdaptiveSize()` reads tty.
-- `candy-flip/src/Cache/FrameCache.php` (new).
-- `candy-flip/composer.json` — add `sugarcraft/candy-pty` if not
+- `sugar-animation/src/Renderer.php` — `withAdaptiveSize()` reads tty.
+- `sugar-animation/src/Cache/FrameCache.php` (new).
+- `sugar-animation/composer.json` — add `sugarcraft/candy-pty` if not
   transitive.
 
 ## Tests
 
-- `candy-flip/tests/AdaptiveSizeTest.php`.
-- `candy-flip/tests/FrameCacheTest.php`.
+- `sugar-animation/tests/AdaptiveSizeTest.php`.
+- `sugar-animation/tests/FrameCacheTest.php`.
 
 ## Acceptance
 
-- `cd candy-flip && vendor/bin/phpunit --filter "Adaptive|FrameCache"` green.
-- `grep -n "shell_exec.*tput\|tput cols" candy-flip/src` returns nothing.
+- `cd sugar-animation && vendor/bin/phpunit --filter "Adaptive|FrameCache"` green.
+- `grep -n "shell_exec.*tput\|tput cols" sugar-animation/src` returns nothing.
 
 ---
 

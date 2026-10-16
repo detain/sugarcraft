@@ -13,7 +13,7 @@
 
 ![demo](.vhs/view.gif)
 
-Terminal GIF and `.ansi`-art viewer for PHP 8.3+ — the command-line front end built on [`sugarcraft/candy-flip`](../candy-flip/). Point it at a `.gif` on disk and it decodes via `ext-gd`, sizes the frame grid to your terminal, and plays the animation in the alternate screen as 24-bit background-coloured blocks or a Unicode luminance ramp.
+Terminal GIF and `.ansi`-art viewer for PHP 8.3+ — the command-line front end built on [`sugarcraft/sugar-animation`](../sugar-animation/). Point it at a `.gif` on disk and it decodes via `ext-gd`, sizes the frame grid to your terminal, and plays the animation in the alternate screen as 24-bit background-coloured blocks or a Unicode luminance ramp.
 
 ```bash
 composer require sugarcraft/candy-gifview
@@ -35,7 +35,7 @@ candy-gifview my-animation.gif density # ASCII luminance ramp
 
 The whole animation engine — `Decoder`, `Frame`, `Renderer`, `Player`, and the
 `.ansi` art surface (`AnsiArt` / `ArtLibrary` / `ArtLoop`) — lives in
-[`sugarcraft/candy-flip`](../candy-flip/). This package is only the viewer app:
+[`sugarcraft/sugar-animation`](../sugar-animation/). This package is only the viewer app:
 
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
@@ -52,4 +52,4 @@ vendor/bin/phpunit
 
 ## Credits & inspiration
 
-Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). The decode/render/playback layer it mirrors is developed here as [`sugarcraft/candy-flip`](../candy-flip/); SugarCraft is a native PHP project on the Charm-inspired TEA stack.
+Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). The decode/render/playback layer it mirrors is developed here as [`sugarcraft/sugar-animation`](../sugar-animation/); SugarCraft is a native PHP project on the Charm-inspired TEA stack.

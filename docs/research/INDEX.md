@@ -81,7 +81,7 @@ To implement an item:
 | **candy-minesweeper** | [research/libraries/candy-minesweeper-research.md](libraries/candy-minesweeper-research.md) | 1. Chord clicks, 2. Win detection, 3. Timer precision |
 | **honey-bounce** | [research/libraries/honey-bounce-research.md](libraries/honey-bounce-research.md) | 1. SpringConfig presets, 2. CubicBezier, 3. SpringChain |
 | **candy-flappy** | [research/libraries/candy-flappy-research.md](libraries/candy-flappy-research.md) | 1. Bird rotation, 2. Collision tests, 3. Variable gap |
-| **candy-flip** | [research/libraries/candy-flip-research.md](libraries/candy-flip-research.md) | 1. imagecreatefromstring, 2. Frame timing, 3. Floyd-Steinberg |
+| **sugar-animation** | [research/libraries/sugar-animation-research.md](libraries/sugar-animation-research.md) | 1. imagecreatefromstring, 2. Frame timing, 3. Floyd-Steinberg |
 
 ### Utilities
 
@@ -121,8 +121,8 @@ To implement an item:
 | 15 | candy-vt | Auto-wrap DECAWM | 2h | [link](libraries/candy-vt-research.md) |
 | 16 | candy-kv | CSV/JSON export | 1-2h | [link](libraries/candy-kv-research.md) |
 | 17 | candy-kv | Levenshtein suggestions | 1h | [link](libraries/candy-kv-research.md) |
-| 18 | candy-flip | imagecreatefromstring | 1-2h | [link](libraries/candy-flip-research.md) |
-| 19 | candy-flip | Per-frame timing | 3-4h | [link](libraries/candy-flip-research.md) |
+| 18 | sugar-animation | imagecreatefromstring | 1-2h | [link](libraries/sugar-animation-research.md) |
+| 19 | sugar-animation | Per-frame timing | 3-4h | [link](libraries/sugar-animation-research.md) |
 | 20 | sugar-mines | Chord clicks | 2-3h | [link](libraries/candy-minesweeper-research.md) |
 
 ---

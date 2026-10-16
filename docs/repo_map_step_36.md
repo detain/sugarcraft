@@ -1,4 +1,4 @@
-# Step 36 — candy-flip + candy-kit + honey-bounce + candy-flappy adopt candy-testing
+# Step 36 — sugar-animation + candy-kit + honey-bounce + candy-flappy adopt candy-testing
 
 **Branch:** `ai/testing-rollout`
 **Depends on:** step-04 (candy-testing), step-30 (audit)
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Four libs that render output (candy-flip GIF flipbook, candy-kit CLI presenter, honey-bounce spring physics with sample rendering, candy-flappy projectile physics with sample rendering) adopt candy-testing for snapshot coverage. None of these were named in the primary analysis but all have rendered output that benefits from golden-file pinning.
+Four libs that render output (sugar-animation GIF flipbook, candy-kit CLI presenter, honey-bounce spring physics with sample rendering, candy-flappy projectile physics with sample rendering) adopt candy-testing for snapshot coverage. None of these were named in the primary analysis but all have rendered output that benefits from golden-file pinning.
 
 Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§446) — pinning their behavior protects that superiority during future refactors.
 
@@ -33,7 +33,7 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 ## Tester brief
 
 - Per lib: at least one snapshot of canonical output.
-- candy-flip: a single frame snapshot.
+- sugar-animation: a single frame snapshot.
 - candy-kit: a presenter slide snapshot.
 - honey-bounce: a spring trajectory snapshot (numeric).
 - candy-flappy: a projectile trajectory snapshot (numeric).
@@ -45,7 +45,7 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 
 ## Ship brief
 
-- **PR title**: `candy-flip + candy-kit + honey-bounce + candy-flappy: snapshot tests via candy-testing`
+- **PR title**: `sugar-animation + candy-kit + honey-bounce + candy-flappy: snapshot tests via candy-testing`
 - **PR body**:
   ```
   ## Summary
@@ -60,4 +60,4 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 
   Refs: docs/repo_map_step_36.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `candy-flip + candy-kit + honey-bounce + candy-flappy: snapshot tests via candy-testing`.
+- Commit subject: `sugar-animation + candy-kit + honey-bounce + candy-flappy: snapshot tests via candy-testing`.

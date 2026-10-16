@@ -58,10 +58,10 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-33 candy-kv + candy-ssh-launcher + candy-git: adopted sugar-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 candy-codetime + candy-mail + candy-git-server: adopted candy-async (PR #915)
-- step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
+- step-36 sugar-animation + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
@@ -173,7 +173,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 12. **Testing infrastructure** — Every package in Stage 5 independently identifies the same hole: no `Simulator` class, no `Program::withInput()/withOutput()`, no snapshot testing utilities. bubble-tea issue #1654 (6+ years old) confirms Go never solved this. SugarCraft can lead here.
 
-13. **Concurrent write safety** — candy-codetime's JSONL append is unsafe across multiple editors; one Ctrl+C away from corrupt data. candy-flip's DISPOSAL_PREVIOUS mode races the same way.
+13. **Concurrent write safety** — candy-codetime's JSONL append is unsafe across multiple editors; one Ctrl+C away from corrupt data. sugar-animation's DISPOSAL_PREVIOUS mode races the same way.
 
 14. **Progress feedback for async operations** — super-candy's AsyncOps fires copy/move without any progress callback; users see nothing until completion. yazi and ranger set the modern standard with per-file, per-byte progress bars.
 
@@ -263,7 +263,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 3. **No `Program::withInput()/withOutput()`** — Standard testing harness for TEA programs absent.
 
-4. **Concurrent write corruption** — `flock()` absent from JSONL append operations (candy-codetime, candy-flip).
+4. **Concurrent write corruption** — `flock()` absent from JSONL append operations (candy-codetime, sugar-animation).
 
 5. **O(1) win detection only in candy-minesweeper** — Other packages have algorithmic inefficiencies that snapshot tests would catch.
 
@@ -345,7 +345,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 |---|-------------|------------------|--------|-------------|------|----------|
 | 1 | Add snapshot/golden file tests for ANSI output | sugar-forms, sugar-forms, sugar-widgets, sugar-charts, sugar-table, candy-mdview, candy-vt, candy-vcr | Critical | Low | Low | P0 |
 | 2 | Add `Simulator` + `Program::withInput()/withOutput()` test harness | All TEA-based packages | Critical | Medium | Low | P0 |
-| 3 | Add `flock()` to JSONL append operations | candy-codetime, candy-flip | Critical | Low | Low | P0 |
+| 3 | Add `flock()` to JSONL append operations | candy-codetime, sugar-animation | Critical | Low | Low | P0 |
 | 4 | Implement fuzzy matching with scored indices | candy-scriptui, sugar-forms, sugar-forms, sugar-widgets | High | Medium | Low | P0 |
 | 5 | Add `ProgramOptions::builder()` + ergonomic APIs | candy-core | High | Low | Low | P0 |
 | 6 | Extract `DatabaseInterface` in candy-sql | candy-sql | Critical | Low | Low | P0 |
@@ -582,7 +582,7 @@ The number of packages (6) citing full re-render as a problem, combined with the
 
 ### Address Concurrent Write Safety Immediately
 
-Data corruption bugs (candy-codetime JSONL, candy-flip canvas) are the kind that creates user distrust. Adding `flock()` is trivial; the damage from silent corruption is not. Treat this as a security-class issue.
+Data corruption bugs (candy-codetime JSONL, sugar-animation canvas) are the kind that creates user distrust. Adding `flock()` is trivial; the damage from silent corruption is not. Treat this as a security-class issue.
 
 ### Embrace Cassowary as a Shared Investment
 

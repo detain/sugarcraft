@@ -40,7 +40,7 @@ trait Mutable
 
 ### Classes Using the Trait
 
-- `candy-flip/src/Player.php`
+- `sugar-animation/src/Player.php`
 - `candy-ssh-launcher/src/Endpoint.php`
 - `candy-sql/src/App.php`
 - `candy-mail/src/Email.php`
@@ -122,7 +122,7 @@ interface Model
 **candy-* libs (20+):**
 - `candy-files/src/Manager.php`
 - `sugar-forms/src/Form.php`, `Viewport.php`, `TextInput.php`, `ItemList.php`, `TextArea.php`, `FilePicker.php`, `Cursor.php`, `Spinner.php`
-- `candy-flip/src/Player.php`
+- `sugar-animation/src/Player.php`
 - `candy-minesweeper/src/Game.php`
 - `candy-tetris/src/Game.php`, `VsGame.php`
 - `candy-mosaic/src/AnimationDriver.php`

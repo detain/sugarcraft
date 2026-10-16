@@ -371,13 +371,13 @@ final class ColorUtil
 
 ## Missing Features
 
-### 17. No GIF animation frame extraction ❗ r82: STILL LIVE — no GIF frame decoder in candy-flip/src either
+### 17. No GIF animation frame extraction ❗ r82: STILL LIVE — no GIF frame decoder in sugar-animation/src either
 
 **File**: N/A
 
-The library has `Animation` and `AnimationDriver` for driving animated sequences, but there is no way to decode a GIF into an `Animation` — the user must manually extract frames and build the `Animation`. The CALIBER_LEARNINGS correctly notes this belongs in `candy-flip` (a separate library), but the capability is missing entirely from the monorepo.
+The library has `Animation` and `AnimationDriver` for driving animated sequences, but there is no way to decode a GIF into an `Animation` — the user must manually extract frames and build the `Animation`. The CALIBER_LEARNINGS correctly notes this belongs in `sugar-animation` (a separate library), but the capability is missing entirely from the monorepo.
 
-**Recommendation**: Add a `GifDecoder` class or function in `candy-flip` that decodes `ImageSource` (for GIF format) into `Animation`, making the full GIF→terminal animation pipeline work out of the box.
+**Recommendation**: Add a `GifDecoder` class or function in `sugar-animation` that decodes `ImageSource` (for GIF format) into `Animation`, making the full GIF→terminal animation pipeline work out of the box.
 
 ---
 

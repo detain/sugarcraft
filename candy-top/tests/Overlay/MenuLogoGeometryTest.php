@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Overlay;
 
-use SugarCraft\Flip\AnsiArt;
+use SugarCraft\Animation\AnsiArt;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Overlay\HelpMenu;
 use SugarCraft\Top\Overlay\MainMenu;

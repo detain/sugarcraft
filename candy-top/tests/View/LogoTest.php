@@ -6,8 +6,8 @@ namespace SugarCraft\Top\Tests\View;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Flip\AnsiArt;
-use SugarCraft\Flip\ArtLibrary;
+use SugarCraft\Animation\AnsiArt;
+use SugarCraft\Animation\ArtLibrary;
 use SugarCraft\Top\Theme\ThemeConfig;
 use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Logo;
@@ -145,7 +145,7 @@ final class LogoTest extends TestCase
         $this->assertSame('    AB      ', $surface->plainLines()[1]);
         $this->assertSame('     CD     ', $surface->plainLines()[2]);
         $this->assertSame("\x1b[31m", $surface->style(4, 1));
-        // Cumulative-SGR AnsiArt (candy-flip fix): the mid-stream space now
+        // Cumulative-SGR AnsiArt (sugar-animation fix): the mid-stream space now
         // carries the inherited run instead of an empty sgr, so it is a
         // deliberate fill and gets painted. Only cells before the first SGR
         // are unstyled; the inherit-the-base idiom below still guards those.

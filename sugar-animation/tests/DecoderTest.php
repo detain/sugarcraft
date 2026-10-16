@@ -1,0 +1,417 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Animation\Tests;
+
+use SugarCraft\Animation\Decoder;
+use PHPUnit\Framework\TestCase;
+
+final class DecoderTest extends TestCase
+{
+    private string $gifPath;
+
+    protected function setUp(): void
+    {
+        // Minimal 1x1 red pixel GIF87a
+        $this->gifPath = sys_get_temp_dir() . '/test-' . uniqid() . '.gif';
+        // GIF87a header: 6 bytes
+        // Logical Screen Descriptor: 7 bytes
+        // Global Color Table (3 colors = 9 bytes)
+        // Image Descriptor: 10 bytes
+        // LZW min code size: 1 byte
+        // Image data (0x21 = GIF trailer): 2 bytes
+        $gif = "\x47\x49\x46\x38\x37\x61"  // GIF87a header
+             . "\x01\x00\x01\x00\x80\x00\x00" // LSD: 1x1, global color table, bg=0, par=0
+             . "\x00\x00\x00"                  // GCT: color 0 = black
+             . "\xff\x00\x00\x00\x00\x00\x00" // color 1 = red, color 2 = black
+             . "\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00" // Image Descriptor
+             . "\x02"                          // LZW min code size
+             . "\x44\x00\x3b";                 // image data + GIF trailer
+        file_put_contents($this->gifPath, $gif);
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->gifPath) && file_exists($this->gifPath)) {
+            unlink($this->gifPath);
+        }
+    }
+
+    /**
+     * Regression: a GIF decodes to a PALETTE image, so the sampler must
+     * resolve palette indices to real RGB (imagecolorsforindex) rather than
+     * treating the index as a packed truecolor int. The old code did the
+     * latter and returned (0,0,0) for every solid color / leaked the palette
+     * index into the blue channel for gradients.
+     *
+     * @dataProvider solidColorProvider
+     */
+    public function testDecoderResolvesPaletteColorsToRgb(int $r, int $g, int $b): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+
+        $path = sys_get_temp_dir() . '/flip-color-' . uniqid() . '.gif';
+        $im = imagecreatetruecolor(8, 4);
+        imagefill($im, 0, 0, imagecolorallocate($im, $r, $g, $b));
+        imagegif($im, $path);
+        imagedestroy($im);
+
+        try {
+            $cell = Decoder::decode($path, 4, 2)[0]->cells[0][0] ?? null;
+            $this->assertNotNull($cell, 'solid-color cell must not be null/transparent');
+            // ext-gd's GIF palette round-trip is near-exact; allow a small delta.
+            $this->assertEqualsWithDelta($r, $cell[0], 6, 'red channel');
+            $this->assertEqualsWithDelta($g, $cell[1], 6, 'green channel');
+            $this->assertEqualsWithDelta($b, $cell[2], 6, 'blue channel');
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /**
+     * @return list<array{int,int,int}>
+     */
+    public static function solidColorProvider(): array
+    {
+        return [
+            'red'    => [255, 0, 0],
+            'green'  => [0, 255, 0],
+            'blue'   => [0, 0, 255],
+            'orange' => [200, 100, 50],
+            'white'  => [255, 255, 255],
+        ];
+    }
+
+    public function testDecodeReturnsFrames(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $frames = Decoder::decode($this->gifPath, 1, 1);
+        $this->assertNotEmpty($frames);
+    }
+
+    public function testDecodeReturnsCorrectDimensions(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $frames = Decoder::decode($this->gifPath, 2, 2);
+        $this->assertInstanceOf(\SugarCraft\Animation\Frame::class, $frames[0]);
+        $this->assertSame(2, $frames[0]->width());
+        $this->assertSame(2, $frames[0]->height());
+    }
+
+    public function testDecodeThrowsForNonexistentFile(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode('/nonexistent/path/file.gif', 1, 1);
+    }
+
+    public function testDecodeThrowsForInvalidBytes(): void
+    {
+        $badPath = sys_get_temp_dir() . '/not-a-gif-' . uniqid();
+        file_put_contents($badPath, 'NOT A GIF FILE');
+        try {
+            $this->expectException(\RuntimeException::class);
+            Decoder::decode($badPath, 1, 1);
+        } finally {
+            unlink($badPath);
+        }
+    }
+
+    public function testDecodeThrowsForTooShortBytes(): void
+    {
+        $badPath = sys_get_temp_dir() . '/short-' . uniqid();
+        file_put_contents($badPath, 'GIF');
+        try {
+            $this->expectException(\RuntimeException::class);
+            Decoder::decode($badPath, 1, 1);
+        } finally {
+            unlink($badPath);
+        }
+    }
+
+    /**
+     * Regression: zero or negative cell dimensions must throw rather than
+     * allocating a zero-size buffer or looping infinitely.
+     */
+    public function testRejectsZeroCellGrid(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode($this->gifPath, 0, 10);
+    }
+
+    public function testRejectsNegativeCellGrid(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode($this->gifPath, -1, 10);
+    }
+
+    /**
+     * Regression: an oversized cell grid product (cellsW * cellsH > MAX_CELLS)
+     * must throw to prevent excessive memory allocation.
+     */
+    public function testRejectsOversizedCellGrid(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        // 500 * 500 = 250,000 which exceeds MAX_CELLS (100,000)
+        Decoder::decode($this->gifPath, 500, 500);
+    }
+
+    /**
+     * Regression: a real GD-encoded GIF whose LZW image data spans
+     * multiple full-size (≥128-byte) sub-blocks used to decode to zero
+     * frames, because findImageDataEnd() bailed on any sub-block length
+     * ≥ 0x80 and truncated the stream so imagecreatefromstring() failed.
+     * The tiny hand-built fixtures elsewhere have single small sub-blocks
+     * and so never exercised this path.
+     */
+    public function testDecodeHandlesLargeLzwSubBlocks(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // A 120x60 gradient yields several 254-byte LZW sub-blocks.
+        $im = imagecreatetruecolor(120, 60);
+        for ($y = 0; $y < 60; $y++) {
+            for ($x = 0; $x < 120; $x++) {
+                $col = imagecolorallocate($im, (int) (255 * $x / 120), (int) (255 * $y / 60), 128);
+                imagesetpixel($im, $x, $y, $col);
+            }
+        }
+        $path = sys_get_temp_dir() . '/large-' . uniqid() . '.gif';
+        imagegif($im, $path);
+        imagedestroy($im);
+
+        try {
+            $frames = Decoder::decode($path, 60, 18);
+            $this->assertNotEmpty($frames, 'multi-sub-block GIF must decode to at least one frame');
+            $this->assertSame(60, $frames[0]->width());
+            $this->assertSame(18, $frames[0]->height());
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /**
+     * Regression: a GIF whose extension sub-block length byte overruns EOF
+     * must not cause PHP warnings or exceptions. The bounds check added to
+     * the sub-block loops treats a truncated tail as end-of-data.
+     */
+    public function testDecodeHandlesTruncatedSubBlockOverrun(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // Build a GIF where an extension sub-block length byte claims 255 bytes
+        // but only a few bytes of payload follow before EOF.
+        $buf = "GIF87a";
+        $buf .= pack('v', 2); // width=2
+        $buf .= pack('v', 2); // height=2
+        $buf .= "\x80";       // GCT flag=1, GCT size=0 (2 entries)
+        $buf .= "\x00";       // bg index
+        $buf .= "\x00";       // par
+        $buf .= "\x00\x00\x00"; // GCT: color 0 = black
+        $buf .= "\xff\x00\x00"; // GCT: color 1 = red
+        // Extension block (not GCE) with sub-block length=255 but only
+        // 2 bytes follow before the GIF trailer (0x3B).
+        $buf .= "\x21\xFF";   // extension introducer + label (fake)
+        $buf .= "\xff";       // sub-block length claims 255 bytes
+        $buf .= "\x00\x3b";   // only 2 bytes before trailer — overruns EOF
+        // GIF should decode to empty frame list (no Image Descriptor found
+        // before EOF) without throwing or emitting PHP warnings.
+        $path = sys_get_temp_dir() . '/truncated-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $frames = @Decoder::decode($path, 2, 2);
+            // Should return 0 frames (no valid Image Descriptor found)
+            $this->assertIsArray($frames);
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /**
+     * Regression: a GIF truncated in the middle of a Graphic Control
+     * Extension must degrade gracefully. The GCE delay bytes were read with
+     * an unguarded ord($bytes[$i + 4]) / ord($bytes[$i + 5]) while the
+     * neighbouring reads used `?? ''`; on a mid-GCE truncation the unguarded
+     * pair raised "Uninitialized string offset" warnings (a hard failure
+     * under failOnWarning) instead of failing cleanly. Every GCE byte read
+     * is now guarded uniformly.
+     */
+    public function testDecodeHandlesTruncatedGraphicControlExtension(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // Valid GIF89a header + logical screen descriptor (no GCT), then a
+        // Graphic Control Extension cut off right after its block-size byte —
+        // bytes[$i+4], [$i+5] and [$i+6] are all past EOF.
+        $buf = "GIF89a"
+             . pack('v', 4)    // width = 4
+             . pack('v', 4)    // height = 4
+             . "\x00"          // packed: no global color table
+             . "\x00"          // bg index
+             . "\x00"          // pixel aspect ratio
+             . "\x21\xF9\x04";  // GCE introducer + label + block size, then EOF
+        $path = sys_get_temp_dir() . '/trunc-gce-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+
+        try {
+            // No @ suppression: with an unguarded ord() the truncated GCE would
+            // raise an "Uninitialized string offset" warning, which the suite's
+            // failOnWarning turns into a test failure. The guarded reads decode
+            // cleanly, yielding an empty frame list rather than a crash.
+            $frames = Decoder::decode($path, 4, 4);
+            $this->assertIsArray($frames);
+            $this->assertSame([], $frames, 'a GIF truncated mid-GCE yields no frames');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * A3b (campaign rerun): zero-dimension logical screen with one image
+     * descriptor used to reach imagecreatetruecolor(0, 8) and leak a raw
+     * ValueError, breaking decode()'s documented RuntimeException contract.
+     */
+    public function testDecodeThrowsRuntimeExceptionForZeroWidthScreen(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $buf = "GIF89a"
+             . pack('v', 0)    // width = 0 (crafted)
+             . pack('v', 8)    // height = 8
+             . "\x00"          // packed: no GCT
+             . "\x00"          // bg index
+             . "\x00"          // pixel aspect ratio
+             . "\x2C"          // image descriptor introducer
+             . "\x00\x00\x00\x00"  // left/top 0,0
+             . pack('v', 8) . pack('v', 8) // frame 8x8
+             . "\x00"          // descriptor packed: no LCT
+             . "\x02"          // LZW min code size
+             . "\x02\x44\x01"  // one sub-block
+             . "\x00"          // sub-block terminator
+             . "\x3B";         // trailer
+        $path = sys_get_temp_dir() . '/zero-width-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('sugar-animation: GIF screen dimensions must be positive');
+            Decoder::decode($path, 4, 4);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * A file carrying the GIF signature but no complete Logical Screen
+     * Descriptor is not a GIF at all — the old gate only asked for 6 bytes,
+     * after which parseHeader read bytes 6..10 off the end of the string
+     * (PHP warnings under failOnWarning).
+     */
+    public function testDecodeThrowsNotGifForHeaderShorterThanLogicalScreenDescriptor(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $path = sys_get_temp_dir() . '/short-lsd-' . uniqid() . '.gif';
+        file_put_contents($path, 'GIF89a' . "\x04\x00\x04"); // 9 bytes, LSD needs 7
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('sugar-animation: not a GIF');
+            Decoder::decode($path, 2, 2);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * A GCT whose declared byte span reaches past EOF cannot resolve any
+     * frame's palette — typed failure instead of a silent walk starting
+     * beyond the data.
+     */
+    public function testDecodeThrowsTruncatedForGlobalColorTableBeyondEof(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // packed 0x87: GCT flag set, size exp 7 → 256 entries = 768 bytes.
+        $buf = "GIF89a" . pack('v', 4) . pack('v', 4) . "\x87\x00\x00";
+        $path = sys_get_temp_dir() . '/gct-eof-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('sugar-animation: truncated GIF');
+            Decoder::decode($path, 2, 2);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * An Image Descriptor cut short by EOF: the nine dimension bytes were
+     * read unguarded (ord($bytes[$i + 1]) … ), raising "Uninitialized string
+     * offset" warnings. Now a typed `decoder.truncated` failure BEFORE any
+     * read — run without @ suppression so a reintroduced unguarded read
+     * fails the suite under failOnWarning, not just the message assert.
+     */
+    public function testDecodeThrowsTruncatedForImageDescriptorCutShortByEof(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $buf = "GIF89a" . pack('v', 4) . pack('v', 4) . "\x00\x00\x00"
+             . "\x2C\x00\x00\x00\x00\x00"; // descriptor introducer + 5 of 10 bytes
+        $path = sys_get_temp_dir() . '/short-id-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('sugar-animation: truncated GIF');
+            Decoder::decode($path, 2, 2);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * A zero/negative grid is too SMALL, not too large — it must name its
+     * own key so the message tells the truth about what was refused.
+     */
+    public function testZeroSizedGridNamesTheTooSmallKey(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sugar-animation: cell grid dimensions must be positive');
+        Decoder::decode($this->gifPath, 0, 10);
+    }
+
+    /** The size-cap key keeps its ({max}) contract, pinned at the message level. */
+    public function testOversizedGridKeepsTheTooLargeKey(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sugar-animation: cell grid product exceeds maximum (' . Decoder::MAX_CELLS . ')');
+        Decoder::decode($this->gifPath, 500, 500);
+    }
+}

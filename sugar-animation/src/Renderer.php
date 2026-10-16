@@ -1,0 +1,213 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Animation;
+
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Pty\SizeIoctl;
+
+/**
+ * Render a {@see Frame} as ANSI-coloured cells.
+ *
+ * Two presets:
+ *   - `solid`    — every cell is a plain space painted with the cell's RGB
+ *                  as its 24-bit background (48;2;m). Looks like a real
+ *                  image; takes a wide terminal.
+ *   - `density`  — pick a glyph from a luminance ramp (` .:-=+*#%@`).
+ *                  Reads as ASCII art, easier on narrow windows.
+ */
+final class Renderer
+{
+    public const PRESET_SOLID   = 'solid';
+    public const PRESET_DENSITY = 'density';
+
+    private const RAMP = ' .:-=+*#%@';
+
+    /** @var int<0, max>|null */
+    private readonly ?int $adaptiveRows;
+
+    /** @var int<0, max>|null */
+    private readonly ?int $adaptiveCols;
+
+    /**
+     * @param int<0, max>|null $adaptiveRows  limit rows rendered to this many; null = unlimited
+     * @param int<0, max>|null $adaptiveCols  limit cols rendered to this many; null = unlimited
+     */
+    private function __construct(
+        ?int $adaptiveRows = null,
+        ?int $adaptiveCols = null,
+    ) {
+        $this->adaptiveRows = $adaptiveRows;
+        $this->adaptiveCols = $adaptiveCols;
+    }
+
+    /**
+     * Return a Renderer that adapts its output to fit the current TTY dimensions.
+     *
+     * Queries the terminal size via ioctl(TIOCGWINSZ) — no shell-out to tput.
+     * When adaptive size is set, the renderer clamps the output grid to the
+     * available rows and columns so the GIF never overflow the viewport.
+     *
+     * ## WHAT THIS ASKED ABOUT, AND WHY IT CHANGED
+     *
+     * WHAT IT SAID: `SizeIoctl::query((int) STDOUT)`, under a `@throws` line
+     * promising the exception means STDOUT is not a TTY.
+     *
+     * WHAT IS TRUE: an `(int)` cast of a PHP stream yields its RESOURCE ID,
+     * not its file descriptor. MEASURED, PHP 8.3.6, three takes, identical
+     * every time: `(int) STDOUT` is **2**, and descriptor 2 is STDERR. So it
+     * asked the kernel for STDERR's window size while its own doc-block
+     * promised an answer about STDOUT.
+     *
+     * That is harmless only while stderr happens to be the same terminal.
+     * Redirect stderr and keep stdout on the terminal — `php demo.php
+     * 2>err.log`, an entirely routine invocation — and the two descriptors
+     * stop naming the same thing. MEASURED under a real tty, PHP 8.3.6,
+     * three takes, identical every time:
+     *
+     *     posix_isatty(1)  [real STDOUT] = true
+     *     posix_isatty(2)  [real STDERR] = false
+     *     SizeIoctl::query(1) -> succeeds
+     *     SizeIoctl::query(2) -> RuntimeException: Cannot query size of non-tty fd
+     *
+     * — so the method threw on a live terminal, and the diagnostic a caller
+     * saw pointed at STDOUT, which was demonstrably fine. Unlike the rest of
+     * this cast family it needed no unusual process state, only a shell
+     * redirection.
+     *
+     * WHY THE CAST IS NOT SIMPLY DELETED: `SizeIoctl::query()` takes an `int`
+     * descriptor and there is no portable way to get one out of a PHP stream.
+     * The defect was the wrong number, not the presence of a number. STDOUT's
+     * descriptor is the literal 1, which is correct and total.
+     *
+     * @throws \RuntimeException if STDOUT is not a TTY
+     */
+    public static function withAdaptiveSize(): self
+    {
+        // Descriptor 1, spelled as the literal. NOT `(int) STDOUT`, which is
+        // the resource id 2 and names STDERR. See the doc-block above.
+        $size = SizeIoctl::query(1);
+        return new self($size['rows'], $size['cols']);
+    }
+
+    /**
+     * Return a fresh Renderer with no adaptive sizing (default).
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    /**
+     * @internal Creates a Renderer with explicit adaptive constraints.
+     *
+     * Not "for testing only" (A3b truth-flip): Player's ResizeMsg handler is a
+     * production caller (src/Player.php). Still internal API — pre-1.0, the
+     * public surface is new()/fromFile(); do not build on this from outside.
+     *
+     * @param int<0, max> $rows
+     * @param int<0, max> $cols
+     */
+    public static function withConstraints(int $rows, int $cols): self
+    {
+        // Mirror the doc'd int<0, max> contract in code, not just in types:
+        // PHP does not enforce @param, and a negative limit reaches the
+        // renderer as a silently degenerate canvas instead of a loud error.
+        if ($rows < 0 || $cols < 0) {
+            throw new \InvalidArgumentException(
+                'sugar-animation: renderer constraints must not be negative (got rows=' . $rows . ', cols=' . $cols . ')',
+            );
+        }
+        return new self($rows, $cols);
+    }
+
+    /**
+     * Static-compatible render — delegates to a zero-sized (unconstrained) instance.
+     * Preserved for backward compatibility; new code should use {@see self::new()}->renderFrame().
+     */
+    public static function render(Frame $f, string $preset = self::PRESET_SOLID): string
+    {
+        return (new self())->renderFrame($f, $preset);
+    }
+
+    /**
+     * Render a frame. When adaptive dimensions are set (via {@see withAdaptiveSize()}),
+     * the output grid is clamped to fit within them.
+     *
+     * Adjacent cells with identical RGB values share a single SGR escape
+     * sequence, reducing the byte count for visually uniform regions.
+     */
+    public function renderFrame(Frame $f, string $preset = self::PRESET_SOLID): string
+    {
+        $maxRows = $this->adaptiveRows;
+        $maxCols = $this->adaptiveCols;
+        $rows = [];
+        foreach ($f->cells as $rowIndex => $row) {
+            if ($maxRows !== null && $rowIndex >= $maxRows) {
+                break;
+            }
+            $line = '';
+            $lastColor = null; // null = transparent run break / no active color
+            foreach ($row as $colIndex => $cell) {
+                if ($maxCols !== null && $colIndex >= $maxCols) {
+                    break;
+                }
+                if ($cell === null) {
+                    // Transparent cell: resets background and breaks any active run.
+                    $line .= $this->transparent();
+                    $lastColor = null;
+                } else {
+                    [$r, $g, $b] = $cell;
+                    if ($lastColor !== null && $lastColor[0] === $r && $lastColor[1] === $g && $lastColor[2] === $b) {
+                        // Same color as previous cell — append glyph without new SGR.
+                        $line .= $this->glyphOnly($r, $g, $b, $preset);
+                    } else {
+                        // New color — emit full SGR + glyph and start a new run.
+                        $line .= $this->cell($r, $g, $b, $preset);
+                        $lastColor = [$r, $g, $b];
+                    }
+                }
+            }
+            $rows[] = $line . Ansi::reset();
+        }
+        return implode("\n", $rows);
+    }
+
+    private function cell(int $r, int $g, int $b, string $preset): string
+    {
+        if ($preset === self::PRESET_DENSITY) {
+            // 0.299r + 0.587g + 0.114b is the standard luminance weight.
+            $lum = (int) (0.299 * $r + 0.587 * $g + 0.114 * $b);
+            $idx = (int) round($lum / 255 * (strlen(self::RAMP) - 1));
+            $glyph = self::RAMP[$idx] ?? ' ';
+            return sprintf(Ansi::CSI . "38;2;%d;%d;%dm%s", $r, $g, $b, $glyph);
+        }
+        // Solid block — full-cell colour fill via 24-bit truecolor escape.
+        return sprintf(Ansi::CSI . "48;2;%d;%d;%dm ", $r, $g, $b);
+    }
+
+    /**
+     * Emit just the glyph for a cell whose SGR is already active
+     * (run coalescing — no new escape sequence needed).
+     */
+    private function glyphOnly(int $r, int $g, int $b, string $preset): string
+    {
+        if ($preset === self::PRESET_DENSITY) {
+            $lum = (int) (0.299 * $r + 0.587 * $g + 0.114 * $b);
+            $idx = (int) round($lum / 255 * (strlen(self::RAMP) - 1));
+            return self::RAMP[$idx] ?? ' ';
+        }
+        // Solid: just a space (color is already set by the active SGR).
+        return ' ';
+    }
+
+    /**
+     * Emit a transparent-cell placeholder (resets bg so the terminal
+     * background shows through).
+     */
+    private function transparent(): string
+    {
+        return Ansi::sgr(49) . ' '; // Reset to default background.
+    }
+}

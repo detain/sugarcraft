@@ -1,4 +1,4 @@
-# Step 07.15 — candy-mosaic animation support (consumes candy-flip frames)
+# Step 07.15 — candy-mosaic animation support (consumes sugar-animation frames)
 
 **Source:** `leftover_updates_later.md` candy-mosaic P2 #8 + strategic split
 **Branch:** `ai/mosaic-animation`
@@ -6,11 +6,11 @@
 ## Deliverable
 
 GIF/MP4-style animation in mosaic. Per the strategic split documented
-in plans/leftover_updates_later.md §6: **candy-flip emits frame bytes;
+in plans/leftover_updates_later.md §6: **sugar-animation emits frame bytes;
 candy-mosaic owns the Kitty/iTerm2/WezTerm protocol output**.
 
 This step adds the consumer side — `Animation` class that takes a
-sequence of frames from candy-flip and drives the renderer.
+sequence of frames from sugar-animation and drives the renderer.
 
 ## Files
 
@@ -25,7 +25,7 @@ sequence of frames from candy-flip and drives the renderer.
 
 - `candy-mosaic/src/Renderer/KittyRenderer.php` — `renderFrame()` /
   `deletePrevious()` API for animation.
-- `candy-mosaic/composer.json` — add `"sugarcraft/candy-flip": "@dev"`
+- `candy-mosaic/composer.json` — add `"sugarcraft/sugar-animation": "@dev"`
   (it's the source of frames) — IF the split says so. Verify with
   strategic-plan step 11.04.
 
@@ -40,7 +40,7 @@ sequence of frames from candy-flip and drives the renderer.
 
 ## Notes
 
-- This step assumes step 11.04 (strategic plan for candy-flip/mosaic
+- This step assumes step 11.04 (strategic plan for sugar-animation/mosaic
   split) has landed first or its conclusions are stable. If unclear,
   block this step until 11.04 ships.
 

@@ -2,7 +2,7 @@
     "title": "CandyGifView — SugarCraft",
     "description": "CandyGifView: Terminal GIF and .ansi-art viewer.",
     "ogTitle": "CandyGifView — SugarCraft",
-    "ogDescription": "Terminal GIF and .ansi-art viewer CLI on top of candy-flip.",
+    "ogDescription": "Terminal GIF and .ansi-art viewer CLI on top of sugar-animation.",
     "emoji": "📽",
     "displayName": "CandyGifView",
     "tagline": "Terminal GIF and .ansi-art viewer",

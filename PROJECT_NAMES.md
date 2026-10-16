@@ -143,8 +143,8 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyMosaic** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |
 | **CandyVt**     | candy + vt = virtual terminal emulator. "vt" is the established term. |
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. "vcr" carries the cassette / playback metaphor for free. |
-| **CandyFlip**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). "flip" carries the frame-by-frame animation metaphor for free. |
-| **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/candy-flip`, split into its own package (rename campaign step 1.3). "view" states the app role beside the CandyFlip toolkit. |
+| **SugarAnimation**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). "flip" carries the frame-by-frame animation metaphor for free. |
+| **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/sugar-animation`, split into its own package (rename campaign step 1.3). "view" states the app role beside the SugarAnimation toolkit. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
 | **SugarForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
 | **SugarFocus** | sugar + focus = the focus-management component. dependency-free ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here. || **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
@@ -158,7 +158,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarTreelist** | candy + lister = scrollable tree/list view component. literal. |
 | **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |
 | **CandySql** | candy + sql = terminal SQL client. literal pairing (was candy-query — the query-editor framing retired with the 2026-10 rename); multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. | <!-- @rename-keep -->
-| **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
+| **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside SugarAnimation (GIF) and CandyMosaic (images) as the video member of the family. |
 | **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter numbering model); first-party PHP. |
 | **Sugar MCP Client** | sugar + mcp = Model Context Protocol client core. component/data per prefix law; extracted from sugar-crush (src/MCP stdio stack + McpMessage codec); first-party PHP — MCP is an open protocol spec. |
 | **SugarCrushWeb** | app satellite of SugarCrush — the browser UI for `sugarcrush serve`. Three words by the `<app>-<surface>` exception above; first-party PHP + Vue. |
@@ -198,7 +198,7 @@ matching package turns out to be.
 
 | Combo | Likely fit |
 |---|---|
-| **PancakeFlip** | image / video / GIF flipping (CandyFlip alternative) |
+| **PancakeFlip** | image / video / GIF flipping (SugarAnimation alternative) |
 | **PieChart** | another charts library |
 | **CookieClick** | mouse-zone tracker (SugarMouse alternative) |
 | **BentoBox** | layout (SugarPanels alternative) |

@@ -2,7 +2,7 @@
 
 ## Summary
 
-sugar-reel is a terminal video player porting Charmbracelet's gum/reel-style video playback to PHP. It implements a TEA (The Elm Architecture) model via candy-core, decodes video via ffmpeg or candy-flip (for GIFs), and renders frames through multiple terminal protocols (ASCII, ANSI256, TrueColor, HalfBlock, QuarterBlock, Sixel, Kitty, iTerm2).
+sugar-reel is a terminal video player porting Charmbracelet's gum/reel-style video playback to PHP. It implements a TEA (The Elm Architecture) model via candy-core, decodes video via ffmpeg or sugar-animation (for GIFs), and renders frames through multiple terminal protocols (ASCII, ANSI256, TrueColor, HalfBlock, QuarterBlock, Sixel, Kitty, iTerm2).
 
 The code is generally well-structured with good documentation, comprehensive CALIBER_LEARNINGS, and solid patterns (immutable builders, factory seams for testability, graceful binary-degradation). However, several significant issues exist: a likely ineffective SIGSTOP/SIGCONT audio pause mechanism, widespread `/fake` test-path branching embedded in production code paths, duplicated audio-rebuild logic, and a 1223-line Player class that violates single-responsibility at its current size. The library is also fundamentally synchronous with no ReactPHP async integration, which limits its utility in an async ecosystem.
 
@@ -346,13 +346,13 @@ The `frameToBuffer()` method (lines 664-693) has a dedicated inline HalfBlock re
 ### 10. `GifDecoder.php:57-77` — `open()` silently falls back to empty array on decode failure
 
 ```php
-$this->frames = FlipDecoder::decode($source, $decodeW, $decodeH);
+$this->frames = FlipDecoder::decode($source, $decodeW, $decodeH); <!-- @rename-keep -->
 // Best-effort time seek: all GIF frames are already in memory...
 if ($startSec > 0.0 && $fps > 0.0) {
     $this->frameIndex = min(count($this->frames), (int) round($startSec * $fps));
 }
 ```
-If `FlipDecoder::decode()` returns `[]`, the player will show a black screen with no error. At minimum this should be logged or a warning emitted. The `RgbFrame` returned will be 0×0 dimensions in some paths.
+If `FlipDecoder::decode()` returns `[]`, the player will show a black screen with no error. At minimum this should be logged or a warning emitted. The `RgbFrame` returned will be 0×0 dimensions in some paths. <!-- @rename-keep -->
 
 ### ✅ (prior) 11. `FfmpegDecoder.php:313-333` — PNG buffer grows unbounded; no size limit
 

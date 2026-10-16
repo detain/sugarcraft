@@ -349,7 +349,7 @@ if ($mode === Mode::HalfBlock) {
 
 ### 3.1 GifDecoder Silently Falls Back to Empty [MEDIUM]
 
-**What:** If FlipDecoder::decode() returns [], player shows black screen silently.
+**What:** If FlipDecoder::decode() returns [], player shows black screen silently. <!-- @rename-keep -->
 
 **Related Code:** `sugar-reel/src/Decode/GifDecoder.php:57-77`
 
@@ -357,9 +357,9 @@ if ($mode === Mode::HalfBlock) {
 
 **Implementation:**
 ```php
-$this->frames = FlipDecoder::decode($source, $decodeW, $decodeH);
+$this->frames = FlipDecoder::decode($source, $decodeW, $decodeH); <!-- @rename-keep -->
 if ($this->frames === []) {
-    error_log("GifDecoder: FlipDecoder::decode('{$source}', {$decodeW}, {$decodeH}) returned empty array");
+    error_log("GifDecoder: FlipDecoder::decode('{$source}', {$decodeW}, {$decodeH}) returned empty array"); <!-- @rename-keep -->
 }
 ```
 

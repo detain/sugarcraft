@@ -278,7 +278,7 @@ Each writes a plan file only — no implementation.
 1. `step-01-candy-mail-identity.md`
 2. `step-02-candy-git-server-tui.md`
 3. `step-03-candy-vt-graphics.md`
-4. `step-04-candy-flip-mosaic-split.md`
+4. `step-04-sugar-animation-mosaic-split.md`
 
 ### Phase 12 — Deferred (`phase-12-deferred/`) — pause indefinitely per user
 

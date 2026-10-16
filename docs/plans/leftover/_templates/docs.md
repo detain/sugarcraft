@@ -72,7 +72,7 @@ a metrics scraper), create the page.
 Audience: someone extending the lib. Only for libs with extension
 points (plugin systems, middleware, custom backends): candy-pty,
 candy-wish, sugar-dashboard, candy-vcr, candy-scriptui, candy-mosaic,
-candy-flip.
+sugar-animation.
 
 Headings:
 

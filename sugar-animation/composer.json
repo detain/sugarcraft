@@ -1,0 +1,52 @@
+{
+    "name": "sugarcraft/sugar-animation",
+    "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "cli",
+        "gif",
+        "ansi-art",
+        "ascii-art",
+        "gifterm",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/sugar-animation.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-animation/issues",
+        "source": "https://github.com/sugarcraft/sugar-animation",
+        "docs": "https://sugarcraft.github.io/lib/sugar-animation.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-pty": "dev-master"
+    },
+    "suggest": {
+        "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Animation\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Animation\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

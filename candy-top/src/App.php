@@ -20,8 +20,8 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View as CoreView;
-use SugarCraft\Flip\AnsiArt;
-use SugarCraft\Flip\ArtLoop;
+use SugarCraft\Animation\AnsiArt;
+use SugarCraft\Animation\ArtLoop;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\Config\GpuPanels;
@@ -208,7 +208,7 @@ final class App implements Model
         private readonly ?ConfigFile $file = null,
         public readonly bool $writeNew = false,
         private readonly ?ThemeRegistry $catalog = null,
-        /** Chosen candy-flip logo art; null = paint the legacy banner. */
+        /** Chosen sugar-animation logo art; null = paint the legacy banner. */
         public readonly ?AnsiArt $logoArt = null,
         /** Frame of `$logoArt` the menus paint right now (advanced by ticks). */
         public readonly int $logoFrame = 0,

@@ -14,7 +14,7 @@ use SugarCraft\Core\Msg;
  * determines the target frame, and decides whether to advance, hold,
  * or skip frames to maintain sync with the playback speed.
  *
- * Mirrors candy-flip/src/TickMsg but scoped to video playback timing.
+ * Mirrors sugar-animation/src/TickMsg but scoped to video playback timing.
  */
 final class TickMsg implements Msg
 {

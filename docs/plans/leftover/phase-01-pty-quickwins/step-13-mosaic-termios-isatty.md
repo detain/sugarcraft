@@ -37,7 +37,7 @@ WezTerm detection bug (bundle)
 - `candy-core/src/Util/TtyDetect.php` — static helper:
   `isAtty(resource $stream): bool` delegating to candy-pty. Single
   call site for every lib that needs "is this a TTY?". Other libs
-  (candy-flip, candy-codeshot) can adopt later.
+  (sugar-animation, candy-codeshot) can adopt later.
 
 ## Tests
 
