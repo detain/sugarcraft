@@ -56,17 +56,17 @@
     <pre class="code"><code class="language-php">use SugarCraft\Panels\SugarPanels;
 use SugarCraft\Sprinkles\{Align, Border};
 
-$boxer = SugarPanels::new();
+$panels = SugarPanels::new();
 
-$layout = $boxer-&gt;vertical(
-    $boxer-&gt;horizontal(
-        $boxer-&gt;leaf('Left panel'),
-        $boxer-&gt;leaf('Right panel'),
+$layout = $panels-&gt;vertical(
+    $panels-&gt;horizontal(
+        $panels-&gt;leaf('Left panel'),
+        $panels-&gt;leaf('Right panel'),
     ),
-    $boxer-&gt;leaf('Bottom bar'),
+    $panels-&gt;leaf('Bottom bar'),
 );
 
-echo $boxer-&gt;render($layout, 60, 20);</code></pre>
+echo $panels-&gt;render($layout, 60, 20);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -92,7 +92,7 @@ echo $boxer-&gt;render($layout, 60, 20);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>SugarPanels</td><td>new()</td><td>Create a boxer instance</td></tr>
+<tr><td>SugarPanels</td><td>new()</td><td>Create a panels instance</td></tr>
 <tr><td>SugarPanels</td><td>leaf(string)</td><td>Leaf node with string content</td></tr>
 <tr><td>SugarPanels</td><td>horizontal(Node ...)</td><td>Horizontal (row) layout</td></tr>
 <tr><td>SugarPanels</td><td>vertical(Node ...)</td><td>Vertical (column) layout</td></tr>

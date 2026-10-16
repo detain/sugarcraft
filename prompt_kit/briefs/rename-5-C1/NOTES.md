@@ -30,6 +30,6 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 - R2 remote rename: done — repo now sugarcraft/sugar-panels, verified record printed (description/homepage/topics synced).
 - R3 tool run: @ done rc=0 — 74 files/13 paths, R1=25 R2=179 R3=318 R6=1 (dry-run delta = my tagged NOTES lines). Lint clean, zero sugar-dash touches (Boxer widget untouched), residue 0 already.
 - R4 manual: formerly+ns notices in README; $boxer->panels in README/examples/_data-body (user-facing only; internal test props kept); README:25 + SugarPanels.php:44 + test:687 brand shorthand reworded; Lang docblock truth-flip; PROJECT_NAMES:55 Boxer->Panels; composer desc/keywords honest no-op (upstream bubbleboxer kept); no bins/env/data-paths/Lang-pins (honest none); icon prompt truthful (B12 law).
-- R5 wiring:
-- R6 gates:
-- R7 commit:
+- R5 wiring: root composer require+repositories already auto-R3'd; `composer update sugarcraft/sugar-panels --no-install` locked; refresh-deps --mode=linked (own-dir anchored) -> 7 symlinked siblings; gen-docs + --check OK (78 files); gen-ansi-readme --check OK.
+- R6 gates: residue 0 findings rc=0 (twice); sugar-panels suite EXACT baseline 201T/456A/0F/0E/0S (2x stable, plain pipe); tools/tests floor EXACT 426T/1484A; path-repos rc=0; child-lifetimes rc=0; consumers: none (grep */composer.json -> only sugar-panels itself); sugar-crush filter N/A zero refs.
+- R7 commit: renames.json:21 pending->renamed (compact sed, JSON valid, numstat 1/1); gen-docs re-run minted docs/lib/sugar-boxer.html redirect stub <!-- @rename-keep --> (18th, generator self-tags @rename-keep); --check pair green; final residue rc=0 at status=renamed; followups C1 GIF-pixels entry added.
