@@ -39,6 +39,6 @@ Base: 4bb435f3e (master==origin). Foreign oc.7z moved to /tmp/oc.7z.b3-hold (pre
 - diff --stat: 129 files +1042/−1024 staged pre-commit (+renames.json flip +stub +followups after).
 
 ## R9 packagist + close
-- Pre-sync create 406 (packagist derived old name from stale split composer.json at 3c2bdc881); forced update old 202 did not flip it while sync lagged. After CI-sync: split master=24effeca8 (legacy/candy-serve + candy-serve-final @3c2bdc881 minted — law holds on fast-forward syncs too). create 202 clean; forced update new (job a6f1fd91); dev-master reference == split master EXACT.
+- Pre-sync create 406 (packagist derived old name from stale split composer.json at 3c2bdc881); forced update old 202 did not flip it while sync lagged. After CI-sync: split master=24effeca8 (legacy/candy-serve + candy-serve-final @3c2bdc881 minted — law holds on fast-forward syncs too). create 202 clean; forced update new (job a6f1fd91); dev-master reference == split master EXACT. <!-- @rename-keep -->
 - published 0dec50424 (status=packagist-done + abandon line). tracker 0f4f18542 pushed. oc.7z restored. ahead/behind 0/0. B3 COMPLETE.
 - LAW ADD (for candy-git-adjacent futures): create MUST follow CI-sync — packagist's name check reads the SPLIT repo, not GitHub's rename. Retry-after-sync beats any 406 cure dance.

@@ -63,7 +63,7 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 - README Formerly+Namespace blockquotes (tagged); PROJECT_NAMES:138 rationale rewritten honest (SVG confirmed truthful — composer desc + README); followups: B11 GIF section; docs/_data CLI example fixed.
 - NOTES history: tool rewrote 7 as-written lines (ls-d ref, fixture strings, /tmp report name, refusal msg quote, ansi dir names, SherbetSnap cite, tape bin path) — all restored + tagged (B4 law re-proven ×7).
 - Regenerated scripts/__pycache__/generate_icons.cpython-313.pyc (tracked, carried old string post-.py rewrite).
-- Survivors ruled LEGIT untagged: ansi/sugarcraft/*.ansi grid art (corpus content-excluded, carries MANY retired names incl sugar-post/sugar-spark — prior lanes left silently); docs/old/ tool-excluded archive; bare-word 'freeze' keyword, 'Freeze the elapsed time' verb (minesweeper), upstream repo_map/pr citations.
+- Survivors ruled LEGIT untagged: ansi/sugarcraft/*.ansi grid art (corpus content-excluded, carries MANY retired names incl sugar-post/sugar-spark — prior lanes left silently); docs/old/ tool-excluded archive; bare-word 'freeze' keyword, 'Freeze the elapsed time' verb (minesweeper), upstream repo_map/pr citations. <!-- @rename-keep -->
 
 ## R5 — LANDED (commit 588b490ef)
 - Root lock relocated cleanly (1 entry, ns SugarCraft\\CodeShot, bin/candy-codeshot, zero old-vocab lines; rest = brace reflow + content-hash + reference).

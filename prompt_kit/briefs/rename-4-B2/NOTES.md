@@ -17,7 +17,7 @@ Procedure R chain from base `9ba813b8d` (== origin at start; tree clean except f
 - Re-dry-run expected: 382 files (CONTEXT+baseline drop), R3 1325→1292, R5→0.
 - Re-dry-run after tag-prep: 382 files (−2 exact), R3 1325→1292 (−33 exact), R5 2→0. Delta byte-clean vs prediction. Tag-prep commit c92c30e3a.
 ## R2 remote
-- `scripts/rename-remote.sh candy-query candy-sql`: verified record (301 + name candy-sql). Repo DESCRIPTION on GitHub carried the stale "Terminal SQLite browser" wording — updated via `gh repo edit` to the plan's SQL-client sentence (R4 alignment).
+- `scripts/rename-remote.sh candy-query candy-sql`: verified record (301 + name candy-sql). Repo DESCRIPTION on GitHub carried the stale "Terminal SQLite browser" wording — updated via `gh repo edit` to the plan's SQL-client sentence (R4 alignment). <!-- @rename-keep -->
 
 ## R3 run
 - Tool: 382 files, 179 paths (+1 bin path = A1/B1 shape), R1=1163 R2=27 R3=1292 R6=1, exit 0.
@@ -31,20 +31,20 @@ Procedure R chain from base `9ba813b8d` (== origin at start; tree clean except f
 - PROJECT_NAMES.md rationale rewritten honestly (FINDING C family; line tagged @rename-keep — residue caught it, A2 pattern).
 - `_candy-query` blindspot: 4 sites sed→`_candy-sql` (findings_resume_plan ×3, plan.md ×1). ZERO remain untagged. `project_candy_query_*` snake memory-IDs left (block IDs ≠ slug; recorded).
 - Env: zero reads → NO LegacyEnv. Data paths: zero (history = optional caller-supplied path) → NO LegacyPaths. MATCHUPS/index.html section move MOOT (row already under Apps). vhs.yml both hand-lists auto-rewritten (verified).
-- ansi wordmark: recorded in rename-followups.md (167 pieces, some embed CandyQuery/QUERY text).
-- Pre-existing FOREIGN vendor detritus hit: candy-sql/vendor/sugarcraft/candy-zone broken symlink (Phase-1.1 leftover) reddened refresh-deps `escaping=1` → removed the stale untracked symlink; refresh now OK rc0. NOT rename-related.
+- ansi wordmark: recorded in rename-followups.md (167 pieces, some embed CandyQuery/QUERY text). <!-- @rename-keep -->
+- Pre-existing FOREIGN vendor detritus hit: candy-sql/vendor/sugarcraft/candy-zone broken symlink (Phase-1.1 leftover) reddened refresh-deps `escaping=1` → removed the stale untracked symlink; refresh now OK rc0. NOT rename-related. <!-- @rename-keep -->
 
 ## R5 wiring
 - root composer require+repositories rewritten by tool; `composer update sugarcraft/candy-sql --no-install`: lock churn = content-hash + ONE relocated package block (79/78 lines), sugarcraft-only.
-- refresh-deps --mode=linked --libs=candy-sql: linked=1 21/21 OK rc0 (after candy-zone detritus cure); guard --no-lib-path-repos rc0. Consumers: root only.
-- gen-docs + --check rc0 (61 pages + 6 stubs; candy-query stub arrives after R7 flip per A3 pattern — re-run inside R7). gen-ansi-readme --check agrees (3595 pieces).
+- refresh-deps --mode=linked --libs=candy-sql: linked=1 21/21 OK rc0 (after candy-zone detritus cure); guard --no-lib-path-repos rc0. Consumers: root only. <!-- @rename-keep -->
+- gen-docs + --check rc0 (61 pages + 6 stubs; candy-query stub arrives after R7 flip per A3 pattern — re-run inside R7). gen-ansi-readme --check agrees (3595 pieces). <!-- @rename-keep -->
 
 ## R6 verification (so far)
-- Residue --old=candy-query: **0 findings** (post git add -A).
+- Residue --old=candy-query: **0 findings** (post git add -A). <!-- @rename-keep -->
 - candy-sql suite: **1580T/11900A OK exit0 — EXACT baseline** (0/0 delta).
 - Sibling suites (prose-edited libs): sugar-toast 278T/669A EXACT; sugar-table 510T/1237A EXACT; sugar-dash 7483T/14859A/2F — EXACT baseline shape, reds are the two documented pre-existing AtomicJsonFile residue tests (WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp + State\PersistenceTest::testSaveLeavesNoLeftoverTempFiles), untouched by this entry.
 - tools/tests: **426T/1484A EXACT floor**. check-path-repos rc0.
 - Harness lesson RE-LEARNED live: `cd <lib> && ( watchdog ) &` backgrounds the whole chain → suite rc=127 (B1's recorded trap; use `;` after cd).
-- R7 DONE: candy-sql: rename from candy-query @0184dd88b (580 files +3008/-2967; renames.json compact one-line flip pending→renamed on line 9 — first whole-file json.dumps rewrite REJECTED for churn law, reverted; gen-docs re-run minted docs/lib/candy-query.html redirect stub (7 stubs now, --check ok) inside the commit; subject+author verified 1/1, no Co-Author trailer; tree clean after commit). oc.7z restored to root (untracked).
-- R8 DONE: pull --rebase absorbed FOREIGN operator commit 11ef95fd3 (vhs GIF regen — touched candy-query/.vhs/*.gif; blob-verified the fresh GIF bytes rode our rename into candy-sql/ intact, hashes match). Pushes: R7 094d92660 (rebased sha of 0184dd88b) + notes 811742b21, then remote-done 2f9c2f06e; master==origin 0/0 each. Continuity peek: monorepo origin/master == local ✓; split sugarcraft/candy-sql responds (renamed repo; old URL 301s same SHA 77a4a069b = pre-rename content, CI sync-sugarcraft.yml will advance it — no watching per owner policy). No legacy/<old> ref expected this entry: split push is fast-forward (rename appended, no history rewrite) unlike A1/B1 force-pushes — old commits are master lineage themselves.
-- R9 DONE: create HTTP 202 clean (no 406 cure needed); forced update job f6d851ef; check: dev-master present, source.reference 8151fed8317dfb1eac136b8aa2bb005fb04a3b78 == split refs/heads/master EXACT. Old candy-query package still indexed at 77a4a069b (stays installable; abandon checklist line appended + cured re legacy refs). Published commit 215e7a08e status=packagist-done, pushed; final continuity ls-remote: monorepo origin master 215e7a08e == local 0/0; split master 8151fed83 + legacy/candy-query + candy-query-final @77a4a069b. B2 COMPLETE.
+- R7 DONE: candy-sql: rename from candy-query @0184dd88b (580 files +3008/-2967; renames.json compact one-line flip pending→renamed on line 9 — first whole-file json.dumps rewrite REJECTED for churn law, reverted; gen-docs re-run minted docs/lib/candy-query.html redirect stub (7 stubs now, --check ok) inside the commit; subject+author verified 1/1, no Co-Author trailer; tree clean after commit). oc.7z restored to root (untracked). <!-- @rename-keep -->
+- R8 DONE: pull --rebase absorbed FOREIGN operator commit 11ef95fd3 (vhs GIF regen — touched candy-query/.vhs/*.gif; blob-verified the fresh GIF bytes rode our rename into candy-sql/ intact, hashes match). Pushes: R7 094d92660 (rebased sha of 0184dd88b) + notes 811742b21, then remote-done 2f9c2f06e; master==origin 0/0 each. Continuity peek: monorepo origin/master == local ✓; split sugarcraft/candy-sql responds (renamed repo; old URL 301s same SHA 77a4a069b = pre-rename content, CI sync-sugarcraft.yml will advance it — no watching per owner policy). No legacy/<old> ref expected this entry: split push is fast-forward (rename appended, no history rewrite) unlike A1/B1 force-pushes — old commits are master lineage themselves. <!-- @rename-keep -->
+- R9 DONE: create HTTP 202 clean (no 406 cure needed); forced update job f6d851ef; check: dev-master present, source.reference 8151fed8317dfb1eac136b8aa2bb005fb04a3b78 == split refs/heads/master EXACT. Old candy-query package still indexed at 77a4a069b (stays installable; abandon checklist line appended + cured re legacy refs). Published commit 215e7a08e status=packagist-done, pushed; final continuity ls-remote: monorepo origin master 215e7a08e == local 0/0; split master 8151fed83 + legacy/candy-query + candy-query-final @77a4a069b. B2 COMPLETE. <!-- @rename-keep -->

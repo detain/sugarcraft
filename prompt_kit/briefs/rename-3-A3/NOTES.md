@@ -4,7 +4,7 @@
 
 ## Chain
 - 00e6cbd37 `rename: mark historical campaign-record refs @rename-keep before A3 run`
-  (baseline row `| sugar-calendar | 149 | 382 |` tagged; A2 precedent — prompt_kit is the
+  (baseline row `| sugar-calendar | 149 | 382 |` tagged; A2 precedent — prompt_kit is the <!-- @rename-keep -->
   only historical surface; CONTEXT/worklog/backlog/findings ride mechanically per A2).
 - R2 remote first: `scripts/rename-remote.sh sugar-calendar sugar-datepicker` — <!-- @rename-keep -->
   verified record name=sugar-datepicker, description (EthanEFung/bubble-datepicker port)
@@ -12,15 +12,15 @@
 - R3 tool run exit 0: 74 files changed, 158 paths renamed, R1=38 R2=28 R3=958 R6=1
   (plan dry-run said 75/959 — the tagged baseline line correctly skipped). php -l 39/39 clean;
   zero identifier-position hyphen results.
-- c646c6322 `sugar-datepicker: rename from sugar-calendar` (235 files; renames.json
-  status=renamed; gen-docs re-run minted docs/lib/sugar-calendar.html redirect stub — 66 pages,
+- c646c6322 `sugar-datepicker: rename from sugar-calendar` (235 files; renames.json <!-- @rename-keep -->
+  status=renamed; gen-docs re-run minted docs/lib/sugar-calendar.html redirect stub — 66 pages, <!-- @rename-keep -->
   --check rc=0; residue 0 again post-stub).
 - 826ef8797 `rename: sugar-datepicker remote done` (pushed; split master 9aa7ecd at check time,
   legacy refs lagging sync — noted per A2, no polling).
 - R9 packagist: create HTTP 202 clean (no old-name 406 — old registration had pre-crawled the
   301'd repo), one forced `update sugar-datepicker` (202, job 8b0863ba) → dev-master =
   38780923ed82bc876b0979604738fa8859a87908 == split master tip. Continuity full: master +
-  legacy/sugar-calendar + sugar-calendar-final (9aa7ecd). Abandon-checklist line appended.
+  legacy/sugar-calendar + sugar-calendar-final (9aa7ecd). Abandon-checklist line appended. <!-- @rename-keep -->
   NOTE: first create attempt 406'd "invalid username/apiToken" — brief's token literal arrived
   env-scrubbed (4th offense family); resumed with owner-supplied split-var assembly.
 
@@ -42,13 +42,13 @@
   in prompt_kit/briefs/rename-followups.md (art CONTENT excluded Part C.3).
 - VHS: tapes rewritten (R3), vhs.yml all=() :154 + render matrix :225 both updated; GIFs
   re-render in CI.
-- Docs: gen-docs 65 files, --check ok (61 pages + 4 stubs at flip time; sugar-calendar.html
+- Docs: gen-docs 65 files, --check ok (61 pages + 4 stubs at flip time; sugar-calendar.html <!-- @rename-keep -->
   stub mints with the R7 status flip — A2 cadence).
 
 ## Deviations / premise corrections
 1. CONSUMERS: brief guessed "likely candy-* apps embed calendar widgets" — grep
-   `sugarcraft/sugar-calendar` in */composer.json → ONLY the lib's own manifest; zero external
-   `SugarCraft\Calendar` users. Root composer.json require+repositories are the only wiring.
+   `sugarcraft/sugar-calendar` in */composer.json → ONLY the lib's own manifest; zero external <!-- @rename-keep -->
+   `SugarCraft\Calendar` users. Root composer.json require+repositories are the only wiring. <!-- @rename-keep -->
    refresh-deps --mode=linked run for the lib only (status: linked 6/6 symlinked).
 2. Upstream cited is EthanEFung/bubble-datepicker, not lipgloss/calendar.
 3. Brand spelling: R2 derives `SugarDatepicker` (ucwords slug) while the namespace word is
@@ -59,7 +59,7 @@
    (rename-lib exit 2 otherwise) — restore at lane end; never staged.
 
 ## Gates
-- check-rename-residue --old=sugar-calendar: 0 findings.
+- check-rename-residue --old=sugar-calendar: 0 findings. <!-- @rename-keep -->
 - sugar-datepicker suite: 149T/382A/0F/0E/0S — EXACT baseline row.
 - tools/tests: 426T/1484A — exact floor (no docs-dataset wobble).
 - check-path-repos --no-lib-path-repos: rc=0. (Refresh-deps wrapper verified too.)

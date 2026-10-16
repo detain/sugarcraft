@@ -98,7 +98,7 @@ Post-R4 sweep: zero untagged old vocab in the lib (vendor/ copies die at R5 reli
   R7 status flip — redirect_stubs() skips status=pending; re-run inside R7 → expect 10).
 - gen-ansi-readme --check: agree across 3595 pieces (ansi.json untouched — tiles are C.3 art content).
 - refresh-deps --mode=linked --libs=candy-mdview: first run flagged escaping=1 — STALE pre-rename dangling
-  symlink vendor/sugarcraft/candy-zone (candy-zone was batch-1 merged→candy-mouse; dir gone since long before
+  symlink vendor/sugarcraft/candy-zone (candy-zone was batch-1 merged→candy-mouse; dir gone since long before <!-- @rename-keep -->
   this lane; sugar-glow's vendor predated it). Removed the dead link, re-ran: 16/16 symlinked, escaping=0, ok; <!-- @rename-keep -->
   committed-tree guard --no-lib-path-repos rc=0. Not rename debt — inherited vendor cruft, disclosed.
 - Consumers grep: zero `sugarcraft/sugar-glow` in any */composer.json ✓ (tool rewrote root :88). <!-- @rename-keep -->
