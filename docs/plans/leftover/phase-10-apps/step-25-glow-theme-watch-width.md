@@ -1,6 +1,6 @@
-# Step 10.25 — sugar-glow Glamour theme JSON + file watching + CJK/emoji width
+# Step 10.25 — candy-mdview Glamour theme JSON + file watching + CJK/emoji width
 
-**Source:** `leftover_updates_later.md` sugar-glow §7.3-5
+**Source:** `leftover_updates_later.md` candy-mdview §7.3-5
 **Branch:** `ai/glow-theme-watch-width`
 
 ## Deliverable
@@ -12,7 +12,7 @@
 
 ## Files
 
-**Create:** `sugar-glow/src/GlamourTheme.php`, `FileWatcher.php`,
+**Create:** `candy-mdview/src/GlamourTheme.php`, `FileWatcher.php`,
 `WidthHelper.php`.
 
 ## Tests
@@ -21,7 +21,7 @@
 
 ## Acceptance
 
-- `cd sugar-glow && vendor/bin/phpunit` green.
+- `cd candy-mdview && vendor/bin/phpunit` green.
 
 ---
 

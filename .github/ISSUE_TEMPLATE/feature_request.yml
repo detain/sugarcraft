@@ -21,7 +21,7 @@ body:
         - candy-shine (Markdown)
         - candy-kit (CLI helpers)
         - candy-freeze (SVG screenshots)
-        - sugar-glow (Markdown viewer)
+        - candy-mdview (Markdown viewer)
         - sugar-spark (ANSI inspector)
         - new library
         - other / multiple

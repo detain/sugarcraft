@@ -420,7 +420,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `sugar-veil`(7,high) — one step each (all small), in dependency order.
 - **5.3** `candy-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
-- **5.4** `sugar-glow`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →
+- **5.4** `candy-mdview`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →
   a/b), `sugar-crush`(20,high, buffer+core+shine+sprinkles; attributes, MCP) → a/b.
 - **5.5** `sugar-charts`(28,med, buffer+core+sprinkles+**sugar‑dash**) → **5.5a** `LineChart/
   Canvas/Picture` (10), **5.5b** `Aggregation/OHLC/Heatmap/Chart/BarChart` (≈11), **5.5c**
@@ -514,7 +514,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-vcr | medium | 81 | attribute, backed-enum, ctor-promotion, match, named-args, new-in-init; symfony |
 | candy-wish | medium | 35 | ctor-promotion, match, mixed, named-args, non-capturing-catch |
 | sugar-charts | medium | 28 | ctor-promotion, enum-with-methods, match, named-args, php8-strfn |
-| sugar-glow | medium | 10 | attribute, ctor-promotion, match, mixed, named-args, readonly |
+| candy-mdview | medium | 10 | attribute, ctor-promotion, match, mixed, named-args, readonly |
 | sugar-readline | medium | 17 | ctor-promotion, match, new-in-init, php8-strfn |
 | sugar-skate | medium | 8 | ctor-promotion, match, mixed, named-args, php8-strfn, readonly; sqlite3 |
 | sugar-spark | medium | 8 | ctor-promotion, match, php8-strfn, readonly |

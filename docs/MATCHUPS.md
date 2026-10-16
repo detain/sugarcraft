@@ -81,7 +81,7 @@ called out in the table below.
 | **CandyMold** (`candy-mold/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
 | **CandyScriptui** (`candy-scriptui/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
 | **CandyFreeze** (`candy-freeze/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
-| **SugarGlow** (`sugar-glow/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
+| **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
 | **SugarSpark** (`sugar-spark/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **SugarWishlist** (`sugar-wishlist/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
 | **SugarSkate** (`sugar-skate/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
@@ -196,7 +196,7 @@ reference projects supplied the ideas, not the code.
 | SugarDash (sugar-dash/) | [bubble-grid](https://github.com/charmbracelet/bubble-grid) |
 | SugarDiff (sugar-diff/) | none — first-party |
 | SugarGallery (sugar-gallery/) | [bubbles](https://github.com/charmbracelet/bubbles) (list/viewport) · phlix web media grid (loosely) |
-| SugarGlow (sugar-glow/) | [glow](https://github.com/charmbracelet/glow) |
+| CandyMdview (candy-mdview/) | [glow](https://github.com/charmbracelet/glow) |
 | SugarMcp (sugar-mcp/) | none — first-party |
 | SugarPost (sugar-post/) | [pop](https://github.com/charmbracelet/pop) |
 | CandyForms (candy-forms/) | [huh](https://github.com/charmbracelet/huh) |

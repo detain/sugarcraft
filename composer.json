@@ -85,7 +85,7 @@
         "sugarcraft/sugar-dash": "dev-master",
         "sugarcraft/sugar-diff": "dev-master",
         "sugarcraft/sugar-gallery": "dev-master",
-        "sugarcraft/sugar-glow": "dev-master",
+        "sugarcraft/candy-mdview": "dev-master",
         "sugarcraft/sugar-mcp": "dev-master",
         "sugarcraft/sugar-post": "dev-master",
         "sugarcraft/sugar-readline": "dev-master",
@@ -426,7 +426,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-glow",
+            "url": "candy-mdview",
             "options": {
                 "symlink": true
             }

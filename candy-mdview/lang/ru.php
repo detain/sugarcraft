@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * Russian translations for candy-mdview.
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    'render.unknown_theme' => 'неизвестная тема: {name}',
+    'render.theme_config_unreadable' => 'конфигурация темы нечитабельна: {path}',
+    'render.theme_config_too_large' => 'конфигурация темы превышает {limit} байт: {path}',
+];

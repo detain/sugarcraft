@@ -81,7 +81,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-mold.png" width="48" alt=""> | **[CandyMold](candy-mold/)** | `composer create-project sugarcraft/candy-mold my-app` — bootstrap skeleton with a working counter Model. |
 | <img src="media/icons/candy-scriptui.png" width="48" alt=""> | **[CandyScriptui](candy-scriptui/)** | Composer-installable CLI of 13 presentation subcommands (choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write) — scriptable terminal UI in one-liners. |
 | <img src="media/icons/candy-freeze.png" width="48" alt=""> | **[CandyFreeze](candy-freeze/)** | Code → SVG screenshot generator (no `ext-gd` required). |
-| <img src="media/icons/sugar-glow.png" width="48" alt=""> | **[SugarGlow](sugar-glow/)** | Markdown CLI viewer / pager. |
+| <img src="media/icons/candy-mdview.png" width="48" alt=""> | **[CandyMdview](candy-mdview/)** | Markdown CLI viewer / pager. |
 | <img src="media/icons/sugar-spark.png" width="48" alt=""> | **[SugarSpark](sugar-spark/)** | ANSI escape-sequence inspector. |
 | <img src="media/icons/sugar-wishlist.png" width="48" alt=""> | **[SugarWishlist](sugar-wishlist/)** | TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh`. |
 | <img src="media/icons/sugar-skate.png" width="48" alt=""> | **[SugarSkate](sugar-skate/)** | Personal key/value store — one SQLite database per store, `@dbname` namespaces, glob listing, TTL, binary values, JSON/YAML import/export. |

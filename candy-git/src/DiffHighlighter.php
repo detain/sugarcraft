@@ -14,11 +14,11 @@ use SugarCraft\Core\Syntax\TokenSpan;
  *
  * The 780920291 Phase-4 commit shipped the four rebase/stash/cherry-pick/
  * worktree surfaces with inline whole-line ANSI and explicitly deferred the
- * syntax pass ("sugar-glow integration deferred"). Step 10.24 has since
+ * syntax pass ("candy-mdview integration deferred"). Step 10.24 has since
  * landed the highlighting pipeline; its reusable surface is candy-core's
- * pure {@see RegexHighlighter} lexer — the same primitive sugar-glow /
+ * pure {@see RegexHighlighter} lexer — the same primitive candy-mdview /
  * candy-shine render through (via Shine\SyntaxHighlighter's Theme slots) and
- * candy-freeze consumes directly (Freeze\CodeHighlighter). sugar-glow itself
+ * candy-freeze consumes directly (Freeze\CodeHighlighter). candy-mdview itself
  * exposes no embeddable highlight surface (it is the markdown pager CLI), so
  * candy-git follows the candy-freeze precedent: consume the shared lexer,
  * keep presentation in {@see Renderer}.

@@ -1,6 +1,6 @@
-# Step 10.26 — sugar-glow additional themes (Solarized / Monokai / GitHub)
+# Step 10.26 — candy-mdview additional themes (Solarized / Monokai / GitHub)
 
-**Source:** `leftover_updates_later.md` sugar-glow §7.6 P2
+**Source:** `leftover_updates_later.md` candy-mdview §7.6 P2
 **Branch:** `ai/glow-themes`
 
 ## Deliverable
@@ -11,17 +11,17 @@ applicable.
 
 ## Files
 
-**Create:** `sugar-glow/themes/{solarized,monokai,github}.json`.
+**Create:** `candy-mdview/themes/{solarized,monokai,github}.json`.
 
 **Modify:** README documents `--theme=<name>`.
 
 ## Tests
 
-- `sugar-glow/tests/ThemeLoadTest.php` — each theme loads.
+- `candy-mdview/tests/ThemeLoadTest.php` — each theme loads.
 
 ## Acceptance
 
-- `cd sugar-glow && vendor/bin/phpunit --filter Theme` green.
+- `cd candy-mdview && vendor/bin/phpunit --filter Theme` green.
 
 ---
 

@@ -9,7 +9,7 @@
 - Stash management (list / apply / drop).
 - Cherry-pick.
 - Worktrees (list / add / remove).
-- Syntax highlighting in diff view (consume sugar-glow, step 10.24).
+- Syntax highlighting in diff view (consume candy-mdview, step 10.24).
 
 ## Files
 

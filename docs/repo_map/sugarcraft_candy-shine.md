@@ -256,9 +256,9 @@ foreach ($lines as $line) {
 Glow consumes glamour for rendering. Candy-shine fills the same role:
 - Glow's `glamourRender()` does: strip YAML frontmatter, optionally wrap in code fences, render via glamour, add line numbers
 
-- SugarGlow (`sugar-glow/`) consumes candy-shine the same way
+- CandyMdview (`candy-mdview/`) consumes candy-shine the same way
 
-**Gap**: SugarGlow does not yet implement:
+**Gap**: CandyMdview does not yet implement:
 
 - Frontmatter stripping (`RemoveFrontmatter()`)
 
@@ -429,9 +429,9 @@ This allows nested blockquotes at any depth to correctly compute their available
 
 ### Consumer
 
-- `/home/sites/sugarcraft/sugar-glow/src/RenderCommand.php` — CLI that consumes candy-shine
+- `/home/sites/sugarcraft/candy-mdview/src/RenderCommand.php` — CLI that consumes candy-shine
 
-- `/home/sites/sugarcraft/sugar-glow/src/GlowModel.php` — Bubble Tea model for pager
+- `/home/sites/sugarcraft/candy-mdview/src/MdViewModel.php` — Bubble Tea model for pager
 
 ---
 

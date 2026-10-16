@@ -1,0 +1,616 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\MdView\Tests;
+
+use SugarCraft\MdView\MdViewModel;
+use SugarCraft\MdView\ReloadTickMsg;
+use SugarCraft\MdView\RenderCommand;
+use SugarCraft\Shine\Renderer;
+use SugarCraft\Shine\Theme;
+use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+final class RenderCommandTest extends TestCase
+{
+    public function testPickThemeAnsi(): void
+    {
+        $theme = RenderCommand::pickTheme('ansi');
+        $this->assertInstanceOf(Theme::class, $theme);
+    }
+
+    public function testPickThemePlain(): void
+    {
+        $theme = RenderCommand::pickTheme('plain');
+        $this->assertSame('plain', $theme->paragraph->render('plain'));
+    }
+
+    public function testPickThemeCaseInsensitive(): void
+    {
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('ANSI'));
+    }
+
+    public function testPickThemeRejectsUnknown(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        RenderCommand::pickTheme('mystery');
+    }
+
+    public function testLoadInputReadsFile(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello");
+        try {
+            $this->assertSame("# Hello", RenderCommand::loadInput($tmp));
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testLoadInputMissingFileReturnsNull(): void
+    {
+        $this->assertNull(RenderCommand::loadInput('/no/such/path/candy-mdview-test.md'));
+    }
+
+    public function testPickThemeDarkLightDraculaTokyoNightPink(): void
+    {
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('dark'));
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('light'));
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('dracula'));
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('tokyo-night'));
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('tokyonight'));
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('pink'));
+        // Underscores accepted as separators.
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('tokyo_night'));
+    }
+
+    public function testPickThemeNotty(): void
+    {
+        // Notty is a no-style fallback (matches plain visually).
+        $theme = RenderCommand::pickTheme('notty');
+        $this->assertSame('plain', $theme->paragraph->render('plain'));
+    }
+
+    public function testPickThemeEmptyDefaultsToAnsi(): void
+    {
+        // The CLI passes the --theme default of 'ansi', but a direct
+        // empty-string call should still produce a usable Theme.
+        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme(''));
+    }
+
+    // --- execute() tests ---
+
+    private function invokeExecute(RenderCommand $command, InputInterface $input, OutputInterface $output): int
+    {
+        $method = new ReflectionMethod($command, 'execute');
+        $method->setAccessible(true);
+        return $method->invoke($command, $input, $output);
+    }
+
+    public function testExecuteWithNoInputReturnsFailure(): void
+    {
+        $input = $this->createMock(InputInterface::class);
+        $input->method('getArgument')->with('file')->willReturn(null);
+        $input->method('getOption')->willReturnMap([
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'ansi'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+
+        $output = $this->createMock(OutputInterface::class);
+        $output->expects($this->once())
+            ->method('writeln')
+            ->with('<error>no input</error>');
+
+        $command = new RenderCommand();
+        $result = $this->invokeExecute($command, $input, $output);
+        $this->assertSame(Command::FAILURE, $result);
+    }
+
+    public function testExecuteWithValidInputNoPagerReturnsSuccess(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello\n\nWorld");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln')
+                ->with($this->stringContains('Hello'));
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteWithStyleOptionUsesStyleAsTheme(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "plain text");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', 'plain'],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteWithThemeConfigOverridesTheme(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "test");
+        $configTmp = tempnam(sys_get_temp_dir(), 'mdview-config-');
+        $this->assertNotFalse($configTmp);
+        file_put_contents($configTmp, '{"paragraph":{"fg":"white","bg":"black"}}');
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', $configTmp],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+            unlink($configTmp);
+        }
+    }
+
+    public function testExecuteWithWidthOptionEnablesWordWrap(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, str_repeat("word ", 50));
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 40],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteWithNoHyperlinksDisablesHyperlinks(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "[link](https://example.com)");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', true],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteWithDarkTheme(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Dark Theme Test");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'dark'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteWithTokyoNightTheme(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Tokyo Night Theme Test");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'tokyo-night'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())
+                ->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        RenderCommand::setColorProbeCallback(null);
+    }
+
+    public function testTerminalSupportsColorWhenProbeSaysColorCapable(): void
+    {
+        RenderCommand::setColorProbeCallback(fn () => true);
+        $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invoke(null));
+    }
+
+    public function testTerminalSupportsColorWhenProbeSaysNoColor(): void
+    {
+        RenderCommand::setColorProbeCallback(fn () => false);
+        $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+        $method->setAccessible(true);
+        $this->assertFalse($method->invoke(null));
+    }
+
+    public function testTerminalSupportsColorGracefulDegradationOnProbeFailure(): void
+    {
+        RenderCommand::setColorProbeCallback(fn () => throw new \RuntimeException('probe failed'));
+        $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invoke(null));
+    }
+
+    public function testTerminalSupportsColorReturnsFalseWhenNoColorEnvSet(): void
+    {
+        $original = getenv('NO_COLOR');
+        try {
+            putenv('NO_COLOR=1');
+            $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+            $method->setAccessible(true);
+            $this->assertFalse($method->invoke(null));
+        } finally {
+            if ($original === false) {
+                putenv('NO_COLOR');
+            } else {
+                putenv("NO_COLOR=$original");
+            }
+        }
+    }
+
+    public function testTerminalSupportsColorReturnsFalseWhenClicolorZero(): void
+    {
+        $original = getenv('CLICOLOR');
+        try {
+            putenv('CLICOLOR=0');
+            $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+            $method->setAccessible(true);
+            $this->assertFalse($method->invoke(null));
+        } finally {
+            if ($original === false) {
+                putenv('CLICOLOR');
+            } else {
+                putenv("CLICOLOR=$original");
+            }
+        }
+    }
+
+    public function testExecuteAutoDowngradesToNottyWhenNoColor(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello\n\nWorld");
+        try {
+            RenderCommand::setColorProbeCallback(fn () => false);
+
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'ansi'], // default — no explicit choice
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $capturedOutput = '';
+            $output->method('writeln')->willReturnCallback(function ($msg) use (&$capturedOutput) {
+                $capturedOutput .= $msg;
+            });
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+            // notty theme produces plain output with no SGR escapes
+            $this->assertStringNotContainsString("\x1b[", $capturedOutput);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteRespectsExplicitThemeEvenWhenNoColor(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello\n\nWorld");
+        try {
+            RenderCommand::setColorProbeCallback(fn () => false);
+
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'dracula'], // explicit theme choice
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testLoadInputEmptyStdinReturnsNull(): void
+    {
+        // Use a pipe that we control — php://temp is seekable and not a TTY.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        // Stream is seekable but empty → should return null.
+        $result = RenderCommand::loadInput('', $stream);
+        fclose($stream);
+        $this->assertNull($result);
+    }
+
+    public function testLoadInputReadsStdin(): void
+    {
+        // Use a pipe that we control — php://temp is seekable and not a TTY.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, "# Hello from stdin");
+        fseek($stream, 0); // Rewind to beginning so loadInput can read it.
+        $result = RenderCommand::loadInput('', $stream);
+        fclose($stream);
+        $this->assertSame("# Hello from stdin", $result);
+    }
+
+    public function testExecuteUnreadableThemeConfigThrows(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', '/no/such/theme.json'],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+
+            $command = new RenderCommand();
+            $this->expectException(\InvalidArgumentException::class);
+            $this->invokeExecute($command, $input, $output);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteRejectsOversizedThemeConfig(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello");
+        $configTmp = tempnam(sys_get_temp_dir(), 'mdview-config-');
+        $this->assertNotFalse($configTmp);
+        // Valid JSON that WOULD decode fine, but exceeds the 1 MB byte cap.
+        // Without the cap the decoder happily accepts it (the extra 'pad' key
+        // is ignored); with the cap it is rejected before ever being decoded.
+        // Reverting the cap makes this input load successfully -> no exception
+        // -> this test fails, which is exactly what pins the guard in place.
+        $huge = '{"paragraph":{"fg":"white","bg":"black"},"pad":"' . str_repeat('a', 1_000_001) . '"}';
+        file_put_contents($configTmp, $huge);
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', $configTmp],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+
+            $command = new RenderCommand();
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/exceeds \d+ bytes/');
+            $this->invokeExecute($command, $input, $output);
+        } finally {
+            unlink($tmp);
+            unlink($configTmp);
+        }
+    }
+
+    public function testBuildPagerModelWiresContentAndSize(): void
+    {
+        $rendered = "line1\nline2\nline3";
+        $cols = 80;
+        $rows = 5;
+
+        $method = new \ReflectionMethod(RenderCommand::class, 'buildPagerModel');
+        $method->setAccessible(true);
+
+        $model = $method->invoke(null, $rendered, $cols, $rows);
+
+        $this->assertInstanceOf(MdViewModel::class, $model);
+        // View should contain the rendered content.
+        $this->assertStringContainsString('line1', $model->view());
+        // The model should not be exited initially.
+        $this->assertFalse($model->isExited());
+    }
+
+    public function testPagerFileWatchIsWiredIntoTheExecuteBranch(): void
+    {
+        // E735 step 10.25 CLI half: execute() must hoist the file argument
+        // and arm the pump ONLY for a file pager — stdin has nothing to
+        // watch. Source-scan pin (house idiom): the wiring is a Program
+        // branch that cannot be unit-invoked without blocking on run().
+        $method = new ReflectionMethod(RenderCommand::class, 'execute');
+        $lines  = array_slice(
+            file((string) $method->getFileName()),
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        );
+        $body = implode('', $lines);
+
+        $this->assertMatchesRegularExpression(
+            '/\$fileArg\s*=\s*\(string\)\s*\(\$input->getArgument\([\'"]file[\'"]\)/',
+            $body,
+            'execute() must hoist the file argument once for both branches'
+        );
+        $this->assertMatchesRegularExpression(
+            '/if \(\$fileArg !== [\'"]{2}\) \{\s*\$model = self::armPagerWatch\(\$model, \$fileArg, \$renderer\);/',
+            $body,
+            'the pager branch must arm the watch behind the non-empty-file gate'
+        );
+        $this->assertSame(1, substr_count($body, 'self::armPagerWatch('), 'exactly one arming call site');
+    }
+
+    public function testArmPagerWatchReloadsThroughTheLiveRenderer(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'mdview-arm-') . '.md';
+        file_put_contents($path, "# Alpha Title\n\nfirst body\n");
+
+        try {
+            $renderer = new Renderer(Theme::dark(), 60);
+            $method   = new ReflectionMethod(RenderCommand::class, 'armPagerWatch');
+            $method->setAccessible(true);
+            $model = $method->invoke(null, MdViewModel::fromContent('stale', 60, 10), $path, $renderer);
+
+            $this->assertTrue($model->isWatching());
+
+            file_put_contents($path, "# Bravo Title\n\nsecond body\n");
+            clearstatcache();
+
+            [$reloaded, $cmd] = $model->update(new ReloadTickMsg());
+            $this->assertNotNull($cmd, 'arming the watch keeps the re-arm chain alive');
+            $this->assertSame(1, $reloaded->reloadCount);
+            // Re-rendered through the live Renderer, not copied verbatim:
+            // headings reach the view styled but text intact.
+            $view = $reloaded->view();
+            $this->assertStringContainsString('Bravo Title', $view);
+            $this->assertStringNotContainsString('Alpha Title', $view);
+        } finally {
+            @unlink($path);
+        }
+    }
+}

@@ -230,8 +230,8 @@ User: "Port the upstream renderer as candy-glow."
 
 Actions:
 
-1. Confirm prefix — renderer, foundation-y → `Candy-` fits. Check `PROJECT_NAMES.md` — `sugar-glow` exists, so the user means a different thing. Stop and clarify before scaffolding.
-2. After user confirms naming, derive namespace `SugarCraft\Glow`. Conflict — `sugar-glow` already owns `SugarCraft\Glow`. Resolve with user (e.g. `SugarCraft\GlowRenderer`) before any file is written.
+1. Confirm prefix — renderer, foundation-y → `Candy-` fits. Check `PROJECT_NAMES.md` — `candy-mdview` exists, so the user means a different thing. Stop and clarify before scaffolding.
+2. After user confirms naming, derive namespace `SugarCraft\MdView`. Conflict — `candy-mdview` already owns `SugarCraft\MdView`. Resolve with user (e.g. `SugarCraft\GlowRenderer`) before any file is written.
 
 Result: collision caught before scaffolding; user picks final name.
 

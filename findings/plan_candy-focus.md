@@ -20,7 +20,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
 | Extract `private static function unique(array): array` | Eliminates triplicated `in_array` deduplication loop; uses `array_flip` for O(n) performance | `src/FocusRing.php:53-58, 75-84, 179-184` |
 | Add `disabledIds(): array` method | Completes API symmetry with `enabledIds()`; enables debugging/UI indication of disabled regions | `src/FocusRing.php:328-334` |
 | Add `enabledCount(): int` and `disabledCount(): int` | Zero-cost alternative to `count($ring->enabledIds())` which allocates a new array | `src/FocusRing.php` |
-| Add `IteratorAggregate` interface | Natural extension for a "ring" of regions; matches existing pattern in `sugar-glow/src/Pager.php` | `sugar-glow/src/Pager.php:12` |
+| Add `IteratorAggregate` interface | Natural extension for a "ring" of regions; matches existing pattern in `candy-mdview/src/Pager.php` | `candy-mdview/src/Pager.php:12` |
 | Add `JsonSerializable` interface | Enables `json_encode($ring)` for session restore / process restarts | `candy-vcr/tests/Msg/UserJsonableMsg.php:14` |
 | Fix `ids()` to return `array_values($this->ids)` | Prevents callers from mutating internal `readonly` array; matches immutable design philosophy | `src/FocusRing.php:359-362`, CALIBER_LEARNINGS |
 | Clarify misleading comment | "wrap would land on self" mischaracterizes the sole-enabled guard | `src/FocusRing.php:226, 272` |
@@ -183,7 +183,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
         }
     }
     ```
-  - **Why:** Natural extension allowing `foreach ($ring as $id)`; matches existing pattern in `sugar-glow/src/Pager.php:12`
+  - **Why:** Natural extension allowing `foreach ($ring as $id)`; matches existing pattern in `candy-mdview/src/Pager.php:12`
   - **Severity:** low
   - **Success:** `foreach (FocusRing::of('a','b','c') as $i => $id)` works correctly
   - **Tests:** Add `testIterateOverRingYieldsIdsInOrder`
@@ -251,7 +251,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
 
 ## Notes
 
-- **2026-06-30:** Plan created based on `findings/candy-focus.md` review with code investigation of `src/FocusRing.php`, `tests/FocusRingTest.php`, `CALIBER_LEARNINGS.md`, `composer.json`, and similar implementations (`sugar-glow/src/Pager.php`, `candy-vcr/src/Render/FrameStream.php`)
+- **2026-06-30:** Plan created based on `findings/candy-focus.md` review with code investigation of `src/FocusRing.php`, `tests/FocusRingTest.php`, `CALIBER_LEARNINGS.md`, `composer.json`, and similar implementations (`candy-mdview/src/Pager.php`, `candy-vcr/src/Render/FrameStream.php`)
 - **Assertion in production:** The `assert()` at `src/FocusRing.php:38` runs in production (PHP 8+ default). For a TUI focus ring this is sub-microsecond overhead and acceptable. Document that production should set `zend.assertions=0` if profiling shows it matters.
 - **ArrayAccess not planned:** `ArrayAccess` support (`$ring['grid']`) was listed as lower-priority in findings (5.5). Not included in this plan — revisit if concrete use case arises.
 - **Phases 1 and 2 must be completed before Phase 3** because the refactoring in Phase 2 modifies `next()` and `previous()` which are used by the new features in Phase 3.

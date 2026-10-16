@@ -26,7 +26,7 @@
 | [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
 | [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-freeze |
 | [charmbracelet/glamour](#charmbraceletglamour) | Go | ~3400 | candy-shine |
-| [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | sugar-glow, sugar-bits, candy-shine |
+| [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | candy-mdview, sugar-bits, candy-shine |
 | [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-bits |
 | [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | honey-bounce |
 | [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | candy-forms, sugar-bits, candy-shine |
@@ -420,11 +420,11 @@
 **Features:** Bubble Tea TUI, glamour markdown, GitHub/GitLab README fetching, gitcha file discovery, fsnotify live reload, clipboard (OSC 52), style auto-detection.
 
 **SugarCraft Mapping:**
-- `sugar-glow` → Primary port
+- `candy-mdview` → Primary port
 - `sugar-bits` → TUI components
 - `candy-shine` → Markdown rendering
 
-**Note:** Port exists as `sugar-glow` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-mdview` (🟢 in MATCHUPS.md).
 
 ---
 

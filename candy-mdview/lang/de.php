@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * German translations for candy-mdview.
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    'render.unknown_theme' => 'unbekanntes Theme: {name}',
+    'render.theme_config_unreadable' => 'Themenkonfiguration nicht lesbar: {path}',
+    'render.theme_config_too_large' => 'Themenkonfiguration überschreitet {limit} Bytes: {path}',
+];

@@ -1,6 +1,6 @@
 # Overview
 
-**candy-shine** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`candy-sprinkles`, `candy-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `sugar-glow`).
+**candy-shine** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`candy-sprinkles`, `candy-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `candy-mdview`).
 
 **Biggest opportunity areas:**
 
@@ -94,8 +94,8 @@
 
 ## Consumer
 
-- `sugar-glow/src/RenderCommand.php` — CLI consuming candy-shine
-- `sugar-glow/src/GlowModel.php` — Bubble Tea model
+- `candy-mdview/src/RenderCommand.php` — CLI consuming candy-shine
+- `candy-mdview/src/MdViewModel.php` — Bubble Tea model
 
 ## Test Suite
 
@@ -544,9 +544,9 @@ Add screenshot-style tests comparing rendered output against stored "golden" ANS
 
 # Ecosystem / Integration Opportunities
 
-## 1. sugar-glow Enhancement
+## 1. candy-mdview Enhancement
 
-`sugar-glow` (markdown reader TUI) could implement:
+`candy-mdview` (markdown reader TUI) could implement:
 
 - Frontmatter stripping (`RemoveFrontmatter()` from glow)
 - Live file watching (fsnotify)

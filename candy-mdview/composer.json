@@ -1,0 +1,55 @@
+{
+    "name": "sugarcraft/candy-mdview",
+    "description": "Markdown CLI viewer / pager composing CandyShine + Viewport, modeled on charmbracelet/glow. 8 stock themes, word-wrap, OSC 8 hyperlinks.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "markdown",
+        "viewer",
+        "pager",
+        "cli",
+        "glow",
+        "ansi",
+        "tui",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-mdview",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-mdview/issues",
+        "source": "https://github.com/sugarcraft/candy-mdview",
+        "docs": "https://sugarcraft.github.io/lib/candy-mdview.html"
+    },
+    "bin": [
+        "bin/candy-mdview"
+    ],
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-shine": "dev-master",
+        "sugarcraft/sugar-bits": "dev-master",
+        "symfony/console": "^6.4 || ^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\MdView\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\MdView\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

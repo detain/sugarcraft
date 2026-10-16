@@ -66,7 +66,7 @@ To implement an item:
 
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
-| **sugar-glow** | [research/libraries/sugar-glow-research.md](libraries/sugar-glow-research.md) | 1. Pygments highlighting, 2. Enhanced themes, 3. File watching |
+| **candy-mdview** | [research/libraries/candy-mdview-research.md](libraries/candy-mdview-research.md) | 1. Pygments highlighting, 2. Enhanced themes, 3. File watching |
 | **candy-freeze** | [research/libraries/candy-freeze-research.md](libraries/candy-freeze-research.md) | 1. Bg colors, 2. Lang detection, 3. VS Code themes |
 | **candy-mosaic** | [research/libraries/candy-mosaic-research.md](libraries/candy-mosaic-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
 | **candy-mouse** | [research/libraries/candy-mouse-research.md](libraries/candy-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |

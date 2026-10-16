@@ -40,3 +40,13 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   `candy-git-server/.vhs/config.gif` (pre-existing broken ref inherited from the candy-serve era — VHS demo owed, not rename debt). <!-- @rename-keep historical record -->
 - `candy-git-server/.assets/icon.png` + `media/icons/candy-git-server.png` + `docs/img/icons/candy-git-server.png` — binary <!-- @rename-keep -->
   icon content untouched (paths renamed from candy-serve.* only). <!-- @rename-keep historical record -->
+
+## B5 sugar-glow → candy-mdview (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-{1-16-m-1,1-256-s-2,3-16-l-2,4-256-l-1}.ansi` — the ecosystem-banner art still <!-- @rename-keep -->
+  spells `sugar-glow` in its lib-name column (4 lines total, one per tile; art CONTENT is excluded from the <!-- @rename-keep -->
+  rewrite per Part C.3; `gen-ansi-readme --check` green with unchanged ansi.json). Redraw owed with the next <!-- @rename-keep -->
+  ansi-corpus pass.
+- `candy-mdview/.vhs/{pager,render}.gif` — rendered demos still show the old `glow`-era branding; CI re-renders <!-- @rename-keep -->
+  from the already-rewritten `.tape` files (they drive ./bin/candy-mdview now) on the next change to the lib. Left as-is per R4.10.
+- `candy-mdview/.assets/icon.png` + `media/icons/candy-mdview.png` + `docs/img/icons/candy-mdview.png` — binary
+  icon content untouched (paths renamed from sugar-glow.* only). <!-- @rename-keep -->

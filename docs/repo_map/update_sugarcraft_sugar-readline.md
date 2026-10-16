@@ -34,7 +34,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - `HistoryInterface` — InMemoryHistory (newest-first) and FileHistory (append-only with `flock`)
 - `UndoManager` — parallel undo/redo stacks (newest-first)
 - `AutoSuggest` — fish-style suggestion model for history-based completions
-- `Highlight` — syntax highlighting stub (currently no-op, planned sugar-glow integration)
+- `Highlight` — syntax highlighting stub (currently no-op, planned candy-mdview integration)
 - `Ansi` — tiny SGR wrapper (`\x1b[${codes}m...\x1b[0m`)
 
 ## Strengths
@@ -56,7 +56,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 2. **Hardcoded ANSI codes** — bare SGR strings (`'1;36'`, `'7'`, `'31'`) not a proper style system; customization requires string manipulation
 3. **No cursor blink** — TextPrompt renders static reverse video cursor; no animation
 4. **No mouse support** — Selection/MultiSelect don't respond to mouse clicks
-5. **Highlight is empty stub** — `Highlight::highlight()` returns single unstyled span; sugar-glow integration planned but not started
+5. **Highlight is empty stub** — `Highlight::highlight()` returns single unstyled span; candy-mdview integration planned but not started
 6. **No soft-wrap in TextareaPrompt** — long lines stored as one array entry; no word-wrap at column width
 7. **Substring-only filter** — no fuzzy matching, no diacritic folding, no regex; compare to Smith-Waterman in `candy-forms`
 8. **Vi visual mode is placeholder** — `handleVisualMode()` tracks no selection state
@@ -184,19 +184,19 @@ if ($this->submitted || $this->aborted) { return $this; }
 
 ## Medium Priority
 
-### 8. sugar-glow Syntax Highlighting Integration
+### 8. candy-mdview Syntax Highlighting Integration
 
 - **Title:** Highlight.php is a no-op stub returning single unstyled span
-- **Description:** Full syntax highlighting via sugar-glow integration is planned (step 10.24) but not implemented.
+- **Description:** Full syntax highlighting via candy-mdview integration is planned (step 10.24) but not implemented.
 - **Why it matters:** Users cannot do syntax-highlighted code input; limits use cases for developer tooling
 - **Source:** `docs/repo_map/sugarcraft_sugar-readline.md` (weakness #5)
 - **Source repo:** `charmbracelet/bubbletea` — `charmbracelet/glow` for markdown rendering; `charmbracelet/gum` — colored output
 - **Implementation ideas:**
-  1. Wait for `sugar-glow` to be implemented (planned step 10.24)
-  2. Then integrate: `Highlight::highlight()` calls sugar-glow's tokenizer
+  1. Wait for `candy-mdview` to be implemented (planned step 10.24)
+  2. Then integrate: `Highlight::highlight()` calls candy-mdview's tokenizer
   3. Return list of styled spans from `Highlight::highlight()`
   4. Modify `TextPrompt::view()` to render multiple spans with styles
-- **Estimated complexity:** Medium (depends on sugar-glow)
+- **Estimated complexity:** Medium (depends on candy-mdview)
 
 ### 9. Vi Visual Mode Selection Range
 
@@ -472,12 +472,12 @@ Test on multiple terminals: xterm, gnome-terminal, Konsole, Windows Terminal, iT
 
 # Ecosystem / Integration Opportunities
 
-## 1. sugar-glow Integration
+## 1. candy-mdview Integration
 
-`sugar-readline` is the natural input library for sugar-glow-powered syntax highlighting. When sugar-glow is ready, the integration is:
+`sugar-readline` is the natural input library for candy-mdview-powered syntax highlighting. When candy-mdview is ready, the integration is:
 ```php
 $prompt = TextPrompt::new('Enter code: ')
-    ->withHighlight(new SugarGlowHighlight('php'));
+    ->withHighlight(new CandyMdviewHighlight('php'));
 ```
 
 ## 2. candy-forms / candy-forms Bridge
@@ -590,7 +590,7 @@ $prompt = TextPrompt::new('Search: ')
 10. **Textarea soft-wrap** with memoized line wrapping
 11. **Vi visual mode selection range**
 12. **PromptRenderer** with real-time cursor blink
-13. **sugar-glow integration** when available
+13. **candy-mdview integration** when available
 
 ## Experimental (Future)
 
@@ -611,7 +611,7 @@ $prompt = TextPrompt::new('Search: ')
 | Textarea soft-wrap | High | High | Medium | P1 |
 | Fuzzy filtering | High | Medium | Low | P1 |
 | Built-in Help view | Medium | Low | Low | P1 |
-| sugar-glow integration | Medium | Medium | Medium | P2 |
+| candy-mdview integration | Medium | Medium | Medium | P2 |
 | Vi visual mode | Medium | Medium | Low | P2 |
 | Confirmation submit feedback | Low | Low | Low | P2 |
 | Undo/redo for MultiSelect | Low | Low | Low | P3 |

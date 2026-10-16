@@ -19,10 +19,10 @@ namespace SugarCraft\Core\Util;
  *
  * MEASURED by grepping this class name across every lib's `src/`: the
  * consumers outside candy-core are candy-mosaic
- * ({@see \SugarCraft\Mosaic\Detect::isInteractiveTty()}), sugar-glow
- * ({@see \SugarCraft\Glow\RenderCommand::loadInput()}) and candy-forms
+ * ({@see \SugarCraft\Mosaic\Detect::isInteractiveTty()}), candy-mdview
+ * ({@see \SugarCraft\MdView\RenderCommand::loadInput()}) and candy-forms
  * ({@see \SugarCraft\Forms\ActionSpinner::run()}).  `sugar-bits` and
- * `candy-log` do not reference this class at all, and sugar-glow — a
+ * `candy-log` do not reference this class at all, and candy-mdview — a
  * real consumer — was missing from the list entirely.  Re-derive that
  * set with a grep rather than trusting this paragraph: it is a snapshot,
  * and the previous one rotted silently precisely because it read as a

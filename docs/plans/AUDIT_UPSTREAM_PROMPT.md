@@ -175,7 +175,7 @@ that are tiny but together justify a PR.
 
 - charmbracelet/gum → candy-scriptui
 - charmbracelet/freeze → candy-freeze
-- charmbracelet/glow → sugar-glow
+- charmbracelet/glow → candy-mdview
 - charmbracelet/sequin → sugar-spark
 - charmbracelet/wishlist → sugar-wishlist
 - charmbracelet/skate → sugar-skate

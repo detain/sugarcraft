@@ -7,7 +7,7 @@
 
 - Autosuggest from history (fish-style — gray completion of likely next chars).
 - Undo / redo on the input buffer.
-- Syntax highlighting (consume sugar-glow's highlighter — step 10.24).
+- Syntax highlighting (consume candy-mdview's highlighter — step 10.24).
 
 ## Files
 

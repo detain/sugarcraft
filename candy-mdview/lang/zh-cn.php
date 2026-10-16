@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * Simplified Chinese translations for candy-mdview.
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    'render.unknown_theme' => '未知主题：{name}',
+    'render.theme_config_unreadable' => '主题配置不可读：{path}',
+    'render.theme_config_too_large' => '主题配置超过 {limit} 字节：{path}',
+];

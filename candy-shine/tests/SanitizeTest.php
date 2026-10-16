@@ -76,7 +76,7 @@ final class SanitizeTest extends TestCase
      * a fenced code block can never reach the terminal — even when the code is
      * routed through the *active* (colour-emitting) highlighter. Guards against
      * terminal-injection via markdown code blocks (title-set OSC, cursor DSR,
-     * raw colour CSI), the one behaviour the deleted sugar-glow
+     * raw colour CSI), the one behaviour the deleted candy-mdview
      * ChromaJsonHighlighter reimplemented locally.
      */
     public function testInjectedControlBytesInHighlightedFencedCodeNeutralized(): void

@@ -18,10 +18,10 @@ use SugarCraft\Sprinkles\Style;
  * `chroma` block mapping chroma token names (`Keyword`, `LiteralString`,
  * `Comment`, `LiteralNumber`, …) to their own primitives.
  *
- * DIVERGENCE, stated honestly: sugar-glow ships the same vocabulary as the
- * adapter {@see \SugarCraft\Glow\GlamourTheme} (it converts parsed
+ * DIVERGENCE, stated honestly: candy-mdview ships the same vocabulary as the
+ * adapter {@see \SugarCraft\MdView\GlamourTheme} (it converts parsed
  * primitives into a shine Theme on the consumer side). This class is NOT a
- * re-export of it and cannot be — sugar-glow REQUIRES candy-shine, so a
+ * re-export of it and cannot be — candy-mdview REQUIRES candy-shine, so a
  * shine→glow dependency would mint a sibling require-cycle (r88 design
  * ruling, reaffirmed r89): the producer never depends on its consumer. The
  * decode vocabulary is therefore duplicated locally; the two families share

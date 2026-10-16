@@ -279,11 +279,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/glow → sugar-glow
+## charmbracelet/glow → candy-mdview
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in sugar-glow | Notes |
+| Upstream | Title | Status in candy-mdview | Notes |
 |---|---|:--:|---|
 | [#922](https://github.com/charmbracelet/glow/pull/922) (2026-04-09) | fix: use `shell.Fields` to parse `$PAGER` command | 🟡 | PAGER parsing — verify PHP handles correctly |
 | [#756](https://github.com/charmbracelet/glow/pull/756) (2025-04-28) | fix: sync viewport on half page up/down | 🟡 | Viewport sync — may need review in pager |

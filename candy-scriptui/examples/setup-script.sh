@@ -41,6 +41,6 @@ candy-scriptui format --theme dark <<'MD'
 
 You've been registered. Next steps:
 
-- Run `bin/sugarglow README.md` to read the docs.
+- Run `bin/candy-mdview README.md` to read the docs.
 - Open `vendor/bin/candy-scriptui --help` for the full command list.
 MD

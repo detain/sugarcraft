@@ -88,7 +88,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | candy-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to candy-core after honey-bounce |
 | candy-buffer | P1 | 2 | AsyncOps duplication (same as candy-async) |
 | candy-sprinkles | P1 | 1 | Style value object — finalize after candy-core foundation stable |
-| sugar-glow | P1 | 2 | Glow Renderer animation timing |
+| candy-mdview | P1 | 2 | Glow Renderer animation timing |
 
 **Concurrency:** 6 libs — spawn 6 subagents in parallel.
 
@@ -166,7 +166,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_candy-async.md` — Phase 1 (AsyncOps duplication)
 - `findings/plan_candy-buffer.md` — Phase 1 (AsyncOps duplication)
 - `findings/plan_candy-sprinkles.md` — Phase 1 (Style immutable value object)
-- `findings/plan_sugar-glow.md` — Phase 1 (animation timing)
+- `findings/plan_candy-mdview.md` — Phase 1 (animation timing)
 
 ### Group D Source Plans
 
@@ -227,7 +227,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
    - **Subagent C3:** candy-async (AsyncOps deduplication)
    - **Subagent C4:** candy-buffer (AsyncOps deduplication)
    - **Subagent C5:** candy-sprinkles (Style immutable value object)
-   - **Subagent C6:** sugar-glow (animation timing)
+   - **Subagent C6:** candy-mdview (animation timing)
 2. Each subagent: review → implement → run tests → fix any issues → commit
 3. After all 6 complete: commit to master, pull, continue to Group D
 

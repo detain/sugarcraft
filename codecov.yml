@@ -74,8 +74,8 @@ flag_management:
     - name: candy-freeze
       paths: ["candy-freeze/src/**"]
       carryforward: true
-    - name: sugar-glow
-      paths: ["sugar-glow/src/**"]
+    - name: candy-mdview
+      paths: ["candy-mdview/src/**"]
       carryforward: true
     - name: sugar-spark
       paths: ["sugar-spark/src/**"]
@@ -301,12 +301,12 @@ component_management:
         - "candy-freeze/src/**"
       flag_regexes:
         - "^candy-freeze$"
-    - component_id: sugar-glow
-      name: sugar-glow
+    - component_id: candy-mdview
+      name: candy-mdview
       paths:
-        - "sugar-glow/src/**"
+        - "candy-mdview/src/**"
       flag_regexes:
-        - "^sugar-glow$"
+        - "^candy-mdview$"
     - component_id: sugar-spark
       name: sugar-spark
       paths:

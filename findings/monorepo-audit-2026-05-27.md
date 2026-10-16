@@ -149,18 +149,18 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 7: sugar-datepicker, sugar-glow, candy-forms, sugar-toast
+### Group 7: sugar-datepicker, candy-mdview, candy-forms, sugar-toast
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-datepicker | 70 ✓ | APPROVE | 0 | 0 | 4 | 0 |
-| sugar-glow | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
+| candy-mdview | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | candy-forms | 299 ✓ | REQUEST_CHANGES | 1 | 1 | 3 | 0 |
 | sugar-toast | 99 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 
 **sugar-datepicker** — Date picker. Issues: `EventStore` uses `time()` (second precision) instead of `microtime(true)`; missing `CALIBER_LEARNINGS.md`; `firstOfViewMonth()` can return false but callers don't consistently handle it.
 
-**sugar-glow** — Markdown viewer. Issues: `Application::VERSION` hardcoded as `'0.1.0'` instead of reading from composer; `ChromaJsonHighlighter` regex tokenizer is explicitly a proof-of-concept (matches any word followed by `(` as function); theme JSON structure mismatch with GlamourTheme::fromJson().
+**candy-mdview** — Markdown viewer. Issues: `Application::VERSION` hardcoded as `'0.1.0'` instead of reading from composer; `ChromaJsonHighlighter` regex tokenizer is explicitly a proof-of-concept (matches any word followed by `(` as function); theme JSON structure mismatch with GlamourTheme::fromJson().
 
 **candy-forms** — **Critical Architecture Issue**: This package is a facade with no real implementation. All source files except `Spinner.php` are `class_alias()` stubs redirecting to `SugarCraft\Forms\*` (candy-forms). Tests pass because they test candy-forms, not candy-forms's own code. **This package should be either documented as a facade or the actual implementation moved here.**
 
@@ -265,7 +265,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
 | **Inconsistent mutability** | sugar-tick/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
-| **Path-repo closure gaps** | sugar-glow, sugar-stickers, sugar-wishlist | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
+| **Path-repo closure gaps** | candy-mdview, sugar-stickers, sugar-wishlist | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
 ### 🟡 Cross-Package Inconsistencies
 
@@ -373,7 +373,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-forms | Real implementation (facade only) | HIGH |
 | sugar-readline | `Highlight::highlight()` implementation | HIGH |
 | sugar-toast | Animation duration (honey-bounce deferred) | MEDIUM |
-| sugar-glow | Complete glamour v2 property support | MEDIUM |
+| candy-mdview | Complete glamour v2 property support | MEDIUM |
 | sugar-charts | OHLC multi-series, Scatter per-point styling | MEDIUM |
 | sugar-stickers | FlexBox tests, sticky header/footer | MEDIUM |
 | candy-tetris | T-Spin Twist rule (beyond 3-corner) | LOW |
@@ -479,7 +479,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 1. **candy-vcr**: Remove `PhpGifEncoder.php` or mark it `@internal` and throw in constructor
 2. **honey-bounce**: Fix `easeInOutCirc` duplicate value (1 line change)
-3. **sugar-glow**: Read version from `composer.json` instead of hardcoding
+3. **candy-mdview**: Read version from `composer.json` instead of hardcoding
 4. **sugar-readline**: Make `Highlight::highlight()` throw `BadMethodCallException`
 5. **candy-flappy**: Make `saveHighScore()` return `false` when `file_put_contents()` fails
 6. **candy-tetris**: Add `escapeshellarg()` to `Repo::branches()` path
@@ -510,7 +510,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
 | sugar-stickers/Table vs sugar-table/Table | Rename sugar-stickers Table to SimpleTable | Two different packages, same class name, confuses |
 | candy-lister + sugar-spark | No consolidation needed | Different purposes |
-| sugar-glow/WidthHelper vs candy-core/Util/Width | Delete sugar-glow/WidthHelper | Already exists in candy-core |
+| candy-mdview/WidthHelper vs candy-core/Util/Width | Delete candy-mdview/WidthHelper | Already exists in candy-core |
 
 ---
 
@@ -568,7 +568,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, sugar-skate, candy-git | 1,190 | ⚠️ stash 2 skipped |
-| 7 | sugar-datepicker, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
+| 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
 | 9 | sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |

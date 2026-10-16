@@ -552,7 +552,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.12 · PR#779 · sugar-stickers: sticky header/footer + scroll sync (leftover-rollout step 10.12)
     step 10.13 · PR#780 · sugar-readline: FileHistory/InMemoryHistory + ↑/↓ history navigation in TextPrompt (leftover-rollout step 10.13)
     step 10.14 · PR#781 · sugar-readline: vi mode + emacs mode key-binding modes (ModeInterface/ViMode/EmacsMode + withMode/handleKeyDirect on TextPrompt)
-    step 10.15 · PR#782 · sugar-readline: autosuggest from history (fish-style gray dim completion) + undo/redo (UndoManager + Key::Undo/Key::Redo) + Highlight stub (awaiting sugar-glow step 10.24)
+    step 10.15 · PR#782 · sugar-readline: autosuggest from history (fish-style gray dim completion) + undo/redo (UndoManager + Key::Undo/Key::Redo) + Highlight stub (awaiting candy-mdview step 10.24)
     step 10.17 · PR#784 · sugar-spark: reportAsJson + StreamingInspector
     step 10.18 · PR#785 · sugar-tick: CSV/JSON export + tags + sugartrackignore + gaps
     step 10.19 · PR#786 · sugar-tick: SQLite backend + milestones + iCal export + auto-backups + theme
@@ -560,8 +560,8 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.21 · PR#788 · sugar-crumbs: pushDirectory + view + filter
     step 10.22 · PR#789 · sugar-crumbs: Closable + URL derivation + escape + semantic HTML
     step 10.23 · PR#790 · sugar-boxer: alignment + margin tests (methods already existed)
-    step 10.24 · PR#791 · sugar-glow: syntax highlighting + streaming pager
-    docs for step 10.26 · PR#795 · refresh docs/lib/sugar-glow.html (lede: eight→eleven themes; Theme picker feature lists all 11 options; note solarized/monokai/github JSON loading)
+    step 10.24 · PR#791 · candy-mdview: syntax highlighting + streaming pager
+    docs for step 10.26 · PR#795 · refresh docs/lib/candy-mdview.html (lede: eight→eleven themes; Theme picker feature lists all 11 options; note solarized/monokai/github JSON loading)
     step 10.27 · PR#796 · sugar-wishlist: proxy_jump + identity_files array + description rendering
     review for step 10.27 · clean · PR#796
     docs for step 10.27 · PR#798 · README: add proxy_jump/proxyJump/proxyJump documentation; CALIBER_LEARNINGS: add [pattern:plural-identity-files]

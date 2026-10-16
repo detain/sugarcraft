@@ -200,7 +200,7 @@ Capture before/after scores. Open one PR per category if the overhaul is large.
 - [ ] Sidebar lists every lib (organized by prefix: Candy- / Sugar- / Honey- / Super-)
 - [ ] Footer has links: GitHub, Packagist (when relevant), license,
       contributing
-- [ ] Cross-links between related libs (e.g. CandyShine page links to SugarGlow)
+- [ ] Cross-links between related libs (e.g. CandyShine page links to CandyMdview)
 - [ ] Optional Cmd-K / `/` search: not required, but flag if missing —
       Pagefind is a low-cost option for static sites
 - [ ] 404 page custom-styled, lists popular libs

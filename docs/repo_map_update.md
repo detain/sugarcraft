@@ -127,7 +127,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 *(Findings mentioned across 3+ packages/stages)*
 
-1. **No snapshot/golden file testing for ANSI rendering output** — The single most-cited gap. candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, sugar-spark, sugar-datepicker all explicitly cite zero ANSI byte-level assertions on `view()` output. Upstream repos (bubbletea, huh, ratatui, pterm with 28,952 tests) all use golden files. Without them, any regression in SGR codes, cursor positioning, or layout is invisible until runtime.
+1. **No snapshot/golden file testing for ANSI rendering output** — The single most-cited gap. candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, candy-mdview, candy-vt, candy-vcr, sugar-spark, sugar-datepicker all explicitly cite zero ANSI byte-level assertions on `view()` output. Upstream repos (bubbletea, huh, ratatui, pterm with 28,952 tests) all use golden files. Without them, any regression in SGR codes, cursor positioning, or layout is invisible until runtime.
 
 2. **Byte-level string operations break UTF-8/grapheme content** — candy-hermit's `highlightMatches()` uses byte indexing; candy-freeze's 0.6 font aspect ratio fails on CJK/multi-byte content; sugar-spark's parser has C1 limitations due to PHP's native UTF-8 handling. The ecosystem re-implements byte-loop parsing instead of using a shared state machine.
 
@@ -135,7 +135,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **Greedy constraint solvers / no shared layout engine** — Every layout-sensitive package independently implements manual sizing logic. No shared layout engine exists at the foundation layer.
 
-5. **Terminal capability detection failures cause panics, not graceful fallback** — candy-mosaic, sugar-glow, candy-wish (Stage 2) all struggle with probing failures on Windows, SSH, old terminals. ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No package has an `auto()` fallback that always returns a usable renderer.
+5. **Terminal capability detection failures cause panics, not graceful fallback** — candy-mosaic, candy-mdview, candy-wish (Stage 2) all struggle with probing failures on Windows, SSH, old terminals. ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No package has an `auto()` fallback that always returns a usable renderer.
 
 6. **Manual byte-loop parsing vs. state machine architecture** — sugar-spark (551-line Inspector.php), candy-hermit use `strlen()`/`strpos()` at byte level. The canonical state machine from `charmbracelet/x/ansi` is already available in candy-vt but not shared.
 
@@ -153,11 +153,11 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **True cell-based buffer model** — candy-core, sugar-bits, candy-sprinkles all render through string-based diffing. External repos (ultraviolet, ratatui) use `Buffer`/`Cell` grids where each cell has (rune, style, link, width), enabling per-cell dirty tracking and SGR transition optimization.
 
-3. **Snapshot tests for ANSI render output** — Called out explicitly as "almost entirely absent" across candy-forms, candy-forms, sugar-bits, candy-shine, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr.
+3. **Snapshot tests for ANSI render output** — Called out explicitly as "almost entirely absent" across candy-forms, candy-forms, sugar-bits, candy-shine, sugar-charts, sugar-table, candy-mdview, candy-vt, candy-vcr.
 
 4. **Cassowary constraint solver** — Enables responsive layouts that adapt to terminal resize without manual string padding. Declarative constraint specification is impossible today.
 
-5. **GitHub/GitLab README fetching in sugar-glow** — The defining feature of upstream `charmbracelet/glow` is entirely absent.
+5. **GitHub/GitLab README fetching in candy-mdview** — The defining feature of upstream `charmbracelet/glow` is entirely absent.
 
 6. **Debug visualization mode in candy-mouse** — Upstream issue #7 (open for years) requesting zone boundary visualization. No equivalent in PHP.
 
@@ -271,7 +271,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 ## Shared Integration Opportunities
 
-1. **GitHub/GitLab README fetching** — sugar-glow HTTP integration with GitHub REST API v3 / GitLab API v4.
+1. **GitHub/GitLab README fetching** — candy-mdview HTTP integration with GitHub REST API v3 / GitLab API v4.
 
 2. **SSH server mode** — candy-git-server SSH mode and sugar-wishlist's #1 requested feature.
 
@@ -306,7 +306,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 9 | `blacktop/go-termimg` | 5+ | Terminal image rendering; parallel base64 encoding, larger LRU cache, request coalescing, Unicode placeholder mode |
 | 10 | `charmbracelet/x/ansi` | 5+ | ECMA-48 state machine parser; ANSI width calculation, C0/C1 control codes. Foundational for entire ANSI-inspection stack |
 | 11 | `php-tui/php-tui` | 5+ | PHP TUI port; same architectural targets as ratatui but PHP-native |
-| 12 | `charmbracelet/glow` | 4+ | Primary upstream for sugar-glow; defines markdown/TUI rendering architecture |
+| 12 | `charmbracelet/glow` | 4+ | Primary upstream for candy-mdview; defines markdown/TUI rendering architecture |
 | 13 | `sahilm/fuzzy` | 4+ | Go fuzzy library (via gum filter); referenced by candy-scriptui, candy-forms, candy-forms, sugar-bits for ranked fuzzy matching |
 | 14 | `ultraviolet-org/ultraviolet` | 3+ | ANSI manipulation library; SGR diffing, cell-level rendering, syntax highlighting. Reference for cell-buffer implementation |
 | 15 | `charmbracelet/vhs` | 3+ | Demo/tape recording; CI workflow references for visual regression testing |
@@ -343,7 +343,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 | # | Opportunity | Primary Packages | Impact | Complexity | Risk | Priority |
 |---|-------------|------------------|--------|-------------|------|----------|
-| 1 | Add snapshot/golden file tests for ANSI output | candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr | Critical | Low | Low | P0 |
+| 1 | Add snapshot/golden file tests for ANSI output | candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, candy-mdview, candy-vt, candy-vcr | Critical | Low | Low | P0 |
 | 2 | Add `Simulator` + `Program::withInput()/withOutput()` test harness | All TEA-based packages | Critical | Medium | Low | P0 |
 | 3 | Add `flock()` to JSONL append operations | sugar-tick, candy-flip | Critical | Low | Low | P0 |
 | 4 | Implement fuzzy matching with scored indices | candy-scriptui, candy-forms, candy-forms, sugar-bits | High | Medium | Low | P0 |
@@ -356,7 +356,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 11 | Implement buffer diffing / dirty-region tracking | sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister | High | Medium | Low | P1 |
 | 12 | Add input driver for terminal keypress decoding | sugar-readline | Critical | High | Medium | P1 |
 | 13 | Add `charmbracelet/x/ansi` state machine sharing | sugar-spark, candy-hermit, candy-freeze, candy-vt | High | Medium | Low | P1 |
-| 14 | Implement GitHub/GitLab README fetching | sugar-glow | High | Medium | Low | P1 |
+| 14 | Implement GitHub/GitLab README fetching | candy-mdview | High | Medium | Low | P1 |
 | 15 | Add debug visualization mode | candy-mouse | High | Low | Low | P1 |
 | 16 | Add mouse event deduplication helpers | candy-mouse | High | Low | Low | P1 |
 | 17 | Add `ContentGenerator` pattern | sugar-stickers | Medium | Low | Low | P1 |
@@ -426,7 +426,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **Cascading style inheritance + BlockStack** — Glamour parity for candy-shine; enables correct nested markdown rendering.
 
-6. **GitHub/GitLab README fetching** — Complete `charmbracelet/glow` feature parity for sugar-glow.
+6. **GitHub/GitLab README fetching** — Complete `charmbracelet/glow` feature parity for candy-mdview.
 
 7. **Textual-style reactive state descriptors** — Optional enhancement to TEA model pattern enabling auto-watcher injection.
 
@@ -512,7 +512,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 8. **Snapshot test pattern** — Every package independently "should add" them; no shared infrastructure emerged despite universal acknowledgment of need.
 
-9. **Terminal capability probing** — candy-mosaic, sugar-glow, candy-wish each struggle with the same probing failure patterns independently.
+9. **Terminal capability probing** — candy-mosaic, candy-mdview, candy-wish each struggle with the same probing failure patterns independently.
 
 10. **God class construction** — super-candy Manager (915 lines), candy-sql App (12 args) represent the same architectural failure in different stages.
 

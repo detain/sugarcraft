@@ -12,7 +12,7 @@
 
 1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `candy-forms` (leaf libs). The dep graph points the wrong way.
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
-3. `sugar-glow/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
+3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
 4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`.
 5. Two incompatible Boxer layout engines (`sugar-boxer` vs `sugar-dash/src/Layout/Boxer`).
 6. Almost everything else — README quickstarts, examples, type signatures, defaults, error messages, `final` policy — is already in great shape. See §6.
@@ -147,9 +147,9 @@ Recommend Option A. Tracked separately because of size — gate the work on expl
 
 ## §3. HIGH — duplication to pay down
 
-### 3.1 Delete sugar-glow/src/WidthHelper.php
+### 3.1 Delete candy-mdview/src/WidthHelper.php
 
-`candy-core/src/Util/Width.php` already provides `Width::string()`, `Width::padRight()`, `Width::truncate()`. `sugar-glow/src/WidthHelper.php` reimplements the same operations via `mb_strwidth` + ANSI-strip regex in 107 lines. Delete the file; ensure `sugar-glow/composer.json` `require`s `sugarcraft/candy-core` (it already transitively will via sugar-bits); rewrite call-sites.
+`candy-core/src/Util/Width.php` already provides `Width::string()`, `Width::padRight()`, `Width::truncate()`. `candy-mdview/src/WidthHelper.php` reimplements the same operations via `mb_strwidth` + ANSI-strip regex in 107 lines. Delete the file; ensure `candy-mdview/composer.json` `require`s `sugarcraft/candy-core` (it already transitively will via sugar-bits); rewrite call-sites.
 
 ### 3.2 ANSI-strip regex duplicated across leaf libs
 
@@ -167,7 +167,7 @@ Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 - `sugar-charts/src/Legend/Legend.php`
 - `sugar-dash/src/Foundation/Style.php`
 - `sugar-dash/src/Components/System/Terminal.php`
-- `sugar-glow/src/Highlighter/ChromaJsonHighlighter.php`
+- `candy-mdview/src/Highlighter/ChromaJsonHighlighter.php`
 - `sugar-dash/src/Foundation/Buffer.php`
 - `sugar-dash/src/Plot/Braille/BrailleCanvas.php`
 
@@ -214,7 +214,7 @@ Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `ne
 
 ### 3.7 Path-repo closure gaps (found this session) — ✅ Resolved (PR #880)
 
-The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-forms`) added a new transitive `sugarcraft/candy-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `sugar-glow`, `sugar-stickers`, `sugar-wishlist` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `candy-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`candy-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-mouse`, `honey-bounce`, `candy-palette`, and for `sugar-glow` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
+The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-forms`) added a new transitive `sugarcraft/candy-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `candy-mdview`, `sugar-stickers`, `sugar-wishlist` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `candy-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`candy-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-mouse`, `honey-bounce`, `candy-palette`, and for `candy-mdview` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
 
 ---
 
@@ -222,11 +222,11 @@ The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-
 
 ### 4.1 Terminal raw-mode lives in the wrong places
 
-✅ Resolved (PR #873): sugar-wishlist raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib. (The stream_isatty cases in candy-forms/Spinner and sugar-glow/RenderCommand were already routed through TtyDetect in PR #866.)
+✅ Resolved (PR #873): sugar-wishlist raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib. (The stream_isatty cases in candy-forms/Spinner and candy-mdview/RenderCommand were already routed through TtyDetect in PR #866.)
 
 - `sugar-wishlist/src/Picker.php` calls `shell_exec('stty -icanon -echo min 1 time 0')` and `shell_exec('stty sane')`.
 - `candy-forms/src/Spinner.php` calls `stream_isatty(STDERR)` directly.
-- `sugar-glow/src/RenderCommand.php` calls `stream_isatty(STDIN)` directly.
+- `candy-mdview/src/RenderCommand.php` calls `stream_isatty(STDIN)` directly.
 
 `candy-core/src/Util/TtyDetect.php` already exists. Inject it. For raw-mode toggling, candy-pty is the natural home, or introduce a new `candy-term` foundation lib that owns terminal-control concerns. Either way, `shell_exec('stty …')` belongs out of leaf libs.
 
@@ -298,8 +298,8 @@ Recorded here so future audits don't re-litigate:
 
 Each step is a self-contained PR ending with the local gate (phpunit + phpstan + cs-fixer) per affected lib, then the review cycle, docs updates, and ship-pr per the Execution protocol above.
 
-1. **Quick wins (1 PR, ~½ day):** Delete `sugar-glow/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`.
-2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + sugar-glow batch.
+1. **Quick wins (1 PR, ~½ day):** Delete `candy-mdview/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`.
+2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + candy-mdview batch.
 3. **Lang.php consolidation (1 PR):** Add `SugarCraft\Core\I18n\LangFactory` + update `scaffold-library` skill + mechanically migrate 33 libs.
 4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-boxer/SugarBoxer`.
 5. **`candy-forms` extraction (multi-PR phased, gated):** Extract `candy-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/candy-forms during transition. Largest item — needs explicit go-ahead.

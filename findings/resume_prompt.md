@@ -127,7 +127,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 |-------|-------|------|
 | 5-A | 5.1–5.3 | sugar-table (frozen/hidden conflict, invalid key tests), candy-flip (per-frame delay test) |
 | 5-B | 5.4–5.6 | candy-flip (DISPOSAL_PREVIOUS), candy-input (FocusEvent tests), candy-async (markCancelled test) |
-| 5-C | 5.7–5.9 | honey-bounce (CubicBezier invalid control points), sugar-glow (viewport key binding tests), candy-mosaic (ChafaRenderer pipe cleanup) |
+| 5-C | 5.7–5.9 | honey-bounce (CubicBezier invalid control points), candy-mdview (viewport key binding tests), candy-mosaic (ChafaRenderer pipe cleanup) |
 | 5-D | 5.10 | candy-mosaic (ChafaRenderer::reset test) |
 
 ### Phase 6: Remaining Items by Plan File

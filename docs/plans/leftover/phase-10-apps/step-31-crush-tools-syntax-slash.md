@@ -6,7 +6,7 @@
 ## Deliverable
 
 - Built-in file / bash tools (today `ToolCall.php` is a value-object only).
-- Syntax highlighting in markdown code blocks (consume sugar-glow from
+- Syntax highlighting in markdown code blocks (consume candy-mdview from
   step 10.24).
 - Slash commands `/help`, `/clear`, `/compact`, `/model`.
 

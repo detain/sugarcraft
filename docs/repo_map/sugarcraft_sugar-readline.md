@@ -53,7 +53,7 @@ sugar-readline/
 ├── src/
 │   ├── Ansi.php                    — Tiny ANSI SGR wrapper (\x1b[${codes}m)
 │   ├── AutoSuggest.php              — Fish-style history-based suggestion model
-│   ├── Highlight.php               — Syntax highlighting stub (sugar-glow integration planned)
+│   ├── Highlight.php               — Syntax highlighting stub (candy-mdview integration planned)
 │   ├── Key.php                     — Symbolic key name constants
 │   ├── TextPrompt.php              — 612 lines — Single-line text input
 │   ├── ConfirmationPrompt.php      — 144 lines — Yes/No prompt
@@ -106,7 +106,7 @@ Single-line text input with cursor navigation. Key features:
 | Vi mode | `withMode(ViMode)` | `h/l/w/b/0/$/i/a/A/dd/yy` |
 | Emacs mode | `withMode(EmacsMode)` | `Ctrl+A/E/B/F/P/N/T/W` |
 | Undo/redo | `withUndoManager(UndoManager)` | `Ctrl+Z` / `Ctrl+Y` |
-| Syntax highlight | `withHighlight(Highlight)` | Stub; planned for sugar-glow integration |
+| Syntax highlight | `withHighlight(Highlight)` | Stub; planned for candy-mdview integration |
 | Auto-suggest | `withAutoSuggest(bool)` | Fish-style dim-gray suggestion from history |
 
 **State properties:**
@@ -470,7 +470,7 @@ if ($this->isAltPrefix()) {
 | Generic types | 🟢 | N/A | Go generics; PHP workaround not needed for prompts |
 | Undo/redo | 🟢 | 🟢 | Parallel undo/redo stacks |
 | Auto-suggest | 🟢 | 🟢 | Fish-style dim suggestion from history |
-| Syntax highlight | N/A | 🔶 | Stub only (planned sugar-glow integration) |
+| Syntax highlight | N/A | 🔶 | Stub only (planned candy-mdview integration) |
 
 **Template rendering difference**: promptkit uses Go's `text/template` with helper functions (`Repeat`, `Len`, `Min`, `Max`, `TrimPrefix`, etc.) and Lipgloss styles. sugar-readline uses direct PHP string concatenation with hardcoded ANSI SGR codes. This is simpler and more portable but less flexible for custom templates.
 
@@ -554,7 +554,7 @@ Bubbles provides `TextInput` and `TextArea` as Bubble Tea models. sugar-readline
 
 4. **No mouse support**: Selection and MultiSelect don't respond to mouse clicks for positioning or selection. Upstream `promptkit` also lacks this.
 
-5. **Highlight is a stub**: `Highlight.php` returns a single unstyled span. Full syntax highlighting via `sugar-glow` integration is planned but not yet implemented.
+5. **Highlight is a stub**: `Highlight.php` returns a single unstyled span. Full syntax highlighting via `candy-mdview` integration is planned but not yet implemented.
 
 6. **No soft-wrap in Textarea**: TextareaPrompt stores each line as a separate array entry. There is no soft-wrap (word-wrap at a given column width). If a user types a long line, it stays as one line in the array — no automatic wrapping.
 
@@ -654,7 +654,7 @@ This makes it trivially embeddable in any PHP 8.3+ project without worrying abou
 
 As a 🟢 v1-ready package, there are no blocking gaps. The following are planned future work:
 
-1. **sugar-glow integration** for `Highlight.php` — Full syntax highlighting for code input (step 10.24 per doc comment).
+1. **candy-mdview integration** for `Highlight.php` — Full syntax highlighting for code input (step 10.24 per doc comment).
 
 2. **Vi visual mode** — Store selection state and expose it via accessors when visual mode is active.
 

@@ -17,7 +17,7 @@ $items = array_map(
     fn(string $s) => new StringItem($s),
     ['SugarCraft', 'CandySprinkles', 'HoneyBounce', 'CandyMouse',
      'SugarBits', 'SugarCharts', 'CandyForms', 'CandyScriptui',
-     'CandyShine', 'CandyKit', 'CandyFreeze', 'SugarGlow',
+     'CandyShine', 'CandyKit', 'CandyFreeze', 'CandyMdview',
      'SugarSpark', 'CandyWish', 'SugarWishlist', 'CandyMetrics'],
 );
 

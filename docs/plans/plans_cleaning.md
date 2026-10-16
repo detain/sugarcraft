@@ -14,7 +14,7 @@
 - W6: Testing harness
 - W8: AtomicJsonFile
 - W9: Highlighter interface
-- W11: sugar-glow dead code
+- W11: candy-mdview dead code
 - W12: candy-layout solver
 - W14.1: blob/main→master
 - W14.2: Package count

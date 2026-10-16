@@ -11676,7 +11676,7 @@ dash reads 0F.
 |---|---|---|---|---|
 | t2 `17e1036cb` | candy-git | → `e0bff28cc` | E735 10.06: diff-view syntax highlighting via shared lexer (`DiffHighlighter`, 1 new test file) | stash FULL 256T/659A/5S exit0 |
 | t3 `7031e17dc` | sugar-spark | → `5499c50bd` | E735 10.16: C1 truth pass — SOS/PM naming, DEL fidelity, colon-SGR regressions (upstream had landed most; 8 defects fixed) | spark FULL 269T/1380A exit0 |
-| t4 `dd1fec6c0` | sugar-glow | → `676e597d7` | E735 10.25: GlamourTheme JSON themes + pager auto-reload (watch-integration) + width pins (3 new test files) | glow FULL 122T/313A exit0 |
+| t4 `dd1fec6c0` | candy-mdview | → `676e597d7` | E735 10.25: GlamourTheme JSON themes + pager auto-reload (watch-integration) + width pins (3 new test files) | glow FULL 122T/313A exit0 |
 | t6 `39671bedd` | sugar-dash goldens | → `bb2e28cfb` | re-roll the 2 stale toast goldens after upstream 68d73f9ba blue revalue (surgical 2-file/+2-line; self-verified probe+x2+mutation) | dash golden pair CURED — zero stale blues tree-wide |
 | t1 `837763041` | sugar-dash code+tests | → `35f327d5b` | E735 03.09: NotificationQueue dual-ring verified ALREADY-SHIPPED + fixed state-losing withers + stale example | dash FULL x2: 5977T/9,889-9,890A/0F/1S exit0 |
 | t5 `7e28b3c9e` | docs/plans/leftover/updates.md | → `7a3280759` (AMENDED) | E735 06.01 verify-only Done-line (PR#581/582 audit) | candy-core `--filter Subscription` 14T/38A/1S exit0 |
@@ -11814,7 +11814,7 @@ at `e765b1742`) over six waves.
 
 ### Per-lib suite figures at the FINAL weld (all linked, plain pipe)
 
-sugar-glow **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5),
+candy-mdview **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5),
 sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6), candy-input 307/40762/1S,
 candy-pty 663/1862/1W(base-carry)/17S, candy-core 862/7646/27S, candy-git-server 354/875, sugar-reel 361/2473/1S,
 candy-mosaic 465/7783/6S, candy-sql 1483/4203, sugar-skate 206/427 (audit-only); sugar-crush

@@ -539,7 +539,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 
 (Strategic. See §6.)
 
-### sugar-glow
+### candy-mdview
 
 - Pygments/Scrutiny full syntax highlighting (P0).
 - Streaming render for pager (P0).

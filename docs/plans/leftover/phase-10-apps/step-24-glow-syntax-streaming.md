@@ -1,6 +1,6 @@
-# Step 10.24 — sugar-glow full syntax highlighting + streaming render
+# Step 10.24 — candy-mdview full syntax highlighting + streaming render
 
-**Source:** `leftover_updates_later.md` sugar-glow §7.1-2
+**Source:** `leftover_updates_later.md` candy-mdview §7.1-2
 **Branch:** `ai/glow-syntax-streaming`
 
 ## Deliverable
@@ -11,10 +11,10 @@
 
 ## Files
 
-**Create:** `sugar-glow/src/Highlighter.php` — pluggable highlighter
+**Create:** `candy-mdview/src/Highlighter.php` — pluggable highlighter
 interface; concrete `ChromaJsonHighlighter`.
 
-**Modify:** `sugar-glow/src/Pager.php` — stream input.
+**Modify:** `candy-mdview/src/Pager.php` — stream input.
 
 ## Tests
 
@@ -22,7 +22,7 @@ interface; concrete `ChromaJsonHighlighter`.
 
 ## Acceptance
 
-- `cd sugar-glow && vendor/bin/phpunit` green.
+- `cd candy-mdview && vendor/bin/phpunit` green.
 
 ---
 

@@ -134,7 +134,7 @@ interface Model
 - `sugar-reel/src/Player.php`
 - `candy-git/src/App.php`
 - `sugar-tick/src/Dashboard.php`
-- `sugar-glow/src/GlowModel.php`
+- `candy-mdview/src/MdViewModel.php`
 - `sugar-dash/src/Modules/*` (multiple)
 
 **honey-* libs (2):**

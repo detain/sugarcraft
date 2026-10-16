@@ -144,7 +144,7 @@ interactive TUI.
 | **CC/BCC toggle** (show on user request — matches Pop) | ½ d | keybinding `c` to reveal |
 | **Filepicker** for attachments | 1 d | use existing `super-candy` Picker, or build a thin wrapper |
 | **Send spinner** during transport | ½ d | candy-sprinkles Spinner already available |
-| **Markdown body → HTML** preview & send | 1 d | use `sugar-glow` for render |
+| **Markdown body → HTML** preview & send | 1 d | use `candy-mdview` for render |
 | **Help bar** with key hints | ½ d | candy-sprinkles HelpBar or candy-forms help |
 | **TUI tests** — model snapshot + scripted-input view tests | 1 d | follow `candy-forms/tests/` pattern |
 | **VHS tape** for README GIF | ½ d | `.vhs/compose.tape` |
@@ -181,7 +181,7 @@ roadmap).
 - `MATCHUPS.md` row stays 🟢; only sub-status moves from "library
   surface complete" to "library surface + TUI complete."
 - No dependency churn — sugar-post stays on `candy-core` and gains
-  `candy-forms` / `sugar-glow` / `candy-sprinkles` (all already
+  `candy-forms` / `candy-mdview` / `candy-sprinkles` (all already
   monorepo siblings).
 
 ### Risks

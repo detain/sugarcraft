@@ -18,7 +18,7 @@ declare(strict_types=1);
  *   > consuming lib's repositories[].
  *
  * Historically this checker only validated a lib's DIRECT requires, so a
- * gap two hops deep (e.g. sugar-glow → sugar-bits → candy-forms) slipped
+ * gap two hops deep (e.g. candy-mdview → sugar-bits → candy-forms) slipped
  * through and broke fresh installs. It now resolves the transitive set and
  * reports the dependency path that introduced each missing entry.
  *

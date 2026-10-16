@@ -1,0 +1,165 @@
+<img src=".assets/icon.png" alt="candy-mdview" width="160" align="right">
+
+# CandyMdview
+
+> Formerly published as `sugarcraft/sugar-glow` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Glow\` → `SugarCraft\MdView\`. <!-- @rename-keep -->
+
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-mdview)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-mdview)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-mdview?label=packagist)](https://packagist.org/packages/sugarcraft/candy-mdview)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+
+![demo](.vhs/render.gif)
+
+candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **CandyShine** (rendering) and **SugarBits Viewport** (scrolling).
+
+```sh
+composer require sugarcraft/candy-mdview
+```
+
+## CLI
+
+```sh
+candy-mdview README.md                            # render to stdout (default)
+candy-mdview -p README.md                         # open in a fullscreen pager
+git log -1 --pretty=%B | candy-mdview -p          # pipe stdin
+candy-mdview --theme dracula README.md
+candy-mdview --width 80 --no-hyperlinks README.md
+candy-mdview --theme-config ./my-theme.json README.md
+```
+
+Flags:
+- `--theme {ansi|plain|dark|light|notty|dracula|tokyo-night|pink|solarized|monokai|github}`
+  — picks a CandyShine preset. `solarized`, `monokai`, and `github` load
+  JSON theme files from `themes/`.
+- `--style` / `-s` — alias for `--theme` (glamour-compat).
+- `--theme-config <path>` — load a custom JSON theme. Two shapes are
+  detected automatically: a **glamour** config (top-level `"document"`
+  block with nested element/chroma maps) is mapped by `GlamourTheme` onto
+  a CandyShine `Theme`; the historic flat colour map goes through
+  `Theme::fromJson`. Overrides `--theme`.
+- `--width` / `-w <N>` — word-wrap paragraphs / blockquotes / list bodies.
+  0 = no wrap.
+- `--no-hyperlinks` — disable OSC 8 link envelopes; render links as
+  `text (url)` instead.
+- `--pager` / `-p` — open in a fullscreen pager.
+
+## Pager keys
+
+Standard reader keys come from `Viewport`:
+
+| Key | Action |
+|---|---|
+| `↑` / `k` | line up |
+| `↓` / `j` | line down |
+| `PgUp` / `b` | page up |
+| `PgDn` / `space` / `f` | page down |
+| `Ctrl+U` / `Ctrl+D` | half page |
+| `Home` / `g` | top |
+| `End` / `G` | bottom |
+| `q` / `Esc` / `Ctrl+C` | exit |
+
+When the pager is opened on a file (not stdin) it **auto-reloads**: the
+model polls the source with `FileWatcher::pollTuple()` on a 0.5 s idle
+tick and re-renders in place whenever the mtime/size tuple changes, so
+edits to the Markdown appear without restarting. A delete-and-recreate
+keeps the last good frame until the file returns.
+
+## Demos
+
+### Render to stdout
+
+![render](.vhs/render.gif)
+
+### Fullscreen pager
+
+![pager](.vhs/pager.gif)
+
+## Library API
+
+Beyond the CLI, candy-mdview exposes two utility helpers for integrating its
+behaviour into other PHP projects.
+
+### FileWatcher
+
+File watching via mtime polling — works cross-platform with no extensions.
+
+```php
+use SugarCraft\MdView\FileWatcher;
+
+$watcher = new FileWatcher('/path/to/file.md');
+
+// Check if modified since a given mtime
+if ($watcher->hasChangedSince($lastMtime)) {
+    // re-render
+}
+
+// Generator-based watch loop (e.g., in a ReactPHP stream)
+foreach (FileWatcher::watch('/path/to/file.md', 500) as $changed) {
+    // $changed === true each time the file is modified
+}
+
+// Stateless tuple API (drives the pager's auto-reload):
+$base = FileWatcher::snapshot($path) ?? [0, 0];      // [mtime, size]
+$changed = FileWatcher::pollTuple($path, ...$base);  // new tuple or null
+```
+
+### GlamourTheme
+
+`GlamourTheme` parses charmbracelet/glamour style JSON (a `"document"`
+block, per-element `StylePrimitive` maps, and a `chroma` token map) and
+projects it onto CandyShine's `Theme`: document block affixes, indent and
+margin, heading/paragraph/inline element styles, and the Keyword /
+LiteralString / LiteralNumber / Comment chroma families. Unmappable fields
+are exposed verbatim through `element()` / `chroma()` for integrations
+that need them.
+
+### Width helpers
+
+CJK and emoji width handling lives in `SugarCraft\Core\Util\Width`. Use it
+directly for visual truncation, padding, and ANSI-aware measurement:
+
+```php
+use SugarCraft\Core\Util\Width;
+
+Width::string('hello');           // 5
+Width::string('你好');            // 4 (full-width)
+Width::string('📦');              // 2 (emoji)
+
+Width::padRight('hi', 8);         // "hi      "
+Width::truncate('hello world', 8); // "hello wo"
+```
+
+## Shared foundations
+
+candy-mdview uses **candy-palette** for terminal capability probing. The
+`RenderCommand::terminalSupportsColor()` wrapper calls
+`\SugarCraft\Palette\Probe\TerminalProbe::run()` and falls back to
+`true` (assume color) if the probe throws — ensuring graceful degradation
+on Windows, over SSH, and in old terminals.
+
+## Snapshot tests
+
+Render output is covered by golden-file snapshot tests. Fixture files live
+in `tests/fixtures/` with a `.golden` extension and are compared against
+actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
+To re-record fixtures after intentional output changes:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
+## Test
+
+```sh
+cd candy-mdview && composer install && vendor/bin/phpunit
+```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

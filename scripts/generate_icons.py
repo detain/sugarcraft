@@ -72,7 +72,7 @@ GEN_SIZE = 1024            # FLUX native; smaller drops quality, bigger wastes t
 
 # ---------------------------------------------------------------------------
 # Style block — pasted in front of every subject. Tuned to match the existing
-# kawaii illustrations (candy-core, sugar-spark, sugar-glow, candy-scriptui, ...).
+# kawaii illustrations (candy-core, sugar-spark, candy-mdview, candy-scriptui, ...).
 # ---------------------------------------------------------------------------
 STYLE = (
     "A cute glossy 3D-rendered kawaii sticker illustration of {SUBJECT}. "
@@ -126,7 +126,7 @@ SUBJECTS: dict[str, str] = {
     "sugar-charts":    "a row of four glossy candy bar-chart bars in pink orange green and blue with a striped lollipop perched on top",
     "candy-forms":    "a glossy candy speech bubble with three small candy form-input cards inside",
     "sugar-spark":     "a glossy yellow five-point candy star surrounded by bright sparkles",
-    "sugar-glow":      "a chubby glossy yellow gummy bear with bright sun rays radiating behind it",
+    "candy-mdview":      "a chubby glossy yellow gummy bear with bright sun rays radiating behind it",
     "sugar-crush":     "a chubby glossy red candy heart with smaller floating heart shards around it",
     "sugar-reel":      "a glossy candy film reel disc in pink and cream with a striped filmstrip ribbon unspooling from it and a small white play-triangle button on the front",
     "candy-git":     "a chubby glossy candy treasure chest with the lid open and colorful gumdrops spilling out",

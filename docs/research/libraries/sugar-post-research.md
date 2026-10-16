@@ -378,7 +378,7 @@ final class Composer {
 
 **Image Rendering in PHP:**
 ```php
-// Using sugar-glow or img2txt library
+// Using candy-mdview or img2txt library
 final class MediaRenderer {
     public function renderImage(string $path, RenderProtocol $protocol): string {
         return match($protocol) {
@@ -647,7 +647,7 @@ final class OAuthHandler {
 | Timeline renderer | Medium | 8-10 | Async PHP |
 | Post composer | Medium | 6-8 | None |
 | Media upload | Medium | 4-6 | File handling |
-| Markdown rendering | Low | 2-4 | sugar-glow |
+| Markdown rendering | Low | 2-4 | candy-mdview |
 | Real-time streaming | High | 10-14 | ReactPHP |
 | Image rendering | High | 8-12 | Image libraries |
 | Mastodon transport | Medium | 8-10 | HTTP client |

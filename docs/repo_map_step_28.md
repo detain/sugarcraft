@@ -6,7 +6,7 @@
 
 ## Goal
 
-Roll out candy-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `candy-forms`, `candy-forms`, `sugar-bits`, `sugar-charts`, `sugar-table`, `sugar-glow`, `candy-vt`, `candy-vcr`, `candy-shine`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
+Roll out candy-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `candy-forms`, `candy-forms`, `sugar-bits`, `sugar-charts`, `sugar-table`, `candy-mdview`, `candy-vt`, `candy-vcr`, `candy-shine`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
 
 Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakness across 8+ libs).
 
@@ -49,7 +49,7 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 - **PR body**:
   ```
   ## Summary
-  - candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, candy-shine all gain assertGoldenAnsi-backed golden-file tests.
+  - candy-forms, candy-forms, sugar-bits, sugar-charts, sugar-table, candy-mdview, candy-vt, candy-vcr, candy-shine all gain assertGoldenAnsi-backed golden-file tests.
   - Closes the ecosystem's most-cited weakness: "no snapshot tests for ANSI rendering" (§19/§149).
   - UPDATE_GOLDENS=1 phpunit workflow documented.
   - Tests are additive; existing tests preserved.
