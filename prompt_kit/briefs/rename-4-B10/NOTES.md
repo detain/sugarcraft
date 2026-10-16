@@ -48,3 +48,7 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 - R7: renames.json line 17 status pending→renamed (compact `"status":"pending"` format — space-form sed silently no-ops; first space-form sed silently no-ops && chain died pre-stage = correct fail-closed, compact form then numstat 1/1 verified); <!-- @rename-keep -->
   gen-docs re-run minted docs/lib/sugar-tick.html redirect stub (tagged, self-declared); final residue gate 0 at status=renamed. <!-- @rename-keep -->
 - Deviations: composer.json keywords dup 'sugarcraft' pre-existing → 'codetime'; none other.
+
+## R9 fire (weld 2026-10-16)
+- create candy-codetime: HTTP 406 (sugarcraft/sugar-tick already exists — old reg holds URL). Recorded, no retry per batch-B law; end-of-campaign verification pass.
+- R8 note: gh repo already renamed (sugar-tick → candy-codetime 301s); split-sync legacy refs owed final ls-remote peek at campaign close.
