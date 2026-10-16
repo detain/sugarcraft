@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-mouse-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-14 (sugar-bits uses it), step-22 (sugar-veil/sugar-crumbs/candy-lister consume it)
+**Blocks:** step-14 (sugar-bits uses it), step-22 (sugar-veil/sugar-crumbs/sugar-treelist consume it)
 
 ## Goal
 
@@ -77,7 +77,7 @@ Reference: `docs/repo_map_update.md` §327.6 (framework), §345.5 (ZoneClickTrac
   ## Summary
   - New foundation lib candy-mouse mirrors bubblezone's Mark/Scan/Get pattern but is self-contained — no external Manager wiring needed.
   - ZoneClickTracker dedups Press+Release pairs (addresses bubblezone issue #10).
-  - candy-mouse is unchanged this PR; sugar-veil/sugar-crumbs/candy-lister migrate to candy-mouse in step-22.
+  - candy-mouse is unchanged this PR; sugar-veil/sugar-crumbs/sugar-treelist migrate to candy-mouse in step-22.
 
   ## Test plan
   - [x] vendor/bin/phpunit in candy-mouse (≥95% coverage)

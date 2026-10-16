@@ -433,7 +433,7 @@ candy-hermit fills a **specific niche** in the SugarCraft ecosystem: the quick-f
 
 - `sugar-bits` / `candy-forms` — inline component rendering
 - `sugar-veil` — general-purpose overlay compositor
-- `candy-lister` — inline list with fuzzy filtering
+- `sugar-treelist` — inline list with fuzzy filtering
 
 The overlay pattern is useful for:
 - Command palette / fuzzy file search (like VS Code Ctrl+P)
@@ -445,7 +445,7 @@ The overlay pattern is useful for:
 1. UTF-8 grapheme cluster support in `highlightMatches()` and `replaceSegment()` (use `grapheme_strlen`/`grapheme_substr`)
 2. ANSI-aware width calculation (leverage `SugarCraft\Core\Util\Width` or `Ansi` utilities)
 3. Optional pagination for large lists
-4. Quality-ranked fuzzy filtering (consider porting smith-waterman from `candy-lister`)
+4. Quality-ranked fuzzy filtering (consider porting smith-waterman from `sugar-treelist`)
 5. Direct TTY ioctl for SIGWINCH size (via candy-pty SignalForwarder enhancements)
 
 ---

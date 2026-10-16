@@ -43,7 +43,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Color, HSL/HSV/Lab color spaces | `candy-palette/` | ✅ Mapped |
 | Content, Text, Span, Style | `candy-shine/` | ✅ Mapped |
 | markdown, MarkdownViewer | `candy-shine/` | ✅ Mapped |
-| Tree, DirectoryTree | `candy-lister/` | ✅ Mapped |
+| Tree, DirectoryTree | `sugar-treelist/` | ✅ Mapped |
 | Select, OptionList, SelectionList | `candy-forms/` | ✅ Mapped |
 | Input, TextArea, MaskedInput | `candy-forms/` | ✅ Mapped |
 | DataTable | `sugar-table/` | ✅ Mapped |

@@ -400,7 +400,7 @@ because research adds three items the PTY plan did not call out:)
 (Scaffold-template lib; most items are repo-level concerns already
 handled by the monorepo.) Skip until someone uses it as a template.
 
-### candy-lister
+### sugar-treelist
 
 - Filter interface (Priority 1) — `withFilterFn()`.
 - `FuzzyMatch` class with Smith-Waterman scoring (Priority 2).

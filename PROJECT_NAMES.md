@@ -156,7 +156,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyInput** | candy + input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
 | **CandyMouse** | candy + mouse = self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |
 | **CandyMinesweeper** | plain descriptive — took this name in the 2026-10 rename; the “candy + mines” wordplay retired with it. |
-| **CandyLister** | candy + lister = scrollable tree/list view component. literal. |
+| **SugarTreelist** | candy + lister = scrollable tree/list view component. literal. |
 | **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |
 | **CandySql** | candy + sql = terminal SQL client. literal pairing (was candy-query — the query-editor framing retired with the 2026-10 rename); multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. | <!-- @rename-keep -->
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |

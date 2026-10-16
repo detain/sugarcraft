@@ -4841,8 +4841,8 @@ duplicated in `sugar-charts` (3 sites), `sugar-table` (2), `sugar-stickers` (1) 
 (1) — **seven sites in four libs**. Each degrades to codepoint splitting on PHP 8.3 exactly as `Width`
 did.
 
-⚠️ `candy-lister` was listed here and **has no such cascade** — `grep -rl grapheme_str_split
-candy-lister/src` returns nothing. Caught by the round-40 reviewer and re-verified by the supervisor.
+⚠️ `sugar-treelist` was listed here and **has no such cascade** — `grep -rl grapheme_str_split
+sugar-treelist/src` returns nothing. Caught by the round-40 reviewer and re-verified by the supervisor.
 A wrong name in a to-do list costs the next lane a wasted file-open, which is cheap; a wrong name that
 makes a five-lib job look like a four-lib job is the kind of miscount this tracker exists to stop.
 

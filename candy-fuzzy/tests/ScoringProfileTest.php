@@ -120,7 +120,7 @@ final class ScoringProfileTest extends TestCase
     #[Test]
     public function testDeprecatedDefaultForwardsToCanonical(): void
     {
-        // Kept for candy-lister's FuzzyMatch (reached via its class_alias).
+        // Kept for sugar-treelist's FuzzyMatch (reached via its class_alias).
         $this->assertEquals(ScoringProfile::canonical(), ScoringProfile::default());
         $this->assertEquals(new ScoringProfile(), ScoringProfile::default());
     }

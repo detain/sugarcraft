@@ -1,0 +1,114 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\TreeList;
+
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+
+/**
+ * Fuzzy substring matcher using Smith-Waterman-style local alignment scoring.
+ *
+ * Thin delegating shim over the candy-fuzzy SSOT
+ * ({@see SmithWatermanMatcher}). sugar-treelist historically shipped a
+ * bit-identical copy of the Smith-Waterman scorer; the DP core now lives in
+ * candy-fuzzy, and the default {@see ScoringProfile} is bit-equivalent to the
+ * classic constants, so scores and rankings are preserved for inputs within
+ * candy-fuzzy's DoS length caps — apart from the per-codepoint case-fold
+ * deviations candy-fuzzy's CharFold now applies deliberately (see score()).
+ *
+ * Over-cap input (query past {@see SmithWatermanMatcher::DEFAULT_MAX_QUERY_LENGTH},
+ * candidate past {@see SmithWatermanMatcher::DEFAULT_MAX_CANDIDATE_LENGTH}
+ * characters) is aligned on its PREFIX, on the same score scale as every other
+ * item — so match() ranks a very long item consistently with short ones (the
+ * SSOT once switched over-cap input to a Sahilm fallback on a different scale).
+ * The trade-off: text that exists only past the candidate cap is not searched.
+ *
+ * The public API (constructor, withProfile(), score(), match()) is unchanged.
+ * match() keeps sugar-treelist's own \Stringable-item contract and input-order
+ * tiebreak — it is intentionally NOT SmithWatermanMatcher::matchAll(), whose
+ * haystack-ascending tiebreak would reorder equal-score items.
+ *
+ * ## CancellationToken support (intended API — requires candy-async)
+ * When candy-async cancellation is wired in, match() will accept an optional
+ * `?CancellationToken $token = null` parameter. Scoring is batched
+ * (e.g., 100 candidates per futureTick) via loop()->futureTick().
+ * If cancelled, throws `SugarCraft\Async\OperationCancelledException`.
+ */
+final class FuzzyMatch
+{
+    private ScoringProfile $profile;
+
+    private SmithWatermanMatcher $matcher;
+
+    public function __construct(?ScoringProfile $profile = null)
+    {
+        $this->profile = $profile ?? ScoringProfile::canonical();
+        $this->matcher = SmithWatermanMatcher::new($this->profile);
+    }
+
+    /**
+     * Set a custom scoring profile.
+     */
+    public function withProfile(ScoringProfile $profile): self
+    {
+        $clone = clone $this;
+        $clone->profile = $profile;
+        $clone->matcher = SmithWatermanMatcher::new($profile);
+        return $clone;
+    }
+
+    /**
+     * Score a candidate against a query using Smith-Waterman local alignment.
+     *
+     * Only considers alignments where the query characters appear in ORDER
+     * within the candidate (not necessarily contiguously). Delegates to the
+     * candy-fuzzy SSOT; case folding is per code point (CharFold: each code
+     * point lowercases individually and compares whole-element, keeping the
+     * fold 1:1 with the original string), so scores match sugar-treelist's
+     * historical whole-string mb_strtolower scorer on every input except the
+     * expansion/context-sensitive folds (U+0130, final sigma) where the old
+     * byte-for-byte match desynced match indices — there the deviation is
+     * intentional; see candy-fuzzy's CharFold contract.
+     *
+     * @param string $query     The search query (needle)
+     * @param string $candidate The candidate string to score
+     * @return int The alignment score (higher = better match)
+     */
+    public function score(string $query, string $candidate): int
+    {
+        return $this->matcher->score($query, $candidate);
+    }
+
+    /**
+     * Filter and rank candidates by fuzzy match score against the query.
+     *
+     * Returns candidates sorted by score descending (best matches first).
+     * Only returns candidates with a score > 0. Equal scores keep input order
+     * (stable sort) — sugar-treelist's contract, distinct from the SSOT's
+     * matchAll() haystack-ascending tiebreak.
+     *
+     * @param string          $query      The search query
+     * @param list<\Stringable> $items    List of Stringable items to score
+     * @return list<array{\Stringable, int}> List of [item, score] pairs sorted by score desc
+     */
+    public function match(string $query, array $items): array
+    {
+        if ($query === '' || $items === []) {
+            return [];
+        }
+
+        $scored = [];
+        foreach ($items as $item) {
+            $score = $this->score($query, (string) $item);
+            if ($score > 0) {
+                $scored[] = [$item, $score];
+            }
+        }
+
+        // Sort by score descending
+        usort($scored, static fn(array $a, array $b) => $b[1] <=> $a[1]);
+
+        return $scored;
+    }
+}

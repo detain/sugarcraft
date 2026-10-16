@@ -53,7 +53,7 @@
         "sugarcraft/candy-gifview": "dev-master",
         "sugarcraft/candy-hermit": "dev-master",
         "sugarcraft/candy-kit": "dev-master",
-        "sugarcraft/candy-lister": "dev-master",
+        "sugarcraft/sugar-treelist": "dev-master",
         "sugarcraft/candy-log": "dev-master",
         "sugarcraft/candy-metrics": "dev-master",
         "sugarcraft/candy-mouse": "dev-master",
@@ -202,7 +202,7 @@
         },
         {
             "type": "path",
-            "url": "candy-lister",
+            "url": "sugar-treelist",
             "options": {
                 "symlink": true
             }

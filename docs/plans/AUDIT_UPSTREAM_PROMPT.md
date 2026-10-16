@@ -160,7 +160,7 @@ that are tiny but together justify a PR.
 - charmbracelet/promwish → candy-metrics
 - charmbracelet/log → candy-log
 - charmbracelet/colorprofile → candy-palette
-- treilik/bubblelister → candy-lister
+- treilik/bubblelister → sugar-treelist
 - treilik/bubbleboxer → sugar-boxer
 - rmhubbert/bubbletea-overlay → sugar-veil
 - KevM/bubbleo → sugar-crumbs

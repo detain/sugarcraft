@@ -89,14 +89,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 4: candy-tetris, candy-minesweeper, candy-flip, candy-lister
+### Group 4: candy-tetris, candy-minesweeper, candy-flip, sugar-treelist
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-tetris | 117 ✓ | APPROVE | 0 | 3 | 2 | 0 |
 | candy-minesweeper | 91 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-flip | 53 ✓ | APPROVE | 0 | 2 | 2 | 0 |
-| candy-lister | 39 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
+| sugar-treelist | 39 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 
 **candy-tetris** — Full Tetris with SRS, T-Spin, VS mode. Issues: `Das::withKeyDown()` ignores state parameter; `Ansi::sgr()` with 4 args in ghost rendering; VS Computer moves on every tick not own schedule.
 
@@ -104,7 +104,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-flip** — GIF decoder. Issues: LZW sub-block parsing fails on `0x80` byte (valid length byte misidentified as control); `FloydSteinberg::dither()` calls `imagecolorat()` 3× per pixel instead of once.
 
-**candy-lister** — List view. Issues: `Model` claims immutability but has many public mutable properties; `addItem()` returns `$this` (mutates in place, not clone); `FuzzyMatch::score()` uses byte operations on potential UTF-8.
+**sugar-treelist** — List view. Issues: `Model` claims immutability but has many public mutable properties; `addItem()` returns `$this` (mutates in place, not clone); `FuzzyMatch::score()` uses byte operations on potential UTF-8.
 
 ---
 
@@ -264,7 +264,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder |
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
-| **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
+| **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, sugar-treelist/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
 | **Path-repo closure gaps** | candy-mdview, sugar-stickers, candy-ssh-launcher | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
 ### 🟡 Cross-Package Inconsistencies
@@ -398,7 +398,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ### ❌ What's Broken
 
-1. **Immutability claims vs reality** — candy-lister/Model, candy-codetime/Milestone mutate
+1. **Immutability claims vs reality** — sugar-treelist/Model, candy-codetime/Milestone mutate
 2. **Facade packages** — candy-forms has no real code
 3. **Stub features** — sugar-readline/Highlight, sugar-toast/animation do nothing
 4. **Path-repo dependency graph** — still has gaps (despite fixes in PR #880)
@@ -509,7 +509,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | honey-bounce.SpringChain mutation | Refactor to return new instances | Consistency with immutable pattern |
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
 | sugar-stickers/Table vs sugar-table/Table | Rename sugar-stickers Table to SimpleTable | Two different packages, same class name, confuses |
-| candy-lister + candy-ansi-inspect | No consolidation needed | Different purposes |
+| sugar-treelist + candy-ansi-inspect | No consolidation needed | Different purposes |
 | candy-mdview/WidthHelper vs candy-core/Util/Width | Delete candy-mdview/WidthHelper | Already exists in candy-core |
 
 ---
@@ -565,7 +565,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 1 | candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
 | 2 | candy-sql, candy-starter, candy-kit, candy-codeshot | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
-| 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
+| 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |

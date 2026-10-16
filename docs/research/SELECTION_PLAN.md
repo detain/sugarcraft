@@ -436,7 +436,7 @@ All 45 research documents available at:
 | candy-flip | 16KB |
 | candy-codeshot | 23KB |
 | candy-hermit | 21KB |
-| candy-lister | 15KB |
+| sugar-treelist | 15KB |
 | candy-log | 17KB |
 | candy-metrics | 20KB |
 | candy-minesweeper | 15KB |

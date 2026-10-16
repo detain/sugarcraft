@@ -13,11 +13,11 @@ namespace SugarCraft\Fuzzy;
  *
  * The {@see self::canonical()} values are the canonical SugarCraft scores and are
  * bit-equivalent to the historical hard-coded constants in
- * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\Lister\FuzzyMatch`,
+ * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\TreeList\FuzzyMatch`,
  * so passing the default profile (or none) preserves existing matcher output
  * byte-for-byte.
  *
- * This class is the scoring SSOT for the ecosystem: `SugarCraft\Lister\ScoringProfile`
+ * This class is the scoring SSOT for the ecosystem: `SugarCraft\TreeList\ScoringProfile`
  * is now a `class_alias` to it, and the deprecated
  * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` shim delegates to
  * {@see \SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher}, which defaults here.
@@ -64,7 +64,7 @@ final class ScoringProfile
 
     /**
      * Former spelling of {@see self::canonical()}, kept so existing callers
-     * (`SugarCraft\Lister\FuzzyMatch`, which reaches this class through its
+     * (`SugarCraft\TreeList\FuzzyMatch`, which reaches this class through its
      * `class_alias`) keep resolving. `::default()` is a banned root-factory
      * spelling under the repo naming rule.
      *

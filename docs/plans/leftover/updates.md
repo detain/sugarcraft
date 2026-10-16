@@ -481,7 +481,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     review for step 09.09 · clean · PR#727
     tests-ci for step 09.09 · clean
     docs for step 09.09 · PR#728 · document T-Spin (3-corner rule), B2B (1.5×), combo, DAS/ARR (167/50ms), perfect-clear (+5000/level) in README + end-user HTML + CALIBER_LEARNINGS.md
-    step 09.10 · PR#729 · candy-lister: filter interface + FuzzyMatch + FilterState enum (leftover-rollout step 09.10)
+    step 09.10 · PR#729 · sugar-treelist: filter interface + FuzzyMatch + FilterState enum (leftover-rollout step 09.10)
     review for step 09.10 · clean · PR#729
     tests-ci for step 09.10 · clean
     docs for step 09.10 · PR#730 · document FilterState/FuzzyMatch/withFilterFn in README + end-user HTML + new CALIBER_LEARNINGS.md

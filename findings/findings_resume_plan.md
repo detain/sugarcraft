@@ -449,34 +449,34 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `candy-kit/src/Theme.php:113-124`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.11 🟡 candy-lister: View() catches RuntimeException not Throwable (Item 1.1)
+#### 1.11 🟡 sugar-treelist: View() catches RuntimeException not Throwable (Item 1.1)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 1.1
+**Plan:** `findings/plan_sugar-treelist.md` — Item 1.1
 **Fix:** Change `catch (\RuntimeException $e)` to `catch (\Throwable $e)` at `Model.php:474`
-**Files:** `candy-lister/src/Model.php:474`
+**Files:** `sugar-treelist/src/Model.php:474`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.12 🟡 candy-lister: FilterState::filtered dead enum case (Item 1.2)
+#### 1.12 🟡 sugar-treelist: FilterState::filtered dead enum case (Item 1.2)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 1.2
+**Plan:** `findings/plan_sugar-treelist.md` — Item 1.2
 **Fix:** Remove `case filtered;` from `FilterState.php:25`
-**Files:** `candy-lister/src/FilterState.php:25`
+**Files:** `sugar-treelist/src/FilterState.php:25`
 **Agent:** Same coder agent as 1.11 (grouped — same lib)
 
 ---
 
-#### 1.13 🟡 candy-lister: splitOverWidth() UTF-8 grapheme (Item 1.4)
+#### 1.13 🟡 sugar-treelist: splitOverWidth() UTF-8 grapheme (Item 1.4)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 1.4
+**Plan:** `findings/plan_sugar-treelist.md` — Item 1.4
 **Fix:** Replace `\strlen($word)` with `\grapheme_strlen($word)` and `\substr` with `\grapheme_substr`
-**Files:** `candy-lister/src/Model.php:593-601`
+**Files:** `sugar-treelist/src/Model.php:593-601`
 **Agent:** Same coder agent as 1.11 (grouped — same lib)
 
-#### 1.14 🟡 candy-lister: ANSI injection in renderItem() (Item 3.1)
+#### 1.14 🟡 sugar-treelist: ANSI injection in renderItem() (Item 3.1)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 3.1
+**Plan:** `findings/plan_sugar-treelist.md` — Item 3.1
 **Fix:** Add `Ansi::strip()` around `(string) $item->value` before `hardWrap()` or document trust boundary
-**Files:** `candy-lister/src/Model.php:513`
+**Files:** `sugar-treelist/src/Model.php:513`
 **Agent:** Same coder agent as 1.11 (grouped — same lib)
 
 #### 1.15 🟡 candy-focus: next()/previous() code duplication (Items 2.1-2.4)
@@ -937,25 +937,25 @@ Same branch/PR check as Phase 0/1.
 
 ### Group 3-C (3 agents)
 
-#### 3.13 🟢 candy-lister: Navigation methods (Item 5.1)
+#### 3.13 🟢 sugar-treelist: Navigation methods (Item 5.1)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 5.1
+**Plan:** `findings/plan_sugar-treelist.md` — Item 5.1
 **Fix:** Add `cursorPageUp()`, `cursorPageDown()`, `cursorToStart()`, `cursorToEnd()` methods
-**Files:** `candy-lister/src/Model.php`
+**Files:** `sugar-treelist/src/Model.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.14 🟢 candy-lister: setLineOffset() fluent (Item 1.3)
+#### 3.14 🟢 sugar-treelist: setLineOffset() fluent (Item 1.3)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 1.3
+**Plan:** `findings/plan_sugar-treelist.md` — Item 1.3
 **Fix:** Add `setLineOffset(int $n): self` fluent setter
-**Files:** `candy-lister/src/Model.php`
+**Files:** `sugar-treelist/src/Model.php`
 **Agent:** Same coder agent as 3.13 (grouped — same lib)
 
-#### 3.15 🟢 candy-lister: sort O(n) cursor relocation (Item 2.1)
+#### 3.15 🟢 sugar-treelist: sort O(n) cursor relocation (Item 2.1)
 
-**Plan:** `findings/plan_candy-lister.md` — Item 2.1
+**Plan:** `findings/plan_sugar-treelist.md` — Item 2.1
 **Fix:** Maintain cursor index during sort using object identity map instead of O(n) foreach
-**Files:** `candy-lister/src/Model.php:264-284`
+**Files:** `sugar-treelist/src/Model.php:264-284`
 **Agent:** Same coder agent as 3.13 (grouped — same lib)
 
 ---
@@ -1281,7 +1281,7 @@ Same verification as previous phases.
 | `plan_candy-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
 | `plan_candy-hermit.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests |
 | `plan_candy-kit.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
-| `plan_candy-lister.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
+| `plan_sugar-treelist.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
 | `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
 | `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
 | `plan_candy-mosaic.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
