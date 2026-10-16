@@ -1,6 +1,6 @@
-# Step 10.06 — sugar-stash Phase 4 (interactive rebase / stash mgmt / cherry-pick / worktrees / syntax)
+# Step 10.06 — candy-git Phase 4 (interactive rebase / stash mgmt / cherry-pick / worktrees / syntax)
 
-**Source:** `leftover_updates_later.md` sugar-stash Phase 4
+**Source:** `leftover_updates_later.md` candy-git Phase 4
 **Branch:** `ai/stash-phase-4`
 
 ## Deliverable
@@ -13,7 +13,7 @@
 
 ## Files
 
-**Create:** `sugar-stash/src/InteractiveRebase.php`,
+**Create:** `candy-git/src/InteractiveRebase.php`,
 `StashManager.php`, `CherryPick.php`, `Worktrees.php`.
 
 ## Tests
@@ -22,7 +22,7 @@
 
 ## Acceptance
 
-- `cd sugar-stash && vendor/bin/phpunit` green.
+- `cd candy-git && vendor/bin/phpunit` green.
 
 ---
 

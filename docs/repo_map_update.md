@@ -55,13 +55,13 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 ### Ecosystem-wide adoption sweep (Phase 6, steps 31–37)
 - step-31 candy-pty: adopted candy-input + candy-ansi (PR #910)
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + candy-mouse + candy-testing (PR #911)
-- step-33 sugar-skate + sugar-wishlist + sugar-stash: adopted candy-fuzzy (PR #912, hotfix PR #913)
+- step-33 sugar-skate + sugar-wishlist + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 sugar-tick + sugar-post + candy-serve: adopted candy-async (PR #915)
 - step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, sugar-skate, sugar-wishlist, sugar-stash, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, sugar-skate, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).
@@ -131,7 +131,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **Byte-level string operations break UTF-8/grapheme content** — candy-hermit's `highlightMatches()` uses byte indexing; candy-freeze's 0.6 font aspect ratio fails on CJK/multi-byte content; sugar-spark's parser has C1 limitations due to PHP's native UTF-8 handling. The ecosystem re-implements byte-loop parsing instead of using a shared state machine.
 
-3. **No Cassowary constraint solver** — candy-sprinkles, candy-core, candy-forms, sugar-bits, sugar-boxer, sugar-dash, sugar-stash, sugar-stickers all need constraint-based layout (column A = 30% but never less than 10). Currently each package implements greedy one-pass sizing manually.
+3. **No Cassowary constraint solver** — candy-sprinkles, candy-core, candy-forms, sugar-bits, sugar-boxer, sugar-dash, candy-git, sugar-stickers all need constraint-based layout (column A = 30% but never less than 10). Currently each package implements greedy one-pass sizing manually.
 
 4. **Greedy constraint solvers / no shared layout engine** — Every layout-sensitive package independently implements manual sizing logic. No shared layout engine exists at the foundation layer.
 

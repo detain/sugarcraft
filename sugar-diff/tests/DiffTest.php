@@ -25,8 +25,8 @@ final class DiffTest extends TestCase
 
         // Byte-exact and prefix-free (a stray header line would break any
         // verbatim consumer, e.g. a patch reader). NOTE (audit 2026-10-07): the
-        // earlier claim here that sugar-stash's DiffViewer::fromRawDiff() feeds on
-        // this output is FALSE — sugar-stash parses `git diff` output and does not
+        // earlier claim here that candy-git's DiffViewer::fromRawDiff() feeds on
+        // this output is FALSE — candy-git parses `git diff` output and does not
         // depend on sugar-diff at all.
         $expected = "--- a/file.txt\n"
             . "+++ b/file.txt\n"

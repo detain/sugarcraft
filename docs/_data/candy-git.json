@@ -1,0 +1,11 @@
+{
+    "title": "CandyGit — SugarCraft",
+    "description": "CandyGit: Terminal git client.",
+    "ogTitle": "CandyGit — SugarCraft",
+    "ogDescription": "Terminal git client.",
+    "emoji": "🌿",
+    "displayName": "CandyGit",
+    "tagline": "Terminal git client",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/jesseduffield/lazygit\" style=\"color: inherit;\">jesseduffield/lazygit</a></span>\n          <span class=\"tag-chip\">git</span>\n          <span class=\"tag-chip\">tui</span>\n          <span class=\"tag-chip\">porcelain</span>\n          <span class=\"tag-chip\">force-command-friendly</span>"
+}

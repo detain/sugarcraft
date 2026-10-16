@@ -17,7 +17,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 2. **Stub features wired silently** (sugar-readline Highlight no-op, sugar-toast animation deferred)
 3. **33 cloned `Lang.php` files** adding ~700 lines of boilerplate
 4. **`with()` methods that can't set `0` values** (candy-boxer, sugar-bits) due to `?: ` sentinel pattern
-5. **God classes** (super-candy/Manager at 915 lines, sugar-stash/App at 1201 lines)
+5. **God classes** (super-candy/Manager at 915 lines, candy-git/App at 1201 lines)
 6. **Inverted dependency** (candy-shell → sugar-*) per prior improvements.md
 7. **Incomplete candy-forms extraction** leaving candy-forms as a facade with no implementation
 
@@ -130,14 +130,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 6: sugar-bits, sugar-charts, sugar-skate, sugar-stash
+### Group 6: sugar-bits, sugar-charts, sugar-skate, candy-git
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-bits | 681 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | sugar-charts | 327 ✓ | APPROVE | 0 | 2 | 3 | 0 |
 | sugar-skate | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 2 | 0 |
-| sugar-stash | 116 ⚠️ | REQUEST_CHANGES | 0 | 3 | 5 | 0 |
+| candy-git | 116 ⚠️ | REQUEST_CHANGES | 0 | 3 | 5 | 0 |
 
 **sugar-bits** — TUI components. 681 tests. Issue: 19 `class_alias()` entries to `SugarCraft\Forms\*` create confusing architecture where the "real" code lives elsewhere (candy-forms).
 
@@ -145,7 +145,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **sugar-skate** — Key/value store. Issues: `YamlImporter` uses reflection to access private `Store::database()` method (fragile); minimal YAML parser only handles `key: value` pairs; `Store::setWithTtl()` silently no-ops on invalid TTL; `get()` writes suggestion to STDERR (not configurable).
 
-**sugar-stash** — Git TUI. 116 tests (2 skipped). Issues: `App` class at 1201 lines violates single responsibility; `WorktreeEntry::fromPorcelainLine()` calls `is_dir()` causing test skips; `HistoryManager` uses string op names in `match` (type-unsafe); `withAll()` has 22 parameters.
+**candy-git** — Git TUI. 116 tests (2 skipped). Issues: `App` class at 1201 lines violates single responsibility; `WorktreeEntry::fromPorcelainLine()` calls `is_dir()` causing test skips; `HistoryManager` uses string op names in `match` (type-unsafe); `withAll()` has 22 parameters.
 
 ---
 
@@ -258,12 +258,12 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 |--------------|-------------------|-------------|
 | **`with()` can't set `0`/`false`** | sugar-boxer, sugar-bits, candy-sprinkles | Uses `value ?: $existing` sentinel pattern; passing `0` is treated as "not passed" |
 | **33 cloned Lang.php files** | All 33 packages | Same ~31-line shape, only NAMESPACE/DIR differ; ~700 lines of boilerplate |
-| **God classes** | super-candy/Manager (915L), sugar-stash/App (1201L) | Single class handling too many responsibilities |
+| **God classes** | super-candy/Manager (915L), candy-git/App (1201L) | Single class handling too many responsibilities |
 | **Stub features wired silently** | sugar-readline/Highlight, sugar-toast/AnimationDuration | Feature exists in API but does nothing; no warning to consumers |
 | **Static singleton facades** | candy-mouse/Zones, candy-prompt | Makes testing harder, causes state leakage |
 | **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder |
-| **String-based type detection** | super-candy/reverseAction, sugar-stash/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
-| **Constructor parameter explosion** | super-candy/Manager (14 params), sugar-stash/withAll (22 params) | Adding new properties requires updating many call sites |
+| **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
+| **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
 | **Inconsistent mutability** | sugar-tick/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
 | **Path-repo closure gaps** | sugar-glow, sugar-stickers, sugar-wishlist | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
@@ -273,7 +273,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 2. **Lang facade pattern**: 33 copies of nearly identical `Lang extends Core\I18n\Lang` with only NAMESPACE/DIR constants differing
 3. **`with*()` method naming**: Some use `with*()`, some use `copy()`, some use `mutate()`
 4. **Factory naming**: Most follow `::new()` + bare-named factories, but not enforced
-5. **Package type**: Some are `"type": "library"`, some `"type": "project"` (sugar-tick, candy-mold, sugar-stash)
+5. **Package type**: Some are `"type": "library"`, some `"type": "project"` (sugar-tick, candy-mold, candy-git)
 6. **Packagist namespace**: `sugarcore/` vs `sugarcraft/` inconsistency
 7. **`mutate()` helper signature**: Named-param vs positional vs named+sentinel bools — 3 different shapes
 8. **CALIBER_LEARNINGS.md presence**: sugar-datepicker missing; others have it
@@ -353,11 +353,11 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Category | Debt Level | Affected Packages | Description |
 |----------|------------|-------------------|-------------|
 | **Cloned boilerplate** | HIGH | 33 packages | 33× Lang.php, repeated patterns |
-| **God classes** | HIGH | super-candy, sugar-stash | 915L and 1201L classes |
+| **God classes** | HIGH | super-candy, candy-git | 915L and 1201L classes |
 | **Stub features** | MEDIUM | sugar-readline, sugar-toast | Features wired but non-functional |
 | **Path-repo symlinks** | MEDIUM | sugar-post, candy-mosaic | composer reinstall needed |
 | **Inverted dependencies** | MEDIUM | candy-shell | Fixed via candy-forms extraction (in progress) |
-| **Constructor bloat** | MEDIUM | super-candy (14), sugar-stash (22) | DTO/value object refactor needed |
+| **Constructor bloat** | MEDIUM | super-candy (14), candy-git (22) | DTO/value object refactor needed |
 | **Static singletons** | LOW | candy-mouse, candy-forms | Inject via constructor or clear test cleanup |
 | **Inconsistent mutability** | LOW | Multiple packages | Some classes readonly, some not in same package |
 | **Magic numbers** | LOW | candy-flappy, candy-tetris | Comments explaining gameplay constants |
@@ -435,7 +435,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### Short Term (This Sprint)
 
 7. **[REFACTOR]** super-candy: Decompose 915-line Manager into ConfirmHandler, SearchHandler, TabManager
-8. **[REFACTOR]** sugar-stash: Decompose 1201-line App into smaller handlers
+8. **[REFACTOR]** candy-git: Decompose 1201-line App into smaller handlers
 9. **[REFACTOR]** sugar-boxer: Fix `with()` to use `null` sentinel so `0` values can be set
 10. **[REFACTOR]** sugar-crumbs: Fix `NavStack::updateTop()` and `setItems()` to return clones
 11. **[REFACTOR]** sugar-readline: Make `Highlight::highlight()` throw unsupported exception instead of silently returning no styling
@@ -467,7 +467,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 1. **sugar-post / candy-mosaic test failures** — broken composer setup, affects CI
 2. **candy-forms facade** — unclear ownership of Form implementation
 3. **super-candy Manager** (915 lines) — high bug risk, hard to modify safely
-4. **sugar-stash App** (1201 lines) — same god class issue
+4. **candy-git App** (1201 lines) — same god class issue
 5. **candy-vcr PhpGifEncoder** — stub in public API that throws
 6. **sugar-readline Highlight** — silent no-op could cause user confusion
 7. **honey-bounce duplicate easing** — correctness bug in physics library
@@ -567,7 +567,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
-| 6 | sugar-bits, sugar-charts, sugar-skate, sugar-stash | 1,190 | ⚠️ stash 2 skipped |
+| 6 | sugar-bits, sugar-charts, sugar-skate, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, sugar-glow, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
 | 9 | sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |

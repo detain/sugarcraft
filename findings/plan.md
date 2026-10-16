@@ -20,7 +20,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 | sugar-reel runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-reel-audit` |
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
 | honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-mold | `ref:honey-bounce-audit` |
-| sugar-stash path-repo closure check deferred | candy-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:sugar-stash-audit` |
+| candy-git path-repo closure check deferred | candy-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
 | sugar-tick plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:sugar-tick-audit` |
 
 ## Dependency Graph (Summary)
@@ -116,7 +116,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-post | P1 | 3 | Attachment silent failure; unchecked fwrite(); @ suppression on fgets() |
 | candy-forms | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
 | candy-log | P1 | 2 | Log level filtering; Handler interface consistency |
-| sugar-stash | P1 | 2 | Path-repo closure check (verify candy-fuzzy is clean) |
+| candy-git | P1 | 2 | Path-repo closure check (verify candy-fuzzy is clean) |
 | candy-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
 | candy-freeze | P1 | 2 | WeakMap for allocateColor cache (memory leak fix) |
 
@@ -182,7 +182,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-post.md` — Phase 1 (Attachment silent failure, unchecked fwrite)
 - `findings/plan_candy-forms-huh.md` — Phase 1 ($pid uninitialized on fork failure)
 - `findings/plan_candy-log.md` — Phase 1 (log level filtering, handler consistency)
-- `findings/plan_sugar-stash.md` — Phase 1 (path-repo closure verification)
+- `findings/plan_candy-git.md` — Phase 1 (path-repo closure verification)
 - `findings/plan_candy-testing.md` — Phase 1 (TapeRecorder Dracula theme bug)
 - `findings/plan_candy-freeze.md` — Phase 1 (WeakMap allocateColor cache)
 

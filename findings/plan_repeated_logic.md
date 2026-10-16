@@ -30,13 +30,13 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 
 **What:** Create `candy-core/src/Util/Clamp.php` with a reusable clamping utility.
 
-**Why:** Four different clamp implementations exist across sugar-stash, candy-palette, sugar-bits, and candy-forms. A centralized utility ensures consistency and reduces maintenance burden.
+**Why:** Four different clamp implementations exist across candy-git, candy-palette, sugar-bits, and candy-forms. A centralized utility ensures consistency and reduces maintenance burden.
 
 **Severity:** Medium
 
 **Source locations:**
 
-- `sugar-stash/src/App.php:L515` — `private function clamp(int $i, int $size): int`
+- `candy-git/src/App.php:L515` — `private function clamp(int $i, int $size): int`
 - `candy-palette/src/Color.php:L67` — `private static function clamp(int $v): int` (0-255 range)
 - `sugar-bits/src/Tree/Tree.php:L317` — `private function clamp(): self`
 - `candy-forms/src/Viewport/Viewport.php:L462` — `private function clamp(): self`
@@ -254,7 +254,7 @@ Add to `CALIBER_LEARNINGS.md`:
 **Source locations:**
 
 - Canonical trait: `candy-core/src/Concerns/Mutable.php:L27-L39`
-- 35 local implementations found via grep across: `sugar-veil/Veil.php`, `candy-forms/Field/Input.php`, `candy-forms/Field/Select.php`, `candy-buffer/Style.php`, `sugar-stash/App.php`, etc.
+- 35 local implementations found via grep across: `sugar-veil/Veil.php`, `candy-forms/Field/Input.php`, `candy-forms/Field/Select.php`, `candy-buffer/Style.php`, `candy-git/App.php`, etc.
 
 **Known reasons for local implementation:**
 
@@ -383,7 +383,7 @@ If evaluation recommends keeping as-is:
 | Priority | Item | Action | Files Affected |
 |----------|------|--------|----------------|
 | High | 3.1 Mutable trait gap audit | Delegation to researcher | All 35 implementation files |
-| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, sugar-stash, candy-palette, sugar-bits, candy-forms |
+| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, candy-palette, sugar-bits, candy-forms |
 | Medium | 1.2 Validation utilities | Create new utility + migrate callers | candy-core, + 5-10 calling libs |
 | Medium | 2.1 AsyncOps audit | Delegation/investigation | candy-async, candy-files |
 | Medium | 4.1 Mutable trait guidance | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |

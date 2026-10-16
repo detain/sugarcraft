@@ -4942,7 +4942,7 @@ final class VhsTapeContractTest extends TestCase
      *     abort with `failed to execute command: invalid shell sh`, and
      *     `Sleep 200ms Output evil1.txt` / `Output evil2.txt Set Height 380`
      *     both wrote the named file. This repo's own tape convention uses that
-     *     form (`Down  Sleep 400ms` in sugar-stash/.vhs/play.tape and a dozen
+     *     form (`Down  Sleep 400ms` in candy-git/.vhs/play.tape and a dozen
      *     more tapes besides), so it is not a hypothetical.
      *   * `vhs validate` is no backstop: it exits 0 on both shared-line
      *     `Set Shell "sh"` tapes above, which then fail at render time.

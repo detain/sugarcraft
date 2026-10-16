@@ -96,7 +96,7 @@ candy-serve  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     ├── sugar-stickers   Viewport       (scrolling lists, scrollbar)
     ├── candy-shine      Renderer       (markdown → ANSI for README)
     ├── candy-shine      SyntaxHighlighter (file viewer colourisation)
-    ├── sugar-stash      Git            (`log`, `show`, `cat-file`, `ls-tree`)
+    ├── candy-git      Git            (`log`, `show`, `cat-file`, `ls-tree`)
     ├── candy-core       Cmd::setClipboard()   (OSC 52 emitter, phase 5)
     └── candy-vt         (terminal-state model used by candy-core writer)
 ```
@@ -148,13 +148,13 @@ hierarchy. The TUI's root model holds a stack of child models, one per
 `candy-core/src/Msg/ScreenStackPushedMsg.php` event) — TUI navigation
 uses `ScreenStack::push()` / `pop()` rather than re-implementing nav.
 
-### 2.3 Git access (sugar-stash)
+### 2.3 Git access (candy-git)
 
-sugar-stash already shells out to `git` and parses its output into PHP
-DTOs (`sugar-stash/src/Git.php` implements `GitDriver`). candy-serve
-will use sugar-stash's `Git` driver for `log` / `branch` / `tag` /
+candy-git already shells out to `git` and parses its output into PHP
+DTOs (`candy-git/src/Git.php` implements `GitDriver`). candy-serve
+will use candy-git's `Git` driver for `log` / `branch` / `tag` /
 `show` / `ls-tree` / `cat-file`. **We do not invent a second Git
-shell-out path**; if a helper is missing in sugar-stash it gets added
+shell-out path**; if a helper is missing in candy-git it gets added
 upstream there and consumed here.
 
 `Repo.php` already exposes the bare-repo metadata the TUI needs:
@@ -385,7 +385,7 @@ and the repo-list screen.
 
 - `candy-serve/composer.json` — add `sugarcraft/candy-wish`,
   `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`,
-  `sugarcraft/sugar-stash`, `sugarcraft/sugar-boxer`,
+  `sugarcraft/candy-git`, `sugarcraft/sugar-boxer`,
   `sugarcraft/sugar-stickers`, `sugarcraft/candy-shine` as `@dev` plus
   matching path-repo entries (closure via `tools/check-path-repos.php
   --fix`).
@@ -412,7 +412,7 @@ and the repo-list screen.
 - `git clone ssh://user@host:23231/<repo>` still works (existing
   path).
 - `vendor/bin/phpunit` green in candy-serve + all four consuming libs
-  (candy-wish, candy-core, sugar-stash, candy-shine).
+  (candy-wish, candy-core, candy-git, candy-shine).
 - `cd candy-serve && composer validate` clean (drop `--strict`).
 
 ### Phase 2 — Repo detail view (≈ 1.5 weeks)
@@ -433,9 +433,9 @@ and the repo-list screen.
 
 **Dependencies (hard preconditions — see §6.1):**
 
-- sugar-stash `Git::branches()` ✅ already ships.
-- sugar-stash `Git::tags()` — **NOT YET SHIPPED**. Phase 2 cannot open
-  until the sugar-stash `tags()` PR has merged. Do **not** start
+- candy-git `Git::branches()` ✅ already ships.
+- candy-git `Git::tags()` — **NOT YET SHIPPED**. Phase 2 cannot open
+  until the candy-git `tags()` PR has merged. Do **not** start
   phase-2 step files until §6.1 reports that row green.
 
 **Tests (≥ 20):** snapshot tests for the three sub-panes; behaviour
@@ -463,9 +463,9 @@ The chunkiest phase — two new screens plus syntax highlighting.
 
 **Dependencies (hard preconditions — see §6.1):**
 
-- sugar-stash `Git::lsTree($ref, $path)` — **NOT YET SHIPPED**.
-- sugar-stash `Git::catFile($ref, $path)` — **NOT YET SHIPPED**.
-  Phase 3 cannot open until **both** sugar-stash patches have merged.
+- candy-git `Git::lsTree($ref, $path)` — **NOT YET SHIPPED**.
+- candy-git `Git::catFile($ref, $path)` — **NOT YET SHIPPED**.
+  Phase 3 cannot open until **both** candy-git patches have merged.
 - candy-shine `SyntaxHighlighter::highlight($source, $lang)` — already
   shipped; verify per-language fallback (returns plain text if `$lang`
   unknown).
@@ -495,11 +495,11 @@ syntax-highlight, show placeholder); files >1 MB refuse to load.
 
 **Dependencies (hard preconditions — see §6.1):**
 
-- sugar-stash `Git::log($ref, $skip, $limit)` — **NOT YET SHIPPED**.
+- candy-git `Git::log($ref, $skip, $limit)` — **NOT YET SHIPPED**.
   The current signature is `log(int $limit = 25)`; it needs to broaden
   to accept `$ref` + `$skip` (backwards compatible). Required so the
   TUI does not load all 10k commits up front.
-- sugar-stash `Git::show($sha)` — **NOT YET SHIPPED** (the existing
+- candy-git `Git::show($sha)` — **NOT YET SHIPPED** (the existing
   `Git.php` has no `show()` method). Required for `DiffView`.
   Phase 4 cannot open until both have merged.
 
@@ -561,20 +561,20 @@ Pre-conditions that **must** be true before phase-1 ships:
 | sugar-stickers Viewport | ✅ shipped | `sugar-stickers/src/Viewport.php` | scrollable lists |
 | sugar-stickers FlexBox | ✅ shipped | `sugar-stickers/src/Flex/FlexBox.php` | 3-pane layout on RepoDetailView |
 | sugar-boxer SugarBoxer | ✅ shipped | `sugar-boxer/src/SugarBoxer.php` | bordered panes |
-| sugar-stash Git | 🟡 partial — phases 2–4 blocked on patches | `sugar-stash/src/Git.php` | only `status()`, `branches()`, `log(int $limit)`, `stage()`, `unstage()` shipped. Missing `tags()`, `show()`, `lsTree()`, `catFile()` and the `log($ref, $skip, $limit)` windowed signature — see §6.1 sugar-stash blockers below |
+| candy-git Git | 🟡 partial — phases 2–4 blocked on patches | `candy-git/src/Git.php` | only `status()`, `branches()`, `log(int $limit)`, `stage()`, `unstage()` shipped. Missing `tags()`, `show()`, `lsTree()`, `catFile()` and the `log($ref, $skip, $limit)` windowed signature — see §6.1 candy-git blockers below |
 
-### 6.1 sugar-stash blockers (hard preconditions for phases 2–4)
+### 6.1 candy-git blockers (hard preconditions for phases 2–4)
 
-The sugar-stash `Git` driver (`sugar-stash/src/Git.php`) and its
-interface (`sugar-stash/src/GitDriver.php`) currently expose only
+The candy-git `Git` driver (`candy-git/src/Git.php`) and its
+interface (`candy-git/src/GitDriver.php`) currently expose only
 `status()`, `branches()`, `log(int $limit = 25)`, `stage()`, and
 `unstage()`. Each of the following methods is a **hard precondition**
 for the phase it gates — phase work cannot start until the matching
-sugar-stash patch has shipped (separate PR, landed before candy-serve
+candy-git patch has shipped (separate PR, landed before candy-serve
 phase-N branch opens). Do **not** invent a parallel `git`-shell-out
 path inside candy-serve.
 
-| sugar-stash API | Phase blocked | What it must do |
+| candy-git API | Phase blocked | What it must do |
 |---|---|---|
 | `GitDriver::tags(): array` + `Git::tags()` | **Phase 2** | mirror `branches()` shape, returning `[['name' => …, 'sha' => …, …]]` from `for-each-ref refs/tags`. |
 | `GitDriver::show(string $sha): array` + `Git::show()` | **Phase 4** | invoke `git show $sha` and return a structured diff (file list + hunks). Powers `DiffView`. |
@@ -582,16 +582,16 @@ path inside candy-serve.
 | `GitDriver::catFile(string $ref, string $path): string` + `Git::catFile()` | **Phase 3** | `git cat-file blob $ref:$path` (or `--filters` for text), return raw body. Drives `FileViewerModel`. |
 | `GitDriver::log()` — broadened signature `log(string $ref = 'HEAD', int $skip = 0, int $limit = 25)` | **Phase 4** | extend existing `log(int $limit)` to accept `$ref` + `$skip` for windowed paging. Drives `CommitLogModel` paging. **Backwards compatible** — keep `$limit` as the third positional and default the first two. |
 
-Each of these is a separate sugar-stash PR with its own tests. Phase-1
+Each of these is a separate candy-git PR with its own tests. Phase-1
 of candy-serve does **not** depend on any of them (only `branches()`
 which already ships). Phases 2–4 are gated:
 
-- **Phase 2 cannot open** until `tags()` ships in sugar-stash.
+- **Phase 2 cannot open** until `tags()` ships in candy-git.
 - **Phase 3 cannot open** until `lsTree()` + `catFile()` both ship.
 - **Phase 4 cannot open** until `show()` ships *and* `log()` accepts
   `$ref` + `$skip`.
 
-Recommend a single sugar-stash umbrella step (e.g. "sugar-stash Git
+Recommend a single candy-git umbrella step (e.g. "candy-git Git
 driver: tags / show / lsTree / catFile / windowed log") with five
 sub-PRs, scheduled ahead of candy-serve phase-2 kickoff. The
 candy-serve phase-1 plan files should reference that step ID once
@@ -649,7 +649,7 @@ A phase is "done" when:
    16 locale files (placeholder English fallback is fine; real
    translations are a separate i18n carry-forward).
 6. `vendor/bin/phpunit` in **every** consumer lib that candy-serve
-   pulls in (candy-wish, candy-core, sugar-stash, candy-shine,
+   pulls in (candy-wish, candy-core, candy-git, candy-shine,
    candy-sprinkles, sugar-boxer, sugar-stickers) still green.
 7. `php tools/check-path-repos.php` reports closure clean.
 
@@ -706,8 +706,8 @@ any client terminal that supports ANSI; the server side is the gate.
 ### 9.4 Performance — paged commit log
 
 A 50k-commit repo can't render in one shot. Phase 4 already plans
-windowed loading. Confirm sugar-stash `Git::log` supports
-skip/limit during phase-2 scoping; if not, ship a sugar-stash patch
+windowed loading. Confirm candy-git `Git::log` supports
+skip/limit during phase-2 scoping; if not, ship a candy-git patch
 first.
 
 ### 9.5 Security — shell injection in tree / log paths
@@ -799,7 +799,7 @@ the wire-protocol port — the marquee TUI feature has not been built.
   + `sugar-stickers/src/Flex/FlexBox.php` — scrolling lists + layout.
 - `candy-shine/src/Renderer.php` — README markdown.
 - `candy-shine/src/SyntaxHighlighter.php` — file viewer colouring.
-- `sugar-stash/src/Git.php` (`GitDriver` impl) — git shell-out.
+- `candy-git/src/Git.php` (`GitDriver` impl) — git shell-out.
 
 ### This plan's own step file
 

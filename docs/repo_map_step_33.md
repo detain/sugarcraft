@@ -1,4 +1,4 @@
-# Step 33 — sugar-skate + sugar-wishlist + sugar-stash adopt candy-fuzzy
+# Step 33 — sugar-skate + sugar-wishlist + candy-git adopt candy-fuzzy
 
 **Branch:** `ai/filter-consumers`
 **Depends on:** step-07 (candy-fuzzy), step-30 (audit)
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Three libs that do filtering / search adopt candy-fuzzy for scored-with-indices matching: sugar-skate (key-value store TUI with key filtering), sugar-wishlist (SSH host list with name filtering), sugar-stash (whatever it stashes — filter via fuzzy).
+Three libs that do filtering / search adopt candy-fuzzy for scored-with-indices matching: sugar-skate (key-value store TUI with key filtering), sugar-wishlist (SSH host list with name filtering), candy-git (whatever it stashes — filter via fuzzy).
 
 Reference: step-30 audit. None of these libs are explicitly in §387.1 but all use ad-hoc filter approaches.
 
@@ -42,7 +42,7 @@ Reference: step-30 audit. None of these libs are explicitly in §387.1 but all u
 
 ## Ship brief
 
-- **PR title**: `sugar-skate + sugar-wishlist + sugar-stash: adopt candy-fuzzy`
+- **PR title**: `sugar-skate + sugar-wishlist + candy-git: adopt candy-fuzzy`
 - **PR body**:
   ```
   ## Summary
@@ -57,4 +57,4 @@ Reference: step-30 audit. None of these libs are explicitly in §387.1 but all u
 
   Refs: docs/repo_map_step_33.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `sugar-skate + sugar-wishlist + sugar-stash: adopt candy-fuzzy`.
+- Commit subject: `sugar-skate + sugar-wishlist + candy-git: adopt candy-fuzzy`.

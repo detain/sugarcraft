@@ -1,6 +1,6 @@
-# Step 10.05 — sugar-stash Phase 3 (undo/redo / line-level staging / delete / merge / rebase)
+# Step 10.05 — candy-git Phase 3 (undo/redo / line-level staging / delete / merge / rebase)
 
-**Source:** `leftover_updates_later.md` sugar-stash Phase 3
+**Source:** `leftover_updates_later.md` candy-git Phase 3
 **Branch:** `ai/stash-phase-3`
 
 ## Deliverable
@@ -21,7 +21,7 @@
 
 ## Acceptance
 
-- `cd sugar-stash && vendor/bin/phpunit` green.
+- `cd candy-git && vendor/bin/phpunit` green.
 
 ---
 

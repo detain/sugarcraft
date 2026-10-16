@@ -1,6 +1,6 @@
-# Step 10.04 — sugar-stash Phase 2 (diff viewer / discard / amend / hunk staging / create branch)
+# Step 10.04 — candy-git Phase 2 (diff viewer / discard / amend / hunk staging / create branch)
 
-**Source:** `leftover_updates_later.md` sugar-stash Phase 2
+**Source:** `leftover_updates_later.md` candy-git Phase 2
 **Branch:** `ai/stash-phase-2`
 
 ## Deliverable
@@ -13,7 +13,7 @@
 
 ## Files
 
-**Create:** `sugar-stash/src/DiffViewer.php`, hunk-stager helper.
+**Create:** `candy-git/src/DiffViewer.php`, hunk-stager helper.
 
 **Modify:** main UI keymap.
 
@@ -23,7 +23,7 @@
 
 ## Acceptance
 
-- `cd sugar-stash && vendor/bin/phpunit` green.
+- `cd candy-git && vendor/bin/phpunit` green.
 
 ---
 

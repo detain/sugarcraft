@@ -58,7 +58,7 @@ the step that surfaced it.)
 
 - step 06.02: Multi-push ScreenStack integration test (`testPushThreeScreensPopTwoVerifiesStateAndBreadcrumb`) fails with only first push recorded when using Program::send() + drainPending() timing — the ScreenStack type and RootModelWithScreenStack work correctly (proven by unit tests and direct dispatch), but socket pair + stream_select() timing in the full Program integration test is unreliable. Test was simplified to use direct dispatch instead of full Program loop.
 - step 06.05 (review-fix): `Flag::$enum` dead code — `applyFlag()` never uses the enum property; Symfony `InputOption` has no native allowed-values mode for options; full wiring needs a normalizer or execute()-time validation post-processing pass (architectural work deferred beyond this review-fix).
-- step 10.05 (sugar-stash Phase 3): Line-level staging (individual lines within hunks, not just whole hunks) is complex and requires `git apply --cached` with manually constructed patches or a different approach. This feature is deferred to a future phase. The current implementation supports hunk-level staging via `Space` in the diff viewer.
+- step 10.05 (candy-git Phase 3): Line-level staging (individual lines within hunks, not just whole hunks) is complex and requires `git apply --cached` with manually constructed patches or a different approach. This feature is deferred to a future phase. The current implementation supports hunk-level staging via `Space` in the diff viewer.
 
 ---
 
@@ -223,10 +223,10 @@ review for step 05.05 · clean · PR#576
 tests-ci for step 05.05 · clean
 docs for step 05.05 · clean
 step 05.06 · PR#577 · super-candy: add i18n via Lang::t() (Lang.php facade + lang/en.php + LangCoverageTest + status/keyhelp/search translations in Manager/Renderer)
-step 05.07 · PR#578 · sugar-stash: add i18n via Lang::t() (key-hints, error prefix, empty-state messages + LangCoverageTest)
+step 05.07 · PR#578 · candy-git: add i18n via Lang::t() (key-hints, error prefix, empty-state messages + LangCoverageTest)
 review for step 05.07 · PR#578 · 3 files (lang/en.php, src/Renderer.php, tests/LangCoverageTest.php); all Lang::t() keys in src/ verified present in lang/en.php; READMEs missing i18n section
 tests-ci for step 05.07 · clean
-docs for step 05.07 · PR#579 · add i18n section to README + docs/lib/sugar-stash.html + create CALIBER_LEARNINGS.md
+docs for step 05.07 · PR#579 · add i18n section to README + docs/lib/candy-git.html + create CALIBER_LEARNINGS.md
 step 05.08 · PR#580 · sugar-stickers: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no user-facing strings — purely computational lib)
 review for step 05.08 · clean · PR#580
 tests-ci for step 05.08 · clean
@@ -323,7 +323,7 @@ fix for step 11.01 · PR#651 · resolved 4 findings (locale count 17→16, bin/p
 tests-ci for step 11.01 · clean
 docs for step 11.01 · clean
 step 11.02 · PR#653 · plans: candy-serve-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
-fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-boxer SugarBoxer; Repo $isPublic property + withDescription(); sugar-stash 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
+fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-boxer SugarBoxer; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
 step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)
@@ -529,10 +529,10 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     fix for step 10.02 · PR#755 · resolved 4 findings (finfo warning suppression + WHAT-comment removal + README Architecture table update)
     fix for step 10.03 · PR#757 · resolved 1 finding
     docs for step 10.03 · PR#758 · refresh App.php PHPDoc (7 keys in class block + showHelp/collectingCommit/commitMessage comments + docblocks on stageAll/checkoutBranch/startCommit/executeCommit) + document [pattern:inline-commit-collection] in CALIBER_LEARNINGS.md + enumerate all Phase 1 i18n keys
-    step 10.04 · PR#759 · sugar-stash: diff viewer + discard + amend + hunk staging + create branch (leftover-rollout step 10.04 Phase 2)
+    step 10.04 · PR#759 · candy-git: diff viewer + discard + amend + hunk staging + create branch (leftover-rollout step 10.04 Phase 2)
     fix for step 10.04 · PR#760 · resolved 8 findings
     tests-ci for step 10.04 · clean
-    step 10.05 · PR#761 · sugar-stash: undo/redo (u/Ctrl+r) + delete branch (D) + merge (M) + rebase continue/abort/skip (r when in progress); line-level staging deferred
+    step 10.05 · PR#761 · candy-git: undo/redo (u/Ctrl+r) + delete branch (D) + merge (M) + rebase continue/abort/skip (r when in progress); line-level staging deferred
     fix for step 10.05 · PR#762 · resolved 3 findings
     docs for step 10.05 · PR#763 · add missing docblocks on HistoryManager::canUndo/canRedo
     step 10.07 · PR#766 · sugar-toast: Middle* positions + allowEscToClose + stack Y-offset fix

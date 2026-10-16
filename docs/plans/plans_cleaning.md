@@ -48,7 +48,7 @@
 - candy-buffer: Region validation
 - candy-core: AtomicJsonFile/Json::decodeArray/Sanitize SSOT
 - candy-fuzzy: ScoringProfile port, DoS caps
-- sugar-stash: rename parsing
+- candy-git: rename parsing
 - sugar-skate: sanitizeForTty
 
 ### ⚠️ PARTIAL (2)

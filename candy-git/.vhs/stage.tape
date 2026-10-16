@@ -1,0 +1,26 @@
+# VHS tape — CandyGit git staging workflow.
+# s key stages/unstages the highlighted file.
+# NOTE: drives the REAL ./bin/candy-git against the CI checkout — output is
+# environment-dependent (see README Demos).
+# Render with: `vhs candy-git/.vhs/stage.tape`
+Output .vhs/stage.gif
+
+Set FontSize 14
+Set Width 1100
+Set Height 400
+Set TypingSpeed 60ms
+Set Theme "TokyoNight"
+
+Type "./bin/candy-git"
+Enter
+Sleep 1s
+
+Down  Sleep 300ms     # move cursor
+Type "s" Sleep 400ms  # stage
+Down  Sleep 300ms
+Type "s" Sleep 400ms  # stage another
+Type "s" Sleep 400ms  # unstage
+Sleep 500ms
+Type "R" Sleep 600ms  # refresh
+Type "q"
+Sleep 200ms

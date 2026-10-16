@@ -132,7 +132,7 @@ interface Model
 - `sugar-bits/src/Table.php`, `Tabs.php`, `Tree.php`, `Timer.php`, `Stopwatch.php`, `Paginator.php`, `Progress/AnimatedProgress.php`
 - `sugar-crush/src/Chat.php`
 - `sugar-reel/src/Player.php`
-- `sugar-stash/src/App.php`
+- `candy-git/src/App.php`
 - `sugar-tick/src/Dashboard.php`
 - `sugar-glow/src/GlowModel.php`
 - `sugar-dash/src/Modules/*` (multiple)
@@ -541,7 +541,7 @@ private function clamp(): self
 }
 ```
 
-**`sugar-stash/src/App.php:L515`** - Standalone helper
+**`candy-git/src/App.php:L515`** - Standalone helper
 ```php
 private function clamp(int $i, int $size): int
 {

@@ -88,7 +88,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **sugar-skate** | [research/libraries/sugar-skate-research.md](libraries/sugar-skate-research.md) | 1. JSON export, 2. Levenshtein, 3. TTL |
-| **sugar-stash** | [research/libraries/sugar-stash-research.md](libraries/sugar-stash-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
+| **candy-git** | [research/libraries/candy-git-research.md](libraries/candy-git-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
 | **sugar-crush** | [research/libraries/sugar-crush-research.md](libraries/sugar-crush-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
 | **sugar-post** | [research/libraries/sugar-post-research.md](libraries/sugar-post-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
 | **candy-query** | [research/libraries/candy-query-research.md](libraries/candy-query-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
@@ -159,7 +159,7 @@ To implement an item:
 ### App-Level
 
 - **candy-shell**: Auto-discovery, ValueEnum, FlagSpec trait
-- **sugar-stash**: Diff panel, branch ops, context help
+- **candy-git**: Diff panel, branch ops, context help
 - **sugar-crush**: Session persistence, streaming UI, context compaction
 - **super-candy**: Copy/move, bookmarks, preview
 

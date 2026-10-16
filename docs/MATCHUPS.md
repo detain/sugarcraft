@@ -91,7 +91,7 @@ called out in the table below.
 | **SugarCrushWeb** (`sugar-crush-web/`) | 🟡 in progress | Browser UI for sugar-crush's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. MVP today (one session: transcript, tool cards, diffs, approvals, composer). |
 | **CandyTetris** (`candy-tetris/`) | 🟢 ready | Tetris clone — SRS / 7-bag / NES scoring. |
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
-| **SugarStash** (`sugar-stash/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
+| **CandyGit** (`candy-git/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
 | **CandyQuery** (`candy-query/`) | 🟢 ready | SQLite/MySQL/PostgreSQL browser TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
 | **SugarTick** (`sugar-tick/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL on disk. |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
@@ -204,7 +204,7 @@ reference projects supplied the ideas, not the code.
 | SugarReel (sugar-reel/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |
 | SugarSkate (sugar-skate/) | [skate](https://github.com/charmbracelet/skate) |
 | SugarSpark (sugar-spark/) | [sequin](https://github.com/charmbracelet/sequin) |
-| SugarStash (sugar-stash/) | [lazygit](https://github.com/jesseduffield/lazygit) |
+| CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
 | SugarStickers (sugar-stickers/) | [stickers](https://github.com/76creates/stickers) |
 | SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) |
 | SugarTick (sugar-tick/) | [TakaTime](https://github.com/Rtarun3606k/TakaTime) |

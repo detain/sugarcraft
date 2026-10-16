@@ -468,7 +468,7 @@ All 45 research documents available at:
 | sugar-readline | 18KB |
 | sugar-skate | 21KB |
 | sugar-spark | 13KB |
-| sugar-stash | 23KB |
+| candy-git | 23KB |
 | sugar-stickers | 14KB |
 | sugar-table | 19KB |
 | sugar-tick | 19KB |

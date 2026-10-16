@@ -1,6 +1,6 @@
-# Step 10.03 — sugar-stash Phase 1 (help / checkout / commit / stage-all)
+# Step 10.03 — candy-git Phase 1 (help / checkout / commit / stage-all)
 
-**Source:** `leftover_updates_later.md` sugar-stash Phase 1
+**Source:** `leftover_updates_later.md` candy-git Phase 1
 **Branch:** `ai/stash-phase-1`
 
 ## Deliverable
@@ -12,7 +12,7 @@
 
 ## Files
 
-**Modify:** `sugar-stash/src/StashUi.php` (or equivalents) — key
+**Modify:** `candy-git/src/StashUi.php` (or equivalents) — key
 bindings + git invocations via `\SugarCraft\Pty\Posix\PosixProcess`.
 
 ## Tests
@@ -21,7 +21,7 @@ bindings + git invocations via `\SugarCraft\Pty\Posix\PosixProcess`.
 
 ## Acceptance
 
-- `cd sugar-stash && vendor/bin/phpunit` green.
+- `cd candy-git && vendor/bin/phpunit` green.
 
 ---
 

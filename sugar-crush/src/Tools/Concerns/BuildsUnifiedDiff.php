@@ -72,7 +72,7 @@ trait BuildsUnifiedDiff
      * Build a unified diff of a write. Callers put this on
      * {@see \SugarCraft\Crush\Tools\ToolResult::diff()} verbatim -- no prefix,
      * no surrounding prose -- so a renderer can pass it straight to
-     * `sugar-stash\DiffViewer::fromRawDiff()` without string-scanning
+     * `candy-git\DiffViewer::fromRawDiff()` without string-scanning
      * `content()` for a `--- a/` line.
      *
      * Returns '' both for "nothing changed" and for a preview that was omitted

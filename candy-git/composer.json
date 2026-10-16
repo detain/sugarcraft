@@ -1,0 +1,50 @@
+{
+    "name": "sugarcraft/candy-git",
+    "description": "Terminal Git client \u2014 port of jesseduffield/lazygit on the SugarCraft stack.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "cli",
+        "git",
+        "lazygit",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-git.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-git/issues",
+        "source": "https://github.com/sugarcraft/candy-git",
+        "docs": "https://sugarcraft.github.io/lib/candy-git.html"
+    },
+    "bin": [
+        "bin/candy-git"
+    ],
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Git\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Git\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -1,0 +1,150 @@
+<img src=".assets/icon.png" alt="candy-git" width="160" align="right">
+
+# CandyGit
+
+> Formerly published as `sugarcraft/sugar-stash` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Stash\` → `SugarCraft\Git\`. <!-- @rename-keep -->
+
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-git)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-git)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-git?label=packagist)](https://packagist.org/packages/sugarcraft/candy-git)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+
+![demo](.vhs/play.gif)
+
+candy-git — a three-pane git TUI for PHP 8.3+, built on the SugarCraft stack. Status / branches / log laid out side-by-side, single-key stage / unstage, refresh, and ahead/behind branch summary.
+
+```bash
+composer require sugarcraft/candy-git
+candy-git    # run inside any git working tree
+```
+
+## Keys
+
+| Key                      | Action                                                  |
+|--------------------------|---------------------------------------------------------|
+| `Tab`                    | Cycle pane focus                                        |
+| `↑/↓` or `k/j`           | Move cursor in active pane                             |
+| `s` (status pane)        | Stage / unstage the highlighted entry                    |
+| `a` (status pane)        | Stage all files                                         |
+| `d` (status pane)        | Discard changes to the highlighted file                  |
+| `P` (status pane)        | Open diff viewer for the highlighted file                |
+| `Space` (branches pane)  | Checkout branch                                         |
+| `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
+| `A`                      | Amend last commit                                        |
+| `n`                      | Create and switch to a new branch                        |
+| `u`                      | Undo last operation                                    |
+| `Ctrl+r`                 | Redo last undone operation                             |
+| `D` (branches pane)      | Delete the selected branch                             |
+| `M`                      | Merge selected branch into current                     |
+| `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
+| `S`                      | Open stash manager (list / apply / drop)                |
+| `V`                      | Cherry-pick — type a commit ref and press Enter       |
+| `w` (branches pane)     | Open worktrees manager (list / add / remove)            |
+| `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
+| `R`                      | Refresh from disk                                       |
+| `?`                      | Context-sensitive help                                  |
+| `q` / `Esc`              | Quit                                                    |
+
+### Diff viewer keys
+
+| Key              | Action                          |
+|------------------|--------------------------------|
+| `Space`          | Stage current hunk              |
+| `↑/↓` or `k/j`   | Navigate between hunks         |
+| `Esc`            | Close diff viewer              |
+
+## Architecture
+
+| File               | Role                                                                                                                             |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`. Throws `RuntimeException` on non-zero exit. |
+| `GitDriver`        | Interface for all git operations. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
+| `Pane`            | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.                                                               |
+| `App` (Model)     | Owns the three lists + cursors + focus + overlays (stash/cherry-pick/worktrees/interactive-rebase). Pure-state — every key returns a fresh App. |
+| `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent. |
+| `StashEntry`        | Immutable stash entry — `index`, `sha`, `branch`, `message` + `stashRef()` / `displayLine()`.                                      |
+| `StashManager`     | Immutable stash list state — `stashes`, `cursor`, `withCursor()`, `withStashes()`, `current()`, `count()`.                        |
+| `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withChar()`/`cancel()`.                              |
+| `WorktreeEntry`    | Immutable worktree entry — `path`, `branch`, `isBare`, `HEAD`.                                                                     |
+| `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + path/branch collection.                      |
+| `RebaseAction`      | Enum — `Pick`, `Reword`, `Edit`, `Squash`, `Drop`.                                                                               |
+| `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
+| `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |
+
+`CandyGit` shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config.
+
+**Note:** All git operations are synchronous and block the event loop. This is by design for v1 — a TTY application naturally runs synchronously at the terminal. Async git operations are planned for v2 (see `GitDriver` interface for deprecation notes).
+
+## Internationalization
+
+User-facing strings are internationalized via `SugarCraft\Git\Lang::t()`.
+All translatable strings live in `lang/en.php` under the `'git'` namespace.
+
+**Available keys** (`lang/en.php`):
+
+| Key                    | Default string                                                    | Parameters  |
+|------------------------|-------------------------------------------------------------------|------------|
+| `git.spawn_failed`      | `git: failed to spawn`                                           | —          |
+| `git.error`            | `git: {stderr}`                                                  | `{stderr}` |
+| `cli.not_a_repo`       | `candy-git: not a git repository: {cwd}`             | `{cwd}`    |
+| `ui.error_prefix`      | `error: `                                                        | —          |
+| `status.clean`          | `clean working tree`                                            | —          |
+| `branches.empty`       | `(no branches)`                                                  | —          |
+| `log.empty`            | `(empty log)`                                                    | —          |
+| `help.keyhints`         | `S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit` | —          |
+
+To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
+values. The lookup chain follows `SugarCraft\Core\I18n\T`:
+exact locale → base language → `en` → raw key.
+
+**Using the facade:**
+
+```php
+use SugarCraft\Git\Lang;
+
+$msg = Lang::t('status.clean');                 // 'clean working tree'
+$hint = Lang::t('help.keyhints');               // 'tab  switch pane  ·  ...'
+$err = Lang::t('ui.error_prefix') . $error;     // 'error: <msg>'
+```
+
+**Adding new translatable strings:**
+
+```php
+// In any source file:
+use SugarCraft\Git\Lang;
+
+// Simple key:
+$msg = Lang::t('status.clean');
+
+// With placeholder:
+$msg = Lang::t('git.error', ['stderr' => $stderr]);
+```
+
+## Demos
+
+### Staging workflow
+
+![stage](.vhs/stage.gif)
+
+> `stage.tape` drives the real `./bin/candy-git` against the CI checkout, so its
+> rows are environment-dependent; the hero demo above (`play.tape`) is hermetic.
+
+## Shared foundations
+
+candy-git uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
+
+## Test
+
+```bash
+composer install
+vendor/bin/phpunit
+```
+
+## Credits & inspiration
+
+Design antecedent: [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit); SugarCraft is developed as a native PHP project.

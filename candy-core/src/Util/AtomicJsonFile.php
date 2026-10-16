@@ -7,7 +7,7 @@ namespace SugarCraft\Core\Util;
 /**
  * Atomic lock+tmp+rename JSON store; consolidates the durable-state save
  * pattern hand-rolled across candy-minesweeper, candy-hermit, candy-metrics,
- * sugar-stash and 5+ other libs (each with subtly different locking /
+ * candy-git and 5+ other libs (each with subtly different locking /
  * cleanup / decode-guard behaviour).
  *
  * The persist contract has two halves. Readers: we write to a sibling temp

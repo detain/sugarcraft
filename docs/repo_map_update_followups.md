@@ -37,7 +37,7 @@ The 8 shared packages:
 |------|-------------|--------------------------|
 | Step 31 | candy-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
-| Step 33 | sugar-skate, sugar-wishlist, sugar-stash | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
+| Step 33 | sugar-skate, sugar-wishlist, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, sugar-post, candy-serve | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
@@ -139,7 +139,7 @@ The 8 shared packages:
 
 ---
 
-### sugar-stash
+### candy-git
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -147,7 +147,7 @@ The 8 shared packages:
 | candy-fuzzy | StashManager.php/HistoryManager.php filter stash entries — SmithWatermanMatcher would improve interactive search | S |
 | candy-mouse | InteractiveRebase.php uses mouse for branch selection — candy-mouse would standardize zone hit-testing | M |
 
-**Notes:** sugar-stash is a git stash TUI with diff viewing and interactive rebase. DiffViewer rendering is a direct use case for candy-buffer (git diff lines with syntax coloring). Interactive rebase uses mouse zone tracking that would benefit from candy-mouse.
+**Notes:** candy-git is a git stash TUI with diff viewing and interactive rebase. DiffViewer rendering is a direct use case for candy-buffer (git diff lines with syntax coloring). Interactive rebase uses mouse zone tracking that would benefit from candy-mouse.
 
 ---
 
@@ -298,8 +298,8 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), sugar-stash (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, sugar-stash (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
 
 ---
 

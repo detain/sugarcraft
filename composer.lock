@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7b8d5b4d82ba587261dfad4869285a63",
+    "content-hash": "17c333e6cc5c2b6c7eebacd493c27387",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4111,6 +4111,66 @@
             }
         },
         {
+            "name": "sugarcraft/candy-git",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-git",
+                "reference": "4f8e5606591ec1ca45527ccccb1bae723ed184a8"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-fuzzy": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "bin": [
+                "bin/candy-git"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Git\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Git\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal Git client — port of jesseduffield/lazygit on the SugarCraft stack.",
+            "homepage": "https://sugarcraft.github.io/lib/candy-git.html",
+            "keywords": [
+                "cli",
+                "git",
+                "lazygit",
+                "sugarcraft",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-git/issues",
+                "source": "https://github.com/sugarcraft/candy-git",
+                "docs": "https://sugarcraft.github.io/lib/candy-git.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-hermit",
             "version": "dev-master",
             "dist": {
@@ -6824,66 +6884,6 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-stash",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-stash",
-                "reference": "997f52a9fe442e91f98a9ae8fad234f99ddef85a"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-fuzzy": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0"
-            },
-            "bin": [
-                "bin/sugar-stash"
-            ],
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Stash\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Stash\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Terminal Git client — port of jesseduffield/lazygit on the SugarCraft stack.",
-            "homepage": "https://sugarcraft.github.io/lib/sugar-stash.html",
-            "keywords": [
-                "cli",
-                "git",
-                "lazygit",
-                "sugarcraft",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-stash/issues",
-                "source": "https://github.com/sugarcraft/sugar-stash",
-                "docs": "https://sugarcraft.github.io/lib/sugar-stash.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/sugar-stickers",
             "version": "dev-master",
             "dist": {
@@ -8592,6 +8592,7 @@
         "sugarcraft/candy-freeze": 20,
         "sugarcraft/candy-fuzzy": 20,
         "sugarcraft/candy-gifview": 20,
+        "sugarcraft/candy-git": 20,
         "sugarcraft/candy-hermit": 20,
         "sugarcraft/candy-kit": 20,
         "sugarcraft/candy-lister": 20,
@@ -8632,7 +8633,6 @@
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-skate": 20,
         "sugarcraft/sugar-spark": 20,
-        "sugarcraft/sugar-stash": 20,
         "sugarcraft/sugar-stickers": 20,
         "sugarcraft/sugar-table": 20,
         "sugarcraft/sugar-tick": 20,

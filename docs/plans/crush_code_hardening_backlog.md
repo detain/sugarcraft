@@ -12483,7 +12483,7 @@ individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled bef
 | sugar-spark | 205 / 659 | 0 |
 | sugar-skate | 206 / 427 | 0 |
 | sugar-tick | 144 / 349 | 0 |
-| sugar-stash | 218 / 606 | 0 |
+| candy-git | 218 / 606 | 0 |
 
 Every one rc 0. **The six reporting PHPUnit's `OK (…)` form had ZERO skips**, which is the part that makes
 this evidence rather than an absence: a lib can post zero orphans because its spawning tests gated
@@ -12522,7 +12522,7 @@ children ranked by exposure:
 `ClaudeCodeInvocation.php:109` (no deadline at all) · `candy-core/src/Program.php:792`.
 
 **LOW / already correct:** candy-serve's five sites are one-shot and drained (no timeout, string commands)
-· candy-pty is clean judged on its own PTY terms · `sugar-stash/src/Process.php` is correct · several
+· candy-pty is clean judged on its own PTY terms · `candy-git/src/Process.php` is correct · several
 sugar-crush sites are already hardened reference implementations.
 
 **The user-facing shape of this, stated plainly:** sugar-crush's MCP servers, language servers and

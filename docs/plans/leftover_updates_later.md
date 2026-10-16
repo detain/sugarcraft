@@ -180,7 +180,7 @@ Canonical pattern: `sugar-wishlist/src/Lang.php` wraps `\SugarCraft\Core\I18n\T`
 - `sugar-boxer` — alignment-mode labels in examples.
 - `sugar-crumbs` — separator + ellipsis labels.
 - `super-candy` — file-manager prompts.
-- `sugar-stash` — many user-facing strings (commit prompts, errors).
+- `candy-git` — many user-facing strings (commit prompts, errors).
 
 **Action template per lib (single PR each):**
 
@@ -458,7 +458,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Preview pane (MEDIUM) — image preview delegates to candy-mosaic.
 - Async file ops (LOW; needs ReactPHP).
 
-### sugar-stash
+### candy-git
 
 - Phase 1: context-sensitive help, branch checkout, commit, stage-all.
 - Phase 2: diff viewer, discard, amend, hunk staging, create branch.

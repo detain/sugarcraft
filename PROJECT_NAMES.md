@@ -135,7 +135,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyShell** | candy + shell = CLI. Scriptable one-shot prompts and layouts. |
 | **CandyServe** | candy + serve = self-hostable Git server. |
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
-| **SugarStash** | stash = the git verb. clever. |
+| **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the `sugar-` family placement. |
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |
 | **CandyMold** | candy + mold = the project skeleton you pour into. ✓✓ |
 | **CandyMosaic** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |

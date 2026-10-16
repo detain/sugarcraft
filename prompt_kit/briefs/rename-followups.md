@@ -24,3 +24,12 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   from the (already rewritten) `.tape` files on the next change to the lib. Left as-is per R4.10.
 - `sugar-datepicker/.assets/icon.png` and `media/icons/sugar-datepicker.png` — binary icon content
   untouched (binary exclusion). Redraw if the icon carries wordmarks.
+
+## B1 sugar-stash → candy-git (2026-10-15) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-3-16-l-2.ansi` — the ecosystem-banner art still spells `sugar-stash` in its <!-- @rename-keep -->
+  lib-name column (1 line, art CONTENT is excluded from the rewrite per Part C.3; `gen-ansi-readme --check`
+  agrees with ansi.json unchanged). Redraw owed with the next ansi-corpus pass.
+- `candy-git/.vhs/{play,stage}.gif` — rendered demos still show the old ` SugarStash ` title-bar brand; <!-- @rename-keep -->
+  CI re-renders from the already-rewritten `.tape` files on the next change to the lib. Left as-is per R4.10.
+- `candy-git/.assets/icon.png` + `media/icons/candy-git.png` + `docs/img/icons/candy-git.png` — binary
+  icon content untouched (path renamed only).

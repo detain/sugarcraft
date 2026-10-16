@@ -23,7 +23,7 @@ final readonly class ToolResult
      *
      * $diff carries a raw unified diff (crush_feat.md §1 recommendation E3)
      * for edit-shaped tools, kept OFF $content so a renderer can hand it
-     * straight to `sugar-stash\DiffViewer::fromRawDiff()` instead of
+     * straight to `candy-git\DiffViewer::fromRawDiff()` instead of
      * string-scanning a free-text summary for a `--- a/` line.
      *
      * $usage is what the tool itself BILLED on a provider — today only

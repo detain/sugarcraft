@@ -15,7 +15,7 @@ sugar-readline cannot read actual terminal keypresses — only processes pre-dec
 **Why critical:** Libraries without input drivers are demo-only; cannot be used in production CLI tools without significant additional wiring.
 
 ### 1.3 Constraint-Based Layout (Cassowary Solver)
-**Affects:** sugar-boxer, sugar-dash, sugar-stash, sugar-stickers
+**Affects:** sugar-boxer, sugar-dash, candy-git, sugar-stickers
 Tree-based weighted distribution cannot express constraints like "column A = 30% but never less than 10". External repos (ratatui, php-tui) use Cassowary constraint solver with Min/Max/Percent/Ratio/Fill constraints.
 
 **Why critical:** Complex responsive dashboards need constraint solving — sidebar at 20% width with min 20 / max 40 cells, main content filling remaining space.
@@ -40,17 +40,17 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 
 ### 3.1 ratatui/ratatui (cited 7+ times)
 **Purpose:** Full TUI framework reference for constraint-based layout, buffer diffing, StatefulWidget pattern, and immediate-mode rendering.
-**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dash), buffer diffing algorithm (sugar-crush, sugar-veil), Widget/StatefulWidget traits (sugar-dash, sugar-stash).
+**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dash), buffer diffing algorithm (sugar-crush, sugar-veil), Widget/StatefulWidget traits (sugar-dash, candy-git).
 **Key citation:** "The layout system uses the Cassowary constraint solver algorithm to resolve conflicting layout constraints"
 
 ### 3.2 charmbracelet/bubbletea (cited 6+ times)
 **Purpose:** Elm architecture pattern, input handling, mouse events, synchronized output (ANSI 2026), Cmd/Batch command pattern.
-**Why cited:** TEA model pattern for MVU architecture (sugar-crush, sugar-stash), mouse event handling (sugar-readline, sugar-veil), key decoding (sugar-readline).
+**Why cited:** TEA model pattern for MVU architecture (sugar-crush, candy-git), mouse event handling (sugar-readline, sugar-veil), key decoding (sugar-readline).
 **Key citation:** "Elm architecture: Model/Update/View — every update returns new model + optional command"
 
 ### 3.3 charmbracelet/lipgloss (cited 5+ times)
 **Purpose:** Pure-value Style type, CSS-like API, CIELAB color blending, borders, layer compositing, Canvas cell buffer.
-**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-stickers, sugar-veil), border system (sugar-stash), width measurement (candy-lister).
+**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-stickers, sugar-veil), border system (candy-git), width measurement (candy-lister).
 **Key citation:** "Style system with bitmask properties, per-side borders, CIELAB color blending, layer compositing"
 
 ---
