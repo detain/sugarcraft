@@ -29,10 +29,10 @@ A sentinel ANYWHERE in a file skips its ENTIRE path plan. NEVER tag: candy-mosai
 ## Steps
 
 - tag-prep commit: 118 lines / 13 files tagged `@rename-keep historical provenance` (CONTEXT ×4 untagged-historical [996,1007,1352,1358], rename-baseline:49, rename-1.3 NOTES ×1, 15c-audit-tools-permissions ×1, crush-dep-surface.txt ×1, crush_code backlog ×43/worklog ×39/triage ×5/concurrency ×1, monorepo-audit ×10, resume_prompt ×3, leftover/updates.md ×9; improvements-2026-05 already tagged). JUDGED-REWRITE per ledger at head. R0 measured at base: mosaic 661T/14817A/6S (record 661/14820/5S — drift disclosed), gallery 264/1162 EXACT, reel 552/8488/1S (record -1A/+1S drift).
-- (pending) R1 dry-run:
-- (pending) R2 remote rename: SKIPPED per brief (no remote renames in lanes)
-- (pending) R3 tool run:
-- (pending) R4 manual:
-- (pending) R5 wiring:
-- (pending) R6 gates:
-- (pending) R7 commit:
+- R1 dry-run: 267 content files / 198 paths; R1=504 R2=39 R3=1624 R6=1; dir move + 12 non-ansi path renames — matched plan exactly.
+- R2 remote rename: SKIPPED per brief law (no remote ops in lanes; weld/serial phase owns remotes). Deviation from C4/C8 which ran rename-remote.sh in-lane.
+- R3 tool run: rc=0, applied R1-plan; candy-mosaic/ gone, sugar-image/ present; all changed PHP php -l clean; Lang NAMESPACE='image' confirmed.
+- R4 manual sweeps (NEW blindspot each): (a) glued pointers invisible to tool by lookbehind law — `plan_candy-mosaic.md` ×7 (ChafaRendererTest, findings_resume_plan ×4, plan.md), `sugarcraft_candy-mosaic.md` ×3 repo_map, `sugar-mosaic/src/...` typo variant in plan_sugar-gallery.md:89 → rewritten; (b) sugar-reel `use ... as MosaicHalfBlockRenderer` local-alias + test method `testDelegatesToCandyMosaic` (R2 blocked by CamelCase-join) → renamed `ImageHalfBlockRenderer`/`testDelegatesToSugarImage` (4 code sites + CALIBER token); (c) crush-dep-surface.php map VALUE 'Mosaic'→'Image'; (d) bare-shorthand historical lines in plan_crush_media/php74_branch/crush triage+backlog/findings-sugar-reel tagged @rename-keep (7 lines). Bare-`Mosaic` symbols (class Mosaic/MosaicBuilder, Mosaic*Test names, HalfBlockParity `...AndMosaic...` methods) KEPT per C4 precedent.
+- R5 wiring: codecov.yml ×6 + vhs.yml all=/matrix auto via R3 (verified in diff); redirect stub docs/lib/candy-mosaic.html minted by gen-docs AFTER renames.json status flip (stub self-tags @rename-keep — generator law); stale vendor symlinks pruned + refresh-deps --mode=linked sugar-image,sugar-gallery,sugar-reel,sugar-crush 4/4.
+- R6 gates (on committed tip f970e0ef7): residue 0 findings; sugar-image 661T/14817A/6S EXACT vs R0; gallery 264/1162 EXACT; reel 552/8488/1S EXACT; crush --filter Image 248T/1621A OK, --filter Mosaic 10T/47A OK (shape gates, no pinned figure — K=8 not run per brief); path-repos rc0; gen-docs --check rc0; gen-ansi --check rc0; tools/tests 426T/1484A (via sugar-image vendor bin — candy-core has NO vendor in fresh worktree, new env fact).
+- R7 commits: tag-prep 0905261eb → rename f970e0ef7 (479 files, author/committer detain verified) → gate-evidence (this). ansi art CONTENT (wordmark bytes in 187 .ansi files) + any residual wordmark prose = followups per C.4 law.
