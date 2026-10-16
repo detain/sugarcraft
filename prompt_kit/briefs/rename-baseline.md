@@ -73,7 +73,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-dash | 7483 | 14859 | 2 | 0 | 0 | 1 |  |
 | sugar-diff | 70 | 225 | 0 | 0 | 0 | 0 |  |
 | sugar-gallery | 264 | 1162 | 0 | 0 | 0 | 0 |  |
-| sugar-glow | 122 | 313 | 0 | 0 | 0 | 0 |  |
+| sugar-glow | 122 | 313 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-mcp | 226 | 899 | 0 | 0 | 0 | 0 |  |
 | sugar-post | 203 | 361 | 0 | 0 | 0 | 0 |  |
 | candy-forms | 72 | 158 | 0 | 0 | 0 | 0 |  |

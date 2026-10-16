@@ -98,5 +98,5 @@ refresh-deps --mode=linked candy-scriptui OK; committed-tree path-repo guard rc=
 
 ## Close
 - Residue re-run after tracker commit caught the late-written continuity line :93 (same law as the 10-finding R7 round: gate residue immediately before staging, not after). Tagged; residue now 0.
-- oc.7z (foreign 413MB) restored to root; final tree clean. Master == origin == tracker tip. B4 CLOSED 4/12 of batch B; next entry per order line: `sugar-glow`.
+- oc.7z (foreign 413MB) restored to root; final tree clean. Master == origin == tracker tip. B4 CLOSED 4/12 of batch B; next entry per order line: `sugar-glow`. <!-- @rename-keep -->
 - Laws re-carried: (1) fresh-create packagist needs forced `update <bare-slug>` for first crawl (create 202 alone can leave dev-master ABSENT indefinitely — 10 wasted polls before applying B1 lesson here); (2) plan_rename.md is residue-excluded — its embedded status list ([:315]) is NOT maintained, only "Entry status" lines are appended; (3) CI-sync mints legacy-ref+final-tag pair on the SPLIT even when the monorepo push fast-forwards.
