@@ -6,7 +6,7 @@
     {"batch":"A","kind":"rename","old":"sugar-calendar","new":"sugar-datepicker","ns_old":"Calendar","ns_new":"DatePicker","type":"lib","bins":{},"status":"packagist-done"},
 
     {"batch":"B","kind":"rename","old":"sugar-stash","new":"candy-git","ns_old":"Stash","ns_new":"Git","type":"app","bins":{"bin/sugar-stash":"bin/candy-git"},"status":"packagist-done"},
-    {"batch":"B","kind":"rename","old":"candy-query","new":"candy-sql","ns_old":"Query","ns_new":"Sql","type":"app","bins":{"bin/candy-query":"bin/candy-sql"},"status":"remote-done"},
+    {"batch":"B","kind":"rename","old":"candy-query","new":"candy-sql","ns_old":"Query","ns_new":"Sql","type":"app","bins":{"bin/candy-query":"bin/candy-sql"},"status":"packagist-done"},
     {"batch":"B","kind":"rename","old":"candy-serve","new":"candy-git-server","ns_old":"Serve","ns_new":"GitServer","type":"app","bins":{"bin/soft-serve":"bin/candy-git-server"},"extra_literals":{"bin/soft-serve":"bin/candy-git-server"},"status":"pending"},
     {"batch":"B","kind":"rename","old":"candy-shell","new":"candy-scriptui","ns_old":"Shell","ns_new":"ScriptUi","type":"app","bins":{"bin/candyshell":"bin/candy-scriptui"},"status":"pending"},
     {"batch":"B","kind":"rename","old":"sugar-glow","new":"candy-mdview","ns_old":"Glow","ns_new":"MdView","type":"app","bins":{"bin/sugarglow":"bin/candy-mdview"},"status":"pending"},
