@@ -23,7 +23,7 @@ The first-pass analysis identified these unmapped areas relevant to SugarCraft:
 |-----|-----------------|
 | Streaming LLM client | `candy-forms` or new `sugar-llm` |
 | Conversation caching | `candy-sprinkles` (caching utilities) |
-| MCP client integration | `sugar-mcp` or `honey-mcp` |
+| MCP client integration | `sugar-mcp-client` or `honey-mcp` |
 | SQLite storage | leveraging `sugar-bits` persistence |
 
 This second-stage analysis drills into the *why* these gaps existed and whatSugarCraft should learn from mods' architectural decisions and failures.
@@ -432,7 +432,7 @@ SugarCraft's TUI renderers must use incremental update patterns. Look at how `hi
 
 ### 3. MCP Client Library
 
-Mods' MCP integration showed both the power and complexity. SugarCraft's `sugar-mcp` should:
+Mods' MCP integration showed both the power and complexity. SugarCraft's `sugar-mcp-client` should:
 - Support stdio/SSE/HTTP transports
 - Use PHP's process spawning for stdio
 - Handle initialization race conditions gracefully
@@ -467,7 +467,7 @@ Build on mods' `stream.Client` pattern but add:
 | #197 persistent TUI | `candy-scriptui` needs session model concept |
 | #352 cross-provider fallback | `candy-forms` needs multi-provider router |
 | #675 --return-id | `candy-forms` needs scriptable ConversationManager |
-| #567 mcp.json | `sugar-mcp` should adopt standard config format |
+| #567 mcp.json | `sugar-mcp-client` should adopt standard config format |
 
 ### From Crush (successor) back to SugarCraft
 

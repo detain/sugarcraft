@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Mcp\McpMessage;
+use SugarCraft\McpClient\McpMessage;
 use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
@@ -14,7 +14,7 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
  * not be half-sent, and a reply that does not arrive in one read must not be
  * thrown away.
  *
- * {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()} and
+ * {@see \SugarCraft\McpClient\StdioMcpServer::writeLine()} and
  * {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()} were fixed in
  * earlier rounds. {@see ClaudeCodeMcpClient::sendMessage()} was the site nobody
  * owned, and its symptom is different from both because
@@ -1087,7 +1087,7 @@ PHP;
 declare(strict_types=1);
 require %s;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Mcp\McpMessage;
+use SugarCraft\McpClient\McpMessage;
 
 $client = new ClaudeCodeMcpClient(PHP_BINARY, [%s]);
 $client->connect();

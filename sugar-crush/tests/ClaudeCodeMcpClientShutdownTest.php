@@ -15,7 +15,7 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
  * THE UNFIXED TWIN. {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} already
  * escalates SIGTERM -> poll -> signal 9 and was pinned by
  * the transport-side rows of the library's own suite after phase-2a
- * moved them into `sugarcraft/sugar-mcp`; this class owns
+ * moved them into `sugarcraft/sugar-mcp-client`; this class owns
  * the same kind of child over the same transport and shipped
  * `fclose()`-then-bare-`proc_close()` instead. `proc_close()` WAITS, so that
  * spelling hands the caller's deadline to a third party's process.
@@ -322,7 +322,7 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * sent one within the fixture's own lifetime.
      *
      * WHAT THIS SAID: that the fixture answers with an ARRAY result rather than
-     * a scalar because {@see \SugarCraft\Mcp\McpMessage} typed `$result` as
+     * a scalar because {@see \SugarCraft\McpClient\McpMessage} typed `$result` as
      * `?array` and raised a `TypeError` on anything else — a real robustness gap
      * against a real server, recorded separately.
      *

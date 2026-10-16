@@ -10,14 +10,14 @@ namespace SugarCraft\Crush\LSP;
  *
  * WHY: sugar-crush runs every turn in a pcntl_fork()ed child and sub-agents in
  * further forks, and every fork inherits the language server's stdio pipes.
- * Unique request ids ({@see \SugarCraft\Mcp\RequestIdSequence}) keep two
+ * Unique request ids ({@see \SugarCraft\McpClient\RequestIdSequence}) keep two
  * processes from answering to the same id, but two processes exchanging at
  * once still interleave their frames on stdin and race on stdout — and the
  * loser of a read consumes and throws away a frame meant for its sibling.
  * Serialising each WHOLE exchange (write the request, read through its
  * response) is what makes one shared server safe.
  *
- * This is the LSP twin of {@see \SugarCraft\Mcp\ExchangeLock} (audit B1/AG-1)
+ * This is the LSP twin of {@see \SugarCraft\McpClient\ExchangeLock} (audit B1/AG-1)
  * rather than a reuse of it, because `Content-Length` framing needs state that
  * newline framing does not: NDJSON recovers from a half-written line with a
  * leading "\n", but a half-written LSP frame has promised the server bytes that
@@ -160,7 +160,7 @@ final class LspExchangeLock
     /**
      * Former name of {@see new()}, kept so callers that still use it keep
      * working; the repo's factory rule names the default root `::new()`, as
-     * the sugar-mcp twin {@see \SugarCraft\Mcp\ExchangeLock::new()} now does.
+     * the sugar-mcp-client twin {@see \SugarCraft\McpClient\ExchangeLock::new()} now does.
      *
      * @deprecated use {@see new()}
      */

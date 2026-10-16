@@ -4,14 +4,14 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\Agents\AgentPreset;
-use SugarCraft\Mcp\McpRouter as LibraryMcpRouter;
+use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
 
 /**
  * PRODUCT ADAPTER — maps an AgentPreset onto the library router's law.
  *
  * The routing law itself (deny-before-allow, `fnmatch` globs, the raw-key
  * both-sides doctrine, the fail-loud allowlist entry check) is canonical in
- * {@see LibraryMcpRouter} (sugarcraft/sugar-mcp) since the lane-A2 fold;
+ * {@see LibraryMcpRouter} (sugarcraft/sugar-mcp-client) since the lane-A2 fold;
  * this class keeps only the product-coupled half that cannot live in a
  * library: reading the allow-list out of an {@see AgentPreset}'s
  * `mcpServers` field, merging `listTools()` over the surviving servers of

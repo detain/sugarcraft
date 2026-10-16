@@ -14,7 +14,7 @@ use SugarCraft\Crush\Support\ProcessContainment;
  * The stdio SEAM suite: what this adapter OWNS, not what the transport does.
  *
  * Phase-2a moved framing, handshake mechanics, stderr absorption and the
- * teardown ladder into `sugarcraft/sugar-mcp` — that law is pinned by the
+ * teardown ladder into `sugarcraft/sugar-mcp-client` — that law is pinned by the
  * library's own suite. What sugar-crush still owns, and what these rows
  * therefore pin, is exactly the adapter's three product decisions plus the
  * construction contract the rest of the product reads:
@@ -107,7 +107,7 @@ final class StdioMcpServerTest extends TestCase
         $server = new StdioMcpServer(name: 'delegation', command: 'true', args: [], env: []);
 
         $this->assertInstanceOf(
-            \SugarCraft\Mcp\StdioMcpServer::class,
+            \SugarCraft\McpClient\StdioMcpServer::class,
             $this->transportOf($server),
             'the adapter stopped delegating to the library transport',
         );
@@ -116,7 +116,7 @@ final class StdioMcpServerTest extends TestCase
     public function testTheDefaultStartTimeoutDerivesFromTheLibraryConstant(): void
     {
         $this->assertSame(
-            \SugarCraft\Mcp\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS,
+            \SugarCraft\McpClient\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS,
             StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS,
             'the product default and the transport default forked — the docs state one number',
         );
@@ -449,12 +449,12 @@ final class StdioMcpServerTest extends TestCase
         return $plan;
     }
 
-    private function transportOf(StdioMcpServer $server): \SugarCraft\Mcp\StdioMcpServer
+    private function transportOf(StdioMcpServer $server): \SugarCraft\McpClient\StdioMcpServer
     {
         $property = new \ReflectionProperty($server, 'transport');
         $property->setAccessible(true);
 
-        /** @var \SugarCraft\Mcp\StdioMcpServer */
+        /** @var \SugarCraft\McpClient\StdioMcpServer */
         return $property->getValue($server);
     }
 

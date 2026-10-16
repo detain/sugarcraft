@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  * `is_resource()` and carries the reasoning at
  * {@see \SugarCraft\Crush\LSP\LspConnection::drainStderr()}. The stdio MCP
  * transport grew the same guards after this file measured the hazard; the
- * transport now lives in `sugarcraft/sugar-mcp` (phase-2a), and what this
+ * transport now lives in `sugarcraft/sugar-mcp-client` (phase-2a), and what this
  * file OWNS — the thing LspConnection's comment cites — is the host-science
  * the guards rest on: on PHP 8.3.6 / Linux 6.8, closed `proc_open()` pipes
  * raise, from the five call shapes a pipe reader uses, the exceptions spelled

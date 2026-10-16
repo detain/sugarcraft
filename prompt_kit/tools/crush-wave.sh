@@ -8,7 +8,7 @@
 set -euo pipefail
 R=/home/sites/sugarcraft
 W=/home/sites/sugarcraft-wt
-VENDORS=(vendor sugar-crush/vendor sugar-mcp/vendor candy-core/vendor)
+VENDORS=(vendor sugar-crush/vendor sugar-mcp-client/vendor candy-core/vendor)
 
 cmd=${1:?mk|rm}; w=${2:?wave}; shift 2
 case "$cmd" in

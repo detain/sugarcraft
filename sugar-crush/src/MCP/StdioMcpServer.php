@@ -7,8 +7,8 @@ namespace SugarCraft\Crush\MCP;
 use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
- * The product-side adapter over the sugar-mcp stdio transport
- * (`sugarcraft/sugar-mcp`, {@see \SugarCraft\Mcp\StdioMcpServer}).
+ * The product-side adapter over the sugar-mcp-client stdio transport
+ * (`sugarcraft/sugar-mcp-client`, {@see \SugarCraft\McpClient\StdioMcpServer}).
  *
  * PHASE-2a REWIRE: framing, the NDJSON read buffer, the 64 MiB frame cap, the
  * handshake exchange, the stderr drain, the closed-pipe guards and the bounded
@@ -58,7 +58,7 @@ final class StdioMcpServer implements McpServer
      * server from `.mcp.json` (`startTimeout`, in seconds) — see
      * {@see \SugarCraft\Crush\MCP\McpClient::startServer()}.
      */
-    public const DEFAULT_START_TIMEOUT_SECONDS = \SugarCraft\Mcp\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;
+    public const DEFAULT_START_TIMEOUT_SECONDS = \SugarCraft\McpClient\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;
 
     /**
      * Per-`tools/call` ceiling default (cl-4 FIX-C). The library exposes no
@@ -74,7 +74,7 @@ final class StdioMcpServer implements McpServer
      */
     public const DEFAULT_TOOL_TIMEOUT_SECONDS = 120.0;
 
-    private readonly \SugarCraft\Mcp\StdioMcpServer $transport;
+    private readonly \SugarCraft\McpClient\StdioMcpServer $transport;
 
     /** Resolved per-call ceiling in seconds — always positive (cl-4 FIX-C). */
     private readonly float $toolTimeoutSeconds;
@@ -111,7 +111,7 @@ final class StdioMcpServer implements McpServer
             ? $toolTimeoutSeconds
             : self::DEFAULT_TOOL_TIMEOUT_SECONDS;
 
-        $this->transport = new \SugarCraft\Mcp\StdioMcpServer(
+        $this->transport = new \SugarCraft\McpClient\StdioMcpServer(
             name: $name,
             command: $command,
             args: $args,
@@ -212,7 +212,7 @@ final class StdioMcpServer implements McpServer
     public function listTools(): array
     {
         return array_map(
-            static fn (\SugarCraft\Mcp\McpTool $tool): McpTool => new McpTool(
+            static fn (\SugarCraft\McpClient\McpTool $tool): McpTool => new McpTool(
                 $tool->name,
                 $tool->description,
                 $tool->inputSchema,

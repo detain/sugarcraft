@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\MCP\ClaudeCodeMcpServer;
-use SugarCraft\Mcp\ExchangeLock;
+use SugarCraft\McpClient\ExchangeLock;
 
 /**
  * Audit MCP-3: {@see ClaudeCodeMcpClient} waited for every response with a
@@ -412,7 +412,7 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
      * The start-time `tools/list` is gated like `initialize`: an ERROR answer
      * (a session- or capability-gated server answers -32601 here) is not "up,
      * 0 tools" — that shape looks connected, exposes nothing, and throws the
-     * server's own diagnosis away. Same gate as sugar-mcp StdioMcpServer::start().
+     * server's own diagnosis away. Same gate as sugar-mcp-client StdioMcpServer::start().
      */
     public function testAToolsListErrorIsAStartFailureAndReapsTheChild(): void
     {
@@ -567,7 +567,7 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
      * or read-only temp filesystem). An exchange that cannot record its W
      * marker runs unprotected — a holder killed mid-line would leave the next
      * one trusting a stream it half-wrote — so it is a FAILED exchange, the
-     * same rule sugar-mcp StdioMcpServer::exchange() applies, and nothing goes
+     * same rule sugar-mcp-client StdioMcpServer::exchange() applies, and nothing goes
      * on the wire.
      */
     public function testAPhaseMarkerThatCannotBeRecordedFailsTheExchange(): void

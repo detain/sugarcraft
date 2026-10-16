@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Mcp\McpMessage;
-use SugarCraft\Mcp\ArgumentShape;
+use SugarCraft\McpClient\McpMessage;
+use SugarCraft\McpClient\ArgumentShape;
 
 /**
  * E699 — the `claude-mcp` transport: the repository ASKS, the operator's

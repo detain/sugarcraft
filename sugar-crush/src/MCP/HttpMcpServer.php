@@ -7,8 +7,8 @@ namespace SugarCraft\Crush\MCP;
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
-use SugarCraft\Mcp\ArgumentShape;
-use SugarCraft\Mcp\RequestIdSequence;
+use SugarCraft\McpClient\ArgumentShape;
+use SugarCraft\McpClient\RequestIdSequence;
 
 /**
  * Client half of the MCP **Streamable HTTP** transport: one endpoint URL, every
@@ -127,7 +127,7 @@ final class HttpMcpServer implements McpServer
             // capability-gated servers answer -32601 here) or a reply with no
             // result is not "up, 0 tools" — that shape looks connected,
             // exposes nothing, and throws the server's own diagnosis away.
-            // sugar-mcp's StdioMcpServer::start() refuses it the same way.
+            // sugar-mcp-client's StdioMcpServer::start() refuses it the same way.
             if (isset($data['error'])) {
                 throw new \RuntimeException('tools/list refused' . self::describeError($data['error']));
             }
@@ -731,7 +731,7 @@ final class HttpMcpServer implements McpServer
      * remote got wrong instead of failing the server over them.
      *
      * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH HERE EITHER, AND THIS HALF STAYED
-     * OPEN A ROUND LONGER THAN ITS TWIN. {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} was
+     * OPEN A ROUND LONGER THAN ITS TWIN. {@see \SugarCraft\McpClient\StdioMcpServer::parseTools()} was
      * given a type filter for the measured `{"tools":[{"name":5}]}` kill; this
      * method was character-identical to the version that had the gap, and the
      * gap is WORSE over HTTP than over stdio in one specific way: {@see start()}

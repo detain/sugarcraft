@@ -31,7 +31,7 @@ use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Hooks\ScriptHook;
-use SugarCraft\Mcp\McpRouter;
+use SugarCraft\McpClient\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HookContextFiles;
 use SugarCraft\Crush\Support\ProcessContainment;
@@ -487,7 +487,7 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-2 (D) + tranche-3 extension: the crush-side children all
      * justify a 65536-byte stderr tail as "one pipe buffer on this host" (the
      * family grew with the tree, it does not fork; at phase-2a the stdio
-     * transport left for `sugarcraft/sugar-mcp`, taking its own tail constant
+     * transport left for `sugarcraft/sugar-mcp-client`, taking its own tail constant
      * with it, so the family derives here from the three classes that remain).
      * The figure is only true as a family if the constants move together, and
      * each 64 stays 64*1024 of its own constant; the host labels (PHP/Linux
@@ -521,7 +521,7 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-2 (E): the start timeout is spelled in words in src and in
      * decimals in docs/MCP.md — both must agree with the constant. (The arm's
      * other half, the stdio pump bound's passes × chunk arithmetic, left with
-     * the transport at phase-2a and is pinned inside `sugarcraft/sugar-mcp`.)
+     * the transport at phase-2a and is pinned inside `sugarcraft/sugar-mcp-client`.)
      */
     public function testStdioPumpBoundAndStartTimeoutProseSurviveTheirLiterals(): void
     {
@@ -3184,7 +3184,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((int) $frame[1] * 1024 * 1024, $frameCap, 'the page still caps a frame at this many MiB — live MAX_FRAME_BYTES moved');
         self::assertSame(
             $frameCap,
-            (int) (new \ReflectionClassConstant('SugarCraft\Mcp\StdioMcpServer', 'MAX_FRAME_BYTES'))->getValue(),
+            (int) (new \ReflectionClassConstant('SugarCraft\McpClient\StdioMcpServer', 'MAX_FRAME_BYTES'))->getValue(),
             'the library transport no longer restates the ceiling EngineBackend owns — the family the docblock promises split',
         );
 

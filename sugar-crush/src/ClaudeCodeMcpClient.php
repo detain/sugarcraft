@@ -9,9 +9,9 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Support\ProcessTree;
-use SugarCraft\Mcp\ExchangeLock;
-use SugarCraft\Mcp\McpMessage;
-use SugarCraft\Mcp\RequestIdSequence;
+use SugarCraft\McpClient\ExchangeLock;
+use SugarCraft\McpClient\McpMessage;
+use SugarCraft\McpClient\RequestIdSequence;
 
 /**
  * MCP client that connects to Claude Code via stdio transport.
@@ -332,12 +332,12 @@ final class ClaudeCodeMcpClient
      * {@see readFrame()}'s select every time, and a full stdin keeps
      * {@see writeAll()} spinning on its short write poll. Rate-limited rather
      * than per-pass so a chatty LIVE server costs no proc_get_status() per
-     * log line. One read poll's worth, as in sugar-mcp's StdioMcpServer.
+     * log line. One read poll's worth, as in sugar-mcp-client's StdioMcpServer.
      */
     private const LIVENESS_CHECK_SECONDS = self::READ_POLL_MICROS / 1_000_000;
 
     /** Protocol version the `initialize` request advertises — the stdio sibling's. */
-    private const PROTOCOL_VERSION = \SugarCraft\Mcp\StdioMcpServer::PROTOCOL_VERSION;
+    private const PROTOCOL_VERSION = \SugarCraft\McpClient\StdioMcpServer::PROTOCOL_VERSION;
 
     /** The product identity the handshake names, the same one the stdio adapter sends. */
     private const CLIENT_INFO = ['name' => 'sugar-crush', 'version' => '1.0.0'];
@@ -395,7 +395,7 @@ final class ClaudeCodeMcpClient
 
     /**
      * FORK SAFETY (audit B1 / AG-1) — the same law as the library stdio
-     * transport ({@see \SugarCraft\Mcp\StdioMcpServer}'s FORK SAFETY note).
+     * transport ({@see \SugarCraft\McpClient\StdioMcpServer}'s FORK SAFETY note).
      * The `claude-mcp` server is started in the TUI parent and called from
      * forked turn and sub-agent processes, each holding copies of these pipes.
      * Ids are unique across processes ({@see $ids}); every {@see callTool()} /
@@ -775,7 +775,7 @@ final class ClaudeCodeMcpClient
                 // one died mid-line — running unprotected is the defect the
                 // marker exists to close, so a failed mark (a full or
                 // read-only temp filesystem) fails the exchange before a byte
-                // goes out. Same rule as sugar-mcp StdioMcpServer::exchange().
+                // goes out. Same rule as sugar-mcp-client StdioMcpServer::exchange().
                 if (!$lock->markPhase(ExchangeLock::PHASE_WRITING)) {
                     throw new RuntimeException(
                         'MCP server exchange state could not be recorded in the lock file; nothing was sent',
@@ -935,7 +935,7 @@ final class ClaudeCodeMcpClient
      * True when $line, which McpMessage::parse() refused, is still a JSON-RPC
      * 2.0 response envelope addressed to $id (see {@see exchange()}). The id is
      * coerced the way parse() coerces it, so an integer id matches its string.
-     * Same rule as {@see \SugarCraft\Mcp\StdioMcpServer}'s twin.
+     * Same rule as {@see \SugarCraft\McpClient\StdioMcpServer}'s twin.
      */
     private static function isMalformedReplyTo(string $line, string $id): bool
     {
@@ -972,7 +972,7 @@ final class ClaudeCodeMcpClient
      * pipes. Where /proc exists the probe therefore also reads the pid's state
      * and treats Z/X as dead, and a start time that no longer matches the one
      * recorded at connect() as a reused pid, i.e. dead too. Without /proc the
-     * signal-0 answer stands. The same probe as sugar-mcp's StdioMcpServer.
+     * signal-0 answer stands. The same probe as sugar-mcp-client's StdioMcpServer.
      */
     private function serverIsRunning(): bool
     {
@@ -1016,7 +1016,7 @@ final class ClaudeCodeMcpClient
      * or say so.
      *
      * THIS WAS A SINGLE `fwrite()` CHECKED WITH `!==  strlen()`, and that is the
-     * third member of the family {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()}
+     * third member of the family {@see \SugarCraft\McpClient\StdioMcpServer::writeLine()}
      * and {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()} closed
      * before it. The symptom here is different from both, because {@see connect()}
      * puts fd 0 in NON-BLOCKING mode: there was no hang. There was a SHORT WRITE

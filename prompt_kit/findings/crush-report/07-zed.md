@@ -383,7 +383,7 @@ Crate `agent-client-protocol = "=2.2.0"` (features `unstable`, `unstable_protoco
 When an external agent writes through `fs/write_text_file`, Zed diffs against the buffer and records it in the same action log, so review and checkpoints work for every agent.
 
 **For sugar-crush (R15, `sugarcrush acp`).**
-- New subcommand running a synchronous stdio JSON-RPC loop; reuse `SugarCraft\Mcp\McpMessage` (`request/notification/success/error/parse/toJson`) for framing.
+- New subcommand running a synchronous stdio JSON-RPC loop; reuse `SugarCraft\McpClient\McpMessage` (`request/notification/success/error/parse/toJson`) for framing.
 - `initialize`: advertise `loadSession: true`, `promptCapabilities{embeddedContext:true}`.
 - `session/new` / `load` / `list` → `EnhancedSessionStore` (`loadTranscript`, `list`).
 - `session/prompt` → `EngineBackend::complete()`; callbacks (token, reasoning, `ToolStarted`/`ToolFinished` with `ToolResult::$diff`, `$arguments`, `$description`, sub-agent events) become `session/update` (`agent_message_chunk`, `agent_thought_chunk`, `tool_call{kind, status, locations}`, `tool_call_update{content: diff{path,oldText,newText}}`).

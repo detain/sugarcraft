@@ -239,7 +239,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * and {@see \SugarCraft\Crush\ClaudeCodeMcpClient} -- and each now spells
      * `= EngineBackend::MAX_FRAME_BYTES` rather than repeating the arithmetic.
      * The stdio transport's cap left the product with it at phase-2a:
-     * `sugarcraft/sugar-mcp` restates the same 64 MiB as a library-local
+     * `sugarcraft/sugar-mcp-client` restates the same 64 MiB as a library-local
      * literal (a library cannot name a product constant), and
      * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest::testBothClassesDeclareTheSameCapAndItIsTheFrameCapNotTheStderrCap()}
      * pins that the restatement has not drifted from this one.
