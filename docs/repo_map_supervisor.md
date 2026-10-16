@@ -96,7 +96,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 19 — candy-scriptui onto candy-fuzzy](repo_map_step_19.md) — branch: `ai/candy-scriptui-shared`
 
 ### Phase 4 — Replace reinventions (6)
-- [x] [Step 20 — ANSI parsers replaced (sugar-spark, candy-hermit, candy-freeze)](repo_map_step_20.md) — branch: `ai/ansi-consumers`, PR #899
+- [x] [Step 20 — ANSI parsers replaced (candy-ansi-inspect, candy-hermit, candy-freeze)](repo_map_step_20.md) — branch: `ai/ansi-consumers`, PR #899
 - [x] [Step 21 — sugar-readline onto candy-input](repo_map_step_21.md) — branch: `ai/sugar-readline-input`, PR #900
 - [x] [Step 22 — Mouse hit-test consumers onto candy-mouse](repo_map_step_22.md) — branch: `ai/mouse-consumers`, PR #901
 - [x] [Step 23 — Async consumers onto candy-async](repo_map_step_23.md) — branch: `ai/async-consumers`, PR #902

@@ -415,7 +415,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   Progress` (12), **5.1c** `Spinner/Key/ItemList/FilePicker/Cursor` (≈15→a/b), **5.1d**
   `Viewport/Tree/TextArea/Tabs/Stopwatch/Scrollbar/Paginator/Help`+root (≈17→a/b).
 - **5.2** `sugar-boxer`(3,low), `sugar-datepicker`(6,low), `sugar-crumbs`(8,low),
-  `sugar-skate`(8,med), `sugar-spark`(8,med), `sugar-stickers`(7,med), `sugar-wishlist`(6,med),
+  `sugar-skate`(8,med), `candy-ansi-inspect`(8,med), `sugar-stickers`(7,med), `sugar-wishlist`(6,med),
   `sugar-post`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
   `sugar-veil`(7,high) — one step each (all small), in dependency order.
 - **5.3** `candy-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
@@ -517,7 +517,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-mdview | medium | 10 | attribute, ctor-promotion, match, mixed, named-args, readonly |
 | sugar-readline | medium | 17 | ctor-promotion, match, new-in-init, php8-strfn |
 | sugar-skate | medium | 8 | ctor-promotion, match, mixed, named-args, php8-strfn, readonly; sqlite3 |
-| sugar-spark | medium | 8 | ctor-promotion, match, php8-strfn, readonly |
+| candy-ansi-inspect | medium | 8 | ctor-promotion, match, php8-strfn, readonly |
 | sugar-stickers | medium | 7 | enum, first-class-callable, match, php8-strfn, readonly-class |
 | sugar-wishlist | medium | 6 | ctor-promotion, first-class-callable, match, mixed, named-args; pcntl |
 | candy-files | medium | 14 | backed-enum, ctor-promotion, enum-with-methods, match, named-args |

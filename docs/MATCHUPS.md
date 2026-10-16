@@ -82,7 +82,7 @@ called out in the table below.
 | **CandyScriptui** (`candy-scriptui/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
 | **CandyFreeze** (`candy-freeze/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
-| **SugarSpark** (`sugar-spark/`) | 🟢 ready | ANSI escape-sequence inspector. |
+| **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **SugarWishlist** (`sugar-wishlist/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
 | **SugarSkate** (`sugar-skate/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
 | **SugarPost** (`sugar-post/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
@@ -203,7 +203,7 @@ reference projects supplied the ideas, not the code.
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
 | SugarReel (sugar-reel/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |
 | SugarSkate (sugar-skate/) | [skate](https://github.com/charmbracelet/skate) |
-| SugarSpark (sugar-spark/) | [sequin](https://github.com/charmbracelet/sequin) |
+| CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
 | CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
 | SugarStickers (sugar-stickers/) | [stickers](https://github.com/76creates/stickers) |
 | SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) |

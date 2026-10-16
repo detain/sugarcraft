@@ -187,17 +187,17 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 9: sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil
+### Group 9: candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| sugar-spark | 147 ✓ | APPROVE | 0 | 0 | 1 | 0 |
+| candy-ansi-inspect | 147 ✓ | APPROVE | 0 | 0 | 1 | 0 |
 | sugar-stickers | 60 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
 | sugar-table | 129 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | sugar-tick | 106 ✓ | REQUEST_CHANGES | 0 | 3 | 3 | 0 |
 | sugar-veil | 97 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 
-**sugar-spark** — ANSI inspector. Clean, 147 tests.
+**candy-ansi-inspect** — ANSI inspector. Clean, 147 tests.
 
 **sugar-stickers** — FlexBox/Table. Issues: No FlexBox test file; README documents incomplete feature ("deferred to step 10.12"); `FlexBox` has public mutable properties (violates immutability).
 
@@ -509,7 +509,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | honey-bounce.SpringChain mutation | Refactor to return new instances | Consistency with immutable pattern |
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
 | sugar-stickers/Table vs sugar-table/Table | Rename sugar-stickers Table to SimpleTable | Two different packages, same class name, confuses |
-| candy-lister + sugar-spark | No consolidation needed | Different purposes |
+| candy-lister + candy-ansi-inspect | No consolidation needed | Different purposes |
 | candy-mdview/WidthHelper vs candy-core/Util/Width | Delete candy-mdview/WidthHelper | Already exists in candy-core |
 
 ---
@@ -570,7 +570,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 6 | sugar-bits, sugar-charts, sugar-skate, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
-| 9 | sugar-spark, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
+| 9 | candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 

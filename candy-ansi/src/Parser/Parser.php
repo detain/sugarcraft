@@ -237,7 +237,7 @@ final class Parser
      * empty result means the list held no `:` separators.
      *
      * A handler that owns its Parser reads them back mid-dispatch this way —
-     * `sugar-spark`'s `AnsiHandler` does exactly that — and a driver reads them
+     * `candy-ansi-inspect`'s `AnsiHandler` does exactly that — and a driver reads them
      * after `feed()` for the last completed sequence; they reset when the next
      * sequence's params start accumulating. This is the PULL route.
      *

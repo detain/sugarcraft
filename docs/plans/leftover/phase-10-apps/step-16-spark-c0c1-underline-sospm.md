@@ -1,6 +1,6 @@
-# Step 10.16 — sugar-spark C0/C1 descriptions + SGR underline 4:1-4:5 + SOS/PM
+# Step 10.16 — candy-ansi-inspect C0/C1 descriptions + SGR underline 4:1-4:5 + SOS/PM
 
-**Source:** `leftover_updates_later.md` sugar-spark §5 P1-P3
+**Source:** `leftover_updates_later.md` candy-ansi-inspect §5 P1-P3
 **Branch:** `ai/spark-c0c1-underline-sospm`
 
 ## Deliverable
@@ -13,9 +13,9 @@
 
 ## Files
 
-**Modify:** `sugar-spark/src/Inspector.php`.
+**Modify:** `candy-ansi-inspect/src/Inspector.php`.
 
-**Create:** `sugar-spark/src/C0C1.php` lookup table.
+**Create:** `candy-ansi-inspect/src/C0C1.php` lookup table.
 
 ## Tests
 
@@ -23,7 +23,7 @@
 
 ## Acceptance
 
-- `cd sugar-spark && vendor/bin/phpunit` green.
+- `cd candy-ansi-inspect && vendor/bin/phpunit` green.
 
 ---
 

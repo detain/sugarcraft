@@ -74,7 +74,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-tetris | AI rotation bug — loop runs when rotDelta=0 | Game.php:309 | Unwanted 90° rotation when AI needs no rotation |
 | candy-tetris | Garbage overflow off-by-one | Game.php:482 | Row $count displaced into visible area not validated |
 | candy-forms | No validation for negative viewport | Forms.php | Silent empty output for negative dimensions |
-| sugar-spark | Empty data set produces invalid output | Sparkline.php:42 | No guard for empty $data |
+| candy-ansi-inspect | Empty data set produces invalid output | Sparkline.php:42 | No guard for empty $data |
 | sugar-toast | Viewport overflow not handled | Toast.php | Toast wider than terminal width overflows |
 | sugar-toast | Auto-dismiss timer not cancellable | Toast.php | Cannot extend or cancel dismiss timer |
 | candy-flappy | Non-atomic high score writes | Game.php:165 | Crash mid-write corrupts scores file |

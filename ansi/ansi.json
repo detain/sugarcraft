@@ -35445,9 +35445,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-16-l-1.ansi": {
-        "name": "sugar-spark-1-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-1-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -35457,9 +35457,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-16-l-2.ansi": {
-        "name": "sugar-spark-1-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-1-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -35469,9 +35469,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-16-m-1.ansi": {
-        "name": "sugar-spark-1-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-1-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -35481,9 +35481,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-16-m-2.ansi": {
-        "name": "sugar-spark-1-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-1-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -35493,9 +35493,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-16-s-1.ansi": {
-        "name": "sugar-spark-1-16-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-16-s-1.ansi": {
+        "name": "candy-ansi-inspect-1-16-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "68x15",
         "width": 68,
         "height": 15,
@@ -35505,9 +35505,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-16-s-2.ansi": {
-        "name": "sugar-spark-1-16-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-16-s-2.ansi": {
+        "name": "candy-ansi-inspect-1-16-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "68x14",
         "width": 68,
         "height": 14,
@@ -35517,9 +35517,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-256-l-1.ansi": {
-        "name": "sugar-spark-1-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-1-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "180x38",
         "width": 180,
         "height": 38,
@@ -35529,9 +35529,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-256-l-2.ansi": {
-        "name": "sugar-spark-1-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-1-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "205x31",
         "width": 205,
         "height": 31,
@@ -35541,9 +35541,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-256-m-1.ansi": {
-        "name": "sugar-spark-1-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-1-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "87x19",
         "width": 87,
         "height": 19,
@@ -35553,9 +35553,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-256-m-2.ansi": {
-        "name": "sugar-spark-1-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-1-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -35565,9 +35565,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-256-s-1.ansi": {
-        "name": "sugar-spark-1-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-1-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "68x11",
         "width": 68,
         "height": 11,
@@ -35577,9 +35577,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-256-s-2.ansi": {
-        "name": "sugar-spark-1-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-1-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "68x9",
         "width": 68,
         "height": 9,
@@ -35589,9 +35589,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-tc-l-1.ansi": {
-        "name": "sugar-spark-1-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-1-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "190x38",
         "width": 190,
         "height": 38,
@@ -35601,9 +35601,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-tc-l-2.ansi": {
-        "name": "sugar-spark-1-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-1-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "210x41",
         "width": 210,
         "height": 41,
@@ -35613,9 +35613,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-tc-m-1.ansi": {
-        "name": "sugar-spark-1-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-1-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -35625,9 +35625,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-tc-m-2.ansi": {
-        "name": "sugar-spark-1-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-1-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -35637,9 +35637,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-tc-s-1.ansi": {
-        "name": "sugar-spark-1-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-1-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -35649,9 +35649,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-1-tc-s-2.ansi": {
-        "name": "sugar-spark-1-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-1-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-1-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "68x14",
         "width": 68,
         "height": 14,
@@ -35661,9 +35661,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-16-l-1.ansi": {
-        "name": "sugar-spark-2-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-2-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "157x36",
         "width": 157,
         "height": 36,
@@ -35673,9 +35673,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-16-l-2.ansi": {
-        "name": "sugar-spark-2-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-2-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "147x32",
         "width": 147,
         "height": 32,
@@ -35685,9 +35685,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-16-m-1.ansi": {
-        "name": "sugar-spark-2-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-2-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -35697,9 +35697,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-16-m-2.ansi": {
-        "name": "sugar-spark-2-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-2-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -35709,9 +35709,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-16-s-1.ansi": {
-        "name": "sugar-spark-2-16-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-16-s-1.ansi": {
+        "name": "candy-ansi-inspect-2-16-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -35721,9 +35721,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-16-s-2.ansi": {
-        "name": "sugar-spark-2-16-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-16-s-2.ansi": {
+        "name": "candy-ansi-inspect-2-16-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -35733,9 +35733,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-l-1.ansi": {
-        "name": "sugar-spark-2-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-2-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "140x34",
         "width": 140,
         "height": 34,
@@ -35745,9 +35745,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-l-2.ansi": {
-        "name": "sugar-spark-2-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-2-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -35757,9 +35757,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-m-1.ansi": {
-        "name": "sugar-spark-2-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-2-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -35769,9 +35769,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-m-2.ansi": {
-        "name": "sugar-spark-2-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-2-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "79x22",
         "width": 79,
         "height": 22,
@@ -35781,9 +35781,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-m-3.ansi": {
-        "name": "sugar-spark-2-256-m-3.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-m-3.ansi": {
+        "name": "candy-ansi-inspect-2-256-m-3.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "71x19",
         "width": 71,
         "height": 19,
@@ -35793,9 +35793,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-s-1.ansi": {
-        "name": "sugar-spark-2-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-2-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -35805,9 +35805,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-256-s-2.ansi": {
-        "name": "sugar-spark-2-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-2-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -35817,9 +35817,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-l-1.ansi": {
-        "name": "sugar-spark-2-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-2-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "163x40",
         "width": 163,
         "height": 40,
@@ -35829,9 +35829,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-l-2.ansi": {
-        "name": "sugar-spark-2-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-2-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "165x34",
         "width": 165,
         "height": 34,
@@ -35841,9 +35841,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-m-1.ansi": {
-        "name": "sugar-spark-2-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-2-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -35853,9 +35853,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-m-2.ansi": {
-        "name": "sugar-spark-2-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-2-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -35865,9 +35865,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-s-1.ansi": {
-        "name": "sugar-spark-2-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-2-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "61x11",
         "width": 61,
         "height": 11,
@@ -35877,9 +35877,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-s-2.ansi": {
-        "name": "sugar-spark-2-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-2-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -35889,9 +35889,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-2-tc-s-3.ansi": {
-        "name": "sugar-spark-2-tc-s-3.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-2-tc-s-3.ansi": {
+        "name": "candy-ansi-inspect-2-tc-s-3.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -35901,9 +35901,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-16-l-1.ansi": {
-        "name": "sugar-spark-3-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-3-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "168x28",
         "width": 168,
         "height": 28,
@@ -35913,9 +35913,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-16-l-2.ansi": {
-        "name": "sugar-spark-3-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-3-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "160x29",
         "width": 160,
         "height": 29,
@@ -35925,9 +35925,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-16-m-1.ansi": {
-        "name": "sugar-spark-3-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-3-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -35937,9 +35937,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-16-m-2.ansi": {
-        "name": "sugar-spark-3-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-3-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "72x18",
         "width": 72,
         "height": 18,
@@ -35949,9 +35949,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-16-s-1.ansi": {
-        "name": "sugar-spark-3-16-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-16-s-1.ansi": {
+        "name": "candy-ansi-inspect-3-16-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -35961,9 +35961,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-256-l-1.ansi": {
-        "name": "sugar-spark-3-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-3-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "170x28",
         "width": 170,
         "height": 28,
@@ -35973,9 +35973,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-256-l-2.ansi": {
-        "name": "sugar-spark-3-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-3-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "184x28",
         "width": 184,
         "height": 28,
@@ -35985,9 +35985,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-256-m-1.ansi": {
-        "name": "sugar-spark-3-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-3-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -35997,9 +35997,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-256-m-2.ansi": {
-        "name": "sugar-spark-3-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-3-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "76x18",
         "width": 76,
         "height": 18,
@@ -36009,9 +36009,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-256-s-1.ansi": {
-        "name": "sugar-spark-3-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-3-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "46x9",
         "width": 46,
         "height": 9,
@@ -36021,9 +36021,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-256-s-2.ansi": {
-        "name": "sugar-spark-3-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-3-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -36033,9 +36033,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-tc-l-1.ansi": {
-        "name": "sugar-spark-3-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-3-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "196x40",
         "width": 196,
         "height": 40,
@@ -36045,9 +36045,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-tc-l-2.ansi": {
-        "name": "sugar-spark-3-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-3-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "188x28",
         "width": 188,
         "height": 28,
@@ -36057,9 +36057,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-tc-m-1.ansi": {
-        "name": "sugar-spark-3-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-3-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -36069,9 +36069,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-tc-m-2.ansi": {
-        "name": "sugar-spark-3-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-3-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -36081,9 +36081,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-tc-s-1.ansi": {
-        "name": "sugar-spark-3-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-3-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -36093,9 +36093,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-tc-s-2.ansi": {
-        "name": "sugar-spark-3-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-3-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-3-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -36105,9 +36105,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-16-l-1.ansi": {
-        "name": "sugar-spark-4-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-4-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "198x33",
         "width": 198,
         "height": 33,
@@ -36117,9 +36117,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-16-l-2.ansi": {
-        "name": "sugar-spark-4-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-4-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "205x36",
         "width": 205,
         "height": 36,
@@ -36129,9 +36129,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-16-m-2.ansi": {
-        "name": "sugar-spark-4-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-4-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -36141,9 +36141,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-16-s-1.ansi": {
-        "name": "sugar-spark-4-16-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-16-s-1.ansi": {
+        "name": "candy-ansi-inspect-4-16-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -36153,9 +36153,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-16-s-2.ansi": {
-        "name": "sugar-spark-4-16-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-16-s-2.ansi": {
+        "name": "candy-ansi-inspect-4-16-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -36165,9 +36165,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-256-l-1.ansi": {
-        "name": "sugar-spark-4-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-4-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "212x39",
         "width": 212,
         "height": 39,
@@ -36177,9 +36177,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-256-l-2.ansi": {
-        "name": "sugar-spark-4-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-4-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "198x33",
         "width": 198,
         "height": 33,
@@ -36189,9 +36189,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-256-m-1.ansi": {
-        "name": "sugar-spark-4-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-4-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36201,9 +36201,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-256-m-2.ansi": {
-        "name": "sugar-spark-4-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-4-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "79x19",
         "width": 79,
         "height": 19,
@@ -36213,9 +36213,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-256-s-1.ansi": {
-        "name": "sugar-spark-4-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-4-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "53x13",
         "width": 53,
         "height": 13,
@@ -36225,9 +36225,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-256-s-2.ansi": {
-        "name": "sugar-spark-4-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-4-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
@@ -36237,9 +36237,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-tc-l-1.ansi": {
-        "name": "sugar-spark-4-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-4-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "220x43",
         "width": 220,
         "height": 43,
@@ -36249,9 +36249,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-tc-l-2.ansi": {
-        "name": "sugar-spark-4-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-4-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "216x37",
         "width": 216,
         "height": 37,
@@ -36261,9 +36261,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-tc-m-1.ansi": {
-        "name": "sugar-spark-4-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-4-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -36273,9 +36273,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-tc-m-2.ansi": {
-        "name": "sugar-spark-4-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-4-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -36285,9 +36285,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-tc-s-1.ansi": {
-        "name": "sugar-spark-4-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-4-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "50x13",
         "width": 50,
         "height": 13,
@@ -36297,9 +36297,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-4-tc-s-2.ansi": {
-        "name": "sugar-spark-4-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-4-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-4-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "53x11",
         "width": 53,
         "height": 11,
@@ -36309,9 +36309,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-16-l-1.ansi": {
-        "name": "sugar-spark-5-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-5-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "170x38",
         "width": 170,
         "height": 38,
@@ -36321,9 +36321,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-16-l-2.ansi": {
-        "name": "sugar-spark-5-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-5-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "180x36",
         "width": 180,
         "height": 36,
@@ -36333,9 +36333,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-16-m-1.ansi": {
-        "name": "sugar-spark-5-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-5-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36345,9 +36345,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-16-m-2.ansi": {
-        "name": "sugar-spark-5-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-5-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36357,9 +36357,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-256-l-1.ansi": {
-        "name": "sugar-spark-5-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-5-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -36369,9 +36369,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-256-l-2.ansi": {
-        "name": "sugar-spark-5-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-5-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "190x44",
         "width": 190,
         "height": 44,
@@ -36381,9 +36381,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-256-m-1.ansi": {
-        "name": "sugar-spark-5-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-5-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -36393,9 +36393,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-256-m-2.ansi": {
-        "name": "sugar-spark-5-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-5-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -36405,9 +36405,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-256-s-1.ansi": {
-        "name": "sugar-spark-5-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-5-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -36417,9 +36417,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-256-s-2.ansi": {
-        "name": "sugar-spark-5-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-5-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -36429,9 +36429,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-tc-l-1.ansi": {
-        "name": "sugar-spark-5-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-5-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "200x46",
         "width": 200,
         "height": 46,
@@ -36441,9 +36441,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-tc-l-2.ansi": {
-        "name": "sugar-spark-5-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-5-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "190x44",
         "width": 190,
         "height": 44,
@@ -36453,9 +36453,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-tc-m-1.ansi": {
-        "name": "sugar-spark-5-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-5-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -36465,9 +36465,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-tc-m-2.ansi": {
-        "name": "sugar-spark-5-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-5-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -36477,9 +36477,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-tc-s-1.ansi": {
-        "name": "sugar-spark-5-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-5-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "54x14",
         "width": 54,
         "height": 14,
@@ -36489,9 +36489,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-tc-s-2.ansi": {
-        "name": "sugar-spark-5-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-5-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-5-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36501,9 +36501,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-256-l-1.ansi": {
-        "name": "sugar-spark-6-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-6-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "204x30",
         "width": 204,
         "height": 30,
@@ -36513,9 +36513,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-256-l-2.ansi": {
-        "name": "sugar-spark-6-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-6-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "180x33",
         "width": 180,
         "height": 33,
@@ -36525,9 +36525,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-256-m-1.ansi": {
-        "name": "sugar-spark-6-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-6-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -36537,9 +36537,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-256-m-2.ansi": {
-        "name": "sugar-spark-6-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-6-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -36549,9 +36549,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-256-s-1.ansi": {
-        "name": "sugar-spark-6-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-6-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "59x14",
         "width": 59,
         "height": 14,
@@ -36561,9 +36561,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-256-s-2.ansi": {
-        "name": "sugar-spark-6-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-6-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -36573,9 +36573,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-l-1.ansi": {
-        "name": "sugar-spark-6-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-6-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "204x34",
         "width": 204,
         "height": 34,
@@ -36585,9 +36585,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-l-2.ansi": {
-        "name": "sugar-spark-6-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-6-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "182x33",
         "width": 182,
         "height": 33,
@@ -36597,9 +36597,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-m-1.ansi": {
-        "name": "sugar-spark-6-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-6-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "81x20",
         "width": 81,
         "height": 20,
@@ -36609,9 +36609,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-m-2.ansi": {
-        "name": "sugar-spark-6-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-6-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36621,9 +36621,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-s-1.ansi": {
-        "name": "sugar-spark-6-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-6-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -36633,9 +36633,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-s-2.ansi": {
-        "name": "sugar-spark-6-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-6-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -36645,9 +36645,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-6-tc-s-3.ansi": {
-        "name": "sugar-spark-6-tc-s-3.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-6-tc-s-3.ansi": {
+        "name": "candy-ansi-inspect-6-tc-s-3.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "55x15",
         "width": 55,
         "height": 15,
@@ -36657,9 +36657,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-16-l-1.ansi": {
-        "name": "sugar-spark-7-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-7-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36669,9 +36669,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-16-l-2.ansi": {
-        "name": "sugar-spark-7-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-7-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36681,9 +36681,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-16-s-2.ansi": {
-        "name": "sugar-spark-7-16-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-16-s-2.ansi": {
+        "name": "candy-ansi-inspect-7-16-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36693,9 +36693,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-256-l-1.ansi": {
-        "name": "sugar-spark-7-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-7-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36705,9 +36705,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-256-l-2.ansi": {
-        "name": "sugar-spark-7-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-7-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36717,9 +36717,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-256-m-1.ansi": {
-        "name": "sugar-spark-7-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-7-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36729,9 +36729,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-256-m-2.ansi": {
-        "name": "sugar-spark-7-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-7-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36741,9 +36741,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-256-s-1.ansi": {
-        "name": "sugar-spark-7-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-7-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36753,9 +36753,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-256-s-2.ansi": {
-        "name": "sugar-spark-7-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-7-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36765,9 +36765,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-tc-l-1.ansi": {
-        "name": "sugar-spark-7-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-7-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36777,21 +36777,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-tc-l-2.ansi": {
-        "name": "sugar-spark-7-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-7-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
         "depth": "truecolor",
         "colors": 21,
-        "description": "arched hall with huge neon SugarSpark, bottle wall, patrons, hidden bookshelf",
+        "description": "arched hall with huge neon CandyAnsiInspect, bottle wall, patrons, hidden bookshelf",
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-tc-m-1.ansi": {
-        "name": "sugar-spark-7-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-7-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36801,9 +36801,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-tc-m-2.ansi": {
-        "name": "sugar-spark-7-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-7-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36813,9 +36813,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-tc-s-1.ansi": {
-        "name": "sugar-spark-7-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-7-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36825,21 +36825,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-tc-s-2.ansi": {
-        "name": "sugar-spark-7-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-7-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-7-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
         "depth": "truecolor",
         "colors": 27,
-        "description": "truecolor sky sphere balloon lettered SugarSpark, tethered radio payload",
+        "description": "truecolor sky sphere balloon lettered CandyAnsiInspect, tethered radio payload",
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-16-m-1.ansi": {
-        "name": "sugar-spark-8-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-8-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36849,9 +36849,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-256-l-1.ansi": {
-        "name": "sugar-spark-8-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-8-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36861,9 +36861,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-256-l-2.ansi": {
-        "name": "sugar-spark-8-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-8-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36873,9 +36873,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-256-m-1.ansi": {
-        "name": "sugar-spark-8-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-8-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36885,9 +36885,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-256-m-2.ansi": {
-        "name": "sugar-spark-8-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-8-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36897,9 +36897,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-256-s-1.ansi": {
-        "name": "sugar-spark-8-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-8-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36909,9 +36909,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-256-s-2.ansi": {
-        "name": "sugar-spark-8-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-8-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36921,9 +36921,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-tc-l-1.ansi": {
-        "name": "sugar-spark-8-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-8-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36933,9 +36933,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-tc-l-2.ansi": {
-        "name": "sugar-spark-8-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-8-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -36945,9 +36945,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-tc-m-1.ansi": {
-        "name": "sugar-spark-8-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-8-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36957,9 +36957,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-tc-m-2.ansi": {
-        "name": "sugar-spark-8-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-8-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -36969,9 +36969,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-tc-s-1.ansi": {
-        "name": "sugar-spark-8-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-8-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36981,9 +36981,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-tc-s-2.ansi": {
-        "name": "sugar-spark-8-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-8-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-8-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -36993,9 +36993,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-16-l-1.ansi": {
-        "name": "sugar-spark-9-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-9-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -37005,9 +37005,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-16-l-2.ansi": {
-        "name": "sugar-spark-9-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-9-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "180x36",
         "width": 180,
         "height": 36,
@@ -37017,9 +37017,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-16-m-1.ansi": {
-        "name": "sugar-spark-9-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-9-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -37029,9 +37029,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-16-m-2.ansi": {
-        "name": "sugar-spark-9-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-9-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -37041,9 +37041,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-16-s-1.ansi": {
-        "name": "sugar-spark-9-16-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-16-s-1.ansi": {
+        "name": "candy-ansi-inspect-9-16-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -37053,9 +37053,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-256-l-1.ansi": {
-        "name": "sugar-spark-9-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-9-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "178x40",
         "width": 178,
         "height": 40,
@@ -37065,9 +37065,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-256-l-2.ansi": {
-        "name": "sugar-spark-9-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-9-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -37077,9 +37077,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-256-m-1.ansi": {
-        "name": "sugar-spark-9-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-9-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -37089,9 +37089,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-256-m-2.ansi": {
-        "name": "sugar-spark-9-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-9-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -37101,9 +37101,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-256-s-1.ansi": {
-        "name": "sugar-spark-9-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-9-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -37113,9 +37113,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-256-s-2.ansi": {
-        "name": "sugar-spark-9-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-9-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -37125,9 +37125,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-tc-l-1.ansi": {
-        "name": "sugar-spark-9-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-9-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -37137,9 +37137,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-tc-l-2.ansi": {
-        "name": "sugar-spark-9-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-9-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -37149,9 +37149,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-tc-m-1.ansi": {
-        "name": "sugar-spark-9-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-9-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -37161,9 +37161,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-tc-m-2.ansi": {
-        "name": "sugar-spark-9-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-9-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -37173,9 +37173,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-tc-s-1.ansi": {
-        "name": "sugar-spark-9-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-9-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -37185,9 +37185,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-tc-s-2.ansi": {
-        "name": "sugar-spark-9-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-9-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-9-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -37197,9 +37197,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-16-l-1.ansi": {
-        "name": "sugar-spark-10-16-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-16-l-1.ansi": {
+        "name": "candy-ansi-inspect-10-16-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -37209,9 +37209,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-16-l-2.ansi": {
-        "name": "sugar-spark-10-16-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-16-l-2.ansi": {
+        "name": "candy-ansi-inspect-10-16-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -37221,9 +37221,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-16-m-1.ansi": {
-        "name": "sugar-spark-10-16-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-16-m-1.ansi": {
+        "name": "candy-ansi-inspect-10-16-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x26",
         "width": 86,
         "height": 26,
@@ -37233,9 +37233,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-16-m-2.ansi": {
-        "name": "sugar-spark-10-16-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-16-m-2.ansi": {
+        "name": "candy-ansi-inspect-10-16-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -37245,9 +37245,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-256-l-1.ansi": {
-        "name": "sugar-spark-10-256-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-256-l-1.ansi": {
+        "name": "candy-ansi-inspect-10-256-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -37257,9 +37257,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-256-l-2.ansi": {
-        "name": "sugar-spark-10-256-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-256-l-2.ansi": {
+        "name": "candy-ansi-inspect-10-256-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "178x40",
         "width": 178,
         "height": 40,
@@ -37269,9 +37269,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-256-m-1.ansi": {
-        "name": "sugar-spark-10-256-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-256-m-1.ansi": {
+        "name": "candy-ansi-inspect-10-256-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -37281,9 +37281,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-256-m-2.ansi": {
-        "name": "sugar-spark-10-256-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-256-m-2.ansi": {
+        "name": "candy-ansi-inspect-10-256-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -37293,9 +37293,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-256-s-1.ansi": {
-        "name": "sugar-spark-10-256-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-256-s-1.ansi": {
+        "name": "candy-ansi-inspect-10-256-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "62x16",
         "width": 62,
         "height": 16,
@@ -37305,9 +37305,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-256-s-2.ansi": {
-        "name": "sugar-spark-10-256-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-256-s-2.ansi": {
+        "name": "candy-ansi-inspect-10-256-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -37317,9 +37317,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-tc-l-1.ansi": {
-        "name": "sugar-spark-10-tc-l-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-tc-l-1.ansi": {
+        "name": "candy-ansi-inspect-10-tc-l-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -37329,9 +37329,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-tc-l-2.ansi": {
-        "name": "sugar-spark-10-tc-l-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-tc-l-2.ansi": {
+        "name": "candy-ansi-inspect-10-tc-l-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "196x42",
         "width": 196,
         "height": 42,
@@ -37341,9 +37341,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-tc-m-1.ansi": {
-        "name": "sugar-spark-10-tc-m-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-tc-m-1.ansi": {
+        "name": "candy-ansi-inspect-10-tc-m-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -37353,9 +37353,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-tc-m-2.ansi": {
-        "name": "sugar-spark-10-tc-m-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-tc-m-2.ansi": {
+        "name": "candy-ansi-inspect-10-tc-m-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -37365,9 +37365,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-tc-s-1.ansi": {
-        "name": "sugar-spark-10-tc-s-1.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-tc-s-1.ansi": {
+        "name": "candy-ansi-inspect-10-tc-s-1.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "58x16",
         "width": 58,
         "height": 16,
@@ -37377,9 +37377,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-tc-s-2.ansi": {
-        "name": "sugar-spark-10-tc-s-2.ansi",
-        "category": "sugar-spark",
+    "candy-ansi-inspect/candy-ansi-inspect-10-tc-s-2.ansi": {
+        "name": "candy-ansi-inspect-10-tc-s-2.ansi",
+        "category": "candy-ansi-inspect",
         "resolution": "60x16",
         "width": 60,
         "height": 16,

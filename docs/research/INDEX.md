@@ -50,7 +50,7 @@ To implement an item:
 | **sugar-readline** | [research/libraries/sugar-readline-research.md](libraries/sugar-readline-research.md) | 1. History interface, 2. ↑/↓ navigation, 3. Vi/Emacs mode |
 | **sugar-datepicker** | [research/libraries/sugar-datepicker-research.md](libraries/sugar-datepicker-research.md) | 1. Date range, 2. Focus nav, 3. Event store |
 | **sugar-toast** | [research/libraries/sugar-toast-research.md](libraries/sugar-toast-research.md) | 1. ESC dismiss, 2. Stack fix, 3. Progress toasts |
-| **sugar-spark** | [research/libraries/sugar-spark-research.md](libraries/sugar-spark-research.md) | 1. C0/C1 codes, 2. SGR styles, 3. JSON output |
+| **candy-ansi-inspect** | [research/libraries/candy-ansi-inspect-research.md](libraries/candy-ansi-inspect-research.md) | 1. C0/C1 codes, 2. SGR styles, 3. JSON output |
 
 ### Shell & Apps
 
@@ -109,8 +109,8 @@ To implement an item:
 | 3 | candy-palette | CLICOLOR env support | 2-4h | [link](libraries/candy-palette-research.md) |
 | 4 | sugar-toast | ESC dismiss | 1h | [link](libraries/sugar-toast-research.md) |
 | 5 | sugar-toast | Stack offset fix | 1h | [link](libraries/sugar-toast-research.md) |
-| 6 | sugar-spark | SGR underline styles | 1h | [link](libraries/sugar-spark-research.md) |
-| 7 | sugar-spark | C0/C1 codes | 1-2h | [link](libraries/sugar-spark-research.md) |
+| 6 | candy-ansi-inspect | SGR underline styles | 1h | [link](libraries/candy-ansi-inspect-research.md) |
+| 7 | candy-ansi-inspect | C0/C1 codes | 1-2h | [link](libraries/candy-ansi-inspect-research.md) |
 | 8 | candy-hermit | Item interface | 2-3h | [link](libraries/candy-hermit-research.md) |
 | 9 | sugar-crumbs | Fix examples | 1h | [link](libraries/sugar-crumbs-research.md) |
 | 10 | sugar-crumbs | Separator escaping | 1h | [link](libraries/sugar-crumbs-research.md) |

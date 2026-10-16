@@ -527,7 +527,7 @@ setenv -g COLORTERM "truecolor"
 
 **Maintainer Position**: Not short-term priority, but welcome community contribution
 
-**SugarCraft Opportunity**: This would be a differentiating feature for `sugar-spark` if implemented well.
+**SugarCraft Opportunity**: This would be a differentiating feature for `candy-ansi-inspect` if implemented well.
 
 ---
 
@@ -759,7 +759,7 @@ defer ansi.PutParser(p)
 
 **Gap**: Sequin is Go-only; PHP developers have no equivalent ANSI debugging tool
 
-**Opportunity**: SugarCraft could provide `sugar-spark` as a PHP-native ANSI sequence inspector
+**Opportunity**: SugarCraft could provide `candy-ansi-inspect` as a PHP-native ANSI sequence inspector
 
 **Value**: 804 stars in ~1.5 years indicates real demand; PHP ecosystem has no equivalent
 
@@ -861,7 +861,7 @@ defer ansi.PutParser(p)
 
 ---
 
-### 3. Build ANSI Debugging Tool (`sugar-spark`)
+### 3. Build ANSI Debugging Tool (`candy-ansi-inspect`)
 
 **Impact**: Provides PHP ecosystem with equivalent to Sequin
 

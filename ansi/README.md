@@ -3414,174 +3414,174 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-post-9-tc-s-2.ansi` | 64x15 | truecolor | 32 | courier bicycle at flower-market dawn: spoked wheel above tulip crates, sun sliver on gradient sky |
 <!-- END sugar-post SLOTS -->
 
-<!-- BEGIN sugar-spark SLOTS -->
-### sugar-spark — slot series
+<!-- BEGIN candy-ansi-inspect SLOTS -->
+### candy-ansi-inspect — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `sugar-spark-1-16-l-1.ansi` | 160x34 | 16 | 12 | byte-river delta — blue current meandering with ESC/CSI/OSC/DCS/APC tributaries pouring in, silt rail of hex, fan of channels debouching into view() |
-| `sugar-spark-1-16-l-2.ansi` | 150x36 | 16 | 13 | engineering blueprint plate dissecting ESC [ 3 1 m byte-by-byte in framed cells with leaders, verdict box, sibling-form callouts and block wordmark |
-| `sugar-spark-1-16-m-1.ansi` | 86x18 | 16 | 14 | the inspector at work — bordered TUI, raw hex left pane vs labelled ESC/CSI/OSC/DEC decodes right, family histogram and status bar |
-| `sugar-spark-1-16-m-2.ansi` | 86x24 | 16 | 13 | cursor command center — concentric targeting reticle locked on a green block at 24;80H with CUP, DECSCUSR, DECRQM and erase-zone panels |
-| `sugar-spark-1-16-s-1.ansi` | 68x15 | 16 | 10 | hexdump strata table with an ESC lightning bolt striking into a canyon cut in the byte floor |
-| `sugar-spark-1-16-s-2.ansi` | 68x14 | 16 | 13 | giant ESC keycap leaking a spark into a decoded byte-trace 1B 5B 33 31 6D ending in red text, half-block SUGAR SPARK wordmark |
-| `sugar-spark-1-256-l-1.ansi` | 180x38 | 256 | 30 | circuit city — night skyline whose towers wear signboards like [2J, ?25l and 1049, lit windows on an indexed palette, neon SUGAR SPARK marquee in the sky |
-| `sugar-spark-1-256-l-2.ansi` | 205x31 | 256 | 20 | the great hex scroll — 200-column annotated mural of the greeting stream with ESC cells hot, wordmark rebuilt from its own bytes, annotation rail |
-| `sugar-spark-1-256-m-1.ansi` | 87x19 | 256 | 36 | hex heat wall — 64-byte grid shaded by value luminance with ESC cells blazing magenta, family histogram rail and glowing wordmark |
-| `sugar-spark-1-256-m-2.ansi` | 88x22 | 256 | 55 | a terminal inside the terminal — rounded OSC-2 title window listing SGR/CSI/DEC/kitty decodes beside a blue-gradient divider and hex strip |
-| `sugar-spark-1-256-s-1.ansi` | 68x11 | 256 | 84 | palette watchtower — OSC 4 base-16, colour-cube ramp and grayscale strips above a spark striking through an indexed heat field |
-| `sugar-spark-1-256-s-2.ansi` | 68x9 | 256 | 16 | synchronized loader — warm 196-to-226 gradient progress bars for capture/parse/describe with ?2026h captions and half-block wordmark |
-| `sugar-spark-1-tc-l-1.ansi` | 190x38 | truecolor | 1699 | spectrum river — a full hue cycle flowing bank to bank, deep-to-foam shading, tributary labels and hex silt, delta channels to view() |
-| `sugar-spark-1-tc-l-2.ansi` | 210x41 | truecolor | 4068 | nebula loading screen — starfield and gas blobs behind a pad-mounted SUGAR SPARK title, warm 62% progress bar and byte-ticker readouts |
-| `sugar-spark-1-tc-m-1.ansi` | 86x23 | truecolor | 1839 | aurora SGR field — computed hue curtains over a starfield with drifting protocol tokens and a rainbow half-block title |
-| `sugar-spark-1-tc-m-2.ansi` | 84x24 | truecolor | 492 | thermal x-ray of a blinking cursor block — heat-map gradients with instrument panel reading DECSCUSR, ?25h and peak luminance |
-| `sugar-spark-1-tc-s-1.ansi` | 66x13 | truecolor | 129 | spark burst — truecolor lightning bolt with white-hot core and violet heat halo above the SUGAR SPARK wordmark |
-| `sugar-spark-1-tc-s-2.ansi` | 68x14 | truecolor | 23 | prism — one white 38;2;255;255;255 beam enters, R/G/B fan exits, glass triangle labelled 6D, wordmark beneath |
-| `sugar-spark-10-16-l-1.ansi` | 176x38 | 16 | 5 | fossil prep lab - air-scribing an ammonite from ESC shale under the lamp cone, find tray and prep-notes board |
-| `sugar-spark-10-16-l-2.ansi` | 176x38 | 16 | 6 | vespers rail - nine SGR altar candles snuffed in family order, fading smoke trails, bell snuffer on the middle wick |
-| `sugar-spark-10-16-m-1.ansi` | 86x26 | 16 | 7 | taxidermy case - glass-eyed WILD ESCAPE-BYTE mounted with bracket antlers and stitched legs over a plinth plaque |
-| `sugar-spark-10-16-m-2.ansi` | 86x24 | 16 | 5 | mason's lodge - dressing an ESC lintel on trestles, mallet on the stone face, banker's-mark card and chip pile |
-| `sugar-spark-10-256-l-1.ansi` | 176x38 | 256 | 21 | cobbler's stall - wall of graded lasts, RESOLE YOUR SEQUENCES sign, boot with worn 1B 5B 31 6D tread mid-stitch |
-| `sugar-spark-10-256-l-2.ansi` | 178x40 | 256 | 25 | sail loft - darning a torn CSI canvas on the long table, cross-stitched patches, furled bolts under the roof beams |
-| `sugar-spark-10-256-m-1.ansi` | 84x22 | 256 | 28 | ammonite under the bench lamp - aragonite chambers banded in 256 hues with suture ticks, calipers and brush |
-| `sugar-spark-10-256-m-2.ansi` | 86x24 | 256 | 23 | gallery light on the glass - pendant spot cones and sheen streaks over the arched case, brass WILD ESCAPE-BYTE plaque |
-| `sugar-spark-10-256-s-1.ansi` | 62x16 | 256 | 25 | metal-detect at low tide - coil sweep rings, dug plug with 1B coin, twelve-cell find plot and tone bar |
-| `sugar-spark-10-256-s-2.ansi` | 60x15 | 256 | 19 | glasscutter's pane - diamond cutter scored across a CSI ring-wheel in graded 256 hues, oil drop at the run start |
-| `sugar-spark-10-tc-l-1.ansi` | 190x40 | truecolor | 208 | first-light loft panorama - window shafts across the great sail, rainbow warp threads exposed at the rip, darning run |
-| `sugar-spark-10-tc-l-2.ansi` | 196x42 | truecolor | 177 | Hall III panorama - three arched cases, the ESC mount with bracket antlers under pendant lamps, eel and moth cabinets |
-| `sugar-spark-10-tc-m-1.ansi` | 84x23 | truecolor | 55 | night beach sweep - moon over graded sand, glowing coil arcs fading to shore, patinated 1B coin unplugged |
-| `sugar-spark-10-tc-m-2.ansi` | 84x24 | truecolor | 131 | snuffed rail close-up - one flame still lit, four smoke trails fading into the hall gradient, bell snuffer on the OSC wick |
-| `sugar-spark-10-tc-s-1.ansi` | 58x16 | truecolor | 224 | interference pane - hue-swept ring gradient under a truecolor glint, black score line across the glass |
-| `sugar-spark-10-tc-s-2.ansi` | 60x16 | truecolor | 33 | single sphinx at the lamp - violet-to-amber gradient wings with eye-spot, pin, and dusk-form tag |
-| `sugar-spark-2-16-l-1.ansi` | 157x36 | 16 | 6 | grand finale of five willow-drooping shells over a lit skyline and a double-scale wordmark |
-| `sugar-spark-2-16-l-2.ansi` | 147x32 | 16 | 6 | twelve-keyframe filmstrip of spark growth, burst and fade in bordered cells |
-| `sugar-spark-2-16-m-1.ansi` | 86x22 | 16 | 6 | triple-shell firework night above a blocky neon skyline with the wordmark in the sky |
-| `sugar-spark-2-16-m-2.ansi` | 82x20 | 16 | 6 | five keyframe panels of a bursting spark ring on a bold rail strip |
-| `sugar-spark-2-16-s-1.ansi` | 62x13 | 16 | 5 | lone firework shell scattering willow droop over the block SUGAR SPARK wordmark |
-| `sugar-spark-2-16-s-2.ansi` | 64x13 | 16 | 5 | three-frame fade-out strip of a dying spark with timestamped keyframe panels |
-| `sugar-spark-2-256-l-1.ansi` | 140x34 | 256 | 36 | sparkler wheel with 48 spokes, dotted shock rings and a heat-cool legend rail |
-| `sugar-spark-2-256-l-2.ansi` | 150x30 | 256 | 26 | state morph: cool and warm indexed pools meeting at a turbulent dissolve seam |
-| `sugar-spark-2-256-m-1.ansi` | 88x24 | 256 | 15 | particle fountain of heat-ramp jets arcing from a nozzle into a glowing basin |
-| `sugar-spark-2-256-m-2.ansi` | 79x22 | 256 | 20 | candlelit inspector: indexed glow disc lighting sequin decode lines under the wordmark |
-| `sugar-spark-2-256-m-3.ansi` | 71x19 | 256 | 18 | firefly pulse lattice of glowing dots alternating warm and cool above the wordmark |
-| `sugar-spark-2-256-s-1.ansi` | 62x12 | 256 | 22 | ember glow disc painted as an indexed 48;5 heat ellipse under the wordmark |
-| `sugar-spark-2-256-s-2.ansi` | 66x12 | 256 | 19 | diagonal cool-to-warm dissolve wipe with a dithered seam behind a plated wordmark |
-| `sugar-spark-2-tc-l-1.ansi` | 163x40 | truecolor | 600 | supernova burst with shock rings, ejecta spray and a huge gradient wordmark |
-| `sugar-spark-2-tc-l-2.ansi` | 165x34 | truecolor | 578 | molten transition seam dividing a cold grid from an ember field with rising sparks |
-| `sugar-spark-2-tc-m-1.ansi` | 84x24 | truecolor | 161 | comet with a fading truecolor tail streaking across a layered night gradient |
-| `sugar-spark-2-tc-m-2.ansi` | 88x20 | truecolor | 284 | shimmer interference field of shade-block waves split by a plated wordmark |
-| `sugar-spark-2-tc-s-1.ansi` | 61x11 | truecolor | 95 | white-hot spark dust cluster scattering from a core over a gradient wordmark |
-| `sugar-spark-2-tc-s-2.ansi` | 64x11 | truecolor | 215 | rainbow sine-ribbon shimmer wave beneath a violet wordmark |
-| `sugar-spark-2-tc-s-3.ansi` | 62x10 | truecolor | 93 | truecolor progress bar with a white glint spark popping off the fill edge |
-| `sugar-spark-3-16-l-1.ansi` | 168x28 | 16 | 7 | Grand escavation field map: ten labelled strata, digger crew, find log and legend in 16 colours |
-| `sugar-spark-3-16-l-2.ansi` | 160x29 | 16 | 6 | Engine bay panorama: four cylinders with spark plugs firing on a timed escape sequence |
-| `sugar-spark-3-16-m-1.ansi` | 84x22 | 16 | 6 | Terminal séance: ghost SGR lines rise around a candlelit table with drifting planchette |
-| `sugar-spark-3-16-m-2.ansi` | 72x18 | 16 | 7 | Archaeological trench grid with eight catalogued escape-code finds and field notes |
-| `sugar-spark-3-16-s-1.ansi` | 66x12 | 16 | 6 | Core-sample dig: eight labelled escape strata in 16 colours, fossil blink-shard at 30cm |
-| `sugar-spark-3-256-l-1.ansi` | 170x28 | 256 | 17 | Parlour of ghost outputs: 256-candle séance with spirit board spelling SGR A U Q U E |
-| `sugar-spark-3-256-l-2.ansi` | 184x28 | 256 | 24 | 256 code-city at dusk: lit windows, beacon towers, night bus on the 226 line |
-| `sugar-spark-3-256-m-1.ansi` | 84x21 | 256 | 13 | 38;5 distribution map: SGR substations wired by amber phase buses with flowing packets |
-| `sugar-spark-3-256-m-2.ansi` | 76x18 | 256 | 16 | Output-stream EKG: heartbeat of parsed lines with gradient delta ribbon |
-| `sugar-spark-3-256-s-1.ansi` | 46x9 | 256 | 6 | SGR line pole: glowing 256-amber crossarm, insulators and 38;5 carrier hum |
-| `sugar-spark-3-256-s-2.ansi` | 64x13 | 256 | 17 | Fireflies of living sequence drifting over a dark 256 field with block-grass shore |
-| `sugar-spark-3-tc-l-1.ansi` | 196x40 | truecolor | 885 | Aurora field with starlit sky and lake mirror diffing every ribbon in truecolour |
-| `sugar-spark-3-tc-l-2.ansi` | 188x28 | truecolor | 142 | Diff falls panorama: three waterfalls of +, − and context pouring into the paged pool |
-| `sugar-spark-3-tc-m-1.ansi` | 86x20 | truecolor | 1103 | Living sequence aurora of code glyphs rippling in truecolour with S u g a r S p a rk signature |
-| `sugar-spark-3-tc-m-2.ansi` | 84x22 | truecolor | 39 | Diff waterfall close-up framed: added ribbon glows, removed ribbon rusts into mist |
-| `sugar-spark-3-tc-s-1.ansi` | 58x10 | truecolor | 355 | Truecolour aurora swatch: green-to-violet curtain fading into night static |
-| `sugar-spark-3-tc-s-2.ansi` | 56x14 | truecolor | 35 | Diff drizzle: green + and red − glyphs trickling down through fading context grey |
-| `sugar-spark-4-16-l-1.ansi` | 198x33 | 16 | 9 | candy fair at night: ferris wheel of colour nodes, striped tents, crowd waving sparklers, wordmark banner |
-| `sugar-spark-4-16-l-2.ansi` | 205x36 | 16 | 7 | SGR electrical substation: main bus feeding six breaker halls for basic, indexed and truecolour rails with hazard floor |
-| `sugar-spark-4-16-m-2.ansi` | 84x23 | 16 | 7 | storm of falling escape tokens grounded by a white lightning rod, core bolts with yellow corona |
-| `sugar-spark-4-16-s-1.ansi` | 56x12 | 16 | 8 | first-ESC big-bang: concentric shrapnel rings of 16-colour sparks around a detonating ESC byte |
-| `sugar-spark-4-16-s-2.ansi` | 62x13 | 16 | 8 | matchbox detonation triptych: strike, flash and delta-scatter frames in 16 colours |
-| `sugar-spark-4-256-l-1.ansi` | 212x39 | 256 | 31 | firefly forest panorama: moonlit 256 sky, canopy static, forty glowing frames hovering between trunks |
-| `sugar-spark-4-256-l-2.ansi` | 198x33 | 256 | 23 | inspector console: byte-offset hex rail with colour-coded SGR/OSC/DEC decodes and family histogram |
-| `sugar-spark-4-256-m-1.ansi` | 86x22 | 256 | 18 | sequence storm grounded on a 256-colour rod: white-core bolt, violet corona, indexed token rain |
-| `sugar-spark-4-256-m-2.ansi` | 79x19 | 256 | 25 | 256 forge assay: heat thermometer bar, grayscale anvil, ingot rails of escape families |
-| `sugar-spark-4-256-s-1.ansi` | 53x13 | 256 | 12 | firefly hollow at night: glowing frames drift over dark 256 bands between tree trunks |
-| `sugar-spark-4-256-s-2.ansi` | 60x12 | 256 | 17 | matchbox detonation reduced to its diff: remove/add heat bars and a cooling 256 ramp |
-| `sugar-spark-4-tc-l-1.ansi` | 220x43 | truecolor | 193 | the great forge: brick hall, truecolour firebox, smith striking a delta on the anvil under a spark fountain |
-| `sugar-spark-4-tc-l-2.ansi` | 216x37 | truecolor | 140 | escape-storm night city: violet sky gradient, three grounded bolts, lit windows and mirrored street reflections |
-| `sugar-spark-4-tc-m-1.ansi` | 86x23 | truecolor | 111 | sparkler night at the candy fair: golden logarithmic spark spiral over a violet truecolour gradient |
-| `sugar-spark-4-tc-m-2.ansi` | 84x21 | truecolor | 71 | tesla-coil substation: toroid discharge arcs in violet-white to 38;2 capacitor terminals over a green bus |
-| `sugar-spark-4-tc-s-1.ansi` | 50x13 | truecolor | 69 | plasma big bang of ESC 0x1B: angle-mixed truecolour rings cooling outward to void blue |
-| `sugar-spark-4-tc-s-2.ansi` | 53x11 | truecolor | 22 | matchbox detonation close-up: ignition flame with white core, stricken head and curling smoke gradient |
-| `sugar-spark-5-16-l-1.ansi` | 170x38 | 16 | 7 | celestial escape atlas: bordered star chart, constellations SGR/CSI/OSC/DCS and a compass rose |
-| `sugar-spark-5-16-l-2.ansi` | 180x36 | 16 | 7 | horologist bench: meshing ESC/CSI/SGR/OSC gears, mainspring spiral and an escapement ticker |
-| `sugar-spark-5-16-m-1.ansi` | 86x22 | 16 | 6 | transit map of the protocol: SGR/CSI/OSC/DCS lines with interchange rings and RX/TX stops |
-| `sugar-spark-5-16-m-2.ansi` | 86x22 | 16 | 5 | synoptic surface chart: cold/warm fronts drawn from ESC-drop and CSI-advance, cyclone LOW |
-| `sugar-spark-5-256-l-1.ansi` | 160x30 | 256 | 12 | split-flap departures board of escape sequences: SEQ/DECODE/CLASS/SIGNAL rows with view() delta |
-| `sugar-spark-5-256-l-2.ansi` | 190x44 | 256 | 16 | tall ship at dusk: sails, yards, ratlines and a signal pennant hoist carrying the code flags |
-| `sugar-spark-5-256-m-1.ansi` | 88x24 | 256 | 29 | museum hall of ancient teletypes: three lit cases for ASR-33, VT-05 and a DECwriter |
-| `sugar-spark-5-256-m-2.ansi` | 84x23 | 256 | 11 | catch and decode: bobber lines hooked on tagged SGR/CSI/OSC fish in a 256 pelagic field |
-| `sugar-spark-5-256-s-1.ansi` | 56x12 | 256 | 34 | decoder ring: two indexed dials of family names you can align to read an escape |
-| `sugar-spark-5-256-s-2.ansi` | 64x11 | 256 | 8 | punched 5-level paper tape spelling ESC[31m, sprocket row and hex decode rail |
-| `sugar-spark-5-tc-l-1.ansi` | 200x46 | truecolor | 109 | night observatory: gradient dome, telescope on slit, armillary rings and a shooting star |
-| `sugar-spark-5-tc-l-2.ansi` | 190x44 | truecolor | 62 | sunken galleon: tilted ribs on a sand floor, barnacled escape codes, glowing wreck treasure |
-| `sugar-spark-5-tc-m-1.ansi` | 86x24 | truecolor | 42 | coral reef of frames: truecolour water gradient, coral fans and family fish among bubbles |
-| `sugar-spark-5-tc-m-2.ansi` | 84x23 | truecolor | 26 | formicarium cross-section: carved chambers labelled ESC [ CSI m view() through soil gradient |
-| `sugar-spark-5-tc-s-1.ansi` | 54x14 | truecolor | 43 | lighthouse over a truecolour dusk sea, warm beam rays sweeping from the lantern |
-| `sugar-spark-5-tc-s-2.ansi` | 64x12 | truecolor | 8 | logic-analyzer timing trace of the bytes E S C [ 3 1 m, one glowing channel per symbol |
-| `sugar-spark-6-256-l-1.ansi` | 204x30 | 256 | 18 | dragon boat regatta — rowers stroke to the SGR drum call |
-| `sugar-spark-6-256-l-2.ansi` | 180x33 | 256 | 57 | tapestry loom — warp and weft weaving the SUGAR SPARK band |
-| `sugar-spark-6-256-m-1.ansi` | 88x22 | 256 | 23 | cave section — surveyed escape passage with station table |
-| `sugar-spark-6-256-m-2.ansi` | 88x22 | 256 | 21 | railway switchyard — code wagons humped under colour-bridge signals |
-| `sugar-spark-6-256-s-1.ansi` | 59x14 | 256 | 12 | handheld scope OS-6 — CRT trace of one escape burst, knob bezel |
-| `sugar-spark-6-256-s-2.ansi` | 60x13 | 256 | 21 | letterpress type case — inked sorts assembled into a galley proof |
-| `sugar-spark-6-tc-l-1.ansi` | 204x34 | truecolor | 35 | cave master map — glowing chambers of the escape system |
-| `sugar-spark-6-tc-l-2.ansi` | 182x33 | truecolor | 18 | grand domino cascade — the long fall ending in SPARK tiles |
-| `sugar-spark-6-tc-m-1.ansi` | 81x20 | truecolor | 13 | lockpick kit — pin-tumbler cutaway, depths read as escape params |
-| `sugar-spark-6-tc-m-2.ansi` | 86x22 | truecolor | 12 | marionette stage — codes dance on strings from one ESC bar |
-| `sugar-spark-6-tc-s-1.ansi` | 54x12 | truecolor | 6 | beehive comb — hex cells storing codes as glowing amber nectar |
-| `sugar-spark-6-tc-s-2.ansi` | 60x15 | truecolor | 9 | glasshouse — pitched panes, potted spectrum plants, warm signboard |
-| `sugar-spark-6-tc-s-3.ansi` | 55x15 | truecolor | 11 | stained-glass lancet — leaded 38;2 panels casting light on stone |
-| `sugar-spark-7-16-l-1.ansi` | 176x38 | 16 | 8 | vault room, dial safes by basic color, round GUILD door combo 38-5-256 |
-| `sugar-spark-7-16-l-2.ansi` | 176x38 | 16 | 9 | dawn shoreline, full-width mist net of ringed flocks, station hut signage |
-| `sugar-spark-7-16-s-2.ansi` | 64x12 | 16 | 8 | speakeasy facade — bookshelf wall, glowing seam door, underline club sign |
-| `sugar-spark-7-256-l-1.ansi` | 176x38 | 256 | 18 | wide hadal panorama — four glowing vents, light shafts, plated SUGAR SPARK tag |
-| `sugar-spark-7-256-l-2.ansi` | 176x38 | 256 | 61 | launch through altitude bands, tether trailing CSI telemetry to SPARK-38 |
-| `sugar-spark-7-256-m-1.ansi` | 86x22 | 256 | 8 | rotor bank under lamp glow beside pinned crib pad of SGR meanings |
-| `sugar-spark-7-256-m-2.ansi` | 86x22 | 256 | 16 | bar counter of parameter bottles under blinking neon marquee and equalizer |
-| `sugar-spark-7-256-s-1.ansi` | 64x12 | 256 | 9 | two sequence safes, one sprung open spilling parameter gold, key notch row |
-| `sugar-spark-7-256-s-2.ansi` | 64x12 | 256 | 16 | dawn mist net with ringed birds tagged R-031/R-032, SGR jar shelf |
-| `sugar-spark-7-tc-l-1.ansi` | 176x38 | truecolor | 36 | interior of the hut — chalk crib board, starred window, five-ring rotor bank |
-| `sugar-spark-7-tc-l-2.ansi` | 176x38 | truecolor | 21 | arched hall with huge neon SugarSpark, bottle wall, patrons, hidden bookshelf |
-| `sugar-spark-7-tc-m-1.ansi` | 86x22 | truecolor | 15 | guild safe wall 3x3, one door awash in spilled truecolor gradient stock |
-| `sugar-spark-7-tc-m-2.ansi` | 86x22 | truecolor | 26 | sunrise census at net 03 — three tagged birds, ringing table and ledger |
-| `sugar-spark-7-tc-s-1.ansi` | 64x12 | truecolor | 18 | abyss gradient with twin chimneys venting OSC bubbles and ice particles |
-| `sugar-spark-7-tc-s-2.ansi` | 64x12 | truecolor | 27 | truecolor sky sphere balloon lettered SugarSpark, tethered radio payload |
-| `sugar-spark-8-16-m-1.ansi` | 86x22 | 16 | 9 | parameter loom — coloured warp, shuttle mid-throw, woven SGR cloth |
-| `sugar-spark-8-256-l-1.ansi` | 176x38 | 256 | 31 | dispensary wall — drawer bank of control codes, tincture shelves, counter |
-| `sugar-spark-8-256-l-2.ansi` | 176x38 | 256 | 36 | wide dive log — descent to the ESC wreck, stepped stops, computer readout |
-| `sugar-spark-8-256-m-1.ansi` | 86x22 | 256 | 19 | harmonica recital — graded glass bowls, drive wheel, ivory SGR score |
-| `sugar-spark-8-256-m-2.ansi` | 86x22 | 256 | 26 | organ console — two manuals, pedalboard, stops drawn as 38;5 and 38;2 |
-| `sugar-spark-8-256-s-1.ansi` | 64x12 | 256 | 12 | seismograph strip — three damped bursts of control chars on paper |
-| `sugar-spark-8-256-s-2.ansi` | 64x12 | 256 | 25 | apothecary shelf — four escape tinctures plus one spilled SS vial |
-| `sugar-spark-8-tc-l-1.ansi` | 176x38 | truecolor | 46 | seismic station — drum recorder, four-channel chart, event log of escapes |
-| `sugar-spark-8-tc-l-2.ansi` | 176x38 | truecolor | 334 | great rose window — jewelled rings over stone, light falling to the floor |
-| `sugar-spark-8-tc-m-1.ansi` | 86x22 | truecolor | 34 | spider silk spiral — nested CSI beaded on logarithmic thread with dew |
-| `sugar-spark-8-tc-m-2.ansi` | 86x22 | truecolor | 120 | barometer station — aneroid dial at CHANGE, mercury yielding to 0x1B |
-| `sugar-spark-8-tc-s-1.ansi` | 64x12 | truecolor | 22 | rose window cameo — eight glass petals around an ESC boss |
-| `sugar-spark-8-tc-s-2.ansi` | 64x12 | truecolor | 18 | music-box cylinder — brass pins plucking a steel comb of SGR notes |
-| `sugar-spark-9-16-l-1.ansi` | 176x38 | 16 | 11 | knight-tour walkthrough of an 8x8 byte grid with an offset move table |
-| `sugar-spark-9-16-l-2.ansi` | 180x36 | 16 | 8 | postal sorting floor of envelopes stamped by opcode into colour-coded racks |
-| `sugar-spark-9-16-m-1.ansi` | 86x22 | 16 | 8 | surveyor's theodolite reading angle-of-escape on a graduated protractor |
-| `sugar-spark-9-16-m-2.ansi` | 84x23 | 16 | 8 | ship's engine-room telegraph dial with orders painted as escape tokens |
-| `sugar-spark-9-16-s-1.ansi` | 64x13 | 16 | 8 | wind-sock cone fanning ESC/CSI/OSC/SGR/DEC hoops as a gust decodes |
-| `sugar-spark-9-256-l-1.ansi` | 178x40 | 256 | 42 | hall of mirrors refracting one ESC byte into fanning family rays |
-| `sugar-spark-9-256-l-2.ansi` | 176x38 | 256 | 41 | surveyor's cartouche framing decoded symbol plates around a compass rose |
-| `sugar-spark-9-256-m-1.ansi` | 86x22 | 256 | 26 | ice-palace throne room with icicles and SGR sequences frozen in blocks |
-| `sugar-spark-9-256-m-2.ansi` | 88x24 | 256 | 23 | diving bell lowered on a cable, portholes showing 1B/5B/6D at depth |
-| `sugar-spark-9-256-s-1.ansi` | 64x12 | 256 | 16 | fixed-rope line on a rock wall, numbered pitons marking byte offsets |
-| `sugar-spark-9-256-s-2.ansi` | 62x14 | 256 | 40 | sign-painter's board rendering SGR as pinstroked gradient lettering |
-| `sugar-spark-9-tc-l-1.ansi` | 190x40 | truecolor | 44 | totem pole of carved escape-family masks with wings and a baseline plinth |
-| `sugar-spark-9-tc-l-2.ansi` | 184x36 | truecolor | 38 | hedge-maze labyrinth threading a highlighted solution past family checkpoints |
-| `sugar-spark-9-tc-m-1.ansi` | 86x23 | truecolor | 29 | paper-chase orienteering course punching escape tokens at each control |
-| `sugar-spark-9-tc-m-2.ansi` | 84x22 | truecolor | 52 | carousel of decoded animals, each pole carrying an escape family |
-| `sugar-spark-9-tc-s-1.ansi` | 60x13 | truecolor | 29 | fairground helter-skelter spiralling a token down through CSI decode |
-| `sugar-spark-9-tc-s-2.ansi` | 62x14 | truecolor | 21 | quarry face cutting labelled escape-strata into graded blocks |
-<!-- END sugar-spark SLOTS -->
+| `candy-ansi-inspect-1-16-l-1.ansi` | 160x34 | 16 | 12 | byte-river delta — blue current meandering with ESC/CSI/OSC/DCS/APC tributaries pouring in, silt rail of hex, fan of channels debouching into view() |
+| `candy-ansi-inspect-1-16-l-2.ansi` | 150x36 | 16 | 13 | engineering blueprint plate dissecting ESC [ 3 1 m byte-by-byte in framed cells with leaders, verdict box, sibling-form callouts and block wordmark |
+| `candy-ansi-inspect-1-16-m-1.ansi` | 86x18 | 16 | 14 | the inspector at work — bordered TUI, raw hex left pane vs labelled ESC/CSI/OSC/DEC decodes right, family histogram and status bar |
+| `candy-ansi-inspect-1-16-m-2.ansi` | 86x24 | 16 | 13 | cursor command center — concentric targeting reticle locked on a green block at 24;80H with CUP, DECSCUSR, DECRQM and erase-zone panels |
+| `candy-ansi-inspect-1-16-s-1.ansi` | 68x15 | 16 | 10 | hexdump strata table with an ESC lightning bolt striking into a canyon cut in the byte floor |
+| `candy-ansi-inspect-1-16-s-2.ansi` | 68x14 | 16 | 13 | giant ESC keycap leaking a spark into a decoded byte-trace 1B 5B 33 31 6D ending in red text, half-block SUGAR SPARK wordmark |
+| `candy-ansi-inspect-1-256-l-1.ansi` | 180x38 | 256 | 30 | circuit city — night skyline whose towers wear signboards like [2J, ?25l and 1049, lit windows on an indexed palette, neon SUGAR SPARK marquee in the sky |
+| `candy-ansi-inspect-1-256-l-2.ansi` | 205x31 | 256 | 20 | the great hex scroll — 200-column annotated mural of the greeting stream with ESC cells hot, wordmark rebuilt from its own bytes, annotation rail |
+| `candy-ansi-inspect-1-256-m-1.ansi` | 87x19 | 256 | 36 | hex heat wall — 64-byte grid shaded by value luminance with ESC cells blazing magenta, family histogram rail and glowing wordmark |
+| `candy-ansi-inspect-1-256-m-2.ansi` | 88x22 | 256 | 55 | a terminal inside the terminal — rounded OSC-2 title window listing SGR/CSI/DEC/kitty decodes beside a blue-gradient divider and hex strip |
+| `candy-ansi-inspect-1-256-s-1.ansi` | 68x11 | 256 | 84 | palette watchtower — OSC 4 base-16, colour-cube ramp and grayscale strips above a spark striking through an indexed heat field |
+| `candy-ansi-inspect-1-256-s-2.ansi` | 68x9 | 256 | 16 | synchronized loader — warm 196-to-226 gradient progress bars for capture/parse/describe with ?2026h captions and half-block wordmark |
+| `candy-ansi-inspect-1-tc-l-1.ansi` | 190x38 | truecolor | 1699 | spectrum river — a full hue cycle flowing bank to bank, deep-to-foam shading, tributary labels and hex silt, delta channels to view() |
+| `candy-ansi-inspect-1-tc-l-2.ansi` | 210x41 | truecolor | 4068 | nebula loading screen — starfield and gas blobs behind a pad-mounted SUGAR SPARK title, warm 62% progress bar and byte-ticker readouts |
+| `candy-ansi-inspect-1-tc-m-1.ansi` | 86x23 | truecolor | 1839 | aurora SGR field — computed hue curtains over a starfield with drifting protocol tokens and a rainbow half-block title |
+| `candy-ansi-inspect-1-tc-m-2.ansi` | 84x24 | truecolor | 492 | thermal x-ray of a blinking cursor block — heat-map gradients with instrument panel reading DECSCUSR, ?25h and peak luminance |
+| `candy-ansi-inspect-1-tc-s-1.ansi` | 66x13 | truecolor | 129 | spark burst — truecolor lightning bolt with white-hot core and violet heat halo above the SUGAR SPARK wordmark |
+| `candy-ansi-inspect-1-tc-s-2.ansi` | 68x14 | truecolor | 23 | prism — one white 38;2;255;255;255 beam enters, R/G/B fan exits, glass triangle labelled 6D, wordmark beneath |
+| `candy-ansi-inspect-10-16-l-1.ansi` | 176x38 | 16 | 5 | fossil prep lab - air-scribing an ammonite from ESC shale under the lamp cone, find tray and prep-notes board |
+| `candy-ansi-inspect-10-16-l-2.ansi` | 176x38 | 16 | 6 | vespers rail - nine SGR altar candles snuffed in family order, fading smoke trails, bell snuffer on the middle wick |
+| `candy-ansi-inspect-10-16-m-1.ansi` | 86x26 | 16 | 7 | taxidermy case - glass-eyed WILD ESCAPE-BYTE mounted with bracket antlers and stitched legs over a plinth plaque |
+| `candy-ansi-inspect-10-16-m-2.ansi` | 86x24 | 16 | 5 | mason's lodge - dressing an ESC lintel on trestles, mallet on the stone face, banker's-mark card and chip pile |
+| `candy-ansi-inspect-10-256-l-1.ansi` | 176x38 | 256 | 21 | cobbler's stall - wall of graded lasts, RESOLE YOUR SEQUENCES sign, boot with worn 1B 5B 31 6D tread mid-stitch |
+| `candy-ansi-inspect-10-256-l-2.ansi` | 178x40 | 256 | 25 | sail loft - darning a torn CSI canvas on the long table, cross-stitched patches, furled bolts under the roof beams |
+| `candy-ansi-inspect-10-256-m-1.ansi` | 84x22 | 256 | 28 | ammonite under the bench lamp - aragonite chambers banded in 256 hues with suture ticks, calipers and brush |
+| `candy-ansi-inspect-10-256-m-2.ansi` | 86x24 | 256 | 23 | gallery light on the glass - pendant spot cones and sheen streaks over the arched case, brass WILD ESCAPE-BYTE plaque |
+| `candy-ansi-inspect-10-256-s-1.ansi` | 62x16 | 256 | 25 | metal-detect at low tide - coil sweep rings, dug plug with 1B coin, twelve-cell find plot and tone bar |
+| `candy-ansi-inspect-10-256-s-2.ansi` | 60x15 | 256 | 19 | glasscutter's pane - diamond cutter scored across a CSI ring-wheel in graded 256 hues, oil drop at the run start |
+| `candy-ansi-inspect-10-tc-l-1.ansi` | 190x40 | truecolor | 208 | first-light loft panorama - window shafts across the great sail, rainbow warp threads exposed at the rip, darning run |
+| `candy-ansi-inspect-10-tc-l-2.ansi` | 196x42 | truecolor | 177 | Hall III panorama - three arched cases, the ESC mount with bracket antlers under pendant lamps, eel and moth cabinets |
+| `candy-ansi-inspect-10-tc-m-1.ansi` | 84x23 | truecolor | 55 | night beach sweep - moon over graded sand, glowing coil arcs fading to shore, patinated 1B coin unplugged |
+| `candy-ansi-inspect-10-tc-m-2.ansi` | 84x24 | truecolor | 131 | snuffed rail close-up - one flame still lit, four smoke trails fading into the hall gradient, bell snuffer on the OSC wick |
+| `candy-ansi-inspect-10-tc-s-1.ansi` | 58x16 | truecolor | 224 | interference pane - hue-swept ring gradient under a truecolor glint, black score line across the glass |
+| `candy-ansi-inspect-10-tc-s-2.ansi` | 60x16 | truecolor | 33 | single sphinx at the lamp - violet-to-amber gradient wings with eye-spot, pin, and dusk-form tag |
+| `candy-ansi-inspect-2-16-l-1.ansi` | 157x36 | 16 | 6 | grand finale of five willow-drooping shells over a lit skyline and a double-scale wordmark |
+| `candy-ansi-inspect-2-16-l-2.ansi` | 147x32 | 16 | 6 | twelve-keyframe filmstrip of spark growth, burst and fade in bordered cells |
+| `candy-ansi-inspect-2-16-m-1.ansi` | 86x22 | 16 | 6 | triple-shell firework night above a blocky neon skyline with the wordmark in the sky |
+| `candy-ansi-inspect-2-16-m-2.ansi` | 82x20 | 16 | 6 | five keyframe panels of a bursting spark ring on a bold rail strip |
+| `candy-ansi-inspect-2-16-s-1.ansi` | 62x13 | 16 | 5 | lone firework shell scattering willow droop over the block SUGAR SPARK wordmark |
+| `candy-ansi-inspect-2-16-s-2.ansi` | 64x13 | 16 | 5 | three-frame fade-out strip of a dying spark with timestamped keyframe panels |
+| `candy-ansi-inspect-2-256-l-1.ansi` | 140x34 | 256 | 36 | sparkler wheel with 48 spokes, dotted shock rings and a heat-cool legend rail |
+| `candy-ansi-inspect-2-256-l-2.ansi` | 150x30 | 256 | 26 | state morph: cool and warm indexed pools meeting at a turbulent dissolve seam |
+| `candy-ansi-inspect-2-256-m-1.ansi` | 88x24 | 256 | 15 | particle fountain of heat-ramp jets arcing from a nozzle into a glowing basin |
+| `candy-ansi-inspect-2-256-m-2.ansi` | 79x22 | 256 | 20 | candlelit inspector: indexed glow disc lighting sequin decode lines under the wordmark |
+| `candy-ansi-inspect-2-256-m-3.ansi` | 71x19 | 256 | 18 | firefly pulse lattice of glowing dots alternating warm and cool above the wordmark |
+| `candy-ansi-inspect-2-256-s-1.ansi` | 62x12 | 256 | 22 | ember glow disc painted as an indexed 48;5 heat ellipse under the wordmark |
+| `candy-ansi-inspect-2-256-s-2.ansi` | 66x12 | 256 | 19 | diagonal cool-to-warm dissolve wipe with a dithered seam behind a plated wordmark |
+| `candy-ansi-inspect-2-tc-l-1.ansi` | 163x40 | truecolor | 600 | supernova burst with shock rings, ejecta spray and a huge gradient wordmark |
+| `candy-ansi-inspect-2-tc-l-2.ansi` | 165x34 | truecolor | 578 | molten transition seam dividing a cold grid from an ember field with rising sparks |
+| `candy-ansi-inspect-2-tc-m-1.ansi` | 84x24 | truecolor | 161 | comet with a fading truecolor tail streaking across a layered night gradient |
+| `candy-ansi-inspect-2-tc-m-2.ansi` | 88x20 | truecolor | 284 | shimmer interference field of shade-block waves split by a plated wordmark |
+| `candy-ansi-inspect-2-tc-s-1.ansi` | 61x11 | truecolor | 95 | white-hot spark dust cluster scattering from a core over a gradient wordmark |
+| `candy-ansi-inspect-2-tc-s-2.ansi` | 64x11 | truecolor | 215 | rainbow sine-ribbon shimmer wave beneath a violet wordmark |
+| `candy-ansi-inspect-2-tc-s-3.ansi` | 62x10 | truecolor | 93 | truecolor progress bar with a white glint spark popping off the fill edge |
+| `candy-ansi-inspect-3-16-l-1.ansi` | 168x28 | 16 | 7 | Grand escavation field map: ten labelled strata, digger crew, find log and legend in 16 colours |
+| `candy-ansi-inspect-3-16-l-2.ansi` | 160x29 | 16 | 6 | Engine bay panorama: four cylinders with spark plugs firing on a timed escape sequence |
+| `candy-ansi-inspect-3-16-m-1.ansi` | 84x22 | 16 | 6 | Terminal séance: ghost SGR lines rise around a candlelit table with drifting planchette |
+| `candy-ansi-inspect-3-16-m-2.ansi` | 72x18 | 16 | 7 | Archaeological trench grid with eight catalogued escape-code finds and field notes |
+| `candy-ansi-inspect-3-16-s-1.ansi` | 66x12 | 16 | 6 | Core-sample dig: eight labelled escape strata in 16 colours, fossil blink-shard at 30cm |
+| `candy-ansi-inspect-3-256-l-1.ansi` | 170x28 | 256 | 17 | Parlour of ghost outputs: 256-candle séance with spirit board spelling SGR A U Q U E |
+| `candy-ansi-inspect-3-256-l-2.ansi` | 184x28 | 256 | 24 | 256 code-city at dusk: lit windows, beacon towers, night bus on the 226 line |
+| `candy-ansi-inspect-3-256-m-1.ansi` | 84x21 | 256 | 13 | 38;5 distribution map: SGR substations wired by amber phase buses with flowing packets |
+| `candy-ansi-inspect-3-256-m-2.ansi` | 76x18 | 256 | 16 | Output-stream EKG: heartbeat of parsed lines with gradient delta ribbon |
+| `candy-ansi-inspect-3-256-s-1.ansi` | 46x9 | 256 | 6 | SGR line pole: glowing 256-amber crossarm, insulators and 38;5 carrier hum |
+| `candy-ansi-inspect-3-256-s-2.ansi` | 64x13 | 256 | 17 | Fireflies of living sequence drifting over a dark 256 field with block-grass shore |
+| `candy-ansi-inspect-3-tc-l-1.ansi` | 196x40 | truecolor | 885 | Aurora field with starlit sky and lake mirror diffing every ribbon in truecolour |
+| `candy-ansi-inspect-3-tc-l-2.ansi` | 188x28 | truecolor | 142 | Diff falls panorama: three waterfalls of +, − and context pouring into the paged pool |
+| `candy-ansi-inspect-3-tc-m-1.ansi` | 86x20 | truecolor | 1103 | Living sequence aurora of code glyphs rippling in truecolour with S u g a r S p a rk signature |
+| `candy-ansi-inspect-3-tc-m-2.ansi` | 84x22 | truecolor | 39 | Diff waterfall close-up framed: added ribbon glows, removed ribbon rusts into mist |
+| `candy-ansi-inspect-3-tc-s-1.ansi` | 58x10 | truecolor | 355 | Truecolour aurora swatch: green-to-violet curtain fading into night static |
+| `candy-ansi-inspect-3-tc-s-2.ansi` | 56x14 | truecolor | 35 | Diff drizzle: green + and red − glyphs trickling down through fading context grey |
+| `candy-ansi-inspect-4-16-l-1.ansi` | 198x33 | 16 | 9 | candy fair at night: ferris wheel of colour nodes, striped tents, crowd waving sparklers, wordmark banner |
+| `candy-ansi-inspect-4-16-l-2.ansi` | 205x36 | 16 | 7 | SGR electrical substation: main bus feeding six breaker halls for basic, indexed and truecolour rails with hazard floor |
+| `candy-ansi-inspect-4-16-m-2.ansi` | 84x23 | 16 | 7 | storm of falling escape tokens grounded by a white lightning rod, core bolts with yellow corona |
+| `candy-ansi-inspect-4-16-s-1.ansi` | 56x12 | 16 | 8 | first-ESC big-bang: concentric shrapnel rings of 16-colour sparks around a detonating ESC byte |
+| `candy-ansi-inspect-4-16-s-2.ansi` | 62x13 | 16 | 8 | matchbox detonation triptych: strike, flash and delta-scatter frames in 16 colours |
+| `candy-ansi-inspect-4-256-l-1.ansi` | 212x39 | 256 | 31 | firefly forest panorama: moonlit 256 sky, canopy static, forty glowing frames hovering between trunks |
+| `candy-ansi-inspect-4-256-l-2.ansi` | 198x33 | 256 | 23 | inspector console: byte-offset hex rail with colour-coded SGR/OSC/DEC decodes and family histogram |
+| `candy-ansi-inspect-4-256-m-1.ansi` | 86x22 | 256 | 18 | sequence storm grounded on a 256-colour rod: white-core bolt, violet corona, indexed token rain |
+| `candy-ansi-inspect-4-256-m-2.ansi` | 79x19 | 256 | 25 | 256 forge assay: heat thermometer bar, grayscale anvil, ingot rails of escape families |
+| `candy-ansi-inspect-4-256-s-1.ansi` | 53x13 | 256 | 12 | firefly hollow at night: glowing frames drift over dark 256 bands between tree trunks |
+| `candy-ansi-inspect-4-256-s-2.ansi` | 60x12 | 256 | 17 | matchbox detonation reduced to its diff: remove/add heat bars and a cooling 256 ramp |
+| `candy-ansi-inspect-4-tc-l-1.ansi` | 220x43 | truecolor | 193 | the great forge: brick hall, truecolour firebox, smith striking a delta on the anvil under a spark fountain |
+| `candy-ansi-inspect-4-tc-l-2.ansi` | 216x37 | truecolor | 140 | escape-storm night city: violet sky gradient, three grounded bolts, lit windows and mirrored street reflections |
+| `candy-ansi-inspect-4-tc-m-1.ansi` | 86x23 | truecolor | 111 | sparkler night at the candy fair: golden logarithmic spark spiral over a violet truecolour gradient |
+| `candy-ansi-inspect-4-tc-m-2.ansi` | 84x21 | truecolor | 71 | tesla-coil substation: toroid discharge arcs in violet-white to 38;2 capacitor terminals over a green bus |
+| `candy-ansi-inspect-4-tc-s-1.ansi` | 50x13 | truecolor | 69 | plasma big bang of ESC 0x1B: angle-mixed truecolour rings cooling outward to void blue |
+| `candy-ansi-inspect-4-tc-s-2.ansi` | 53x11 | truecolor | 22 | matchbox detonation close-up: ignition flame with white core, stricken head and curling smoke gradient |
+| `candy-ansi-inspect-5-16-l-1.ansi` | 170x38 | 16 | 7 | celestial escape atlas: bordered star chart, constellations SGR/CSI/OSC/DCS and a compass rose |
+| `candy-ansi-inspect-5-16-l-2.ansi` | 180x36 | 16 | 7 | horologist bench: meshing ESC/CSI/SGR/OSC gears, mainspring spiral and an escapement ticker |
+| `candy-ansi-inspect-5-16-m-1.ansi` | 86x22 | 16 | 6 | transit map of the protocol: SGR/CSI/OSC/DCS lines with interchange rings and RX/TX stops |
+| `candy-ansi-inspect-5-16-m-2.ansi` | 86x22 | 16 | 5 | synoptic surface chart: cold/warm fronts drawn from ESC-drop and CSI-advance, cyclone LOW |
+| `candy-ansi-inspect-5-256-l-1.ansi` | 160x30 | 256 | 12 | split-flap departures board of escape sequences: SEQ/DECODE/CLASS/SIGNAL rows with view() delta |
+| `candy-ansi-inspect-5-256-l-2.ansi` | 190x44 | 256 | 16 | tall ship at dusk: sails, yards, ratlines and a signal pennant hoist carrying the code flags |
+| `candy-ansi-inspect-5-256-m-1.ansi` | 88x24 | 256 | 29 | museum hall of ancient teletypes: three lit cases for ASR-33, VT-05 and a DECwriter |
+| `candy-ansi-inspect-5-256-m-2.ansi` | 84x23 | 256 | 11 | catch and decode: bobber lines hooked on tagged SGR/CSI/OSC fish in a 256 pelagic field |
+| `candy-ansi-inspect-5-256-s-1.ansi` | 56x12 | 256 | 34 | decoder ring: two indexed dials of family names you can align to read an escape |
+| `candy-ansi-inspect-5-256-s-2.ansi` | 64x11 | 256 | 8 | punched 5-level paper tape spelling ESC[31m, sprocket row and hex decode rail |
+| `candy-ansi-inspect-5-tc-l-1.ansi` | 200x46 | truecolor | 109 | night observatory: gradient dome, telescope on slit, armillary rings and a shooting star |
+| `candy-ansi-inspect-5-tc-l-2.ansi` | 190x44 | truecolor | 62 | sunken galleon: tilted ribs on a sand floor, barnacled escape codes, glowing wreck treasure |
+| `candy-ansi-inspect-5-tc-m-1.ansi` | 86x24 | truecolor | 42 | coral reef of frames: truecolour water gradient, coral fans and family fish among bubbles |
+| `candy-ansi-inspect-5-tc-m-2.ansi` | 84x23 | truecolor | 26 | formicarium cross-section: carved chambers labelled ESC [ CSI m view() through soil gradient |
+| `candy-ansi-inspect-5-tc-s-1.ansi` | 54x14 | truecolor | 43 | lighthouse over a truecolour dusk sea, warm beam rays sweeping from the lantern |
+| `candy-ansi-inspect-5-tc-s-2.ansi` | 64x12 | truecolor | 8 | logic-analyzer timing trace of the bytes E S C [ 3 1 m, one glowing channel per symbol |
+| `candy-ansi-inspect-6-256-l-1.ansi` | 204x30 | 256 | 18 | dragon boat regatta — rowers stroke to the SGR drum call |
+| `candy-ansi-inspect-6-256-l-2.ansi` | 180x33 | 256 | 57 | tapestry loom — warp and weft weaving the SUGAR SPARK band |
+| `candy-ansi-inspect-6-256-m-1.ansi` | 88x22 | 256 | 23 | cave section — surveyed escape passage with station table |
+| `candy-ansi-inspect-6-256-m-2.ansi` | 88x22 | 256 | 21 | railway switchyard — code wagons humped under colour-bridge signals |
+| `candy-ansi-inspect-6-256-s-1.ansi` | 59x14 | 256 | 12 | handheld scope OS-6 — CRT trace of one escape burst, knob bezel |
+| `candy-ansi-inspect-6-256-s-2.ansi` | 60x13 | 256 | 21 | letterpress type case — inked sorts assembled into a galley proof |
+| `candy-ansi-inspect-6-tc-l-1.ansi` | 204x34 | truecolor | 35 | cave master map — glowing chambers of the escape system |
+| `candy-ansi-inspect-6-tc-l-2.ansi` | 182x33 | truecolor | 18 | grand domino cascade — the long fall ending in SPARK tiles |
+| `candy-ansi-inspect-6-tc-m-1.ansi` | 81x20 | truecolor | 13 | lockpick kit — pin-tumbler cutaway, depths read as escape params |
+| `candy-ansi-inspect-6-tc-m-2.ansi` | 86x22 | truecolor | 12 | marionette stage — codes dance on strings from one ESC bar |
+| `candy-ansi-inspect-6-tc-s-1.ansi` | 54x12 | truecolor | 6 | beehive comb — hex cells storing codes as glowing amber nectar |
+| `candy-ansi-inspect-6-tc-s-2.ansi` | 60x15 | truecolor | 9 | glasshouse — pitched panes, potted spectrum plants, warm signboard |
+| `candy-ansi-inspect-6-tc-s-3.ansi` | 55x15 | truecolor | 11 | stained-glass lancet — leaded 38;2 panels casting light on stone |
+| `candy-ansi-inspect-7-16-l-1.ansi` | 176x38 | 16 | 8 | vault room, dial safes by basic color, round GUILD door combo 38-5-256 |
+| `candy-ansi-inspect-7-16-l-2.ansi` | 176x38 | 16 | 9 | dawn shoreline, full-width mist net of ringed flocks, station hut signage |
+| `candy-ansi-inspect-7-16-s-2.ansi` | 64x12 | 16 | 8 | speakeasy facade — bookshelf wall, glowing seam door, underline club sign |
+| `candy-ansi-inspect-7-256-l-1.ansi` | 176x38 | 256 | 18 | wide hadal panorama — four glowing vents, light shafts, plated SUGAR SPARK tag |
+| `candy-ansi-inspect-7-256-l-2.ansi` | 176x38 | 256 | 61 | launch through altitude bands, tether trailing CSI telemetry to SPARK-38 |
+| `candy-ansi-inspect-7-256-m-1.ansi` | 86x22 | 256 | 8 | rotor bank under lamp glow beside pinned crib pad of SGR meanings |
+| `candy-ansi-inspect-7-256-m-2.ansi` | 86x22 | 256 | 16 | bar counter of parameter bottles under blinking neon marquee and equalizer |
+| `candy-ansi-inspect-7-256-s-1.ansi` | 64x12 | 256 | 9 | two sequence safes, one sprung open spilling parameter gold, key notch row |
+| `candy-ansi-inspect-7-256-s-2.ansi` | 64x12 | 256 | 16 | dawn mist net with ringed birds tagged R-031/R-032, SGR jar shelf |
+| `candy-ansi-inspect-7-tc-l-1.ansi` | 176x38 | truecolor | 36 | interior of the hut — chalk crib board, starred window, five-ring rotor bank |
+| `candy-ansi-inspect-7-tc-l-2.ansi` | 176x38 | truecolor | 21 | arched hall with huge neon CandyAnsiInspect, bottle wall, patrons, hidden bookshelf |
+| `candy-ansi-inspect-7-tc-m-1.ansi` | 86x22 | truecolor | 15 | guild safe wall 3x3, one door awash in spilled truecolor gradient stock |
+| `candy-ansi-inspect-7-tc-m-2.ansi` | 86x22 | truecolor | 26 | sunrise census at net 03 — three tagged birds, ringing table and ledger |
+| `candy-ansi-inspect-7-tc-s-1.ansi` | 64x12 | truecolor | 18 | abyss gradient with twin chimneys venting OSC bubbles and ice particles |
+| `candy-ansi-inspect-7-tc-s-2.ansi` | 64x12 | truecolor | 27 | truecolor sky sphere balloon lettered CandyAnsiInspect, tethered radio payload |
+| `candy-ansi-inspect-8-16-m-1.ansi` | 86x22 | 16 | 9 | parameter loom — coloured warp, shuttle mid-throw, woven SGR cloth |
+| `candy-ansi-inspect-8-256-l-1.ansi` | 176x38 | 256 | 31 | dispensary wall — drawer bank of control codes, tincture shelves, counter |
+| `candy-ansi-inspect-8-256-l-2.ansi` | 176x38 | 256 | 36 | wide dive log — descent to the ESC wreck, stepped stops, computer readout |
+| `candy-ansi-inspect-8-256-m-1.ansi` | 86x22 | 256 | 19 | harmonica recital — graded glass bowls, drive wheel, ivory SGR score |
+| `candy-ansi-inspect-8-256-m-2.ansi` | 86x22 | 256 | 26 | organ console — two manuals, pedalboard, stops drawn as 38;5 and 38;2 |
+| `candy-ansi-inspect-8-256-s-1.ansi` | 64x12 | 256 | 12 | seismograph strip — three damped bursts of control chars on paper |
+| `candy-ansi-inspect-8-256-s-2.ansi` | 64x12 | 256 | 25 | apothecary shelf — four escape tinctures plus one spilled SS vial |
+| `candy-ansi-inspect-8-tc-l-1.ansi` | 176x38 | truecolor | 46 | seismic station — drum recorder, four-channel chart, event log of escapes |
+| `candy-ansi-inspect-8-tc-l-2.ansi` | 176x38 | truecolor | 334 | great rose window — jewelled rings over stone, light falling to the floor |
+| `candy-ansi-inspect-8-tc-m-1.ansi` | 86x22 | truecolor | 34 | spider silk spiral — nested CSI beaded on logarithmic thread with dew |
+| `candy-ansi-inspect-8-tc-m-2.ansi` | 86x22 | truecolor | 120 | barometer station — aneroid dial at CHANGE, mercury yielding to 0x1B |
+| `candy-ansi-inspect-8-tc-s-1.ansi` | 64x12 | truecolor | 22 | rose window cameo — eight glass petals around an ESC boss |
+| `candy-ansi-inspect-8-tc-s-2.ansi` | 64x12 | truecolor | 18 | music-box cylinder — brass pins plucking a steel comb of SGR notes |
+| `candy-ansi-inspect-9-16-l-1.ansi` | 176x38 | 16 | 11 | knight-tour walkthrough of an 8x8 byte grid with an offset move table |
+| `candy-ansi-inspect-9-16-l-2.ansi` | 180x36 | 16 | 8 | postal sorting floor of envelopes stamped by opcode into colour-coded racks |
+| `candy-ansi-inspect-9-16-m-1.ansi` | 86x22 | 16 | 8 | surveyor's theodolite reading angle-of-escape on a graduated protractor |
+| `candy-ansi-inspect-9-16-m-2.ansi` | 84x23 | 16 | 8 | ship's engine-room telegraph dial with orders painted as escape tokens |
+| `candy-ansi-inspect-9-16-s-1.ansi` | 64x13 | 16 | 8 | wind-sock cone fanning ESC/CSI/OSC/SGR/DEC hoops as a gust decodes |
+| `candy-ansi-inspect-9-256-l-1.ansi` | 178x40 | 256 | 42 | hall of mirrors refracting one ESC byte into fanning family rays |
+| `candy-ansi-inspect-9-256-l-2.ansi` | 176x38 | 256 | 41 | surveyor's cartouche framing decoded symbol plates around a compass rose |
+| `candy-ansi-inspect-9-256-m-1.ansi` | 86x22 | 256 | 26 | ice-palace throne room with icicles and SGR sequences frozen in blocks |
+| `candy-ansi-inspect-9-256-m-2.ansi` | 88x24 | 256 | 23 | diving bell lowered on a cable, portholes showing 1B/5B/6D at depth |
+| `candy-ansi-inspect-9-256-s-1.ansi` | 64x12 | 256 | 16 | fixed-rope line on a rock wall, numbered pitons marking byte offsets |
+| `candy-ansi-inspect-9-256-s-2.ansi` | 62x14 | 256 | 40 | sign-painter's board rendering SGR as pinstroked gradient lettering |
+| `candy-ansi-inspect-9-tc-l-1.ansi` | 190x40 | truecolor | 44 | totem pole of carved escape-family masks with wings and a baseline plinth |
+| `candy-ansi-inspect-9-tc-l-2.ansi` | 184x36 | truecolor | 38 | hedge-maze labyrinth threading a highlighted solution past family checkpoints |
+| `candy-ansi-inspect-9-tc-m-1.ansi` | 86x23 | truecolor | 29 | paper-chase orienteering course punching escape tokens at each control |
+| `candy-ansi-inspect-9-tc-m-2.ansi` | 84x22 | truecolor | 52 | carousel of decoded animals, each pole carrying an escape family |
+| `candy-ansi-inspect-9-tc-s-1.ansi` | 60x13 | truecolor | 29 | fairground helter-skelter spiralling a token down through CSI decode |
+| `candy-ansi-inspect-9-tc-s-2.ansi` | 62x14 | truecolor | 21 | quarry face cutting labelled escape-strata into graded blocks |
+<!-- END candy-ansi-inspect SLOTS -->
 
 <!-- BEGIN sugar-table SLOTS -->
 ### sugar-table — slot series

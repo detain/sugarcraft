@@ -497,7 +497,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Undo/redo (MEDIUM).
 - Syntax highlighting (LOW).
 
-### sugar-spark
+### candy-ansi-inspect
 
 - C0/C1 control-code descriptions in Inspector output (§5 P1).
 - SGR underline-style variants 4:1–4:5 (§5 P2).

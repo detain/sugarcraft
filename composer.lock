@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "aade7745da5932530654a47f6564603d",
+    "content-hash": "7981531de68faa8ce97762f2bf6a7149",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3433,6 +3433,68 @@
             }
         },
         {
+            "name": "sugarcraft/candy-ansi-inspect",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-ansi-inspect",
+                "reference": "e311d971c13fbdaa9fcef4b341513a5436fd5f08"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "bin": [
+                "bin/candy-ansi-inspect"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\AnsiInspect\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\AnsiInspect\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ANSI escape-sequence inspector — decodes SGR / CSI / OSC / DCS / APC / SS3 sequences into human-readable labels, modeled on the charmbracelet/sequin Go tool.",
+            "homepage": "https://github.com/sugarcraft/candy-ansi-inspect",
+            "keywords": [
+                "ansi",
+                "debug",
+                "escape",
+                "inspector",
+                "sequin",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-ansi-inspect/issues",
+                "source": "https://github.com/sugarcraft/candy-ansi-inspect",
+                "docs": "https://sugarcraft.github.io/lib/candy-ansi-inspect.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-async",
             "version": "dev-master",
             "dist": {
@@ -6824,68 +6886,6 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-spark",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-spark",
-                "reference": "8fb0cbd3086dd7270ceb876ea480136128a86d50"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "bin": [
-                "bin/sugarspark"
-            ],
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Spark\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Spark\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/sequin — ANSI escape-sequence inspector. Decodes SGR / CSI / OSC / DCS / APC / SS3 sequences into human-readable labels.",
-            "homepage": "https://github.com/sugarcraft/sugar-spark",
-            "keywords": [
-                "ansi",
-                "debug",
-                "escape",
-                "inspector",
-                "sequin",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-spark/issues",
-                "source": "https://github.com/sugarcraft/sugar-spark",
-                "docs": "https://sugarcraft.github.io/lib/sugar-spark.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/sugar-stickers",
             "version": "dev-master",
             "dist": {
@@ -8583,6 +8583,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "sugarcraft/candy-ansi": 20,
+        "sugarcraft/candy-ansi-inspect": 20,
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
@@ -8634,7 +8635,6 @@
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-skate": 20,
-        "sugarcraft/sugar-spark": 20,
         "sugarcraft/sugar-stickers": 20,
         "sugarcraft/sugar-table": 20,
         "sugarcraft/sugar-tick": 20,

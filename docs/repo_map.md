@@ -36,7 +36,7 @@
 | [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, candy-forms |
 | [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | sugar-post, candy-scriptui, candy-shine |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
-| [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, sugar-spark |
+| [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, candy-ansi-inspect |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 | [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | sugar-skate |
 | [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-git-server |
@@ -617,9 +617,9 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → ANSI parsing/rendering
-- `sugar-spark` → Visual debugging
+- `candy-ansi-inspect` → Visual debugging
 
-**Note:** Port exists as `sugar-spark` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-ansi-inspect` (🟢 in MATCHUPS.md).
 
 ---
 

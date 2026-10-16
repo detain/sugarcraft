@@ -19,7 +19,7 @@ namespace SugarCraft\Ansi\Parser;
  * the candy-vt/candy-freeze paths (a closure via `attachSubparamsProvider()`, a
  * Parser object via `bindParser()`) are gone now — those paths take the push
  * instead. The pull itself is NOT a dead route: a handler that owns its Parser
- * (sugar-spark's `AnsiHandler` does `new Parser($this)` and reads
+ * (candy-ansi-inspect's `AnsiHandler` does `new Parser($this)` and reads
  * {@see Parser::subparams()} mid-dispatch) still pulls, and remains free to.
  *
  * That pull inverted the dependency the parser otherwise has — the handler ended
@@ -69,7 +69,7 @@ namespace SugarCraft\Ansi\Parser;
  * ever accompanied this interface.
  *
  * The raw pull via {@see Parser::subparams()} is a separate matter and is NOT
- * retired: `sugar-spark`'s `AnsiHandler` owns its Parser (`new Parser($this)`)
+ * retired: `candy-ansi-inspect`'s `AnsiHandler` owns its Parser (`new Parser($this)`)
  * and reads the flags back mid-`csiDispatch()` without implementing this
  * interface. So both routes remain live — push where a handler opts in, pull
  * where a handler owns the parser it was passed to.
@@ -95,13 +95,13 @@ namespace SugarCraft\Ansi\Parser;
  *
  * Sinks that do NOT opt in need nothing pushed and are dispatched unchanged —
  * e.g. candy-vcr's `MouseModeTracker` and candy-pty's `AnsiOutputParser` pass a
- * plain {@see Handler}, and sugar-spark's `AnsiHandler` pulls instead (above).
+ * plain {@see Handler}, and candy-ansi-inspect's `AnsiHandler` pulls instead (above).
  *
  * Re-derive this map from the wiring before trusting it: the only object that
  * matters is the one passed to `new Parser(...)`, and wrappers move between waves.
  *
  * {@see Parser::subparams()} stays public and byte-compatible — for pull handlers
- * like sugar-spark's and for any driver reading the last sequence after `feed()`.
+ * like candy-ansi-inspect's and for any driver reading the last sequence after `feed()`.
  * A class is free to implement this interface while ignoring the pull route.
  * Non-implementors are dispatched with zero behaviour change.
  */

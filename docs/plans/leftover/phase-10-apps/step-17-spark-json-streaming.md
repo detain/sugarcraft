@@ -1,6 +1,6 @@
-# Step 10.17 — sugar-spark reportAsJson + StreamingInspector
+# Step 10.17 — candy-ansi-inspect reportAsJson + StreamingInspector
 
-**Source:** `leftover_updates_later.md` sugar-spark §5 P4-P5
+**Source:** `leftover_updates_later.md` candy-ansi-inspect §5 P4-P5
 **Branch:** `ai/spark-json-streaming`
 
 ## Deliverable
@@ -10,9 +10,9 @@
 
 ## Files
 
-**Modify:** `sugar-spark/src/Inspector.php` — add `reportAsJson()`.
+**Modify:** `candy-ansi-inspect/src/Inspector.php` — add `reportAsJson()`.
 
-**Create:** `sugar-spark/src/StreamingInspector.php`.
+**Create:** `candy-ansi-inspect/src/StreamingInspector.php`.
 
 ## Tests
 
@@ -20,7 +20,7 @@
 
 ## Acceptance
 
-- `cd sugar-spark && vendor/bin/phpunit` green.
+- `cd candy-ansi-inspect && vendor/bin/phpunit` green.
 
 ---
 

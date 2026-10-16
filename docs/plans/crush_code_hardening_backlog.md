@@ -12480,7 +12480,7 @@ individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled bef
 | candy-core | 799 / 7210 | 0 |
 | sugar-reel | 352 / 2423 | 0 |
 | sugar-dash | 5853 / 9154 | 0 |
-| sugar-spark | 205 / 659 | 0 |
+| candy-ansi-inspect | 205 / 659 | 0 |
 | sugar-skate | 206 / 427 | 0 |
 | sugar-tick | 144 / 349 | 0 |
 | candy-git | 218 / 606 | 0 |

@@ -911,7 +911,7 @@ $truncated = mb_strimwidth($plain, 0, $maxWidth, '...');
 
 ## Strategic Opportunities
 
-### 1. Charts Library (sugar-spark/sugar-charts)
+### 1. Charts Library (candy-ansi-inspect/sugar-charts)
 
 - Community requested charm-charts
 - No Go implementation yet merged

@@ -314,11 +314,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/sequin → sugar-spark
+## charmbracelet/sequin → candy-ansi-inspect
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in sugar-spark | Notes |
+| Upstream | Title | Status in candy-ansi-inspect | Notes |
 |---|---|:--:|---|
 | [#106](https://github.com/charmbracelet/sequin/pull/106) (2026-03-02) | chore(deps): bump lipgloss/v2 | ⚪ | Dep only |
 | [#62](https://github.com/charmbracelet/sequin/pull/62) (2025-03-18) | implement FinalTerm escape sequences | 🟡 | FinalTerm sequences — likely covered by ANSI decoder |

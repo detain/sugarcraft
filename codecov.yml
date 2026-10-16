@@ -77,8 +77,8 @@ flag_management:
     - name: candy-mdview
       paths: ["candy-mdview/src/**"]
       carryforward: true
-    - name: sugar-spark
-      paths: ["sugar-spark/src/**"]
+    - name: candy-ansi-inspect
+      paths: ["candy-ansi-inspect/src/**"]
       carryforward: true
     - name: candy-wish
       paths: ["candy-wish/src/**"]
@@ -307,12 +307,12 @@ component_management:
         - "candy-mdview/src/**"
       flag_regexes:
         - "^candy-mdview$"
-    - component_id: sugar-spark
-      name: sugar-spark
+    - component_id: candy-ansi-inspect
+      name: candy-ansi-inspect
       paths:
-        - "sugar-spark/src/**"
+        - "candy-ansi-inspect/src/**"
       flag_regexes:
-        - "^sugar-spark$"
+        - "^candy-ansi-inspect$"
     - component_id: candy-wish
       name: candy-wish
       paths:

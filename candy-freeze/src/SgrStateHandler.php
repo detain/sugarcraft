@@ -221,7 +221,7 @@ final class SgrStateHandler implements SubparamsAwareHandler
      * `R:G:B`. Dropping the id slot is therefore tried first, and the tail is
      * re-read whole only when that leaves too few components to paint with.
      *
-     * <p>`SugarCraft\Spark\Inspector` labels an SGR with the same count rule on
+     * <p>`SugarCraft\AnsiInspect\Inspector` labels an SGR with the same count rule on
      * the same bytes — measured to agree on every colour-resolving shape both
      * suites pin — so a well-formed spec means one colour and one label. A
       * group that cannot resolve is the honest exception: this lib falls back to
@@ -229,7 +229,7 @@ final class SgrStateHandler implements SubparamsAwareHandler
       * labels the truncated group and never guesses a colour. Both sides pin
       * that divergence literally — `testUnresolvableColonGroupFallsBackAcrossParameterBoundaries`
       * here, `ByteFidelityTest::testColonTruncatedExtendedColoursAreReportedAsTruncated`
-      * in sugar-spark. A change to the count rule here must be mirrored there.
+      * in candy-ansi-inspect. A change to the count rule here must be mirrored there.
      *
      * @param list<int> $group `38` (or `48`) followed by its sub-parameters
      */

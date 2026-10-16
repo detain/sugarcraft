@@ -91,7 +91,7 @@
         "sugarcraft/sugar-readline": "dev-master",
         "sugarcraft/sugar-reel": "dev-master",
         "sugarcraft/sugar-skate": "dev-master",
-        "sugarcraft/sugar-spark": "dev-master",
+        "sugarcraft/candy-ansi-inspect": "dev-master",
         "sugarcraft/candy-git": "dev-master",
         "sugarcraft/sugar-stickers": "dev-master",
         "sugarcraft/sugar-table": "dev-master",
@@ -468,7 +468,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-spark",
+            "url": "candy-ansi-inspect",
             "options": {
                 "symlink": true
             }

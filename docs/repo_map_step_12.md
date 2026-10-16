@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-vt-uses-ansi`
 **Depends on:** step-01 (candy-ansi exists with the parser extracted)
-**Blocks:** step-20 (sugar-spark/candy-hermit/candy-freeze migrations expect candy-ansi to be the canonical home; once candy-vt aliases to it, no two-truth situation)
+**Blocks:** step-20 (candy-ansi-inspect/candy-hermit/candy-freeze migrations expect candy-ansi to be the canonical home; once candy-vt aliases to it, no two-truth situation)
 
 ## Goal
 

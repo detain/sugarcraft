@@ -236,7 +236,7 @@ builds on it. From the same monorepo:
 - **CandyKit** — opinionated CLI presentation helpers.
 - **CandyFreeze** — code → SVG screenshot.
 - **CandyWish** — SSH server middleware framework.
-- **SugarSpark** — ANSI escape-sequence inspector.
+- **CandyAnsiInspect** — ANSI escape-sequence inspector.
 
 See the matchup table in [../MATCHUPS.md](../MATCHUPS.md) for status,
 package names, and namespace mappings.

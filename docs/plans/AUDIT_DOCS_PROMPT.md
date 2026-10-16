@@ -252,6 +252,6 @@ Then stop.
 - Skip libs marked 🚀 (split into their own repo) — those have their
   own docs lifecycle.
 - For tightly related sibling libs (e.g. all the charts: sugar-charts +
-  sugar-spark) bundle into a single PR.
+  candy-ansi-inspect) bundle into a single PR.
 - The first PR's commit messages and README phrasing become the de-facto
   template — review the first PR carefully before approving.

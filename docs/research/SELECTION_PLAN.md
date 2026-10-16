@@ -120,17 +120,17 @@
 - **Effort**: 2-3 hours
 - **Research**: `libraries/sugar-toast-research.md`
 
-### sugar-spark
+### candy-ansi-inspect
 
 ### [ ] Add SGR underline styles (4;1-4;5)
 
 - **Effort**: 1 hour
-- **Research**: `libraries/sugar-spark-research.md`
+- **Research**: `libraries/candy-ansi-inspect-research.md`
 
 ### [ ] Add C0/C1 control code support
 
 - **Effort**: 1-2 hours
-- **Research**: `libraries/sugar-spark-research.md`
+- **Research**: `libraries/candy-ansi-inspect-research.md`
 
 ### candy-mosaic
 
@@ -467,7 +467,7 @@ All 45 research documents available at:
 | candy-forms | 20KB |
 | sugar-readline | 18KB |
 | sugar-skate | 21KB |
-| sugar-spark | 13KB |
+| candy-ansi-inspect | 13KB |
 | candy-git | 23KB |
 | sugar-stickers | 14KB |
 | sugar-table | 19KB |

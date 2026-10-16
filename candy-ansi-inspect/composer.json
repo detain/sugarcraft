@@ -1,0 +1,52 @@
+{
+    "name": "sugarcraft/candy-ansi-inspect",
+    "description": "ANSI escape-sequence inspector — decodes SGR / CSI / OSC / DCS / APC / SS3 sequences into human-readable labels, modeled on the charmbracelet/sequin Go tool.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "ansi",
+        "escape",
+        "inspector",
+        "debug",
+        "sequin",
+        "tui",
+        "terminal",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-ansi-inspect",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-ansi-inspect/issues",
+        "source": "https://github.com/sugarcraft/candy-ansi-inspect",
+        "docs": "https://sugarcraft.github.io/lib/candy-ansi-inspect.html"
+    },
+    "bin": [
+        "bin/candy-ansi-inspect"
+    ],
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-ansi": "dev-master",
+        "sugarcraft/candy-core": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\AnsiInspect\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\AnsiInspect\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

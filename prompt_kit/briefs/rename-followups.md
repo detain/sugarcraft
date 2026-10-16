@@ -50,3 +50,11 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   from the already-rewritten `.tape` files (they drive ./bin/candy-mdview now) on the next change to the lib. Left as-is per R4.10.
 - `candy-mdview/.assets/icon.png` + `media/icons/candy-mdview.png` + `docs/img/icons/candy-mdview.png` — binary
   icon content untouched (paths renamed from sugar-glow.* only). <!-- @rename-keep -->
+
+## B6 sugar-spark → candy-ansi-inspect (2026-10-16) <!-- @rename-keep -->
+- `ansi/candy-ansi-inspect/` — 162 art files still paint the `sugar-spark` wordmark (C.3 content-excluded, <!-- @rename-keep -->
+  paths renamed). Redraw only if a future art pass happens; `php tools/gen-ansi-readme.php` regenerates README from ansi.json.
+- PRE-EXISTING MISLABEL for human triage: `findings/sugar-charts-sparkline.md` is titled "# Audit: sugar-spark" <!-- @rename-keep -->
+  but its content audits `src/Sparkline.php` = the sugar-charts Sparkline port, not this app (likely spark↔sparkline
+  name-confusion at audit time, 2026-06-30). Its 3 old-slug lines were tagged @rename-keep pre-R3 so the rename
+  would not mint false claims about candy-ansi-inspect. Retitle/merge into the sugar-charts records when triaged.

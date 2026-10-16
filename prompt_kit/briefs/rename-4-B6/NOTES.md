@@ -2,67 +2,111 @@
 
 Entry: tools/renames.json batch-B line 13. kind=rename, type=app, ns Spark→AnsiInspect,
 bins bin/sugarspark→bin/candy-ansi-inspect (GLUED compact bin spelling). <!-- @rename-keep -->
-Base: master 4f8427290 == origin; foreign untracked oc.7z at root. <!-- @rename-keep -->
+Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold (preflight demanded clean tree). <!-- @rename-keep -->
 
 ## R0 recon findings
-- Baseline (rename-baseline.md:83): 278T/1412A/0F/0E/0S/0W — tagged @rename-keep in tag-prep.
-- Sibling dirs/packages prefixed `sugar-spark`: NONE (`ls -d *spark*` = only `sugar-spark/`). <!-- @rename-keep -->
-  NO sugar-sparkline lib exists (brief premise checked): sparkline code lives INSIDE sugar-dash
-  (`src/Plot/Chart/Sparkline*.php`, `examples/sparkline*.php`) and candy-sql (TimeSeriesCell.php prose) —
-  all SAFE: R3 needs the full `sugar-spark` literal, R2 is Pascal `SugarSpark`, R4 is glued `sugarspark`;
-  `Sparkline`/`sparkline` matches none. Zero `spark*` paths must appear in `git diff --stat` outside the lib.
-- PROTECT auto-derivation inert (no sugar-spark* sibling entries in renames.json — 1 hit total).
-  Reverse-direction law RE-LOGGED: batch-E `candy-ansi` → sugar-ansi-parser must PROTECT `candy-ansi-inspect`
-  (R3 suffix lookahead + R5 CANDY_ANSI_ prefix would otherwise mangle CANDY_ANSI_INSPECT_BIN / paths).
-- 9 tracked paths outside lib carry the slug (docs/_data pair, docs/lib page, repo_map pair, research doc,
-  findings/plan_sugar-spark.md, media+docs/img icons pngs) + ansi/sugar-spark/ (162 art files) — all moved by C.2.
-- Composer REQUIRE consumers: root composer.json only (require :94 + repositories :471). NO sibling lib requires it.
-  Docblock/example mentions: candy-core/README.md:239, sugar-bits/examples/item-list.php, README.md:85,
-  MATCHUPS :85/:206 — tool rewrites mechanically.
-- Env: ZERO getenv/$_ENV/putenv reads in sugar-spark/src+bin. `SUGARSPARK_BIN` exists ONLY in
-  examples/inspect.sh (example script, not PHP) → tool R5 rewrites to CANDY_ANSI_INSPECT_BIN per plan note;
-  NO LegacyEnv shim (confirmed by reading where it is "read" — nowhere in code). <!-- @rename-keep -->
+- Baseline (rename-baseline.md:83): 278T/1412A/0F/0E/0S/0W — tagged @rename-keep in tag-prep 5718a6148.
+- Sibling dirs/packages prefixed `sugar-spark`: NONE (`ls -d *spark*` = only the lib itself). <!-- @rename-keep -->
+  NO sugar-sparkline lib exists (brief premise checked): sparkline code lives INSIDE sugar-charts <!-- @rename-keep -->
+  (`src/Sparkline/Sparkline.php`), sugar-dash (`src/Plot/Chart/Sparkline*.php` + examples/goldens) and
+  candy-sql (TimeSeriesCell prose) — ALL SAFE: R3 needs the full `sugar-spark` literal, R2 is Pascal <!-- @rename-keep -->
+  `SugarSpark`, R4 is glued `sugarspark`; `Sparkline`/`sparkline` matches none. VERIFIED at R3: zero <!-- @rename-keep -->
+  sparkline paths in the staged diff, zero sparkline lines in the (re-)dry-run.
+- PROTECT auto-derivation inert (renames.json has exactly 1 spark entry). Reverse-direction law RE-LOGGED:
+  batch-E `candy-ansi` → sugar-ansi-parser must PROTECT `candy-ansi-inspect` (R3 suffix + R5 CANDY_ANSI_
+  prefix would mangle CANDY_ANSI_INSPECT_BIN / paths). Also: the sibling lib `candy-ansi` (untouched slug)
+  shares the word 'ansi' — zero rule fires on it from this entry (verified: only its 4 CONTENT files got
+  docblock prose rewrites, no path renames).
+- Tracked paths outside lib moved by C.2: docs/_data pair, docs/lib page, repo_map pair, research doc,
+  findings/plan_sugar-spark.md (→ plan_candy-ansi-inspect.md), media+docs/img icon pngs, ansi/sugar-spark/ <!-- @rename-keep -->
+  162 art files (→ ansi/candy-ansi-inspect/candy-ansi-inspect-*.ansi). <!-- @rename-keep -->
+- Composer REQUIRE consumers: root composer.json only (require + repositories). NO sibling lib requires it.
+  Docblock/example mentions auto-rewrote: candy-core/README.md, sugar-bits/examples/item-list.php, root
+  README.md:85, MATCHUPS :85/:206, candy-ansi/{README,CALIBER_LEARNINGS,src/Parser/Parser,src/Parser/SubparamsAwareHandler}.
+- Env: ZERO getenv/$_ENV/putenv reads in src+bin. `SUGARSPARK_BIN` existed ONLY in examples/inspect.sh <!-- @rename-keep -->
+  (bash example, not PHP) → tool R5 rewrote it to CANDY_ANSI_INSPECT_BIN (6 R5 sites incl comment); NO LegacyEnv shim.
 - User data paths: grep XDG/.config/.local/.cache over src+bin → EMPTY. LegacyPaths: honest none.
 - BRAND CLASS: none — all src classes domain-named (Inspector/StreamingInspector/AnsiHandler/Segment/
-  SequenceSegment/TextSegment/C0C1/Lang). No Spark* compounds anywhere (grep `Spark[A-Z]` outside ns = zero).
-- Glued blindspot sweep: `_sugarspark`/`SUGARSPARK` content outside .ansi art: examples/inspect.sh ONLY <!-- @rename-keep -->
-  (+ bin path literals covered by bins map, CliTest `/no/such/sugarspark/...` covered by R4 with `/` lookbehind OK).
-  `.ansi` art CONTENT is C.3-excluded (wordmark `sugarspark` painted inside art → followups). `_sugar-spark`
-  underscore path refs: docs/repo_map filenames moved by tool (pathContext); content refs swept in R4 if any.
-- CliTest.php:134 `tempnam(sys_get_temp_dir(), 'spark')` — manual → 'inspect-' (B5-g pattern).
-- examples/inspect.sh: R4 will mint the INVALID bash fn name `candy-ansi-inspect()` — manual run_ansi_inspect()
-  (def + export -f + 5 pipe-call sites) (B5-h law). <!-- @rename-keep -->
-- Lang: src/Lang.php NAMESPACE='spark' → R6 rewrites to 'ansiinspect' mechanically; NO LangTest exists in the
-  suite (11 test files, none asserts domain) — only MANUAL docblock prose fix Lang.php:13 `'spark'` literal (B1 law).
-- ansi/: 162 art files paint the sugar-spark wordmark → rename-followups.md line (never redraw here);
-  ansi/README.md is generated (gen-ansi-readme) — regenerate+--check; ansi.json key + 2 description strings
-  carry the brand (R2/R3 rewrite → README regen keeps them consistent).
-- vhs.yml: sugar-spark present in BOTH hand-lists (:147 all=, :225 matrix lib:) — tool auto-rewrites (B1 verified).
-- MATCHUPS row :85 already under `## Apps` (:77); index.html tile :708 under `#apps` (:649) → R4.8 MOOT.
+  SequenceSegment/TextSegment/C0C1/Lang). No Spark* compounds anywhere.
+- Lang: NAMESPACE='spark' → R6 → 'ansiinspect' mechanically; NO LangTest exists (11 test files, none asserts <!-- @rename-keep -->
+  domain) — docblock prose `'spark'` at Lang.php:13 manually fixed to `'ansiinspect'`.
+- MISLABEL FOUND (unique to this entry): `findings/sugar-charts-sparkline.md` carries header "# Audit: sugar-spark" <!-- @rename-keep -->
+  + 2 body mentions while its CONTENT audits `src/Sparkline.php` — the sugar-charts Sparkline port (sugar-charts/
+  src/Sparkline/Sparkline.php exists; the inspector lib has no such file). The slug refs are a historical
+  name-confusion (spark↔sparkline), NOT references to this app. Mechanically rewriting them would mint FALSE
+  claims about candy-ansi-inspect ("ports charmbracelet/spark, generates sparkline charts"). RULING: tagged the
+  3 lines @rename-keep BEFORE R3 (excluded from rewrite) + recorded for human triage in rename-followups.md.
+- ansi/: 162 art files paint the wordmark (paths renamed, content C.3-excluded) → followups line; ansi.json
+  key + 2 art DESCRIPTION strings (`SugarSpark` R2, `sugar-spark` R3) rewrote mechanically — gen-ansi-readme <!-- @rename-keep -->
+  regen keeps README.md in step (art files: `sugar-spark-*.ansi` filenames in README/ansi.json → `candy-ansi-inspect-*`). <!-- @rename-keep -->
+- vhs.yml: BOTH hand-lists auto-rewrote (:147 all= + :225 matrix). inspect.tape drives ./examples/inspect.sh ✓.
+- MATCHUPS row already under `## Apps`; index.html tile under `#apps` → R4.8 MOOT.
 - PROJECT_NAMES.md: ZERO spark mentions (unlike B4/B5) — no rationale rewrite owed. Honest record.
-- Capital-hyphen `Sugar-spark` prose form: grep → ZERO occurrences → nothing to hand-fix this entry.
-- Generic-word 'spark' landscape: NO Apache Spark / spark-sql citations anywhere; bare `spark`/`sparks` words
-  live in ansi/README.md + ansi.json art DESCRIPTIONS (forge/spark imagery) — no rule fires on bare lowercase
-  words; audit executed at R6 (B4/B5 method).
-- codecov.yml rows (:80-81 flag, :310-315 component) auto-rewritten by R3 (tracked text, not excluded).
+- Capital-hyphen `Sugar-spark` prose form: ZERO occurrences tree-wide → no living-doc hand-fix needed (B5 law applied).
+- Generic-word 'spark' landscape: NO Apache Spark/spark-sql citations; bare `spark`/`sparks`/`sparkline` live in
+  ansi/README+ansi.json art descriptions (forge imagery) and sugar-charts/sugar-dash code — no rule fires on bare
+  words. Audit executed at R6 (B4/B5 method).
+- codecov.yml rows (flag + component) auto-rewrote via R3. `scripts/__pycache__/generate_icons.cpython-313.pyc`
+  is a TRACKED binary (NUL bytes → C.3 content-excluded; residue NUL-skip) — pre-existing repo dirt, untouched.
 
 ## R1 dry-run
-(pending)
+- Post tag-prep: 99 files, 172 paths, R1=60 R2=30 R3=1078 R4=108 R5=6 R6=1. Eye-reviewed: dir move, bin move via
+  bins map, ns pair, NO tool/self/plan hits, zero sparkline path targets. Mislabel tagging → re-dry-run delta exact:
+  98 files, R3 1078→1075 (−3), zero 'sparkline' anywhere in plan. Report: /tmp/rename-sugar-spark{,2}.txt. <!-- @rename-keep -->
 
 ## R2 remote rename
-(pending)
+- `scripts/rename-remote.sh sugar-spark candy-ansi-inspect`: GitHub rename SUCCEEDED, then topics 422 (B5 family) — <!-- @rename-keep -->
+  repo carried 19 topics incl stale brand `candycore` + noise `readable`/`development`; script adds 8 composer
+  keywords (4 new: escape/inspector/debug/sugarcraft) → would exceed 20. Cure: `gh repo edit --remove-topic candycore`,
+  then `--remove-topic readable --remove-topic development`, re-ran script → idempotent convergence.
+  Verified: name candy-ansi-inspect, description 'ANSI escape-sequence inspector — port of charmbracelet/sequin.',
+  topics=20 EXACT at cap, old sugar-spark URL resolves (redirect live). Note: repo already carried well-chosen <!-- @rename-keep -->
+  inspector-flavored topics (ansi-inspector/csi-decoder/osc-decoder/sequence-parser/sequin-port/sgr-parser/terminal-debug).
 
 ## R3 tool run
-(pending)
+- rc=0: 98 files, **173** paths (172 + the lib dir itself — B5 shape), replacement counts byte-identical to re-dry-run.
+- `sugar-spark/` gone → `candy-ansi-inspect/`; `bin/candy-ansi-inspect` present. <!-- @rename-keep -->
+- php -l: all changed existing PHP clean + bin lints (file_exists filter per B5 gotcha). JSON valid (root/lib).
+- Collision gates: zero sparkline PATHS in diff; candy-ansi sibling = 4 content-only docblock prose rewrites, zero paths.
 
-## R4 manual followups
-(pending)
+## R4 manual followups (all landed pre-R7)
+- examples/inspect.sh: R4 minted INVALID bash fn name `candy-ansi-inspect()` (+export -f +6 `| candy-ansi-inspect`
+  pipes) → `run_ansi_inspect()` ×8 sites (B5-h law). Comment prose kept truthful (binary name in `command -v` narrative).
+- src/Lang.php:13 docblock `'spark'` → `'ansiinspect'` (B1 law). <!-- @rename-keep -->
+- tests/CliTest.php tempnam prefixes 'spark'→'inspect', 'spark-empty'→'inspect-empty' (B5-g law; recon initially
+  caught :134, post-R3 sweep caught :102 too — grep bare `'spark` in tests before claiming done).
+- Glued `_sugar-spark` path refs swept (A1 blindspot law): docs/repo_map/update_sugarcraft_candy-ansi-inspect.md :149, <!-- @rename-keep -->
+  findings/plan.md :197. Zero `_sugar-spark` remain outside tagged history + .ansi art. <!-- @rename-keep -->
+- README Formerly + Namespace-changed blockquotes under `# CandyAnsiInspect` H1 (B2 format, tagged).
+- composer.json description de-framed 'PHP port of charmbracelet/sequin' → '…modeled on the charmbracelet/sequin Go tool'
+  (B3/B5 pattern); keywords keep sequin + sugarcraft + ansi/inspector; raw em-dash matches dominant house style (1-line diff).
+- rename-1.1-zone-merge.md:63 historical line tagged (true history: zone-merge lane's sugar-spark revert record). <!-- @rename-keep -->
+- NOTES.md re-authored (tool touched skeleton's untagged lines — B4 law).
+- PROJECT_NAMES: nothing owed (no row). lang/*.php + tape + bin comment all coherent post-R3/R4.
 
 ## R5 wiring
-(pending)
+- `composer update sugarcraft/candy-ansi-inspect --no-install`: lock = clean swap (removing sugar-spark dev-master 8fb0cbd / <!-- @rename-keep -->
+  locking candy-ansi-inspect dev-master e311d97), dist url path `candy-ansi-inspect`, source URL split repo ✓.
+- refresh-deps `--mode=linked --libs=candy-ansi-inspect`: linked 4/4 symlinked, escaping=0, committed-tree guard rc0.
+  Relative vendor symlinks survived the dir move untouched (depth-stable ../../../) <!-- @rename-keep -->
+- autoload_psr4: zero Spark, 2× AnsiInspect ✓. gen-docs: 71 files (libs 40 / apps 21), --check OK 61 pages + 10 redirect
+  stubs (sugar-spark stub minted at R7 after status flip). gen-ansi-readme --check: 3595 pieces agree ✓. <!-- @rename-keep -->
 
 ## R6 verification
-(pending)
+- Residue `--old=sugar-spark`: initial 12 findings ALL = own NOTES.md history lines → tagged them all → **0 rc=0** ✓. <!-- @rename-keep -->
+- Suite EXACT-shape: **278T/1412A OK (0.745s)** = baseline ✓. Watchdog + plain pipe + env -u LINES/COLUMNS.
+- Sparkline untouched proof: `git diff --cached --name-only -M | grep -ci sparkline` = **0** ✓; `ls -d *spark*` → no match.
+- Consumer sanity: candy-ansi suite **360T/901A OK** (its 4 changed files are docblock-comment-only; lint clean ×3 incl
+  candy-freeze/SgrStateHandler.php auto-rewrite). No composer REQUIRE consumers exist.
+- tools/tests **426T/1484A OK (36s)** — floor EXACT ✓. path-repos --no-lib-path-repos rc=0 ✓.
+- Diffstat: 284 files; rename-detection `{sugar-spark => candy-ansi-inspect}` through lib tree + docs pair + repo_map pair <!-- @rename-keep -->
+  + research + findings plan + icon png ✓.
+- Generic-word audit (B4/B5 method): changed bare-spark lines = ONLY `SugarCraft\Spark\*` namespace tokens (R1 rewrites) <!-- @rename-keep -->
+  + own NOTES lines + ONE docs/plans/crush_code_worklog.md:11678 t3 history row — lib-column identifier renamed, its
+  `spark FULL 269T/1380A` suite-column abbreviation + figures preserved (mechanical rename of a reference, claim intact —
+  same entity; accepted, no falsification). sugar-charts/sugar-dash sparkline prose+code lines: byte-untouched ✓.
+- No completions file existed for `sugarspark` (git ls-files zero) — bin sweep vacuous-clean; `.opencode/`+`.caliber/` <!-- @rename-keep -->
+  hits are gitignored session artifacts; `.ansi` art wordmark content = logged followup ✓.
 
 ## R7 commit
 (pending)
