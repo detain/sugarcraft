@@ -109,13 +109,31 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
   hits are gitignored session artifacts; `.ansi` art wordmark content = logged followup ✓.
 
 ## R7 commit
-(pending)
+- renames.json line 13 targeted sed → status=renamed; gen-docs re-run minted redirect stub docs/lib/sugar-spark.html <!-- @rename-keep -->
+  (11th; stub body self-carries @rename-keep for its Moved: title) + --check green (61 pages + 11 stubs).
+- **Discipline slip caught by own gate:** staged → residue ran BEFORE commit but my R6 NOTES prose added 7 new untagged
+  lines; the `echo rc=$?` in the chain masked rc=1 and the commit landed (005e0ca78). Fixed: tagged all 12 history lines →
+  residue 0 → amended (unpushed) → 580d028c2. LAW: gate rc must short-circuit (`&&`), never echo-masked; NOTES lines get
+  tagged AS WRITTEN, not in a later pass.
 
 ## R8 push + remote-done
-(pending)
+- `git pull --rebase` absorbed FOREIGN `f67c043ec vhs: regenerate demo GIFs` → **all chain SHAs moved** (A1 law re-proven
+  3rd campaign entry): tag-prep dc94da476, skeleton a4ae044fd, mislabel e3d9967ea, R7 **812d53243** (pushed, 0 ahead).
+- Split sync verified before flip: master=f1c1b124d (composer name sugarcraft/candy-ansi-inspect), legacy/sugar-spark + <!-- @rename-keep -->
+  sugar-spark-final both at 40bf3e835, old GitHub URL 301s. <!-- @rename-keep -->
+- remote-done commit c3b8956b3 pushed (renames.json staged explicitly per B5 gotcha).
 
 ## R9 packagist
-(pending)
+- B5 cure **did not engage**: `create candy-ansi-inspect` → HTTP 202 first try (no 406). Interpretation: packagist's
+  stored sugar-spark registration was not holding the renamed URL at crawl time (unlike sugar-glow where it was); <!-- @rename-keep -->
+  B3 law still honored (CI-sync landed first). Nuance logged in abandon-checklist: the 406 is conditional, don't
+  pre-emptively force-update the old slug — try create, only run the cure on actual 406.
+- One forced bare-slug `update candy-ansi-inspect` (job 57a4af9fa) → check: dev-master present, reference
+  f1c1b124d1d3a2a96fbf2ceb3c006a4b9c680ea3 == LIVE split refs/heads/master EXACT (first poll; no 10-poll stall).
+- Abandon line appended (full house prose; thin first pass committed in f34d65176 → heredoc python indent error on the
+  upgrade attempt meant the published commit carried the bare line — fixed in the tracker commit; amend-of-pushed NOT done).
+- published commit f34d65176 pushed.
 
 ## Tracker
-(pending)
+- plan_rename.md B6 ✅ line appended before **Done when:** with full SHAs/gates; committed here alongside checklist fix-up.
+- oc.7z restored from /tmp/oc.7z.b6-hold → back as foreign untracked. Final: master == origin, tree clean except oc.7z.
