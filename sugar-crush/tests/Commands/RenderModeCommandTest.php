@@ -85,7 +85,7 @@ final class RenderModeCommandTest extends TestCase
             'R13-M2: the report must state the honesty law — Chat threads ONE mosaic at launch, so transcript paint does not follow the mid-session word',
         );
         self::assertStringNotContainsString('images apply on the next paint', $body, 'the disproven promise may never ride the reply again');
-        self::assertStringContainsString('reel analogue: halfblock', $body, 'the pure tryFrom half of the player pick law must show');
+        self::assertStringContainsString('video analogue: halfblock', $body, 'the pure tryFrom half of the player pick law must show');
         self::assertStringContainsString('images:', RenderModeCommand::help());
         self::assertStringContainsString('video:', RenderModeCommand::help(), 'the asymmetry has to live in the help text');
         self::assertStringContainsString('m cycles', RenderModeCommand::help());

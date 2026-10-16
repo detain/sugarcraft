@@ -78,7 +78,7 @@ final class ToolResult
      *
      * THE LADDER, for the record (crush_media §8.2, candy-mosaic
      * `Detect.php:17` precedence): the `auto` image ladder is
-     * kitty > iterm2 > sixel > chafa > halfblock. sugar-reel's VIDEO
+     * kitty > iterm2 > sixel > chafa > halfblock. sugar-video's VIDEO
      * ladder is deliberately different (sixel-first, crush_media §8.3) --
      * do not "harmonize" them. Grid layouts force cell renderers
      * regardless of mode (crush_media W2.4/W5.6).

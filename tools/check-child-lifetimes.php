@@ -12,7 +12,7 @@ declare(strict_types=1);
  * sugar-crush child inherit", so both read through `vendor/sugarcraft` — the
  * eighteen libraries sugar-crush actually requires. That reach is correct for
  * the question it answers and it is NOT the whole tree: E448 measured three
- * long-lived exposed spawns (`sugar-dashboard` ExternalModule, `sugar-reel`
+ * long-lived exposed spawns (`sugar-dashboard` ExternalModule, `sugar-video`
  * AudioPlayer and FfmpegDecoder) sitting in libraries no sugar-crush test can
  * see, where a new one could appear, move, or multiply with nothing saying
  * so. The filed options were to promote the scanner into `candy-testing` or
@@ -69,7 +69,7 @@ declare(strict_types=1);
  * exemption list): for the two `candy-pty` rows and the `candy-core` row, the
  * same REPORT sugar-crush's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
  * a package this repo's CI does not own, so the row buys visibility, not
- * silence. For the three `sugar-dashboard`/`sugar-reel` rows, E366 shipped a
+ * silence. For the three `sugar-dashboard`/`sugar-video` rows, E366 shipped a
  * bounded TERM→KILL reap ladder at each site's teardown in this same round,
  * which closes the orphan half; the fd≥3 inheritance half REMAINS and this
  * row is where that stays written down. A row is allowed to say "exposed and
@@ -134,20 +134,20 @@ final class CheckChildLifetimes
                 . 'cannot outlive the dashboard; the fd≥3 inheritance exposure stands and this '
                 . 'row is where it stays written down for sugar-dashboard to own.',
         ],
-        'sugar-reel/src/AudioPlayer.php::start' => [
+        'sugar-video/src/AudioPlayer.php::start' => [
             'count' => 1,
             'reason' => 'ffplay/mpv companion with all-/dev/null FILE sinks (no parent-side pipe '
                 . 'at all — closing a reader-less stderr pipe SIGPIPEs the child). E366 shipped '
                 . '__destruct + a bounded reap ladder (round-90 folded it onto candy-core '
                 . 'BoundedShutdown), closing the orphan half; the fd≥3 exposure stands '
-                . 'for sugar-reel to own.',
+                . 'for sugar-video to own.',
         ],
-        'sugar-reel/src/Decode/FfmpegDecoder.php::open' => [
+        'sugar-video/src/Decode/FfmpegDecoder.php::open' => [
             'count' => 1,
             'reason' => 'ffmpeg decode child. close() now walks a bounded grace-then-escalate ladder '
                 . '(candy-core BoundedShutdown, folded from the per-lib BoundedReaper copy) '
                 . 'before proc_close() and __destruct() calls close() (E366); the fd≥3 exposure '
-                . 'stands for sugar-reel to own.',
+                . 'stands for sugar-video to own.',
         ],
         'sugar-mcp-client/src/StdioMcpServer.php::start' => [
             'count' => 1,

@@ -221,12 +221,12 @@ For each phase:
 **Files:** `candy-scriptui/src/Application.php:137-150`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.17 🔴 sugar-reel: resume() uses SIGCONT (Item 1.2)
+#### 0.17 🔴 sugar-video: resume() uses SIGCONT (Item 1.2)
 
-**Plan:** `findings/plan_sugar-reel.md` — Item 1.2
+**Plan:** `findings/plan_sugar-video.md` — Item 1.2
 **Issue:** `AudioPlayer.php:145-152` — SIGCONT has same PTY issues as SIGSTOP
 **Fix:** Use `proc_terminate($this->processHandle, SIGTERM)` and restart, or find proper resume mechanism
-**Files:** `sugar-reel/src/AudioPlayer.php:145-152`
+**Files:** `sugar-video/src/AudioPlayer.php:145-152`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 0.18 🔴 candy-flappy: Score fires at wrong x position (Item 1.1)
@@ -594,29 +594,29 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `candy-vcr/src/Command/InspectCommand.php`
 **Agent:** Same coder agent as 1.26 (grouped — same lib)
 
-#### 1.29 🟡 sugar-reel: rebuildAudio() extraction (Item 2.3)
+#### 1.29 🟡 sugar-video: rebuildAudio() extraction (Item 2.3)
 
-**Plan:** `findings/plan_sugar-reel.md` — Item 2.3
+**Plan:** `findings/plan_sugar-video.md` — Item 2.3
 **Fix:** Extract duplicate `withSeek()` and `seekToSeconds()` code into shared `rebuildAudio()` helper
-**Files:** `sugar-reel/src/Player.php:931-942, 1058-1068`
+**Files:** `sugar-video/src/Player.php:931-942, 1058-1068`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.30 🟡 sugar-reel: PNG buffer unbounded (Item 3.2)
+#### 1.30 🟡 sugar-video: PNG buffer unbounded (Item 3.2)
 
-**Plan:** `findings/plan_sugar-reel.md` — Item 3.2
+**Plan:** `findings/plan_sugar-video.md` — Item 3.2
 **Fix:** Add `MAX_PNG_BUFFER` constant and size check in `nextPng()` — fail gracefully if buffer exceeds limit
-**Files:** `sugar-reel/src/FfmpegDecoder.php:313-333`
+**Files:** `sugar-video/src/FfmpegDecoder.php:313-333`
 **Agent:** Same coder agent as 1.29 (grouped — same lib)
 
 ---
 
 ### Group 1-F (3 agents)
 
-#### 1.31 🟡 sugar-reel: DecoderInterface::reopen() (Item 2.1)
+#### 1.31 🟡 sugar-video: DecoderInterface::reopen() (Item 2.1)
 
-**Plan:** `findings/plan_sugar-reel.md` — Item 2.1
+**Plan:** `findings/plan_sugar-video.md` — Item 2.1
 **Fix:** Add `reopen()` method to `Decoder.php` interface and implement in `FakeDecoder.php`; use in `Player.php:904`
-**Files:** `sugar-reel/src/Decoder.php`, `sugar-reel/src/FakeDecoder.php`, `sugar-reel/src/Player.php:904`
+**Files:** `sugar-video/src/Decoder.php`, `sugar-video/src/FakeDecoder.php`, `sugar-video/src/Player.php:904`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 1.32 🟡 honey-bounce: CubicBezier x-value validation (Item 1.3)
@@ -1032,9 +1032,9 @@ Same branch/PR check as Phase 0/1.
 
 ### Group 3-E (3 agents)
 
-#### 3.25 🟢 sugar-reel: Seeking callback (Item 5.1)
+#### 3.25 🟢 sugar-video: Seeking callback (Item 5.1)
 
-**Plan:** `findings/plan_sugar-reel.md` — Item 5.1
+**Plan:** `findings/plan_sugar-video.md` — Item 5.1
 **Fix:** (Deferred — marked as future work)
 **Agent:** ⏭️ SKIP — deferred, not blocking
 
@@ -1305,7 +1305,7 @@ Same verification as previous phases.
 | `plan_candy-mdview.md` | 2.2-2.3, 2.5 | GlamourTheme $throws, loadInput() docs, Pager empty stream |
 | `plan_candy-mail.md` | 3.1, 3.2, 4.1-4.7, 5.1, 6.1-6.2 | buildMimeMessage refactor, async transport, Resend API key, address deduplication, hasExtension parsing, CID validation, getenv consistency |
 | `plan_sugar-forms-huh.md` | 2.2-2.4, 3.2-3.7, 4.1-4.5, 5.1-5.2, 6.1-6.3, 7.1-7.3 | SIGCHLD handler, @ suppression removal, signal handler restoration, Spinner timeout, AsyncSpinner, SequentialSpinner, deprecation triggers, mutate helper |
-| `plan_sugar-reel.md` | 1.4, 2.4, 3.3-3.8, 4.1-4.9, 5.2-5.9, 6.2-6.9, 7.1-7.5, 8.1-8.6 | Exit code capture, mutate false/0, HalfBlock path, GifDecoder silent fallback, mode switch rebuild, renderPlaceholder memo, subtitle not found, skip limit, autoMode sentinel, decoderFactory, color packing, Windows NUL, tickMsg singleton, frame PTS |
+| `plan_sugar-video.md` | 1.4, 2.4, 3.3-3.8, 4.1-4.9, 5.2-5.9, 6.2-6.9, 7.1-7.5, 8.1-8.6 | Exit code capture, mutate false/0, HalfBlock path, GifDecoder silent fallback, mode switch rebuild, renderPlaceholder memo, subtitle not found, skip limit, autoMode sentinel, decoderFactory, color packing, Windows NUL, tickMsg singleton, frame PTS |
 | `plan_candy-git.md` | 3.1-3.2, 5.1 | DiffViewer early return, HistoryManager spread syntax, async git driver |
 | `plan_sugar-table.md` | 2.2-2.4, 3.1-3.3, 4.1-4.3 | Navigation short-circuit, totalRows double-compute, widthSolveCache LRU, styleFunc doc, visibleColumnIndices helper |
 | `plan_sugar-toast.md` | 3.1-3.3, 5.3, 6.3 | Null message handling, Finding 9 marker, Finding 10 marker ✅ COMPLETE d0f85418 |

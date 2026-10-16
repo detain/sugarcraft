@@ -28,7 +28,7 @@ use SugarCraft\Dashboard\Plugin\ExternalModule;
  * Every test that arms a live child also arms a background killer
  * (`sh -c 'sleep N; pkill -9 -f MARKER'`) so a regression that breaks the
  * ladder can hang ONE test at the harness timeout rather than wedge the
- * suite — the watchdog shape `sugar-reel`'s AudioPlayerTest already uses.
+ * suite — the watchdog shape `sugar-video`'s AudioPlayerTest already uses.
  */
 final class ExternalModuleTeardownTest extends TestCase
 {

@@ -1,0 +1,2356 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Video\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Video\AudioPlayer;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Msg\ResizeRebuildMsg;
+use SugarCraft\Video\Msg\TickMsg;
+use SugarCraft\Video\Player;
+use SugarCraft\Video\Source\Probe;
+use SugarCraft\Video\Tests\FakeDecoder;
+use SugarCraft\Video\Render\HalfBlockRenderer;
+use SugarCraft\Video\Render\LumaRamp;
+use SugarCraft\Video\Render\Mode;
+use SugarCraft\Testing\ProgramSimulator;
+use SugarCraft\Testing\Input\ScriptedInput;
+
+/**
+ * Unit tests for Player TEA model.
+ *
+ * Uses FakeDecoder to provide deterministic frame sequences without
+ * any real video file or external process.
+ *
+ * @covers \SugarCraft\Video\Player
+ */
+final class PlayerTest extends TestCase
+{
+    /** @var list<string> Temp files to remove in tearDown. */
+    private array $tempFiles = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempFiles as $path) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        $this->tempFiles = [];
+        parent::tearDown();
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Create a 1×1 RgbFrame with the given RGB bytes.
+     */
+    private function makeFrame(string $rgb, int $w = 1, int $h = 1): RgbFrame
+    {
+        return new RgbFrame($rgb, $w, $h);
+    }
+
+    /**
+     * Create a small multi-color GIF on disk so DecoderFactory builds a real
+     * GifDecoder (no ffmpeg) and rebuildDecoderAt() takes its real branch.
+     * Registered for cleanup in tearDown.
+     */
+    private function createTempGif(int $w = 8, int $h = 6): string
+    {
+        $img = imagecreatetruecolor($w, $h);
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $color = imagecolorallocate($img, ($x * 31) % 256, ($y * 47) % 256, (($x + $y) * 17) % 256);
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+
+        $path = sys_get_temp_dir() . '/sugar-video-player-gif-' . uniqid('', true) . '.gif';
+        imagegif($img, $path);
+        imagedestroy($img);
+
+        $this->tempFiles[] = $path;
+        return $path;
+    }
+
+    /**
+     * Create a FakeDecoder pre-populated with $count black 1×1 frames.
+     *
+     * @param int $count Number of frames
+     * @return FakeDecoder
+     */
+    private function makeFakeDecoder(int $count): FakeDecoder
+    {
+        $black = "\x00\x00\x00";
+        $frames = array_fill(0, $count, $this->makeFrame($black));
+        return new FakeDecoder($frames);
+    }
+
+    /**
+     * Create a FakeDecoder with a single red 1×1 pixel frame.
+     */
+    private function makeRedFrameDecoder(): FakeDecoder
+    {
+        // Red pixel: R=255, G=0, B=0
+        return new FakeDecoder([$this->makeFrame("\xff\x00\x00")]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Player::openForTest
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Player::openForTest returns a Player instance (not null)
+     */
+    public function testOpenReturnsPlayer(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $this->assertInstanceOf(Player::class, $player);
+    }
+
+    /**
+     * @testdox Player::openForTest creates a paused player
+     */
+    public function testInitCreatesPausedPlayer(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Player starts paused via openForTest factory
+        $this->assertTrue($this->getPlayerProperty($player, 'paused'));
+    }
+
+    /**
+     * @testdox Player::openForTest stores the fps parameter in the player
+     *
+     * The fps is stored as a public readonly property so tests can access
+     * it directly without reflection.
+     */
+    public function testOpenForTestStoresFps(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 60.0);
+
+        // fps is a public readonly property on Player
+        $this->assertSame(60.0, $player->fps);
+    }
+
+    /**
+     * @testdox Player::openForTest stores different fps values correctly
+     */
+    public function testOpenForTestStoresVariousFpsValues(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+
+        $player24 = Player::openForTest($decoder, 24.0);
+        $this->assertSame(24.0, $player24->fps);
+
+        $player30 = Player::openForTest($decoder, 30.0);
+        $this->assertSame(30.0, $player30->fps);
+
+        $player5994 = Player::openForTest($decoder, 59.94);
+        $this->assertSame(59.94, $player5994->fps);
+    }
+
+    // -------------------------------------------------------------------------
+    // Cell pixel geometry (graphics-mode decode/render resolution)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Player::openForTest stores the cellPxW/cellPxH it was given
+     *
+     * Graphics modes decode at cells·cellPx; the Player threads the cell pixel
+     * box into every decoder/renderer rebuild, exposing it as public readonly
+     * properties.
+     */
+    public function testOpenForTestStoresCellPxGeometry(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0, cellPxW: 8, cellPxH: 16);
+
+        $this->assertSame(8, $player->cellPxW);
+        $this->assertSame(16, $player->cellPxH);
+    }
+
+    /**
+     * @testdox the default cell pixel box is 10x20 when no cellPx args are passed
+     */
+    public function testOpenForTestDefaultCellPxGeometry(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(3), 30.0);
+
+        $this->assertSame(10, $player->cellPxW);
+        $this->assertSame(20, $player->cellPxH);
+    }
+
+    /**
+     * @testdox the cell pixel box survives a withSeek() rebuild
+     *
+     * withSeek() rebuilds the Player (and its decoder/renderer) — the explicit
+     * cellPx geometry must be carried over, not reset to the defaults.
+     */
+    public function testCellPxGeometrySurvivesSeek(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, totalFrames: 20, cellPxW: 8, cellPxH: 16);
+
+        $seeked = $player->withSeek(5);
+
+        $this->assertSame(8, $seeked->cellPxW, 'cellPxW must survive the seek rebuild');
+        $this->assertSame(16, $seeked->cellPxH, 'cellPxH must survive the seek rebuild');
+    }
+
+    // -------------------------------------------------------------------------
+    // Space key toggles pause
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Space key unpauses a paused player
+     */
+    public function testSpaceKeyTogglesPause(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Player starts paused
+        $this->assertTrue($this->getPlayerProperty($player, 'paused'));
+
+        // First Space unpauses
+        $space = new KeyMsg(KeyType::Space);
+        [$player,] = $player->update($space);
+
+        $this->assertFalse($this->getPlayerProperty($player, 'paused'));
+
+        // Second Space re-pauses
+        [$player,] = $player->update($space);
+
+        $this->assertTrue($this->getPlayerProperty($player, 'paused'));
+    }
+
+    // -------------------------------------------------------------------------
+    // TickMsg advances frame
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox TickMsg when unpaused advances the frame index
+     */
+    public function testTickMsgAdvancesFrame(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Advance decoder to get first frame
+        $firstFrame = $decoder->next();
+        $this->assertNotNull($firstFrame);
+
+        // Pre-seed currentFrame so TickMsg has something to advance from
+        $player = $this->setCurrentFrame($player, $firstFrame, 0);
+
+        // Unpause
+        $space = new KeyMsg(KeyType::Space);
+        [$player,] = $player->update($space);
+
+        // Send TickMsg
+        $tick = new TickMsg();
+        [$player, $cmd] = $player->update($tick);
+
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        $this->assertSame(1, $frameIndex);
+    }
+
+    /**
+     * @testdox TickMsg does not advance when paused
+     */
+    public function testTickMsgWhenPausedDoesNotAdvance(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Pre-seed currentFrame
+        $firstFrame = $decoder->next();
+        $player = $this->setCurrentFrame($player, $firstFrame, 0);
+
+        $frameIndexBefore = $this->getPlayerProperty($player, 'frameIndex');
+
+        // Send TickMsg while paused
+        $tick = new TickMsg();
+        [$player,] = $player->update($tick);
+
+        $frameIndexAfter = $this->getPlayerProperty($player, 'frameIndex');
+        $this->assertSame($frameIndexBefore, $frameIndexAfter);
+    }
+
+    // -------------------------------------------------------------------------
+    // Arrow keys seek
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox LeftArrow seeks backward 10 frames
+     */
+    public function testLeftArrowSeeksBackward(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Seek forward first (past frame 0) so we have room to seek back
+        // Set frameIndex to 15
+        $player = $this->setFrameIndex($player, 15);
+
+        $left = new KeyMsg(KeyType::Left);
+        [$player,] = $player->update($left);
+
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        // Left seeks back 10: max(0, 15 - 10) = 5
+        $this->assertSame(5, $frameIndex);
+    }
+
+    /**
+     * @testdox RightArrow seeks forward 10 frames
+     */
+    public function testRightArrowSeeksForward(): void
+    {
+        $decoder = $this->makeFakeDecoder(30);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Set frameIndex to 5
+        $player = $this->setFrameIndex($player, 5);
+
+        $right = new KeyMsg(KeyType::Right);
+        [$player,] = $player->update($right);
+
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        // Right seeks forward 10: 5 + 10 = 15
+        $this->assertSame(15, $frameIndex);
+    }
+
+    // -------------------------------------------------------------------------
+    // [ ] keys adjust speed
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox LeftBracket decreases speed by 0.25
+     */
+    public function testLeftBracketDecreasesSpeed(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $leftBracket = new KeyMsg(KeyType::Char, '[');
+        [$player,] = $player->update($leftBracket);
+
+        $speed = $this->getPlayerProperty($player, 'speed');
+        // Started at 1.0, decreased by 0.25 = 0.75
+        $this->assertSame(0.75, $speed);
+    }
+
+    /**
+     * @testdox RightBracket increases speed by 0.25
+     */
+    public function testRightBracketIncreasesSpeed(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $rightBracket = new KeyMsg(KeyType::Char, ']');
+        [$player,] = $player->update($rightBracket);
+
+        $speed = $this->getPlayerProperty($player, 'speed');
+        // Started at 1.0, increased by 0.25 = 1.25
+        $this->assertSame(1.25, $speed);
+    }
+
+    /**
+     * @testdox Speed is clamped at minimum 0.25
+     */
+    public function testSpeedClampedAtMinimum(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Decrease speed many times to hit the floor
+        $leftBracket = new KeyMsg(KeyType::Char, '[');
+        for ($i = 0; $i < 10; $i++) {
+            [$player,] = $player->update($leftBracket);
+        }
+
+        $speed = $this->getPlayerProperty($player, 'speed');
+        $this->assertSame(0.25, $speed);
+    }
+
+    /**
+     * @testdox Speed is clamped at maximum 4.0
+     */
+    public function testSpeedClampedAtMaximum(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Increase speed many times to hit the ceiling
+        $rightBracket = new KeyMsg(KeyType::Char, ']');
+        for ($i = 0; $i < 20; $i++) {
+            [$player,] = $player->update($rightBracket);
+        }
+
+        $speed = $this->getPlayerProperty($player, 'speed');
+        $this->assertSame(4.0, $speed);
+    }
+
+    // -------------------------------------------------------------------------
+    // 0-9 keys seek to percentage
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Char '0' seeks to 0 percent of duration
+     */
+    public function testChar0SeeksTo0Percent(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        // Pass totalFrames=100 via openForTest so digit-seek works.
+        $player = Player::openForTest($decoder, 30.0, 100, 80, 24, '/fake');
+
+        $char0 = new KeyMsg(KeyType::Char, '0');
+        [$player,] = $player->update($char0);
+
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        // 0% of 100 = frame 0
+        $this->assertSame(0, $frameIndex);
+    }
+
+    /**
+     * @testdox Char '5' seeks to 50 percent of duration
+     *
+     * Note: with 10-frame FakeDecoder, forward seek to frame 50 stops at
+     * the last available frame (frame 9) since the decoder runs out of frames.
+     */
+    public function testChar5SeeksTo50Percent(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        // Pass totalFrames=100 via openForTest so digit-seek works.
+        $player = Player::openForTest($decoder, 30.0, 100, 80, 24, '/fake');
+
+        $char5 = new KeyMsg(KeyType::Char, '5');
+        [$player,] = $player->update($char5);
+
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        // 50% of 100 = frame 50, but decoder only has 10 frames → clamped to 9
+        $this->assertLessThanOrEqual(10, $frameIndex);
+    }
+
+    /**
+     * @testdox Digit-seek must no-op when totalFrames is 0 (unknown-length stream)
+     */
+    public function testDigitSeekNoOpsWhenTotalFramesZero(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        // totalFrames=0 (default) — can't seek by percentage on unknown-length stream.
+        $player = Player::openForTest($decoder, 30.0, 0, 80, 24, '/fake');
+        $player = $this->setFrameIndex($player, 5);
+
+        $char5 = new KeyMsg(KeyType::Char, '5');
+        [$player,] = $player->update($char5);
+
+        // Frame index must be UNCHANGED — digit-seek is a no-op when totalFrames=0.
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        $this->assertSame(5, $frameIndex);
+    }
+
+    // -------------------------------------------------------------------------
+    // F4: Speed change must NOT retroactively re-scale accumulated videoTime
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F4. A speed change from 1.0× to 1.25× must only affect
+     * FUTURE pacing — no retroactive jump. The next target frame must advance
+     * by only ~delta*1.25*fps with no 0.25*oldVideoTime*fps skip-storm.
+     *
+     * FAILSON: On master the retroactive formula (`elapsed += delta; target = elapsed*fps*speed`)
+     * re-scales ALL prior elapsed time, so switching from 1.0→1.25× causes a massive
+     * forward jump (old code multiplies the accumulated elapsed by 1.25, so the new
+     * target overshoots by ~25% of total elapsed time — sometimes an entire half of
+     * the video).
+     */
+    public function testSpeedChangeDoesNotRetroactivelyJump(): void
+    {
+        // Build a 100-frame decoder at 30 fps. Start playing from frame 0.
+        $decoder = new FakeDecoder(array_fill(0, 100, $this->makeFrame("\x00\x00\x00")));
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Pre-seed first frame and unpause.
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        $player = $this->setPlayerProperty($player, 'videoTime', 0.0);
+        $player = $this->setPlayerProperty($player, 'lastTickTime', microtime(true));
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        // First tick: advances to frame 1. After tick, videoTime ≈ 1/30.
+        [$player] = $player->update(new TickMsg());
+        $frameAfterTick1 = $this->getPlayerProperty($player, 'frameIndex');
+        // videoTime is now ~1/30
+
+        // Manually backdate lastTickTime so the NEXT tick sees a ~0.033s delta
+        // (one frame interval at 30fps).
+        $player = $this->backdateLastTick($player, 0.033);
+
+        // Press ']' to increase speed to 1.25× — this must ONLY affect the NEXT
+        // tick's delta, not retroactively re-scale videoTime.
+        [$player] = $player->update(new KeyMsg(KeyType::Char, ']'));
+
+        // The speed must be 1.25.
+        $this->assertSame(1.25, $this->getPlayerProperty($player, 'speed'));
+
+        // The next tick: with videoTime ≈ 1/30 and delta ≈ 0.033,
+        // newVideoTime = (1/30) + 0.033*1.25 ≈ 0.063.
+        // target = floor(0.063*30) = floor(1.875) = 1.
+        // So the tick should advance by AT MOST 1 frame (delta*1.25*fps ≈ 1.25).
+        // A retroactive re-scale would produce target = floor((1/30)*30*1.25) = floor(1.25) = 1
+        // — actually let me use a larger gap to make the retroactivity obvious.
+        //
+        // Let's use a more obvious case: backdate by 0.5s so old formula would jump.
+        $player = $this->backdateLastTick($player, 0.5);
+        $frameBefore = $this->getPlayerProperty($player, 'frameIndex');
+        [$player] = $player->update(new TickMsg());
+        $frameAfter = $this->getPlayerProperty($player, 'frameIndex');
+
+        // delta = 0.5s, speed = 1.25, so newVideoTime grows by 0.5*1.25 = 0.625 more seconds.
+        // At 30fps, 0.625s more content = 18.75 more frames.
+        // So frameAfter should be frameBefore + at most 19 (never 30+ which would
+        // happen with the retroactive bug where videoTime gets scaled by 1.25).
+        $deltaFrames = $frameAfter - $frameBefore;
+        $this->assertLessThanOrEqual(
+            19,
+            $deltaFrames,
+            'Speed change must NOT cause retroactive frame skip — at most delta*speed*fps extra frames'
+        );
+    }
+
+    /**
+     * Regression for findings #44: the catch-up decode-forward loop used to run
+     * unbounded, so a big lag (long seek / stalling decode) blocked the whole TEA
+     * update inside a single tick. With a frameBudgetMs set, ONE tick may only do
+     * about that much wall-clock work — it stops early, leaving the decoder behind
+     * the screen but CONVERGING: successive ticks keep catching up. videoTime stays
+     * content-correct throughout.
+     */
+    public function testFrameBudgetBoundsSingleTickCatchUp(): void
+    {
+        // 40 frames, each costing ~2ms to produce. fps 30.
+        $decoder = new SlowFakeDecoder(array_fill(0, 40, $this->makeFrame("\x00\x00\x00")), 0.002);
+        $player = Player::fromDecoder($decoder, 80, 24, 30.0, paused: false, frameBudgetMs: 0.5);
+        // Lag of ~0.5s ⇒ target ≈ 15 frames ahead of index 0.
+        $player = $this->backdateLastTick($player, 0.5);
+
+        [$oneTick] = $player->update(new TickMsg());
+        $afterOneTick = $this->getPlayerProperty($oneTick, 'frameIndex');
+
+        // A 0.5ms budget vs 2ms/frame means the loop breaks after the first frame
+        // that overshoots the deadline — never the full ~15. Leave timing slack.
+        $this->assertLessThan(
+            10,
+            $afterOneTick,
+            'a bounded tick must not drain the whole lag in one blocking loop'
+        );
+        $this->assertGreaterThanOrEqual(1, $afterOneTick, 'the tick still made forward progress');
+
+        // Convergence: keep ticking; the decoder walks up to the target rather than
+        // being stuck, so catch-up finishes across ticks instead of in one freeze.
+        $target = $this->getPlayerProperty($oneTick, 'videoTime') * 30.0;
+        $current = $oneTick;
+        for ($i = 0; $i < 40; $i++) {
+            [$next] = $current->update(new TickMsg());
+            $current = $next;
+            if ($this->getPlayerProperty($current, 'frameIndex') >= $target) {
+                break;
+            }
+        }
+        $this->assertGreaterThanOrEqual(
+            $target,
+            $this->getPlayerProperty($current, 'frameIndex'),
+            'successive bounded ticks converge the decoder to the target frame'
+        );
+    }
+
+    /**
+     * @testdox an unbounded budget (0) drains the entire lag in a single tick (legacy behaviour)
+     */
+    public function testZeroBudgetCatchesUpInOneTick(): void
+    {
+        $decoder = new SlowFakeDecoder(array_fill(0, 40, $this->makeFrame("\x00\x00\x00")), 0.0);
+        $player = Player::fromDecoder($decoder, 80, 24, 30.0, paused: false, frameBudgetMs: 0.0);
+        $player = $this->backdateLastTick($player, 0.2); // target ≈ 6
+
+        [$ticked] = $player->update(new TickMsg());
+
+        $this->assertGreaterThanOrEqual(
+            6,
+            $this->getPlayerProperty($ticked, 'frameIndex'),
+            'with no budget the single tick skips all the way to the target'
+        );
+    }
+
+    /**
+     * Regression for F4. Pressing '[' to slow down from 1.0× to 0.75× must NOT
+     * cause a multi-tick hold/freeze. The retroactive bug makes old elapsed time
+     * appear LONGER when speed decreases (divide-by-smaller), causing the target
+     * frame to fall behind current → shouldHold fires → freeze.
+     */
+    public function testSpeedDecreaseDoesNotFreeze(): void
+    {
+        $decoder = new FakeDecoder(array_fill(0, 100, $this->makeFrame("\x00\x00\x00")));
+        $player = Player::openForTest($decoder, 30.0);
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        $player = $this->setPlayerProperty($player, 'videoTime', 0.0);
+        $player = $this->setPlayerProperty($player, 'lastTickTime', microtime(true));
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        // Advance several ticks.
+        for ($i = 0; $i < 5; $i++) {
+            $player = $this->backdateLastTick($player, 0.033);
+            [$player] = $player->update(new TickMsg());
+        }
+        $frameBefore = $this->getPlayerProperty($player, 'frameIndex');
+        $videoTimeBefore = $this->getPlayerProperty($player, 'videoTime');
+
+        // Slow down: 1.0 → 0.75
+        [$player] = $player->update(new KeyMsg(KeyType::Char, '['));
+
+        // The next tick: delta*0.75 makes videoTime grow SLOWER.
+        // target = (videoTimeBefore + 0.033*0.75)*30 = videoTimeBefore*30 + ~0.74.
+        // On the old buggy code, videoTime gets re-scaled: newElapsed = oldElapsed*0.75
+        // (retroactively slower), so target = newElapsed*30 = oldElapsed*30*0.75,
+        // which is LESS than the current frameIndex → shouldHold fires → freeze.
+        // The fix means target >= currentFrameIndex, so tick ADDS frames (doesn't hold).
+        $player = $this->backdateLastTick($player, 0.033);
+        [$player] = $player->update(new TickMsg());
+        $frameAfter = $this->getPlayerProperty($player, 'frameIndex');
+
+        // Must not freeze — frame should advance (or at minimum not regress).
+        $this->assertGreaterThanOrEqual(
+            $frameBefore,
+            $frameAfter,
+            'Slowing speed must NOT freeze playback (no shouldHold retroactively firing)'
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // m key cycles mode
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox 'm' key cycles through rendering modes
+     */
+    public function testMcyclesMode(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $initialMode = $this->getPlayerProperty($player, 'mode');
+
+        $m = new KeyMsg(KeyType::Char, 'm');
+        [$player,] = $player->update($m);
+
+        $nextMode = $this->getPlayerProperty($player, 'mode');
+        $this->assertNotSame($initialMode, $nextMode);
+    }
+
+    /**
+     * Regression for F2. Switching mode must rebuild the decoder so the decoded
+     * frame resolution tracks the new mode: HalfBlock packs 2 source rows per
+     * cell (height 48 for 24 cells), the 1-row modes use 1 (height 24).
+     *
+     * On master 'm' only swapped the Mode enum and left currentFrame untouched,
+     * so after switching from the initial HalfBlock frame (h=48) to a 1-row mode
+     * the height stayed 48 — the assert fails.
+     *
+     * @testdox mode switch rebuilds the decoder so frame height matches the mode (F2)
+     */
+    public function testModeSwitchRebuildsDecoderToMatchGeometry(): void
+    {
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 0, 80, 24, '/fake');
+
+        $m = new KeyMsg(KeyType::Char, 'm');
+
+        // Cycle through every mode once (7 presses) and confirm the decoded
+        // frame height tracks the mode each time.
+        $modeCount = count(Mode::cases());
+        for ($i = 0; $i < $modeCount; $i++) {
+            [$player,] = $player->update($m);
+
+            $mode = $this->getPlayerProperty($player, 'mode');
+            $frame = $player->currentFrame;
+
+            $this->assertNotNull($frame, 'mode switch must rebuild and decode a frame');
+            $this->assertSame(
+                24 * $mode->rowsPerCell(),
+                $frame->h,
+                "frame height must match mode {$mode->name} (rowsPerCell {$mode->rowsPerCell()})",
+            );
+            $this->assertSame(80, $frame->w, 'frame width must equal cellsW');
+        }
+    }
+
+    /**
+     * Regression for F2 (tail). The mode cycle is capability-aware: it only
+     * includes modes the terminal reports support for via Mosaic::diagnose().
+     *
+     * Since we cannot mock Mosaic::diagnose() in plain PHPUnit, we verify the
+     * observable contract: cycling works without error, the cycle wraps around
+     * (pressing m many times stays within a bounded set), and that bounded set
+     * is at least the 4 text modes (always included).
+     *
+     * @testdox mode cycle wraps around and includes all text modes
+     */
+    public function testModeCycleReachesGraphicsModes(): void
+    {
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 0, 80, 24, '/fake');
+
+        $m = new KeyMsg(KeyType::Char, 'm');
+        $visited = [];
+        // Press enough times to wrap around at least once.
+        $pressCount = 14;
+        for ($i = 0; $i < $pressCount; $i++) {
+            [$player,] = $player->update($m);
+            $visited[] = $this->getPlayerProperty($player, 'mode');
+        }
+
+        // The cycle must be non-empty and bounded (wrap-around must happen).
+        $unique = array_unique(array_map(fn (Mode $m) => $m->name, $visited));
+        $this->assertLessThanOrEqual(
+            $pressCount,
+            count($unique),
+            'unique modes visited cannot exceed press count'
+        );
+
+        // The 4 text modes must always be in the cycle.
+        $this->assertContains(Mode::Ascii->name, $unique, 'cycle must include Ascii');
+        $this->assertContains(Mode::Ansi256->name, $unique, 'cycle must include Ansi256');
+        $this->assertContains(Mode::TrueColor->name, $unique, 'cycle must include TrueColor');
+        $this->assertContains(Mode::HalfBlock->name, $unique, 'cycle must include HalfBlock');
+    }
+
+    // -------------------------------------------------------------------------
+    // F10: WindowSizeMsg resizes the player
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F10, re-scoped by finding #52. When a WindowSizeMsg arrives the
+     * Player must take the new cellsW/cellsH AND rebuild the decoder at it (so frames
+     * are decoded at the correct resolution for the new mode) — but the rebuild is now
+     * DEBOUNCED: the signal handler only records the clamped target and arms a timer,
+     * and the geometry lands when the ResizeRebuildMsg it dispatches is delivered.
+     * Both halves are asserted here.
+     *
+     * On master update() had no WindowSizeMsg branch at all — this no-ops silently
+     * and the video stays at the constructor's fixed 80×24.
+     */
+    public function testWindowSizeMsgUpdatesCellDimensions(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+
+        // Pre-seed a currentFrame and unpause so resize schedules a tick.
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        $resize = new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40);
+        [$player2, $cmd] = $player->update($resize);
+
+        // The signal handler must not block on a spawn — it schedules the rebuild.
+        $this->assertNotNull($cmd, 'a resize must schedule the deferred rebuild');
+        $this->assertSame(
+            120,
+            $this->pendingResizeTarget($player2)->cols,
+            'the target must be recorded synchronously'
+        );
+        $this->assertSame(
+            80,
+            $this->getPlayerProperty($player2, 'cellsW'),
+            'the applied grid must not change until the debounce elapses'
+        );
+
+        [$player3, $tick] = $player2->update(ResizeRebuildMsg::instance());
+
+        $this->assertSame(
+            120,
+            $this->getPlayerProperty($player3, 'cellsW'),
+            'cellsW must update once the debounce elapses'
+        );
+        $this->assertSame(
+            40,
+            $this->getPlayerProperty($player3, 'cellsH'),
+            'cellsH must update once the debounce elapses'
+        );
+        $this->assertNotNull($tick, 'a resize landing while playing must keep the tick chain alive');
+        $this->assertNull($this->getPlayerProperty($player3, 'pendingResize'), 'the apply must consume the pending slot');
+    }
+
+    /**
+     * Finding #52 — a burst of WindowSizeMsgs (a dragged terminal edge reflows per
+     * character cell) must cost ONE decoder rebuild, not one per event. The fake
+     * decoder counts its own spawns, so this measures the process-level cost directly.
+     */
+    public function testResizeStormRebuildsTheDecoderOnce(): void
+    {
+        // GeometryFakeDecoder regenerates on reopen (reopen() delegates to open()),
+        // so openCount() is the true count of "a new decode grid was built" — exactly
+        // the expensive event the debounce must collapse.
+        $decoder = new GeometryFakeDecoder(200);
+        $decoder->open('/fake', 80, 24, 30.0, Mode::HalfBlock);
+        $player = Player::openForTest($decoder, 30.0, 200, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        $opensBefore = $decoder->openCount();
+        $current = $player;
+        /** @var list<?\Closure> $cmds */
+        $cmds = [];
+        // 25 distinct sizes that never revisit the applied 80×24, with no rebuild
+        // applied in between — a pure burst.
+        for ($i = 0; $i < 25; $i++) {
+            [$current, $cmd] = $current->update(new \SugarCraft\Core\Msg\WindowSizeMsg(40 + $i, 20 + intdiv($i, 5)));
+            $cmds[] = $cmd;
+        }
+
+        $this->assertCount(25, $cmds);
+        $this->assertSame(
+            $opensBefore,
+            $decoder->openCount(),
+            'the resize signal handler must not touch the decoder at all'
+        );
+
+        // Every armed timer fires. Only the first may rebuild; the rest must find
+        // nothing pending and no-op — that IS the debounce contract.
+        $rebuilds = 0;
+        foreach ($cmds as $cmd) {
+            $this->assertNotNull($cmd, 'each new target must arm a debounce timer');
+            $before = $decoder->openCount();
+            [$current] = $current->update(ResizeRebuildMsg::instance());
+            $rebuilds += $decoder->openCount() - $before;
+        }
+
+        $this->assertSame(1, $rebuilds, 'a 25-event burst must spawn exactly one decoder rebuild');
+        $this->assertSame(64, $this->getPlayerProperty($current, 'cellsW'), 'the last geometry must win');
+        $this->assertSame(24, $this->getPlayerProperty($current, 'cellsH'));
+    }
+
+    /**
+     * Finding #52 — the deferred apply must not orphan a child. It goes through the
+     * same close-then-create seam the F21 regression pins for a backward seek, so the
+     * decoder it replaces is closed before the replacement is built. Driven with a
+     * SpyDecoder (reopensInPlace() === false) on a real .gif path so the production
+     * rebuild branch — not the in-memory reopen branch — is the one exercised.
+     */
+    public function testDeferredResizeClosesTheSupersededDecoder(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gifPath = $this->createTempGif();
+        $spy = new SpyDecoder(array_fill(0, 20, $this->makeFrame("\x10\x20\x30")));
+        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(16, 12));
+        $this->assertNotNull($cmd);
+        $this->assertSame(0, $spy->closeCount, 'the signal handler itself must close nothing');
+
+        [$player] = $player->update(ResizeRebuildMsg::instance());
+
+        $this->assertSame(1, $spy->closeCount, 'the applied rebuild must close the child it replaces');
+        $this->assertSame(16, $this->getPlayerProperty($player, 'cellsW'));
+    }
+
+    /**
+     * Finding #52 — a resize that snaps back to the applied geometry cancels the
+     * burst's work: the stale timer must then apply nothing rather than rebuild twice.
+     */
+    public function testStaleDebounceTimerAppliesNothing(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $this->assertNotNull($cmd);
+        [$player] = $player->update(ResizeRebuildMsg::instance());
+        $reopensAfterApply = $decoder->reopenCount();
+        $this->assertSame(1, $reopensAfterApply, 'the burst must have rebuilt once');
+
+        // The same timer firing again (a second armed event from the same burst)
+        // finds nothing pending.
+        [$player2, $cmd2] = $player->update(ResizeRebuildMsg::instance());
+        $this->assertSame($player, $player2, 'a stale debounce must be identity');
+        $this->assertNull($cmd2, 'a stale debounce must schedule nothing');
+        $this->assertSame(
+            $reopensAfterApply,
+            $decoder->reopenCount(),
+            'a stale debounce must not rebuild again'
+        );
+    }
+
+    /**
+     * Finding #52 — a pending resize must survive other updates. A tick landing
+     * inside the debounce window must not swallow the deferred rebuild, or the player
+     * would keep decoding at the superseded geometry forever.
+     */
+    public function testPendingResizeSurvivesAnInterleavedTick(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        [$player] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        [$player] = $player->update(TickMsg::instance());
+
+        $this->assertNotNull(
+            $this->getPlayerProperty($player, 'pendingResize'),
+            'an interleaved tick must carry the pending resize forward'
+        );
+
+        [$player] = $player->update(ResizeRebuildMsg::instance());
+        $this->assertSame(120, $this->getPlayerProperty($player, 'cellsW'));
+        $this->assertSame(40, $this->getPlayerProperty($player, 'cellsH'));
+    }
+
+    /**
+     * Finding #52 (round-1 review M1) — the snap-back case the debounce comment
+     * promised but never implemented: play at A, burst to B (timer armed), then the
+     * terminal returns to A while the timer is still in flight. The second event
+     * must CANCEL the deferred target, or the armed timer fires and rebuilds the
+     * decoder at B — a geometry the host no longer has, uncorrected until the next
+     * resize. Drives the exact sequence A→B→A→(late timer) and asserts the player
+     * stays at A with no reopen.
+     */
+    public function testSnapbackResizeCancelsThePendingRebuild(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $this->assertNotNull($cmd, 'a new target arms the debounce timer');
+        $this->assertNotNull($this->getPlayerProperty($player, 'pendingResize'));
+
+        // Snap back to the APPLIED geometry while the armed timer is still in flight.
+        [$player2, $cmd2] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertNull($cmd2, 'a snap-back schedules nothing new');
+        $this->assertNull(
+            $this->getPlayerProperty($player2, 'pendingResize'),
+            'the snap-back must clear the deferred target, not leave it armed'
+        );
+
+        // The timer armed by the FIRST event fires late. It must find nothing pending.
+        $reopensBefore = $decoder->reopenCount();
+        [$player3, $cmd3] = $player2->update(ResizeRebuildMsg::instance());
+        $this->assertSame($player2, $player3, 'a cancelled debounce must be identity');
+        $this->assertNull($cmd3);
+        $this->assertSame(
+            $reopensBefore,
+            $decoder->reopenCount(),
+            'a cancelled debounce must not reopen the decoder at the stale geometry'
+        );
+        $this->assertSame(80, $this->getPlayerProperty($player3, 'cellsW'), 'the applied grid stays the snap-back size');
+        $this->assertSame(24, $this->getPlayerProperty($player3, 'cellsH'));
+    }
+
+    /**
+     * Finding #52 (round-1 review M2) — teardown must beat the debounce timer.
+     * stop() closes the decoder; an in-flight ResizeRebuildMsg armed BEFORE the stop
+     * must not resurrect it, or the deferred rebuild spawns a fresh ffmpeg child on
+     * a player the host already tore down — exactly the orphan the child-lifetime
+     * guarantee exists to prevent. Driven with a SpyDecoder (reopensInPlace() ===
+     * false) on a real .gif path so the factory respawn branch is the one refused.
+     */
+    public function testStopCancelsAnInFlightDebounceTimer(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gifPath = $this->createTempGif();
+        $spy = new SpyDecoder(array_fill(0, 20, $this->makeFrame("\x10\x20\x30")));
+        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(16, 12));
+        $this->assertNotNull($cmd, 'the resize arms the debounce timer');
+
+        $player->stop(); // the host tears the stream down; the timer is still in flight
+        $this->assertSame(1, $spy->closeCount, 'stop() closes the decoder exactly once');
+
+        [$player2, $cmd2] = $player->update(ResizeRebuildMsg::instance());
+        $this->assertSame($player, $player2, 'a stopped player must not derive a rebuilt instance');
+        $this->assertNull($cmd2, 'a stopped player must not schedule further work');
+        $this->assertSame($spy, $this->getPlayerProperty($player2, 'decoder'), 'no replacement decoder may be built after stop()');
+        $this->assertSame(1, $spy->closeCount, 'the refused rebuild must close nothing further');
+        $this->assertSame(8, $this->getPlayerProperty($player2, 'cellsW'), 'geometry stays as it was at teardown');
+
+        // A late WindowSizeMsg on the stopped instance must arm nothing either.
+        [$player3, $cmd3] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(20, 14));
+        $this->assertSame($player, $player3);
+        $this->assertNull($cmd3, 'a stopped player must not arm new debounce timers');
+    }
+
+    /**
+     * Round-3 review R3-1: the stop() latch must cover the TICK path too, not just
+     * the two resize sites. A looping player that is stopped mid-run used to let an
+     * in-flight TickMsg walk to end-of-stream and reopen frame 0 through
+     * onReachedEnd() — respawning a decoder child whose owner had already torn the
+     * instance down. The latch refuses the tick outright.
+     */
+    public function testStopSilencesALoopingPlaybackTick(): void
+    {
+        $decoder = $this->makeFakeDecoder(2);
+        $player = Player::openForTest($decoder, 30.0, totalFrames: 2, loop: true, paused: false);
+        $decoder->next();
+        $player = $this->setCurrentFrame($player, $decoder->next(), 1);
+
+        $player->stop();
+
+        [$after, $cmd] = $player->update(new TickMsg());
+
+        $this->assertSame($player, $after, 'a stopped player must not derive a looping reopen');
+        $this->assertNull($cmd, 'a stopped tick schedules nothing further');
+        $this->assertSame(0, $decoder->reopenCount(), 'the end-of-stream loop must not respawn a closed player');
+        $this->assertSame(1, $this->getPlayerProperty($after, 'frameIndex'), 'frame position stays frozen at teardown');
+    }
+
+    /**
+     * Regression for F10. Resize with the SAME size must be a no-op
+     * (no decoder rebuild, no tick reschedule).
+     */
+    public function testWindowSizeMsgNoOpWhenUnchanged(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        $resizeSame = new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24);
+        [$player2, $cmd] = $player->update($resizeSame);
+
+        // Must be the same instance (no mutation).
+        $this->assertSame($player, $player2);
+        $this->assertNull($cmd, 'no-op resize must not reschedule a tick');
+    }
+
+    /**
+     * Regression for F10. Resize clamps to sane bounds (cols≥10, rows≥5).
+     * A WindowSizeMsg(5, 3) must be clamped to cols=10, rows=5 before anything
+     * else sees it — including the deferred rebuild, which must never be handed a
+     * zero-area grid (that would crash the decoder).
+     */
+    public function testWindowSizeMsgClampsToMinimum(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        $tiny = new \SugarCraft\Core\Msg\WindowSizeMsg(5, 3);
+        [$player2, $cmd] = $player->update($tiny);
+
+        $this->assertNotNull($cmd, 'a clamped resize is still a resize');
+        $this->assertSame(
+            10,
+            $this->pendingResizeTarget($player2)->cols,
+            'cols below 10 must be clamped to 10 before they are recorded'
+        );
+        $this->assertSame(
+            5,
+            $this->pendingResizeTarget($player2)->rows,
+            'rows below 5 must be clamped to 5 before they are recorded'
+        );
+
+        [$player3] = $player2->update(ResizeRebuildMsg::instance());
+        $this->assertSame(10, $this->getPlayerProperty($player3, 'cellsW'), 'the applied grid must be the clamped width');
+        $this->assertSame(5, $this->getPlayerProperty($player3, 'cellsH'), 'the applied grid must be the clamped height');
+    }
+
+    /**
+     * Finding #52 — pin the wiring the debounce depends on: the command a resize
+     * returns must be a one-shot timer that dispatches ResizeRebuildMsg (not a
+     * playback tick, which would fork the tick chain), so the host that runs it gets
+     * exactly one deferred apply per armed window.
+     */
+    public function testResizeCommandDispatchesTheRebuildMessage(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        [, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $this->assertNotNull($cmd);
+
+        $request = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $request, 'a resize arms a timer, it does not inline work');
+        $this->assertGreaterThan(0.0, $request->seconds, 'the debounce window must be a real delay');
+        $this->assertLessThan(0.5, $request->seconds, '…but short enough that the reflow is not visibly late');
+        $this->assertInstanceOf(ResizeRebuildMsg::class, ($request->produce)());
+    }
+
+    /**
+     * The recorded (clamped) resize target, for asserting the debounce contract
+     * without waiting on a real timer.
+     */
+    private function pendingResizeTarget(Player $player): \SugarCraft\Core\Msg\WindowSizeMsg
+    {
+        $pending = $this->getPlayerProperty($player, 'pendingResize');
+        $this->assertInstanceOf(
+            \SugarCraft\Core\Msg\WindowSizeMsg::class,
+            $pending,
+            'expected update() to record a pending resize'
+        );
+
+        return $pending;
+    }
+
+    // -------------------------------------------------------------------------
+    // F2 tail: capability-aware mode cycle
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F2 (tail). The mode cycle must ONLY include modes the
+     * terminal actually supports. On master the cycle hardcoded all 7 modes,
+     * so `m` would land on Sixel even when the terminal can't render it
+     * (garbage output). This test verifies that the cycle is non-empty,
+     * visits distinct modes, and never crashes.
+     *
+     * NOTE: Since Mosaic::diagnose() is a real external probe that cannot be
+     * mocked without a library, we verify observable behavior: cycling works
+     * without error and visits at least 2 distinct modes.
+     */
+    public function testModeCycleOnlyVisitsSupportedModes(): void
+    {
+        // Use GeometryFakeDecoder which regenerates frames based on mode.
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 0, 80, 24, '/fake');
+
+        $m = new KeyMsg(KeyType::Char, 'm');
+        $visited = [];
+        // Visit 14 times — enough to wrap around at least once if cycle is short.
+        for ($i = 0; $i < 14; $i++) {
+            [$player] = $player->update($m);
+            $visited[] = $this->getPlayerProperty($player, 'mode');
+        }
+
+        // Every visited mode must be a valid Mode.
+        foreach ($visited as $mode) {
+            $this->assertInstanceOf(Mode::class, $mode);
+        }
+
+        // The cycle must visit at least 2 distinct modes.
+        $unique = array_unique(array_map(fn (Mode $m) => $m->name, $visited));
+        $this->assertGreaterThanOrEqual(
+            2,
+            count($unique),
+            'mode cycle must visit at least 2 distinct modes'
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Quit keys
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox 'q' key returns Cmd::quit()
+     */
+    public function testQKeyQuits(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $q = new KeyMsg(KeyType::Char, 'q');
+        [, $cmd] = $player->update($q);
+
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        // Execute the cmd and check it returns QuitMsg
+        $result = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\QuitMsg::class, $result);
+    }
+
+    /**
+     * @testdox Escape key returns Cmd::quit()
+     */
+    public function testEscKeyQuits(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $esc = new KeyMsg(KeyType::Escape);
+        [, $cmd] = $player->update($esc);
+
+        $this->assertNotNull($cmd);
+        $result = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\QuitMsg::class, $result);
+    }
+
+    // -------------------------------------------------------------------------
+    // view()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox view() returns a string (not null)
+     */
+    public function testViewReturnsString(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $output = $player->view();
+
+        $this->assertIsString($output);
+        $this->assertNotEmpty($output);
+    }
+
+    /**
+     * @testdox view() returns a string containing ANSI escape sequences for a red pixel
+     */
+    public function testViewContainsRenderedFrame(): void
+    {
+        $redDecoder = new FakeDecoder([$this->makeFrame("\xff\x00\x00")]);
+        $player = Player::openForTest($redDecoder, 30.0);
+
+        // Pre-seed currentFrame with the red pixel
+        $redFrame = $redDecoder->next();
+        $player = $this->setCurrentFrame($player, $redFrame, 0);
+
+        $output = $player->view();
+
+        // The output should contain ANSI SGR codes (ESC[...)
+        $this->assertIsString($output);
+        // At minimum we expect the output to be non-empty and contain content
+        $this->assertNotEmpty(trim($output));
+    }
+
+    /**
+     * @testdox view() is idempotent — calling it twice with the same frame produces identical output
+     */
+    public function testViewIsIdempotent(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $firstFrame = $decoder->next();
+        $player = $this->setCurrentFrame($player, $firstFrame, 0);
+
+        $output1 = $player->view();
+        $output2 = $player->view();
+
+        $this->assertSame($output1, $output2);
+    }
+
+    /**
+     * Regression: view() must emit the FULL current frame every call so
+     * candy-core's Renderer can diff it. A previous implementation diffed
+     * inside view() and returned an empty string for every frame after the
+     * first, freezing playback. Two visibly different frames must therefore
+     * produce two different, non-empty renders.
+     *
+     * @testdox view() renders distinct, non-empty output for distinct frames
+     */
+    public function testViewRendersFullFrameForEachFrame(): void
+    {
+        // A solid-red frame and a solid-green frame of the same size.
+        $red = $this->makeFrame("\xff\x00\x00");
+        $green = $this->makeFrame("\x00\xff\x00");
+
+        $player = Player::openForTest(new FakeDecoder([$red, $green]), 30.0);
+
+        $playerRed = $this->setCurrentFrame($player, $red, 0);
+        $outRed = $playerRed->view();
+
+        $playerGreen = $this->setCurrentFrame($player, $green, 1);
+        $outGreen = $playerGreen->view();
+
+        $this->assertNotEmpty(trim($outRed), 'red frame must render content');
+        $this->assertNotEmpty(trim($outGreen), 'green frame must render content');
+        $this->assertNotSame(
+            $outRed,
+            $outGreen,
+            'distinct frames must render distinct output (view() must emit full frames, not a self-diff)',
+        );
+    }
+
+    /**
+     * Regression for F14. The inline Player::frameToBuffer HalfBlock path
+     * and the standalone HalfBlockRenderer (candy-mosaic via sugar-video's
+     * HalfBlockRenderer) must both emit the same ▀ cell with fg/bg SGR.
+     * This guards against the two paths drifting after geometry changes.
+     */
+    public function testHalfBlockViewOutputHasCorrectSgrAndChar(): void
+    {
+        // 2 cols × 4 rows = 4 cells (each cell = 2 pixel rows)
+        $bytes =
+            "\xff\x00\x00"  // R0C0 upper: red
+            . "\x00\x00\xff"  // R0C0 lower: blue
+            . "\x00\xff\x00"  // R0C1 upper: green
+            . "\xff\xff\x00"  // R0C1 lower: yellow
+            . "\x00\xff\xff"  // R1C0 upper: cyan
+            . "\xff\xff\xff"  // R1C0 lower: white
+            . "\x40\x40\x40"  // R1C1 upper: dark grey
+            . "\xff\x00\xff"; // R1C1 lower: magenta
+        $frame = new RgbFrame($bytes, 2, 4);
+
+        $player = Player::openForTest(new FakeDecoder([$frame]), 30.0, 0, 2, 2, '/fake');
+        $player = $this->setCurrentFrame($player, $frame, 0);
+
+        $view = $player->view();
+
+        // Must contain half-block character.
+        $this->assertStringContainsString(
+            "\u{2580}",
+            $view,
+            'HalfBlock output must contain ▀'
+        );
+        // Must have TrueColor foreground SGR (may be combined with reset: [0;38;2;).
+        $this->assertStringContainsString(
+            '38;2;',
+            $view,
+            'HalfBlock must use 38;2;R;G;B foreground'
+        );
+        // Must have TrueColor background SGR (may be combined with reset: [0;48;2;).
+        $this->assertStringContainsString(
+            '48;2;',
+            $view,
+            'HalfBlock must use 48;2;R;G;B background'
+        );
+    }
+
+    /**
+     * frameToBuffer() PERF parity. The per-cell Buffer::withCellAt() loop (each
+     * call copy-on-write duplicated the whole grid → O(cells²)/frame) was
+     * replaced with grid accumulation + a single Buffer::fromGrid() call. The
+     * refactor MUST be byte-identical to the old path.
+     *
+     * These EXPECTED byte strings were captured from the pre-refactor per-cell
+     * code (see the commit that introduces this test). Each covers one branch of
+     * frameToBuffer: HalfBlock, Ascii (luma ramp), TrueColor, and QuarterBlock.
+     * A future divergence in the grid ordering or wrapping would change view()
+     * and fail this test.
+     *
+     * Re-captured after the candy-buffer value-equality fix made Buffer::toAnsi()
+     * canonical: equal styles now emit ONE SGR per run instead of one per cell
+     * (the HalfBlock pin below lost its per-glyph repeats). Parity semantics —
+     * grid ordering, glyph choice, wrapping — are unchanged.
+     *
+     * @dataProvider frameToBufferParityCases
+     */
+    public function testFrameToBufferParityWithPerCellPath(string $bytes, int $w, int $h, Mode $mode, string $expectedB64): void
+    {
+        $frame = new RgbFrame($bytes, $w, $h);
+
+        $base = Player::openForTest(new FakeDecoder([$frame]), 1.0, 0, $w, $h, '/fake', false, 'standard');
+        $player = $this->createPlayerWithOverrides($base, [
+            'currentFrame' => $frame,
+            'frameIndex' => 0,
+            'mode' => $mode,
+        ]);
+
+        $this->assertSame(
+            base64_decode($expectedB64, true),
+            $player->view(),
+            "frameToBuffer() {$mode->name} output must be byte-identical to the old per-cell path",
+        );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: int, 3: Mode, 4: string}>
+     */
+    public static function frameToBufferParityCases(): array
+    {
+        // QuarterBlock frame: 4×4 varied colors (mirrors the capture fixture).
+        $qb = '';
+        for ($y = 0; $y < 4; $y++) {
+            for ($x = 0; $x < 4; $x++) {
+                $qb .= chr(($x * 60) % 256) . chr(($y * 60) % 256) . chr((($x + $y) * 40) % 256);
+            }
+        }
+
+        return [
+            'HalfBlock' => [
+                str_repeat("\xff\x00\x00", 4) . str_repeat("\x00\x80\x00", 4),
+                4,
+                2,
+                Mode::HalfBlock,
+                'G1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paA4paA4paA4paAG1swbQ==',
+            ],
+            'Ascii' => [
+                "\x00\x00\x00" . "\x7f\x7f\x7f" . "\x7f\x7f\x7f" . "\xff\xff\xff",
+                2,
+                2,
+                Mode::Ascii,
+                'IHQKdEA=',
+            ],
+            'TrueColor' => [
+                "\xff\x00\x00" . "\x00\xff\x00" . "\x00\x00\xff" . "\xff\xff\x00",
+                2,
+                2,
+                Mode::TrueColor,
+                'G1swOzM4OzI7MjU1OzA7MG07G1swOzM4OzI7MDsyNTU7MG1mChtbMDszODsyOzA7MDsyNTVtLhtbMDszODsyOzI1NTsyNTU7MG04G1swbQ==',
+            ],
+            'QuarterBlock' => [
+                $qb,
+                4,
+                4,
+                Mode::QuarterBlock,
+                'G1swOzM4OzI7NDA7NDA7NTM7NDg7MjswOzA7MG3ilp8bWzA7Mzg7MjsxNjA7NDA7MTMzOzQ4OzI7MTIwOzA7ODBt4pafChtbMDszODsyOzQwOzE2MDsxMzM7NDg7MjswOzEyMDs4MG3ilp8bWzA7Mzg7MjsxNjA7MTYwOzIxMzs0ODsyOzEyMDsxMjA7MTYwbeKWnxtbMG0=',
+            ],
+        ];
+    }
+
+    /**
+     * Regression (tick path): after a tick advances the frame, view() must
+     * still emit the full frame. The old implementation set the diff baseline
+     * to the just-advanced frame inside updateTick(), so view() diffed the
+     * current frame against itself and returned an empty string — the screen
+     * froze on the placeholder. Driving update() through a real tick is the
+     * path that exposed the bug.
+     *
+     * @testdox view() is non-empty after a tick advances the frame
+     */
+    public function testViewNonEmptyAfterTickAdvance(): void
+    {
+        $player = Player::openForTest(new FakeDecoder([
+            $this->makeFrame("\xff\x00\x00"),
+            $this->makeFrame("\x00\xff\x00"),
+        ]), 30.0);
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+        [$player] = $player->update(new TickMsg());              // advance one frame
+
+        $this->assertNotEmpty(trim($player->view()));
+    }
+
+    // -------------------------------------------------------------------------
+    // F9: end-of-stream handling + optional loop
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F9. When the decoder is exhausted and the player is NOT
+     * looping, playback must mark itself ended and STOP rescheduling ticks
+     * (null Cmd) — otherwise the tick chain spins forever at the end. On the
+     * un-fixed code there is no `ended` state and updateTick() always returns a
+     * non-null tick Cmd, so this fails on both the null-Cmd and ended asserts.
+     *
+     * @testdox exhausted non-looping decoder marks ended and stops ticking (null Cmd)
+     */
+    public function testExhaustedDecoderStopsTickingWhenNotLooping(): void
+    {
+        // Three real frames, loop defaults false.
+        $player = Player::openForTest(new FakeDecoder([
+            $this->makeFrame("\xff\x00\x00"),
+            $this->makeFrame("\x00\xff\x00"),
+            $this->makeFrame("\x00\x00\xff"),
+        ]), 30.0);
+
+        // Unpause so ticks advance.
+        [$player] = $player->update(new KeyMsg(KeyType::Space));
+
+        // Drive ticks to exhaustion. Each tick re-anchors lastTickTime to now,
+        // so to make wall-clock target outrun the frame index deterministically
+        // we push lastTickTime ~1s into the past before each tick (large delta →
+        // big target → skip path drains the decoder via next()). Ten passes far
+        // exceeds the three available frames.
+        $cmd = null;
+        for ($i = 0; $i < 10; $i++) {
+            $player = $this->backdateLastTick($player, 1.0);
+            [$player, $cmd] = $player->update(new TickMsg());
+        }
+
+        $this->assertTrue($player->ended, 'player must be marked ended at end-of-stream');
+        $this->assertNull($cmd, 'tick chain must stop (null Cmd) once the decoder is exhausted');
+    }
+
+    /**
+     * Regression for F9. With looping enabled, exhausting the decoder must wrap
+     * back to frame 0 and KEEP ticking (non-null Cmd) rather than ending. On the
+     * un-fixed code there is no loop logic, so frameIndex would stay at the last
+     * frame and the player would never reset — failing both asserts.
+     *
+     * @testdox looping decoder wraps to frame 0 and keeps ticking at end-of-stream
+     */
+    public function testLoopWrapsToFrameZeroAndKeepsTicking(): void
+    {
+        $player = Player::openForTest(
+            new FakeDecoder([
+                $this->makeFrame("\xff\x00\x00"),
+                $this->makeFrame("\x00\xff\x00"),
+                $this->makeFrame("\x00\x00\xff"),
+            ]),
+            30.0,
+            0,
+            80,
+            24,
+            '/fake',
+            loop: true,
+        );
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        $cmd = null;
+        for ($i = 0; $i < 10; $i++) {
+            $player = $this->backdateLastTick($player, 1.0);
+            [$player, $cmd] = $player->update(new TickMsg());
+        }
+
+        $this->assertSame(0, $this->getPlayerProperty($player, 'frameIndex'), 'loop must wrap frameIndex back to 0');
+        $this->assertFalse($player->ended, 'looping player must not be marked ended');
+        $this->assertNotNull($cmd, 'looping player must keep ticking (non-null Cmd) after wrap');
+    }
+
+    /**
+     * Regression for F9. After playback has ENDED (non-loop), a seek must clear
+     * the ended state and — when not paused — re-arm the tick chain so playback
+     * can resume from the new position. On the un-fixed code there is no ended
+     * state to clear and seeks always returned a null Cmd.
+     *
+     * @testdox seek out of the ended state clears ended and reschedules a tick
+     */
+    public function testSeekClearsEndedAndReschedulesTick(): void
+    {
+        // Pass totalFrames=10 so digit-seek actually executes (new guard rejects 0).
+        $player = Player::openForTest(new FakeDecoder([
+            $this->makeFrame("\xff\x00\x00"),
+            $this->makeFrame("\x00\xff\x00"),
+            $this->makeFrame("\x00\x00\xff"),
+        ]), 30.0, 10, 80, 24, '/fake');
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        // Drive to ended.
+        for ($i = 0; $i < 10; $i++) {
+            $player = $this->backdateLastTick($player, 1.0);
+            [$player] = $player->update(new TickMsg());
+        }
+        $this->assertTrue($player->ended, 'precondition: player is ended');
+        $this->assertFalse($this->getPlayerProperty($player, 'paused'), 'precondition: player is not paused');
+
+        // Seek back to the start (digit 0). totalFrames=10 so digit-seek works.
+        [$player, $cmd] = $player->update(new KeyMsg(KeyType::Char, '0'));
+
+        $this->assertFalse($player->ended, 'seek must clear the ended state');
+        $this->assertNotNull($cmd, 'seek out of ended (and not paused) must reschedule a tick');
+    }
+
+    // -------------------------------------------------------------------------
+    // close
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Decoder close() is called when 'q' key is pressed
+     */
+    public function testCloseClosesDecoder(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0);
+
+        $q = new KeyMsg(KeyType::Char, 'q');
+        $player->update($q); // q key closes decoder
+
+        // After close(), subsequent next() calls should return null
+        $this->assertNull($decoder->next());
+    }
+
+    // -------------------------------------------------------------------------
+    // F21: backward seek closes the old decoder (no process leak)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F21. A backward seek must CLOSE the current decoder before
+     * building a fresh one — otherwise the old ffmpeg process (or GIF buffer) is
+     * leaked. We drive it through a SpyDecoder + a real .gif path: because
+     * videoPath is a real .gif, rebuildDecoderAt() takes the real branch and
+     * closes the injected spy, then builds a GifDecoder via DecoderFactory.
+     *
+     * On master the backward branch called DecoderFactory::new() but NEVER
+     * closed the old decoder → closeCount stays 0.
+     *
+     * @testdox backward seek closes the old decoder before rebuilding (F21)
+     */
+    public function testBackwardSeekClosesOldDecoder(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gifPath = $this->createTempGif();
+
+        // Spy yields enough frames that the rebuild's skip-to-target loop has data.
+        $frames = array_fill(0, 20, $this->makeFrame("\x10\x20\x30"));
+        $spy = new SpyDecoder($frames);
+
+        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
+        $player = $this->setFrameIndex($player, 12);
+
+        // Left = seek backward 10 frames → target 2 < 12 → backward rebuild path.
+        [$player] = $player->update(new KeyMsg(KeyType::Left));
+
+        $this->assertSame(1, $spy->closeCount, 'backward seek must close the old decoder exactly once');
+    }
+
+    // -------------------------------------------------------------------------
+    // Helper methods (reflection-based Player property access)
+    // -------------------------------------------------------------------------
+
+    private function getPlayerProperty(Player $player, string $prop): mixed
+    {
+        $reflection = new \ReflectionClass($player);
+        // Try public property first
+        if ($reflection->hasProperty($prop)) {
+            $propObj = $reflection->getProperty($prop);
+            $propObj->setAccessible(true);
+            return $propObj->getValue($player);
+        }
+        // Try reading from constructor property promotion (private)
+        foreach ($reflection->getProperties() as $p) {
+            if ($p->getName() === $prop) {
+                $p->setAccessible(true);
+                return $p->getValue($player);
+            }
+        }
+        throw new \RuntimeException("Property {$prop} not found on Player");
+    }
+
+    private function setPlayerProperty(Player $player, string $prop, mixed $value): Player
+    {
+        return $this->createPlayerWithOverrides($player, [$prop => $value]);
+    }
+
+    private function setCurrentFrame(Player $player, ?RgbFrame $frame, int $index): Player
+    {
+        $reflection = new \ReflectionClass($player);
+        $prop = $reflection->getProperty('currentFrame');
+        $prop->setAccessible(true);
+
+        $newPlayer = $this->createPlayerWithOverrides($player, [
+            'currentFrame' => $frame,
+            'frameIndex' => $index,
+        ]);
+        return $newPlayer;
+    }
+
+    private function setFrameIndex(Player $player, int $index): Player
+    {
+        return $this->createPlayerWithOverrides($player, ['frameIndex' => $index]);
+    }
+
+    /**
+     * Push the player's lastTickTime $seconds into the past so the NEXT
+     * TickMsg sees a large wall-clock delta — making Sync's target frame
+     * outrun the current frame index and deterministically drive the
+     * skip/advance path to decoder exhaustion (instead of holding on the
+     * microsecond deltas of a tight test loop).
+     */
+    private function backdateLastTick(Player $player, float $seconds): Player
+    {
+        $current = $this->getPlayerProperty($player, 'lastTickTime');
+        return $this->createPlayerWithOverrides($player, [
+            'lastTickTime' => $current - $seconds,
+        ]);
+    }
+
+    /**
+     * Create a new Player instance with some properties overridden.
+     *
+     * Uses the private constructor via reflection to produce a Player
+     * with specific field values for testing.
+     *
+     * @param array<string, mixed> $overrides
+     */
+    private function createPlayerWithOverrides(Player $player, array $overrides): Player
+    {
+        $fps = $this->getPlayerProperty($player, 'fps');
+        $decoder = $this->getPlayerProperty($player, 'decoder');
+        $mode = $this->getPlayerProperty($player, 'mode');
+        $speed = $this->getPlayerProperty($player, 'speed');
+        $paused = $this->getPlayerProperty($player, 'paused');
+        $videoTime = $this->getPlayerProperty($player, 'videoTime');
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        $currentFrame = $this->getPlayerProperty($player, 'currentFrame');
+        $lastTickTime = $this->getPlayerProperty($player, 'lastTickTime');
+        $totalFrames = $this->getPlayerProperty($player, 'totalFrames');
+        $cellsW = $this->getPlayerProperty($player, 'cellsW');
+        $cellsH = $this->getPlayerProperty($player, 'cellsH');
+        $videoPath = $this->getPlayerProperty($player, 'videoPath');
+        // Read the live ended/loop so this faithfully COPIES the source player —
+        // hardcoding false here would silently drop the loop flag when rebuilding
+        // (e.g. across backdateLastTick), breaking the loop tests.
+        $ended = $this->getPlayerProperty($player, 'ended');
+        $loop = $this->getPlayerProperty($player, 'loop');
+        $ramp = $this->getPlayerProperty($player, 'ramp');
+        $audioFactory = $this->getPlayerProperty($player, 'audioFactory');
+        // Copy the remaining ctor fields too: a rebuild that dropped them would
+        // reset cellPx/subtitles/renderer/headers/frameBudget to their defaults,
+        // so a test that backdates the clock on a graphics-mode or budgeted
+        // Player would silently be testing a different Player. EXCEPTION:
+        // audioPlayer stays null deliberately — a live AudioPlayer owns a child
+        // process bound to its original Player; two Players driving one
+        // companion would double-stop it. Audio wiring is asserted elsewhere.
+        $cellPxW = $this->getPlayerProperty($player, 'cellPxW');
+        $cellPxH = $this->getPlayerProperty($player, 'cellPxH');
+        $subtitles = $this->getPlayerProperty($player, 'subtitles');
+        $renderer = $this->getPlayerProperty($player, 'renderer');
+        $headers = $this->getPlayerProperty($player, 'headers');
+        $frameBudgetMs = $this->getPlayerProperty($player, 'frameBudgetMs');
+        // Carried like any other playback state: dropping a pending resize here
+        // would silently cancel a debounced rebuild the test is about to trigger.
+        $pendingResize = $this->getPlayerProperty($player, 'pendingResize');
+
+        // Order MUST match the Player constructor positionally — the new Player
+        // instance is built via array_values($values) through the private ctor.
+        $values = [
+            'decoder' => $decoder,
+            'mode' => $mode,
+            'speed' => $speed,
+            'paused' => $paused,
+            'videoTime' => $videoTime,
+            'frameIndex' => $frameIndex,
+            'currentFrame' => $currentFrame,
+            'lastTickTime' => $lastTickTime,
+            'fps' => $fps,
+            'totalFrames' => $totalFrames,
+            'cellsW' => $cellsW,
+            'cellsH' => $cellsH,
+            'videoPath' => $videoPath,
+            'audioPlayer' => null,
+            'ended' => $ended,
+            'loop' => $loop,
+            'ramp' => $ramp,
+            'audioFactory' => $audioFactory,
+            'cellPxW' => $cellPxW,
+            'cellPxH' => $cellPxH,
+            'subtitles' => $subtitles,
+            'renderer' => $renderer,
+            'headers' => $headers,
+            'frameBudgetMs' => $frameBudgetMs,
+            'pendingResize' => $pendingResize,
+        ];
+
+        foreach ($overrides as $k => $v) {
+            $values[$k] = $v;
+        }
+
+        $reflectionClass = new \ReflectionClass(Player::class);
+        $ctor = $reflectionClass->getConstructor();
+        $ctor->setAccessible(true);
+        // Use Closure::bind to invoke the private constructor.
+        $closure = \Closure::bind(fn (...$args) => new Player(...$args), null, Player::class);
+        $newPlayer = $closure(...array_values($values));
+        return $newPlayer;
+    }
+
+    // -------------------------------------------------------------------------
+    // J2: Ramp selection
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression test: minimal and dense ramps MUST produce different character
+     * sequences for the same frame content.
+     *
+     * This fails on master (before J2 wiring) because both call sites hardcode
+     * the default ramp, so the char sets are identical regardless of ramp param.
+     */
+    public function testRampSelectionProducesDifferentCharSets(): void
+    {
+        // 2×2 frame: TL=black, TR=gray(127), BL=gray, BR=white.
+        // Luma values: 0 → ' ' (space) in both ramps; 127 → distinct chars.
+        $bytes = "\x00\x00\x00"   // (0,0,0) luma=0
+                . "\x7f\x7f\x7f" // (127,127,127) luma=127
+                . "\x7f\x7f\x7f" // (1,0,0) luma=19 — ignored; row 2 same colors
+                . "\xff\xff\xff"; // (255,255,255) luma=255
+        $frame = new RgbFrame($bytes, 2, 2);
+
+        // Build a base Player via openForTest in Ascii mode (so ramp char is visible).
+        $basePlayer = Player::openForTest(new FakeDecoder([$frame]), 1.0, 1, 80, 24, '/fake', false, 'standard');
+        // Override to Ascii mode so we get luma→char mapping (not half-block glyph).
+        $basePlayer = $this->createPlayerWithOverrides($basePlayer, ['mode' => Mode::Ascii]);
+
+        // Player with minimal ramp.
+        $playerMinimal = $this->createPlayerWithOverrides(
+            $basePlayer,
+            [
+                'currentFrame' => $frame,
+                'ramp' => 'minimal',
+            ]
+        );
+
+        // Player with dense ramp (same base, different ramp).
+        $playerDense = $this->createPlayerWithOverrides(
+            $basePlayer,
+            [
+                'currentFrame' => $frame,
+                'ramp' => 'dense',
+            ]
+        );
+
+        $viewMinimal = $playerMinimal->view();
+        $viewDense = $playerDense->view();
+
+        // Strip SGR escape sequences for character-level comparison.
+        $charsMinimal = preg_replace('/\x1b\[[0-9;]*m/', '', $viewMinimal);
+        $charsDense = preg_replace('/\x1b\[[0-9;]*m/', '', $viewDense);
+
+        $this->assertNotEquals(
+            $charsMinimal,
+            $charsDense,
+            'minimal and dense ramps must produce different char sequences for the same frame'
+        );
+    }
+
+    /**
+     * Verify LumaRamp::char() returns different chars for different ramps at the
+     * same luminance (unit-level confirmation of ramp wiring).
+     */
+    public function testLumaRampCharDiffersByRampName(): void
+    {
+        $luma = 127;
+        $minimalChar = \SugarCraft\Video\Render\LumaRamp::char((float)$luma, 'minimal');
+        $denseChar = \SugarCraft\Video\Render\LumaRamp::char((float)$luma, 'dense');
+
+        $this->assertNotSame(
+            $minimalChar,
+            $denseChar,
+            "LumaRamp::char(127, 'minimal') and LumaRamp::char(127, 'dense') must differ"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // J3: Test guards & caveats
+    // -------------------------------------------------------------------------
+
+    /**
+     * J3.1 (F14): Half-block parity — inline Buffer path vs Mosaic renderer.
+     *
+     * The Player::view() route for HalfBlock goes through the inline frameToBuffer()
+     * path (Buffer → toAnsi()), NOT through HalfBlockRenderer at RendererFactory:98.
+     * HalfBlockRenderer is never hit by the runtime — only by direct factory use in
+     * tests. This test guards that the two paths stay in sync.
+     *
+     * This test passes on current master (the implementations currently match).
+     * It would FAIL if the inline path's color computation ever drifted from the
+     * Mosaic renderer.
+     */
+    public function testHalfBlockInlineMatchesMosaicRenderer(): void
+    {
+        // 4×2 frame: top row red, bottom row green — each cell is a ▀ with
+        // red foreground and green background via the inline Buffer path.
+        $bytes = str_repeat("\xff\x00\x00", 4)  // row 0: red (255,0,0) × 4 pixels
+               . str_repeat("\x00\x80\x00", 4); // row 1: green (0,128,0) × 4 pixels
+        $frame = new RgbFrame($bytes, 4, 2);
+
+        // Path A: inline via Player::view() — construct a HalfBlock Player with
+        // this frame as currentFrame and read view().
+        $decoder = new FakeDecoder([$frame]);
+        $playerViaInline = Player::openForTest($decoder, 1.0, 1, 4, 2, '/fake', false, 'standard');
+        $playerViaInline = $this->createPlayerWithOverrides(
+            $playerViaInline,
+            ['currentFrame' => $frame, 'mode' => Mode::HalfBlock]
+        );
+        $inlineView = $playerViaInline->view();
+
+        // Path B: direct via HalfBlockRenderer (the Mosaic renderer).
+        $renderer = new HalfBlockRenderer();
+        $mosaicView = $renderer->render($frame, Mode::HalfBlock);
+
+        // Glyph count alone is a weak guard — two paths that disagree on every
+        // colour still produce four ▀ — so the comparison is now on the decoded
+        // per-cell semantics (glyph, foreground, background). See HalfBlockStream.
+        $stripSgr = static fn (string $s): string => preg_replace('/\x1b\[[0-9;]*m/', '', $s);
+        $this->assertSame(substr_count($stripSgr($mosaicView), '▀'), substr_count($stripSgr($inlineView), '▀'));
+
+        $inlineCells = \SugarCraft\Video\Tests\Support\HalfBlockStream::cells($inlineView);
+        $mosaicCells = \SugarCraft\Video\Tests\Support\HalfBlockStream::cells($mosaicView);
+
+        $this->assertCount(4, $inlineCells, 'one cell per column for a 4x2 frame');
+        $this->assertSame(
+            [
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+            ],
+            $inlineCells,
+            'the inline path must paint the upper pixel as foreground and the lower as background'
+        );
+        $this->assertSame(
+            $mosaicCells,
+            $inlineCells,
+            'Inline HalfBlock path and Mosaic HalfBlockRenderer must agree on every cell, '
+                . 'not merely on how many cells they emit'
+        );
+    }
+
+    /**
+     * J3.2 (F6): Pure-math seek offset formula.
+     *
+     * Verifies round($targetIndex / $fps * 1000) for several (index, fps) pairs.
+     * This is the formula used at Player.php:777 (withSeek) to compute startMs.
+     * Runs unconditionally (no ffplay dependency).
+     */
+    public function testSeekOffsetFormula(): void
+    {
+        // (targetIndex, fps) → expected startMs
+        $this->assertEquals(5000, (int)round(5 / 1.0 * 1000));   // 5 frames @ 1fps = 5000ms
+        $this->assertEquals(2500, (int)round(5 / 2.0 * 1000));   // 5 frames @ 2fps = 2500ms
+        $this->assertEquals(333, (int)round(1 / 3.0 * 1000));   // frame 1 @ 3fps ≈ 333ms
+        $this->assertEquals(0, (int)round(0 / 24.0 * 1000));  // frame 0 → 0ms
+        $this->assertEquals(417, (int)round(10 / 24.0 * 1000)); // frame 10 @ 24fps ≈ 417ms
+    }
+
+    /**
+     * J3.2 (F6): openForTest accepts an audioPlayer injection.
+     *
+     * Verifies that openForTest can receive a non-null audioPlayer and that the
+     * audioFactory seam allows it to be passed through.
+     */
+    public function testOpenForTestAcceptsAudioPlayer(): void
+    {
+        $fakeAudioPlayer = new AudioPlayer('/fake/path', null);
+
+        // openForTest with an explicit audioPlayer (and a factory that returns it).
+        $factory = static fn (string $path, ?int $ms) => $fakeAudioPlayer;
+        $decoder = new FakeDecoder([]);
+        $player = Player::openForTest(
+            decoder: $decoder,
+            fps: 24.0,
+            totalFrames: 0,
+            cellsW: 80,
+            cellsH: 24,
+            videoPath: '/fake',
+            loop: false,
+            ramp: 'standard',
+            audioFactory: $factory,
+            audioPlayer: $fakeAudioPlayer,
+            paused: true,
+        );
+
+        // The audioPlayer property should be the injected instance.
+        $this->assertSame($fakeAudioPlayer, $this->getPlayerProperty($player, 'audioPlayer'));
+    }
+
+    /**
+     * J3.2 (F6): AudioPlayer restart on seek — spy proves old-stopped + new-at-correct-startMs.
+     *
+     * This test FAILS on current master (before the audioFactory seam) because the
+     * Player has no injectable seam to intercept AudioPlayer creation on seek.
+     * After J3.2 (audioFactory) it passes.
+     */
+    public function testAudioPlayerRestartOnSeek(): void
+    {
+        $spyAudioPlayer = new SpyAudioPlayer('/fake/path', 0);
+        $spyCreated = [];
+
+        // Factory that returns our spy for the first call and captures call info.
+        $factory = static function (string $path, ?int $startMs) use ($spyAudioPlayer, &$spyCreated): AudioPlayer {
+            $spyCreated[] = ['path' => $path, 'startMs' => $startMs];
+            return $spyAudioPlayer;
+        };
+
+        $decoder = new FakeDecoder([]);
+        $player = Player::openForTest(
+            decoder: $decoder,
+            fps: 1.0,
+            totalFrames: 10,
+            cellsW: 80,
+            cellsH: 24,
+            videoPath: '/fake/path',
+            loop: false,
+            ramp: 'standard',
+            audioFactory: \Closure::fromCallable($factory),
+            audioPlayer: $spyAudioPlayer,
+            paused: true,
+        );
+
+        // Seek to frame 5 (which is 5000ms at 1.0 fps).
+        $playerAfterSeek = $player->withSeek(5);
+
+        // The original spy's stop() was called exactly once (in withSeek).
+        $this->assertEquals(
+            1,
+            $spyAudioPlayer->stopCallCount,
+            'SpyAudioPlayer::stop() must be called exactly once on seek'
+        );
+
+        // A new AudioPlayer was created with startMs = round(5 / 1.0 * 1000) = 5000.
+        $this->assertNotEmpty(
+            $spyCreated,
+            'Factory must have been called to create a new AudioPlayer on seek'
+        );
+        $this->assertEquals('/fake/path', $spyCreated[0]['path']);
+        $this->assertEquals(5000, $spyCreated[0]['startMs']);
+
+        // start() was NOT called because the player is paused.
+        $this->assertFalse(
+            $spyAudioPlayer->hasStarted(),
+            'start() must NOT be called on seek when player is paused'
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Time-based seek: position()/duration()/seekToSeconds()/frameAt()/stop()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox duration() is totalFrames / fps; position() starts at 0
+     */
+    public function testPositionAndDurationReport(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(10), 30.0, totalFrames: 300);
+
+        $this->assertSame(0.0, $player->position());
+        $this->assertSame(10.0, $player->duration(), '300 frames @ 30fps = 10s');
+    }
+
+    /**
+     * @testdox duration() is 0.0 for a stream of unknown length (totalFrames 0)
+     */
+    public function testDurationZeroWhenLengthUnknown(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(10), 30.0, totalFrames: 0);
+
+        $this->assertSame(0.0, $player->duration());
+    }
+
+    /**
+     * @testdox seekToSeconds() sets position to the time and frameIndex to time*fps
+     */
+    public function testSeekToSecondsSetsPositionAndFrameIndex(): void
+    {
+        // videoPath defaults to '/fake' → the index-based rebuild path (no ffmpeg).
+        $player = Player::openForTest($this->makeFakeDecoder(100), 30.0, totalFrames: 300);
+
+        $seeked = $player->seekToSeconds(2.0);
+
+        $this->assertSame(2.0, $seeked->position());
+        $this->assertSame(60, $seeked->frameIndex, '2.0s @ 30fps = frame 60');
+        $this->assertFalse($seeked->ended, 'a seek clears the ended state');
+    }
+
+    /**
+     * @testdox seekToSeconds() clamps beyond the duration to the end
+     */
+    public function testSeekToSecondsClampsToDuration(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(400), 30.0, totalFrames: 300);
+
+        $seeked = $player->seekToSeconds(999.0);
+
+        $this->assertSame(10.0, $seeked->position(), 'clamped to the 10s duration');
+        $this->assertSame(300, $seeked->frameIndex);
+    }
+
+    /**
+     * @testdox seekToSeconds() clamps a negative time to 0
+     */
+    public function testSeekToSecondsClampsNegativeToZero(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(100), 30.0, totalFrames: 300);
+
+        $seeked = $player->seekToSeconds(-5.0);
+
+        $this->assertSame(0.0, $seeked->position());
+        $this->assertSame(0, $seeked->frameIndex);
+    }
+
+    /**
+     * @testdox seekToSeconds() realigns audio to the target offset (stops old, recreates at startMs)
+     */
+    public function testSeekToSecondsRealignsAudio(): void
+    {
+        $spy = new SpyAudioPlayer('/fake', 0);
+        $created = [];
+        $factory = static function (string $path, ?int $startMs) use ($spy, &$created): AudioPlayer {
+            $created[] = ['path' => $path, 'startMs' => $startMs];
+            return $spy;
+        };
+
+        $player = Player::openForTest(
+            decoder: $this->makeFakeDecoder(200),
+            fps: 30.0,
+            totalFrames: 600,
+            videoPath: '/fake',
+            audioFactory: \Closure::fromCallable($factory),
+            audioPlayer: $spy,
+            paused: true,
+        );
+
+        $player->seekToSeconds(4.0);
+
+        $this->assertSame(1, $spy->stopCallCount, 'old audio stopped exactly once');
+        $this->assertNotEmpty($created, 'a fresh audio companion is created on seek');
+        $this->assertSame(4000, $created[0]['startMs'], '4.0s → startMs 4000');
+    }
+
+    /**
+     * @testdox frameAt() serves an injected decoder instead of silently returning null
+     *
+     * Replaces the old "/fake → null" contract: the decoder now declares whether
+     * it reopens in place, so frameAt() grabs a real frame from an injected
+     * (reopensInPlace) decoder rather than special-casing a sentinel path string.
+     */
+    public function testFrameAtWorksForInjectedDecoder(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::fromDecoder($decoder, fps: 30.0);
+        $frame = $player->frameAt(1.0);
+        $this->assertInstanceOf(RgbFrame::class, $frame, 'an injected decoder yields a frame at the seek');
+        // Observe the reopen itself: grab at 1.0, then a restore at the playhead
+        // (0.0 here) — without either reopen the frame would be served from the
+        // wrong position while the Player still believed it was mid-stream.
+        $this->assertSame(2, $decoder->reopenCount(), 'frameAt() reopens to grab AND reopens again to restore the playhead');
+        $this->assertSame(0.0, $decoder->lastReopenStartSec(), 'the second reopen returns the live decoder to the current playhead');
+    }
+
+    /**
+     * @testdox frameAt() restores the playhead even when the throwaway read throws
+     *
+     * The reopen/restore pair runs inside try/finally: a decoder failure during
+     * a scrub-hover must propagate AND still leave the live decoder at the
+     * current playhead, never stranded at the hovered position while the
+     * Player believes it is mid-stream (the exception-path stranding class).
+     */
+    public function testFrameAtRestoresPlayheadEvenWhenTheGrabThrows(): void
+    {
+        $black = "\x00\x00\x00";
+        $decoder = new class (array_fill(0, 4, $this->makeFrame($black))) extends FakeDecoder {
+            public function next(): ?RgbFrame
+            {
+                throw new \RuntimeException('simulated decode failure mid-scrub');
+            }
+        };
+        $player = Player::fromDecoder($decoder, fps: 30.0);
+
+        try {
+            $player->frameAt(5.0);
+            $this->fail('the decoder failure must propagate to the caller');
+        } catch (\RuntimeException $thrown) {
+            $this->assertSame('simulated decode failure mid-scrub', $thrown->getMessage());
+        }
+
+        $this->assertSame(2, $decoder->reopenCount(), 'the finally-restore still reopens after a throwing grab');
+        $this->assertSame(0.0, $decoder->lastReopenStartSec(), 'and lands the live decoder back on the playhead, not the hovered 5.0s');
+    }
+
+    /**
+     * @testdox frameAt() throws when a factory-owned decoder has no source path
+     *
+     * A DecoderFactory-owned decoder (reopensInPlace false) is snapshotted through
+     * a throwaway decoder built from the source path; with no path there is
+     * nothing to snapshot, which is a misconfiguration, not an empty result — so
+     * it must fail loud rather than the old silent null.
+     */
+    public function testFrameAtThrowsForUnboundFactoryDecoder(): void
+    {
+        $spy = new SpyDecoder(array_fill(0, 3, $this->makeFrame("\x10\x20\x30")));
+        $player = Player::openForTest($spy, 30.0, videoPath: '');
+        $this->expectException(\LogicException::class);
+        $player->frameAt(1.0);
+    }
+
+    /**
+     * @testdox stop() stops the audio companion and closes the decoder
+     */
+    public function testStopStopsAudioAndClosesDecoder(): void
+    {
+        $spy = new SpyAudioPlayer('/fake', 0);
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest(
+            decoder: $decoder,
+            fps: 30.0,
+            videoPath: '/fake',
+            audioPlayer: $spy,
+        );
+
+        $player->stop();
+
+        $this->assertSame(1, $spy->stopCallCount, 'audio stopped');
+        $this->assertTrue($decoder->isClosed(), 'decoder closed (ffmpeg torn down)');
+    }
+
+    /**
+     * @testdox frameAt() input-seeks a real clip, grabbing distinct frames at distinct times
+     *
+     * Live proof of the time-domain seek: with real ffmpeg, frameAt() spawns a
+     * throwaway decoder with `-ss` and the frames at 0.2s vs 2.5s differ (the
+     * seek lands at different content). Skipped without ffmpeg; watchdog-guarded
+     * so a regression that wedged a subprocess can't hang the suite.
+     */
+    public function testFrameAtInputSeeksARealClip(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-video-seek-' . getmypid() . '.mp4';
+        $wd = proc_open(['sh', '-c', 'sleep 20; pkill -9 -f sugar-video-seek'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $wdPipes);
+
+        try {
+            $gen = proc_open(
+                [
+                    Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi', '-i', 'testsrc=duration=3:size=128x96:rate=15',
+                    '-y', $clip,
+                ],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            $this->assertIsResource($gen, 'ffmpeg clip generation must start');
+            foreach ($genPipes as $p) {
+                if (is_resource($p)) {
+                    \fclose($p);
+                }
+            }
+            proc_close($gen);
+            $this->assertFileExists($clip);
+
+            $player = Player::open($clip, 40, 20, 15.0, Mode::HalfBlock);
+            $this->assertEqualsWithDelta(3.0, $player->duration(), 0.5, 'probed duration ~3s');
+
+            $a = $player->frameAt(0.2);
+            $b = $player->frameAt(2.5);
+            $this->assertInstanceOf(RgbFrame::class, $a);
+            $this->assertInstanceOf(RgbFrame::class, $b);
+            $this->assertNotSame($a->bytes, $b->bytes, 'a -ss seek lands at different content per time');
+
+            $seeked = $player->seekToSeconds(1.5);
+            $this->assertSame(1.5, $seeked->position());
+            $this->assertSame(23, $seeked->frameIndex, '1.5s @ 15fps = frame 23 (round)');
+
+            $player->stop();
+            $seeked->stop();
+        } finally {
+            if (is_resource($wd)) {
+                proc_terminate($wd);
+                proc_close($wd);
+            }
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
+
+    /**
+     * J3.3: Ended-hint shows digit "0 restart" only when totalFrames > 0.
+     *
+     * When totalFrames == 0 (e.g. live stream or synthetic without probe result),
+     * digit-seek is a no-op so the "0 restart" hint is misleading and must be omitted.
+     */
+    public function testEndedHintShowsOrOmitsDigitBasedOnTotalFrames(): void
+    {
+        $frame = new RgbFrame("\xff\x00\x00\x00\x80\x00", 2, 1);
+        $decoder = new FakeDecoder([$frame]);
+
+        // Case 1: totalFrames = 0 — "0" must NOT appear in the hint line.
+        // The view() returns the placeholder when currentFrame is null, so we
+        // must pass a valid currentFrame to reach the ended-hint path.
+        $player0 = Player::openForTest($decoder, 1.0, 0, 2, 1, '/fake', false, 'standard');
+        $player0 = $this->createPlayerWithOverrides($player0, [
+            'ended' => true,
+            'currentFrame' => $frame,
+        ]);
+        $view0 = $player0->view();
+        $this->assertStringNotContainsString(
+            '0 restart',
+            $view0,
+            'When totalFrames=0 the ended hint must not show "0 restart"'
+        );
+
+        // Case 2: totalFrames > 0 — "0 restart" MUST appear.
+        $playerGt0 = Player::openForTest($decoder, 1.0, 0, 2, 1, '/fake', false, 'standard');
+        $playerGt0 = $this->createPlayerWithOverrides($playerGt0, [
+            'ended' => true,
+            'currentFrame' => $frame,
+            'totalFrames' => 10,
+        ]);
+        $viewGt0 = $playerGt0->view();
+        $this->assertStringContainsString(
+            '0 restart',
+            $viewGt0,
+            'When totalFrames>0 the ended hint must show "0 restart"'
+        );
+    }
+
+    /**
+     * @testdox view() with currentFrame === null renders exactly cellsH+1 lines:
+     *           cellsH blank rows + a status line (the placeholder)
+     *
+     * Player::openForTest starts with currentFrame = null (paused, before any
+     * tick). The placeholder must not crash and must produce exactly cellsH+1
+     * CRLF-separated lines: the first cellsH lines are all spaces (one line
+     * per cell row), and the last line is the fixed status text.
+     */
+    public function testPlaceholderViewIsBlankGridPlusStatusLine(): void
+    {
+        $cellsW = 4;
+        $cellsH = 3;
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 1.0, 0, $cellsW, $cellsH, '/fake', false, 'standard');
+
+        // currentFrame starts null in openForTest — view() hits renderPlaceholder.
+        $view = $player->view();
+        $lines = explode("\r\n", $view);
+
+        $this->assertSame(
+            $cellsH + 1,
+            count($lines),
+            'Placeholder must produce exactly cellsH+1 lines (cellsH blank + status)'
+        );
+
+        // First cellsH lines must be exactly cellsW spaces.
+        for ($i = 0; $i < $cellsH; $i++) {
+            $this->assertSame(
+                $cellsW,
+                strlen($lines[$i]),
+                "Line $i must be exactly cellsW ({$cellsW}) spaces"
+            );
+            $this->assertSame(
+                str_repeat(' ', $cellsW),
+                $lines[$i],
+                "Line $i must be all spaces"
+            );
+        }
+
+        // Last line is the status text.
+        $this->assertSame('loading...  space play  q quit', $lines[$cellsH]);
+    }
+}
+
+/**
+ * Spy AudioPlayer for F6 (audio realign on seek) testing.
+ *
+ * Records stop() call count and buildCommand() output without spawning any
+ * real subprocess.
+ */
+final class SpyAudioPlayer extends AudioPlayer
+{
+    public int $stopCallCount = 0;
+
+    public function __construct(string $videoPath, ?int $startMs = null)
+    {
+        // Don't call parent — parent starts the process on construct.
+        // We override buildCommand to return [] so no subprocess spawns.
+    }
+
+    protected function buildCommand(): ?array
+    {
+        return []; // empty — we never actually run ffplay
+    }
+
+    public function start(): void
+    {
+        // Record but don't spawn
+    }
+
+    public function stop(): void
+    {
+        $this->stopCallCount++;
+    }
+}

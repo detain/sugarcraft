@@ -858,7 +858,7 @@ request is refused, never clamped. Admission is a separate honest door: an
 route, while a family with a recorded contract is dialed; a finished video
 lands beside a JSON sidecar of its request params and job ledger. Playback is
 `src/Tui/VideoPlayer/` — the `/play` command and the player screen render
-through sugar-reel, and the audio door (decision C-4) leaves generated videos
+through sugar-video, and the audio door (decision C-4) leaves generated videos
 silent. Live preview frames (`PreviewSlots`, `PreviewPaint`) ride
 display-only progress events: they replace in place, clear when the job
 settles, and are never written into the transcript or the session store. The
@@ -1293,7 +1293,7 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `candy-shine`, `sugar-fuzzy`, `sugar-overlay`, `sugar-mcp-client` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
 `sugar-toast` (the toast a settings save reports through),
-`sugar-reel` (the video the player screen renders through),
+`sugar-video` (the video the player screen renders through),
 `candy-mosaic`, `sugar-mouse`,
 `candy-layout` (dock geometry), `sugar-focus`, `candy-kit`, `candy-pty`
 (the pseudo-terminal interactive tool output is captured through).

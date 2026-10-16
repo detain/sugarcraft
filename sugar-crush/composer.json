@@ -61,7 +61,7 @@
         "sugarcraft/sugar-focus": "@dev",
         "sugarcraft/candy-kit": "@dev",
         "sugarcraft/candy-pty": "dev-master",
-        "sugarcraft/sugar-reel": "@dev"
+        "sugarcraft/sugar-video": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

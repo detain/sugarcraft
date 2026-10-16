@@ -17,7 +17,7 @@ use SugarCraft\Crush\Support\MediaStore;
  * (the typed path IS the consent, same law as {@see GenerateHostCommand}'s
  * mask flag); a bare name is looked up in the session's media store by
  * artifact id, exact filename, or filename without extension, limited to
- * the container types sugar-reel's decoder family speaks (gif decodes in
+ * the container types sugar-video's decoder family speaks (gif decodes in
  * pure PHP, the rest through the accounted ffmpeg spawn). The screen
  * itself opens through the {@see CommandEffect::openVideoPlayer()} door —
  * the player is shell state, so the command only asks the shell to raise
@@ -33,7 +33,7 @@ use SugarCraft\Crush\Support\MediaStore;
  */
 final class PlayHostCommand implements HostCommand
 {
-    /** Container types the player speaks (sugar-reel DecoderFactory family). */
+    /** Container types the player speaks (sugar-video DecoderFactory family). */
     public const PLAYABLE_EXTENSIONS = ['gif', 'mp4', 'webm', 'mov', 'mkv', 'avi'];
 
     /**

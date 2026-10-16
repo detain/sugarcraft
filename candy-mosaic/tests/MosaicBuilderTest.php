@@ -167,7 +167,7 @@ final class MosaicBuilderTest extends TestCase
     {
         // Swapping the builder dither over a tuned Sixel (custom colour
         // budget, real terminal cell size) must not reset the tuning —
-        // sugar-reel builds SixelRenderer with the true cell pixel size,
+        // sugar-video builds SixelRenderer with the true cell pixel size,
         // and a reset would mis-scale its canvas.
         $mosaic = Mosaic::builder()
             ->withRenderer(new SixelRenderer(Dither::None, 16, 12, 24))

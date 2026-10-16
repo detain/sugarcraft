@@ -10,22 +10,22 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Theme;
-use SugarCraft\Reel\Msg\ResizeRebuildMsg;
-use SugarCraft\Reel\Msg\TickMsg;
-use SugarCraft\Reel\Player;
-use SugarCraft\Reel\Render\Mode;
+use SugarCraft\Video\Msg\ResizeRebuildMsg;
+use SugarCraft\Video\Msg\TickMsg;
+use SugarCraft\Video\Player;
+use SugarCraft\Video\Render\Mode;
 
 /**
  * The full-screen video player surface (crush-media W5.4).
  *
  * RULING (plan §W5.4, decided): the player is a PUSHED FULL-SCREEN screen
  * — Option A, the phlix `graphicsChrome` shape — not an ImageLayer/Veil
- * overlay: sugar-reel's `Player::view()` emits one whole-terminal blob
+ * overlay: sugar-video's `Player::view()` emits one whole-terminal blob
  * (sixel/kitty/iterm2 payloads or a full cell grid), which the line-diff
  * compositor can only paint honestly as its own band, exactly like the
  * settings editor and the media form before it.
  *
- * sugar-reel owns decode and frame painting; this class owns composition
+ * sugar-video owns decode and frame painting; this class owns composition
  * around it: the "Preparing…" placeholder while the probe+spawn promise
  * runs, the scrubber chrome row, the close interception that keeps the
  * Player's own quit-trio from tearing down the whole app, and the
@@ -43,19 +43,19 @@ use SugarCraft\Reel\Render\Mode;
  * only on ticks the Player itself arms while unpaused.
  *
  * Audio (W5.8 / Appendix C-4 ruling: silent v1): this screen wires no
- * audio surface of its own. Honest probe fact — sugar-reel's Player is
+ * audio surface of its own. Honest probe fact — sugar-video's Player is
  * NOT audio-opt-in on the open() path: a source WITH an audio track gets
  * an AudioPlayer companion auto-created (Player.php:197) and started on
  * first play (Player.php:721). Generated videos carry no audio track, so
  * crush's own artifacts are inherently silent; a user-typed /play on an
- * audio-bearing file plays sound when ffplay/mpv exist — accepted reel
+ * audio-bearing file plays sound when ffplay/mpv exist — accepted library
  * behavior for v1. Either way the companion dies with the Player: stop()
  * bounds-kills it (BoundedShutdown ladder) and the teardown law above
  * already routes every exit path through stop(). Whether silence should be
  * ENFORCED (factory builds via Player::fromDecoder with audioPlayer: null)
  * was the Wave-7 operator question recorded at C-4 and CLOSED by the C-10
  * ruling as accepted-as-is: crush's generated artifacts stay inherently
- * silent, reel's inherent-audio play of user files stands.
+ * silent, the library's inherent-audio play of user files stands.
  */
 final class VideoPlayerScreen
 {
@@ -112,7 +112,7 @@ final class VideoPlayerScreen
     }
 
     /**
-     * Drive the inner Player. Reel ticks and rebuilds, keystrokes the gate
+     * Drive the inner Player. Video ticks and rebuilds, keystrokes the gate
      * forwarded, and resizes are the Player's own contract; everything else
      * — including a late PlayerReadyMsg on an already-closed screen — is a
      * no-op. Returns the Player's Cmd verbatim so its tick cadence rides
@@ -204,7 +204,7 @@ final class VideoPlayerScreen
     /**
      * Move the shutdown memo onto a Player that re-minted itself under an
      * already-adopted wrapper (R13-C1). Unlike {@see adopt()} this stops
-     * NOTHING: the reel Player is immutable, so every handled key returns a
+     * NOTHING: the video Player is immutable, so every handled key returns a
      * fresh wrapper around the SAME live decoder — halting the superseded
      * one here would kill the stream the new wrapper is playing. The old
      * wrapper's own stop() stays harmless: its memo guard simply no longer

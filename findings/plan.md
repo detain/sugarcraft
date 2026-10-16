@@ -17,7 +17,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 | candy-core Phase 1 runs first | 10+ libs depend on `InputReader.php` (undefined `$len_of_buf` bug); breaks UTF-8 multi-byte parsing | `ref:candy-core-investigation` |
 | candy-vt Phase 1 (thread-safety) runs before all VT consumers | `Transitions::$table` and `Theme::$fgIndexMap` lazy init races affect any concurrent VT usage | `ref:candy-vt-audit` |
 | sugar-dashboard Phase 1 runs in Group A | Parse error in `Stack.php:78` (missing space before `&&`) blocks compilation of the largest sugar-* lib | `ref:sugar-dashboard-audit` |
-| sugar-reel runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-reel-audit` |
+| sugar-video runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-video-audit` |
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
 | honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:honey-bounce-audit` |
 | candy-git path-repo closure check deferred | sugar-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
@@ -30,7 +30,7 @@ candy-core (Phase 1 critical: InputReader undefined var)
     └── all candy-* and sugar-* libs using InputReader / Model contract
 
 candy-vt (Phase 1 thread-safety: Transitions::$table, Theme::$fgIndexMap)
-    └── sugar-reel (uses Terminal/VT emulation)
+    └── sugar-video (uses Terminal/VT emulation)
 
 candy-sql (Phase 1: SQL injection in identifier quoting)
     └── Independent — no sugarcraft dep consumers
@@ -38,7 +38,7 @@ candy-sql (Phase 1: SQL injection in identifier quoting)
 sugar-dashboard (Phase 1: Stack.php parse error + RingBuffer oldest() bug)
     └── Independent
 
-sugar-reel (Phase 1: AudioPlayer SIGSTOP/PTY, mutate() ?? bug)
+sugar-video (Phase 1: AudioPlayer SIGSTOP/PTY, mutate() ?? bug)
     └── Independent
 
 honey-bounce (Phase 1: Spring tick mutates in place)
@@ -71,7 +71,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 
 | Lib | Phase | Items | Key Critical Fix |
 |-----|-------|-------|------------------|
-| sugar-reel | P1 | 3 | AudioPlayer::pause() SIGSTOP ineffective in PTY; mutate() `??` breaks falsy values |
+| sugar-video | P1 | 3 | AudioPlayer::pause() SIGSTOP ineffective in PTY; mutate() `??` breaks falsy values |
 | candy-pty | P1 | 3 | FD reuse race via `fopen('php://fd/N')` dup(); EINTR silently treated as timeout |
 | candy-sql | P1 | 8 | SQL injection in MysqlDatabase::rows() identifier quoting (7 critical + voryx replacement) |
 
@@ -155,7 +155,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 ### Group B Source Plans
 
-- `findings/plan_sugar-reel.md` — Phase 1 (items 1.1–1.8), Phase 2–6 (deferred)
+- `findings/plan_sugar-video.md` — Phase 1 (items 1.1–1.8), Phase 2–6 (deferred)
 - `findings/plan_candy-pty.md` — Phase 1 (FD reuse race, EINTR timeout)
 - `findings/plan_candy-sql.md` — Phase 1 (items 1.1–1.8 all critical SQL injection)
 
@@ -213,7 +213,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 ### Step 2: Execute Group B
 
 1. Spawn 3 subagents in parallel:
-   - **Subagent B1:** Implement sugar-reel Phase 1.1–1.3 (AudioPlayer SIGSTOP, mutate() ?? bug)
+   - **Subagent B1:** Implement sugar-video Phase 1.1–1.3 (AudioPlayer SIGSTOP, mutate() ?? bug)
    - **Subagent B2:** Implement candy-pty Phase 1.1–1.3 (FD reuse race, EINTR timeout)
    - **Subagent B3:** Implement candy-sql Phase 1.1–1.8 (all SQL injection fixes)
 2. Each subagent: review → implement → run tests → fix any issues → commit

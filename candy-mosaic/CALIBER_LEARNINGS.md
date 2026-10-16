@@ -257,7 +257,7 @@ kept as design rationale for what shipped._
   $hasAlpha = false)` ingests a raw RGB24/RGBA scanline buffer with no
   container: exact-length + `MAX_PIXELS` guards first, one O(n)
   imagesetpixel pass into a truecolor GD image, then the existing `fromGd()`
-  encode. sugar-reel's `GraphicsRenderer` switched its raw-frame path from a
+  encode. sugar-video's `GraphicsRenderer` switched its raw-frame path from a
   per-frame `toGd()+imagepng` round-trip to this (short/malformed buffers keep
   the old clamping path). RGBA byte alpha 255=opaque maps to GD 0=opaque via
   `intdiv((255-$a)*127, 255)`.

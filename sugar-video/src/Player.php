@@ -1,0 +1,1635 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Video;
+
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style;
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Palette\Probe;
+use SugarCraft\Palette\Probe\Capability;
+use SugarCraft\Video\Decode\Decoder;
+use SugarCraft\Video\Decode\DecoderFactory;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Msg\ResizeRebuildMsg;
+use SugarCraft\Video\Msg\TickMsg;
+use SugarCraft\Video\Render\Color;
+use SugarCraft\Video\Render\FrameRenderer;
+use SugarCraft\Video\Render\LumaRamp;
+use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Render\RendererFactory;
+use SugarCraft\Video\Source\HttpHeaders;
+use SugarCraft\Video\Source\VideoSource;
+use SugarCraft\Video\Subtitle\WebVtt;
+
+/**
+ * TEA Model for terminal video playback.
+ *
+ * The Player implements the Elm Architecture (Model-View-Update) via
+ * the TEA runtime in candy-core. It pulls frames from a Decoder iterator,
+ * paces them using wall-clock time and the Sync engine, and renders via
+ * FrameRenderer (ascii/ansi256/truecolor/half-block).
+ *
+ * Repaint: view() returns the FULL current frame every call. candy-core's
+ * Renderer already diffs each frame against the previously rendered one and
+ * emits only the minimal terminal update, so the Player does not (and must
+ * not) diff inside view() — doing so would double-diff and corrupt output.
+ *
+ * Keys:
+ *   Space       — pause / resume
+ *   ← / →      — seek backward / forward 10 frames
+ *   [ / ]      — decrease / increase speed (0.25 steps, 0.25–4.0)
+ *   0–9        — seek to 0–90% of duration
+ *   m          — cycle rendering mode
+ *   q / Esc    — quit
+ *
+ * Mirrors the TEA player structure in candy-flip/src/Player.php but
+ * adapted for continuous video rather than discrete GIF frames.
+ */
+final class Player implements Model
+{
+    /** Minimum and maximum terminal column/row bounds for resize clamping. */
+    private const MIN_COLS = 10;
+    private const MAX_COLS = 200;
+    private const MIN_ROWS = 5;
+    private const MAX_ROWS = 80;
+
+    /**
+     * Debounce window for applying a pending resize (finding #52), in seconds.
+     *
+     * Sized to comfortably exceed a manual drag-resize's inter-reflow gap (a
+     * terminal reflows on each character-cell change, so events arrive milliseconds
+     * apart) while staying well under a frame the user would notice: at the default
+     * 24 fps the picture holds its pre-resize geometry for barely one frame.
+     */
+    private const RESIZE_DEBOUNCE_SECONDS = 0.05;
+
+    /**
+     * @param Decoder                      $decoder      Frame source iterator
+     * @param Mode                         $mode         Rendering mode
+     * @param float                       $speed        Playback speed multiplier
+     * @param bool                        $paused       True when playback is paused
+     * @param float                       $videoTime    Content seconds since playback start (accumulates delta*speed, NOT retroactive)
+     * @param int                         $frameIndex   Current frame number (0-based)
+     * @param RgbFrame|null               $currentFrame Decoded frame ready for rendering
+     * @param float                       $lastTickTime Wall-clock time at last tick (microtime)
+     * @param float                       $fps          Frames per second from VideoSource
+     * @param int                         $totalFrames  Total frame count (0 if unknown/stream)
+     * @param int                         $cellsW       Terminal cell width
+     * @param int                         $cellsH       Terminal cell height
+     * @param string                      $videoPath    Source video file path (for seek/restart)
+     * @param AudioPlayer|null            $audioPlayer  Audio subprocess handle (null when no audio)
+     * @param bool                        $ended        True once the decoder is exhausted (playback stopped at end)
+     * @param bool                        $loop         When true, restart from frame 0 at end instead of stopping
+     * @param string                      $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param \Closure                    $audioFactory Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer
+     * @param int                         $cellPxW      Pixel width of a terminal cell (graphics-mode resolution)
+     * @param int                         $cellPxH      Pixel height of a terminal cell
+     * @param WebVtt|null                 $subtitles    Parsed subtitle track, or null when no subtitles
+     * @param FrameRenderer|null          $renderer     Cached renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256)
+     * @param array<array-key, string>    $headers      HTTP request headers for a remote source, re-presented on every decoder rebuild
+     * @param float                       $frameBudgetMs Wall-clock budget for one tick's decode+skip work before catch-up bails (0 = unbounded); enforced between frames, never mid-decode
+     * @param WindowSizeMsg|null          $pendingResize Clamped geometry received from a `WindowSizeMsg` whose decoder rebuild is still deferred by the resize debounce (finding #52); null when nothing is pending
+     */
+    private function __construct(
+        public readonly Decoder $decoder,
+        public readonly Mode $mode,
+        public readonly float $speed,
+        public readonly bool $paused,
+        public readonly float $videoTime,
+        public readonly int $frameIndex,
+        public readonly ?RgbFrame $currentFrame,
+        private readonly float $lastTickTime,
+        public readonly float $fps,
+        public readonly int $totalFrames,
+        public readonly int $cellsW,
+        public readonly int $cellsH,
+        private readonly string $videoPath,
+        private readonly ?AudioPlayer $audioPlayer,
+        public readonly bool $ended,
+        private readonly bool $loop,
+        private readonly string $ramp = 'standard',
+        private readonly ?\Closure $audioFactory = null,
+        public readonly int $cellPxW = 10,
+        public readonly int $cellPxH = 20,
+        private readonly ?WebVtt $subtitles = null,
+        private readonly ?FrameRenderer $renderer = null,
+        private readonly array $headers = [],
+        private readonly float $frameBudgetMs = 0.0,
+        private readonly ?WindowSizeMsg $pendingResize = null,
+    ) {
+    }
+
+    /**
+     * Teardown latch set by {@see stop()}.
+     *
+     * WHY a plain mutable property rather than a promoted readonly field: stopping is
+     * an event on the instance the host already holds, not a value the model is built
+     * with — and a 26th constructor parameter would shift the positional argument list
+     * every test helper assembles. mutate() copies it forward deliberately: a derived
+     * instance owns the SAME decoder and audio companion that stop() already closed, so
+     * nothing that happens after teardown may respawn them. That includes the debounce
+     * timer added for finding #52, which is armed before the resize lands and would
+     * otherwise spawn a fresh ffmpeg child onto a player the host has already torn down
+     * — a leak the static child-lifetime roster cannot see, since the spawn site itself
+     * is accounted for.
+     */
+    private bool $stopped = false;
+
+    /**
+     * Open a video file and return a Player ready for Program::run().
+     *
+     * Probes the video to get FPS and dimensions, creates the appropriate
+     * decoder, and returns a Player in the paused state at frame 0.
+     *
+     * @param string     $videoPath    Path to the video file (mp4, gif, avi, etc.)
+     * @param int       $cellsW       Target terminal cell width
+     * @param int       $cellsH       Target terminal cell height
+     * @param float|null $fpsOverride FPS override (null = auto from probe)
+     * @param Mode       $mode         Rendering mode (decoder resolution matches it)
+     * @param bool       $loop         Restart from the beginning at end-of-stream instead of stopping
+     * @param string     $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param int        $cellPxW      Pixel width of a terminal cell — graphics modes decode at
+     *                                 cells·cellPx for full resolution (caller probes it; 10×20 default)
+     * @param int        $cellPxH      Pixel height of a terminal cell
+     * @param WebVtt|null $subtitles  Parsed subtitle track, or null when no subtitles
+     * @param array<array-key, string> $headers HTTP request headers for a remote
+     *                            http(s) source, re-presented on every decoder rebuild
+     * @param float        $frameBudgetMs Wall-clock budget (ms) for one tick's catch-up
+     *                            decode before it defers the rest to the next tick
+     *                            (0 = unbounded, the pre-budget behaviour)
+     */
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0): self
+    {
+        $source = VideoSource::probe($videoPath);
+
+        // FPS from probe, default 24 if not available. Use override when set.
+        $fps = $fpsOverride ?? ($source->fps > 0.0 ? $source->fps : 24.0);
+
+        // Compute totalFrames from duration and fps when both are known.
+        $totalFrames = ($source->duration > 0.0 && $fps > 0.0)
+            ? (int)round($source->duration * $fps) : 0;
+
+        // Decoder resolution is keyed to the render mode (HalfBlock decodes at
+        // 2× cell height; graphics modes at cells·cellPx). Seek recreates the
+        // decoder with the current mode and the same cell geometry.
+        $decoder = DecoderFactory::new($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $cellPxW, $cellPxH, $headers);
+
+        // Audio companion factory: creates AudioPlayer on demand. The factory
+        // is threaded through the Player so tests can inject a spy subclass.
+        // It takes the header map (finding #52) because ffplay/mpv fetch the
+        // audio track from the SAME remote URL as the video: a signed stream
+        // whose token rides in the request headers is playable for video and
+        // 403-silent for audio unless the headers are re-presented here too.
+        $audioFactory = self::defaultAudioFactory();
+
+        // Audio companion is created when the source has audio but is NOT
+        // started here — the Player starts it on first play (see updateKey)
+        // so audio and the video wall clock share the same t0.
+        $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null, $headers) : null;
+
+        // Build and cache the renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256).
+        // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
+        $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
+
+        // Player starts paused; the first tick is scheduled when playback begins.
+        return new self(
+            decoder: $decoder,
+            mode: $mode,
+            speed: 1.0,
+            paused: true,
+            videoTime: 0.0,
+            frameIndex: 0,
+            currentFrame: null,
+            lastTickTime: microtime(true),
+            fps: $fps,
+            totalFrames: $totalFrames,
+            cellsW: $cellsW,
+            cellsH: $cellsH,
+            videoPath: $videoPath,
+            audioPlayer: $audioPlayer,
+            ended: false,
+            loop: $loop,
+            ramp: $ramp,
+            audioFactory: $audioFactory,
+            cellPxW: $cellPxW,
+            cellPxH: $cellPxH,
+            subtitles: $subtitles,
+            renderer: $renderer,
+            headers: $headers,
+            frameBudgetMs: $frameBudgetMs,
+        );
+    }
+
+    /**
+     * The blessed public seam for driving a Player from any Decoder implementation.
+     *
+     * Use this to mount playback over a frame source that is NOT a file on disk —
+     * most importantly a server-transcoded stream (raw RGB24 delivered over a
+     * socket, wrapped in a small Decoder of the host's own), and equally for a
+     * test double that yields canned frames. It bypasses {@see VideoSource::probe()}
+     * and {@see DecoderFactory} entirely: the caller supplies the decoder, the
+     * geometry, the frame rate and the render mode, and the Player trusts them.
+     *
+     * Because the source has no rebuildable path behind it, the decoder SHOULD
+     * answer {@see Decoder::reopensInPlace()} true so a seek/resize/mode-change
+     * re-opens it in place; a decoder that answers false will be handed to
+     * DecoderFactory with $videoPath on rebuild (correct only when that path is a
+     * real file/URL the factory can re-open).
+     *
+     * @param Decoder  $decoder       Frame source the Player pulls next() from.
+     * @param int      $cellsW        Terminal cell width the decoder targets.
+     * @param int      $cellsH        Terminal cell height the decoder targets.
+     * @param float    $fps           Frames per second for pacing.
+     * @param Mode     $mode          Rendering mode (a renderer is built for it).
+     * @param int      $totalFrames   Total frame count (0 = unknown/stream).
+     * @param string   $videoPath     Rebuild source path for a factory-owned
+     *                                decoder; '' for a pure injected stream.
+     * @param bool     $loop          Restart from frame 0 at end-of-stream.
+     * @param string   $ramp          Luma ramp name: 'minimal', 'standard', 'dense'.
+     * @param \Closure|null $audioFactory Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer.
+     * @param AudioPlayer|null $audioPlayer Initial audio companion (null = silent).
+     * @param bool     $paused        Start paused (default true).
+     * @param int      $cellPxW       Pixel width of one terminal cell.
+     * @param int      $cellPxH       Pixel height of one terminal cell.
+     * @param WebVtt|null $subtitles  Parsed subtitle track, or null.
+     * @param array<array-key, string> $headers HTTP request headers for a remote source.
+     * @param float    $frameBudgetMs Bounded per-tick catch-up decode (ms); 0 = unbounded.
+     */
+    public static function fromDecoder(
+        Decoder $decoder,
+        int $cellsW = 80,
+        int $cellsH = 24,
+        float $fps = 24.0,
+        Mode $mode = Mode::HalfBlock,
+        int $totalFrames = 0,
+        string $videoPath = '',
+        bool $loop = false,
+        string $ramp = 'standard',
+        ?\Closure $audioFactory = null,
+        ?AudioPlayer $audioPlayer = null,
+        bool $paused = true,
+        int $cellPxW = 10,
+        int $cellPxH = 20,
+        ?WebVtt $subtitles = null,
+        array $headers = [],
+        float $frameBudgetMs = 0.0,
+    ): self {
+        // The header map is validated HERE, at this public boundary (finding #52
+        // review m6): every other entry point — Reel::open/openUrl, the ffmpeg
+        // decoder's open() — parses before trusting, and the deferred
+        // rebuildAudio() would otherwise let a malformed map throw mid-`update()`
+        // from deep inside the companion factory, escaping the TEA pipeline.
+        HttpHeaders::parse($headers);
+
+        $factory = $audioFactory ?? self::defaultAudioFactory();
+
+        // The renderer follows the mode — including the direct-render image
+        // protocols — so a host mounting a graphics stream gets the matching
+        // FrameRenderer instead of a HalfBlock one that would ignore the mode.
+        $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
+
+        return new self(
+            decoder: $decoder,
+            mode: $mode,
+            speed: 1.0,
+            paused: $paused,
+            videoTime: 0.0,
+            frameIndex: 0,
+            currentFrame: null,
+            lastTickTime: microtime(true),
+            fps: $fps,
+            totalFrames: $totalFrames,
+            cellsW: $cellsW,
+            cellsH: $cellsH,
+            videoPath: $videoPath,
+            audioPlayer: $audioPlayer,
+            ended: false,
+            loop: $loop,
+            ramp: $ramp,
+            audioFactory: $factory,
+            cellPxW: $cellPxW,
+            cellPxH: $cellPxH,
+            subtitles: $subtitles,
+            renderer: $renderer,
+            headers: $headers,
+            frameBudgetMs: $frameBudgetMs,
+        );
+    }
+
+    /**
+     * Factory for tests: create a Player with an injected decoder.
+     *
+     * Bypasses VideoSource::probe() and DecoderFactory so tests can use
+     * a FakeDecoder that yields canned RgbFrame objects without any
+     * real video file or external process.
+     *
+     * @param Decoder      $decoder       Frame source iterator (e.g. FakeDecoder)
+     * @param float        $fps            Frames per second
+     * @param int          $totalFrames    Total frame count (0 if unknown/stream)
+     * @param int          $cellsW         Terminal cell width
+     * @param int          $cellsH         Terminal cell height
+     * @param string       $videoPath      Fake path for seeking (default '/fake')
+     * @param bool         $loop           Restart from frame 0 at end-of-stream instead of stopping
+     * @param string       $ramp           Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param \Closure     $audioFactory   Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer
+     * @param AudioPlayer  $audioPlayer   Optional initial AudioPlayer instance (for spy injection)
+     * @param bool         $paused         Start paused (default true)
+     * @param WebVtt|null  $subtitles      Parsed subtitle track for testing
+     *
+     * @deprecated Use {@see fromDecoder()} — the blessed public seam, which takes
+     *             the render mode as an argument instead of hardcoding HalfBlock.
+     *             This alias is retained for existing tests and simply forwards.
+     */
+    public static function openForTest(
+        Decoder $decoder,
+        float $fps,
+        int $totalFrames = 0,
+        int $cellsW = 80,
+        int $cellsH = 24,
+        string $videoPath = '/fake',
+        bool $loop = false,
+        string $ramp = 'standard',
+        ?\Closure $audioFactory = null,
+        ?AudioPlayer $audioPlayer = null,
+        bool $paused = true,
+        int $cellPxW = 10,
+        int $cellPxH = 20,
+        ?WebVtt $subtitles = null,
+    ): self {
+        return self::fromDecoder(
+            decoder: $decoder,
+            cellsW: $cellsW,
+            cellsH: $cellsH,
+            fps: $fps,
+            mode: Mode::HalfBlock,
+            totalFrames: $totalFrames,
+            videoPath: $videoPath,
+            loop: $loop,
+            ramp: $ramp,
+            audioFactory: $audioFactory,
+            audioPlayer: $audioPlayer,
+            paused: $paused,
+            cellPxW: $cellPxW,
+            cellPxH: $cellPxH,
+            subtitles: $subtitles,
+        );
+    }
+
+    /**
+     * @return null|\Closure
+     */
+    public function init(): ?\Closure
+    {
+        // If paused, schedule no tick; keyboard input will unpause.
+        if ($this->paused) {
+            return null;
+        }
+        return Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
+    }
+
+    /**
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    public function update(Msg $msg): array
+    {
+        // TickMsg: advance frame based on wall-clock sync.
+        if ($msg instanceof TickMsg) {
+            return $this->updateTick();
+        }
+
+        // KeyMsg: pause, seek, speed, mode, quit.
+        if ($msg instanceof KeyMsg) {
+            return $this->updateKey($msg);
+        }
+
+        // F10: WindowSizeMsg — resize the player cell dimensions and rebuild
+        // the decoder so frames are decoded at the correct resolution.
+        if ($msg instanceof WindowSizeMsg) {
+            return $this->updateResize($msg->cols, $msg->rows);
+        }
+
+        // Finding #52: the debounce window armed by updateResize() elapsed.
+        if ($msg instanceof ResizeRebuildMsg) {
+            return $this->applyPendingResize();
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Handle a TickMsg: compute wall-clock delta, sync to target frame,
+     * skip/hold/advance the decoder, and reschedule the next tick.
+     *
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    private function updateTick(): array
+    {
+        if ($this->stopped) {
+            // Same owner rule as applyPendingResize() (round-1 M2, extended per
+            // round-3 R3-1): stop() closed the decoder child this instance owned;
+            // no in-flight tick — least of all a looping player's end-of-stream
+            // reopen — may spawn a replacement with no one left to reap it.
+            return [$this, null];
+        }
+
+        if ($this->paused) {
+            return [$this, null];
+        }
+
+        $now = microtime(true);
+        $delta = $now - $this->lastTickTime;
+
+        // F4 fix: videoTime accumulates delta*speed — speed change only affects
+        // FUTURE pacing, never retroactively rescales prior content time.
+        $newVideoTime = $this->videoTime + $delta * $this->speed;
+        $target = Sync::targetFrame($newVideoTime, $this->fps);
+
+        // Decide skip / hold / advance using the tested Sync engine.
+        $nextFrame = $this->currentFrame;
+        $nextIndex = $this->frameIndex;
+        // Set when the decoder is exhausted this tick (null from next()), so we
+        // can stop ticking (or loop) rather than spinning forever at the end.
+        $reachedEnd = false;
+
+        if (Sync::shouldSkip($this->frameIndex, $target)) {
+            // Behind by more than the skip limit — discard intermediate frames,
+            // keeping only the last one decoded, to catch up without lag.
+            //
+            // FINDINGS #44: this decode-forward was unbounded, so a big catch-up
+            // (a long seek, or stalling decode) blocked the whole TEA update
+            // inside fread() until ffmpeg caught up — freezing input and redraw.
+            // The loop now watches the wall clock and stops at $frameBudgetMs,
+            // leaving the decoder ahead-of-screen but *converging*: the next tick
+            // resumes the skip from the new frameIndex. videoTime tracks the
+            // true content position, so playback stays A/V-correct across the
+            // multi-tick catch-up; only intermediate frames go unrendered (which
+            // is exactly what skipping means). frameBudgetMs <= 0 keeps the old
+            // single-tick behaviour for hosts that want it.
+            $skipCount = $target - $this->frameIndex;
+            $deadline = $this->frameBudgetMs > 0.0
+                ? $now + ($this->frameBudgetMs / 1000.0)
+                : null;
+            for ($i = 0; $i < $skipCount; $i++) {
+                $frame = $this->decoder->next();
+                if ($frame === null) {
+                    $reachedEnd = true;
+                    break;
+                }
+                $nextFrame = $frame;
+                $nextIndex++;
+                // Check the budget after each frame so we never abandon the tick
+                // having decoded nothing (progress is guaranteed by the first read).
+                if ($deadline !== null && $i + 1 < $skipCount && microtime(true) >= $deadline) {
+                    // Out of budget with frames still to skip: yield to the event
+                    // loop and finish the catch-up on the next tick.
+                    break;
+                }
+            }
+        } elseif (Sync::shouldHold($this->frameIndex, $target)) {
+            // Ahead of schedule — hold the current frame, advance nothing.
+            // (Holding never reaches end — we have not asked the decoder for more.)
+        } else {
+            // On schedule — advance by one frame.
+            $frame = $this->decoder->next();
+            if ($frame !== null) {
+                $nextFrame = $frame;
+                $nextIndex++;
+            } else {
+                $reachedEnd = true;
+            }
+        }
+
+        if ($reachedEnd) {
+            return $this->onReachedEnd($nextFrame, $nextIndex, $newVideoTime, $now);
+        }
+
+        $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $this->decoder, $newVideoTime, $now);
+
+        $cmd = $nextPlayer->paused
+            ? null
+            : Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
+
+        return [$nextPlayer, $cmd];
+    }
+
+    /**
+     * Handle a WindowSizeMsg: clamp, no-op if unchanged, otherwise record the
+     * geometry and DEFER the decoder rebuild behind a debounce timer.
+     *
+     * WHY deferred (finding #52): a rebuild closes the running ffmpeg child and
+     * spawns another at the new resolution, then decodes forward to the current
+     * playhead — the single most expensive thing this model does, and on master it
+     * ran synchronously inside `update()`. SIGWINCH does not arrive once per resize,
+     * it arrives once per reflow: dragging a terminal edge delivers a burst of
+     * dozens, so a synchronous rebuild paid that cost dozens of times to display
+     * intermediate sizes nobody sees. `update()` therefore does the cheap part only
+     * (stash the clamped geometry) and arms a one-shot timer; {@see applyPendingResize()}
+     * does the expensive part when the burst settles.
+     *
+     * WHAT THIS DOES NOT CHANGE: the rebuild is still synchronous work performed
+     * inside `update()` when the deferred message arrives, so the event loop still
+     * stalls for the length of one spawn. The win is cost, not concurrency — N reflows
+     * in a burst collapse to 1 stall instead of N. Off-loop decoding is the remaining
+     * half of finding #52 and is still open.
+     *
+     * @return array{0:Player, 1:?Closure}
+     */
+    private function updateResize(int $cols, int $rows): array
+    {
+        if ($this->stopped) {
+            // Teardown already happened; arming a debounce timer for a decoder that
+            // must never reopen would only schedule the resurrection applyPendingResize()
+            // refuses.
+            return [$this, null];
+        }
+
+        $cols = max(self::MIN_COLS, min($cols, self::MAX_COLS));
+        $rows = max(self::MIN_ROWS, min($rows, self::MAX_ROWS));
+
+        // Compare against the *pending* geometry, not just the applied one: during a
+        // burst each event re-states the size, and only a genuinely new target needs
+        // a fresh timer. Re-arming for an identical target would only add another
+        // message that applies nothing.
+        $pending = $this->pendingResize;
+        if ($cols === $this->cellsW && $rows === $this->cellsH) {
+            // Already decoding at this size. Drop any deferred target: the terminal
+            // snapped back mid-burst, and the timer armed by the earlier event is
+            // still in flight. Cancelling here is what makes that timer harmless —
+            // otherwise it fires and rebuilds the decoder at a geometry the host no
+            // longer has, and nothing later corrects it.
+            if ($pending === null) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['pendingResize' => null]), null];
+        }
+
+        if ($pending !== null && $pending->cols === $cols && $pending->rows === $rows) {
+            return [$this, null];
+        }
+
+        // Stash the clamped target so the rebuild honours the same bounds a
+        // synchronous path would have, and so `view()` keeps painting the current
+        // (slightly stale) frame instead of a black box while the burst settles.
+        $nextPlayer = $this->mutate(['pendingResize' => new WindowSizeMsg($cols, $rows)]);
+
+        return [$nextPlayer, Cmd::tick(self::RESIZE_DEBOUNCE_SECONDS, static fn (): Msg => ResizeRebuildMsg::instance())];
+    }
+
+    /**
+     * Apply the pending resize recorded by {@see updateResize()} — the debounced
+     * second half of a `WindowSizeMsg`.
+     *
+     * Rebuilds the decoder at the new cell dimensions, swaps in a renderer for the
+     * new grid, and reschedules the tick chain exactly as the old synchronous path
+     * did; only the *timing* moved. Every `ResizeRebuildMsg` whose geometry has
+     * already been applied (or cancelled) finds nothing pending and no-ops, which is
+     * what makes a burst of N armed timers cost one rebuild rather than N.
+     *
+     * @return array{0:Player, 1:?Closure}
+     */
+    private function applyPendingResize(): array
+    {
+        if ($this->stopped) {
+            // The host already tore this stream down; the decoder child this message
+            // would reopen no longer has an owner. Nothing to cancel — just refuse.
+            return [$this, null];
+        }
+
+        $pending = $this->pendingResize;
+        if ($pending === null) {
+            // Superseded by a later resize that already landed, or the terminal
+            // snapped back to the current size. No spawn, no re-render.
+            return [$this, null];
+        }
+
+        $cols = $pending->cols;
+        $rows = $pending->rows;
+
+        [$decoder, $frame] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
+
+        // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx),
+        // and clear the pending slot in the same mutate() so the apply is atomic: no
+        // Player instance ever shows the new grid while still owning the old decoder.
+        $nextPlayer = $this->mutate([
+            'cellsW' => $cols,
+            'cellsH' => $rows,
+            'pendingResize' => null,
+            'decoder' => $decoder,
+            'currentFrame' => $frame ?? $this->currentFrame,
+            'lastTickTime' => microtime(true),
+            'renderer' => RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
+        ]);
+
+        $cmd = $nextPlayer->paused
+            ? null
+            : Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
+
+        return [$nextPlayer, $cmd];
+    }
+
+    /**
+     * Handle the decoder running out of frames during a tick.
+     *
+     * Non-loop: stop the audio, mark the player ended, and return a null Cmd so
+     * the tick chain halts (the player no longer reschedules itself). Loop:
+     * restart from frame 0 — {@see rebuildDecoderAt()} reopens the source in
+     * place when the decoder reports {@see Decoder::reopensInPlace()} (a
+     * synthetic in-memory stream resets its index), or closes and re-creates it
+     * through the factory for a real file — and audio restarts from t0.
+     *
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    private function onReachedEnd(?RgbFrame $nextFrame, int $nextIndex, float $newVideoTime, float $now): array
+    {
+        $tick = Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
+
+        if (!$this->loop) {
+            // End of stream, no loop: stop audio and freeze on the last frame.
+            $this->audioPlayer?->stop();
+            $nextPlayer = $this->mutate([
+                'ended' => true,
+                'currentFrame' => $nextFrame ?? $this->currentFrame,
+                'frameIndex' => $nextIndex,
+                'videoTime' => $newVideoTime,
+                'lastTickTime' => $now,
+            ]);
+
+            return [$nextPlayer, null];
+        }
+
+        // Loop: rebuild the decoder from frame 0 and restart audio from t0 so
+        // A/V stay aligned on the new pass. rebuildDecoderAt() handles both the
+        // factory-owned path (close + DecoderFactory) and the reopen-in-place
+        // path (re-open the injected decoder, which resets it to frame 0) under
+        // one capability check — no '/fake' string comparison here.
+        [$newDecoder, $firstFrame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, 0);
+
+        // Restart the audio companion from t0 through the shared rebuild seam.
+        $newAudio = $this->rebuildAudio(0);
+
+        $nextPlayer = $this->mutate([
+            'decoder' => $newDecoder,
+            'currentFrame' => $firstFrame ?? $this->currentFrame,
+            'frameIndex' => 0,
+            'videoTime' => 0.0,
+            'lastTickTime' => $now,
+            'ended' => false,
+            'audioPlayer' => $newAudio,
+        ]);
+
+        return [$nextPlayer, $tick];
+    }
+
+    /**
+     * Handle a KeyMsg: pause/resume, seek, speed, mode cycle, quit.
+     *
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    private function updateKey(KeyMsg $msg): array
+    {
+        // Quit: Escape, q, or ctrl+c. Same teardown a host screen performs via
+        // stop() — stop the audio companion and close the decoder (killing its
+        // ffmpeg child) — then ask candy-core to exit the program.
+        if ($msg->type === KeyType::Escape
+            || ($msg->type === KeyType::Char && $msg->rune === 'q')
+            || ($msg->ctrl && $msg->rune === 'c')) {
+            $this->stop();
+            return [$this, Cmd::quit()];
+        }
+
+        // Space: toggle pause/resume.
+        if ($msg->type === KeyType::Space) {
+            $resuming = $this->paused;
+            $changes = ['paused' => !$this->paused];
+
+            if ($resuming) {
+                // Re-anchor the wall clock to now so $elapsed accumulates
+                // play-time only — not time spent on the start screen or paused.
+                $changes['lastTickTime'] = microtime(true);
+                // Start audio on first play; resume it on later unpauses, so it
+                // shares the video's t0 and stays roughly in sync.
+                if ($this->audioPlayer !== null) {
+                    if ($this->audioPlayer->hasStarted()) {
+                        $this->audioPlayer->resume();
+                    } else {
+                        $this->audioPlayer->start();
+                    }
+                }
+            } else {
+                // Pause audio alongside video so they realign on resume.
+                $this->audioPlayer?->pause();
+            }
+
+            $nextPlayer = $this->mutate($changes);
+            $cmd = $nextPlayer->paused
+                ? null
+                : Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
+            return [$nextPlayer, $cmd];
+        }
+
+        // ← : seek backward 10 frames.
+        if ($msg->type === KeyType::Left) {
+            $nextIndex = max(0, $this->frameIndex - 10);
+            $nextPlayer = $this->withSeek($nextIndex);
+            return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
+        }
+
+        // → : seek forward 10 frames.
+        if ($msg->type === KeyType::Right) {
+            $nextIndex = $this->frameIndex + 10;
+            $nextPlayer = $this->withSeek($nextIndex);
+            return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
+        }
+
+        // [ : decrease speed (min 0.25).
+        if ($msg->type === KeyType::Char && $msg->rune === '[') {
+            $nextSpeed = max(0.25, $this->speed - 0.25);
+            $nextPlayer = $this->mutate(['speed' => $nextSpeed]);
+            return [$nextPlayer, null];
+        }
+
+        // ] : increase speed (max 4.0).
+        if ($msg->type === KeyType::Char && $msg->rune === ']') {
+            $nextSpeed = min(4.0, $this->speed + 0.25);
+            $nextPlayer = $this->mutate(['speed' => $nextSpeed]);
+            return [$nextPlayer, null];
+        }
+
+        // 0–9 : seek to percentage of duration (0=0%, 9=90%).
+        // Guard: can't percent-seek an unknown-length stream.
+        if ($msg->type === KeyType::Char && ctype_digit($msg->rune)) {
+            if ($this->totalFrames <= 0) {
+                return [$this, null];
+            }
+            $percent = (int)$msg->rune * 10;
+            $nextIndex = (int)(($percent / 100.0) * $this->totalFrames);
+            $nextPlayer = $this->withSeek($nextIndex);
+            return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
+        }
+
+        // m : cycle rendering mode through ONLY the modes the terminal supports.
+        // Build the cycle dynamically based on Mosaic::diagnose() capabilities (F2 tail).
+        if ($msg->type === KeyType::Char && $msg->rune === 'm') {
+            // Always present: text modes.
+            $textModes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock, Mode::QuarterBlock];
+            // Graphics modes only if the terminal reports the capability.
+            $report = Mosaic::diagnose();
+            $graphicsModes = [];
+            if ($report->has(Capability::Sixel)) {
+                $graphicsModes[] = Mode::Sixel;
+            }
+            if ($report->has(Capability::KittyKeyboard)) {
+                // Note: Kitty image mode is gated on Capability::KittyKeyboard because
+                // candy-palette exposes no standalone KittyGraphics capability.
+                $graphicsModes[] = Mode::Kitty;
+            }
+            if ($report->has(Capability::ITerm2)) {
+                $graphicsModes[] = Mode::Iterm2;
+            }
+            $allModes = array_merge($textModes, $graphicsModes);
+
+            // Guard: if current mode is somehow not in the cycle, start from first.
+            $currentIdx = array_search($this->mode, $allModes, true);
+            if ($currentIdx === false) {
+                $currentIdx = -1;
+            }
+            $nextMode = $allModes[($currentIdx + 1) % count($allModes)];
+
+            // Rebuild the decoder ONLY when the new mode needs a different decode
+            // geometry — the frames already in hand are exactly what an
+            // equal-geometry mode renders, so re-spawning ffmpeg and decoding
+            // forward to the current playhead (finding #13) would be pure churn.
+            if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
+                return [$this->mutate([
+                    'mode' => $nextMode,
+                    'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                ]), null];
+            }
+
+            [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
+
+            $nextPlayer = $this->mutate([
+                'mode' => $nextMode,
+                'decoder' => $decoder,
+                'currentFrame' => $frame ?? $this->currentFrame,
+                'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+            ]);
+            return [$nextPlayer, null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * The decode geometry a rendering mode demands from its source, as an
+     * opaque comparable signature.
+     *
+     * WHY this is the right reuse key (finding #13): a decoder consults the mode
+     * for exactly three things — `isGraphics()` (rawvideo rgb24 vs a PNG
+     * image2pipe), `colsPerCell()` and `rowsPerCell()` (the pixel size of one
+     * source cell). `FfmpegDecoder::open()` and `GifDecoder::open()` derive
+     * `$graphics`/`$frameW`/`$frameH` from nothing else, so two modes with equal
+     * signatures produce byte-identical decoder argv and an identical frame grid.
+     * Ascii → Ansi256 → TrueColor therefore share one decoder process, and the
+     * Sixel/Kitty/iTerm2 trio share theirs, while crossing into HalfBlock
+     * (2 source rows per cell) or QuarterBlock (2×2) still rebuilds as before.
+     *
+     * @return string
+     */
+    private static function decodeGeometry(Mode $mode): string
+    {
+        return $mode->isGraphics()
+            ? sprintf('graphics:%dx%d', $mode->colsPerCell(), $mode->rowsPerCell())
+            : sprintf('text:%dx%d', $mode->colsPerCell(), $mode->rowsPerCell());
+    }
+
+    /**
+     * Render the current frame to a full ANSI string.
+     *
+     * view() always emits the COMPLETE current frame. candy-core's Renderer
+     * diffs it against the previously rendered frame and writes only the
+     * minimal terminal update, so there is intentionally no cell-diff here —
+     * diffing inside view() would double-diff the framework's own diff and
+     * corrupt the screen.
+     *
+     * Ascii/TrueColor/HalfBlock render through a candy-buffer Buffer (the
+     * cell grid the plan calls for); Ansi256/Sixel/Kitty/Iterm2 render
+     * directly through their FrameRenderer.
+     *
+     * @return string
+     */
+    public function view(): string
+    {
+        $frame = $this->currentFrame;
+
+        // If no frame yet (initial render before first tick), show a
+        // placeholder rather than crashing.
+        if ($frame === null) {
+            return $this->renderPlaceholder();
+        }
+
+        // Ansi256 (38;5;N) and the image protocols render directly — they are
+        // not expressible through the truecolor-only Buffer cell grid.
+        if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2 || $this->mode === Mode::Ansi256) {
+            $out = $this->renderDirect($frame);
+        } else {
+            $out = $this->frameToBuffer($frame, $this->mode)->toAnsi();
+        }
+
+        // Subtitle overlay: append a centered caption line at the bottom when
+        // a subtitle cue is active for the current videoTime.
+        if ($this->subtitles !== null) {
+            $caption = $this->subtitles->cueAt($this->videoTime);
+            if ($caption !== null) {
+                // Truncate to cellsW to respect the one-line-per-row invariant.
+                $caption = mb_strcut($caption, 0, $this->cellsW, 'UTF-8');
+                $caption = str_pad($caption, $this->cellsW, ' ', STR_PAD_RIGHT);
+                $out .= "\r\n" . $caption;
+            }
+        }
+
+        // At end-of-stream (non-loop) append a status line so the user can see
+        // playback stopped and how to restart. Normal playback output is
+        // unchanged, so this adds no per-frame snapshot churn.
+        // The digit restart hint ("0 restart") is only shown when totalFrames > 0
+        // because digit-seek is a no-op on streams of unknown length.
+        if ($this->ended) {
+            $hint = $this->totalFrames > 0 ? '0 restart  q quit' : 'q quit';
+            return $out . "\r\n" . '[ended]  ' . $hint;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Build a Buffer from an RgbFrame using the current rendering mode.
+     *
+     * For Ascii/Ansi256/TrueColor: each pixel maps to one Buffer cell
+     * with the appropriate luma character and optional foreground color.
+     *
+     * For HalfBlock: each pair of vertically-adjacent pixels maps to
+     * one Buffer cell with the upper pixel color as foreground and
+     * lower pixel as background (via the ▀ character).
+     */
+    private function frameToBuffer(RgbFrame $frame, Mode $mode): Buffer
+    {
+        $w = $frame->w;
+        $h = $frame->h;
+
+        // Use cell dimensions from the frame's native size.
+        // For HalfBlock, h is doubled (2 rows per cell).
+        $cellDims = $this->detectCellDimensions();
+        $cellW = $cellDims['w'];
+        $cellH = $cellDims['h'];
+
+        // Buffer cell grid dimensions.
+        $bufW = (int)ceil($w / $cellW);
+        $bufH = (int)ceil($h / $cellH);
+
+        // Accumulate a flat row-major cell grid (index = cy*bufW + cx) and wrap
+        // it in a single Buffer::fromGrid() call below. The previous per-cell
+        // Buffer::withCellAt() loop copy-on-write duplicated the whole grid on
+        // every pixel — O(cells²) per frame; appending to a plain array and
+        // wrapping once is O(cells). Every cell is written exactly once (the
+        // loops cover the full bufW×bufH range), so the resulting Buffer is
+        // byte-identical to the old path.
+        /** @var list<Cell> $grid */
+        $grid = [];
+
+        $bytes = $frame->bytes;
+        $byteLen = strlen($bytes);
+
+        if ($mode === Mode::HalfBlock) {
+            // INLINE HalfBlock path: renders directly via Buffer → toAnsi().
+            // This is the runtime path used by Player::view() for HalfBlock.
+            // There is a SEPARATE HalfBlockRenderer (wired at RendererFactory)
+            // that is NEVER reached by the Player runtime — only by direct
+            // factory use / tests.
+            //
+            // Why the duplicate survives (finding #9, deliberately NOT deleted):
+            // it is the only executable specification of the mosaic contract this
+            // renderer must keep, and the two paths do NOT emit identical bytes —
+            // Buffer::toAnsi() writes one combined `0;38;2;r;g;b;48;2;r;g;bm` run
+            // per cell while mosaic writes a reset-terminated fg/bg pair, and
+            // mosaic resamples through GD. Routing view() at mosaic would rewrite
+            // every HalfBlock snapshot and pull ext-gd (not a declared dependency
+            // of this lib) onto the hot path. `tests/HalfBlockParityTest` therefore
+            // compares the decoded per-cell (glyph, fg, bg) stream — the picture,
+            // not the encoding — on every geometry a conforming decoder can emit,
+            // and pins the one shape where they legitimately differ (odd pixel
+            // height, which cellsH × rowsPerCell() cannot produce).
+            //
+            // HalfBlock: each cell shows 2 vertically-stacked pixels.
+            // Upper pixel = foreground, lower pixel = background.
+            for ($cy = 0; $cy < $bufH; $cy++) {
+                for ($cx = 0; $cx < $bufW; $cx++) {
+                    // Source pixel row for upper half.
+                    $upperY = $cy * 2;
+                    // Source pixel row for lower half.
+                    $lowerY = $cy * 2 + 1;
+
+                    $upperRgb = self::pixelRgb($bytes, $w, $byteLen, $cx * $cellW, $upperY);
+                    $lowerRgb = self::pixelRgb($bytes, $w, $byteLen, $cx * $cellW, $lowerY);
+
+                    $fg = self::rgbToStyleColor($upperRgb[0], $upperRgb[1], $upperRgb[2], $mode);
+                    $bg = self::rgbToStyleColor($lowerRgb[0], $lowerRgb[1], $lowerRgb[2], $mode);
+
+                    $style = new Style($fg, $bg);
+
+                    $grid[] = Cell::new('▀', $style, null, 1);
+                }
+            }
+        } elseif ($mode === Mode::QuarterBlock) {
+            // QuarterBlock: each cell is a 2×2 pixel group. The four quadrant
+            // colours are split into two groups and drawn with a quadrant glyph
+            // (fg = brighter group, bg = the other) — two colours across four
+            // sub-pixel positions, sharper than half-block.
+            for ($cy = 0; $cy < $bufH; $cy++) {
+                for ($cx = 0; $cx < $bufW; $cx++) {
+                    $x0 = $cx * 2;
+                    $y0 = $cy * 2;
+                    $quads = [
+                        self::pixelRgb($bytes, $w, $byteLen, $x0, $y0),     // UL
+                        self::pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0),     // UR
+                        self::pixelRgb($bytes, $w, $byteLen, $x0, $y0 + 1), // LL
+                        self::pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0 + 1), // LR
+                    ];
+                    [$glyph, $fgInt, $bgInt] = self::quarterCell($quads);
+                    $grid[] = Cell::new($glyph, new Style($fgInt, $bgInt), null, 1);
+                }
+            }
+        } else {
+            // Ascii / Ansi256 / TrueColor: one pixel per cell.
+            for ($cy = 0; $cy < $bufH; $cy++) {
+                for ($cx = 0; $cx < $bufW; $cx++) {
+                    $px = $cx * $cellW;
+                    $py = $cy * $cellH;
+
+                    $rgb = self::pixelRgb($bytes, $w, $byteLen, $px, $py);
+                    [$r, $g, $b] = $rgb;
+
+                    $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
+                    $ch = LumaRamp::char((float)$luma, $this->ramp);
+
+                    $fg = self::rgbToStyleColor($r, $g, $b, $mode);
+                    $style = $fg !== null ? new Style($fg) : null;
+
+                    $grid[] = Cell::new($ch, $style, null, 1);
+                }
+            }
+        }
+
+        return Buffer::fromGrid($bufW, $bufH, $grid);
+    }
+
+    /**
+     * 16 quadrant glyphs indexed by a 4-bit foreground mask
+     * (bit0=UL, bit1=UR, bit2=LL, bit3=LR).
+     *
+     * @var array<int, string>
+     */
+    private const QUARTER_GLYPHS = [
+        0 => ' ', 1 => '▘', 2 => '▝', 3 => '▀', 4 => '▖', 5 => '▌', 6 => '▞', 7 => '▛',
+        8 => '▗', 9 => '▚', 10 => '▐', 11 => '▜', 12 => '▄', 13 => '▙', 14 => '▟', 15 => '█',
+    ];
+
+    /**
+     * Pick a quadrant glyph + fg/bg colours for one 2×2 cell. The four quadrant
+     * colours are split into two groups (a one-step 2-means around the
+     * most-distant pair); the glyph marks the brighter foreground group and each
+     * group's average colour becomes fg/bg (0xRRGGBB).
+     *
+     * @param list<array{int,int,int}> $quads ul, ur, ll, lr
+     * @return array{0: string, 1: int, 2: int} glyph, fg, bg
+     */
+    private static function quarterCell(array $quads): array
+    {
+        $dist = static fn (array $a, array $b): int =>
+            ($a[0] - $b[0]) ** 2 + ($a[1] - $b[1]) ** 2 + ($a[2] - $b[2]) ** 2;
+        $luma = static fn (array $c): int => LumaRamp::compute($c[0], $c[1], $c[2]);
+        $pack = static fn (array $c): int => Color::pack($c[0], $c[1], $c[2]);
+
+        $maxD = -1;
+        $a = 0;
+        $b = 0;
+        for ($i = 0; $i < 4; $i++) {
+            for ($j = $i + 1; $j < 4; $j++) {
+                $d = $dist($quads[$i], $quads[$j]);
+                if ($d > $maxD) {
+                    $maxD = $d;
+                    $a = $i;
+                    $b = $j;
+                }
+            }
+        }
+
+        if ($maxD === 0) {
+            return [self::QUARTER_GLYPHS[15], $pack($quads[0]), $pack($quads[0])];
+        }
+
+        [$fgSeed, $bgSeed] = $luma($quads[$a]) >= $luma($quads[$b])
+            ? [$quads[$a], $quads[$b]]
+            : [$quads[$b], $quads[$a]];
+
+        $mask = 0;
+        $fgSum = [0, 0, 0];
+        $bgSum = [0, 0, 0];
+        $fgN = 0;
+        $bgN = 0;
+        for ($i = 0; $i < 4; $i++) {
+            if ($dist($quads[$i], $fgSeed) <= $dist($quads[$i], $bgSeed)) {
+                $mask |= (1 << $i);
+                $fgSum[0] += $quads[$i][0];
+                $fgSum[1] += $quads[$i][1];
+                $fgSum[2] += $quads[$i][2];
+                $fgN++;
+            } else {
+                $bgSum[0] += $quads[$i][0];
+                $bgSum[1] += $quads[$i][1];
+                $bgSum[2] += $quads[$i][2];
+                $bgN++;
+            }
+        }
+
+        $fg = $fgN > 0 ? [intdiv($fgSum[0], $fgN), intdiv($fgSum[1], $fgN), intdiv($fgSum[2], $fgN)] : $fgSeed;
+        $bg = $bgN > 0 ? [intdiv($bgSum[0], $bgN), intdiv($bgSum[1], $bgN), intdiv($bgSum[2], $bgN)] : $bgSeed;
+
+        return [self::QUARTER_GLYPHS[$mask], $pack($fg), $pack($bg)];
+    }
+
+    /**
+     * Get RGB values for a pixel at (px, py) from raw rgb24 bytes.
+     *
+     * @return array{int, int, int} [r, g, b]
+     */
+    private static function pixelRgb(string $bytes, int $w, int $byteLen, int $px, int $py): array
+    {
+        $idx = ($py * $w + $px) * 3;
+        if ($idx + 2 >= $byteLen) {
+            return [0, 0, 0];
+        }
+        return [ord($bytes[$idx]), ord($bytes[$idx + 1]), ord($bytes[$idx + 2])];
+    }
+
+    /**
+     * Convert RGB to a candy-buffer Style color (0xRRGGBB) based on mode.
+     *
+     * Only the buffer-backed modes reach this — Ascii has no color, the rest
+     * (TrueColor/HalfBlock) pack the channels into a 0xRRGGBB int. Ansi256 and
+     * the image protocols never use the Buffer path (they renderDirect()).
+     *
+     * Packing delegates to {@see Color::pack()} — the same helper `RgbFrame::toGd()`
+     * uses — so the terminal path and the GD export path can never drift on how
+     * three bytes become one int (finding #44).
+     *
+     * @return int|null 0xRRGGBB color for TrueColor/HalfBlock, null for Ascii
+     */
+    private static function rgbToStyleColor(int $r, int $g, int $b, Mode $mode): ?int
+    {
+        if ($mode === Mode::Ascii) {
+            return null;
+        }
+
+        return Color::pack($r, $g, $b);
+    }
+
+    /**
+     * Detect cell dimensions for a frame given the current rendering mode.
+     *
+     * @return array{w: int, h: int}
+     */
+    private function detectCellDimensions(): array
+    {
+        return ['w' => $this->mode->colsPerCell(), 'h' => $this->mode->rowsPerCell()];
+    }
+
+    /**
+     * Direct (non-delta) rendering via cached FrameRenderer.
+     *
+     * The renderer is built by open()/fromDecoder() for every mode; a null here
+     * means a Player reached a direct-render mode without going through a
+     * factory that armed one — a programming error we surface loudly rather
+     * than fataling on a null method call mid-frame.
+     */
+    private function renderDirect(RgbFrame $frame): string
+    {
+        if ($this->renderer === null) {
+            throw new \LogicException(
+                'Player is in direct-render mode ' . $this->mode->value
+                . ' but carries no FrameRenderer; build it with Player::open() or Player::fromDecoder().'
+            );
+        }
+
+        return $this->renderer->render($frame, $this->mode);
+    }
+
+    /**
+     * Render a placeholder when no frame is available yet.
+     */
+    private function renderPlaceholder(): string
+    {
+        $lines = [];
+        for ($i = 0; $i < $this->cellsH; $i++) {
+            $lines[] = str_repeat(' ', $this->cellsW);
+        }
+        $body = implode("\r\n", $lines);
+        $status = "loading...  space play  q quit";
+        return $body . "\r\n" . $status;
+    }
+
+    /**
+     * Cmd to re-arm the tick chain after a seek.
+     *
+     * The live tick chain is self-perpetuating, so a seek during normal
+     * playback needs no new tick (returns null). But a seek out of the ENDED
+     * state (where ticking had stopped) must restart it — provided the
+     * post-seek player is not paused.
+     */
+    private function seekTickCmd(self $nextPlayer): ?\Closure
+    {
+        return ($this->ended && !$nextPlayer->paused)
+            ? Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance())
+            : null;
+    }
+
+    /**
+     * Close-and-recreate the decoder at a given size+mode, advanced to $frameIndex.
+     *
+     * The decision is driven by the decoder's own {@see Decoder::reopensInPlace()}
+     * capability, not by a `'/fake'` string or an `instanceof` test class in the
+     * playback path:
+     *  - A decoder that reopens in place (an injected test double, or a server
+     *    stream that regenerates at the new geometry) is re-opened via reopen().
+     *  - Any other decoder (the ffmpeg/GIF decoders DecoderFactory owns) is
+     *    closed — F21: never leak the old ffmpeg process — and rebuilt fresh
+     *    from the source path via DecoderFactory, re-presenting the request
+     *    headers so a signed stream survives the rebuild.
+     *
+     * @return array{0: Decoder, 1: ?RgbFrame}
+     */
+    private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
+    {
+        if ($this->decoder->reopensInPlace()) {
+            $this->decoder->reopen($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->headers);
+            $decoder = $this->decoder;
+        } else {
+            $this->decoder->close();                 // F21: never leak the old ffmpeg process
+            $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH, $this->headers);
+        }
+        $frame = null;
+        for ($i = 0; $i <= $frameIndex; $i++) {
+            $f = $decoder->next();
+            if ($f === null) {
+                break;
+            }
+            $frame = $f;
+        }
+        return [$decoder, $frame];
+    }
+
+    /**
+     * Seek to a specific frame index by re-creating the decoder
+     * and advancing it to the target frame.
+     */
+    public function withSeek(int $targetIndex): self
+    {
+        // Clamp to valid range.
+        $targetIndex = max(0, $targetIndex);
+
+        // F6: realign audio to the seek target position.
+        $newAudio = $this->rebuildAudio((int)round(($targetIndex / $this->fps) * 1000));
+
+        // Backward seek: decoders are forward-only, so close-and-rebuild the
+        // decoder and skip forward to the target. rebuildDecoderAt() closes the
+        // old decoder first (F21: no leaked ffmpeg process) on the real path.
+        if ($targetIndex < $this->frameIndex) {
+            [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex);
+            $newVideoTime = $targetIndex / $this->fps; // videoTime = content time (not scaled)
+
+            return $this->mutate([
+                'decoder' => $decoder,
+                'videoTime' => $newVideoTime,
+                'frameIndex' => $targetIndex,
+                'currentFrame' => $frame,
+                'lastTickTime' => microtime(true),
+                'audioPlayer' => $newAudio,
+                'ended' => false,
+            ]);
+        }
+
+        if ($targetIndex === $this->frameIndex) {
+            return $this;
+        }
+
+        // Forward seek: advance decoder to target frame.
+        $frame = $this->currentFrame;
+        $idx = $this->frameIndex;
+        while ($idx < $targetIndex) {
+            $frame = $this->decoder->next();
+            if ($frame === null) {
+                break;
+            }
+            $idx++;
+        }
+
+        // F4 fix: videoTime = content time (not scaled by speed).
+        $newVideoTime = $idx / $this->fps;
+
+        return $this->mutate([
+            'videoTime' => $newVideoTime,
+            'frameIndex' => $idx,
+            'currentFrame' => $frame,
+            'lastTickTime' => microtime(true),
+            'audioPlayer' => $newAudio,
+            'ended' => false, // a seek clears the ended state
+        ]);
+    }
+
+    /**
+     * Current playback position in content seconds (videoTime).
+     */
+    public function position(): float
+    {
+        return $this->videoTime;
+    }
+
+    /**
+     * The HTTP request headers this player re-presents on every decoder rebuild
+     * (empty for a local file). Bare accessor per the library's no-`get` rule.
+     *
+     * @return array<array-key, string>
+     */
+    public function headers(): array
+    {
+        return $this->headers;
+    }
+
+    /**
+     * Total duration in content seconds, or 0.0 when unknown (a stream of
+     * indeterminate length, where totalFrames is 0).
+     */
+    public function duration(): float
+    {
+        return ($this->totalFrames > 0 && $this->fps > 0.0)
+            ? $this->totalFrames / $this->fps
+            : 0.0;
+    }
+
+    /**
+     * Seek to an absolute time in content seconds (clamped to [0, duration]).
+     *
+     * The time-domain companion to {@see withSeek()} (which is frame-indexed):
+     * it re-spawns the decoder with a fast ffmpeg input seek (`-ss`) so jumping
+     * deep into a multi-GB network stream is instant rather than decoding every
+     * intervening frame. Audio is realigned to the same offset. Returns a new
+     * Player (immutable); a host screen decides whether to re-arm the tick.
+     */
+    public function seekToSeconds(float $sec): self
+    {
+        $sec = max(0.0, $sec);
+        $duration = $this->duration();
+        if ($duration > 0.0 && $sec > $duration) {
+            $sec = $duration;
+        }
+        $targetIndex = (int) round($sec * $this->fps);
+
+        // Realign audio to the seek target (same factory seam as withSeek()).
+        $newAudio = $this->rebuildAudio((int)round($sec * 1000));
+
+        [$decoder, $frame] = $this->rebuildDecoderAtSeconds($this->cellsW, $this->cellsH, $this->mode, $sec);
+
+        return $this->mutate([
+            'decoder' => $decoder,
+            'currentFrame' => $frame ?? $this->currentFrame,
+            'frameIndex' => $targetIndex,
+            'videoTime' => $sec,
+            'lastTickTime' => microtime(true),
+            'audioPlayer' => $newAudio,
+            'ended' => false, // a seek clears the end-of-stream state
+        ]);
+    }
+
+    /**
+     * Grab a single frame at $sec for a scrubber-hover thumbnail.
+     *
+     * Two source kinds, and frameAt serves both now that the decoder tells the
+     * Player how it reopens (no `'/fake'` string check here):
+     *  - A decoder that reopens in place (an injected test double or a server
+     *    stream) is asked to reopen at $sec, hand back its next frame, then
+     *    reopen again at the current playhead. The restore matters: a
+     *    scrubber-hover grabs thumbnails WHILE playing, and without rewinding
+     *    to $this->videoTime the live stream would keep flowing from $sec while
+     *    the Player still believed it was at frameIndex — silently desynced.
+     *    (Decoders that honour $startSec resume exactly; replay-from-start
+     *    test doubles resume from the head — such doubles ignore absolute
+     *    positions everywhere, so their playhead was always approximate.)
+     *  - A DecoderFactory-owned decoder (ffmpeg/GIF) is snapshotted through a
+     *    throwaway decoder seeked to $sec (fast `-ss`), read once, and closed —
+     *    WITHOUT disturbing the live decoder that keeps playing.
+     *
+     * @throws \LogicException for a factory-owned Player that has no source path
+     *         to spawn the throwaway from (an unbound source), where grabbing a
+     *         frame is impossible rather than merely empty.
+     * @return RgbFrame|null null only when a real grab legitimately yields nothing.
+     */
+    public function frameAt(float $sec): ?RgbFrame
+    {
+        if ($this->decoder->reopensInPlace()) {
+            try {
+                $this->decoder->reopen($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->headers);
+                $frame = $this->decoder->next();
+            } finally {
+                // Put the playhead back where the ticking Player thinks it is —
+                // even when the throwaway read throws, so a caught exception
+                // never strands the live decoder at the hovered position.
+                $this->decoder->reopen($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, $this->videoTime, $this->headers);
+            }
+
+            return $frame;
+        }
+
+        if ($this->videoPath === '') {
+            throw new \LogicException(
+                'frameAt() needs a source path to spawn a throwaway decoder, but this Player is unbound.'
+            );
+        }
+
+        $decoder = DecoderFactory::new($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH, $this->headers);
+        try {
+            $frame = $decoder->next(); // with -ss, the first frame is at/near $sec
+        } finally {
+            $decoder->close(); // a throw reads cleanly or not at all — never leaks the child
+        }
+
+        return $frame;
+    }
+
+    /**
+     * The stock audio-companion factory: builds the real {@see AudioPlayer} for a
+     * path, seek offset and header map.
+     *
+     * One definition rather than three copies of the same closure (finding #44's
+     * duplication pattern applied to Player itself): `open()`, `fromDecoder()` and
+     * `rebuildAudio()` all defaulted to this exact shape, so the #52 header
+     * parameter had to be edited in three places at once — the precise drift the
+     * audit keeps flagging.
+     *
+     * @return \Closure(string,?int,array<array-key,string>):AudioPlayer
+     */
+    private static function defaultAudioFactory(): \Closure
+    {
+        return static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
+            => new AudioPlayer($path, $startMs, null, $headers);
+    }
+
+    /**
+     * Tear down playback: stop the audio companion and close the decoder
+     * (terminating its ffmpeg subprocess). Idempotent — safe to call more than
+     * once. A host screen calls this when leaving the player so no audio/video
+     * subprocess leaks across play → back.
+     *
+     * The stop latch is per object tree (round-2 NEW-4): it is copied forward by
+     * `mutate()`, so the three paths that can self-reschedule work — the resize
+     * arming path, the deferred debounce apply, and every playback tick — all
+     * resolve to identity on a stopped instance (round-3 R3-1). Host-driven
+     * one-shot APIs (an explicit seek, a mode keypress) still act, exactly as
+     * before the latch existed; a host has no reason to keep feeding input to a
+     * torn-down player. To play again, construct a FRESH Player (or `open()` a
+     * new one) — reusing the stopped instance will not resurrect its decoder.
+     */
+    public function stop(): void
+    {
+        $this->stopped = true;
+        $this->audioPlayer?->stop();
+        $this->decoder->close();
+    }
+
+    /**
+     * Pause playback. Returns a new Player with paused=true.
+     */
+    public function pause(): self
+    {
+        $this->audioPlayer?->pause();
+        return $this->mutate(['paused' => true]);
+    }
+
+    /**
+     * Resume playback. Returns a new Player with paused=false and re-anchored
+     * clock so play-time accumulates correctly.
+     */
+    public function play(): self
+    {
+        $this->audioPlayer?->resume();
+        return $this->mutate([
+            'paused' => false,
+            'lastTickTime' => microtime(true),
+        ]);
+    }
+
+    /**
+     * Attach a parsed subtitle track to the player.
+     *
+     * Returns a new Player (immutable) with the subtitle track set.
+     * The caption overlay appears in view() when videoTime falls within a cue.
+     */
+    public function withSubtitles(WebVtt $track): self
+    {
+        return $this->mutate(['subtitles' => $track]);
+    }
+
+    /**
+     * Build a fresh decoder seeked to $startSec via fast ffmpeg input seeking
+     * (`-ss`), returning the decoder and its first (target) frame. The real path
+     * closes the old decoder first (F21: no leaked ffmpeg) and threads startSec
+     * through DecoderFactory. A decoder that reopens in place has no `-ss`
+     * notion (an injected test double or a socket stream replays from its own
+     * head), so it falls back to the index-based rebuild — decode-forward to the
+     * equivalent frame — which is the capability's honest meaning here, not a
+     * path-string special case.
+     *
+     * @return array{0: Decoder, 1: ?RgbFrame}
+     */
+    private function rebuildDecoderAtSeconds(int $cellsW, int $cellsH, Mode $mode, float $startSec): array
+    {
+        if ($this->decoder->reopensInPlace()) {
+            $index = (int) round(max(0.0, $startSec) * $this->fps);
+            return $this->rebuildDecoderAt($cellsW, $cellsH, $mode, $index);
+        }
+
+        $this->decoder->close(); // never leak the old ffmpeg process
+        $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH, $this->headers);
+        $frame = $decoder->next(); // with -ss, the first frame IS the seek target
+
+        return [$decoder, $frame];
+    }
+
+    /**
+     * Rebuild the audio player for a seek operation.
+     *
+     * Mirrors the factory seam in withSeek() and seekToSeconds() so the
+     * same stop/rebuild/start logic is used in both places.
+     */
+    private function rebuildAudio(?int $startMs): ?AudioPlayer
+    {
+        if ($this->audioPlayer === null) {
+            return null;
+        }
+        $this->audioPlayer->stop();
+        $factory = $this->audioFactory ?? self::defaultAudioFactory();
+        // Re-present the source headers on the respawned companion (finding #52):
+        // every seek/loop/mode rebuild used to drop them, so audio worked only
+        // on an unauthenticated URL.
+        $newAudio = $factory($this->videoPath, $startMs, $this->headers);
+        if (!$this->paused) {
+            $newAudio->start();
+        }
+        return $newAudio;
+    }
+
+    /**
+     * Create a new Player with a new decoded frame, advancing frame index.
+     */
+    private function withNewFrame(
+        ?RgbFrame $frame,
+        int $frameIndex,
+        Decoder $decoder,
+        float $videoTime,
+        float $lastTickTime,
+    ): self {
+        // mutate() carries every other field; `ended` is intentionally left out so
+        // it defaults to the current value — a normal tick advance never changes
+        // the end-of-stream state.
+        return $this->mutate([
+            'decoder' => $decoder,
+            'videoTime' => $videoTime,
+            'frameIndex' => $frameIndex,
+            'currentFrame' => $frame ?? $this->currentFrame,
+            'lastTickTime' => $lastTickTime,
+        ]);
+    }
+
+    /**
+     * Generic mutable-update helper: create a new Player with changed fields.
+     *
+     * WHY `array_key_exists()` and not `??` (finding #8). The old implementation
+     * read `$changes['ended'] ?? $this->ended`, which reads as "fall back when the
+     * caller gave me nothing" but actually means "fall back when the caller gave
+     * me *null*". Two real consequences, both silent:
+     *
+     *  - A nullable field could never be CLEARED. `['audioPlayer' => null]` (stop
+     *    following an audio companion) or `['currentFrame' => null]` would have
+     *    quietly kept the previous value, so the new Player would claim a state the
+     *    update path explicitly discarded — and then try to start audio that no
+     *    longer belongs to this stream position.
+     *  - Falsy-but-present values were only accidentally safe. `ended => false`,
+     *    `frameIndex => 0`, `videoTime => 0.0` and `paused => false` are all
+     *    meaningful state the loop-restart and seek paths pass, and their survival
+     *    depended on a quirk of the operator rather than on intent.
+     *
+     * Key-existence makes presence the single signal: if the key is in the map the
+     * value is used verbatim, whatever it is. Callers therefore express "no change"
+     * by omitting the key — never by passing null.
+     *
+     * `videoPath`, `headers` and `frameBudgetMs` are pinned (not read from
+     * $changes at all): they describe the *source* and the host's decode budget,
+     * not the playback state a rebuild is allowed to revise, so any attempt to
+     * change them through this seam would be a bug we want to be unable to write.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        $next = new self(
+            decoder: array_key_exists('decoder', $changes) ? $changes['decoder'] : $this->decoder,
+            mode: array_key_exists('mode', $changes) ? $changes['mode'] : $this->mode,
+            speed: array_key_exists('speed', $changes) ? $changes['speed'] : $this->speed,
+            paused: array_key_exists('paused', $changes) ? $changes['paused'] : $this->paused,
+            videoTime: array_key_exists('videoTime', $changes) ? $changes['videoTime'] : $this->videoTime,
+            frameIndex: array_key_exists('frameIndex', $changes) ? $changes['frameIndex'] : $this->frameIndex,
+            currentFrame: array_key_exists('currentFrame', $changes) ? $changes['currentFrame'] : $this->currentFrame,
+            lastTickTime: array_key_exists('lastTickTime', $changes) ? $changes['lastTickTime'] : $this->lastTickTime,
+            fps: array_key_exists('fps', $changes) ? $changes['fps'] : $this->fps,
+            totalFrames: array_key_exists('totalFrames', $changes) ? $changes['totalFrames'] : $this->totalFrames,
+            cellsW: array_key_exists('cellsW', $changes) ? $changes['cellsW'] : $this->cellsW,
+            cellsH: array_key_exists('cellsH', $changes) ? $changes['cellsH'] : $this->cellsH,
+            videoPath: $this->videoPath, // pinned — videoPath is immutable for the player's lifetime
+            audioPlayer: array_key_exists('audioPlayer', $changes) ? $changes['audioPlayer'] : $this->audioPlayer,
+            ended: array_key_exists('ended', $changes) ? $changes['ended'] : $this->ended,
+            loop: array_key_exists('loop', $changes) ? $changes['loop'] : $this->loop,
+            ramp: array_key_exists('ramp', $changes) ? $changes['ramp'] : $this->ramp,
+            audioFactory: array_key_exists('audioFactory', $changes) ? $changes['audioFactory'] : $this->audioFactory,
+            cellPxW: array_key_exists('cellPxW', $changes) ? $changes['cellPxW'] : $this->cellPxW,
+            cellPxH: array_key_exists('cellPxH', $changes) ? $changes['cellPxH'] : $this->cellPxH,
+            subtitles: array_key_exists('subtitles', $changes) ? $changes['subtitles'] : $this->subtitles,
+            renderer: array_key_exists('renderer', $changes) ? $changes['renderer'] : $this->renderer,
+            headers: $this->headers, // pinned — the source's request headers outlive any rebuild
+            frameBudgetMs: $this->frameBudgetMs, // pinned for the player's lifetime
+            // Carried, not pinned: a tick, seek or mode switch that happens inside
+            // the debounce window must not silently swallow the deferred rebuild, or
+            // the player keeps decoding at the superseded geometry forever.
+            pendingResize: array_key_exists('pendingResize', $changes) ? $changes['pendingResize'] : $this->pendingResize,
+        );
+        // Teardown is not a value the model is built with, so it cannot ride the
+        // named-argument list — copy the latch forward instead. Every derived
+        // instance owns the very same decoder/audio child that stop() already
+        // closed, so it must be just as dead as its parent.
+        $next->stopped = $this->stopped;
+
+        return $next;
+    }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
+}

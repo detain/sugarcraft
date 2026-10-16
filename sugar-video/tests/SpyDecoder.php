@@ -1,0 +1,78 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Video\Tests;
+
+use SugarCraft\Video\Decode\Decoder;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Render\Mode;
+
+/**
+ * A Decoder that wraps a fixed frame list and records how many times close()
+ * is called.
+ *
+ * Used by the F21 regression test to prove a backward seek closes the OLD
+ * decoder (instead of leaking the underlying ffmpeg process) before building
+ * a fresh one.
+ */
+final class SpyDecoder implements Decoder
+{
+    public int $closeCount = 0;
+
+    /** @var list<RgbFrame> */
+    private array $frames;
+
+    private int $index = 0;
+
+    /**
+     * @param list<RgbFrame> $frames Sequence of frames to yield on each next() call
+     */
+    public function __construct(array $frames)
+    {
+        $this->frames = $frames;
+    }
+
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
+    {
+        $this->index = 0;
+    }
+
+    public function next(): ?RgbFrame
+    {
+        return $this->frames[$this->index++] ?? null;
+    }
+
+    public function close(): void
+    {
+        $this->closeCount++;
+    }
+
+    public function getIterator(): \Generator
+    {
+        while (($frame = $this->next()) !== null) {
+            yield $frame;
+        }
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * Resets the index (same as open()).
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
+    {
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+    }
+
+    /**
+     * Reports false so the F21 backward-seek test drives Player's REAL rebuild
+     * branch (close the old decoder, then build a fresh one from a genuine .gif
+     * path through DecoderFactory). That branch is what proves the old decoder
+     * gets closed; a reopensInPlace() decoder would skip it.
+     */
+    public function reopensInPlace(): bool
+    {
+        return false;
+    }
+}

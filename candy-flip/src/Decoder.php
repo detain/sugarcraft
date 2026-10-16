@@ -31,7 +31,7 @@ final class Decoder
      * by catching the exception: {@see sampleCanvas()} area-averages in PHP,
      * one `imagecolorat()` per source pixel per cell, so the grid is both the
      * memory and the time budget (MEASURED: a 6-frame GIF at 316×316 ≈ 100k
-     * cells costs ~1.1s and ~288MB). sugar-reel's graphics modes ask in
+     * cells costs ~1.1s and ~288MB). sugar-video's graphics modes ask in
      * PIXELS, which for an ordinary 80×24 terminal is ~384k — six times over
      * this line, and a hard failure rather than a slow success.
      */
