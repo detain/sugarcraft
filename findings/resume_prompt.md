@@ -86,7 +86,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 1-G | 1.19–1.23 | candy-palette (StandardColors cache), sugar-dash (EventDispatcher mutation, Chart render mutation, SystemModule mutation, array_search false) | <!-- @rename-keep -->
 | 1-H | 1.24–1.27 | candy-git (removeDir DRY, interactive rebase), candy-vcr (FrameStream mutation, negative dt, double iteration) |
 | 1-I | 1.28–1.30 | sugar-reel (rebuildAudio extraction, PNG buffer unbounded, DecoderInterface reopen) |
-| 1-J | 1.31–1.33 | honey-bounce (CubicBezier validation, SpringConfig silent clamping) |
+| 1-J | 1.31–1.33 | honey-bounce (CubicBezier validation, SpringConfig silent clamping) | <!-- @rename-keep historical provenance -->
 
 ### Phase 2: DRY Refactoring and Architecture
 
@@ -109,7 +109,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) |
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), sugar-treelist (navigation methods, setLineOffset fluent, sort O(n) cursor) |
 | 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
-| 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), candy-palette (AsyncProbe), honey-bounce (reducedMotionOverride, Vector methods, EasingFunction interface) |
+| 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), candy-palette (AsyncProbe), honey-bounce (reducedMotionOverride, Vector methods, EasingFunction interface) | <!-- @rename-keep historical provenance -->
 | 3-G | 3.24–3.30 | candy-git-server (Async GitDaemon — deferred ⏭️), sugar-reel (Seeking callback — deferred ⏭️), candy-log (StreamHandler type, HookRegistry return, JsonFormatter coercion, RemoveHandler void, Styles return) |
 
 ### Phase 4: Documentation and CALIBER_LEARNINGS
@@ -127,7 +127,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 |-------|-------|------|
 | 5-A | 5.1–5.3 | sugar-table (frozen/hidden conflict, invalid key tests), candy-flip (per-frame delay test) |
 | 5-B | 5.4–5.6 | candy-flip (DISPOSAL_PREVIOUS), candy-input (FocusEvent tests), candy-async (markCancelled test) |
-| 5-C | 5.7–5.9 | honey-bounce (CubicBezier invalid control points), candy-mdview (viewport key binding tests), candy-mosaic (ChafaRenderer pipe cleanup) |
+| 5-C | 5.7–5.9 | honey-bounce (CubicBezier invalid control points), candy-mdview (viewport key binding tests), candy-mosaic (ChafaRenderer pipe cleanup) | <!-- @rename-keep historical provenance -->
 | 5-D | 5.10 | candy-mosaic (ChafaRenderer::reset test) |
 
 ### Phase 6: Remaining Items by Plan File

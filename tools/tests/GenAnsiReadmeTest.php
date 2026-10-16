@@ -161,7 +161,7 @@ final class GenAnsiReadmeTest extends TestCase
         ];
 
         return [
-            // A PIPE IN A DESCRIPTION. Until the honey-bounce row was rewritten, the real
+            // A PIPE IN A DESCRIPTION. Until the honey-bounce row was rewritten, the real // @rename-keep historical provenance
             // corpus contained exactly one of these, and an unescaped pipe silently splits
             // the row into extra cells — which is how that row read as undocumented to the
             // first parser written against this table. The corpus no longer exercises the
