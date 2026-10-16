@@ -92,3 +92,6 @@ refresh-deps --mode=linked candy-scriptui OK; committed-tree path-repo guard rc=
 - dev-master ABSENT across 5+5 polls → forced `scripts/packagist.sh update candy-scriptui` (BARE slug only — the script's validator rejects `vendor/name`: "not a valid package slug") → job 2254f0f99 → next check: dev-master present, source.reference afa6a66f01a38b3d0d62f5d5a5441433edb14d61 == split master EXACT.
 - Continuity peek: refs/heads/legacy/candy-shell + tag candy-shell-final at 9500e0aa (pre-rename split tip) — CI sync mints the pair on rename-syncs even though the monorepo push fast-forwarded (candy-query correction re-confirmed; B2 "FF mints none" law applies only to the monorepo push itself, not the split).
 - Abandon-checklist line appended (tagged); renames.json → packagist-done.
+
+## Tracker (done)
+- Entry status line inserted after B3's at plan_rename.md:963; cites TRUE post-rebase chain (40b41b7dd/69e90ac30/112012411/e62fbf508/5a37d3d00). Phase-4 row stays ☐ (4/12 entries done). Embedded renames listing (:315) un-maintained per precedent.
