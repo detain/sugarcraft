@@ -10,7 +10,7 @@ use SugarCraft\Crush\Host\SessionEvent;
 use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Host\SessionHub;
 use SugarCraft\Crush\Host\TurnTicket;
-use SugarCraft\Mcp\McpMessage;
+use SugarCraft\McpClient\McpMessage;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Protocol\ErrorCode;

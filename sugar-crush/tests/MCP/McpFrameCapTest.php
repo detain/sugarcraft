@@ -18,7 +18,7 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
  * `readMessages()` a hundred times per `callTool()` — and a peer that emits an
  * endless stream WITH NO NEWLINE grew it without bound for the life of the
  * process. The third member of that family, the stdio transport, moved into
- * `sugarcraft/sugar-mcp` at phase-2a: its cap rows — the oversized-frame
+ * `sugarcraft/sugar-mcp-client` at phase-2a: its cap rows — the oversized-frame
  * refusal, the drop, and the exactly-at-cap positive half, all driven through
  * the real reader — now live in the library suite
  * in the library's own suite), pinned STRONGER than the
@@ -48,7 +48,7 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
  *
  * ⚠️ AND THE FAILURE IS A NAMED THROW, NOT A TRUNCATION, WHICH IS THE PART
  * WORTH ASSERTING ON. Cutting the buffer at the cap would hand
- * {@see \SugarCraft\Mcp\McpMessage::parse()} half a line, which comes back as
+ * {@see \SugarCraft\McpClient\McpMessage::parse()} half a line, which comes back as
  * a malformed message — so the diagnostic would blame the PEER for what is in
  * fact this side refusing to hold more. Each row therefore asserts that the
  * message names the cap and that the buffer was DROPPED rather than kept.
@@ -151,7 +151,7 @@ final class McpFrameCapTest extends TestCase
 
     public function testBothClassesDeclareTheSameCapAndItIsTheFrameCapNotTheStderrCap(): void
     {
-        $stdio = self::capOf(\SugarCraft\Mcp\StdioMcpServer::class);
+        $stdio = self::capOf(\SugarCraft\McpClient\StdioMcpServer::class);
         $claude = self::capOf(ClaudeCodeMcpClient::class);
 
         $this->assertSame(64 * 1024 * 1024, $stdio, 'the library transport\'s MAX_FRAME_BYTES moved');

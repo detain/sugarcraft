@@ -299,7 +299,7 @@ Custom commands (`CommandLoader`, `CommandSpec`): `~/.sugar-crush/commands/**/*.
 ### 8.4 MCP (`src/MCP/`)
 
 - Client only. Config is `<root>/.mcp.json` only (no user-level config), honoured when `trustedProjectMcp` lists the root (`Bootstrap::mcpConfigDecision()`), with trust pins (`McpTrustPins`, `UNPINNED_KEYS`). Foreign spellings normalised by `McpForeignTranslate`. Servers start once at launch (`Bootstrap::mcpClient()`).
-- Transports (`McpClient::buildServer()`): `stdio` (`StdioMcpServer` over `sugarcraft/sugar-mcp`; `tools/call` unbounded by design), `http` (30 s Guzzle total timeout, OAuth bearer from `McpAuthStore`), `git` (in-process), `claude-mcp`. `sse` ABSENT.
+- Transports (`McpClient::buildServer()`): `stdio` (`StdioMcpServer` over `sugarcraft/sugar-mcp-client`; `tools/call` unbounded by design), `http` (30 s Guzzle total timeout, OAuth bearer from `McpAuthStore`), `git` (in-process), `claude-mcp`. `sse` ABSENT.
 - Tools only: resources, prompts and sampling ABSENT. Bridged tools are `mcp__<server>__<tool>` (`Tools/McpToolBridge`), gated like any tool.
 - Stdio env inherits unscrubbed via `ProcessContainment::env()` by documented decision (→ 0.14-b).
 

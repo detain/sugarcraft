@@ -9,7 +9,7 @@ use SugarCraft\Crush\MCP\StdioMcpServer;
 
 /**
  * A JSON-RPC `result` IS ANY JSON VALUE. The TYPE MATRIX for the envelope
- * itself lives with the canonical class in `sugarcraft/sugar-mcp`
+ * itself lives with the canonical class in `sugarcraft/sugar-mcp-client`
  * (tests/McpMessageTest.php, moved here by the lane-A2 fold); what stays in
  * this file is the CONSUMER half only — the {@see StdioMcpServer::callTool()}
  * and {@see StdioMcpServer::start()} behaviour the widening moved the crash
@@ -123,7 +123,7 @@ final class McpMessageResultTypeTest extends TestCase
      * ⚠️ AND A THIRD PART, WHICH IS THE ROSTER'S OWN KNOWN-POSITIVE. Those two
      * polarities are both about `start()`; NEITHER of them says anything about
      * `listTools()`. `assertSame([], $server->listTools())` is exactly what a
-     * {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} that had stopped working AT ALL would
+     * {@see \SugarCraft\McpClient\StdioMcpServer::parseTools()} that had stopped working AT ALL would
      * return, so on its own the empty roster is not evidence — it is the reading
      * a dead instrument gives. The well-behaved fixture is therefore driven
      * through the SAME `start()` -> `parseTools()` -> `listTools()` path first

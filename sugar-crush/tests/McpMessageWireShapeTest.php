@@ -10,9 +10,9 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * The CONSUMER half of the wire-shape guard: the codec's own key-set pins
- * ({@see \SugarCraft\Mcp\McpMessage::toJson()} versus
- * {@see \SugarCraft\Mcp\McpMessage::toArray()}) moved to the canonical class
- * with the lane-A2 fold and now live in `sugarcraft/sugar-mcp`
+ * ({@see \SugarCraft\McpClient\McpMessage::toJson()} versus
+ * {@see \SugarCraft\McpClient\McpMessage::toArray()}) moved to the canonical class
+ * with the lane-A2 fold and now live in `sugarcraft/sugar-mcp-client`
  * (tests/McpMessageWireShapeTest.php). What stays here is the end-to-end claim
  * only this product can make — that the widened `parse()` output actually
  * reaches {@see ClaudeCodeMcpClient::readMessages()} through a real child.
@@ -21,7 +21,7 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
  * ABOUT IN PROSE.
  *
  * `McpMessage::parse()` has TWO callers, not one:
- * {@see \SugarCraft\Mcp\StdioMcpServer::readResponse()} (phase-2a home: `sugarcraft/sugar-mcp`) and
+ * {@see \SugarCraft\McpClient\StdioMcpServer::readResponse()} (phase-2a home: `sugarcraft/sugar-mcp-client`) and
  * {@see ClaudeCodeMcpClient::readMessages()}. Every artefact of round 55
  * discussed `resultSet` as though the first were the only one, so this
  * method's output grew a shape nobody had looked at: a line such as

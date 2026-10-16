@@ -1290,7 +1290,7 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
 `sugarcrush serve`'s HTTP + WebSocket transport), sixteen SugarCraft siblings: `candy-core` (the MVC-style runtime —
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
-`candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp` (stdio MCP transport),
+`candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp-client` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
 `sugar-toast` (the toast a settings save reports through),
 `sugar-reel` (the video the player screen renders through),

@@ -131,7 +131,7 @@ final class McpClientDispatchPumpTest extends TestCase
      * its tools/list reply, the last line start() waits for — writes the
      * given expression to stderr once. Post-reply placement is load-bearing:
      * bytes written earlier are absorbed inside start()'s own read loop,
-     * leaving the IDLE window empty — measured in the library's drain rows (`sugarcraft/sugar-mcp`).
+     * leaving the IDLE window empty — measured in the library's drain rows (`sugarcraft/sugar-mcp-client`).
      */
     private function script(string $noiseExpression, ?string $readyPath = null): string
     {
@@ -193,7 +193,7 @@ final class McpClientDispatchPumpTest extends TestCase
     private function tailOf(StdioMcpServer $server): string
     {
         // phase-2a: the tail buffer moved with the transport into
-        // `sugarcraft/sugar-mcp`; chain through the adapter's property.
+        // `sugarcraft/sugar-mcp-client`; chain through the adapter's property.
         $transport = new \ReflectionProperty($server, 'transport');
         $transport->setAccessible(true);
         $inner = $transport->getValue($server);

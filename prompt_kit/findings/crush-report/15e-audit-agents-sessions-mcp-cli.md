@@ -1,6 +1,6 @@
 # 15e — Defect audit: agents, sessions, MCP, CLI (sugar-crush)
 
-Scope: `src/Agents/`, `src/Workflows/`, `src/Session*`, `src/Sessions/`, `src/MCP/` (+ `sugar-mcp` transport it delegates to), `src/ClaudeCodeMcpClient.php`, `src/Cli/`, `bin/`.
+Scope: `src/Agents/`, `src/Workflows/`, `src/Session*`, `src/Sessions/`, `src/MCP/` (+ `sugar-mcp-client` transport it delegates to), `src/ClaudeCodeMcpClient.php`, `src/Cli/`, `bin/`.
 Baseline excluded: everything in `99-synthesis.md` Part II (not re-reported).
 Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/`, run with a scratch `HOME` (never the real `~/.sugar-crush`).
 
@@ -12,7 +12,7 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/`, ru
 
 ## Coverage
 
-**Read end to end:** `src/Session/EnhancedSessionStore.php`, `src/Session/SessionStore.php`; `src/Sessions/BackgroundSupervisor.php`, `BackgroundSessionRunner.php`; `src/Agents/SuspendedDelegations.php`, `EngineExecutor.php`, `AgentPresetRegistry.php`; `src/MCP/McpClient.php`, `StdioMcpServer.php`, `sugar-mcp/src/StdioMcpServer.php`, `sugar-mcp/src/McpMessage.php`, `McpRouter.php`, `McpAuthStore.php`, `OAuthPkce.php`, `OAuthLoopbackFlow.php`, `OAuthClientRegistration.php`; `src/Cli/NonInteractive.php`, `HeadlessPermissionPrompt.php`, `ArgvParser.php`, `bin/sugarcrush`; `src/Workflows/WorkflowEngine.php` (stage loop, stage executors, run/pause/resume/status, interpolation and interrupt handlers), `WorkflowRegistry.php` (YAML parsing), `WorkflowBuilder.php`.
+**Read end to end:** `src/Session/EnhancedSessionStore.php`, `src/Session/SessionStore.php`; `src/Sessions/BackgroundSupervisor.php`, `BackgroundSessionRunner.php`; `src/Agents/SuspendedDelegations.php`, `EngineExecutor.php`, `AgentPresetRegistry.php`; `src/MCP/McpClient.php`, `StdioMcpServer.php`, `sugar-mcp-client/src/StdioMcpServer.php`, `sugar-mcp-client/src/McpMessage.php`, `McpRouter.php`, `McpAuthStore.php`, `OAuthPkce.php`, `OAuthLoopbackFlow.php`, `OAuthClientRegistration.php`; `src/Cli/NonInteractive.php`, `HeadlessPermissionPrompt.php`, `ArgvParser.php`, `bin/sugarcrush`; `src/Workflows/WorkflowEngine.php` (stage loop, stage executors, run/pause/resume/status, interpolation and interrupt handlers), `WorkflowRegistry.php` (YAML parsing), `WorkflowBuilder.php`.
 
 **Read in part:** `AgentWorkerPool.php`, `AgentManager.php`, `ProcessExecutor.php` (`spawnWorker()` only — the no-provider fallback, whose 5 s ready loop busy-spins on a non-blocking `fgets`; not filed), `GitMcpServer.php`, `GitCommandHandlers.php`, the relevant `Bootstrap.php` and `Subcommands.php` ranges, `McpToolBridge.php`, `ClaudeCodeMcpClient.php`, Chat's workflow and session handlers, `RuntimeNoticeSink.php`, and `docs/MCP.md`, `docs/WORKFLOWS.md`, `docs/TROUBLESHOOTING.md`, `docs/PERMISSIONS.md`, `docs/ARCHITECTURE.md`.
 

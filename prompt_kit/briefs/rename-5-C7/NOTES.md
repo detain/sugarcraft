@@ -24,7 +24,8 @@
 
 - R0 tag-prep @6469b43e1: protect added (JSON-validated), brand pre-edit 16 sites/6 files to space-form, baseline row :77 tagged. %ae/%ce==1 verified. <!-- @rename-keep -->
 - R1 dry-run: 86 files / 5+1 paths / R1=121 R2=0 R3=126 R4=0 R5=0 (R2/R4/R5 zero = deliberate, hazard rulings above). Full eye-review passed; notable: crush own-ns `SugarCraft\Crush\MCP` files untouched except their lib-FQN cites; charmbracelet_mods repo_map rows + prompt_kit campaign pointers rewrite as live pointers; PROJECT_NAMES.md absent from dry-run (holds no hyphen-slug after brand edit — honest). TOOL RUN EXACTLY ONCE (protect makes a 2nd run a no-op but no reason to risk it). <!-- @rename-keep -->
-- R2 remote rename @rc=0: gh repo sugarcraft/sugar-mcp -> sugar-mcp-client (301 redirect lives); verified record name/description (desc keeps truthful 'Extracted from sugar-crush').
+- R2 remote rename @rc=0: gh repo sugarcraft/OLD -> sugar-mcp-client (301 redirect lives); verified record name/description (desc keeps truthful 'Extracted from sugar-crush'). <!-- @rename-keep -->
+- H1 PROTECT PROVEN LIVE: the tool's one untagged NOTES rewrite converted exactly the historical bare-mention while the legit `sugar-mcp-client` token on the SAME line survived un-doubled (no `-client-client`). Restored as-written + tagged. <!-- @rename-keep -->
 - BASE gate figures (pre-R3, linked cwd=worktree): sugar-mcp 226T/899A OK == baseline row; crush --filter Mcp 1058T/5271A/1S(canary); --filter Lsp 287T/1206A; --filter DocFigureProseDrift|DescriptorInheritance|ProcessReaper 111T/8436A; tools/tests pinned 426T/1484A. <!-- @rename-keep -->
 - R3 tool run:
 - R4 manual:

@@ -84,7 +84,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
     - Veil  x2
   src entry points: src/Renderer.php, src/Tui/Components/AgentDashboardPane.php, src/Chat.php
 
-=== sugar-mcp (SugarCraft\Mcp) ===
+=== sugar-mcp-client (SugarCraft\McpClient) ===
   referencing files: 17  (src=7, tests=10, other=0)
   distinct symbols imported: 3
     - RequestIdSequence  x3

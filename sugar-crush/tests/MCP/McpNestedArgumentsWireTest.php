@@ -16,7 +16,7 @@ use SugarCraft\Crush\MCP\HttpMcpServer;
 
 /**
  * Audit MCP-9 on the two transports sugar-crush owns (the stdio one is the
- * sugar-mcp library's, pinned by its StdioMcpServerNestedArgumentsWireTest).
+ * sugar-mcp-client library's, pinned by its StdioMcpServerNestedArgumentsWireTest).
  *
  * A model's `{"filter":{}}` reaches the transport as `['filter' => []]`
  * (every provider parser decodes assoc). Before the fix only the top-level

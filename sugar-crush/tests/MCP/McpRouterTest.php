@@ -16,8 +16,8 @@ use SugarCraft\Crush\MCP\McpTool;
  *
  * With the lane-A2 fold the routing LAW (deny-before-allow, fnmatch on raw
  * config keys, the fail-loud allowlist entry check) lives canonically in
- * sugar-mcp/src/McpRouter.php and is pinned by
- * sugar-mcp/tests/McpRouterTest.php. Re-testing that law here would be the
+ * sugar-mcp-client/src/McpRouter.php and is pinned by
+ * sugar-mcp-client/tests/McpRouterTest.php. Re-testing that law here would be the
  * duplicated-facade-suite the AGENTS.md test law forbids, so the ten
  * law-shaped rows this file once carried retired into the library's mirror
  * rows at the fold; what stays is exactly the behaviour this adapter owns:

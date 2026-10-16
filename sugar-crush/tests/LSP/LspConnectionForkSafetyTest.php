@@ -403,7 +403,7 @@ final class LspConnectionForkSafetyTest extends TestCase
      * (a full or read-only temp filesystem). An exchange whose phase or frame
      * record never landed runs unprotected — killed part-way, it would leave
      * the next holder trusting a stale state — so it is refused before a byte
-     * goes out, the rule sugar-mcp StdioMcpServer::exchange() applies to its
+     * goes out, the rule sugar-mcp-client StdioMcpServer::exchange() applies to its
      * phase marker.
      */
     public function testAnExchangeWhoseStateCannotBeRecordedIsRefused(): void

@@ -325,7 +325,7 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
      * The start-time `tools/list` is gated like `initialize`: an error reply
      * (session- or capability-gated servers answer -32601 here) is not "up,
      * 0 tools" — that shape looks connected, exposes nothing, and throws the
-     * server's own diagnosis away. Same gate as sugar-mcp StdioMcpServer::start().
+     * server's own diagnosis away. Same gate as sugar-mcp-client StdioMcpServer::start().
      */
     public function testAToolsListErrorReplyFailsStartWithTheServersMessage(): void
     {

@@ -8,7 +8,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SugarCraft\Crush\Agents\AgentPreset;
 use SugarCraft\Crush\Cli\Bootstrap;
-use SugarCraft\Mcp\McpRouter as LibraryMcpRouter;
+use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
 
 final class McpClient
 {

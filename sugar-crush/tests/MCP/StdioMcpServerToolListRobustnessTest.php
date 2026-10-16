@@ -15,8 +15,8 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * ONE MISTYPED TOOL IN A `tools/list` REPLY MUST NOT TAKE THE SESSION'S WHOLE
  * MCP SUBSYSTEM DOWN — AND IT DID.
  *
- * {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} (phase-2a: the stdio
- * parser lives in `sugarcraft/sugar-mcp`) filtered `is_array($def)` and nothing
+ * {@see \SugarCraft\McpClient\StdioMcpServer::parseTools()} (phase-2a: the stdio
+ * parser lives in `sugarcraft/sugar-mcp-client`) filtered `is_array($def)` and nothing
  * else, then handed the entry to {@see McpTool::fromArray()}, which reads
  * `$data['name'] ?? ''` into a `string` parameter. So a reply of
  * `{"tools":[{"name":5}]}` — a well-formed JSON-RPC message carrying a
@@ -287,11 +287,11 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
         }
 
         // ---- the guard, in both classes that carry it. Phase-2a moved the
-        // stdio parser into `sugarcraft/sugar-mcp`; the crush adapter forwards
+        // stdio parser into `sugarcraft/sugar-mcp-client`; the crush adapter forwards
         // to it, so the reflection row reads the library class directly.
-        foreach ([\SugarCraft\Mcp\StdioMcpServer::class, HttpMcpServer::class] as $class) {
-            $server = $class === \SugarCraft\Mcp\StdioMcpServer::class
-                ? new \SugarCraft\Mcp\StdioMcpServer('probe', PHP_BINARY, [], [])
+        foreach ([\SugarCraft\McpClient\StdioMcpServer::class, HttpMcpServer::class] as $class) {
+            $server = $class === \SugarCraft\McpClient\StdioMcpServer::class
+                ? new \SugarCraft\McpClient\StdioMcpServer('probe', PHP_BINARY, [], [])
                 : new HttpMcpServer('probe', 'http://127.0.0.1:1/mcp', [], new Client());
 
             $parse = new \ReflectionMethod($class, 'parseTools');

@@ -110,7 +110,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * absorbed unboundedly many spawns in the same function. Injecting a
      * SECOND long-lived `proc_open()` with nothing said about fd 3+ into
      * `MCP/StdioMcpServer::start()`, which had a row then (phase-2a moved the
-     * spawn into `sugarcraft/sugar-mcp`), left this guard green -
+     * spawn into `sugarcraft/sugar-mcp-client`), left this guard green -
      * 5 tests, 13 assertions, rc 0. The identical spawn in a method with no
      * row reddened it. So the guard was live everywhere except behind its own
      * exemptions, which is where a new offender is most likely to be added:
@@ -463,10 +463,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'or the real STDOUT/STDERR, which shows the author thinking about descriptors '
                 . 'and still saying nothing about 3+. NOT FIXABLE FROM THIS PACKAGE.',
         ],
-        'sugar-mcp/StdioMcpServer.php::start' => [
+        'sugar-mcp-client/StdioMcpServer.php::start' => [
             'count' => 1,
             'reason' => 'the stdio MCP server child, reached from this package because phase-2a '
-                . 'made `sugarcraft/sugar-mcp` a requirement — the product adapter '
+                . 'made `sugarcraft/sugar-mcp-client` a requirement — the product adapter '
                 . '(src/MCP/StdioMcpServer.php) delegates its spawn to it. The handle is kept '
                 . 'for the life of the server; the lifecycle half is accounted in '
                 . 'tools/check-child-lifetimes.php (teardown via candy-core BoundedShutdown in '
@@ -795,7 +795,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // helper the tree goes through, in this test. Measured before the row
         // carried a count: injecting a second exposed spawn into
         // `MCP/StdioMcpServer::start()`, which had a row then (phase-2a moved
-        // the spawn into `sugarcraft/sugar-mcp`), left this guard
+        // the spawn into `sugarcraft/sugar-mcp-client`), left this guard
         // green - 5 tests, 13 assertions, rc 0.
         self::assertSame(
             ['fixture.php::secondSpawn', 'fixture.php::secondSpawn'],

@@ -1488,7 +1488,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * `ACCEPTED_DIVERGENCE` row for `maxStderrBytes` stood here and read, in
      * part: *"the differing token is the CLASS the constant is read off: one
      * copy reflects on `LspConnection::MAX_STDERR_BYTES`, the other on
-     * `\SugarCraft\Mcp\StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is
+     * `\SugarCraft\McpClient\StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is
      * about. Making the two agree would be the bug."* WHAT IS TRUE NOW: that
      * sentence was correct about the code and wrong about where the fix
      * belonged. A row is a licence keyed by NAME, so it excuses that helper

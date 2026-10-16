@@ -133,7 +133,7 @@ final class SequentialToolHeartbeatTest extends TestCase
 
     /**
      * An `mcp__*` bridge end to end: the beat crosses McpClient and the
-     * stdio adapter into the sugar-mcp transport's wait loop while a slow
+     * stdio adapter into the sugar-mcp-client transport's wait loop while a slow
      * server works — the unbounded call (E646) kept visibly alive.
      */
     public function testALoneMcpCallBeatsWhileTheServerWorks(): void
