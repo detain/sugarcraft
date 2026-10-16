@@ -80,7 +80,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-readline | 336 | 1076 | 0 | 0 | 0 | 0 |  |
 | sugar-reel | 552 | 8489 | 0 | 0 | 0 | 0 |  |
 | sugar-skate | 212 | 466 | 0 | 0 | 0 | 0 |  |
-| sugar-spark | 278 | 1412 | 0 | 0 | 0 | 0 |  |
+| sugar-spark | 278 | 1412 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-stash | 326 | 4638 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-stickers | 221 | 476 | 0 | 0 | 0 | 0 |  |
 | sugar-table | 510 | 1237 | 0 | 0 | 0 | 0 |  |
