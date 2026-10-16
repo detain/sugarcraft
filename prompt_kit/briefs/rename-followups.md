@@ -131,3 +131,10 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `ansi/candy-forms/candy-forms-2-256-m-1.ansi`, `ansi/sugarcraft/sugarcraft-4-256-l-1.ansi`, <!-- @rename-keep -->
   `ansi/sugarcraft/sugarcraft-5-256-l-1.ansi` — art CONTENT carries the pre-rename `candy-fuzzy` <!-- @rename-keep -->
   wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->
+
+## D5 candy-kit → sugar-cli (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-{2-16-l-1,3-16-l-2}.ansi` + `ansi/sugar-crush/30-crush-terminal.ansi` — <!-- @rename-keep -->
+  art CONTENT embeds the pre-rename `candy-kit` slug (C.3 excludes *.ansi content). Redraw or leave <!-- @rename-keep -->
+  for the ansi tagger pass.
+- `sugar-cli/.vhs/cli-page.gif` — demo GIF frames show the pre-rename CandyKit wordmark; CI re-renders <!-- @rename-keep -->
+  from the already-rewritten `.tape` on the next vhs run; do not hand-patch.

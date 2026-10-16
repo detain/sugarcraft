@@ -34,11 +34,12 @@ docs/old/crush_libs.md — EXCLUDED_PREFIXES by tool + residue (no tags needed).
 ## Steps
 
 - R0 link+baselines: DONE (figures above; refresh-deps --mode=linked candy-kit,candy-sql,sugar-crush 3/3). <!-- @rename-keep -->
-- tag-prep commit:
-- R1 dry-run:
-- R2 remote: SKIPPED per brief law.
-- R3 tool run (EXACTLY ONCE):
-- R4 manual:
-- R5 wiring:
-- R6 gates (committed tip):
-- R7 commit + push rename/d5:
+- tag-prep commit 4635ee4c0: 30 lines / 12 files tagged `@rename-keep historical provenance` (numstat pure 1x1 every file); NOTES skeleton 11 lines pre-tagged. <!-- @rename-keep -->
+- R1 dry-run: 90 content files / 9 paths (dir move + _data x2 + lib html + img/icons png + media png + repo_map pair + findings pair); R1=101 R2=35 R3=310, R4/R5/R6=0 (compact/env/lang vocab absent — honest). Full eye-review passed; all 30 tagged lines confirmed ABSENT from plan. Log /tmp/opencode/d5-dryrun.txt. <!-- @rename-keep -->
+- R2 remote: SKIPPED per brief law (weld/serial phase owns remotes; D1 precedent).
+- R3 tool run EXACTLY ONCE: rc=0, counts == dry-run byte-exact; dir moved; php -l all 29 tracked lib PHP files rc=0 (first lint pass mis-scanned moved dir names from git status R-pair old paths — re-run on git-ls-files clean). <!-- @rename-keep -->
+- R4 manual: (a) sugar-cli/README.md Formerly + Namespace-changed blockquotes (both tagged per plan verbatim shape); (b) glued `plan_candy-kit.md` x6 -> plan_sugar-cli.md in findings_resume_plan.md (living); (c) prompt_kit/tools/crush-dep-surface.php value `'sugar-cli' => 'Kit'` -> `'Cli'` (C4/D1 blindspot law); (d) PROJECT_NAMES row reworked residue-safe (no old-brand text); (e) composer keywords verified (fang+sugarcraft kept), description reads correctly; (f) MATCHUPS/index sections: type stays lib, no section move. <!-- @rename-keep -->
+- R5 wiring: renames.json status pending->renamed (targeted sed, one line, keys verified via json.load); root `composer update sugarcraft/* --no-install` (lock 66x66: only the candy-kit->sugar-cli block + sugar-crush ambient ref + content-hash); refresh-deps linked 3/3 escaping=0 after pruning 2 dangling candy-kit vendor symlinks (candy-sql + sugar-crush; maxdepth-4 find law); gen-docs AFTER status flip -> redirect stub docs/lib/candy-kit.html minted (92 files, libs 40/apps 21), --check rc0; gen-ansi --check rc0. <!-- @rename-keep -->
+- R6 gates (on committed tip 159cfea58, clean tree): residue `--old=candy-kit` 0 findings (pre- and post-stage); sugar-cli 272T/1634A OK EXACT; candy-sql 1580T/11900A OK EXACT; tools/tests 426T/1484A OK; **crush K=8 CONSERVATION PASS: 22564T/423738A/0F/0E/2S** vs base-run 22564T/423771A (T exact; both wobbles +86/+119 over pinned 423652 = tree-scan census family, within conservation design); check-path-repos --no-lib-path-repos rc0; check-child-lifetimes rc0. <!-- @rename-keep -->
+- R7 commits: tag-prep 4635ee4c0 -> rename 159cfea58 (113 staged paths, author/committer detain 1/1, no trailer) -> gate-evidence (NOTES+followups+tracker row). Push rename/d5 ONLY. <!-- @rename-keep -->
+- Residual owed by weld: R8/R9 remote+packagist, tracker row SHA re-anchor if rebased. <!-- @rename-keep -->
