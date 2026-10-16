@@ -42,10 +42,13 @@ bins {`bin/candyshell`: `bin/candy-scriptui`} (glued compact bin spelling). Base
 - oc.7z foreign untracked at root: preflight may insist → mv /tmp/oc.7z.b4-hold aside, restore at close.
 
 ## R1 dry-run
-(pending)
+Landed tag-prep 6ca37bbe8 (7 CONTEXT lines + baseline row tagged; baseline:24 PTY-rule line left UNTAGGED so R3 keeps it live-accurate).
+Dry-run rc=0: 261 files / 11 paths, R1=299 R2=42 R3=565 R4=79 R5=30 R6=1. ns_old Shell R1 non-zero ✓. Cross-lib R1 hits are docblock-only (candy-pty PosixProcess/Contract Process @see, SECURITY.md RealProcess line, Process.php) — no runtime coupling, no candy-pty suite needed.
+lang/*.php R3:1 = header comments only ✓. Generic-word safety: no rule can match bare shell/$SHELL (all brand-token-bound) — spot-check planned at R6.
+Blind spots CONFIRMED in counts: BashCompletion shows only R1:1 (_candyshell_main survives → manual), Application.php has NO R5 (bare CANDYSHELL_ const survives → manual), README R5:2 (full-name lines only; CANDYSHELL_* prose survives → manual), my NOTES file itself gets rewritten (will re-author post-R3 with tags).
 
 ## R2 remote rename
-(pending)
+rename-remote.sh: rename SUCCEEDED — name/description/homepage verified via gh, both ls-remote resolve to 9500e0aa, old name redirects. DEVIATION: topics sync 422 (repo already at 20-topic cap; keyword-add step refused, cosmetic-only, skipped just the final print).
 
 ## R3 tool run
 (pending)
