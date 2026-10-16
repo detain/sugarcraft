@@ -30,7 +30,7 @@ From the first-pass analysis (`repo_map/Genekkion_theHermit.md`):
 | List overlay/quick fix popup | `sugar-list` | Needs overlay/wrapper pattern |
 | Item interface (`Title()`) | `sugar-bits` | Mirrors component/item protocol |
 | Border rendering + styling | `candy-shine` | Lipgloss-based styling system |
-| Overlay rendering (centered) | `candy-shell` | Viewport/window management |
+| Overlay rendering (centered) | `candy-scriptui` | Viewport/window management |
 | Background view preservation | `sugar-bits` (renderer) | Concurrent view update pattern |
 | Keyboard navigation (up/down) | `candy-forms` | Input handling, cursor movement |
 | tea.Model interface | `candy-core` | Core TUI component contract |
@@ -343,7 +343,7 @@ The only insight is from the **original README's TODO list**:
 
 **theHermit solution**: Split background view into lines, overwrite the bounding box region, preserve surrounding content.
 
-**SugarCraft relevance**: `sugar-bits` renderer and `candy-shell` viewport management would need to support this pattern if we implement overlay components.
+**SugarCraft relevance**: `sugar-bits` renderer and `candy-scriptui` viewport management would need to support this pattern if we implement overlay components.
 
 **Direct risk**: HIGH — This is core to SugarCraft's TUI rendering model. ANSI handling and overlay rendering are fundamental concerns.
 
@@ -563,7 +563,7 @@ The `ViewCache` pattern in the revamp is a generic optimization applicable to an
 
 | Pattern | theHermit Implementation | SugarCraft Equivalent |
 |---------|------------------------|----------------------|
-| **Overlay rendering** | `modal.View()` with parent/child split | `candy-shell` viewport |
+| **Overlay rendering** | `modal.View()` with parent/child split | `candy-scriptui` viewport |
 | **ANSI width** | `utils.Width()` using lipgloss | `candy-shine` styling |
 | **Cursor clamping** | `max(min(cursor, ...), 0)` | Immutability guards |
 | **View caching** | `ViewCache` with maphash | Not yet implemented |

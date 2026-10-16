@@ -1,0 +1,62 @@
+{
+    "name": "sugarcraft/candy-scriptui",
+    "description": "Interactive terminal widgets for shell scripts \u2014 composer-installable CLI of SugarCraft TUI primitives, modeled on charmbracelet/gum. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "cli",
+        "shell",
+        "gum",
+        "prompt",
+        "select",
+        "confirm",
+        "spinner",
+        "filter",
+        "style",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-scriptui",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-scriptui/issues",
+        "source": "https://github.com/sugarcraft/candy-scriptui",
+        "docs": "https://sugarcraft.github.io/lib/candy-scriptui.html"
+    },
+    "bin": [
+        "bin/candy-scriptui"
+    ],
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
+        "sugarcraft/candy-pty": "dev-master",
+        "sugarcraft/candy-shine": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "react/event-loop": "^1.6",
+        "symfony/console": "^6.4 || ^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\ScriptUi\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\ScriptUi\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -154,8 +154,8 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 **Source PR/Issue:** `charmbracelet/wishlist` serves the TUI via `charmbracelet/wish` middleware (`listingMiddleware` in `middleware.go`)  
 **Implementation ideas:**
 
-- Integrate `candy-shell` (SSH server port) to accept incoming SSH connections
-- Serve the Picker TUI over SSH using the same stream-based I/O pattern from `candy-shell`
+- Integrate `candy-scriptui` (SSH server port) to accept incoming SSH connections
+- Serve the Picker TUI over SSH using the same stream-based I/O pattern from `candy-scriptui`
 - Use the `wish/bubbletea` middleware pattern as reference: spawn a `tea.Program` per SSH session with PTY wiring
 
 **Estimated complexity:** High — requires full SSH server integration, PTY handling per session, window resize forwarding
@@ -613,11 +613,11 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "Discovery mechanisms are service-announcement patterns. Could be a `sugar-discovery` leaf lib"
 
-## 2. Integration with candy-shell (SSH Server)
+## 2. Integration with candy-scriptui (SSH Server)
 
-**Description:** For SSH-server mode, integrate `candy-shell` (port of `charmbracelet/wish`) to serve the TUI over SSH.
+**Description:** For SSH-server mode, integrate `candy-scriptui` (port of `charmbracelet/wish`) to serve the TUI over SSH.
 
-**Source:** `docs/repo_map/charmbracelet_wishlist.md` — "SugarCraft ports `charmbracelet/ssh` and `charmbracelet/wish` in `candy-shell`"
+**Source:** `docs/repo_map/charmbracelet_wishlist.md` — "SugarCraft ports `charmbracelet/ssh` and `charmbracelet/wish` in `candy-scriptui`"
 
 ## 3. VSCode Remote SSH Integration Pattern
 
@@ -679,7 +679,7 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 
 ## Medium-Term Improvements
 
-5. **SSH-server mode** — Integrate `candy-shell` to serve Picker over SSH
+5. **SSH-server mode** — Integrate `candy-scriptui` to serve Picker over SSH
 6. **Extract `candy-sshconfig`** — Refactor `SshConfigParser` into standalone leaf library
 7. **Fuzzy match highlighting** — Highlight matched characters in filter results
 8. **Mouse support** — Add click to select, scroll to navigate
@@ -725,7 +725,7 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 
 sugar-wishlist is a well-scoped, well-implemented v1 port of `charmbracelet/wishlist`'s local-CLI mode. Its most important architectural decision — using `pcntl_exec` + system `ssh` rather than a PHP SSH library — is the right call for a tool in this category. It means PHP never touches the SSH protocol, so all SSH semantics (host-key verification, agent forwarding, PTY allocation, escape sequences) work exactly as they would for a manual `ssh` invocation.
 
-The **single most important gap** relative to upstream is the lack of **SSH-server mode** — the ability to serve the TUI over SSH so users can connect remotely. This is the primary use case that distinguishes wishlist from a simple shell alias. The architecture is cleanly structured so this could be added later using `candy-shell` (for SSH serving), but the dependency chain is non-trivial.
+The **single most important gap** relative to upstream is the lack of **SSH-server mode** — the ability to serve the TUI over SSH so users can connect remotely. This is the primary use case that distinguishes wishlist from a simple shell alias. The architecture is cleanly structured so this could be added later using `candy-scriptui` (for SSH serving), but the dependency chain is non-trivial.
 
 The **most actionable immediate improvements** are:
 

@@ -56,7 +56,7 @@ To implement an item:
 
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
-| **candy-shell** | [research/libraries/candy-shell-research.md](libraries/candy-shell-research.md) | 1. Auto-discovery, 2. ValueEnum options, 3. FlagSpec trait |
+| **candy-scriptui** | [research/libraries/candy-scriptui-research.md](libraries/candy-scriptui-research.md) | 1. Auto-discovery, 2. ValueEnum options, 3. FlagSpec trait |
 | **candy-log** | [research/libraries/candy-log-research.md](libraries/candy-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values |
 | **candy-wish** | [research/libraries/candy-wish-research.md](libraries/candy-wish-research.md) | 1. Context propagation, 2. Channel events, 3. Session metadata |
 | **sugar-wishlist** | [research/libraries/sugar-wishlist-research.md](libraries/sugar-wishlist-research.md) | 1. proxy_jump, 2. SSH config import, 3. Identity files |
@@ -158,7 +158,7 @@ To implement an item:
 
 ### App-Level
 
-- **candy-shell**: Auto-discovery, ValueEnum, FlagSpec trait
+- **candy-scriptui**: Auto-discovery, ValueEnum, FlagSpec trait
 - **candy-git**: Diff panel, branch ops, context help
 - **sugar-crush**: Session persistence, streaming UI, context compaction
 - **super-candy**: Copy/move, bookmarks, preview

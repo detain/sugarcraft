@@ -14,18 +14,18 @@ use SugarCraft\Pty\PtyException;
  * Counterpart to {@see PosixChild}: that class wraps a child whose
  * stdio is bound to a slave PTY; this one wraps a child whose stdio
  * is `/dev/null`-stdin plus inherited-or-piped stdout/stderr. It is
- * the runtime backbone that {@see \SugarCraft\Shell\Process\RealProcess}
+ * the runtime backbone that {@see \SugarCraft\ScriptUi\Process\RealProcess}
  * will migrate to in plan step P3.3.
  *
  * stdin is deliberately bound to `/dev/null` — if it were inherited
- * from the parent, a candy-shell process running inside a candy-wish
+ * from the parent, a candy-scriptui process running inside a candy-wish
  * SSH session would steal the supervisor's stdin and starve the
  * outer event loop.
  *
  * Mirrors creack/pty.Cmd and the portable-pty.Process lifecycle.
  *
  * @see \SugarCraft\Pty\Posix\PosixChild for the PTY-attached sibling.
- * @see \SugarCraft\Shell\Process\RealProcess for the legacy non-PTY shape this replaces.
+ * @see \SugarCraft\ScriptUi\Process\RealProcess for the legacy non-PTY shape this replaces.
  */
 final class PosixProcess implements Process
 {

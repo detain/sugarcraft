@@ -576,7 +576,7 @@ The pump integration with `SugarCraft\Core\Recorder` (for candy-vcr session reco
 |---------|-------|
 | `candy-wish` | `InProcessTransport` uses `PosixPump` + `PosixPtySystem` for SSH sessions |
 | `candy-vcr` | Session recording via `Recorder` tap in `PosixPump` |
-| `candy-shell` | PTY spawning for interactive shell sessions |
+| `candy-scriptui` | PTY spawning for interactive shell sessions |
 
 ### 12.3 Optional Extensions
 

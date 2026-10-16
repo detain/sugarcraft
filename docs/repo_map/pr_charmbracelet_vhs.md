@@ -14,7 +14,7 @@
 | VHS Concept | SugarCraft Lib | Notes |
 |------------|----------------|-------|
 | `.tape` format / DSL | `sugar-bits` | Both define scripting formats for TUI demos |
-| Frame capture / recording | `candy-shell` | Could provide terminal capture primitives |
+| Frame capture / recording | `candy-scriptui` | Could provide terminal capture primitives |
 | Video encoding / FFmpeg | `sugar-charts` | Both produce output files, FFmpeg could be wrapped |
 | Theme system (base16) | `sugar-bits` | 16-color theme mapping aligns with Charm color systems |
 | Typing simulation | `candy-forms` | Input emulation concepts overlap |
@@ -562,7 +562,7 @@ Show
 
 **Problem**: Knowing when a command finishes
 **VHS Solution**: OSC 133 shell integration
-**SugarCraft Implication**: `candy-forms` or `candy-shell` needs command completion detection
+**SugarCraft Implication**: `candy-forms` or `candy-scriptui` needs command completion detection
 
 ### 2. Buffer Viewport Management
 
@@ -586,7 +586,7 @@ Show
 
 **Problem**: Cleanup on early exit, process leaks
 **VHS Issue**: #738
-**SugarCraft Implication**: `candy-shell` must handle subprocess cleanup properly
+**SugarCraft Implication**: `candy-scriptui` must handle subprocess cleanup properly
 
 ### 6. Shell State Isolation
 
@@ -608,7 +608,7 @@ Show
 
 **Rationale**: Years-long demand, finally resolved in VHS
 **Implementation**: OSC 133 prompt markers
-**SugarCraft path**: `candy-shell` integration
+**SugarCraft path**: `candy-scriptui` integration
 
 ### 3. Stability Detection
 
@@ -620,7 +620,7 @@ Show
 
 **Rationale**: VHS only has CLI, no Go library
 **VHS Issue**: #462
-**SugarCraft path**: `candy-shell` or `sugar-bits` as testable library
+**SugarCraft path**: `candy-scriptui` or `sugar-bits` as testable library
 
 ### 5. Per-Section Playback Control
 
@@ -818,7 +818,7 @@ Evaluator: Commands → Actions
 ### For SugarCraft Development
 
 1. **Implement Shell Integration (High Impact)**
-   - Add OSC 133 prompt detection to `candy-shell`
+   - Add OSC 133 prompt detection to `candy-scriptui`
    - Enables reliable command completion detection
    - Years of VHS development distilled
 

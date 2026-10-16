@@ -62,8 +62,8 @@ flag_management:
       paths: ["sugar-charts/src/**"]
       carryforward: true
       carryforward: true
-    - name: candy-shell
-      paths: ["candy-shell/src/**"]
+    - name: candy-scriptui
+      paths: ["candy-scriptui/src/**"]
       carryforward: true
     - name: candy-shine
       paths: ["candy-shine/src/**"]
@@ -277,12 +277,12 @@ component_management:
         - "sugar-charts/src/**"
       flag_regexes:
         - "^sugar-charts$"
-    - component_id: candy-shell
-      name: candy-shell
+    - component_id: candy-scriptui
+      name: candy-scriptui
       paths:
-        - "candy-shell/src/**"
+        - "candy-scriptui/src/**"
       flag_regexes:
-        - "^candy-shell$"
+        - "^candy-scriptui$"
     - component_id: candy-shine
       name: candy-shine
       paths:

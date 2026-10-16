@@ -1,0 +1,167 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\ScriptUi\Command;
+
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\Shine\Renderer;
+use SugarCraft\Shine\Theme;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+
+/**
+ * Render a Markdown file (or stdin) as styled ANSI text using
+ * {@see \SugarCraft\Shine\Renderer}. Non-interactive — produces output
+ * straight to stdout so it pipelines naturally:
+ *
+ *   $ candy-scriptui format README.md
+ *   $ git log -1 --pretty=%B | candy-scriptui format
+ */
+#[AsCommand(name: 'format', description: 'Render Markdown as styled ANSI text.')]
+final class FormatCommand extends Command
+{
+    protected function configure(): void
+    {
+        $this
+            ->addArgument('file',  InputArgument::OPTIONAL, 'Input file. Default: stdin.')
+            ->addOption('theme', null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | dracula | tokyo-night | pink | notty | ascii', 'ansi')
+            ->addOption('type',  't',  InputOption::VALUE_REQUIRED, 'Render type: markdown | code | template | emoji. Default markdown.', 'markdown')
+            ->addOption('language', 'l', InputOption::VALUE_REQUIRED, 'Source language for `--type code`.', '')
+            ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma-separated allowlist of env var names permitted for {{VAR}} expansion in --type template. Empty = expand none; "*" = expand all (opt-in, unsafe with untrusted input).', '')
+            ->addOption('strip-ansi', null, InputOption::VALUE_NONE, 'Strip ANSI escapes from the rendered output.')
+            ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
+            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive format).', 0);
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $file = $input->getArgument('file');
+        if (is_string($file) && $file !== '') {
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                $output->writeln('<error>' . Lang::t('io.read_failed', ['path' => $file]) . '</error>');
+                return Command::FAILURE;
+            }
+        } else {
+            $raw = self::readStdin();
+        }
+
+        $allowEnv = array_values(array_filter(
+            array_map('trim', explode(',', (string) $input->getOption('allow-env'))),
+            static fn (string $s): bool => $s !== '',
+        ));
+
+        $type = strtolower((string) $input->getOption('type'));
+        $rendered = match ($type) {
+            'markdown', '' => (new Renderer(self::pickTheme((string) $input->getOption('theme'))))->render($raw),
+            'code'         => self::renderCode($raw, (string) $input->getOption('language'), (string) $input->getOption('theme')),
+            'template'     => self::renderTemplate($raw, $allowEnv),
+            'emoji'        => self::renderEmoji($raw),
+            default        => throw new \InvalidArgumentException(Lang::t('format.unknown_type', ['type' => $type])),
+        };
+
+        if ($input->getOption('strip-ansi')) {
+            $rendered = \SugarCraft\Core\Util\Ansi::strip($rendered);
+        }
+
+        $output->writeln($rendered);
+        return Command::SUCCESS;
+    }
+
+    public static function pickTheme(string $name): Theme
+    {
+        // Lean on Theme::byName() (case-insensitive, hyphen/underscore-tolerant)
+        // so callers stay aligned with CandyShine's full theme set.
+        $theme = Theme::byName($name);
+        if ($theme === null) {
+            throw new \InvalidArgumentException(Lang::t('format.unknown_theme', ['name' => $name]));
+        }
+        return $theme;
+    }
+
+    /**
+     * Render `--type code <body>` as a fenced code block of the given
+     * language. Equivalent to wrapping the input in ``` fences and
+     * piping through the markdown pipeline.
+     */
+    private static function renderCode(string $raw, string $lang, string $themeName): string
+    {
+        $body = "```$lang\n" . rtrim($raw, "\n") . "\n```\n";
+        return (new Renderer(self::pickTheme($themeName)))->render($body);
+    }
+
+    /**
+     * `--type template` expands `{{var}}` placeholders from environment
+     * variables and emits the result. Mirrors gum's lightweight
+     * template mode (no Go template-function support).
+     *
+     * Secure-by-default: expansion is gated by an explicit allowlist so
+     * an attacker-influenced template body (an untrusted markdown file
+     * or piped stdin) cannot exfiltrate arbitrary secrets — a bare
+     * `{{AWS_SECRET_ACCESS_KEY}}` or `{{DB_PASSWORD}}` would otherwise
+     * leak ANY env var. A `{{NAME}}` is only substituted from the
+     * environment when NAME is in $allowlist (or the allowlist is `*`);
+     * every other placeholder renders empty — the same result an
+     * undefined var already produced, so no leak and no error. The
+     * default (no --allow-env) is an empty allowlist: nothing expands.
+     *
+     * @param list<string> $allowlist Env var names permitted for
+     *                                expansion; `['*']` opts every var in
+     *                                (explicit, unsafe with untrusted
+     *                                input); `[]` expands none.
+     */
+    private static function renderTemplate(string $raw, array $allowlist): string
+    {
+        $allowAll = in_array('*', $allowlist, true);
+        $set = array_flip($allowlist);
+        return (string) preg_replace_callback(
+            '/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/',
+            static function (array $m) use ($allowAll, $set): string {
+                $name = $m[1];
+                if ($allowAll || isset($set[$name])) {
+                    return (string) (getenv($name) ?: '');
+                }
+                return '';
+            },
+            $raw,
+        );
+    }
+
+    /**
+     * `--type emoji` expands `:smile:` shortcodes via the small
+     * built-in mapping. Unknown shortcodes pass through verbatim
+     * so callers can mix emoji + text without breakage.
+     */
+    private static function renderEmoji(string $raw): string
+    {
+        $map = [
+            'smile'        => '😄', 'grin'        => '😁',
+            'heart'        => '❤️', 'fire'        => '🔥',
+            'rocket'       => '🚀', 'star'        => '⭐',
+            'thumbsup'     => '👍', 'thumbsdown'  => '👎',
+            'check'        => '✅', 'x'           => '❌',
+            'warning'      => '⚠️',  'info'        => 'ℹ️',
+            'tada'         => '🎉', 'sparkles'    => '✨',
+            'candy'        => '🍬', 'sugar'       => '🍭',
+            'honey'        => '🍯',
+        ];
+        return (string) preg_replace_callback(
+            '/:([a-z0-9_+-]+):/i',
+            static fn (array $m) => $map[strtolower($m[1])] ?? $m[0],
+            $raw,
+        );
+    }
+
+    private static function readStdin(): string
+    {
+        if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
+            return '';
+        }
+        return (string) stream_get_contents(STDIN);
+    }
+}

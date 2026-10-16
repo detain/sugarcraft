@@ -580,9 +580,9 @@ $node->withTitle('My Panel')
 
 **Source**: `sugarcraft_sugar-bits.md` — Viewport provides "Scrollable text region with setWidth(), setHeight(), mouse wheel support"
 
-## 3. Integration with candy-shell
+## 3. Integration with candy-scriptui
 
-**Opportunity**: candy-shell handles TTY initialization. sugar-boxer could provide a `Shell::box()` helper that initializes the terminal, renders a box layout, and waits for resize events.
+**Opportunity**: candy-scriptui handles TTY initialization. sugar-boxer could provide a `Shell::box()` helper that initializes the terminal, renders a box layout, and waits for resize events.
 
 ---
 

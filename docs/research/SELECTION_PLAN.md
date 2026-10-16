@@ -446,7 +446,7 @@ All 45 research documents available at:
 | candy-pty | 24KB |
 | candy-sql | 11KB |
 | candy-git-server | 12KB |
-| candy-shell | 18KB |
+| candy-scriptui | 18KB |
 | candy-sprinkles | 15KB |
 | candy-tetris | 18KB |
 | candy-vcr | 23KB |

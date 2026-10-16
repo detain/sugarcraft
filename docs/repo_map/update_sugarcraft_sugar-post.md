@@ -57,7 +57,7 @@ sugar-post is a PHP email sending library ported from charmbracelet/pop (Go). It
 | `charmbracelet_x.md` | Testing utilities | teatest golden file testing, vcr HTTP recording/playback | MEDIUM |
 | `c9s_CLIFramework.md` | PHP CLI reference | Hierarchical commands, extension system, Levenshtein typo correction, shell completion | MEDIUM |
 | `textualize_textual.md` | Alternative TUI | CSS-based styling, reactive state, widget composition, command palette | LOW |
-| `sugarcraft_candy-shell.md` | Internal CLI patterns | Symfony Console, PHP 8 attributes, CANDYSHELL_* env fallback, Levenshtein suggester, completion generators | HIGH |
+| `sugarcraft_candy-scriptui.md` | Internal CLI patterns | Symfony Console, PHP 8 attributes, CANDY_SCRIPTUI_* env fallback, Levenshtein suggester, completion generators | HIGH |
 
 # Feature Gap Analysis
 
@@ -173,7 +173,7 @@ sugar-post is a PHP email sending library ported from charmbracelet/pop (Go). It
 
 - Generate completion scripts via `pop completion bash|zsh|fish`
 - Use Symfony Console's built-in completion support
-- Auto-register completion in candy-shell style
+- Auto-register completion in candy-scriptui style
 
 **Expected impact:** Better CLI discoverability.
 
@@ -250,7 +250,7 @@ sugar-post is a PHP email sending library ported from charmbracelet/pop (Go). It
 **Source:** `docs/repo_map/charmbracelet_pop.md` — Feature list #17
 **Implementation ideas:**
 
-- Integrate sugar-bits FilePicker or candy-shell file command
+- Integrate sugar-bits FilePicker or candy-scriptui file command
 - Use Bubble Tea filepicker as reference
 
 **Expected impact:** TUI attachment selection (if TUI mode added).
@@ -487,7 +487,7 @@ final class FakeSmtpTransport implements Transport {
     public function send(Email $email): void { $this->sentEmails[] = $email; }
 }
 ```
-**Source:** `docs/repo_map/sugarcraft_candy-shell.md` — FakeProcess pattern
+**Source:** `docs/repo_map/sugarcraft_candy-scriptui.md` — FakeProcess pattern
 
 ## 2. HTTP Mock for ResendTransport
 

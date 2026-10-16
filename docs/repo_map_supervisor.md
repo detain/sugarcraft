@@ -93,7 +93,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 16 — candy-forms onto shared foundations](repo_map_step_16.md) — branch: `ai/candy-forms-shared`
 - [x] [Step 17 — sugar-charts onto candy-buffer](repo_map_step_17.md) — branch: `ai/sugar-charts-shared`
 - [x] [Step 18 — sugar-table onto candy-buffer](repo_map_step_18.md) — branch: `ai/sugar-table-shared`
-- [x] [Step 19 — candy-shell onto candy-fuzzy](repo_map_step_19.md) — branch: `ai/candy-shell-shared`
+- [x] [Step 19 — candy-scriptui onto candy-fuzzy](repo_map_step_19.md) — branch: `ai/candy-scriptui-shared`
 
 ### Phase 4 — Replace reinventions (6)
 - [x] [Step 20 — ANSI parsers replaced (sugar-spark, candy-hermit, candy-freeze)](repo_map_step_20.md) — branch: `ai/ansi-consumers`, PR #899

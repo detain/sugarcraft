@@ -584,7 +584,7 @@ Calendar view in table:
 // Render events as calendar grid with table layout
 ```
 
-## 3. Integration with candy-shell (Mouse Input)
+## 3. Integration with candy-scriptui (Mouse Input)
 
 Zone-based mouse tracking via candy-mouse:
 
@@ -725,4 +725,4 @@ The focus zone system from upstream Go is valuable for power users but adds comp
 **Testing infrastructure** should include snapshot tests for View() output using golden files, following the `CHARM_TEST_UPDATE=1` pattern from bubbletea's experimental teatest package.
 
 **Long-term vision:**
-SugarDatepicker should evolve toward a compound DateSelect widget (input + dropdown), eventually supporting DateTimePicker composition. The pure renderer approach positions it well for embedding in both candy-shell (terminal) and potential web-based contexts. Consider the textual-web model for browser-based TUI rendering as a future differentiator.
+SugarDatepicker should evolve toward a compound DateSelect widget (input + dropdown), eventually supporting DateTimePicker composition. The pure renderer approach positions it well for embedding in both candy-scriptui (terminal) and potential web-based contexts. Consider the textual-web model for browser-based TUI rendering as a future differentiator.

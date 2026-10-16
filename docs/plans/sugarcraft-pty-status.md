@@ -76,7 +76,7 @@ Suites + counts (current):
 | candy-pty | 261 | 2 deprecations, 2 skipped — both expected |
 | candy-core | 545 | 24 skipped (FFI / Windows guards) |
 | candy-wish | 70 | All real PTY end-to-end |
-| candy-shell | 180 | Spin / RealProcess adapter |
+| candy-scriptui | 180 | Spin / RealProcess adapter |
 
 ## CI workflows
 
@@ -134,7 +134,7 @@ The macOS candy-wish cell **is** the canary that proves the underlying fix works
 #458  ai/candy-wish-spawn-pty-system  P4.3 — Spawn middleware DI integration test
 #457  ai/candy-wish-pty-system-di    P4.2 — InProcessTransport optional PtySystem DI
 #456  ai/candy-pty-system-factory    P4.1 — PtySystemFactory + UnsupportedPlatformException
-#455  ai/candy-shell-uses-posix-process  P3.3 — candy-shell RealProcess adapter
+#455  ai/candy-scriptui-uses-posix-process  P3.3 — candy-scriptui RealProcess adapter
 #454  ai/candy-pty-posix-process     P3.2 — PosixProcess (non-PTY spawn)
 #453  ai/candy-pty-child-poll-trait  P3.1 — ChildPollTrait extraction
 #452  ai/candy-pty-p25-redo          P2.5 redo — pump migration freeze fix
@@ -159,7 +159,7 @@ candy-pty/src/
 │   ├── ChildPollTrait.php       #   proc_get_status polling + reap (P3.1)
 │   ├── PosixChild.php           #   PTY child (extends legacy Child + trait)
 │   ├── PosixMasterPty.php       #   FFI-driven master
-│   ├── PosixProcess.php         #   non-PTY spawn for candy-shell (P3.2/3.3)
+│   ├── PosixProcess.php         #   non-PTY spawn for candy-scriptui (P3.2/3.3)
 │   ├── PosixPtyPair.php
 │   ├── PosixPtySystem.php       #   posix_openpt + grantpt + Darwin slave anchor
 │   ├── PosixPump.php            #   byte pump (P2.x) — EOF grace + flush + callbacks

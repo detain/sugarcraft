@@ -136,7 +136,7 @@ SugarCraft maps to the Charmbracelet ecosystem for PHP TUI libraries. Crush is a
 
 | Crush Component | SugarCraft Lib | Notes |
 |-----------------|---------------|-------|
-| `internal/shell` | `candy-shell` | Shell command execution foundation |
+| `internal/shell` | `candy-scriptui` | Shell command execution foundation |
 | `internal/lsp` | `candy-core` (future) | LSP integration pattern |
 | `internal/agent/tools` | `sugar-bits`, `candy-forms` | Built-in tool patterns for TUI interaction |
 | `internal/ui` | `candy-shine`, `sugar-charts` | TUI rendering with Bubble Tea |
@@ -146,7 +146,7 @@ SugarCraft maps to the Charmbracelet ecosystem for PHP TUI libraries. Crush is a
 | `internal/pubsub` | `SugarCraft\Core` | Internal pub/sub for decoupling |
 | `internal/message` | `SugarCraft\Core` | Message model patterns |
 
-**Key Insight:** Crush is a CLI application, not a library. SugarCraft's `candy-shell` maps closest to Crush's `internal/shell` package (POSIX shell execution), but SugarCraft currently lacks:
+**Key Insight:** Crush is a CLI application, not a library. SugarCraft's `candy-scriptui` maps closest to Crush's `internal/shell` package (POSIX shell execution), but SugarCraft currently lacks:
 - AI/LLM agent infrastructure
 - MCP client implementation
 - LSP integration

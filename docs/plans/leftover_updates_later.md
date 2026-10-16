@@ -207,7 +207,7 @@ short bullet list; treat them as backlog items, not sequenced steps.
 - **Component composition** with `on_mount`/`on_unmount` lifecycle (§3.3).
 - Worker pool for CPU-bound tasks (§3.4).
 
-### candy-shell
+### candy-scriptui
 
 - Auto-discovery command attribute scanner (§5 P1).
 - `FlagSpec` attribute trait for declarative options (§P2).

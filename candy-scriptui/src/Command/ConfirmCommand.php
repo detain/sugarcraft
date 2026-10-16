@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\ScriptUi\Command;
+
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\ScriptUi\Model\ConfirmModel;
+use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+
+/**
+ * Confirmation prompt. Exit code reflects the answer: 0 for yes, 1 for
+ * no, 2 for abort (Esc / Ctrl-C).
+ */
+#[AsCommand(name: 'confirm', description: 'Prompt for a yes/no answer; exit code reflects the choice.')]
+final class ConfirmCommand extends Command
+{
+    public const EXIT_YES    = 0;
+    public const EXIT_NO     = 1;
+    public const EXIT_ABORT  = 2;
+
+    protected function configure(): void
+    {
+        $this
+            ->addArgument('question', InputArgument::OPTIONAL, 'Prompt text.', '')
+            ->addOption('default-yes', null, InputOption::VALUE_NONE,     'Default to yes (deprecated — use --default=yes|no).')
+            ->addOption('default',     null, InputOption::VALUE_REQUIRED, 'Default answer (yes|no).', '')
+            ->addOption('affirmative', null, InputOption::VALUE_REQUIRED, 'Label for the yes option.',  'Yes')
+            ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
+            ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.')
+            ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the prompt.', '')
+            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $defaultRaw = strtolower((string) $input->getOption('default'));
+        $defaultYes = (bool) $input->getOption('default-yes')
+            || $defaultRaw === 'yes' || $defaultRaw === 'y';
+
+        $affirm = (string) $input->getOption('affirmative');
+        $negate = (string) $input->getOption('negative');
+
+        $header = (string) $input->getOption('header');
+        if ($header !== '') {
+            $output->writeln($header);
+        }
+
+        $model   = ConfirmModel::newPrompt(
+            title:       (string) $input->getArgument('question'),
+            default:     $defaultYes,
+            affirmative: $affirm,
+            negative:    $negate,
+        );
+        $loop    = \React\EventLoop\Loop::get();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen:    false,
+            hideCursor:      false,
+            catchInterrupts: true,
+            loop:            $loop,
+        ));
+        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
+        /** @var ConfirmModel $final */
+        $final = $program->run();
+        $guard->disarm();
+
+        // Deadline elapsed with no answer — surface the timeout exit code
+        // rather than a yes/no/abort verdict.
+        if ($guard->fired()) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
+
+        if ($final->isAborted()) {
+            return self::EXIT_ABORT;
+        }
+        if ($input->getOption('show-output')) {
+            $output->writeln($final->answer() ? $affirm : $negate);
+        }
+        return $final->answer() ? self::EXIT_YES : self::EXIT_NO;
+    }
+}

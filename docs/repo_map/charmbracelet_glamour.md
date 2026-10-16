@@ -148,7 +148,7 @@
 | `candy-core` (rendering) | BaseElement, Element, Renderer pattern | **Direct port** — The `BaseElement.doRender()` with prefix/suffix/blockPrefix/blockSuffix and the Entering/Exiting/Renderer/Finisher tuple pattern is directly portable to `candy-core`'s render architecture. |
 | `candy-forms` | Word wrapping, ANSI output | **Direct port** — glamour's `MarginWriter`/`lipgloss.Wrap` wrapping logic and UTF-8 aware `PaddingWriter` are directly reusable in `candy-forms` for multi-line prompt rendering. |
 | `honey-bounce` | Animation timing | **Not applicable** — glamour has no animation concepts. |
-| `candy-shell` | Link rendering (hyperlinks) | **Reference** — glamour's `LinkElement` with OSC 8 hyperlink generation (FNV hash for URL ID, `ansi.SetHyperlink`) provides a production implementation of terminal hyperlink rendering. |
+| `candy-scriptui` | Link rendering (hyperlinks) | **Reference** — glamour's `LinkElement` with OSC 8 hyperlink generation (FNV hash for URL ID, `ansi.SetHyperlink`) provides a production implementation of terminal hyperlink rendering. |
 
 ## Analysis
 

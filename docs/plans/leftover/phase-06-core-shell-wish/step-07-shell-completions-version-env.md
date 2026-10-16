@@ -1,6 +1,6 @@
-# Step 06.07 — candy-shell completions + version-from-composer + env-var fallbacks
+# Step 06.07 — candy-scriptui completions + version-from-composer + env-var fallbacks
 
-**Source:** `leftover_updates_later.md` candy-shell §7–§9
+**Source:** `leftover_updates_later.md` candy-scriptui §7–§9
 **Branch:** `ai/shell-completions-version-env`
 
 ## Deliverable
@@ -16,25 +16,25 @@ Three operator-facing features:
 
 **Create:**
 
-- `candy-shell/src/Completion/BashCompletion.php`.
-- `candy-shell/src/Completion/ZshCompletion.php`.
-- `candy-shell/src/Completion/FishCompletion.php`.
-- `candy-shell/src/CompletionCommand.php` — built-in `completion`
+- `candy-scriptui/src/Completion/BashCompletion.php`.
+- `candy-scriptui/src/Completion/ZshCompletion.php`.
+- `candy-scriptui/src/Completion/FishCompletion.php`.
+- `candy-scriptui/src/CompletionCommand.php` — built-in `completion`
   subcommand that emits the right shell.
 
 **Modify:**
 
-- `candy-shell/src/Application.php` — `versionFromComposer()` helper;
+- `candy-scriptui/src/Application.php` — `versionFromComposer()` helper;
   env-var fallback wiring in flag resolution.
 
 **Tests:**
 
-- `candy-shell/tests/Completion/<Each>CompletionTest.php`.
-- `candy-shell/tests/EnvVarFallbackTest.php`.
+- `candy-scriptui/tests/Completion/<Each>CompletionTest.php`.
+- `candy-scriptui/tests/EnvVarFallbackTest.php`.
 
 ## Acceptance
 
-- `cd candy-shell && vendor/bin/phpunit --filter "Completion|EnvVar"` green.
+- `cd candy-scriptui && vendor/bin/phpunit --filter "Completion|EnvVar"` green.
 - `php examples/cli.php completion bash > /tmp/comp; bash /tmp/comp`
   loads without errors.
 

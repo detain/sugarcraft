@@ -1,0 +1,31 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use SugarCraft\ScriptUi\Application;
+
+// Walk up to find the right vendor/autoload.php whether the lib is the
+// top-level project or a Composer dependency.
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',     // dev: candy-scriptui standalone
+    __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
+    __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
+];
+foreach ($autoloadCandidates as $autoload) {
+    if (file_exists($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+// Pre-rename env compatibility (plan_rename.md R4.5): CANDYSHELL_* was this app's // @rename-keep
+// option-fallback prefix before the 2026-10 rename to candy-scriptui. Import any // @rename-keep
+// old-prefix exports under the new CANDY_SCRIPTUI_* name (new name always wins),
+// then warn once per var.
+foreach (\SugarCraft\Core\Util\LegacyEnv::import([
+    'CANDYSHELL_' => 'CANDY_SCRIPTUI_', // @rename-keep
+]) as $legacyVar) {
+    fwrite(STDERR, sprintf("candy-scriptui: %s is deprecated; set CANDY_SCRIPTUI_%s instead.\n", $legacyVar, substr($legacyVar, strlen('CANDYSHELL_')))); // @rename-keep
+}
+
+(new Application())->run();

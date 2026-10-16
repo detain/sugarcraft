@@ -161,7 +161,7 @@ The architecture maps well to SugarCraft's TUI component philosophy:
 | `navstack.Model` (stack management, push/pop) | `candy-forms` or `candy-shine` | Navigation model with state machine patterns, message-driven updates |
 | `menu.Model` (list selection) | `sugar-bits` (base components) | Menu/select widget building on bubbles/list |
 | `breadcrumb.Model` (trail rendering) | `sugar-bits` or `candy-shine` | View component rendering hierarchical context |
-| `shell.Model` (composite shell) | `candy-shell` (shell wrapper) | Composite component managing child views |
+| `shell.Model` (composite shell) | `candy-scriptui` (shell wrapper) | Composite component managing child views |
 | `window.Model` (dimension management) | `candy-core` | Layout/dimension tracking utilities |
 | `styles`, `lipgloss` usage | `candy-shine` | Lipgloss-based styling/theme system |
 | `tea.Model` interface pattern | All SugarCraft libs | Immutable + fluent `Model` pattern with Init/Update/View |
@@ -170,10 +170,10 @@ The architecture maps well to SugarCraft's TUI component philosophy:
 
 **Many-to-many mapping notes**:
 
-- `navstack` → `candy-forms` (navigation metaphor), `candy-shell` (view composition)
+- `navstack` → `candy-forms` (navigation metaphor), `candy-scriptui` (view composition)
 - `menu` → `sugar-bits` (list widget), `sugar-charts` (item selection from collections)
 - `breadcrumb` → could be standalone breadcrumb lib or part of `candy-forms`
-- `shell` → `candy-shell` wraps nav + breadcrumb exactly as bubbleo's shell wraps navstack + breadcrumb
+- `shell` → `candy-scriptui` wraps nav + breadcrumb exactly as bubbleo's shell wraps navstack + breadcrumb
 
 ## Analysis
 

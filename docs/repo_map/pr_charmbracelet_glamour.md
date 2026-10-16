@@ -33,7 +33,7 @@ From the first-stage analysis, glamour maps to:
 | `candy-shine` | Styles/theme system | Reference — glamour's `StyleConfig` + `cascadeStyle()` is the canonical JSON stylesheet-in-JSON pattern |
 | `candy-core` | BaseElement, Element, Renderer pattern | Direct port — Entering/Exiting/Renderer/Finisher tuple pattern is portable |
 | `candy-forms` | Word wrapping, ANSI output | Direct port — `MarginWriter`/`lipgloss.Wrap` are directly reusable |
-| `candy-shell` | Link rendering (hyperlinks) | Reference — `LinkElement` with OSC 8 hyperlink generation via FNV hash for URL IDs |
+| `candy-scriptui` | Link rendering (hyperlinks) | Reference — `LinkElement` with OSC 8 hyperlink generation via FNV hash for URL IDs |
 
 ---
 
@@ -132,7 +132,7 @@ Long URLs break when wrapped across lines — the OSC 8 hyperlink escape sequenc
 
 **Solution path**: Fixed in v2 via hyperlink support PR #411. Still, long URLs in tables remain problematic.
 
-**Direct Risk to SugarCraft**: If `candy-shell` implements OSC 8 hyperlinks, must ensure URL wrapping doesn't break links. Consider detecting and preventing URL splits at render time.
+**Direct Risk to SugarCraft**: If `candy-scriptui` implements OSC 8 hyperlinks, must ensure URL wrapping doesn't break links. Consider detecting and preventing URL splits at render time.
 
 ---
 
@@ -261,7 +261,7 @@ Multiple issues (82, 85, 114, 149, 178, 204, 260, 361) all relate to link render
 
 **Pattern**: Link handling was incrementally improved over 5+ years. The `LinkStyler` abstraction was proposed but never fully implemented before v2.
 
-**SugarCraft Implication**: `candy-shell` should provide a flexible link abstraction that supports:
+**SugarCraft Implication**: `candy-scriptui` should provide a flexible link abstraction that supports:
 
 - Text-only rendering
 - Full hyperlink (OSC 8)

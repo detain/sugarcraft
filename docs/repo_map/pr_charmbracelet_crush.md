@@ -21,7 +21,7 @@ From the first-pass analysis (`repo_map/charmbracelet_crush.md`), SugarCraft map
 
 | Crush Component | SugarCraft Lib | Status |
 |---|---|---|
-| `internal/shell` | `candy-shell` | Exists |
+| `internal/shell` | `candy-scriptui` | Exists |
 | `internal/lsp` | `candy-core` (future) | Not implemented |
 | `internal/agent/tools` | `sugar-bits`, `candy-forms` | Partial |
 | `internal/ui` | `candy-shine`, `sugar-charts` | Partial |
@@ -72,7 +72,7 @@ These gaps represent the fundamental architectural delta between a TUI component
 
 **Status:** Open as of archival. No fix merged.
 
-**Direct Risk to SugarCraft:** The permission model decision—session-level vs. per-invocation vs. per-command-pattern—directly affects how dangerous autonomous tool use becomes. SugarCraft's shell tool (candy-shell) would need a similarly robust model.
+**Direct Risk to SugarCraft:** The permission model decision—session-level vs. per-invocation vs. per-command-pattern—directly affects how dangerous autonomous tool use becomes. SugarCraft's shell tool (candy-scriptui) would need a similarly robust model.
 
 ---
 

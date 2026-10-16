@@ -632,9 +632,9 @@ Viewport and FilePicker use terminal dimensions. No tests for resize events mid-
 
 Some components (e.g., progress bars, tables) may need forms for configuration. Document integration pattern.
 
-## 3. candy-shell Integration
+## 3. candy-scriptui Integration
 
-TTY initialization (raw mode, alternate screen) happens in `candy-core` runtime. candy-forms should work seamlessly with `candy-shell` TTY setup.
+TTY initialization (raw mode, alternate screen) happens in `candy-core` runtime. candy-forms should work seamlessly with `candy-scriptui` TTY setup.
 
 ## 4. Third-party Validator Library
 

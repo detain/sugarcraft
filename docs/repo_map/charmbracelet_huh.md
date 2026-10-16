@@ -198,7 +198,7 @@
 | FilePicker | `sugar-file-picker` | File/folder browser |
 | Theming | `candy-shine` | Lip Gloss analog for ANSI styling |
 | Spinner | `sugar-spin` | Loading indicator |
-| Bubble Tea integration | `candy-shell` | TUI framework foundation |
+| Bubble Tea integration | `candy-scriptui` | TUI framework foundation |
 | KeyMap / Keyboard | `candy-core` | Keyboard handling utilities |
 | Dynamic forms | sugar-forms | *Func pattern with binding invalidation |
 | Validation | `candy-validate` (hypothetical) | Per-field validation |

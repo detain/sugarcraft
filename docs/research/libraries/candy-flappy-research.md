@@ -278,11 +278,11 @@ Add brief screen shake when bird crashes.
 **Effort:** 3-4 hours  
 **Impact:** Low-Medium (juice)
 
-### 5.5 Sound Effects via candy-shell (Low Priority)
+### 5.5 Sound Effects via candy-scriptui (Low Priority)
 
 **Reference:** Rustfinity plays wing.ogg on flap
 
-Use sugar-bits or candy-shell audio integration for:
+Use sugar-bits or candy-scriptui audio integration for:
 - Wing flap sound
 - Point scored sound  
 - Crash sound
@@ -369,7 +369,7 @@ public const TERMINAL_VELOCITY = 100.0;
 | # | Improvement | Effort | Impact | Description |
 |---|-------------|--------|--------|-------------|
 | 6 | **Screen shake** | 3-4h | Med-Low | Juice on collision |
-| 7 | **Sound effects** | 4-6h | Medium | Audio feedback via candy-shell |
+| 7 | **Sound effects** | 4-6h | Medium | Audio feedback via candy-scriptui |
 | 8 | **Terminal velocity** | 2h | Low | Physics realism |
 
 ---

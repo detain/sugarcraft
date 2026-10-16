@@ -735,7 +735,7 @@ public string $combining = '';
 
 2. **candy-shine integration** — Could use candy-vt to parse ANSI and feed into markdown rendering pipeline.
 
-3. **candy-shell integration** — Could use candy-vt to parse PTY output for logging/replay.
+3. **candy-scriptui integration** — Could use candy-vt to parse PTY output for logging/replay.
 
 4. **php-tui integration** — Could use candy-vt as the ANSI parsing backend for php-tui's backend abstraction.
 

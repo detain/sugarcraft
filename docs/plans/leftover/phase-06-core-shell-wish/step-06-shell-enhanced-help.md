@@ -1,6 +1,6 @@
-# Step 06.06 — candy-shell enhanced help (examples / aliases / typo suggestions)
+# Step 06.06 — candy-scriptui enhanced help (examples / aliases / typo suggestions)
 
-**Source:** `leftover_updates_later.md` candy-shell §P4–P6
+**Source:** `leftover_updates_later.md` candy-scriptui §P4–P6
 **Branch:** `ai/shell-enhanced-help`
 
 ## Deliverable
@@ -15,25 +15,25 @@ Three help-system improvements:
 
 **Create:**
 
-- `candy-shell/src/Attribute/Example.php`
-- `candy-shell/src/Attribute/Alias.php`
-- `candy-shell/src/Help/HelpFormatter.php` — renders the enhanced help.
-- `candy-shell/src/Help/TypoSuggester.php` — Levenshtein over the
+- `candy-scriptui/src/Attribute/Example.php`
+- `candy-scriptui/src/Attribute/Alias.php`
+- `candy-scriptui/src/Help/HelpFormatter.php` — renders the enhanced help.
+- `candy-scriptui/src/Help/TypoSuggester.php` — Levenshtein over the
   command registry; suggests if distance ≤ 2.
 
 **Modify:**
 
-- `candy-shell/src/Application.php` — wire all three into the run
+- `candy-scriptui/src/Application.php` — wire all three into the run
   loop. Unknown command → suggester runs.
 
 **Tests:**
 
-- `candy-shell/tests/Help/TypoSuggesterTest.php`.
-- `candy-shell/tests/Help/HelpFormatterTest.php` — snapshot.
+- `candy-scriptui/tests/Help/TypoSuggesterTest.php`.
+- `candy-scriptui/tests/Help/HelpFormatterTest.php` — snapshot.
 
 ## Acceptance
 
-- `cd candy-shell && vendor/bin/phpunit --filter Help` green.
+- `cd candy-scriptui && vendor/bin/phpunit --filter Help` green.
 - Manual smoke: `php examples/cli.php sttatus` (typo) suggests `status`.
 
 ---

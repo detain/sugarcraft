@@ -31,10 +31,10 @@ The mapping is specifically to `sugar-crumbs` for breadcrumb rendering. However,
 
 | bubbleo Component | SugarCraft Mapping | Notes |
 |---|---|---|
-| `navstack.Model` | `candy-forms` (navigation), `candy-shell` (composition) | Stack-based navigation is distinct from CandyForms's form model |
+| `navstack.Model` | `candy-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from CandyForms's form model |
 | `menu.Model` | `sugar-bits` (list widget) | Wraps bubbles/list for menu selection |
 | `breadcrumb.Model` | `sugar-crumbs` | Full mapping exists |
-| `shell.Model` | `candy-shell` | Composite nav + breadcrumb |
+| `shell.Model` | `candy-scriptui` | Composite nav + breadcrumb |
 | `window.Model` | `candy-core` | Offset-based dimension management |
 | `Closable` interface | Not directly mapped | Resource cleanup pattern |
 | `utils.Cmdize` | `SugarCraft\Core\Utils` | Message→Command wrapper |
@@ -118,7 +118,7 @@ func (m *tea.Model) View() {
 |---|---|---|
 | **Resource cleanup timing** | Issue #5 requests `Dispose() tea.Cmd`; v0.1.5 added symmetry (close on push AND pop) | HIGH — SugarCraft's disposal patterns should handle both push and pop |
 | **Menu help visibility control** | PR #4 requests control over initial help display state | MEDIUM — sugar-bits may have similar toggle needs |
-| **Delimiter override in Shell** | PR #6 bugfix: Shell.View() was overriding configured delimiter | MEDIUM — candy-shell composition must preserve child configurations |
+| **Delimiter override in Shell** | PR #6 bugfix: Shell.View() was overriding configured delimiter | MEDIUM — candy-scriptui composition must preserve child configurations |
 | **Quit-on-empty-stack behavior** | PR #2: Option to not quit when stack empties | MEDIUM — navigation models need configurable empty-state behavior |
 | **Functional options API** | PR #3: Builder pattern via functional options for Menu config | MEDIUM — SugarCraft APIs should use functional options for optional params |
 
@@ -396,7 +396,7 @@ Maintainer (KevM) has merged PR #6 (external contributor) but left PRs #2, #3, #
 | **Disposal not integrated with command system** | HIGH | `Closable.Close() error` is fire-and-forget. If SugarCraft uses similar disposal, cleanup actions can't be sequenced properly. |
 | **Empty-stack quit behavior is rigid** | MEDIUM | sugar-crumbs/nav should allow configurable empty-stack behavior |
 | **Help state machine bugs** | MEDIUM | Help visibility toggle is error-prone. SugarCraft should test this explicitly. |
-| **Shell composition overrides child config** | MEDIUM | candy-shell must preserve child configuration (like the delimiter bug in PR #6) |
+| **Shell composition overrides child config** | MEDIUM | candy-scriptui must preserve child configuration (like the delimiter bug in PR #6) |
 | **No async data loading lifecycle** | MEDIUM | Issue #5's `onDataInit`/`onDataInited` pattern is a common need. candy-forms handles this for forms, but general models need a lifecycle hook. |
 | **Functional options not used in v0.1.0 API** | LOW | Early API was designed before functional options adoption. PR #3 is retroactively fixing this. SugarCraft should use functional options from the start. |
 
@@ -549,7 +549,7 @@ The v0.1.5 push-symmetry change (closing on push AND pop) reflects a maturing un
 
 ### 1. First-Class Stack Navigation Library
 
-**Opportunity**: SugarCraft lacks a dedicated stack navigation primitive. `candy-forms` handles forms, `candy-shell` is a CLI shell, but neither provides the bubbleo-style `NavStack` with push/pop/close semantics.
+**Opportunity**: SugarCraft lacks a dedicated stack navigation primitive. `candy-forms` handles forms, `candy-scriptui` is a CLI shell, but neither provides the bubbleo-style `NavStack` with push/pop/close semantics.
 
 **Recommendation**: Consider creating `sugar-nav` (or expanding `sugar-crumbs`) to provide:
 

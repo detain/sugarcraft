@@ -329,7 +329,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Implementation ideas:**
 
 - Add WASI target to `composer.json`
-- Use `sugarcraft/candy-shell` for backend abstraction
+- Use `sugarcraft/candy-scriptui` for backend abstraction
 - Create simple HTML/JS frontend
 
 **Expected impact:** Low — niche use case
@@ -759,7 +759,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 
 ### 4. Browser-based Inspector
 
-**Using `sugarcraft/candy-shell` with ReactPHP:**
+**Using `sugarcraft/candy-scriptui` with ReactPHP:**
 
 - Simple HTTP endpoint: `POST /inspect`
 - Request: raw ANSI bytes

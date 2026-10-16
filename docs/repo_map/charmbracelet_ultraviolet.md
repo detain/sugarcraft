@@ -254,7 +254,7 @@ Ultraviolet is a terminal TUI foundation layer. SugarCraft is a PHP monorepo of 
 | `KeyPressEvent` / `KeyReleaseEvent` / `MouseClickEvent` / `MouseScrollEvent` / `PasteEvent` / `FocusEvent` | `sugar-bits` | Input event types and keyboard/mouse handling |
 | `Window` (parent/child hierarchy, shared-buffer views) | `candy-sprinkles` | Windowing model, view composition |
 | `layout` package with Cassowary algorithm | `honey-bounce` or `candy-shine` | Constraint-based layout solver |
-| `Border` functions (Normal, Rounded, Block, Thick, Double, etc.) | `candy-shell` | Box-drawing borders (shells contain content) |
+| `Border` functions (Normal, Rounded, Block, Thick, Double, etc.) | `candy-scriptui` | Box-drawing borders (shells contain content) |
 | `StyledString` + `screen.Context` (styled text → cells) | `sugar-bits` | High-level styled string drawing |
 | `ProgressBar` + `EncodeProgressBar()` | `sugar-bits` | Progress indication (Windows Terminal sequences) |
 | `Cursor` + `EncodeCursorStyle()` + `EncodeCursorColor()` | `sugar-bits` | Cursor shape/color control |
@@ -263,7 +263,7 @@ Ultraviolet is a terminal TUI foundation layer. SugarCraft is a PHP monorepo of 
 | `WindowSizeEvent` / `PixelSizeEvent` / `Winsize` | `candy-core` | Terminal dimension reporting |
 | Color profile detection (`colorprofile.Detect`) | `sugar-bits` | TrueColor/ANSI256/ANSI detection and mapping |
 
-**Summary**: Ultraviolet maps most closely to `candy-core` (foundation: buffer, screen, terminal, events) + `sugar-bits` (styling, input, cursor, mouse, progress bars, width methods) + `candy-shell`/`candy-sprinkles`/`honey-bounce` (layout/borders/windows). There is no single equivalent — a full port would be split across multiple libs following the Charm pattern.
+**Summary**: Ultraviolet maps most closely to `candy-core` (foundation: buffer, screen, terminal, events) + `sugar-bits` (styling, input, cursor, mouse, progress bars, width methods) + `candy-scriptui`/`candy-sprinkles`/`honey-bounce` (layout/borders/windows). There is no single equivalent — a full port would be split across multiple libs following the Charm pattern.
 
 ## Analysis
 

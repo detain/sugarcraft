@@ -229,7 +229,7 @@ builds on it. From the same monorepo:
 - **SugarBits** — 14 prebuilt components.
 - **CandyForms** — multi-page form library.
 - **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
-- **CandyShell** — composer-installable CLI of 13 subcommands.
+- **CandyScriptui** — composer-installable CLI of 13 subcommands.
 - **CandyShine** — Markdown → ANSI renderer.
 - **CandyMouse** — mouse-zone tracker.
 - **HoneyBounce** — spring physics + Newtonian projectile sim.
@@ -348,7 +348,7 @@ cursor on first frame and restores it after each repaint, so
 preceding shell output stays visible. Pair with `Cmd::println()` to
 emit lines that scroll above the program region.
 
-A typical CandyShell prompt (`gum input`-style) uses inline mode;
+A typical CandyScriptui prompt (`gum input`-style) uses inline mode;
 a fullscreen filter (`gum filter`-style) uses alt-screen.
 
 ## Tutorial — building a shopping list

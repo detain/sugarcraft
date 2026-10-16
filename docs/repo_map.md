@@ -13,46 +13,46 @@
 | [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-bits |
 | [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-bits, candy-core |
 | [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | candy-mosaic |
-| [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-shell, candy-kit, candy-forms |
+| [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, candy-kit, candy-forms |
 | [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-bits, candy-forms |
-| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-bits, candy-shell |
+| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-bits, candy-scriptui |
 | [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | candy-core |
-| [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-shell, candy-forms |
-| [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-shell, candy-sprinkles, candy-core |
+| [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, candy-forms |
+| [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, candy-sprinkles, candy-core |
 | [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, candy-palette |
 | [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | honey-bounce, sugar-charts |
-| [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-shell, candy-forms, candy-shine |
+| [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, candy-forms, candy-shine |
 | [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | candy-kit |
-| [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-shell |
+| [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
 | [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-freeze |
 | [charmbracelet/glamour](#charmbraceletglamour) | Go | ~3400 | candy-shine |
 | [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | sugar-glow, sugar-bits, candy-shine |
-| [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-shell, candy-sprinkles, sugar-bits |
+| [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-bits |
 | [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | honey-bounce |
 | [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | candy-forms, sugar-bits, candy-shine |
 | [charmbracelet/lipgloss](#charmbraceletlipgloss) | Go | ~3500 | candy-sprinkles |
 | [charmbracelet/log](#charmbraceletlog) | Go | ~700 | candy-log |
-| [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-shell |
-| [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-shell, candy-forms |
-| [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | sugar-post, candy-shell, candy-shine |
+| [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-scriptui |
+| [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, candy-forms |
+| [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | sugar-post, candy-scriptui, candy-shine |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
 | [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, sugar-spark |
-| [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-shell |
+| [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 | [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | sugar-skate |
 | [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-git-server |
 | [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-bits |
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, candy-shine |
 | charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
 | [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | candy-wish |
-| [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-shell, candy-pty, candy-core |
+| [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, candy-pty, candy-core |
 | [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-bits, candy-shine |
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
-| [KevM/bubbleo](#kevmbubbleo) | Go | 69 | candy-forms, sugar-bits, candy-shell |
+| [KevM/bubbleo](#kevmbubbleo) | Go | 69 | candy-forms, sugar-bits, candy-scriptui |
 | [kojiflowers/php-tui-chart](#kojiflowersphp-tui-chart) | PHP | ~niche | sugar-charts (data parsing only) |
 | [lrstanley/bubblezone](#lrstanleybubblezone) | Go | 880 | candy-mouse |
-| [p-gen/smenu](#p-gensmenu) | C | ~900 | candy-shell |
+| [p-gen/smenu](#p-gensmenu) | C | ~900 | candy-scriptui |
 | [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-bits, candy-shine, candy-core |
-| [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-bits, candy-shell |
+| [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-bits, candy-scriptui |
 | [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | candy-core, candy-sprinkles, sugar-bits |
 | [rasjonell/dashbrew](#rasjonelldashbrew) | Go | ~100 | candy-core, candy-shine, sugar-charts |
 | [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | candy-core, sugar-bits, candy-sprinkles |
@@ -67,7 +67,7 @@
 | [EthanEFung/bubble-datepicker](#ethanefungbubble-datepicker) | Go | ~40 | sugar-datepicker |
 | [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-bits |
 | [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-bits |
-| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-bits, candy-shell |
+| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-bits, candy-scriptui |
 | charmbracelet/meta | Go | ~100 | (CI infrastructure only) |
 | charmbracelet/scoop-bucket | JSON/YAML | 29 | (distribution manifests) |
 | charmbracelet/soft-serve-action | TypeScript | ~30 | (GitHub Action) |
@@ -75,7 +75,7 @@
 | charmbracelet/winget-pkgs | YAML | ~1000 | (Windows distribution manifests) |
 | charmbracelet/git-lfs-transfer | Go | ~50 | (Git infrastructure, not TUI) |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
-| [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-shell |
+| [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 
 ---
 
@@ -156,7 +156,7 @@
 **Features:** Command hierarchy, GetOptionKit option parsing, event hooks (execute.before/after), Levenshtein typo correction, reflection-based argument extraction, zsh/bash completion.
 
 **SugarCraft Mapping:**
-- `candy-shell` → Command application framework
+- `candy-scriptui` → Command application framework
 - `candy-kit` → CLI options
 - `candy-forms` → Prompter, Chooser
 
@@ -203,7 +203,7 @@
 **SugarCraft Mapping:**
 - `candy-core` → Primary port (main framework)
 - `sugar-bits` → Components built on core
-- `candy-shell` → Application shell
+- `candy-scriptui` → Application shell
 - `candy-sprinkles` → Styling
 - `honey-bounce` → Animations
 
@@ -263,7 +263,7 @@
 
 **SugarCraft Mapping:**
 - No direct mapping (cloud infrastructure, not TUI components)
-- Indirect: `candy-shell` (CLI patterns), future Sugar-KV/Sugar-FS could draw inspiration
+- Indirect: `candy-scriptui` (CLI patterns), future Sugar-KV/Sugar-FS could draw inspiration
 
 **Weaknesses:** Sunset project, SQLite doesn't scale horizontally, SSH exposure required.
 
@@ -323,7 +323,7 @@
 **Features:** Session-based agent, shell execution, LSP integration, MCP client, self-documenting tools, auto-summarization, workspace sharing.
 
 **SugarCraft Mapping:**
-- `candy-shell` → CLI patterns
+- `candy-scriptui` → CLI patterns
 - `candy-forms` → Bubble Tea components
 
 **Note:** Sunset March 2026, archived in favor of this project.
@@ -441,10 +441,10 @@
 **Features:** 15 commands, fuzzy matching (sahilm/fuzzy), xpty for spin, lipgloss styling, Kong CLI framework.
 
 **SugarCraft Mapping:**
-- `candy-shell` → Primary umbrella (shell/framework)
+- `candy-scriptui` → Primary umbrella (shell/framework)
 - `sugar-bits` → Individual commands (choose, filter, input, spin, style, etc.)
 
-**Note:** Port exists as `candy-shell` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-scriptui` (🟢 in MATCHUPS.md).
 
 ---
 
@@ -556,7 +556,7 @@
 **Features:** Multi-provider LLM streaming, tool calling, SQLite conversation storage, MCP client (stdio/SSE/HTTP).
 
 **SugarCraft Mapping:**
-- `candy-shell` → TUI framework
+- `candy-scriptui` → TUI framework
 - `candy-forms` → Interactive forms
 
 **Note:** Sunset March 2026, archived in favor of Crush.
@@ -636,7 +636,7 @@
 **Features:** Full AST parser (POSIX/Bash/mksh), formatter (shfmt), interpreter with handler injection, expansion engine.
 
 **SugarCraft Mapping:**
-- `candy-shell` → Shell parsing patterns
+- `candy-scriptui` → Shell parsing patterns
 - No direct port (shell scripting domain, different from TUI)
 
 ---
@@ -694,7 +694,7 @@
 **SugarCraft Mapping:**
 - `candy-core` → Buffer/screen/terminal
 - `sugar-bits` → Styling/input/width methods
-- `candy-shell`/`candy-sprinkles` → Borders/windows
+- `candy-scriptui`/`candy-sprinkles` → Borders/windows
 - `honey-bounce` → Cassowary layout
 
 ---
@@ -753,7 +753,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-wishlist` → Primary port
-- `candy-shell` → TUI framework
+- `candy-scriptui` → TUI framework
 - `candy-pty` → PTY wrappers
 
 **Note:** Port exists as `sugar-wishlist` (🟢 in MATCHUPS.md).
@@ -853,7 +853,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-bits` → Selection component
-- `candy-shell` → CLI tool patterns
+- `candy-scriptui` → CLI tool patterns
 
 ---
 
@@ -891,7 +891,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-bits` → Individual menu items
-- `candy-shell` → Full menu runtime + builder
+- `candy-scriptui` → Full menu runtime + builder
 
 ---
 
@@ -951,7 +951,7 @@
 - `candy-core` → Framework foundation (Display/Buffer/Terminal)
 - `sugar-bits` → Widget library
 - `candy-sprinkles` → Styling/layout
-- `candy-shell` → TTY I/O
+- `candy-scriptui` → TTY I/O
 - `honey-bounce` → Cassowary constraint solver
 
 ---
@@ -1151,7 +1151,7 @@
 **SugarCraft Mapping:**
 - `candy-forms` → Navigation
 - `sugar-bits` → Menu/list widgets
-- `candy-shell` → Shell composition
+- `candy-scriptui` → Shell composition
 
 ---
 

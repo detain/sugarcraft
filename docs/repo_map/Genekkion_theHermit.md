@@ -157,7 +157,7 @@ items = model.items[model.offset : model.offset+model.height-1]
 | List overlay/quick fix popup | `sugar-list` | SugarCraft's list component; would need overlay/wrapper pattern |
 | Item interface (`Title()`) | `sugar-bits` | Mirrors the component/item protocol in SugarCraft TUI |
 | Border rendering + styling | `candy-shine` | Lipgloss-based styling system; border primitives |
-| Overlay rendering (centered on background) | `candy-shell` | Viewport/window management, fullscreen overlay |
+| Overlay rendering (centered on background) | `candy-scriptui` | Viewport/window management, fullscreen overlay |
 | Background view preservation | `sugar-bits` (renderer) | BubbleTea's concurrent view update pattern |
 | Keyboard navigation (up/down) | `candy-forms` | Input handling, cursor movement |
 | tea.Model interface (Init/Update/View) | `candy-core` | Core TUI component contract |

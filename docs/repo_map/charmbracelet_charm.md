@@ -202,10 +202,10 @@
 | `kv/` package | `sugar-bits` | Key-value store; sugar-bits provides BitArray, Table rendering primitives. Not a direct KV port but complementary. |
 | `fs/` package | `candy-shine` or `sugar-bits` | Filesystem FS interface; shine has output/styling, bits has data structures. |
 | `crypt/` package | (no direct equivalent) | Encryption/crypto utilities not yet ported. |
-| `client/` package | `candy-shell` | Shell utilities; client config/env management similar to shell setup. |
+| `client/` package | `candy-scriptui` | Shell utilities; client config/env management similar to shell setup. |
 | `ui/` package (Bubble Tea) | `candy-sprinkles` | Sprinkles provides Bubble Tea components. The TUI pattern matches. |
 | `server/` package | (no direct equivalent) | Server-side components not applicable to SugarCraft TUI libs. |
-| `cmd/` package (CLI) | `candy-shell` | Command-line interface patterns; shell provides CLI primitives. |
+| `cmd/` package (CLI) | `candy-scriptui` | Command-line interface patterns; shell provides CLI primitives. |
 | Overall architecture | `candy-core` | The Elm-style update/model/view pattern for TUI applications. |
 
 **SugarCraft libs that could be built on this:**

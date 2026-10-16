@@ -32,13 +32,13 @@
 ## 2. Existing SugarCraft Mapping
 
 From `repo_map/c9s_CLIFramework.md`:
-- **Primary:** `candy-shell` (framework/command hierarchy)
+- **Primary:** `candy-scriptui` (framework/command hierarchy)
 - **Secondary:** `candy-forms` (Prompter, Chooser)
 - **Tertiary:** `candy-shine` (Formatter, Logger), `sugar-bits` (Table, ProgressBar, utilities)
 
 ### First-Pass Assessment
 
-CLIFramework maps to `candy-shell` as the umbrella TUI/console application foundation, comparable to `charmbracelet/bubbletea` in the Go ecosystem.
+CLIFramework maps to `candy-scriptui` as the umbrella TUI/console application foundation, comparable to `charmbracelet/bubbletea` in the Go ecosystem.
 
 ---
 
@@ -712,7 +712,7 @@ Implement smarter command correction:
 
 CLIFramework is a mature, feature-rich PHP CLI framework that suffers from **11 years of PHP 5-era code style** and **minimal ongoing maintenance**. The community has identified critical issues (wrong exit codes, broken validators, format string bugs) that remain unfixed for years.
 
-For SugarCraft's `candy-shell` port, the key lessons are:
+For SugarCraft's `candy-scriptui` port, the key lessons are:
 
 1. **Modern PHP from day one** — explicit types, attributes, readonly, union types
 2. **Exit codes matter** — treat them as part of the public API

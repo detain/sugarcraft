@@ -8,7 +8,7 @@ current source on 2026-07-04 and closed by: `a160cefd` (test
 skips/flake), `5f33c4b7` (candy-mouse contains, candy-wish StreamHelper
 + pid()), `1920988f`/`09546125` (candy-git-server auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
-(candy-shell), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
+(candy-scriptui), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
 candy-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
 (candy-pty). candy-sprinkles plan items were all verified
 misreferenced/N-A (see plan_candy-sprinkles.md annotations).
@@ -213,12 +213,12 @@ For each phase:
 
 ### Group 0-C (3 agents)
 
-#### 0.16 🔴 candy-shell: Shell injection in env-var fallback (Item 1.1)
+#### 0.16 🔴 candy-scriptui: Shell injection in env-var fallback (Item 1.1)
 
-**Plan:** `findings/plan_candy-shell.md` — Item 1.1
+**Plan:** `findings/plan_candy-scriptui.md` — Item 1.1
 **Issue:** `Application.php:137-141` — `escapeshellarg → stripslashes → trim` chain is vulnerable
 **Fix:** Use argv array approach with `$input->setOption()` to avoid shell interpolation
-**Files:** `candy-shell/src/Application.php:137-150`
+**Files:** `candy-scriptui/src/Application.php:137-150`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 0.17 🔴 sugar-reel: resume() uses SIGCONT (Item 1.2)
@@ -1289,7 +1289,7 @@ Same verification as previous phases.
 | `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
 | `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
 | `plan_candy-git-server.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
-| `plan_candy-shell.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |
+| `plan_candy-scriptui.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |
 | `plan_candy-shine.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |
 | `plan_candy-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |

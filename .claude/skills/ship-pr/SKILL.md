@@ -37,7 +37,7 @@ For each lib `<slug>` from Step 1:
 cd <slug> && composer install --quiet && composer test
 ```
 
-Also run reverse-dependents if a foundation lib (`candy-core`, `candy-sprinkles`, `candy-shell`) changed — at minimum re-run `sugar-bits`, `sugar-charts`, `candy-shine`.
+Also run reverse-dependents if a foundation lib (`candy-core`, `candy-sprinkles`, `candy-scriptui`) changed — at minimum re-run `sugar-bits`, `sugar-charts`, `candy-shine`.
 
 Verify: every suite ends with `OK (...)`. If ANY suite fails or shows warnings (PHPUnit configs use `failOnWarning="true"`), STOP. Do not proceed to commit.
 

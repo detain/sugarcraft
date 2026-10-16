@@ -240,11 +240,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/gum → candy-shell
+## charmbracelet/gum → candy-scriptui
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-shell | Notes |
+| Upstream | Title | Status in candy-scriptui | Notes |
 |---|---|:--:|---|
 | (all recent are chore/deps) | | | No significant semantic changes |
 | [#1072](https://github.com/charmbracelet/gum/pull/1072) (2026-05-04) | chore(deps): bump semver | ⚪ | Dep only |

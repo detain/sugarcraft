@@ -301,7 +301,7 @@ A TUI menu builder with builder API and styling. **Not a scaffold** — it's a c
 
 #### charmbracelet/gum (Go, 8700 stars)
 
-A shell script utility (15 commands: `gum input`, `gum confirm`, `gum spin`, etc.). **Not a scaffold** — it's a final binary. Maps to `candy-shell` as the umbrella app containing the same subcommands.
+A shell script utility (15 commands: `gum input`, `gum confirm`, `gum spin`, etc.). **Not a scaffold** — it's a final binary. Maps to `candy-scriptui` as the umbrella app containing the same subcommands.
 
 #### textualize/textual (Python, 35000 stars)
 

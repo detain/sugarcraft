@@ -322,7 +322,7 @@ An empty marker interface provides minimal value beyond using a docblock tag. Ho
 
 ### 2. No `sugar-bits` Compatibility
 
-**Problem:** `sugar-bits` (component library) has no dependency on `candy-input`. The TUI component ecosystem (`sugar-bits`, `candy-shell`) likely needs keyboard/mouse input but there is no integration example.
+**Problem:** `sugar-bits` (component library) has no dependency on `candy-input`. The TUI component ecosystem (`sugar-bits`, `candy-scriptui`) likely needs keyboard/mouse input but there is no integration example.
 
 ### 3. Hard Dependency on `sugarcraft/candy-core`
 

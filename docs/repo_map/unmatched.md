@@ -726,9 +726,9 @@
 
 **Redundancy Check:**
 
-- Maps to `candy-shell` as CLI foundation — but CLIFramework is PHP, SugarCraft should be idiomatic PHP 8.3+
+- Maps to `candy-scriptui` as CLI foundation — but CLIFramework is PHP, SugarCraft should be idiomatic PHP 8.3+
 
-- SugarCraft's `candy-shell` should implement hierarchical command model differently (without singletons)
+- SugarCraft's `candy-scriptui` should implement hierarchical command model differently (without singletons)
 
 **Strategic Value:**
 
@@ -738,7 +738,7 @@
 
 - SugarCraft should NOT port CLIFramework style, but SHOULD implement same patterns idiomatically
 
-**Verdict:** Redundant — SugarCraft has/must have equivalent `candy-shell` CLI patterns, but must use PHP 8.3+ idioms not CLIFramework's PHP 5 style
+**Verdict:** Redundant — SugarCraft has/must have equivalent `candy-scriptui` CLI patterns, but must use PHP 8.3+ idioms not CLIFramework's PHP 5 style
 
 ---
 

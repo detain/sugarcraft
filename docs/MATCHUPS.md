@@ -79,7 +79,7 @@ called out in the table below.
 | App | Status | Notes |
 |---|:---:|---|
 | **CandyMold** (`candy-mold/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
-| **CandyShell** (`candy-shell/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
+| **CandyScriptui** (`candy-scriptui/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
 | **CandyFreeze** (`candy-freeze/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
 | **SugarGlow** (`sugar-glow/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
 | **SugarSpark** (`sugar-spark/`) | 🟢 ready | ANSI escape-sequence inspector. |
@@ -111,7 +111,7 @@ package. Suffixes are short, technical, and describe the role.
 
 | Prefix | Meaning | Example uses |
 |---|---|---|
-| **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyShell), markdown (CandyShine) |
+| **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyScriptui), markdown (CandyShine) |
 | **Sugar-** | components / data / forms / apps | components (SugarBits), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (CandyFlappy) |
 
@@ -174,7 +174,7 @@ reference projects supplied the ideas, not the code.
 | CandyPty (candy-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |
 | CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
 | CandyGitServer (candy-git-server/) | [soft-serve](https://github.com/charmbracelet/soft-serve) |
-| CandyShell (candy-shell/) | [gum](https://github.com/charmbracelet/gum) |
+| CandyScriptui (candy-scriptui/) | [gum](https://github.com/charmbracelet/gum) |
 | CandyShine (candy-shine/) | [glamour](https://github.com/charmbracelet/glamour) |
 | CandySprinkles (candy-sprinkles/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
 | CandyTesting (candy-testing/) | none — first-party |

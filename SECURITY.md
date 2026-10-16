@@ -7,7 +7,7 @@ If you discover a security vulnerability in any SugarCraft library,
 <!-- codacy ignore Agentlinter_security_no-pii-exposure -->
 **`[REPLACE_WITH_EMAIL]`** (intentionally public for security vulnerability reports) with:
 
-- The library affected (e.g. `candy-shell`, `candy-shine`).
+- The library affected (e.g. `candy-scriptui`, `candy-shine`).
 - A description of the vulnerability and its impact.
 - Steps to reproduce — minimum working example preferred.
 - Your name / handle for the credit (optional).
@@ -40,7 +40,7 @@ surfaces:
 - **Markdown rendering** (`SugarCraft\Shine\Renderer`) — input is
   user-supplied; the renderer must not let markdown payloads emit raw
   ANSI sequences they didn't author.
-- **Shell-out paths** (`SugarCraft\Shell\Process\RealProcess`,
+- **Shell-out paths** (`SugarCraft\ScriptUi\Process\RealProcess`,
   `SugarCraft\Core\Cmd::exec`) — `proc_open` invocations should never
   execute arbitrary user input through a shell when the caller
   supplies an argv list.

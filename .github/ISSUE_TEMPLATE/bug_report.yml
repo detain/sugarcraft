@@ -17,7 +17,7 @@ body:
         - sugar-bits (components)
         - sugar-charts (charts)
         - candy-forms (forms)
-        - candy-shell (CLI)
+        - candy-scriptui (CLI)
         - candy-shine (Markdown)
         - candy-kit (CLI helpers)
         - candy-freeze (SVG screenshots)

@@ -7,7 +7,7 @@
 - **Upstream Language**: Go
 - **Upstream Stars**: ~23.2k (2026)
 - **License**: MIT
-- **SugarCraft Port**: `candy-shell` (🟡 in progress)
+- **SugarCraft Port**: `candy-scriptui` (🟡 in progress)
 - **Primary Maintainers**: @caarlos0, @meowgorithm, @maaslalani, @aymanbagabas
 
 ---
@@ -18,7 +18,7 @@
 
 The project exemplifies the "batteries included" philosophy — instead of writing Go to use Bubbles, users write shell scripts. Each command is a self-contained package following a consistent `cmd/options.go + cmd/command.go + cmd/<model>.go` pattern.
 
-**Key architectural insight**: Gum is NOT a library — it's purely a binary. This is the fundamental gap SugarCraft's `candy-shell` fills.
+**Key architectural insight**: Gum is NOT a library — it's purely a binary. This is the fundamental gap SugarCraft's `candy-scriptui` fills.
 
 ---
 
@@ -42,7 +42,7 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 | Bubbles dep | `candy-sprinkles` + `sugar-bits` | 🟢 / 🟡 | TUI component primitives |
 | Lipgloss dep | `candy-shine` / `sugar-shine` | 🟡 | Styling/rendering engine |
 
-**Key insight from MATCHUPS.md**: `candy-shell` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `candy-forms`, `sugar-bits`) is what enables the shell commands.
+**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `candy-forms`, `sugar-bits`) is what enables the shell commands.
 
 ---
 
@@ -796,10 +796,10 @@ Go binary: ~5-20MB
 
 **Implementation**:
 
-- XDG locations: `~/.config/candy-shell/config.yaml`
+- XDG locations: `~/.config/candy-scriptui/config.yaml`
 - YAML parsing
 - Precedence: config < environment < constructor options
-- Debug flag: `CANDY_SHELL_DEBUG_CONFIG=1`
+- Debug flag: `CANDY_SCRIPTUI_DEBUG_CONFIG=1`
 
 **SugarCraft advantage**: Native PHP config array; no YAML parsing overhead.
 
@@ -996,7 +996,7 @@ if errors.Is(err, tea.ErrProgramKilled) {
 
 **Opportunity**: SugarCraft IS the library that gum refuses to be
 **Positioning**: "Use gum-style commands as PHP objects, not shell subprocesses"
-**Execution**: Every candy-shell command should be embeddable in any PHP application
+**Execution**: Every candy-scriptui command should be embeddable in any PHP application
 
 ### B. Extended Search Implementation
 

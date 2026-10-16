@@ -132,7 +132,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarCrumbs** | crumbs = breadcrumbs nav IS the function. delightful. |
 | **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
-| **CandyShell** | candy + shell = CLI. Scriptable one-shot prompts and layouts. |
+| **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
 | **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
 | **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the `sugar-` family placement. |
@@ -229,7 +229,7 @@ vocabulary above — these three remain reserved as the safe defaults.
 
 | Prefix | Meaning | Example uses |
 |---|---|---|
-| **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyShell), markdown (CandyShine) |
+| **Candy-** | foundation / system / framework | runtime (SugarCraft), terminal scripting (CandyScriptui), markdown (CandyShine) |
 | **Sugar-** | components / data / forms / apps | components (SugarBits), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce); the Flappy clone left this prefix family in the 2026-10 rename (now CandyFlappy) |
 

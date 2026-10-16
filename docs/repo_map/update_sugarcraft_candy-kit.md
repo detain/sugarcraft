@@ -532,7 +532,7 @@ Show how to:
 ## 3. Integration Examples
 
 Show candy-kit integration with:
-- `candy-shell` (CLI application framework)
+- `candy-scriptui` (CLI application framework)
 
 - `candy-log` (logging integration)
 
@@ -612,13 +612,13 @@ Test with negative or very large step numbers.
 
 # Ecosystem / Integration Opportunities
 
-## 1. candy-shell Integration
+## 1. candy-scriptui Integration
 
-candy-kit should document integration with `candy-shell` (SugarCraft's CLI application framework):
+candy-kit should document integration with `candy-scriptui` (SugarCraft's CLI application framework):
 
 ```php
 use SugarCraft\Kit\{Banner, StatusLine, Theme};
-use SugarCraft\Shell\Application;
+use SugarCraft\ScriptUi\Application;
 
 class MyApp extends Application {
     protected function execute(): int {

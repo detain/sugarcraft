@@ -18,7 +18,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 3. **33 cloned `Lang.php` files** adding ~700 lines of boilerplate
 4. **`with()` methods that can't set `0` values** (candy-boxer, sugar-bits) due to `?: ` sentinel pattern
 5. **God classes** (super-candy/Manager at 915 lines, candy-git/App at 1201 lines)
-6. **Inverted dependency** (candy-shell → sugar-*) per prior improvements.md
+6. **Inverted dependency** (candy-scriptui → sugar-*) per prior improvements.md
 7. **Incomplete candy-forms extraction** leaving candy-forms as a facade with no implementation
 
 **Test Suite Status:** 7,633+ tests across 48 packages. Two packages have failing tests: sugar-post (2 failures due to missing Lang base class in path-repo symlink).
@@ -29,19 +29,19 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Package-by-Package Findings
 
-### Group 1: candy-core, candy-shell, candy-sprinkles, candy-shine, candy-git-server
+### Group 1: candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-core | 588 ✓ | APPROVE | 0 | 2 | 3 | 0 |
-| candy-shell | 230 ✓ | APPROVE | 0 | 0 | 3 | 0 |
+| candy-scriptui | 230 ✓ | APPROVE | 0 | 0 | 3 | 0 |
 | candy-sprinkles | 522 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | candy-shine | 158 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-git-server | 140 ✓ | APPROVE | 0 | 2 | 4 | 0 |
 
 **candy-core** — Foundation TUI runtime (Elm architecture). Well-architected with 588 passing tests. Issues: `Ansi::sgr()` called with 4 args where 3 expected (ghost rendering); `Subscription::startSubscription()` returns `mixed` instead of typed return.
 
-**candy-shell** — Symfony Console CLI shell (gum port). Clean, 230 tests. Issues: `candy-forms` dependency not in path-repo closure for some consumers; `CommandScanner::scan()` limitation.
+**candy-scriptui** — Symfony Console CLI shell (gum port). Clean, 230 tests. Issues: `candy-forms` dependency not in path-repo closure for some consumers; `CommandScanner::scan()` limitation.
 
 **candy-sprinkles** — Styling/layout library (lipgloss port). Excellent 522 tests. Issues: Style's sentinel-bool pattern is exceptional (documented but creates inconsistency).
 
@@ -248,8 +248,8 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - Tests test candy-forms, not candy-forms
    - Architectural concern: which package "owns" the implementation?
 
-3. **candy-shell dependency inversion** (documented in improvements.md §2.1, partially resolved)
-   - candy-shell (foundation) depends on sugar-bits, candy-forms (leaf)
+3. **candy-scriptui dependency inversion** (documented in improvements.md §2.1, partially resolved)
+   - candy-scriptui (foundation) depends on sugar-bits, candy-forms (leaf)
    - Resolved via candy-forms extraction but extraction still 🟡 in progress
 
 ### 🟠 Major Cross-Cutting Anti-Patterns
@@ -356,7 +356,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **God classes** | HIGH | super-candy, candy-git | 915L and 1201L classes |
 | **Stub features** | MEDIUM | sugar-readline, sugar-toast | Features wired but non-functional |
 | **Path-repo symlinks** | MEDIUM | sugar-post, candy-mosaic | composer reinstall needed |
-| **Inverted dependencies** | MEDIUM | candy-shell | Fixed via candy-forms extraction (in progress) |
+| **Inverted dependencies** | MEDIUM | candy-scriptui | Fixed via candy-forms extraction (in progress) |
 | **Constructor bloat** | MEDIUM | super-candy (14), candy-git (22) | DTO/value object refactor needed |
 | **Static singletons** | LOW | candy-mouse, candy-forms | Inject via constructor or clear test cleanup |
 | **Inconsistent mutability** | LOW | Multiple packages | Some classes readonly, some not in same package |
@@ -402,7 +402,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 2. **Facade packages** — candy-forms has no real code
 3. **Stub features** — sugar-readline/Highlight, sugar-toast/animation do nothing
 4. **Path-repo dependency graph** — still has gaps (despite fixes in PR #880)
-5. **Layer inversion** — candy-shell still partially depends on leaf libs (candy-forms extraction in progress)
+5. **Layer inversion** — candy-scriptui still partially depends on leaf libs (candy-forms extraction in progress)
 
 ---
 
@@ -562,7 +562,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Group | Packages | Tests | Status |
 |-------|----------|-------|--------|
-| 1 | candy-core, candy-shell, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
+| 1 | candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
 | 2 | candy-sql, candy-mold, candy-kit, candy-freeze | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |

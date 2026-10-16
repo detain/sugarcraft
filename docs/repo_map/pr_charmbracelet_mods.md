@@ -462,9 +462,9 @@ Build on mods' `stream.Client` pattern but add:
 
 | mods Issue | SugarCraft Gap |
 |-----------|---------------|
-| #635 streaming perf | `candy-shell` viewport needs delta rendering |
+| #635 streaming perf | `candy-scriptui` viewport needs delta rendering |
 | #316 LocalAI key required | `candy-core` config needs provider-aware validation |
-| #197 persistent TUI | `candy-shell` needs session model concept |
+| #197 persistent TUI | `candy-scriptui` needs session model concept |
 | #352 cross-provider fallback | `candy-forms` needs multi-provider router |
 | #675 --return-id | `candy-forms` needs scriptable ConversationManager |
 | #567 mcp.json | `sugar-mcp` should adopt standard config format |

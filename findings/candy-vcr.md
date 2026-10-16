@@ -50,7 +50,7 @@ When withTheme() is called, clone shares same tileCache array. If either instanc
 
 Recommendation: Deep-clone the cache array or implement copy-on-write.
 
-- r86-v1: same defect appeared MISFILED in the candy-shell audit as `findings/plan_candy-shell.md` 4.1 — stamped 🔀 there (moved — belongs to this ledger); canonical record remains this section, closed ✅ at r82 (dup tracked in #13).
+- r86-v1: same defect appeared MISFILED in the candy-scriptui audit as `findings/plan_candy-scriptui.md` 4.1 — stamped 🔀 there (moved — belongs to this ledger); canonical record remains this section, closed ✅ at r82 (dup tracked in #13).
 
 ---
 

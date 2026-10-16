@@ -15,7 +15,7 @@ The plan file should cover:
 - **Goal** — interactive SSH-served repo browser equivalent to
   charmbracelet/soft-serve's TUI.
 - **Architecture** — how it sits on top of candy-wish (SSH transport)
-  + candy-vt (terminal state) + candy-shell (CLI subcommand) +
+  + candy-vt (terminal state) + candy-scriptui (CLI subcommand) +
   candy-git (git ops) + sugar-glow (markdown render) + sugar-stickers
   (viewport).
 - **User stories** — what a user does with it.

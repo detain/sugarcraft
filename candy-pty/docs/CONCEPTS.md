@@ -264,7 +264,7 @@ src/Contract/                src/Posix/
 
 Two reasons:
 
-1. **Testability.** Tests in `candy-wish`, `candy-shell`, etc. can
+1. **Testability.** Tests in `candy-wish`, `candy-scriptui`, etc. can
    inject a stub `PtySystem` that returns scripted in-memory streams
    without touching libc. Production code resolves the real one via
    `PtySystemFactory::new()`.

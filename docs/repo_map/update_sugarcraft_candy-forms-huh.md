@@ -411,7 +411,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `candy-forms/s
 ### 1. Gum CLI Wrapper (`candy-forms` → `gum`-equivalent)
 
 - **Current:** `candy-forms` is a library, not a CLI
-- **Opportunity:** `candy-shell` could provide `sugar` CLI wrapping candy-forms fields
+- **Opportunity:** `candy-scriptui` could provide `sugar` CLI wrapping candy-forms fields
 - **Reference:** `charmbracelet_gum.md` — 13 commands mapping to form fields
 
 ### 2. PHPStorm/IDE Plugin for Form Building

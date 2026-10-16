@@ -404,7 +404,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   ansi+buffer+core+shine+sprinkles).
 - **4.3** `honey-bounce`(12,high, core+palette; enum‑with‑methods), then `candy-flappy`(6,low,
   core+sprinkles+honey‑bounce).
-- **4.4** `candy-shell`(41,med, core+forms+fuzzy+pty+shine+sprinkles; symfony console→^5.4,
+- **4.4** `candy-scriptui`(41,med, core+forms+fuzzy+pty+shine+sprinkles; symfony console→^5.4,
   src attributes) → **4.4a** `Command/` (13→a/b), **4.4b** `Model/` (8), **4.4c** `Attribute/`
   (5, the attribute→7.4 mechanism), **4.4d** `Process/Completion/Style/Help/...`+root.
 - **4.5** `candy-tetris`(14,med, buffer+core+mouse+sprinkles; attributes, first‑class‑callable,
@@ -507,7 +507,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-mouse | medium | 9 | backed-enum, ctor-promotion, match, nullsafe, php8-strfn |
 | candy-palette | medium | 8 | ctor-promotion, enum-with-methods, match, named-args, new-in-init |
 | candy-git-server | medium | 14 | ctor-promotion, first-class-callable, match, named-args; ssh2/openssl |
-| candy-shell | medium | 41 | attribute, backed-enum, ctor-promotion, enum-with-methods, match, mixed; symfony console |
+| candy-scriptui | medium | 41 | attribute, backed-enum, ctor-promotion, enum-with-methods, match, mixed; symfony console |
 | candy-sprinkles | medium | 43 | backed-enum, enum, ctor-promotion, match, mixed, nullsafe |
 | candy-testing | medium | 8 | **fiber**, attribute, ctor-promotion, enum-in-const-expr, first-class-callable, intersection |
 | candy-tetris | medium | 14 | attribute, backed-enum, ctor-promotion, enum-with-methods, first-class-callable |

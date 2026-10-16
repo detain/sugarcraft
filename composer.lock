@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3725f85918102cb435c153d56584a416",
+    "content-hash": "dc0ed82c0e3c96b66866ca64088023d5",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -5040,12 +5040,12 @@
             }
         },
         {
-            "name": "sugarcraft/candy-shell",
+            "name": "sugarcraft/candy-scriptui",
             "version": "dev-master",
             "dist": {
                 "type": "path",
-                "url": "candy-shell",
-                "reference": "f9fa54f6fb29a28c49e5211c1db19a05e939a820"
+                "url": "candy-scriptui",
+                "reference": "9f1f414870e5ca22316b48c89bf21d93ab85d758"
             },
             "require": {
                 "php": "^8.3",
@@ -5062,17 +5062,17 @@
                 "phpunit/phpunit": "^10.5"
             },
             "bin": [
-                "bin/candyshell"
+                "bin/candy-scriptui"
             ],
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "SugarCraft\\Shell\\": "src/"
+                    "SugarCraft\\ScriptUi\\": "src/"
                 }
             },
             "autoload-dev": {
                 "psr-4": {
-                    "SugarCraft\\Shell\\Tests\\": "tests/"
+                    "SugarCraft\\ScriptUi\\Tests\\": "tests/"
                 }
             },
             "license": [
@@ -5085,8 +5085,8 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "PHP port of charmbracelet/gum — composer-installable CLI of SugarCraft TUI primitives. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
-            "homepage": "https://github.com/sugarcraft/candy-shell",
+            "description": "Interactive terminal widgets for shell scripts — composer-installable CLI of SugarCraft TUI primitives, modeled on charmbracelet/gum. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
+            "homepage": "https://github.com/sugarcraft/candy-scriptui",
             "keywords": [
                 "cli",
                 "confirm",
@@ -5102,9 +5102,9 @@
                 "tui"
             ],
             "support": {
-                "issues": "https://github.com/sugarcraft/candy-shell/issues",
-                "source": "https://github.com/sugarcraft/candy-shell",
-                "docs": "https://sugarcraft.github.io/lib/candy-shell.html"
+                "issues": "https://github.com/sugarcraft/candy-scriptui/issues",
+                "source": "https://github.com/sugarcraft/candy-scriptui",
+                "docs": "https://sugarcraft.github.io/lib/candy-scriptui.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8607,7 +8607,7 @@
         "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
-        "sugarcraft/candy-shell": 20,
+        "sugarcraft/candy-scriptui": 20,
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,

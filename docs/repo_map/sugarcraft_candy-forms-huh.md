@@ -347,7 +347,7 @@ Bubbles provides 14 primitives. candy-forms uses several as wrapped widgets:
 
 ### charmbracelet/gum (CLI tool, ~8.7k stars)
 
-Gum wraps huh/bubbles into shell commands. SugarCraft would need a `CandyShell` CLI wrapper to be equivalent. The gum commands map to candy-forms fields:
+Gum wraps huh/bubbles into shell commands. SugarCraft would need a `CandyScriptui` CLI wrapper to be equivalent. The gum commands map to candy-forms fields:
 
 | gum command | candy-forms field |
 |---|---|

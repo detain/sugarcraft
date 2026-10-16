@@ -289,7 +289,7 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `timer.Timer` | `candy-core/` | Timer functionality |
 | `worker.Worker`, `WorkerManager` | `candy-core/` | Background workers |
 | `command.CommandPalette`, `Provider` | `candy-kit/` | Command palette system |
-| `binding.Binding` | `candy-shell/` | Key binding configuration |
+| `binding.Binding` | `candy-scriptui/` | Key binding configuration |
 | `Pilot` (testing) | `candy-vcr/` | Testing infrastructure |
 | `Logger` + `log()` | `candy-log/` | Logging system |
 | Web driver/rendering | _no equivalent_ | Browser-based TUI (unique to textual) |

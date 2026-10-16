@@ -43,7 +43,7 @@ From the first-pass analysis, Ultraviolet maps across multiple SugarCraft libs:
 | KeyPress/Mouse/Paste/Focus events | `sugar-bits` | **HIGH** |
 | Window parent/child hierarchy | `candy-sprinkles` | MEDIUM |
 | Cassowary layout solver | `honey-bounce` | MEDIUM |
-| Border functions | `candy-shell` | LOW |
+| Border functions | `candy-scriptui` | LOW |
 | StyledString + screen.Context | `sugar-bits` | **HIGH** |
 | ProgressBar + Cursor encoding | `sugar-bits` | MEDIUM |
 | MouseMode / Kitty keyboard | `sugar-bits` | **HIGH** |

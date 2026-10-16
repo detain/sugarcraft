@@ -10,7 +10,7 @@
 
 ## §1. Executive summary
 
-1. One **architectural** problem: `candy-shell` (a foundation lib) `require`s `sugar-bits` + `candy-forms` (leaf libs). The dep graph points the wrong way.
+1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `candy-forms` (leaf libs). The dep graph points the wrong way.
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
 3. `sugar-glow/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
 4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`.
@@ -127,19 +127,19 @@ Never queue two phases concurrently against the same lib, and never start a new 
 
 ## §2. CRITICAL — architectural
 
-### 2.1 candy-shell depends on sugar-bits + candy-forms (inverted dependency)
+### 2.1 candy-scriptui depends on sugar-bits + candy-forms (inverted dependency)
 
-✅ Resolved (PR #871): candy-shell now requires candy-forms; sugar-bits/candy-forms deps dropped. Spinner moved into candy-forms in PR #870.
+✅ Resolved (PR #871): candy-scriptui now requires candy-forms; sugar-bits/candy-forms deps dropped. Spinner moved into candy-forms in PR #870.
 
-**Evidence:** `candy-shell/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/candy-forms` in `require`. Eight files under `candy-shell/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Forms\*`. `candy-shell/src/Command/SpinCommand.php` does the same.
+**Evidence:** `candy-scriptui/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/candy-forms` in `require`. Eight files under `candy-scriptui/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Forms\*`. `candy-scriptui/src/Command/SpinCommand.php` does the same.
 
-**Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-shell` standalone post-1.0 and creates implicit cycles once sugar-bits or candy-forms grows a back-reference.
+**Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-scriptui` standalone post-1.0 and creates implicit cycles once sugar-bits or candy-forms grows a back-reference.
 
 **Options:**
 
-- **Option A — preferred. Extract `candy-forms` foundation lib.** Move the reusable form/input primitives (`TextInput`, `TextArea`, `ItemList`, `Viewport`, `FilePicker` from sugar-bits; `Confirm` from candy-forms) into a new foundation lib `candy-forms`. Then candy-shell, sugar-bits, and candy-forms all depend on candy-forms. sugar-bits and candy-forms remain leaf libs that re-export or compose candy-forms primitives. Effort: medium (multi-PR phased) — touches 3 libs + every consuming composer.json. No public-API break if sugar-bits and candy-forms keep the same class names via aliasing during transition.
+- **Option A — preferred. Extract `candy-forms` foundation lib.** Move the reusable form/input primitives (`TextInput`, `TextArea`, `ItemList`, `Viewport`, `FilePicker` from sugar-bits; `Confirm` from candy-forms) into a new foundation lib `candy-forms`. Then candy-scriptui, sugar-bits, and candy-forms all depend on candy-forms. sugar-bits and candy-forms remain leaf libs that re-export or compose candy-forms primitives. Effort: medium (multi-PR phased) — touches 3 libs + every consuming composer.json. No public-API break if sugar-bits and candy-forms keep the same class names via aliasing during transition.
 
-- **Option B — minimal. Rename `candy-shell` → `sugar-shell`.** Reclassify as a leaf. Cheaper but loses the framing of "gum-port-as-foundation-CLI", and renames in this repo are non-trivial (root composer.json, MATCHUPS.md, PROJECT_NAMES.md, docs/, workflows, etc. — there's a CLAUDE.md note that renames go through a separate flow).
+- **Option B — minimal. Rename `candy-scriptui` → `sugar-shell`.** Reclassify as a leaf. Cheaper but loses the framing of "gum-port-as-foundation-CLI", and renames in this repo are non-trivial (root composer.json, MATCHUPS.md, PROJECT_NAMES.md, docs/, workflows, etc. — there's a CLAUDE.md note that renames go through a separate flow).
 
 Recommend Option A. Tracked separately because of size — gate the work on explicit user go-ahead.
 
@@ -173,7 +173,7 @@ Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 
 Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders.
 
-✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-shell, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
+✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
 
 ✅ Also fixed (PR #878): sugar-wishlist Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
 
@@ -302,7 +302,7 @@ Each step is a self-contained PR ending with the local gate (phpunit + phpstan +
 2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + sugar-glow batch.
 3. **Lang.php consolidation (1 PR):** Add `SugarCraft\Core\I18n\LangFactory` + update `scaffold-library` skill + mechanically migrate 33 libs.
 4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-boxer/SugarBoxer`.
-5. **`candy-forms` extraction (multi-PR phased, gated):** Extract `candy-forms`; flip `candy-shell` requires; aliasing in sugar-bits/candy-forms during transition. Largest item — needs explicit go-ahead.
+5. **`candy-forms` extraction (multi-PR phased, gated):** Extract `candy-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/candy-forms during transition. Largest item — needs explicit go-ahead.
 6. **Polish round (1 PR):** `catalog()` methods, candy-forms validator shortcuts, `TestCase` base, `StreamHelper` trait.
 7. **Optional / opportunistic:** shared `phpunit.xml.dist`; `candy-term` foundation lib for raw-mode.
 

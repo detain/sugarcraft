@@ -6,7 +6,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem. PHP has a 
 
 **Key existing-state finding** (`candy-pty/src/*`, ~1024 LOC): a working FFI-based PTY library already exists. It allocates master/slave via `posix_openpt → grantpt → unlockpt → ptsname_r`, spawns children via `proc_open` with explicit slave descriptors, forwards `SIGWINCH`, supports controlling-terminal via a `bin/pty-shim.php` shim (`setsid` + `ioctl(TIOCSCTTY)`), and is integration-tested against real PTYs.
 
-This is **not** a from-scratch build. It is a consolidation + gap-close + hardening pass that pulls duplicated PTY/TTY plumbing out of `candy-core`, `candy-shell`, and `candy-wish` into `candy-pty`, then adds the missing pieces (FFI termios, reusable Pump abstraction, portable-pty-style trait architecture, comprehensive test matrix).
+This is **not** a from-scratch build. It is a consolidation + gap-close + hardening pass that pulls duplicated PTY/TTY plumbing out of `candy-core`, `candy-scriptui`, and `candy-wish` into `candy-pty`, then adds the missing pieces (FFI termios, reusable Pump abstraction, portable-pty-style trait architecture, comprehensive test matrix).
 
 User decisions (confirmed up front):
 - **Skip Windows ConPTY for v1.** Linux + macOS only. Document the Windows path as a deferred follow-up.
@@ -31,7 +31,7 @@ User decisions (confirmed up front):
 | Real-PTY integration tests | `candy-pty/tests/*` (8 files) | ✅ Solid |
 | Raw mode (termios) | `candy-core/src/Util/Tty/PosixBackend.php` via `stty -g` / `stty -icanon -echo` shell-out | ⚠️ Works, but shells out, no FFI path |
 | Bidirectional byte pump (stdin↔master, with backpressure + EOF grace) | `candy-wish/src/Transport/InProcessTransport.php` | ⚠️ Works, but bound to candy-wish; not reusable by other consumers |
-| Non-PTY process spawning | `candy-shell/src/Process/RealProcess.php` (proc_open pipes) | ⚠️ Duplicates parts of `candy-pty::Child` (proc_get_status polling pattern) |
+| Non-PTY process spawning | `candy-scriptui/src/Process/RealProcess.php` (proc_open pipes) | ⚠️ Duplicates parts of `candy-pty::Child` (proc_get_status polling pattern) |
 | Terminal size query | `candy-core/src/Util/Tty/PosixBackend.php` (stty size + env fallback) | ⚠️ Should share path with candy-pty's ioctl readback |
 | Windows ConPTY | not implemented | ❌ Deferred (v2) |
 | Cross-OS test coverage | Linux primary; macOS CI runs candy-pty only | ⚠️ Expand macOS coverage post-consolidation |
@@ -43,7 +43,7 @@ User decisions (confirmed up front):
 1. **Single namespace owns PTY/process/termios plumbing.** `SugarCraft\Pty\*` is the source of truth for: opening PTYs, spawning processes (with or without PTY), termios state, byte pumping, signal forwarding.
 2. **`candy-core::Util\Tty::PosixBackend` becomes a thin delegate** to `candy-pty` for raw mode and size — no more `stty` shell-out on the primary code path.
 3. **`candy-wish::InProcessTransport` pump loop is extracted** to `candy-pty::Pump` so any consumer (recording, scripting, REPLs, candy-vcr playback) reuses the same backpressure/EOF-grace/SIGWINCH-aware pump.
-4. **`candy-shell::RealProcess` migrates** to `candy-pty::Process` (non-PTY spawn) sharing lifecycle code with `Child`.
+4. **`candy-scriptui::RealProcess` migrates** to `candy-pty::Process` (non-PTY spawn) sharing lifecycle code with `Child`.
 5. **Portable-pty-style interfaces** (`PtySystem`, `MasterPty`, `SlavePty`, `Child`, `Process`) are introduced so future backends (ConPTY, sidecar) can slot in without touching consumers.
 6. **Comprehensive test matrix** — every public method has Linux + macOS coverage; a representative subset runs against bash, zsh, fish, `dash` (POSIX baseline), `python -i`, `vim`, and a SIGWINCH-aware test harness.
 7. **Documentation parity** — public API doc-comments cite the equivalent `creack/pty` or `portable-pty` method; `candy-pty/README.md` includes a "compared to node-pty / creack" feature table.
@@ -73,7 +73,7 @@ SugarCraft\Pty\Contract\
 ├── MasterPty.php       // read/write/resize/size/stream/close
 ├── SlavePty.php        // path(), spawn(cmd, opts) → Child
 ├── Child.php           // pid, exited, wait, kill, exitCode
-├── Process.php         // non-PTY equivalent of Child (for candy-shell)
+├── Process.php         // non-PTY equivalent of Child (for candy-scriptui)
 ├── Termios.php         // get/set, makeRaw, restore, isatty
 └── Pump.php            // run(master, stdin, stdout, opts) → exit code
 ```
@@ -124,7 +124,7 @@ candy-pty   (no internal deps; ext-ffi, ext-pcntl optional)
     ↑
 candy-core  (uses candy-pty for Termios + size queries; Util\Tty\PosixBackend becomes thin)
     ↑
-candy-shell, candy-wish, candy-vcr, ...
+candy-scriptui, candy-wish, candy-vcr, ...
 ```
 
 `candy-pty` stays dependency-free at the SugarCraft level. `candy-core` adds `"sugarcraft/candy-pty": "@dev"` and the path-repo entry. Every consuming lib already has candy-pty in its transitive closure via candy-core — only need to verify path repos.
@@ -142,7 +142,7 @@ candy-shell, candy-wish, candy-vcr, ...
 - Extend `Libc.php` cdef with the termios surface: `tcgetattr`, `tcsetattr`, `cfmakeraw`, `cfgetospeed`, plus `struct termios` (use 64-byte buffer + opaque; we don't need to read individual c_cflag bits in PHP — `cfmakeraw` does it for us).
 - Add `SizeIoctl::winsize` doc-comment cross-reference to `creack/pty.GetsizeFull`.
 - Confirm `candy-wish::InProcessTransport` still passes its full test suite unchanged.
-- **Acceptance:** `vendor/bin/phpunit` green for candy-pty, candy-wish, candy-shell, candy-core. No public API removed.
+- **Acceptance:** `vendor/bin/phpunit` green for candy-pty, candy-wish, candy-scriptui, candy-core. No public API removed.
 
 ### P1 — Termios FFI primary, stty fallback (week 1–2)
 
@@ -191,12 +191,12 @@ candy-shell, candy-wish, candy-vcr, ...
 
 **Goal:** unify non-PTY subprocess handling with the PTY child lifecycle.
 
-- Create `Posix\PosixProcess` (`candy-pty/src/Posix/PosixProcess.php`) by moving and generalizing `candy-shell/src/Process/RealProcess.php`. Public API mirrors `Child`: `pid()`, `exited()`, `wait()`, `kill($signal)`, `exitCode()`, plus `stdoutBytes()`, `stderrBytes()` for the capture case.
+- Create `Posix\PosixProcess` (`candy-pty/src/Posix/PosixProcess.php`) by moving and generalizing `candy-scriptui/src/Process/RealProcess.php`. Public API mirrors `Child`: `pid()`, `exited()`, `wait()`, `kill($signal)`, `exitCode()`, plus `stdoutBytes()`, `stderrBytes()` for the capture case.
 - Extract the shared `proc_get_status()` poll pattern into a package-private trait `ChildPollTrait` used by both `PosixChild` and `PosixProcess`. Handles: `running=false` detection, `exitcode` capture before close, `-1` post-reap guard.
 - Move the destructor zombie-reaper safety net from `Child` into the trait so `PosixProcess` inherits it.
-- Replace `candy-shell/src/Process/RealProcess.php` with a thin alias class `extends PosixProcess` (or just update callers and delete it; the class is internal, so an alias may be unnecessary — verify).
+- Replace `candy-scriptui/src/Process/RealProcess.php` with a thin alias class `extends PosixProcess` (or just update callers and delete it; the class is internal, so an alias may be unnecessary — verify).
 - **Acceptance:**
-  - `candy-shell` full suite green.
+  - `candy-scriptui` full suite green.
   - `proc_get_status()` polling lives in exactly one place.
   - `candy-pty/tests/Posix/PosixProcessTest.php` covers capture/no-capture, exit-code propagation, signal kill, stdin closure.
 
@@ -362,8 +362,8 @@ To modify:
 - `candy-pty/CALIBER_LEARNINGS.md` — log new patterns as they emerge.
 - `candy-core/src/Util/Tty/PosixBackend.php` — delegate to `candy-pty::Termios` + `SizeIoctl`.
 - `candy-core/composer.json` — add `"sugarcraft/candy-pty": "@dev"` + path repo (verify not already present).
-- `candy-shell/src/Process/RealProcess.php` — either delete and update callers, or convert to alias of `PosixProcess`.
-- `candy-shell/composer.json` — depend on candy-pty if not already (transitive via candy-core probably suffices; verify).
+- `candy-scriptui/src/Process/RealProcess.php` — either delete and update callers, or convert to alias of `PosixProcess`.
+- `candy-scriptui/composer.json` — depend on candy-pty if not already (transitive via candy-core probably suffices; verify).
 - `candy-wish/src/Transport/InProcessTransport.php` — shrink to ~30 lines; delegate to `PosixPump`.
 - `candy-wish/src/Middleware/Spawn.php` — accept injected `PtySystem`.
 - `MATCHUPS.md` — update candy-pty row(s) to reflect P1–P5 scope.
@@ -414,7 +414,7 @@ SUGARCRAFT_TERMIOS=stty vendor/bin/phpunit --testsuite=integration
 Consumer regression:
 
 ```sh
-for d in candy-pty candy-core candy-shell candy-wish candy-vcr; do
+for d in candy-pty candy-core candy-scriptui candy-wish candy-vcr; do
   (cd "$d" && composer install --quiet && vendor/bin/phpunit) || { echo "FAIL: $d"; exit 1; }
 done
 ```
@@ -439,7 +439,7 @@ Parity check (manual, end of P5):
 4. **Migration of `candy-wish::InProcessTransport`** — the existing `STDIN_EOF_GRACE_SEC` / `FLUSH_DEADLINE_SEC` constants encode subtle SSH protocol assumptions. Keep them as the **defaults** of `PumpOptions` to avoid behavioural regression; verify the SSH end-to-end suite before merging P2.
 5. **macOS CI runner cost.** macOS GitHub runners are 10x cost of Linux. P5's integration matrix should be limited to the necessary tests on macOS — not the full suite. Use `markTestSkipped` on Linux-only edge cases.
 6. **Composer path-repo closure.** Adding candy-pty as a dependency of candy-core means every lib that depends on candy-core must also list candy-pty in its `repositories[]`. Mechanically tedious but the CLAUDE.md "Gotchas" section explicitly warns about this. Use `scripts/affected-libs.php` output to enumerate before merge.
-7. **`candy-shell::RealProcess` deletion vs alias.** If it's `internal` and zero external callers, prefer deletion. Grep `RealProcess` across the monorepo before P3 to decide.
+7. **`candy-scriptui::RealProcess` deletion vs alias.** If it's `internal` and zero external callers, prefer deletion. Grep `RealProcess` across the monorepo before P3 to decide.
 8. **Shirley CLI and host terminal hygiene.** The recorder switches the host's stdin into raw mode while a child program runs — if it crashes mid-record, the user is left in a broken terminal. Mitigation: register a `register_shutdown_function` + `pcntl_signal(SIGTERM)` handler that always calls `TermiosFactory::open(STDIN)->saved->apply()`. Test by killing the recorder with SIGKILL during a `vim` session and verifying the host shell is usable after.
 9. **Idle-trim timestamp semantics.** `--idle-trim` rewrites event timestamps, which breaks naive byte-exact replay if a downstream consumer expects original timing. Mitigation: store both `t` (trimmed) and `tRaw` (original) on the event when `--idle-trim` was active; `Player` honors `tRaw` if present and `--no-trim` is passed. Document the trade-off in `candy-vcr/README.md`.
 

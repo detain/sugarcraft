@@ -208,12 +208,12 @@
 
 ## SugarCraft Mapping
 
-### Primary Mapping: `candy-shell`
+### Primary Mapping: `candy-scriptui`
 
-**CLIFramework maps directly to `candy-shell`** — both are the umbrella TUI/console application foundation layer. `candy-shell` is SugarCraft's system/framework tier (per `PROJECT_NAMES.md` naming: `Candy-` prefix for foundation/system/framework).
+**CLIFramework maps directly to `candy-scriptui`** — both are the umbrella TUI/console application foundation layer. `candy-scriptui` is SugarCraft's system/framework tier (per `PROJECT_NAMES.md` naming: `Candy-` prefix for foundation/system/framework).
 
 - **Similar to:** `charmbracelet/bubbletea` (Go) — hierarchical command model, option parsing, lifecycle hooks
-- **Comparable SugarCraft libs:** `candy-shell` (if it exists), `candy-core` for base abstractions
+- **Comparable SugarCraft libs:** `candy-scriptui` (if it exists), `candy-core` for base abstractions
 
 ### Secondary Mapping: `candy-forms`
 
@@ -236,7 +236,7 @@ These would be leaf libs under `Sugar\` (components/data/forms/apps) rather than
 ```
 CLIFramework                       SugarCraft
 ────────────────────────────       ──────────────────────────
-Application                        (candy-shell root)
+Application                        (candy-scriptui root)
 CommandBase                        Base classes
 Command                            Per-command classes
 ServiceContainer                   DI / service provision
@@ -260,4 +260,4 @@ The service container (Pimple-based) centralizes framework-wide dependencies (lo
 
 The main weaknesses are architectural. Despite targeting PHP 7.2+, the codebase uses no return type declarations, no typed properties, no named arguments, and almost no attributes — it's PHP 5.6 style code wearing PHP 7.2 compatibility. The `CommandBase` class is a 945-line god object that mixes IO, class loading, extension management, argument parsing, and command resolution. The reliance on reflection for argument introspection on every `execute()` call has performance implications. And while it has an extension/plugin system, the coupling between `Application` and concrete services like `Formatter` and `Logger` makes swapping implementations awkward.
 
-For the SugarCraft ecosystem, CLIFramework maps most naturally to `candy-shell` as the console application foundation. The interactive prompt and chooser components would become `candy-forms` leaf libs, while the ANSI formatting and logging infrastructure belongs in `candy-shine`. The table rendering and progress bar components are utility-level leaf libs that could live in `sugar-bits`. The completion generation system is a specialized `candy-forms` feature. The overall architecture — hierarchical commands, fluent option building, service container, event hooks — is the same model that `candy-shell` should implement in idiomatic PHP 8.3+ style.
+For the SugarCraft ecosystem, CLIFramework maps most naturally to `candy-scriptui` as the console application foundation. The interactive prompt and chooser components would become `candy-forms` leaf libs, while the ANSI formatting and logging infrastructure belongs in `candy-shine`. The table rendering and progress bar components are utility-level leaf libs that could live in `sugar-bits`. The completion generation system is a specialized `candy-forms` feature. The overall architecture — hierarchical commands, fluent option building, service container, event hooks — is the same model that `candy-scriptui` should implement in idiomatic PHP 8.3+ style.

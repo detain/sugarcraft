@@ -1,6 +1,6 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
-Sources: candy-core, candy-shell, candy-forms, candy-sprinkles, sugar-bits,
+Sources: candy-core, candy-scriptui, candy-forms, candy-sprinkles, sugar-bits,
 candy-forms, honey-bounce, candy-palette, candy-shine, candy-pty
 
 ---
@@ -9,7 +9,7 @@ candy-forms, honey-bounce, candy-palette, candy-shine, candy-pty
 
 ### A. Fuzzy Matching Is Broken or Absent Across Multiple Packages
 
-**candy-shell**: `--fuzzy` flag maps to `--strict` (substring matching only); real fuzzy scoring via `sahilm/fuzzy` is absent. **candy-forms / candy-forms**: `FuzzyMatcher::match()` returns scored candidates but **not** matched character indices — filter highlighting UI is impossible. **sugar-bits** ItemList uses simple `str_contains()` with no ranking. All three packages independently cite the same upstream reference (`sahilm/fuzzy` via `charmbracelet/gum` filter) and the same gap: PHP has no production-grade fuzzy library.
+**candy-scriptui**: `--fuzzy` flag maps to `--strict` (substring matching only); real fuzzy scoring via `sahilm/fuzzy` is absent. **candy-forms / candy-forms**: `FuzzyMatcher::match()` returns scored candidates but **not** matched character indices — filter highlighting UI is impossible. **sugar-bits** ItemList uses simple `str_contains()` with no ranking. All three packages independently cite the same upstream reference (`sahilm/fuzzy` via `charmbracelet/gum` filter) and the same gap: PHP has no production-grade fuzzy library.
 
 **Impact**: Every interactive filter/select UI in the ecosystem is degraded. gum users expect ranked fuzzy results with highlighted matches.
 
@@ -47,7 +47,7 @@ candy-sprinkles, candy-core, candy-forms, and sugar-bits all independently work 
 
 ### B. Async Concurrency Is Inconsistent Across the Ecosystem
 
-candy-core has ReactPHP integration but `exec()` blocks during external command execution. candy-forms/candy-forms have ReactPHP async suggestions but no cancellation mechanism. candy-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-shell's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
+candy-core has ReactPHP integration but `exec()` blocks during external command execution. candy-forms/candy-forms have ReactPHP async suggestions but no cancellation mechanism. candy-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
 
 ### C. No Consistent Buffer/Cell Abstraction for Rendering
 
@@ -67,7 +67,7 @@ Primary styling upstream for candy-sprinkles. Cited for: CSS-like shorthand prop
 Rust TUI benchmark and its PHP port. Cited together for: Cassowary constraint solver, buffer diffing, Widget/StatefulWidget trait pattern, immediate-mode rendering, Text/Line/Span hierarchy, flex alignment variants (SpaceBetween/SpaceAround), Layout margin support, buffer cell representation. These are the architectural targets for candy-core's rendering evolution.
 
 ### 4. `charmbracelet/gum` — 6 citations (HIGH)
-Primary CLI tool upstream for candy-shell. Cited for: 13-command surface with fuzzy filter (sahilm/fuzzy), 2D grid choose with paginator, external editor integration (charmbracelet/x/editor), per-element style flags (dotted form `--header.foreground=red`), shell completion generation, logfmt formatter. gum is also the reference for what candy-shell should achieve in shell script integration.
+Primary CLI tool upstream for candy-scriptui. Cited for: 13-command surface with fuzzy filter (sahilm/fuzzy), 2D grid choose with paginator, external editor integration (charmbracelet/x/editor), per-element style flags (dotted form `--header.foreground=red`), shell completion generation, logfmt formatter. gum is also the reference for what candy-scriptui should achieve in shell script integration.
 
 ### 5. `charmbracelet/huh` / `charmbracelet/bubbles` — 5 citations each (HIGH)
 huh is the upstream for candy-forms/candy-forms Form/Field architecture. Cited for: `*Func()` dynamic labels with hash-based cache invalidation (Eval/Cache), per-field keymap override, generic type-safe Select, error summary rendering, multi-page wizard flow. bubbles is the upstream for sugar-bits/ candy-forms primitives (TextInput, TextArea, ItemList, FilePicker, Cursor, Spinner) and the reference for soft-wrap LineInfo tracking and fuzzy filtering quality.
@@ -83,9 +83,9 @@ Python state-of-the-art TUI framework (30k stars). Cited for: reactive state des
 
 Both packages have zero ANSI byte assertions on `view()` output. This is the highest-confidence, lowest-risk improvement available: establish the golden file pattern once in candy-forms (which candy-forms re-exports), apply to all 8 primitives and 7 field types. Impact: enables confident refactoring, eliminates silent regressions, unlocks visual CI via VHS workflow. All upstream repos (bubbletea, huh, ratatui) have this. **Complexity: Low** — establishes pattern, applies existing testing knowledge.
 
-### B. Fix Fuzzy Matching in candy-shell Filter (P0 — Days)
+### B. Fix Fuzzy Matching in candy-scriptui Filter (P0 — Days)
 
-The `SubStyleParser` for per-element styles already exists in candy-shell — just needs wiring across commands. Combined with fixing `CommandScanner` autoloading (`spl_autoload_functions()` to trigger autoloading before `get_declared_classes()`), both are low-complexity wiring fixes with high impact: makes fuzzy search actually work and makes auto-discovery reliable with Composer's PSR-4.
+The `SubStyleParser` for per-element styles already exists in candy-scriptui — just needs wiring across commands. Combined with fixing `CommandScanner` autoloading (`spl_autoload_functions()` to trigger autoloading before `get_declared_classes()`), both are low-complexity wiring fixes with high impact: makes fuzzy search actually work and makes auto-discovery reliable with Composer's PSR-4.
 
 ### C. Add Immediate Ergonomic APIs to candy-core (P0 — Days)
 

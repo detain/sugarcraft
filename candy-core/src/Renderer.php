@@ -32,7 +32,7 @@ use SugarCraft\Core\Util\Width;
  *     savings.
  *   - **Inline** (`$inline = true`). Only owns the program's own
  *     rows. First frame saves the cursor; subsequent frames restore +
- *     erase-to-end + repaint. Used by CandyShell `input` / `confirm` /
+ *     erase-to-end + repaint. Used by CandyScriptui `input` / `confirm` /
  *     `spin` so the user's prompt scrollback stays intact.
  *
  * Newlines between rendered lines are sent as `\r\n` so raw-mode ttys

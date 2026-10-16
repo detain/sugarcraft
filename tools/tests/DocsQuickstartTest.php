@@ -535,7 +535,7 @@ final class DocsQuickstartTest extends TestCase
 
     public function testNonPhpBlocksAreScannedForPhp(): void
     {
-        self::assertSame([], self::phpSignals("candyshell confirm \"Really delete \$file?\" && rm \"\$file\"\nname=\$(candyshell input)\n"));
+        self::assertSame([], self::phpSignals("candy-scriptui confirm \"Really delete \$file?\" && rm \"\$file\"\nname=\$(candy-scriptui input)\n"));
         self::assertNotSame([], self::phpSignals("./bin/app\n\nuse SugarCraft\\Core\\Program;\n"));
         self::assertNotSame([], self::phpSignals("\$player = Player::open('x');\n"));
     }

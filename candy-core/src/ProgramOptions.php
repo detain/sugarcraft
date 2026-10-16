@@ -32,14 +32,14 @@ final class ProgramOptions
         /**
          * Inline mode — render only the program's own rows instead of
          * taking over the viewport. Pairs with `useAltScreen=false`
-         * for CandyShell-style prompts that should leave scrollback
+         * for CandyScriptui-style prompts that should leave scrollback
          * intact.
          */
         public readonly bool $inlineMode = false,
         /**
          * Open the controlling terminal directly (`/dev/tty`) for
          * input/output instead of using STDIN/STDOUT. Useful when
-         * stdin is piped (`candyshell choose < some.txt`) and the
+         * stdin is piped (`candy-scriptui choose < some.txt`) and the
          * program still needs to read keys. Falls back to
          * STDIN/STDOUT when `/dev/tty` isn't available (Windows,
          * sandboxed envs).

@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-fuzzy-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-14 (sugar-bits uses it), step-15 (candy-forms uses it), step-16 (candy-forms uses it), step-19 (candy-shell uses it)
+**Blocks:** step-14 (sugar-bits uses it), step-15 (candy-forms uses it), step-16 (candy-forms uses it), step-19 (candy-scriptui uses it)
 
 ## Goal
 

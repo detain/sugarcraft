@@ -40,7 +40,7 @@ From `repo_map/charmbracelet_huh.md`:
 | FilePicker | `sugar-file-picker` | File/folder browser |
 | Theming | `candy-shine` | ANSI styling |
 | Spinner | `sugar-spin` | Loading indicator |
-| Bubble Tea integration | `candy-shell` | TUI framework |
+| Bubble Tea integration | `candy-scriptui` | TUI framework |
 | Dynamic forms | sugar-forms | `*Func` pattern |
 | Validation | `candy-validate` (hypothetical) | Per-field validation |
 

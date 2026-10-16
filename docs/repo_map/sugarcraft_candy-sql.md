@@ -482,7 +482,7 @@ candy-sql has `ExplainView` which:
 ### Related Reports in repo_map/
 
 - **charmbracelet/bubbletea** — upstream TUI framework (Go)
-- **charmbracelet/gum** — CLI tool picker (Go, ported as candy-shell)
+- **charmbracelet/gum** — CLI tool picker (Go, ported as candy-scriptui)
 - **Evertras/bubble-table** — table component (Go, ported as sugar-table)
 - **charmbracelet/bubbles** — component library (Go, ported as sugar-bits)
 - **erikgeiser/promptkit** — prompt library (Go, ported as sugar-readline)

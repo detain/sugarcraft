@@ -704,9 +704,9 @@ final class OAuthHandler {
 | **php-term/termbox** | Abandoned | Low-level terminal bindings |
 | **bubbfwt/php-term-ui** | Active | PHP 8.1+, basic widgets |
 | **jcuppf/php-terminal** | Active | Lightweight TUI |
-| **Custom (recommended)** | N/A | Build on chord/candy-shell for key events |
+| **Custom (recommended)** | N/A | Build on chord/candy-scriptui for key events |
 
-**Recommendation:** Given SugarCraft already has `candy-shell` for terminal handling, build the TUI layer using existing components + ReactPHP for async rendering.
+**Recommendation:** Given SugarCraft already has `candy-scriptui` for terminal handling, build the TUI layer using existing components + ReactPHP for async rendering.
 
 ---
 

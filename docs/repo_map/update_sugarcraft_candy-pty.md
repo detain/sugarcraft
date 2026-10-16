@@ -1,6 +1,6 @@
 # Overview
 
-`candy-pty` is a mature, production-grade PHP port of `charmbracelet/x/xpty` providing pseudo-terminal (PTY) primitive operations for spawning and managing child processes with terminal I/O, window resize forwarding, and signal handling. It targets Linux and macOS via FFI into libc, demonstrating idiomatic PHP 8.3+ patterns (readonly properties, constructor promotion, fluent builders, RAII-style resource management). The library serves as a foundational primitive consumed by `candy-wish` (SSH transport), `candy-vcr` (session recording), and `candy-shell` (interactive shell sessions).
+`candy-pty` is a mature, production-grade PHP port of `charmbracelet/x/xpty` providing pseudo-terminal (PTY) primitive operations for spawning and managing child processes with terminal I/O, window resize forwarding, and signal handling. It targets Linux and macOS via FFI into libc, demonstrating idiomatic PHP 8.3+ patterns (readonly properties, constructor promotion, fluent builders, RAII-style resource management). The library serves as a foundational primitive consumed by `candy-wish` (SSH transport), `candy-vcr` (session recording), and `candy-scriptui` (interactive shell sessions).
 
 **Biggest opportunity areas:** Windows ConPTY backend (v2), pecl-sidecar backend for FFI-free deployments, pecl-uv async integration, comprehensive BSD/Solaris testing.
 
@@ -785,20 +785,20 @@ if ($isCiContainer) {
 
 **Source:** `charmbracelet_wish.md` bubbletea middleware pattern
 
-## 2. candy-shell Integration (Interactive Shell)
+## 2. candy-scriptui Integration (Interactive Shell)
 
-**Current:** `candy-shell` uses PTY spawning for interactive shell sessions.
+**Current:** `candy-scriptui` uses PTY spawning for interactive shell sessions.
 
 **Proposed:** Deeper integration:
 - Shell detection and `TERM` auto-configuration
 
-- `candy-shell` command pipeline over PTY
+- `candy-scriptui` command pipeline over PTY
 
 - Ctrl+C / Ctrl+Z signal forwarding
 
 - History navigation support
 
-**Source:** MATCHUPS.md "candy-shell" consumer listing
+**Source:** MATCHUPS.md "candy-scriptui" consumer listing
 
 ## 3. VSCode Debug Protocol Support
 
@@ -963,7 +963,7 @@ if ($isCiContainer) {
 
 `candy-pty` is a **mature, well-engineered PHP library** that successfully ports the `charmbracelet/x/xpty` PTY primitive to PHP with idiomatic patterns. Its architecture is sound: clean contract interfaces, FFI singleton with fallback, comprehensive signal handling, and thorough edge case handling documented in CALIBER_LEARNINGS.md.
 
-**Strategic position:** `candy-pty` is a foundational primitive for the SugarCraft ecosystem — consumed by SSH transport (`candy-wish`), session recording (`candy-vcr`), and interactive shell (`candy-shell`). Its quality directly impacts the quality of these downstream libraries.
+**Strategic position:** `candy-pty` is a foundational primitive for the SugarCraft ecosystem — consumed by SSH transport (`candy-wish`), session recording (`candy-vcr`), and interactive shell (`candy-scriptui`). Its quality directly impacts the quality of these downstream libraries.
 
 **Critical gaps:**
 

@@ -125,19 +125,19 @@ new `PosixPumpIdleVsSigwinchTest` exercises both hooks independently.
 ✅ All three steps shipped; `ChildPollTrait` is the single owner of
 `proc_get_status` polling.
 
-🟡 **P3-LO-01 — `candy-shell/src/Process/RealProcess.php` still exists
+🟡 **P3-LO-01 — `candy-scriptui/src/Process/RealProcess.php` still exists
 as a thin alias.**
 *Where:* The plan (step P3.3, Risk #7) said: "if internal and zero
 external callers, prefer deletion." Current state on master keeps it
 as a `@deprecated` alias.
-*Fix:* `grep -rn "candy-shell.*RealProcess\|Process\\RealProcess"`
+*Fix:* `grep -rn "candy-scriptui.*RealProcess\|Process\\RealProcess"`
 across the monorepo (and Packagist if any sister repos snapshot the
-class). If the count is still zero outside `candy-shell` itself, delete
-the file and have `candy-shell/src/Process/Process.php` delegate
+class). If the count is still zero outside `candy-scriptui` itself, delete
+the file and have `candy-scriptui/src/Process/Process.php` delegate
 straight to `\SugarCraft\Pty\Posix\PosixProcess`. Saves one indirection
 and one CALIBER entry's worth of "why does this exist" reading.
-*Acceptance:* `candy-shell/tests/*` still green after deletion;
-`MATCHUPS.md` row for candy-shell unchanged.
+*Acceptance:* `candy-scriptui/tests/*` still green after deletion;
+`MATCHUPS.md` row for candy-scriptui unchanged.
 
 ### P4 — Migration + interface adoption
 
@@ -409,15 +409,15 @@ code propagation, stderr capture).
 *Fix:* Replace inline `proc_open` blocks with `PosixProcess`
 construction; tests in `candy-core` remain green.
 
-### CC-LO-08 — `candy-shell` still has its own `Process\Process.php` interface
+### CC-LO-08 — `candy-scriptui` still has its own `Process\Process.php` interface
 
-*Where:* `candy-shell/src/Process/Process.php`.
+*Where:* `candy-scriptui/src/Process/Process.php`.
 *Why it matters:* `candy-pty/src/Contract/Process.php` was introduced in
-P0.1 as the canonical interface. `candy-shell` should re-export
+P0.1 as the canonical interface. `candy-scriptui` should re-export
 (`use SugarCraft\Pty\Contract\Process as Process;`) or implement the
 upstream contract, not maintain a parallel one.
 *Fix:* Verify the two interfaces have compatible methods; align signatures
-if drifted; have `candy-shell` import the candy-pty contract and delete its
+if drifted; have `candy-scriptui` import the candy-pty contract and delete its
 own. Same shape as the `RealProcess` → `PosixProcess` move (P3.3).
 
 ---
@@ -480,7 +480,7 @@ Recommended order (each line ≤1 PR unless `[multi-PR]` flag):
    onSigwinch). Combined PR.
 4. P1-LO-01 + P1-LO-02 (drop `shell_exec` from PosixBackend). Combined PR.
 5. P3-LO-01 (delete `RealProcess` if zero callers) + CC-LO-08 (collapse
-   `candy-shell::Process` interface). Combined PR.
+   `candy-scriptui::Process` interface). Combined PR.
 6. P5-LO-02 (better macOS arm64 ioctl path). `[multi-PR]` — investigate
    each option, prototype, decide.
 7. P5-LO-03 (skip + track flakes) + P5-LO-04 (Darwin stty matrix cell).

@@ -36,10 +36,10 @@ From `repo_map/charmbracelet_charm.md`:
 | `kv/` package | `sugar-bits` | KV store, not direct port |
 | `fs/` package | `candy-shine` or `sugar-bits` | Filesystem FS interface |
 | `crypt/` package | (none) | No encryption port yet |
-| `client/` package | `candy-shell` | Shell/env config management |
+| `client/` package | `candy-scriptui` | Shell/env config management |
 | `ui/` (Bubble Tea) | `candy-sprinkles` | TUI component patterns |
 | `server/` package | (none) | Server-side, not applicable |
-| `cmd/` package | `candy-shell` | CLI primitives |
+| `cmd/` package | `candy-scriptui` | CLI primitives |
 | Overall architecture | `candy-core` | Elm-style MVC TUI pattern |
 
 **Identified Opportunities:**

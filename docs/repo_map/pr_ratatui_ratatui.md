@@ -44,7 +44,7 @@ From `repo_map/ratatui_ratatui.md`, SugarCraft maps to Ratatui as follows:
 |----------------|-------------------|
 | ratatui-core (Widget/StatefulWidget traits, Buffer, Layout, Style, Text) | candy-core |
 | ratatui-widgets (Block, Paragraph, List, Table, Chart, Gauge, etc.) | sugar-bits |
-| ratatui-crossterm backend | candy-shell |
+| ratatui-crossterm backend | candy-scriptui |
 | Layout + Cassowary constraints | candy-shine |
 | Stylize trait | candy-forms |
 | ratatui-macros | sugar-bits (likely) |
@@ -52,7 +52,7 @@ From `repo_map/ratatui_ratatui.md`, SugarCraft maps to Ratatui as follows:
 | StatefulWidget + State types | candy-core (State) |
 | Text/Line/Span hierarchy | sugar-bits (Text rendering) |
 | Buffer diffing | candy-core (render optimization) |
-| ratatui::run() initialization | candy-shell (Tty initialization) |
+| ratatui::run() initialization | candy-scriptui (Tty initialization) |
 
 ---
 
@@ -171,7 +171,7 @@ terminal.swap_buffers();
 - Naming and exact behavior still being worked out
 - Want to avoid releasing multiple core versions
 
-**Direct Risk to SugarCraft**: HIGH - This is exactly the architectural pattern we should follow. candy-core must be the stable foundation that other libs depend on, while sugar-bits, candy-shell can iterate faster.
+**Direct Risk to SugarCraft**: HIGH - This is exactly the architectural pattern we should follow. candy-core must be the stable foundation that other libs depend on, while sugar-bits, candy-scriptui can iterate faster.
 
 ---
 
@@ -951,7 +951,7 @@ impl Component {
 ```
 candy-core (stable)
   ↓ depend
-sugar-bits, candy-shell, candy-shine, candy-forms
+sugar-bits, candy-scriptui, candy-shine, candy-forms
   ↓ depend
 sugar-* (user-facing components)
 ```

@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\TtyDetect;
  *
  * This is **not** a Bubble Tea Model — it's a tiny driver that spins
  * the spinner via a sleep loop on the main process. Use it for
- * scripts and CLIs (CandyShell, ad-hoc tooling) that want a visible
+ * scripts and CLIs (CandyScriptui, ad-hoc tooling) that want a visible
  * "doing something" indicator without setting up a full Program.
  *
  * ### Platform compatibility

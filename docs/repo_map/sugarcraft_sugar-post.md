@@ -737,6 +737,6 @@ Delegates to `SugarCraft\Core\I18n\T` with 'post' namespace baked in.
 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_pop.md` — Primary upstream (Go, full TUI email client)
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-shell.md` — Shell wrapper patterns relevant to CLI design
+- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-scriptui.md` — Shell wrapper patterns relevant to CLI design
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-shine.md` — Styling, note: upstream pop uses goldmark for Markdown→ANSI (related to HTML body concept)

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Contract;
 
 /**
- * Handle to a non-PTY child process (for candy-shell migration).
+ * Handle to a non-PTY child process (for candy-scriptui migration).
  *
  * @see creack/pty.Cmd
  * @see portable-pty.Process

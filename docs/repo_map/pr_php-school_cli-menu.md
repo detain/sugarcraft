@@ -19,19 +19,19 @@ From the first-pass analysis, php-school/cli-menu maps to:
 
 | php-school/cli-menu Class | SugarCraft Equivalent | Notes |
 |---|---|---|
-| `CliMenu` | `SugarCraft\Shell\Menu` | Main menu runtime + event loop |
+| `CliMenu` | `SugarCraft\ScriptUi\Menu` | Main menu runtime + event loop |
 | `MenuStyle` | `SugarCraft\Core\Style` | Box-model styling |
-| `CliMenuBuilder` | `SugarCraft\Shell\MenuBuilder` | Fluent builder |
+| `CliMenuBuilder` | `SugarCraft\ScriptUi\MenuBuilder` | Fluent builder |
 | `SplitItem` | `SugarCraft\Bits\SplitRow` | Horizontal layout |
 | `SelectableItem` | `SugarCraft\Bits\SelectableItem` | Basic selectable row |
 | `CheckboxItem` | `SugarCraft\Bits\CheckboxItem` | Toggle checkbox |
 | `RadioItem` | `SugarCraft\Bits\RadioItem` | Mutually-exclusive radio |
-| `Flash`/`Confirm` | `SugarCraft\Shell\Dialogue` | Overlay prompts |
+| `Flash`/`Confirm` | `SugarCraft\ScriptUi\Dialogue` | Overlay prompts |
 | `Text`/`Number`/`Password` | `SugarCraft\Bits\Input` | Input rows |
 | `ColourUtil` | `SugarCraft\Core\Ansi\ColourUtil` | ANSI color generation |
 | `NonCanonicalReader` | `SugarCraft\Core\Terminal\RawMode` | Raw TTY input |
 
-**Tier mapping:** Primarily `candy-shell` (framework/system) and partially `sugar-bits` (components).
+**Tier mapping:** Primarily `candy-scriptui` (framework/system) and partially `sugar-bits` (components).
 
 ---
 

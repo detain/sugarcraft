@@ -21,7 +21,7 @@
 ## Baseline test figures (per lib)
 
 Command per lib: `cd /home/sites/sugarcraft/<lib> && vendor/bin/phpunit --colors=never`.
-PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-shell, sugar-crush) run under the
+PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-scriptui, sugar-crush) run under the
 Part A rule-9 watchdog (1800 s). Pre-existing failures are RECORDED, not fixed.
 sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush — sharded, E671)".
 

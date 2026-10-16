@@ -22,7 +22,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **AsyncOps duplication** — candy-async's AsyncOps reproduced in candy-buffer, sugar-dash, others
 - **Clamping logic** — min/max clamping copied across 10+ projects with no shared utility
 - **Style object allocation** — hot-render loops creating Style chains per-frame (candy-mold, candy-flappy)
-- **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-shell)
+- **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-scriptui)
 - **array_map over children** — double/triple iteration over same child array (sugar-boxer, sugar-table)
 - **WeakMap/registry patterns** — per-project implementations instead of shared candy-core utility
 - **i18n wrapper inconsistency** — Lang::t() vs SugarCraft\Core\I18n\T scattered across libs
@@ -41,8 +41,8 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-git-server | Empty password authentication bypass | Server.php:566 | Users with password=null can authenticate with any password |
 | candy-git-server | Repo init runs git in wrong directory | Repo.php:145 | git init --bare runs in CWD, not $this->path |
 | candy-git-server | Temp file leak on exception | GitDaemon.php:309 | Temp files not deleted if handleUploadPack throws |
-| candy-shell | Shell injection in env-var fallback | Application.php:137 | escapeshellarg→stripslashes→trim chain not safe |
-| candy-shell | Env var exfiltration via template mode | FormatCommand.php:99 | getenv() accessible in templates — cred leak risk |
+| candy-scriptui | Shell injection in env-var fallback | Application.php:137 | escapeshellarg→stripslashes→trim chain not safe |
+| candy-scriptui | Env var exfiltration via template mode | FormatCommand.php:99 | getenv() accessible in templates — cred leak risk |
 | candy-vcr | Undefined $cassette variable | TapeToGif.php:70 | Variable used before assignment — runtime fatal |
 | sugar-datepicker | Cell output not capped to viewport width | View.php | Cells rendered beyond viewport width |
 | sugar-gallery | No file type validation | Gallery.php:78 | Non-image files passed to decoder — crash/exploit |
@@ -94,7 +94,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | Project | Severity Profile | Key Theme |
 |---------|-----------------|-----------|
 | candy-git-server | 7 HIGH, 12 MED, 9 LOW | Git daemon security/injection issues |
-| candy-shell | 2 HIGH, 7 MED, 6 LOW | Shell injection, env var exposure, async blocking |
+| candy-scriptui | 2 HIGH, 7 MED, 6 LOW | Shell injection, env var exposure, async blocking |
 | candy-vcr | 2 HIGH, 9 MED, 8 LOW | Undefined variable, Imagick cache sharing, blocking I/O |
 | candy-shine | 1 HIGH, 6 MED, 9 LOW | BlockStack state, string concat in loops, missing Write() parity |
 | sugar-boxer | 1 HIGH, 4 MED, 9 LOW | Division by zero, multibyte sanitization, flex separator gap |
@@ -141,7 +141,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 - Cache Style objects in hot render loops (candy-mold, candy-flappy, candy-shine)
 - Pre-compute visible column indices before row iteration (sugar-stickers, sugar-table)
-- Add caching to SmithWatermanMatcher in fuzzy filter (candy-shell, sugar-crush)
+- Add caching to SmithWatermanMatcher in fuzzy filter (candy-scriptui, sugar-crush)
 - Use array rewind + single-pass iteration instead of multiple array_map passes
 
 ### 4. PHP 8.4 Readiness
@@ -153,7 +153,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 ### 5. Missing Features Priority
 
-- candy-shell: `--no-selected`, `--print-query`, fuzzy highlight rendering
+- candy-scriptui: `--no-selected`, `--print-query`, fuzzy highlight rendering
 - candy-vcr: async batch rendering, buffering improvements
 - sugar-gallery: format fallback, animated GIF, async decode
 - sugar-toast: action buttons, toast stacking, cancellable dismiss

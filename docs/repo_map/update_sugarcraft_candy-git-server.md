@@ -653,7 +653,7 @@ Add optional PHP web dashboard for:
 - Repository statistics
 - Access control management
 
-**Note:** This would be a separate package (`sugar-serve-admin`?) leveraging existing `candy-shell`, `sugar-bits`, etc.
+**Note:** This would be a separate package (`sugar-serve-admin`?) leveraging existing `candy-scriptui`, `sugar-bits`, etc.
 
 ## 4. Prometheus Metrics Export
 

@@ -800,7 +800,7 @@ final class CandyLogServiceProvider extends ServiceProvider
 
 **Relevance:** pterm's logger supports wrapping long messages at a configured max width.
 
-**Lessons learned:** Terminal applications benefit from width-aware formatting. PHP's `ncurses` or `candy-shell` could provide terminal dimensions.
+**Lessons learned:** Terminal applications benefit from width-aware formatting. PHP's `ncurses` or `candy-scriptui` could provide terminal dimensions.
 
 **Adaptation:** Add `maxWidth` option to Logger/TextFormatter that enables word-wrap at specified column.
 

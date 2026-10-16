@@ -1,0 +1,11 @@
+{
+    "title": "CandyScriptui — SugarCraft",
+    "description": "CandyScriptui: Interactive terminal widgets you can call from shell scripts — prompts, tables, spinners, and more.",
+    "ogTitle": "CandyScriptui — SugarCraft",
+    "ogDescription": "Interactive terminal widgets you can call from shell scripts — prompts, tables, spinners, and more.",
+    "emoji": "🐚",
+    "displayName": "CandyScriptui",
+    "tagline": "Composer-installable CLI of TUI primitives",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/gum\" style=\"color: inherit;\">charmbracelet/gum</a></span>\n          <span class=\"tag-chip\">cli</span>\n          <span class=\"tag-chip\">shell-script</span>\n          <span class=\"tag-chip\">one-shot</span>"
+}

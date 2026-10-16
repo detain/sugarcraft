@@ -173,7 +173,7 @@ that are tiny but together justify a PR.
 
 ### Apps
 
-- charmbracelet/gum → candy-shell
+- charmbracelet/gum → candy-scriptui
 - charmbracelet/freeze → candy-freeze
 - charmbracelet/glow → sugar-glow
 - charmbracelet/sequin → sugar-spark

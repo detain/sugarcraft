@@ -183,9 +183,9 @@
 
 ## SugarCraft Mapping
 
-This library maps primarily to the **candy-shell** tier (framework/system layer) and partially to **sugar-bits** (components):
+This library maps primarily to the **candy-scriptui** tier (framework/system layer) and partially to **sugar-bits** (components):
 
-- **`candy-shell`**: The overall terminal/menu rendering engine (`CliMenu`, `MenuStyle`, `Frame`) directly corresponds to the TTY rendering subsystem in SugarCraft. The `CliMenuBuilder` is the sugar equivalent of the builder pattern used in `candy-shell`.
+- **`candy-scriptui`**: The overall terminal/menu rendering engine (`CliMenu`, `MenuStyle`, `Frame`) directly corresponds to the TTY rendering subsystem in SugarCraft. The `CliMenuBuilder` is the sugar equivalent of the builder pattern used in `candy-scriptui`.
 
 - **`sugar-bits`**: The individual `MenuItem` types (`SelectableItem`, `CheckboxItem`, `RadioItem`, `StaticItem`, etc.) map to discrete TUI component implementations — each one is a renderable, selectable piece of UI similar to what `sugar-bits` components would be.
 
@@ -197,9 +197,9 @@ This library maps primarily to the **candy-shell** tier (framework/system layer)
 
 | php-school/cli-menu Class | SugarCraft Equivalent | Notes |
 |---|---|---|
-| `CliMenu` | `SugarCraft\Shell\Menu` | Main menu runtime + event loop |
+| `CliMenu` | `SugarCraft\ScriptUi\Menu` | Main menu runtime + event loop |
 | `MenuStyle` | `SugarCraft\Core\Style` | Box-model styling (margin/border/padding/colors) |
-| `CliMenuBuilder` | `SugarCraft\Shell\MenuBuilder` | Fluent builder for menu construction |
+| `CliMenuBuilder` | `SugarCraft\ScriptUi\MenuBuilder` | Fluent builder for menu construction |
 | `SplitItem` | `SugarCraft\Bits\SplitRow` | Horizontal layout within vertical list |
 | `SelectableItem` | `SugarCraft\Bits\SelectableItem` | Basic selectable row |
 | `CheckboxItem` | `SugarCraft\Bits\CheckboxItem` | Toggle checkbox row |
@@ -208,7 +208,7 @@ This library maps primarily to the **candy-shell** tier (framework/system layer)
 | `LineBreakItem` | `SugarCraft\Bits\SeparatorItem` | Full-width divider |
 | `AsciiArtItem` | `SugarCraft\Bits\AsciiArtItem` | Centered/block ASCII art |
 | `MenuMenuItem` (submenu) | `SugarCraft\Bits\SubMenuItem` | Opens nested menu |
-| `Flash` / `Confirm` | `SugarCraft\Shell\Dialogue` | Overlay prompts |
+| `Flash` / `Confirm` | `SugarCraft\ScriptUi\Dialogue` | Overlay prompts |
 | `Text` / `Number` / `Password` | `SugarCraft\Bits\Input` | Text/number/password input rows |
 | `SelectableItemRenderer` | `SugarCraft\Core\Renderer` | Raw ANSI SGR byte rendering |
 | `ColourUtil` | `SugarCraft\Core\Ansi\ColourUtil` | ANSI color code generation |
@@ -223,4 +223,4 @@ The rendering pipeline is particularly well-designed: each item returns an array
 
 The library's approach to input is notably low-level: it reads raw bytes via `NonCanonicalReader` from `php-school/terminal` and maps them to logical controls (`InputCharacter::UP`, `DOWN`, `ENTER`, etc.). Default vim-style mappings (`j/k` for up/down, `l/m` for right/left) are built-in and can be disabled or extended. The input loop in `CliMenu::display()` is a classic state-machine-while-loop: read character, map to control, switch on control type, mutate menu state, redraw. For inputs like `Number` and `Password`, a separate `InputIO` class runs its own inner while-loop to collect characters with its own validation. The split-item horizontal navigation is particularly interesting: when LEFT/RIGHT is pressed and the current item is a `SplitItem`, it delegates to `moveSelectionHorizontally()` which cycles through the split item's children.
 
-The style propagation system ensures submenus feel consistent: when a submenu is created via `addSubMenu()`, `propagateStyles()` clones the parent's `ItemStyle` instances into child items that haven't explicitly customized their style. The `Locator` class maintains a registry mapping item class names to style class names, making the system extensible — new item types can be registered with `registerItemStyle()`. Overall, this library provides a professional-grade foundation for building polished CLI tools with interactive menus, and its architecture (builder, composite items, style locator, ANSI rendering) maps cleanly onto the SugarCraft candy-shell and sugar-bits tiers.
+The style propagation system ensures submenus feel consistent: when a submenu is created via `addSubMenu()`, `propagateStyles()` clones the parent's `ItemStyle` instances into child items that haven't explicitly customized their style. The `Locator` class maintains a registry mapping item class names to style class names, making the system extensible — new item types can be registered with `registerItemStyle()`. Overall, this library provides a professional-grade foundation for building polished CLI tools with interactive menus, and its architecture (builder, composite items, style locator, ANSI rendering) maps cleanly onto the SugarCraft candy-scriptui and sugar-bits tiers.
