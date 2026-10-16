@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "426caa62d64a442e10a19dfa23e514d1",
+    "content-hash": "584aaa2a1d4ea16aa38622d2014e4645",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3878,13 +3878,13 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flappy",
-                "reference": "b5d00d6b2e138d8b450f5945c804757bb7e5bee9"
+                "reference": "f3bc9a06357ecc4c882dfe2088889eedc24f3ccd"
             },
             "require": {
                 "php": ">=8.3",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/honey-bounce": "dev-master"
+                "sugarcraft/sugar-spring": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
@@ -3920,8 +3920,8 @@
                 "flapioca",
                 "flappy",
                 "game",
-                "honeybounce",
                 "physics",
+                "sugar-spring",
                 "sugarcraft",
                 "tui"
             ],
@@ -3936,87 +3936,25 @@
             }
         },
         {
-            "name": "sugarcraft/candy-flip",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-flip",
-                "reference": "05bfce5cd05c8ed5bfde60319bcfc4892c123ac1"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "suggest": {
-                "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Flip\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Flip\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
-            "homepage": "https://sugarcraft.github.io/lib/candy-flip.html",
-            "keywords": [
-                "ansi-art",
-                "ascii-art",
-                "cli",
-                "gif",
-                "gifterm",
-                "sugarcraft",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-flip/issues",
-                "source": "https://github.com/sugarcraft/candy-flip",
-                "docs": "https://sugarcraft.github.io/lib/candy-flip.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-gifview",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-gifview",
-                "reference": "54e5d74d18a072575827251bf42cf48ea965bee5"
+                "reference": "6316b671587a9fc0c0c940fb53df7c3c579714d4"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-flip": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/sugar-animation": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
                 "sugarcraft/candy-testing": "dev-master"
             },
             "suggest": {
-                "ext-gd": "Required to decode GIF animations (via sugarcraft/candy-flip); ANSI art playback needs neither."
+                "ext-gd": "Required to decode GIF animations (via sugarcraft/sugar-animation); ANSI art playback needs neither."
             },
             "bin": [
                 "bin/candy-gifview"
@@ -4042,7 +3980,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Terminal GIF and .ansi-art viewer (gifterm port) — the command-line front end of sugarcraft/candy-flip.",
+            "description": "Terminal GIF and .ansi-art viewer (gifterm port) — the command-line front end of sugarcraft/sugar-animation.",
             "homepage": "https://sugarcraft.github.io/lib/candy-gifview.html",
             "keywords": [
                 "ansi-art",
@@ -4259,66 +4197,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-kit",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-kit",
-                "reference": "523771a5c3544b2be022249cb0ffe21b9bfb068a"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Kit\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Kit\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers: StatusLine (✓/✗/⚠/ℹ), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
-            "homepage": "https://github.com/sugarcraft/candy-kit",
-            "keywords": [
-                "banner",
-                "cli",
-                "console",
-                "fang",
-                "help",
-                "presentation",
-                "status-line",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-kit/issues",
-                "source": "https://github.com/sugarcraft/candy-kit",
-                "docs": "https://sugarcraft.github.io/lib/candy-kit.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-kv",
             "version": "dev-master",
             "dist": {
@@ -4439,14 +4317,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-log",
-                "reference": "29dccccfcc0c32d098cc30eb3d6633cf1d2987f0"
+                "reference": "88f2935e018b6fd9ed338fc8f556da9ab2b935d5"
             },
             "require": {
                 "php": "^8.3",
                 "psr/log": "^3.0",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-palette": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-colorprofile": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -4742,136 +4620,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-mosaic",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-mosaic",
-                "reference": "9694eb017c85d53ae1cbe69f7a3097fdb360ed61"
-            },
-            "require": {
-                "ext-gd": "*",
-                "ext-mbstring": "*",
-                "php": "^8.3",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-flip": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "react/http": "^1.11",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "suggest": {
-                "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Mosaic\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Mosaic\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Image-to-cell renderer — PNG/JPEG/static GIF to terminal via Sixel, Kitty, iTerm2, or half-block Unicode fallback. Port of charmbracelet/x/mosaic.",
-            "homepage": "https://github.com/sugarcraft/candy-mosaic",
-            "keywords": [
-                "charmbracelet",
-                "image",
-                "iterm2",
-                "kitty",
-                "sixel",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "x-mosaic"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-mosaic/issues",
-                "source": "https://github.com/sugarcraft/candy-mosaic",
-                "docs": "https://sugarcraft.github.io/lib/candy-mosaic.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-palette",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-palette",
-                "reference": "a9c55aaaff688f10f6bfc51f3c0ff576c3c496e0"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/child-process": "^0.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpstan/phpstan": "^2.1",
-                "phpstan/phpstan-phpunit": "^2.0",
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Palette\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Palette\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/colorprofile — magical terminal color profile detection and color degradation (TrueColor → ANSI256 → ANSI → ASCII).",
-            "homepage": "https://github.com/sugarcraft/candy-palette",
-            "keywords": [
-                "ansi",
-                "color",
-                "colorprofile",
-                "sugarcraft",
-                "terminal",
-                "truecolor",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-palette/issues",
-                "source": "https://github.com/sugarcraft/candy-palette",
-                "docs": "https://sugarcraft.github.io/lib/candy-palette.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-pty",
             "version": "dev-master",
             "dist": {
@@ -5084,7 +4832,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sql",
-                "reference": "da971928ecd68ffd969479988099716081608373"
+                "reference": "3a87957dafedd215fdc1fafe83412302348c1124"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -5095,10 +4843,10 @@
                 "react/promise-timer": "^1.9",
                 "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-kit": "dev-master",
                 "sugarcraft/candy-layout": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-charts": "dev-master",
+                "sugarcraft/sugar-cli": "dev-master",
                 "sugarcraft/sugar-dashboard": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-table": "dev-master",
@@ -5406,15 +5154,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-top",
-                "reference": "f22f198f09dfa5579d70476c2966ac841efbda34"
+                "reference": "522d9cc5bacd14f2522f6b351520c96010a975dc"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "@dev",
-                "sugarcraft/candy-flip": "@dev",
                 "sugarcraft/candy-sprinkles": "@dev",
+                "sugarcraft/sugar-animation": "@dev",
                 "sugarcraft/sugar-dashboard": "@dev",
                 "sugarcraft/sugar-widgets": "@dev"
             },
@@ -5681,31 +5429,34 @@
             }
         },
         {
-            "name": "sugarcraft/honey-bounce",
+            "name": "sugarcraft/sugar-animation",
             "version": "dev-master",
             "dist": {
                 "type": "path",
-                "url": "honey-bounce",
-                "reference": "16986118de976cf2dcbd24aa08b009b1cc7f3c4e"
+                "url": "sugar-animation",
+                "reference": "3c651c1e7758ed1ccb197fe4e1219213ade74a1a"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5",
+                "phpunit/phpunit": "^10.0",
                 "sugarcraft/candy-testing": "dev-master"
+            },
+            "suggest": {
+                "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
             },
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "SugarCraft\\Bounce\\": "src/"
+                    "SugarCraft\\Animation\\": "src/"
                 }
             },
             "autoload-dev": {
                 "psr-4": {
-                    "SugarCraft\\Bounce\\Tests\\": "tests/"
+                    "SugarCraft\\Animation\\Tests\\": "tests/"
                 }
             },
             "license": [
@@ -5718,23 +5469,21 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "PHP port of charmbracelet/harmonica — damped spring physics + Newtonian projectile simulation for terminal animation.",
-            "homepage": "https://github.com/sugarcraft/honey-bounce",
+            "description": "ANSI/GIF animation toolkit — GIF decode and frame playback (antecedent: gifterm) plus .ansi art playback (AnsiArt/ArtLibrary/ArtLoop). The viewer CLI lives in sugarcraft/candy-gifview.",
+            "homepage": "https://sugarcraft.github.io/lib/sugar-animation.html",
             "keywords": [
-                "animation",
-                "harmonica",
-                "physics",
-                "projectile",
-                "ryan-juckett",
-                "spring",
+                "ansi-art",
+                "ascii-art",
+                "cli",
+                "gif",
+                "gifterm",
                 "sugarcraft",
-                "terminal",
                 "tui"
             ],
             "support": {
-                "issues": "https://github.com/sugarcraft/honey-bounce/issues",
-                "source": "https://github.com/sugarcraft/honey-bounce",
-                "docs": "https://sugarcraft.github.io/lib/honey-bounce.html"
+                "issues": "https://github.com/sugarcraft/sugar-animation/issues",
+                "source": "https://github.com/sugarcraft/sugar-animation",
+                "docs": "https://sugarcraft.github.io/lib/sugar-animation.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -5811,12 +5560,134 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-cli",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-cli",
+                "reference": "59682fa97b3e6070040434c7ca882e782eb684b7"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Cli\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Cli\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers: StatusLine (✓/✗/⚠/ℹ), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
+            "homepage": "https://github.com/sugarcraft/sugar-cli",
+            "keywords": [
+                "banner",
+                "cli",
+                "console",
+                "fang",
+                "help",
+                "presentation",
+                "status-line",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-cli/issues",
+                "source": "https://github.com/sugarcraft/sugar-cli",
+                "docs": "https://sugarcraft.github.io/lib/sugar-cli.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-colorprofile",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-colorprofile",
+                "reference": "dbf0d51bbfcc70b384e94837f657d7b29bb36789"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/child-process": "^0.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\ColorProfile\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\ColorProfile\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/colorprofile — magical terminal color profile detection and color degradation (TrueColor → ANSI256 → ANSI → ASCII).",
+            "homepage": "https://github.com/sugarcraft/sugar-colorprofile",
+            "keywords": [
+                "ansi",
+                "color",
+                "colorprofile",
+                "palette",
+                "sugarcraft",
+                "terminal",
+                "truecolor",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-colorprofile/issues",
+                "source": "https://github.com/sugarcraft/sugar-colorprofile",
+                "docs": "https://sugarcraft.github.io/lib/sugar-colorprofile.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-crush",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "5ff368bee0c549c277cbbdbb2ef11ca3efcce7ac"
+                "reference": "b79ef7a890f48111d5b2b6f3fe0cda5955b75707"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5833,21 +5704,21 @@
                 "react/promise": "^3.3",
                 "react/socket": "^1.16",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-kit": "@dev",
                 "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-mosaic": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-cli": "@dev",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-focus": "@dev",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-image": "dev-master",
                 "sugarcraft/sugar-markdown": "dev-master",
                 "sugarcraft/sugar-mcp-client": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-overlay": "dev-master",
-                "sugarcraft/sugar-reel": "@dev",
                 "sugarcraft/sugar-toast": "dev-master",
+                "sugarcraft/sugar-video": "@dev",
                 "symfony/yaml": "^7.4"
             },
             "require-dev": {
@@ -6413,7 +6284,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-gallery",
-                "reference": "7439c4a9a65aa7f75225e1c12730c1a588f9050d"
+                "reference": "2f08f79449a64036f42a475bd9a573f7be79fc75"
             },
             "require": {
                 "php": "^8.3",
@@ -6423,7 +6294,7 @@
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-mosaic": "dev-master"
+                "sugarcraft/sugar-image": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6462,6 +6333,75 @@
                 "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
                 "source": "https://github.com/sugarcraft/sugar-gallery",
                 "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-image",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-image",
+                "reference": "f5bb89afebc9b92b6e9e1d9374bb183e253df28d"
+            },
+            "require": {
+                "ext-gd": "*",
+                "ext-mbstring": "*",
+                "php": "^8.3",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-colorprofile": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "react/http": "^1.11",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "suggest": {
+                "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Image\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Image\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Image-to-cell renderer — PNG/JPEG/static GIF to terminal via Sixel, Kitty, iTerm2, or half-block Unicode fallback. Port of charmbracelet/x/mosaic.",
+            "homepage": "https://github.com/sugarcraft/sugar-image",
+            "keywords": [
+                "charmbracelet",
+                "image",
+                "iterm2",
+                "kitty",
+                "sixel",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "x-mosaic"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-image/issues",
+                "source": "https://github.com/sugarcraft/sugar-image",
+                "docs": "https://sugarcraft.github.io/lib/sugar-image.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -6705,15 +6645,15 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-overlay",
-                "reference": "acf58c550189996c0873c6f2aef54e1a2d3397a5"
+                "reference": "25f752be26128d926d470c81f63d9da055d61279"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/honey-bounce": "dev-master",
-                "sugarcraft/sugar-mouse": "dev-master"
+                "sugarcraft/sugar-mouse": "dev-master",
+                "sugarcraft/sugar-spring": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6935,20 +6875,17 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-reel",
+            "name": "sugarcraft/sugar-spring",
             "version": "dev-master",
             "dist": {
                 "type": "path",
-                "url": "sugar-reel",
-                "reference": "682ca1818a65e6f59a91c51f7485358607d0ad5b"
+                "url": "sugar-spring",
+                "reference": "06d9274c8240ab305f21bcbfb93b5f8761a88675"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-flip": "dev-master",
-                "sugarcraft/candy-mosaic": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/sugar-colorprofile": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -6957,12 +6894,12 @@
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "SugarCraft\\Reel\\": "src/"
+                    "SugarCraft\\Spring\\": "src/"
                 }
             },
             "autoload-dev": {
                 "psr-4": {
-                    "SugarCraft\\Reel\\Tests\\": "tests/"
+                    "SugarCraft\\Spring\\Tests\\": "tests/"
                 }
             },
             "license": [
@@ -6975,27 +6912,23 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Terminal video player for SugarCraft — plays mp4 (and more) by decoding frames on the fly and rendering them to ASCII / ANSI / truecolor half-block / sixel / kitty output.",
-            "homepage": "https://github.com/sugarcraft/sugar-reel",
+            "description": "PHP port of charmbracelet/harmonica — damped spring physics + Newtonian projectile simulation for terminal animation.",
+            "homepage": "https://github.com/sugarcraft/sugar-spring",
             "keywords": [
-                "ansi",
-                "ascii",
-                "ascii-art",
-                "ffmpeg",
-                "kitty",
-                "sixel",
+                "animation",
+                "harmonica",
+                "physics",
+                "projectile",
+                "ryan-juckett",
+                "spring",
                 "sugarcraft",
                 "terminal",
-                "tplay",
-                "tui",
-                "video",
-                "video-player",
-                "video-to-ascii"
+                "tui"
             ],
             "support": {
-                "issues": "https://github.com/sugarcraft/sugar-reel/issues",
-                "source": "https://github.com/sugarcraft/sugar-reel",
-                "docs": "https://sugarcraft.github.io/lib/sugar-reel.html"
+                "issues": "https://github.com/sugarcraft/sugar-spring/issues",
+                "source": "https://github.com/sugarcraft/sugar-spring",
+                "docs": "https://sugarcraft.github.io/lib/sugar-spring.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -7182,20 +7115,88 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-video",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-video",
+                "reference": "c5a70761c6d40248a29f3ecda5675a9b280676eb"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-buffer": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-colorprofile": "dev-master",
+                "sugarcraft/sugar-image": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Video\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Video\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal video player for SugarCraft — plays mp4 (and more) by decoding frames on the fly and rendering them to ASCII / ANSI / truecolor half-block / sixel / kitty output.",
+            "homepage": "https://github.com/sugarcraft/sugar-video",
+            "keywords": [
+                "ansi",
+                "ascii",
+                "ascii-art",
+                "ffmpeg",
+                "kitty",
+                "sixel",
+                "sugarcraft",
+                "terminal",
+                "tplay",
+                "tui",
+                "video",
+                "video-player",
+                "video-to-ascii"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-video/issues",
+                "source": "https://github.com/sugarcraft/sugar-video",
+                "docs": "https://sugarcraft.github.io/lib/sugar-video.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-widgets",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-widgets",
-                "reference": "8fa7e95e9bcb0e3b0667ac162c84ebaf0e97ccac"
+                "reference": "d85496106f9acb387ba3866e4537e96456d3e690"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/honey-bounce": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
-                "sugarcraft/sugar-mouse": "dev-master"
+                "sugarcraft/sugar-mouse": "dev-master",
+                "sugarcraft/sugar-spring": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -8594,19 +8595,15 @@
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flappy": 20,
-        "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
         "sugarcraft/candy-git-server": 20,
-        "sugarcraft/candy-kit": 20,
         "sugarcraft/candy-kv": 20,
         "sugarcraft/candy-log": 20,
         "sugarcraft/candy-mail": 20,
         "sugarcraft/candy-mdview": 20,
         "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
-        "sugarcraft/candy-mosaic": 20,
-        "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-scriptui": 20,
         "sugarcraft/candy-sprinkles": 20,
@@ -8619,8 +8616,10 @@
         "sugarcraft/candy-vcr": 20,
         "sugarcraft/candy-vt": 20,
         "sugarcraft/candy-wish": 20,
-        "sugarcraft/honey-bounce": 20,
+        "sugarcraft/sugar-animation": 20,
         "sugarcraft/sugar-charts": 20,
+        "sugarcraft/sugar-cli": 20,
+        "sugarcraft/sugar-colorprofile": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dashboard": 20,
@@ -8631,6 +8630,7 @@
         "sugarcraft/sugar-forms": 20,
         "sugarcraft/sugar-fuzzy": 20,
         "sugarcraft/sugar-gallery": 20,
+        "sugarcraft/sugar-image": 20,
         "sugarcraft/sugar-markdown": 20,
         "sugarcraft/sugar-mcp-client": 20,
         "sugarcraft/sugar-mouse": 20,
@@ -8639,10 +8639,11 @@
         "sugarcraft/sugar-panels": 20,
         "sugarcraft/sugar-quickpick": 20,
         "sugarcraft/sugar-readline": 20,
-        "sugarcraft/sugar-reel": 20,
+        "sugarcraft/sugar-spring": 20,
         "sugarcraft/sugar-table": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-treelist": 20,
+        "sugarcraft/sugar-video": 20,
         "sugarcraft/sugar-widgets": 20
     },
     "prefer-stable": true,
