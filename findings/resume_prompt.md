@@ -13,7 +13,7 @@ Resume the SugarCraft audit-fixing workflow from where it left off. This documen
 
 ## What Was Done
 
-The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
+The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce. <!-- @rename-keep historical provenance -->
 
 **The plan files themselves were NOT marked ✅ — the fixes landed but bookkeeping was not done.**
 
@@ -104,7 +104,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 
 | Group | Items | Libs |
 |-------|-------|------|
-| 3-A | 3.1–3.3 | candy-fuzzy (matchAllGenerator, FuzzyMatcherFactory, MatchResultSorter) |
+| 3-A | 3.1–3.3 | candy-fuzzy (matchAllGenerator, FuzzyMatcherFactory, MatchResultSorter) | <!-- @rename-keep historical provenance -->
 | 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable) |
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) |
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), candy-lister (navigation methods, setLineOffset fluent, sort O(n) cursor) |
