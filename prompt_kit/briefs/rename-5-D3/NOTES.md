@@ -18,11 +18,15 @@ Lane: D3 (batch-D line 37, ns Reel→Video, type=lib, bins {}). Branch `rename/d
 
 ## Steps
 
-- (pending) tag-prep commit
-- (pending) R1 dry-run:
+- tag-prep commit 8b08069df: 28 lines / 10 files tagged (CONTEXT 2 new +7 pre-existing, rename-baseline:81, rename-1.3 NOTES:21, backlog ×11 new of 15 [4 already tagged], worklog ×3, triage ×3, resume_prompt ×3, php74_branch ×3 + prompt ×1, plan_crush_media ×4 compound-history [641 686 2260 2461] + 2235 in rename commit). JUDGED-REWRITE: findings pair (living), candy-async/repeated_logic, docs pages/workflows/manifests, all code. R0 measured at base: sugar-video 552T/8488A/1S exit0; crush K=8 shards 22,564T/423,770A/0E/0F/2S = CONSERVATION BASELINE (figure 22,564/423,652, +118A wobble at base too). <!-- @rename-keep -->
+- R1 dry-run: 130 content files / 7 path renames; R1=339 R2=22 R3=246 R5=8 R6=1. R5 sites = SUGAR_REEL_COLS/ROWS in examples/play.php (6) + README (2) — demo knobs, not runtime env: rewritten to SUGAR_VIDEO_*, NO LegacyEnv shim (lib has no bin; examples are not an entry-point contract). plan_rename.md:1379 SUGAR_REEL_ spec line untouched by design (trailing-underscore fails R5 lookahead; plan is self-historical like the stale C4/C8 rows). Log /tmp/opencode/d3-dryrun.txt. <!-- @rename-keep -->
 - R2 remote rename: SKIPPED per brief law (no remote ops in lanes).
-- (pending) R3 tool run:
-- (pending) R4 manual:
-- (pending) R5 wiring:
-- (pending) R6 gates:
-- (pending) R7 commits + push rename/d3:
+- R3 tool run: rc=0, exact planned counts, dir moved, all PHP lint-clean. <!-- @rename-keep -->
+- R4 manual: alias re-key 17 sites (App.php ReelResizeRebuildMsg×2 ReelTickMsg×2 ReelRendererFactory×2 ReelPlayer×5 ReelMode×5 → Video*, RenderModeCommand ReelMode×3, VideoPlayerWiringTest ReelTickMsg×2; ReelDependencyTest class+methods KEPT per family ruling, class_exists FQN strings inside rode R1); emitted strings 'reel analogue:'/'reel\'s own ladder'/'reel-shaped'/'reel auto' → video phrasing + sole test pin RenderModeCommandTest:88 flipped in-step; living docblock prose sweep (App ×2, VideoPlayerScreen ×4, RenderModeHostCommand, VideoPlayerScreenTest, MEDIA.md ×2); Lang.php docblock + LangTest testdox/assertSame 'reel'→'video'; glued plan_sugar-reel.md pointers ×7 → plan_sugar-video.md; README Formerly + Namespace-change notices post-move. In-lib bare `Reel` (class doc prose, $reel vars, ReelTest, tempnam prefix 'reel') KEPT — class `Reel` stays per C4/D1 law. <!-- @rename-keep -->
+- R5 wiring: renames.json:37 pending→renamed (targeted sed, JSON valid); gen-docs 92 files minted redirect stub docs/lib/sugar-reel.html (self-tagged) before commits; root composer update sugarcraft/sugar-video --no-install → lock diff 72/72 pure sugarcraft, 8 '-' lines zero '+' sugar-reel; stale vendor/sugarcraft/sugar-reel symlink pruned (refresh-deps does not GC links for renamed deps — NEW finding: escaping=1 phantom until pruned) then linked 9/9 + 23/23 escaping=0. <!-- @rename-keep -->
+- R6 gates (on committed tip 0470a6103): residue 0 findings rc0; sugar-video suite 552T/8488A/1S EXACT vs base; crush K=8 shards 22,564T/423,770A/0E/0F/2S CONSERVATION PASS — totals byte-identical to branch-base baseline; tools/tests 426T/1484A EXACT; check-path-repos rc0; check-child-lifetimes rc0; gen-docs --check rc0; gen-ansi --check rc0. candy-mosaic/sugar-gallery confirmed NOT consumers (no require of sugar-reel) → no gate owed; reel→mosaic dep direction means mosaic suites cannot regress (their sugar-reel mentions are docblock prose only, rewritten). <!-- @rename-keep -->
+- R7: rename commit 0470a6103 (142 files, +905/−896) author/committer detain verified ×1, zero Co-Authored trailers; this NOTES + followups commit; push rename/d3 only. ansi/sugarcraft wordmark bytes + .vhs/play.gif stale → rename-followups.md. <!-- @rename-keep -->
+
+## Deviations summary
+
+1. Brief label "candy-reel" → disk truth sugar-reel→sugar-video (disk-wins). 2. R5 demo-env sites exist (D1-style "zero runtime" refined: honest-none for runtime, rewrite without shim for examples/README). 3. Emitted /render-mode strings rewritten + 1 test pin flipped (judgment call, disclosed above). 4. refresh-deps stale-link pruning gap recorded. <!-- @rename-keep -->

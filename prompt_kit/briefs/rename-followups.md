@@ -131,3 +131,11 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `ansi/candy-forms/candy-forms-2-256-m-1.ansi`, `ansi/sugarcraft/sugarcraft-4-256-l-1.ansi`, <!-- @rename-keep -->
   `ansi/sugarcraft/sugarcraft-5-256-l-1.ansi` — art CONTENT carries the pre-rename `candy-fuzzy` <!-- @rename-keep -->
   wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->
+
+## D3 sugar-reel → sugar-video (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-1-tc-l-2.ansi` — art CONTENT carries the pre-rename <!-- @rename-keep -->
+  `sugar-reel` wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->
+- `sugar-video/.vhs/play.gif` — rendered bytes show the old `# SugarReel` prompt; CI vhs.yml re-renders. <!-- @rename-keep -->
+- `scripts/generate_icons.py` art prose for the sugar-video key still says "film reel disc" — kept as common-English <!-- @rename-keep -->
+  description of the existing artwork; regenerate when the icon art is next touched. <!-- @rename-keep -->
+
