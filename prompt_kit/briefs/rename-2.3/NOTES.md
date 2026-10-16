@@ -23,7 +23,7 @@ C = tracker commit updating plan_rename.md row 2.3 → ✅.
 Step 2.2's `prefixes_for` walks renames.json WITHOUT a status filter (git history: pending
 entries are future facts). For URL redirects that reading is refuted by the plan's own
 **Done when**: "stubs for candy-zone and sugar-prompt exist now, pointing at candy-mouse and <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->
-candy-forms" — while `candy-mouse→sugar-mouse` and `candy-forms→sugar-forms` sit pending in the
+candy-forms" — while `candy-mouse→sugar-mouse` and `candy-forms→sugar-forms` sit pending in the <!-- @rename-keep -->
 map. So `resolve_final_slug()` follows **executed (status ≠ pending) hops only**: every stub
 lands on a page that exists today, and when a later batch executes candy-mouse→sugar-mouse the
 candy-zone stub automatically re-targets two hops ahead (test `renamesFixture()` pins exactly <!-- @rename-keep: intentional historical/moved-stub mention of the old slug -->

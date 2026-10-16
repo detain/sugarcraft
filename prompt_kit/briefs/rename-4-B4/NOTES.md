@@ -13,7 +13,7 @@ bins {`bin/candyshell`: `bin/candy-scriptui`} (glued compact bin spelling). Base
   SECURITY.md:43, research docs). All rewritten by R1, comment-only → no candy-pty/candy-core suite re-run.
   No lib requires sugarcraft/candy-shell (root composer only) → no consumer serial/K=8. <!-- @rename-keep -->
 - Outside-lib `candyshell` brand refs: candy-core/src/ProgramOptions.php:42,308 + candy-core/src/Renderer.php:35, <!-- @rename-keep -->
-  candy-forms/src/ActionSpinner.php:20, candy-core/README.md, sugar-bits/examples/item-list.php,
+  candy-forms/src/ActionSpinner.php:20, candy-core/README.md, sugar-bits/examples/item-list.php, <!-- @rename-keep -->
   candy-sprinkles/examples/table.php (docblock prose), tools/tests/DocsQuickstartTest.php:538 (test INPUT).
   All R2/R4 rewrites; behavior-neutral; tools/tests floor covers the Quickstart test.
 - Env: real prefix CANDYSHELL_ <!-- @rename-keep --> (44 occ; ENV_PREFIX const Application.php:34 —
