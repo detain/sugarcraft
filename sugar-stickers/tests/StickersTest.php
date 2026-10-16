@@ -502,7 +502,7 @@ final class StickersTest extends TestCase
      * Benchmark: diff-based TableRenderer::render() emits fewer bytes than full re-render
      * for small changes between consecutive frames.
      *
-     * Mirrors sugar-boxer, sugar-dash, sugar-crush, sugar-veil, candy-lister.
+     * Mirrors sugar-boxer, sugar-dashboard, sugar-crush, sugar-veil, candy-lister.
      *
      * TableRenderer tracks diff state across frames. First render emits full output.
      * Subsequent renders with stable dimensions emit delta-encoded ops.

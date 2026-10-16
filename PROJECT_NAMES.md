@@ -109,7 +109,7 @@ own still needs a two-word name of its own.
 | **CandyTop** (`candy-top/`, `sugarcraft/candy-top`, `SugarCraft\Top\`) | `Sugar-` — it is a full-screen **app** (system monitor in the btop family), and the prefix law puts apps under `Sugar-`; the add-a-lib review flagged that "a system monitor app arguably reads sugar-top". | `Candy-` — the owner explicitly chose `candy-top`. | Owner decision, recorded 2026-10-08: keep `candy-top`. |
 
 Both sides, for the record: **for `Sugar-`**, candy-top ships no reusable
-primitives — every rendering gap it needed was closed in `sugar-dash`,
+primitives — every rendering gap it needed was closed in `sugar-dashboard`,
 `sugar-charts`, `sugar-bits` and `candy-sprinkles`, and the app only
 assembles them, which is exactly the `Sugar-` "components / apps" role.
 **For `Candy-`**, the AGENTS.md naming line gives `Candy-` to
@@ -146,7 +146,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/candy-flip`, split into its own package (rename campaign step 1.3). "view" states the app role beside the CandyFlip toolkit. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
 | **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits. |
-| **CandyFocus** | candy + focus = focus management. dependency-free focus ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dash first used here. |
+| **CandyFocus** | candy + focus = focus management. dependency-free focus ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here. |
 | **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
 | **CandyFuzzy** | candy + fuzzy = fuzzy string matching with scored matched indices. extracted from candy-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type). |
 | **CandyBuffer** | candy + buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |

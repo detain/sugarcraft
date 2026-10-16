@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
-use SugarCraft\Dash\Plot\ProcRow\ProcGraphTracker;
+use SugarCraft\Dashboard\Plot\ProcRow\ProcGraphTracker;
 use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\ProcessControl;

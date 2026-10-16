@@ -523,34 +523,34 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `candy-palette/src/StandardColors.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.20 🟡 sugar-dash: EventDispatcher mutation (Item C-3)
+#### 1.20 🟡 sugar-dashboard: EventDispatcher mutation (Item C-3)
 
-**Plan:** `findings/plan_sugar-dash.md` — Item C-3
+**Plan:** `findings/plan_sugar-dashboard.md` — Item C-3
 **Fix:** Return `[Event, self]` tuple from `dispatch()` without mutating `$this->listeners`; use `$this->onceKeysToRemove` properly after iteration
-**Files:** `sugar-dash/src/Events/EventDispatcher.php:98-120`
+**Files:** `sugar-dashboard/src/Events/EventDispatcher.php:98-120`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.21 🟡 sugar-dash: Chart render() mutation (Item H-1)
+#### 1.21 🟡 sugar-dashboard: Chart render() mutation (Item H-1)
 
-**Plan:** `findings/plan_sugar-dash.md` — Item H-1
+**Plan:** `findings/plan_sugar-dashboard.md` — Item H-1
 **Fix:** Use render-context object instead of mutating `$this->previousFrame`, `$this->prevWidth`, `$this->prevHeight`
-**Files:** `sugar-dash/src/Chart.php:129-134`
+**Files:** `sugar-dashboard/src/Chart.php:129-134`
 **Agent:** Same coder agent as 1.20 (grouped — same lib)
 
 ---
 
-#### 1.22 🟡 sugar-dash: SystemModule fetchSystemData mutation (Item H-3)
+#### 1.22 🟡 sugar-dashboard: SystemModule fetchSystemData mutation (Item H-3)
 
-**Plan:** `findings/plan_sugar-dash.md` — Item H-3
+**Plan:** `findings/plan_sugar-dashboard.md` — Item H-3
 **Fix:** Don't call `fetchSystemData()` before `withSystemState()` — move it inside or compute fresh
-**Files:** `sugar-dash/src/Modules/SystemModule.php:97-112`
+**Files:** `sugar-dashboard/src/Modules/SystemModule.php:97-112`
 **Agent:** Same coder agent as 1.20 (grouped — same lib)
 
-#### 1.23 🟡 sugar-dash: FocusManager array_search false (Item M-5)
+#### 1.23 🟡 sugar-dashboard: FocusManager array_search false (Item M-5)
 
-**Plan:** `findings/plan_sugar-dash.md` — Item M-5
+**Plan:** `findings/plan_sugar-dashboard.md` — Item M-5
 **Fix:** Check `$idx !== false` before using result of `array_search()` in `focusNext()` and `focusPrevious()`
-**Files:** `sugar-dash/src/FocusManager.php:70-72, 85-87`
+**Files:** `sugar-dashboard/src/FocusManager.php:70-72, 85-87`
 **Agent:** Same coder agent as 1.20 (grouped — same lib)
 
 #### 1.24 🟡 candy-git: removeDir() DRY extraction (Item 2.1)
@@ -694,11 +694,11 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `candy-mosaic/src/QuarterBlockRenderer.php`, `candy-mosaic/src/SixelRenderer.php`, etc.
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 2.5 🟢 sugar-dash: Chart wither boilerplate (Items M-4, 6.1)
+#### 2.5 🟢 sugar-dashboard: Chart wither boilerplate (Items M-4, 6.1)
 
-**Plan:** `findings/plan_sugar-dash.md` — Items M-4, 6.1
+**Plan:** `findings/plan_sugar-dashboard.md` — Items M-4, 6.1
 **Fix:** Add canonical `with(array $overrides)` method to Chart.php; reduce 12 individual withers
-**Files:** `sugar-dash/src/Chart.php:436-690`
+**Files:** `sugar-dashboard/src/Chart.php:436-690`
 **Agent:** Same coder agent as 2.4 (grouped — same lib)
 
 #### 2.6 🟢 candy-hermit: computeWidth() redundant call (Item 3.1)
@@ -1302,7 +1302,7 @@ Same verification as previous phases.
 | Plan | Items | Summary |
 | ---- | ----- | ------- |
 | `plan_sugar-bits.md` | 2.3-2.4, 3.1-3.5, 3.7, 4.1-4.4, 5.1-5.2, 6.1-6.2, 7.1, 7.3 | Proportional width, Tabs scrollEnd, Progress layout, Tree/Table caching, C0 sanitization, input validation, ReactPHP/async docs |
-| `plan_sugar-dash.md` | M-1, M-2, M-3, M-4, L-1, L-3, F-2, F-4 | WeatherModule HOME fallback, FilesystemIterator, LegacyModuleAdapter msg filtering, Gauge double clamp, PluginSdk signals, EventDispatcherTest |
+| `plan_sugar-dashboard.md` | M-1, M-2, M-3, M-4, L-1, L-3, F-2, F-4 | WeatherModule HOME fallback, FilesystemIterator, LegacyModuleAdapter msg filtering, Gauge double clamp, PluginSdk signals, EventDispatcherTest |
 | `plan_candy-mdview.md` | 2.2-2.3, 2.5 | GlamourTheme $throws, loadInput() docs, Pager empty stream |
 | `plan_candy-mail.md` | 3.1, 3.2, 4.1-4.7, 5.1, 6.1-6.2 | buildMimeMessage refactor, async transport, Resend API key, address deduplication, hasExtension parsing, CID validation, getenv consistency |
 | `plan_candy-forms-huh.md` | 2.2-2.4, 3.2-3.7, 4.1-4.5, 5.1-5.2, 6.1-6.3, 7.1-7.3 | SIGCHLD handler, @ suppression removal, signal handler restoration, Spinner timeout, AsyncSpinner, SequentialSpinner, deprecation triggers, mutate helper |

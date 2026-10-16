@@ -16,7 +16,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 |----------|-----------|--------|
 | candy-core Phase 1 runs first | 10+ libs depend on `InputReader.php` (undefined `$len_of_buf` bug); breaks UTF-8 multi-byte parsing | `ref:candy-core-investigation` |
 | candy-vt Phase 1 (thread-safety) runs before all VT consumers | `Transitions::$table` and `Theme::$fgIndexMap` lazy init races affect any concurrent VT usage | `ref:candy-vt-audit` |
-| sugar-dash Phase 1 runs in Group A | Parse error in `Stack.php:78` (missing space before `&&`) blocks compilation of the largest sugar-* lib | `ref:sugar-dash-audit` |
+| sugar-dashboard Phase 1 runs in Group A | Parse error in `Stack.php:78` (missing space before `&&`) blocks compilation of the largest sugar-* lib | `ref:sugar-dashboard-audit` |
 | sugar-reel runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-reel-audit` |
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
 | honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:honey-bounce-audit` |
@@ -35,7 +35,7 @@ candy-vt (Phase 1 thread-safety: Transitions::$table, Theme::$fgIndexMap)
 candy-sql (Phase 1: SQL injection in identifier quoting)
     └── Independent — no sugarcraft dep consumers
 
-sugar-dash (Phase 1: Stack.php parse error + RingBuffer oldest() bug)
+sugar-dashboard (Phase 1: Stack.php parse error + RingBuffer oldest() bug)
     └── Independent
 
 sugar-reel (Phase 1: AudioPlayer SIGSTOP/PTY, mutate() ?? bug)
@@ -61,7 +61,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 |-----|-------|-------|------------------|
 | candy-core | P1 | 2 | InputReader.php:195 `$len_of_buf` undefined var |
 | candy-vt | P1 | 2 | Transitions::$table thread-safe lazy init; Theme::$fgIndexMap race |
-| sugar-dash | P1 | 2 | Stack.php:78 parse error; RingBuffer::oldest() wrapped buffer bug |
+| sugar-dashboard | P1 | 2 | Stack.php:78 parse error; RingBuffer::oldest() wrapped buffer bug |
 
 **Concurrency:** 3 libs, all isolated files — safe to parallelize.
 
@@ -151,7 +151,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 - `findings/plan_candy-core.md` — Phase 1 (items 1.1–1.2), Phase 2 (items 2.1–2.2)
 - `findings/plan_candy-vt.md` — Phase 1 (items 1.1–1.2), Phase 2–12 (deferred after P1)
-- `findings/plan_sugar-dash.md` — Phase 1 (parse error + RingBuffer bug; full plan ~52KB)
+- `findings/plan_sugar-dashboard.md` — Phase 1 (parse error + RingBuffer bug; full plan ~52KB)
 
 ### Group B Source Plans
 
@@ -206,7 +206,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 1. Spawn 3 subagents in parallel:
    - **Subagent A1:** Implement candy-core Phase 1.1 (InputReader undefined var) + Phase 1.2 + Phase 2
    - **Subagent A2:** Implement candy-vt Phase 1.1 (Transitions thread-safe) + Phase 1.2 (Theme maps)
-   - **Subagent A3:** Implement sugar-dash Phase 1 (Stack.php parse error + RingBuffer oldest())
+   - **Subagent A3:** Implement sugar-dashboard Phase 1 (Stack.php parse error + RingBuffer oldest())
 2. Each subagent: review → implement → run tests → fix any issues → commit
 3. After all 3 complete: commit to master, pull, continue to Group B
 
@@ -274,13 +274,13 @@ The following plans have findings marked as no-action — only documentation/cla
 
 cd candy-core && composer install && vendor/bin/phpunit
 cd ../candy-vt && composer install && vendor/bin/phpunit
-cd ../sugar-dash && composer install && vendor/bin/phpunit
+cd ../sugar-dashboard && composer install && vendor/bin/phpunit
 
 # PHPStan level 9
 
 cd candy-core && vendor/bin/phpstan analyse --level=9 src/
 cd ../candy-vt && vendor/bin/phpstan analyse --level=9 src/
-cd ../sugar-dash && vendor/bin/phpstan analyse --level=9 src/
+cd ../sugar-dashboard && vendor/bin/phpstan analyse --level=9 src/
 ```
 
 All tests must pass with `failOnWarning="true"` before committing.

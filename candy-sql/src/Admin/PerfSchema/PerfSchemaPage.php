@@ -10,8 +10,8 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Components\Card\Badge;
-use SugarCraft\Dash\Components\Card\Divider;
+use SugarCraft\Dashboard\Components\Card\Badge;
+use SugarCraft\Dashboard\Components\Card\Divider;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Sql\Admin\PageBase;
@@ -906,7 +906,7 @@ final class PerfSchemaPage extends PageBase
     }
 
     /**
-     * The setup-state chip shown in the header — a sugar-dash Badge so the
+     * The setup-state chip shown in the header — a sugar-dashboard Badge so the
      * FULLY/DEFAULT/CUSTOM/DISABLED status colouring lives in the widget.
      */
     private function stateBadge(): string

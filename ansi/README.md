@@ -2726,191 +2726,191 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-charts-9-tc-s-2.ansi` | 62x14 | truecolor | 21 | chronometer rate-by-position diverging bars vs COSC ±4 s/day band, amplitude column |
 <!-- END sugar-charts SLOTS -->
 
-<!-- BEGIN sugar-dash SLOTS -->
-### sugar-dash — slot series
+<!-- BEGIN sugar-dashboard SLOTS -->
+### sugar-dashboard — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `sugar-dash-1-16-l-1.ansi` | 150x29 | 16 | 14 | orbital CRT wall - 3-column grid, block title, four dials, 54-col chart, node map, gauges, log tail, punch-card band |
-| `sugar-dash-1-16-l-2.ansi` | 138x30 | 16 | 13 | refinery control wall - amber masthead, six tank columns, pipe network, twin dials, histogram, process readout, alarm marquee |
-| `sugar-dash-1-16-m-1.ansi` | 88x26 | 16 | 14 | green CRT mission control - block title, twin dials, datagrid, meters, status strip |
-| `sugar-dash-1-16-m-2.ansi` | 82x22 | 16 | 10 | BIOS POST console - widget probe list, histogram, LOAD WIDGETS meter, inverse boot bar |
-| `sugar-dash-1-16-s-1.ansi` | 60x15 | 16 | 12 | green CRT boot strip - dash widget initialization sequence with inline status ticks |
-| `sugar-dash-1-16-s-2.ansi` | 62x13 | 16 | 9 | amber gauge wall - four segmented meters with ▓/░ fills and live percentages |
-| `sugar-dash-1-256-l-1.ansi` | 201x29 | 256 | 25 | TokyoNight 200-col mission wall - gradient masthead, 4-panel chart wall, six gauges, traffic heat grid, event tail, LIVE status strip |
-| `sugar-dash-1-256-l-2.ansi` | 160x32 | 256 | 12 | sugar market terminal - gold masthead, 12-symbol tape, order book with depth bars, 14 candlesticks, liquidity radar, spreads/volume/feed |
-| `sugar-dash-1-256-m-1.ansi` | 90x23 | 256 | 46 | neon plot wall - gradient title, half-block area chart, heat grid, twin dials, rainbow gauge, scanline footer |
-| `sugar-dash-1-256-m-2.ansi` | 87x24 | 256 | 16 | sugar factory SCADA panel - gradient tanks, alarm queue, pipe flows, dial and bay gauges |
-| `sugar-dash-1-256-s-1.ansi` | 68x11 | 256 | 38 | TokyoNight KPI card row - gradient sparkline cards with delta badges |
-| `sugar-dash-1-256-s-2.ansi` | 60x13 | 256 | 14 | donut breakdown widget - pixel arc with colored legend entries |
-| `sugar-dash-1-tc-l-1.ansi` | 176x34 | truecolor | 247 | neon city night-ops wall - gradient sky w/ lit skyline, glowing SUGAR DASH title, radar sweep, 5 gradient gauges, dispatch log, 80-col cyan-magenta throughput chart |
-| `sugar-dash-1-tc-l-2.ansi` | 168x31 | truecolor | 304 | confection reactor lab - gold masthead, 3 gradient syrup kettles, violet reaction plate, temp ladder, 7-seg boil clock, vacuum/flow/crystal gauges, notes |
-| `sugar-dash-1-tc-m-1.ansi` | 86x26 | truecolor | 61 | vaporwave control room - star sky, banded sunset, grid floor with SUGAR DASH title, gauge cards |
-| `sugar-dash-1-tc-m-2.ansi` | 88x24 | truecolor | 35 | abyss deck - truecolor radial compass, candlesticks, vertical gauges, depth bar |
-| `sugar-dash-1-tc-s-1.ansi` | 61x10 | truecolor | 319 | aurora ribbon gauge - truecolor gradient bands over starfield with SUGAR DASH lettering |
-| `sugar-dash-1-tc-s-2.ansi` | 66x14 | truecolor | 66 | heat dial - radial truecolor temperature gauge with gradient tick arc |
-| `sugar-dash-10-16-l-1.ansi` | 152x30 | 16 | 9 | gasworks governor house wall: three gasholder ladders, purifier beds, town flow bars, alarm marquee |
-| `sugar-dash-10-16-l-2.ansi` | 150x32 | 16 | 8 | foundry molding line wall: flask loop, cupola ladles, heat analysis datagrid, defect bars |
-| `sugar-dash-10-16-m-1.ansi` | 88x24 | 16 | 7 | sheetfed press feeder desk: pile columns, CMYK unit ink bars, register marks, makeready |
-| `sugar-dash-10-16-m-2.ansi` | 86x22 | 16 | 8 | bascule bridge control cabin: raised leaf schematic, machinery bank, road/marine signals |
-| `sugar-dash-10-16-s-1.ansi` | 64x13 | 16 | 7 | sawmill headrig console: band-saw load/tension bars, log deck tally, ladder carriage |
-| `sugar-dash-10-16-s-2.ansi` | 62x12 | 16 | 6 | rope-walk tension monitor: three strand cN meters, carriage position, shed rows |
-| `sugar-dash-10-256-l-1.ansi` | 162x30 | 256 | 18 | grain elevator leg-head monitor: head pulley diagram, distributor spouts, quality panel, leg duty table |
-| `sugar-dash-10-256-l-2.ansi` | 158x32 | 256 | 20 | steam pumping station board: beam engine schematic, true indicator card loop, boiler bank, well gallery |
-| `sugar-dash-10-256-m-1.ansi` | 88x22 | 256 | 17 | harbour pilot station signal board: code-flag hoist swatches, inbound pilot calls, semaphore outlet |
-| `sugar-dash-10-256-m-2.ansi` | 86x21 | 256 | 14 | cold store zoned temperature wall: six zone rows, evaporator fan icons, deviation heat strip, NH3 plant |
-| `sugar-dash-10-256-s-1.ansi` | 66x14 | 256 | 14 | pottery kiln cone board: firing ramp bars with holds, bent pyrometric cone glyphs, pyrometer |
-| `sugar-dash-10-256-s-2.ansi` | 64x12 | 256 | 13 | ferry rostrum ramp desk: linkspan angle, tide column, vehicle deck fills, winch amps, toll lane |
-| `sugar-dash-10-tc-l-1.ansi` | 182x34 | truecolor | 328 | offshore wind farm SCADA wall: turbine array over gradient sea, MW datagrid, cable pool, event strip |
-| `sugar-dash-10-tc-l-2.ansi` | 172x32 | truecolor | 103 | road tunnel control wall: CO haze density profile, jet fans, lane signals, flow datagrid, action list |
-| `sugar-dash-10-tc-m-1.ansi` | 88x23 | truecolor | 68 | fiber hut OTDR board: gradient attenuation staircase with splice spikes, event judgment table |
-| `sugar-dash-10-tc-m-2.ansi` | 86x24 | truecolor | 268 | glass house furnace & lehr: molten truecolor bath, forehearth zone columns, anneal cooling ridge |
-| `sugar-dash-10-tc-s-1.ansi` | 66x14 | truecolor | 161 | bottling line tacho wall: gradient station speed bars, bottle row with gradient fill, BPH counter |
-| `sugar-dash-10-tc-s-2.ansi` | 63x13 | truecolor | 84 | neon tube bender bench: glowing OPEN sign art, gas spectral strike tubes, electrode bake readout |
-| `sugar-dash-2-16-l-1.ansi` | 170x36 | 16 | 7 | operations wall: scaled block wordmark over 4x2 tile array |
-| `sugar-dash-2-16-l-2.ansi` | 150x30 | 16 | 7 | control desk: ribbon, ticker, log pane, vertical rails, service board |
-| `sugar-dash-2-16-m-1.ansi` | 82x23 | 16 | 6 | 3x2 widget grid console: bars, sparks, service LEDs, keymap |
-| `sugar-dash-2-16-m-2.ansi` | 80x22 | 16 | 6 | event stream pane beside four-column vertical gauge rail |
-| `sugar-dash-2-16-s-1.ansi` | 54x13 | 16 | 7 | boot tile: palette block wordmark, tri-color sparklines, fleet LEDs |
-| `sugar-dash-2-16-s-2.ansi` | 58x12 | 16 | 7 | threshold meters card with shaded block wordmark footer |
-| `sugar-dash-2-256-l-1.ansi` | 180x30 | 256 | 45 | planetary traffic cosmos: four panels above full-width heat field |
-| `sugar-dash-2-256-l-2.ansi` | 170x32 | 256 | 52 | rack telemetry board: sixteen units, sparks, power bars, fleet health |
-| `sugar-dash-2-256-m-1.ansi` | 88x20 | 256 | 47 | heatmap board: 256-palette block wordmark over packed half-cell field |
-| `sugar-dash-2-256-m-2.ansi` | 84x19 | 256 | 26 | six-row system meter cluster with segmented ramps and load strip |
-| `sugar-dash-2-256-s-1.ansi` | 66x16 | 256 | 22 | 2x2 live sparkline tiles with ramped strokes on banded rails |
-| `sugar-dash-2-256-s-2.ansi` | 56x10 | 256 | 39 | node-fleet status matrix packed in half-cells with hotspots |
-| `sugar-dash-2-tc-l-1.ansi` | 200x36 | truecolor | 531 | aurora sky canvas with floating gradient panels and spectrum wall |
-| `sugar-dash-2-tc-l-2.ansi` | 190x34 | truecolor | 365 | sonar sweep scope: rings, trail, blips, control and contact columns |
-| `sugar-dash-2-tc-m-1.ansi` | 86x22 | truecolor | 575 | telemetry waterfall with gradient spark rows, spectrum analyzer, block wordmark |
-| `sugar-dash-2-tc-m-2.ansi` | 88x24 | truecolor | 203 | mission-control panel: ops star-map, gradient gauges, donut core loop |
-| `sugar-dash-2-tc-s-1.ansi` | 56x9 | truecolor | 145 | gradient wordmark plate with rounded frame and spectrum underline |
-| `sugar-dash-2-tc-s-2.ansi` | 62x14 | truecolor | 31 | triple speedometer dials with filled gradient sectors |
-| `sugar-dash-3-16-l-1.ansi` | 158x30 | 16 | 8 | city traffic control map with signals and flow meters |
-| `sugar-dash-3-16-l-2.ansi` | 152x32 | 16 | 6 | epic NOC wall with twenty screens and night shift desks |
-| `sugar-dash-3-16-m-1.ansi` | 86x22 | 16 | 6 | widget assembly line with stations and pass/fail bins |
-| `sugar-dash-3-16-m-2.ansi` | 88x24 | 16 | 7 | NOC wall of nine mini dashboard screens |
-| `sugar-dash-3-16-s-1.ansi` | 56x11 | 16 | 6 | diner order ticket rail with grill and fryer heat gauges |
-| `sugar-dash-3-16-s-2.ansi` | 60x9 | 16 | 5 | refresh heartbeat EKG strip with three colored leads |
-| `sugar-dash-3-256-l-1.ansi` | 182x34 | 256 | 71 | space mission control board with orbit track and gauge rails |
-| `sugar-dash-3-256-l-2.ansi` | 172x30 | 256 | 19 | widget factory night shift with cranes and scoreboard |
-| `sugar-dash-3-256-m-1.ansi` | 86x22 | 256 | 20 | submarine control deck with ballast tanks and depth ladder |
-| `sugar-dash-3-256-m-2.ansi` | 84x20 | 256 | 8 | cardiac monitor pulse leads with rhythm legend |
-| `sugar-dash-3-256-s-1.ansi` | 48x12 | 256 | 13 | hull sonar mini scope with fading sweep wedge |
-| `sugar-dash-3-256-s-2.ansi` | 62x13 | 256 | 12 | alert fatigue toast avalanche with storm meter |
-| `sugar-dash-3-tc-l-1.ansi` | 182x38 | truecolor | 130 | deep-sea panorama with gradient ocean and SugarDash sub |
-| `sugar-dash-3-tc-l-2.ansi` | 164x38 | truecolor | 59 | radial refresh clock with rainbow tick ring and pulse leads |
-| `sugar-dash-3-tc-m-1.ansi` | 88x22 | truecolor | 149 | kitchen brigade stations with truecolor flame beds |
-| `sugar-dash-3-tc-m-2.ansi` | 86x22 | truecolor | 18 | alert triage board with severity gradient chips |
-| `sugar-dash-3-tc-s-1.ansi` | 54x13 | truecolor | 53 | shaded block planet with truecolor relay orbit |
-| `sugar-dash-3-tc-s-2.ansi` | 52x12 | truecolor | 40 | traffic light head with truecolor queue drain bar |
-| `sugar-dash-4-16-l-1.ansi` | 168x34 | 16 | 7 | regional grid control wall: generators, one-line bus, substations, demand, alarms |
-| `sugar-dash-4-16-l-2.ansi` | 150x32 | 16 | 7 | observatory dome console with star chart, alt-az control and log panel |
-| `sugar-dash-4-16-m-1.ansi` | 88x22 | 16 | 7 | power-grid board with four feeder gauges, demand curve and breaker strip |
-| `sugar-dash-4-16-m-2.ansi` | 86x22 | 16 | 8 | radio mixer desk with five channel faders and scrolling now-playing line |
-| `sugar-dash-4-16-s-1.ansi` | 58x15 | 16 | 7 | ship bridge binnacle compass with heading/SOG readouts and rudder bar |
-| `sugar-dash-4-256-l-1.ansi` | 176x36 | 256 | 15 | bridge helm panorama with ship wheel, instrument bank and radar scope |
-| `sugar-dash-4-256-l-2.ansi` | 182x34 | 256 | 16 | FM broadcast console with twelve channel strips, master VU and waveform |
-| `sugar-dash-4-256-m-1.ansi` | 88x24 | 256 | 15 | ship bridge cluster: compass, engine RPM, depth ladder and heave horizon |
-| `sugar-dash-4-256-m-2.ansi` | 88x24 | 256 | 13 | train driver cab speedometer with brake/pressure bars and signal stack |
-| `sugar-dash-4-256-m-3.ansi` | 86x22 | 256 | 15 | field weather board with baro trend, wind rose, rain gage and hygro dials |
-| `sugar-dash-4-256-s-1.ansi` | 52x10 | 256 | 14 | radio desk ON AIR lamp, FM freq digits and stereo VU meters |
-| `sugar-dash-4-256-s-2.ansi` | 48x12 | 256 | 12 | weather porch thermometer column, humidity bar and baro sparkline |
-| `sugar-dash-4-tc-l-1.ansi` | 160x34 | truecolor | 84 | high-speed train driver cab front view with windshield, speed dial and TCMS |
-| `sugar-dash-4-tc-l-2.ansi` | 176x40 | truecolor | 301 | arcade high-score wall cabinet with marquee, ghost art and attract mode |
-| `sugar-dash-4-tc-l-3.ansi` | 200x44 | truecolor | 571 | master SCADA with truecolor skyline, transmission topology and gauge rail |
-| `sugar-dash-4-tc-m-1.ansi` | 88x22 | truecolor | 34 | weather station instrument array with six truecolor dial gauges |
-| `sugar-dash-4-tc-m-2.ansi` | 84x22 | truecolor | 31 | arcade high-score leaderboard with gradient HI-SCORE title |
-| `sugar-dash-4-tc-s-1.ansi` | 63x11 | truecolor | 62 | arcade HI-SCORE pixel marquee over starfield with credit line |
-| `sugar-dash-4-tc-s-2.ansi` | 52x12 | truecolor | 58 | observatory reticle scope with RA/DEC readout and seeing gauge |
-| `sugar-dash-5-16-l-1.ansi` | 154x28 | 16 | 7 | submarine control room: order telegraph, ballast fill bars, depth ladder and tube states |
-| `sugar-dash-5-16-l-2.ansi` | 128x28 | 16 | 7 | fairground fortune-teller booth: crystal ball and widget omen cards under curtain lamps |
-| `sugar-dash-5-16-m-1.ansi` | 87x21 | 16 | 5 | weather balloon launch station ascent log: pressure/temp/altitude table with wind sparklines |
-| `sugar-dash-5-16-m-2.ansi` | 90x18 | 16 | 6 | stock exchange as a fish market: crying-hall crate rows of tuna and cod with tick arrows |
-| `sugar-dash-5-16-s-1.ansi` | 64x11 | 16 | 5 | ATC tower runway status board: callsigns, altitudes, trend sparklines, sector clearances |
-| `sugar-dash-5-256-l-1.ansi` | 176x29 | 256 | 24 | grid mimic diagram: generators to 400kV bus, transformers, feeder gauges and relays |
-| `sugar-dash-5-256-l-2.ansi` | 167x28 | 256 | 46 | submarine periscope dusk view: banded gradient sky, horizon and freighter contact |
-| `sugar-dash-5-256-m-1.ansi` | 88x20 | 256 | 9 | ATC primary radar PPI scope: phosphor sweep, range rings and labeled traffic blips |
-| `sugar-dash-5-256-m-2.ansi` | 88x18 | 256 | 25 | fish auction heat board: twelve crate lots as 256-color thermal bars with chg ticks |
-| `sugar-dash-5-256-s-1.ansi` | 64x8 | 256 | 7 | radio telescope pulsar counter strip: flux/DM/ToA sparkbars with widget lock readout |
-| `sugar-dash-5-256-s-2.ansi` | 67x8 | 256 | 11 | power station breaker grid: two tiled rows of breakers with states and trip current |
-| `sugar-dash-5-tc-l-1.ansi` | 214x28 | truecolor | 1029 | aurora KP7 curtain over a stratospheric balloon launch with station telemetry row |
-| `sugar-dash-5-tc-l-2.ansi` | 160x28 | truecolor | 37 | abyssal bioluminescent fish market: glowing shoals as ticker rows at 24 MPa |
-| `sugar-dash-5-tc-m-1.ansi` | 80x18 | truecolor | 138 | master trip panel: three glossy radial-shaded buttons under hazard stripes |
-| `sugar-dash-5-tc-m-2.ansi` | 86x19 | truecolor | 204 | pulsar waterfall heatmap: dispersion sweep over time in blue-white truecolor |
-| `sugar-dash-5-tc-s-1.ansi` | 56x10 | truecolor | 13 | fortune teller crystal ball with truecolor glow and floating sparkline omens |
-| `sugar-dash-5-tc-s-2.ansi` | 68x8 | truecolor | 17 | weather balloon rising through a truecolor sunrise gradient sky |
-| `sugar-dash-6-16-l-1.ansi` | 150x31 | 16 | 7 | clockmaker workshop bench: tower movement datagrid, drift sparklines, torque bars, strike logs |
-| `sugar-dash-6-16-l-2.ansi` | 140x28 | 16 | 10 | water tower ladder gauge: vertical level column, hourly supply/draw blocks, pump and quality rows |
-| `sugar-dash-6-16-m-1.ansi` | 88x20 | 16 | 7 | fairground ride control booth: interlock matrix, queue meters, wind gust auto-hold rows |
-| `sugar-dash-6-16-s-1.ansi` | 66x14 | 16 | 9 | theater lighting desk cue stack: gel rows, barn-door level bars, followspot flicker sparkline |
-| `sugar-dash-6-16-s-2.ansi` | 64x12 | 16 | 8 | library circulation desk due-date slip board: borrower datagrid, status chips, returns sparkline |
-| `sugar-dash-6-256-l-1.ansi` | 170x34 | 256 | 15 | greenhouse climate wall: zone temp/humidity sparklines, lamp schedule bars, root-zone heat map |
-| `sugar-dash-6-256-l-2.ansi` | 176x30 | 256 | 9 | tram line section map board: platform occupancy bars, stop grid, headway datagrid and depot status |
-| `sugar-dash-6-256-m-1.ansi` | 88x19 | 256 | 13 | brewery cellar gauge wall: fermentation tank datagrid, krausen trend, gravity and CO2 sparklines |
-| `sugar-dash-6-256-m-2.ansi` | 90x19 | 256 | 8 | parcel sorting conveyor board: chute counters with speed bars, jam alarm, induct sparkline |
-| `sugar-dash-6-256-s-1.ansi` | 68x8 | 256 | 9 | ship engine-room telegraph strip: order echo handle, RPM gauge, ahead rev sparkbars |
-| `sugar-dash-6-256-s-2.ansi` | 66x11 | 256 | 11 | aquarium gallery feeding board: tank schedule rows, temperature trend blocks, salinity spark |
-| `sugar-dash-6-tc-l-1.ansi` | 180x29 | truecolor | 39 | lighthouse district control log: per-station flash character charts, truecolor fog visibility bands, lamp and rotation gauges |
-| `sugar-dash-6-tc-l-2.ansi` | 176x32 | truecolor | 40 | apiary hive inspection wall: per-hive comb cap-pattern strips, weight gain, queen flags, brood warmth gradient |
-| `sugar-dash-6-tc-m-1.ansi` | 88x18 | truecolor | 42 | post office counter services board: window queue heat bars, call ticker, forms stock and audit rows |
-| `sugar-dash-6-tc-m-2.ansi` | 86x19 | truecolor | 123 | ice rink resurfacer dispatch: truecolor ice-temperature heat field with hot spots, unit roster rows |
-| `sugar-dash-6-tc-s-1.ansi` | 66x12 | truecolor | 43 | bakery dawn-rush production board: oven deck ember gradients, proofing curve, batch out-times |
-| `sugar-dash-6-tc-s-2.ansi` | 68x9 | truecolor | 31 | cinema projection booth changeover log: reel countdowns, xenon lamp-hours gradient meter, cue dots |
-| `sugar-dash-7-16-l-1.ansi` | 168x32 | 16 | 6 | satellite ground-station antenna farm + pass datagrid + doppler + AGC |
-| `sugar-dash-7-16-l-2.ansi` | 164x30 | 16 | 5 | distillery aging-floor gauge wall: cask-head racks + shed climate |
-| `sugar-dash-7-16-m-1.ansi` | 86x22 | 16 | 6 | night bridge console: radar scope, gyro dial, engine telegraph |
-| `sugar-dash-7-16-m-2.ansi` | 88x20 | 16 | 5 | subway interlocking panel with aspect matrix + occupancy bars |
-| `sugar-dash-7-16-s-1.ansi` | 64x14 | 16 | 5 | ship's wheel spinner + gyro compass card at the helm |
-| `sugar-dash-7-16-s-2.ansi` | 62x11 | 16 | 5 | signal-box lever frame with a 3-aspect head repeater |
-| `sugar-dash-7-256-l-1.ansi` | 180x34 | 256 | 9 | ship's bridge at night full wall: window, ARPA radar, ECDIS, gauge bank |
-| `sugar-dash-7-256-l-2.ansi` | 170x30 | 256 | 8 | met-station rooftop array: vane row, wind rose, rain/temp/pressure |
-| `sugar-dash-7-256-m-1.ansi` | 88x20 | 256 | 6 | power-loom mill floor board: picks, warp/weft tension, bobbin stock |
-| `sugar-dash-7-256-m-2.ansi` | 86x21 | 256 | 6 | grain terminal silo bank level columns + aeration trend |
-| `sugar-dash-7-256-s-1.ansi` | 66x13 | 256 | 7 | rooftop weather vane over the ridge + wind-rose compass |
-| `sugar-dash-7-256-s-2.ansi` | 64x14 | 256 | 7 | distillery cask-head proof gauge with shed-temp sparkline |
-| `sugar-dash-7-tc-l-1.ansi` | 190x36 | truecolor | 6 | subway interlocking tower wall: schematic, lever frame, departures |
-| `sugar-dash-7-tc-l-2.ansi` | 176x32 | truecolor | 9 | tide-mill waterwheel control board: sluice bank, races, millstone drive |
-| `sugar-dash-7-tc-m-1.ansi` | 88x22 | truecolor | 9 | radio-telescope control van: mount dials + truecolor waterfall |
-| `sugar-dash-7-tc-m-2.ansi` | 86x20 | truecolor | 7 | canal lock board: mitred gates, chamber levels, paddle bars |
-| `sugar-dash-7-tc-s-1.ansi` | 62x13 | truecolor | 7 | tide-mill sluice handwheel + gate head-race water column |
-| `sugar-dash-7-tc-s-2.ansi` | 66x12 | truecolor | 8 | radio telescope dish + HI-line spectrum blip trace |
-| `sugar-dash-8-16-l-1.ansi` | 150x28 | 16 | 9 | ski-resort lift-line ops: ridge profile, 5 lifts, avy grid, tension, energy |
-| `sugar-dash-8-16-l-2.ansi` | 146x28 | 16 | 9 | hydro spillway control: reservoir section, 6 radial gates, 4 units, seepage |
-| `sugar-dash-8-16-m-1.ansi` | 84x18 | 16 | 8 | hospital nurse-call annunciator: ward grids, corridor LED strip, ring counter |
-| `sugar-dash-8-16-m-2.ansi` | 82x18 | 16 | 8 | fire station apparatus board: bays, run ticket, tones, zones, hydrants |
-| `sugar-dash-8-16-s-1.ansi` | 64x14 | 16 | 9 | power substation bay board: breaker cells, bus, lockout relay |
-| `sugar-dash-8-16-s-2.ansi` | 62x14 | 16 | 8 | seismic network station: 3-component traces, STA/LTA bars, event log |
-| `sugar-dash-8-256-l-1.ansi` | 148x28 | 256 | 18 | water treatment works: jars, floc, clarifiers, 6 filters, clearwells, lab |
-| `sugar-dash-8-256-l-2.ansi` | 144x32 | 256 | 22 | stadium match-day capacity: seat map, sections, turnstiles, parking |
-| `sugar-dash-8-256-m-1.ansi` | 86x19 | 256 | 15 | datacenter cold-aisle camera wall: 3 feeds, dT bars, CRACs, door sensors |
-| `sugar-dash-8-256-m-2.ansi` | 88x19 | 256 | 18 | metro traction-power control: 750V DC rail segments, 5 substations, regen |
-| `sugar-dash-8-256-s-1.ansi` | 66x13 | 256 | 18 | farm irrigation valve grid: 12 valves, pivots, soil probes, leak scan |
-| `sugar-dash-8-256-s-2.ansi` | 68x13 | 256 | 20 | port container-gate lanes: booms, OCR plates, yard blocks, weighbridge |
-| `sugar-dash-8-tc-l-1.ansi` | 150x28 | truecolor | 53 | rocket launch director console: 10 systems, weather, range, trajectory |
-| `sugar-dash-8-tc-l-2.ansi` | 150x28 | truecolor | 97 | satellite ground station: dish, spectrum waterfall, polarizations, TLE |
-| `sugar-dash-8-tc-m-1.ansi` | 84x20 | truecolor | 48 | coffee roastery batch board: roast curve, milestones, drum, cooling |
-| `sugar-dash-8-tc-m-2.ansi` | 84x19 | truecolor | 27 | LNG metering bay: 3 trains, tank gradients, BOG, custody transfer |
-| `sugar-dash-8-tc-s-1.ansi` | 66x16 | truecolor | 35 | planetarium dome control: star field, projector channels, show climate |
-| `sugar-dash-8-tc-s-2.ansi` | 64x14 | truecolor | 23 | pinball factory test jig: switch matrix, coil pulses, DMD strip, QA |
-| `sugar-dash-9-16-l-1.ansi` | 162x30 | 16 | 9 | web-offset press desk: register marks, tension bars, duct keys, counters, alarms |
-| `sugar-dash-9-16-l-2.ansi` | 150x29 | 16 | 8 | mine winding-house depth desk: shaft scale, cage A/B, bell codes, engine bank |
-| `sugar-dash-9-16-m-1.ansi` | 88x22 | 16 | 8 | radio request-line switchboard: jackfield, caller dedications, patch lamps |
-| `sugar-dash-9-16-m-2.ansi` | 86x21 | 16 | 9 | zoo feeding rota: 8 enclosures, meal slots with check marks, diet, prep bars |
-| `sugar-dash-9-16-s-1.ansi` | 64x14 | 16 | 8 | grand-hotel bell annunciator: room state grid, corridor LED strip, ring queue |
-| `sugar-dash-9-16-s-2.ansi` | 68x13 | 16 | 8 | bank vault pneumatic-tube diverter: five stations, carrier transit, pump bank |
-| `sugar-dash-9-256-l-1.ansi` | 160x30 | 256 | 15 | film sound-stage call-sheet wall: scenes/build, crew calls, bays, takes, day |
-| `sugar-dash-9-256-l-2.ansi` | 152x29 | 256 | 14 | coastguard rocket-apparatus station: surf/tide, rig states, crew, rescue log |
-| `sugar-dash-9-256-m-1.ansi` | 88x22 | 256 | 14 | grid battery energy-storage hall: 8 rack SOC/V/I/temp, thermal map, cell spread |
-| `sugar-dash-9-256-m-2.ansi` | 86x21 | 256 | 11 | water-works pressure-zone board: DMA nightline, tank ladders, valves, burst log |
-| `sugar-dash-9-256-s-1.ansi` | 66x15 | 256 | 13 | art-deco searchlight battery sector plot: hand-plotted beams, bearing scale |
-| `sugar-dash-9-256-s-2.ansi` | 68x16 | 256 | 12 | overhead-line inspection car: contact-wire height trace, stagger, hook wear |
-| `sugar-dash-9-tc-l-1.ansi` | 168x30 | truecolor | 212 | airship mooring-mast control wall: ship on mast, weather, gas, handling party |
-| `sugar-dash-9-tc-l-2.ansi` | 150x29 | truecolor | 104 | glacier mass-balance stakes: section profile, stake table, melt discharge, cams |
-| `sugar-dash-9-tc-m-1.ansi` | 88x22 | truecolor | 24 | rail hump-yard retarder board: per-car entry/exit speed, retarder groups, faults |
-| `sugar-dash-9-tc-m-2.ansi` | 86x22 | truecolor | 29 | aqueduct valve-house telemetry: sections, hydraulic grade line, actuator bank |
-| `sugar-dash-9-tc-s-1.ansi` | 68x16 | truecolor | 66 | museum gallery conservation board: per-case RH/temp/lux/vib, hall climate |
-| `sugar-dash-9-tc-s-2.ansi` | 66x12 | truecolor | 82 | musical fountain control console: jet-height choreography, pumps, valve cues |
-<!-- END sugar-dash SLOTS -->
+| `sugar-dashboard-1-16-l-1.ansi` | 150x29 | 16 | 14 | orbital CRT wall - 3-column grid, block title, four dials, 54-col chart, node map, gauges, log tail, punch-card band |
+| `sugar-dashboard-1-16-l-2.ansi` | 138x30 | 16 | 13 | refinery control wall - amber masthead, six tank columns, pipe network, twin dials, histogram, process readout, alarm marquee |
+| `sugar-dashboard-1-16-m-1.ansi` | 88x26 | 16 | 14 | green CRT mission control - block title, twin dials, datagrid, meters, status strip |
+| `sugar-dashboard-1-16-m-2.ansi` | 82x22 | 16 | 10 | BIOS POST console - widget probe list, histogram, LOAD WIDGETS meter, inverse boot bar |
+| `sugar-dashboard-1-16-s-1.ansi` | 60x15 | 16 | 12 | green CRT boot strip - dash widget initialization sequence with inline status ticks |
+| `sugar-dashboard-1-16-s-2.ansi` | 62x13 | 16 | 9 | amber gauge wall - four segmented meters with ▓/░ fills and live percentages |
+| `sugar-dashboard-1-256-l-1.ansi` | 201x29 | 256 | 25 | TokyoNight 200-col mission wall - gradient masthead, 4-panel chart wall, six gauges, traffic heat grid, event tail, LIVE status strip |
+| `sugar-dashboard-1-256-l-2.ansi` | 160x32 | 256 | 12 | sugar market terminal - gold masthead, 12-symbol tape, order book with depth bars, 14 candlesticks, liquidity radar, spreads/volume/feed |
+| `sugar-dashboard-1-256-m-1.ansi` | 90x23 | 256 | 46 | neon plot wall - gradient title, half-block area chart, heat grid, twin dials, rainbow gauge, scanline footer |
+| `sugar-dashboard-1-256-m-2.ansi` | 87x24 | 256 | 16 | sugar factory SCADA panel - gradient tanks, alarm queue, pipe flows, dial and bay gauges |
+| `sugar-dashboard-1-256-s-1.ansi` | 68x11 | 256 | 38 | TokyoNight KPI card row - gradient sparkline cards with delta badges |
+| `sugar-dashboard-1-256-s-2.ansi` | 60x13 | 256 | 14 | donut breakdown widget - pixel arc with colored legend entries |
+| `sugar-dashboard-1-tc-l-1.ansi` | 176x34 | truecolor | 247 | neon city night-ops wall - gradient sky w/ lit skyline, glowing SUGAR DASH title, radar sweep, 5 gradient gauges, dispatch log, 80-col cyan-magenta throughput chart |
+| `sugar-dashboard-1-tc-l-2.ansi` | 168x31 | truecolor | 304 | confection reactor lab - gold masthead, 3 gradient syrup kettles, violet reaction plate, temp ladder, 7-seg boil clock, vacuum/flow/crystal gauges, notes |
+| `sugar-dashboard-1-tc-m-1.ansi` | 86x26 | truecolor | 61 | vaporwave control room - star sky, banded sunset, grid floor with SUGAR DASH title, gauge cards |
+| `sugar-dashboard-1-tc-m-2.ansi` | 88x24 | truecolor | 35 | abyss deck - truecolor radial compass, candlesticks, vertical gauges, depth bar |
+| `sugar-dashboard-1-tc-s-1.ansi` | 61x10 | truecolor | 319 | aurora ribbon gauge - truecolor gradient bands over starfield with SUGAR DASH lettering |
+| `sugar-dashboard-1-tc-s-2.ansi` | 66x14 | truecolor | 66 | heat dial - radial truecolor temperature gauge with gradient tick arc |
+| `sugar-dashboard-10-16-l-1.ansi` | 152x30 | 16 | 9 | gasworks governor house wall: three gasholder ladders, purifier beds, town flow bars, alarm marquee |
+| `sugar-dashboard-10-16-l-2.ansi` | 150x32 | 16 | 8 | foundry molding line wall: flask loop, cupola ladles, heat analysis datagrid, defect bars |
+| `sugar-dashboard-10-16-m-1.ansi` | 88x24 | 16 | 7 | sheetfed press feeder desk: pile columns, CMYK unit ink bars, register marks, makeready |
+| `sugar-dashboard-10-16-m-2.ansi` | 86x22 | 16 | 8 | bascule bridge control cabin: raised leaf schematic, machinery bank, road/marine signals |
+| `sugar-dashboard-10-16-s-1.ansi` | 64x13 | 16 | 7 | sawmill headrig console: band-saw load/tension bars, log deck tally, ladder carriage |
+| `sugar-dashboard-10-16-s-2.ansi` | 62x12 | 16 | 6 | rope-walk tension monitor: three strand cN meters, carriage position, shed rows |
+| `sugar-dashboard-10-256-l-1.ansi` | 162x30 | 256 | 18 | grain elevator leg-head monitor: head pulley diagram, distributor spouts, quality panel, leg duty table |
+| `sugar-dashboard-10-256-l-2.ansi` | 158x32 | 256 | 20 | steam pumping station board: beam engine schematic, true indicator card loop, boiler bank, well gallery |
+| `sugar-dashboard-10-256-m-1.ansi` | 88x22 | 256 | 17 | harbour pilot station signal board: code-flag hoist swatches, inbound pilot calls, semaphore outlet |
+| `sugar-dashboard-10-256-m-2.ansi` | 86x21 | 256 | 14 | cold store zoned temperature wall: six zone rows, evaporator fan icons, deviation heat strip, NH3 plant |
+| `sugar-dashboard-10-256-s-1.ansi` | 66x14 | 256 | 14 | pottery kiln cone board: firing ramp bars with holds, bent pyrometric cone glyphs, pyrometer |
+| `sugar-dashboard-10-256-s-2.ansi` | 64x12 | 256 | 13 | ferry rostrum ramp desk: linkspan angle, tide column, vehicle deck fills, winch amps, toll lane |
+| `sugar-dashboard-10-tc-l-1.ansi` | 182x34 | truecolor | 328 | offshore wind farm SCADA wall: turbine array over gradient sea, MW datagrid, cable pool, event strip |
+| `sugar-dashboard-10-tc-l-2.ansi` | 172x32 | truecolor | 103 | road tunnel control wall: CO haze density profile, jet fans, lane signals, flow datagrid, action list |
+| `sugar-dashboard-10-tc-m-1.ansi` | 88x23 | truecolor | 68 | fiber hut OTDR board: gradient attenuation staircase with splice spikes, event judgment table |
+| `sugar-dashboard-10-tc-m-2.ansi` | 86x24 | truecolor | 268 | glass house furnace & lehr: molten truecolor bath, forehearth zone columns, anneal cooling ridge |
+| `sugar-dashboard-10-tc-s-1.ansi` | 66x14 | truecolor | 161 | bottling line tacho wall: gradient station speed bars, bottle row with gradient fill, BPH counter |
+| `sugar-dashboard-10-tc-s-2.ansi` | 63x13 | truecolor | 84 | neon tube bender bench: glowing OPEN sign art, gas spectral strike tubes, electrode bake readout |
+| `sugar-dashboard-2-16-l-1.ansi` | 170x36 | 16 | 7 | operations wall: scaled block wordmark over 4x2 tile array |
+| `sugar-dashboard-2-16-l-2.ansi` | 150x30 | 16 | 7 | control desk: ribbon, ticker, log pane, vertical rails, service board |
+| `sugar-dashboard-2-16-m-1.ansi` | 82x23 | 16 | 6 | 3x2 widget grid console: bars, sparks, service LEDs, keymap |
+| `sugar-dashboard-2-16-m-2.ansi` | 80x22 | 16 | 6 | event stream pane beside four-column vertical gauge rail |
+| `sugar-dashboard-2-16-s-1.ansi` | 54x13 | 16 | 7 | boot tile: palette block wordmark, tri-color sparklines, fleet LEDs |
+| `sugar-dashboard-2-16-s-2.ansi` | 58x12 | 16 | 7 | threshold meters card with shaded block wordmark footer |
+| `sugar-dashboard-2-256-l-1.ansi` | 180x30 | 256 | 45 | planetary traffic cosmos: four panels above full-width heat field |
+| `sugar-dashboard-2-256-l-2.ansi` | 170x32 | 256 | 52 | rack telemetry board: sixteen units, sparks, power bars, fleet health |
+| `sugar-dashboard-2-256-m-1.ansi` | 88x20 | 256 | 47 | heatmap board: 256-palette block wordmark over packed half-cell field |
+| `sugar-dashboard-2-256-m-2.ansi` | 84x19 | 256 | 26 | six-row system meter cluster with segmented ramps and load strip |
+| `sugar-dashboard-2-256-s-1.ansi` | 66x16 | 256 | 22 | 2x2 live sparkline tiles with ramped strokes on banded rails |
+| `sugar-dashboard-2-256-s-2.ansi` | 56x10 | 256 | 39 | node-fleet status matrix packed in half-cells with hotspots |
+| `sugar-dashboard-2-tc-l-1.ansi` | 200x36 | truecolor | 531 | aurora sky canvas with floating gradient panels and spectrum wall |
+| `sugar-dashboard-2-tc-l-2.ansi` | 190x34 | truecolor | 365 | sonar sweep scope: rings, trail, blips, control and contact columns |
+| `sugar-dashboard-2-tc-m-1.ansi` | 86x22 | truecolor | 575 | telemetry waterfall with gradient spark rows, spectrum analyzer, block wordmark |
+| `sugar-dashboard-2-tc-m-2.ansi` | 88x24 | truecolor | 203 | mission-control panel: ops star-map, gradient gauges, donut core loop |
+| `sugar-dashboard-2-tc-s-1.ansi` | 56x9 | truecolor | 145 | gradient wordmark plate with rounded frame and spectrum underline |
+| `sugar-dashboard-2-tc-s-2.ansi` | 62x14 | truecolor | 31 | triple speedometer dials with filled gradient sectors |
+| `sugar-dashboard-3-16-l-1.ansi` | 158x30 | 16 | 8 | city traffic control map with signals and flow meters |
+| `sugar-dashboard-3-16-l-2.ansi` | 152x32 | 16 | 6 | epic NOC wall with twenty screens and night shift desks |
+| `sugar-dashboard-3-16-m-1.ansi` | 86x22 | 16 | 6 | widget assembly line with stations and pass/fail bins |
+| `sugar-dashboard-3-16-m-2.ansi` | 88x24 | 16 | 7 | NOC wall of nine mini dashboard screens |
+| `sugar-dashboard-3-16-s-1.ansi` | 56x11 | 16 | 6 | diner order ticket rail with grill and fryer heat gauges |
+| `sugar-dashboard-3-16-s-2.ansi` | 60x9 | 16 | 5 | refresh heartbeat EKG strip with three colored leads |
+| `sugar-dashboard-3-256-l-1.ansi` | 182x34 | 256 | 71 | space mission control board with orbit track and gauge rails |
+| `sugar-dashboard-3-256-l-2.ansi` | 172x30 | 256 | 19 | widget factory night shift with cranes and scoreboard |
+| `sugar-dashboard-3-256-m-1.ansi` | 86x22 | 256 | 20 | submarine control deck with ballast tanks and depth ladder |
+| `sugar-dashboard-3-256-m-2.ansi` | 84x20 | 256 | 8 | cardiac monitor pulse leads with rhythm legend |
+| `sugar-dashboard-3-256-s-1.ansi` | 48x12 | 256 | 13 | hull sonar mini scope with fading sweep wedge |
+| `sugar-dashboard-3-256-s-2.ansi` | 62x13 | 256 | 12 | alert fatigue toast avalanche with storm meter |
+| `sugar-dashboard-3-tc-l-1.ansi` | 182x38 | truecolor | 130 | deep-sea panorama with gradient ocean and SugarDashboard sub |
+| `sugar-dashboard-3-tc-l-2.ansi` | 164x38 | truecolor | 59 | radial refresh clock with rainbow tick ring and pulse leads |
+| `sugar-dashboard-3-tc-m-1.ansi` | 88x22 | truecolor | 149 | kitchen brigade stations with truecolor flame beds |
+| `sugar-dashboard-3-tc-m-2.ansi` | 86x22 | truecolor | 18 | alert triage board with severity gradient chips |
+| `sugar-dashboard-3-tc-s-1.ansi` | 54x13 | truecolor | 53 | shaded block planet with truecolor relay orbit |
+| `sugar-dashboard-3-tc-s-2.ansi` | 52x12 | truecolor | 40 | traffic light head with truecolor queue drain bar |
+| `sugar-dashboard-4-16-l-1.ansi` | 168x34 | 16 | 7 | regional grid control wall: generators, one-line bus, substations, demand, alarms |
+| `sugar-dashboard-4-16-l-2.ansi` | 150x32 | 16 | 7 | observatory dome console with star chart, alt-az control and log panel |
+| `sugar-dashboard-4-16-m-1.ansi` | 88x22 | 16 | 7 | power-grid board with four feeder gauges, demand curve and breaker strip |
+| `sugar-dashboard-4-16-m-2.ansi` | 86x22 | 16 | 8 | radio mixer desk with five channel faders and scrolling now-playing line |
+| `sugar-dashboard-4-16-s-1.ansi` | 58x15 | 16 | 7 | ship bridge binnacle compass with heading/SOG readouts and rudder bar |
+| `sugar-dashboard-4-256-l-1.ansi` | 176x36 | 256 | 15 | bridge helm panorama with ship wheel, instrument bank and radar scope |
+| `sugar-dashboard-4-256-l-2.ansi` | 182x34 | 256 | 16 | FM broadcast console with twelve channel strips, master VU and waveform |
+| `sugar-dashboard-4-256-m-1.ansi` | 88x24 | 256 | 15 | ship bridge cluster: compass, engine RPM, depth ladder and heave horizon |
+| `sugar-dashboard-4-256-m-2.ansi` | 88x24 | 256 | 13 | train driver cab speedometer with brake/pressure bars and signal stack |
+| `sugar-dashboard-4-256-m-3.ansi` | 86x22 | 256 | 15 | field weather board with baro trend, wind rose, rain gage and hygro dials |
+| `sugar-dashboard-4-256-s-1.ansi` | 52x10 | 256 | 14 | radio desk ON AIR lamp, FM freq digits and stereo VU meters |
+| `sugar-dashboard-4-256-s-2.ansi` | 48x12 | 256 | 12 | weather porch thermometer column, humidity bar and baro sparkline |
+| `sugar-dashboard-4-tc-l-1.ansi` | 160x34 | truecolor | 84 | high-speed train driver cab front view with windshield, speed dial and TCMS |
+| `sugar-dashboard-4-tc-l-2.ansi` | 176x40 | truecolor | 301 | arcade high-score wall cabinet with marquee, ghost art and attract mode |
+| `sugar-dashboard-4-tc-l-3.ansi` | 200x44 | truecolor | 571 | master SCADA with truecolor skyline, transmission topology and gauge rail |
+| `sugar-dashboard-4-tc-m-1.ansi` | 88x22 | truecolor | 34 | weather station instrument array with six truecolor dial gauges |
+| `sugar-dashboard-4-tc-m-2.ansi` | 84x22 | truecolor | 31 | arcade high-score leaderboard with gradient HI-SCORE title |
+| `sugar-dashboard-4-tc-s-1.ansi` | 63x11 | truecolor | 62 | arcade HI-SCORE pixel marquee over starfield with credit line |
+| `sugar-dashboard-4-tc-s-2.ansi` | 52x12 | truecolor | 58 | observatory reticle scope with RA/DEC readout and seeing gauge |
+| `sugar-dashboard-5-16-l-1.ansi` | 154x28 | 16 | 7 | submarine control room: order telegraph, ballast fill bars, depth ladder and tube states |
+| `sugar-dashboard-5-16-l-2.ansi` | 128x28 | 16 | 7 | fairground fortune-teller booth: crystal ball and widget omen cards under curtain lamps |
+| `sugar-dashboard-5-16-m-1.ansi` | 87x21 | 16 | 5 | weather balloon launch station ascent log: pressure/temp/altitude table with wind sparklines |
+| `sugar-dashboard-5-16-m-2.ansi` | 90x18 | 16 | 6 | stock exchange as a fish market: crying-hall crate rows of tuna and cod with tick arrows |
+| `sugar-dashboard-5-16-s-1.ansi` | 64x11 | 16 | 5 | ATC tower runway status board: callsigns, altitudes, trend sparklines, sector clearances |
+| `sugar-dashboard-5-256-l-1.ansi` | 176x29 | 256 | 24 | grid mimic diagram: generators to 400kV bus, transformers, feeder gauges and relays |
+| `sugar-dashboard-5-256-l-2.ansi` | 167x28 | 256 | 46 | submarine periscope dusk view: banded gradient sky, horizon and freighter contact |
+| `sugar-dashboard-5-256-m-1.ansi` | 88x20 | 256 | 9 | ATC primary radar PPI scope: phosphor sweep, range rings and labeled traffic blips |
+| `sugar-dashboard-5-256-m-2.ansi` | 88x18 | 256 | 25 | fish auction heat board: twelve crate lots as 256-color thermal bars with chg ticks |
+| `sugar-dashboard-5-256-s-1.ansi` | 64x8 | 256 | 7 | radio telescope pulsar counter strip: flux/DM/ToA sparkbars with widget lock readout |
+| `sugar-dashboard-5-256-s-2.ansi` | 67x8 | 256 | 11 | power station breaker grid: two tiled rows of breakers with states and trip current |
+| `sugar-dashboard-5-tc-l-1.ansi` | 214x28 | truecolor | 1029 | aurora KP7 curtain over a stratospheric balloon launch with station telemetry row |
+| `sugar-dashboard-5-tc-l-2.ansi` | 160x28 | truecolor | 37 | abyssal bioluminescent fish market: glowing shoals as ticker rows at 24 MPa |
+| `sugar-dashboard-5-tc-m-1.ansi` | 80x18 | truecolor | 138 | master trip panel: three glossy radial-shaded buttons under hazard stripes |
+| `sugar-dashboard-5-tc-m-2.ansi` | 86x19 | truecolor | 204 | pulsar waterfall heatmap: dispersion sweep over time in blue-white truecolor |
+| `sugar-dashboard-5-tc-s-1.ansi` | 56x10 | truecolor | 13 | fortune teller crystal ball with truecolor glow and floating sparkline omens |
+| `sugar-dashboard-5-tc-s-2.ansi` | 68x8 | truecolor | 17 | weather balloon rising through a truecolor sunrise gradient sky |
+| `sugar-dashboard-6-16-l-1.ansi` | 150x31 | 16 | 7 | clockmaker workshop bench: tower movement datagrid, drift sparklines, torque bars, strike logs |
+| `sugar-dashboard-6-16-l-2.ansi` | 140x28 | 16 | 10 | water tower ladder gauge: vertical level column, hourly supply/draw blocks, pump and quality rows |
+| `sugar-dashboard-6-16-m-1.ansi` | 88x20 | 16 | 7 | fairground ride control booth: interlock matrix, queue meters, wind gust auto-hold rows |
+| `sugar-dashboard-6-16-s-1.ansi` | 66x14 | 16 | 9 | theater lighting desk cue stack: gel rows, barn-door level bars, followspot flicker sparkline |
+| `sugar-dashboard-6-16-s-2.ansi` | 64x12 | 16 | 8 | library circulation desk due-date slip board: borrower datagrid, status chips, returns sparkline |
+| `sugar-dashboard-6-256-l-1.ansi` | 170x34 | 256 | 15 | greenhouse climate wall: zone temp/humidity sparklines, lamp schedule bars, root-zone heat map |
+| `sugar-dashboard-6-256-l-2.ansi` | 176x30 | 256 | 9 | tram line section map board: platform occupancy bars, stop grid, headway datagrid and depot status |
+| `sugar-dashboard-6-256-m-1.ansi` | 88x19 | 256 | 13 | brewery cellar gauge wall: fermentation tank datagrid, krausen trend, gravity and CO2 sparklines |
+| `sugar-dashboard-6-256-m-2.ansi` | 90x19 | 256 | 8 | parcel sorting conveyor board: chute counters with speed bars, jam alarm, induct sparkline |
+| `sugar-dashboard-6-256-s-1.ansi` | 68x8 | 256 | 9 | ship engine-room telegraph strip: order echo handle, RPM gauge, ahead rev sparkbars |
+| `sugar-dashboard-6-256-s-2.ansi` | 66x11 | 256 | 11 | aquarium gallery feeding board: tank schedule rows, temperature trend blocks, salinity spark |
+| `sugar-dashboard-6-tc-l-1.ansi` | 180x29 | truecolor | 39 | lighthouse district control log: per-station flash character charts, truecolor fog visibility bands, lamp and rotation gauges |
+| `sugar-dashboard-6-tc-l-2.ansi` | 176x32 | truecolor | 40 | apiary hive inspection wall: per-hive comb cap-pattern strips, weight gain, queen flags, brood warmth gradient |
+| `sugar-dashboard-6-tc-m-1.ansi` | 88x18 | truecolor | 42 | post office counter services board: window queue heat bars, call ticker, forms stock and audit rows |
+| `sugar-dashboard-6-tc-m-2.ansi` | 86x19 | truecolor | 123 | ice rink resurfacer dispatch: truecolor ice-temperature heat field with hot spots, unit roster rows |
+| `sugar-dashboard-6-tc-s-1.ansi` | 66x12 | truecolor | 43 | bakery dawn-rush production board: oven deck ember gradients, proofing curve, batch out-times |
+| `sugar-dashboard-6-tc-s-2.ansi` | 68x9 | truecolor | 31 | cinema projection booth changeover log: reel countdowns, xenon lamp-hours gradient meter, cue dots |
+| `sugar-dashboard-7-16-l-1.ansi` | 168x32 | 16 | 6 | satellite ground-station antenna farm + pass datagrid + doppler + AGC |
+| `sugar-dashboard-7-16-l-2.ansi` | 164x30 | 16 | 5 | distillery aging-floor gauge wall: cask-head racks + shed climate |
+| `sugar-dashboard-7-16-m-1.ansi` | 86x22 | 16 | 6 | night bridge console: radar scope, gyro dial, engine telegraph |
+| `sugar-dashboard-7-16-m-2.ansi` | 88x20 | 16 | 5 | subway interlocking panel with aspect matrix + occupancy bars |
+| `sugar-dashboard-7-16-s-1.ansi` | 64x14 | 16 | 5 | ship's wheel spinner + gyro compass card at the helm |
+| `sugar-dashboard-7-16-s-2.ansi` | 62x11 | 16 | 5 | signal-box lever frame with a 3-aspect head repeater |
+| `sugar-dashboard-7-256-l-1.ansi` | 180x34 | 256 | 9 | ship's bridge at night full wall: window, ARPA radar, ECDIS, gauge bank |
+| `sugar-dashboard-7-256-l-2.ansi` | 170x30 | 256 | 8 | met-station rooftop array: vane row, wind rose, rain/temp/pressure |
+| `sugar-dashboard-7-256-m-1.ansi` | 88x20 | 256 | 6 | power-loom mill floor board: picks, warp/weft tension, bobbin stock |
+| `sugar-dashboard-7-256-m-2.ansi` | 86x21 | 256 | 6 | grain terminal silo bank level columns + aeration trend |
+| `sugar-dashboard-7-256-s-1.ansi` | 66x13 | 256 | 7 | rooftop weather vane over the ridge + wind-rose compass |
+| `sugar-dashboard-7-256-s-2.ansi` | 64x14 | 256 | 7 | distillery cask-head proof gauge with shed-temp sparkline |
+| `sugar-dashboard-7-tc-l-1.ansi` | 190x36 | truecolor | 6 | subway interlocking tower wall: schematic, lever frame, departures |
+| `sugar-dashboard-7-tc-l-2.ansi` | 176x32 | truecolor | 9 | tide-mill waterwheel control board: sluice bank, races, millstone drive |
+| `sugar-dashboard-7-tc-m-1.ansi` | 88x22 | truecolor | 9 | radio-telescope control van: mount dials + truecolor waterfall |
+| `sugar-dashboard-7-tc-m-2.ansi` | 86x20 | truecolor | 7 | canal lock board: mitred gates, chamber levels, paddle bars |
+| `sugar-dashboard-7-tc-s-1.ansi` | 62x13 | truecolor | 7 | tide-mill sluice handwheel + gate head-race water column |
+| `sugar-dashboard-7-tc-s-2.ansi` | 66x12 | truecolor | 8 | radio telescope dish + HI-line spectrum blip trace |
+| `sugar-dashboard-8-16-l-1.ansi` | 150x28 | 16 | 9 | ski-resort lift-line ops: ridge profile, 5 lifts, avy grid, tension, energy |
+| `sugar-dashboard-8-16-l-2.ansi` | 146x28 | 16 | 9 | hydro spillway control: reservoir section, 6 radial gates, 4 units, seepage |
+| `sugar-dashboard-8-16-m-1.ansi` | 84x18 | 16 | 8 | hospital nurse-call annunciator: ward grids, corridor LED strip, ring counter |
+| `sugar-dashboard-8-16-m-2.ansi` | 82x18 | 16 | 8 | fire station apparatus board: bays, run ticket, tones, zones, hydrants |
+| `sugar-dashboard-8-16-s-1.ansi` | 64x14 | 16 | 9 | power substation bay board: breaker cells, bus, lockout relay |
+| `sugar-dashboard-8-16-s-2.ansi` | 62x14 | 16 | 8 | seismic network station: 3-component traces, STA/LTA bars, event log |
+| `sugar-dashboard-8-256-l-1.ansi` | 148x28 | 256 | 18 | water treatment works: jars, floc, clarifiers, 6 filters, clearwells, lab |
+| `sugar-dashboard-8-256-l-2.ansi` | 144x32 | 256 | 22 | stadium match-day capacity: seat map, sections, turnstiles, parking |
+| `sugar-dashboard-8-256-m-1.ansi` | 86x19 | 256 | 15 | datacenter cold-aisle camera wall: 3 feeds, dT bars, CRACs, door sensors |
+| `sugar-dashboard-8-256-m-2.ansi` | 88x19 | 256 | 18 | metro traction-power control: 750V DC rail segments, 5 substations, regen |
+| `sugar-dashboard-8-256-s-1.ansi` | 66x13 | 256 | 18 | farm irrigation valve grid: 12 valves, pivots, soil probes, leak scan |
+| `sugar-dashboard-8-256-s-2.ansi` | 68x13 | 256 | 20 | port container-gate lanes: booms, OCR plates, yard blocks, weighbridge |
+| `sugar-dashboard-8-tc-l-1.ansi` | 150x28 | truecolor | 53 | rocket launch director console: 10 systems, weather, range, trajectory |
+| `sugar-dashboard-8-tc-l-2.ansi` | 150x28 | truecolor | 97 | satellite ground station: dish, spectrum waterfall, polarizations, TLE |
+| `sugar-dashboard-8-tc-m-1.ansi` | 84x20 | truecolor | 48 | coffee roastery batch board: roast curve, milestones, drum, cooling |
+| `sugar-dashboard-8-tc-m-2.ansi` | 84x19 | truecolor | 27 | LNG metering bay: 3 trains, tank gradients, BOG, custody transfer |
+| `sugar-dashboard-8-tc-s-1.ansi` | 66x16 | truecolor | 35 | planetarium dome control: star field, projector channels, show climate |
+| `sugar-dashboard-8-tc-s-2.ansi` | 64x14 | truecolor | 23 | pinball factory test jig: switch matrix, coil pulses, DMD strip, QA |
+| `sugar-dashboard-9-16-l-1.ansi` | 162x30 | 16 | 9 | web-offset press desk: register marks, tension bars, duct keys, counters, alarms |
+| `sugar-dashboard-9-16-l-2.ansi` | 150x29 | 16 | 8 | mine winding-house depth desk: shaft scale, cage A/B, bell codes, engine bank |
+| `sugar-dashboard-9-16-m-1.ansi` | 88x22 | 16 | 8 | radio request-line switchboard: jackfield, caller dedications, patch lamps |
+| `sugar-dashboard-9-16-m-2.ansi` | 86x21 | 16 | 9 | zoo feeding rota: 8 enclosures, meal slots with check marks, diet, prep bars |
+| `sugar-dashboard-9-16-s-1.ansi` | 64x14 | 16 | 8 | grand-hotel bell annunciator: room state grid, corridor LED strip, ring queue |
+| `sugar-dashboard-9-16-s-2.ansi` | 68x13 | 16 | 8 | bank vault pneumatic-tube diverter: five stations, carrier transit, pump bank |
+| `sugar-dashboard-9-256-l-1.ansi` | 160x30 | 256 | 15 | film sound-stage call-sheet wall: scenes/build, crew calls, bays, takes, day |
+| `sugar-dashboard-9-256-l-2.ansi` | 152x29 | 256 | 14 | coastguard rocket-apparatus station: surf/tide, rig states, crew, rescue log |
+| `sugar-dashboard-9-256-m-1.ansi` | 88x22 | 256 | 14 | grid battery energy-storage hall: 8 rack SOC/V/I/temp, thermal map, cell spread |
+| `sugar-dashboard-9-256-m-2.ansi` | 86x21 | 256 | 11 | water-works pressure-zone board: DMA nightline, tank ladders, valves, burst log |
+| `sugar-dashboard-9-256-s-1.ansi` | 66x15 | 256 | 13 | art-deco searchlight battery sector plot: hand-plotted beams, bearing scale |
+| `sugar-dashboard-9-256-s-2.ansi` | 68x16 | 256 | 12 | overhead-line inspection car: contact-wire height trace, stagger, hook wear |
+| `sugar-dashboard-9-tc-l-1.ansi` | 168x30 | truecolor | 212 | airship mooring-mast control wall: ship on mast, weather, gas, handling party |
+| `sugar-dashboard-9-tc-l-2.ansi` | 150x29 | truecolor | 104 | glacier mass-balance stakes: section profile, stake table, melt discharge, cams |
+| `sugar-dashboard-9-tc-m-1.ansi` | 88x22 | truecolor | 24 | rail hump-yard retarder board: per-car entry/exit speed, retarder groups, faults |
+| `sugar-dashboard-9-tc-m-2.ansi` | 86x22 | truecolor | 29 | aqueduct valve-house telemetry: sections, hydraulic grade line, actuator bank |
+| `sugar-dashboard-9-tc-s-1.ansi` | 68x16 | truecolor | 66 | museum gallery conservation board: per-case RH/temp/lux/vib, hall climate |
+| `sugar-dashboard-9-tc-s-2.ansi` | 66x12 | truecolor | 82 | musical fountain control console: jet-height choreography, pumps, valve cues |
+<!-- END sugar-dashboard SLOTS -->
 
 <!-- BEGIN sugar-gallery SLOTS -->
 ### sugar-gallery — slot series

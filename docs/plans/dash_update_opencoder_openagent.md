@@ -1,14 +1,14 @@
-# Sugar-Dash: Comprehensive Reorganization & Enhancement Plan
+# Sugar-Dashboard: Comprehensive Reorganization & Enhancement Plan
 
 **Generated:** 2026-05-13  
 **Status:** PLANNING  
-**Based on:** Analysis of 7 upstream Go repositories + current sugar-dash state
+**Based on:** Analysis of 7 upstream Go repositories + current sugar-dashboard state
 
 ---
 
 ## Executive Summary
 
-Sugar-dash has made substantial progress implementing a TUI dashboard library, but its current organization under `src/Grid/` is architecturally misaligned with the original 18-package vision. This plan proposes a comprehensive reorganization into distinct subsystems with implementation priorities based on dependency order and value delivered.
+Sugar-dashboard has made substantial progress implementing a TUI dashboard library, but its current organization under `src/Grid/` is architecturally misaligned with the original 18-package vision. This plan proposes a comprehensive reorganization into distinct subsystems with implementation priorities based on dependency order and value delivered.
 
 **Key Problems Identified:**
 
@@ -34,7 +34,7 @@ Sugar-dash has made substantial progress implementing a TUI dashboard library, b
 
 ### 1.1 What Exists vs Original Plan
 
-| Phase  | Package              | Original Plan Status         | sugar-dash Status              |
+| Phase  | Package              | Original Plan Status         | sugar-dashboard Status              |
 | ------ | -------------------- | ---------------------------- | ------------------------------ |
 | 1.1    | Grid\                | Item/Sizer, StackedGrid, Frame | ✅ Implemented (Layout.php, GridLayout.php, FlexLayout.php, StackedGrid.php) |
 | 1.2    | Boxer\               | Boxer, Node, ModelMap, CreateLeaf | ❌ Missing — need to implement  |
@@ -109,7 +109,7 @@ type Drawable interface {
 }
 ```
 
-**Why valuable:** Provides a universal contract for layout systems to interact with widgets. Sugar-dash currently lacks this — layout classes call `render()` directly but don't have a unified way to query/set widget bounds.
+**Why valuable:** Provides a universal contract for layout systems to interact with widgets. Sugar-dashboard currently lacks this — layout classes call `render()` directly but don't have a unified way to query/set widget bounds.
 
 **PHP Implementation:**
 ```php
@@ -302,7 +302,7 @@ The tealeaves suite provides mature reference implementations for:
 ### 3.1 New Directory Structure
 
 ```
-sugar-dash/
+sugar-dashboard/
 ├── composer.json
 ├── phpunit.xml
 ├── README.md
@@ -340,16 +340,16 @@ sugar-dash/
 
 | Current Namespace                  | Proposed Namespace                    |
 | ---------------------------------- | ------------------------------------- |
-| `SugarCraft\Dash\Grid`               | `SugarCraft\Dash\Layout` (for Layout sub-packages) |
-| `SugarCraft\Dash\Grid\Layout`        | `SugarCraft\Dash\Layout\Flex`          |
-| `SugarCraft\Dash\Grid\GridLayout`    | `SugarCraft\Dash\Layout\Grid`          |
-| `SugarCraft\Dash\Grid\StackedGrid`   | `SugarCraft\Dash\Layout\Stacked`       |
-| `SugarCraft\Dash\Grid\Frame`         | `SugarCraft\Dash\Components\Frame`     |
-| `SugarCraft\Dash\Grid\Chart\*`       | `SugarCraft\Dash\Components\Plot\*`    |
-| `SugarCraft\Dash\Grid\Input\*`       | `SugarCraft\Dash\Components\Input\*`   |
-| (new) `SugarCraft\Dash\Drawable`     | `SugarCraft\Dash\Drawable`             |
-| (new) `SugarCraft\Dash\Module`       | `SugarCraft\Dash\Module`               |
-| (new) `SugarCraft\Dash\System`       | `SugarCraft\Dash\System`               |
+| `SugarCraft\Dashboard\Grid`               | `SugarCraft\Dashboard\Layout` (for Layout sub-packages) |
+| `SugarCraft\Dashboard\Grid\Layout`        | `SugarCraft\Dashboard\Layout\Flex`          |
+| `SugarCraft\Dashboard\Grid\GridLayout`    | `SugarCraft\Dashboard\Layout\Grid`          |
+| `SugarCraft\Dashboard\Grid\StackedGrid`   | `SugarCraft\Dashboard\Layout\Stacked`       |
+| `SugarCraft\Dashboard\Grid\Frame`         | `SugarCraft\Dashboard\Components\Frame`     |
+| `SugarCraft\Dashboard\Grid\Chart\*`       | `SugarCraft\Dashboard\Components\Plot\*`    |
+| `SugarCraft\Dashboard\Grid\Input\*`       | `SugarCraft\Dashboard\Components\Input\*`   |
+| (new) `SugarCraft\Dashboard\Drawable`     | `SugarCraft\Dashboard\Drawable`             |
+| (new) `SugarCraft\Dashboard\Module`       | `SugarCraft\Dashboard\Module`               |
+| (new) `SugarCraft\Dashboard\System`       | `SugarCraft\Dashboard\System`               |
 
 ---
 
@@ -594,14 +594,14 @@ sugar-dash/
 {
     "autoload": {
         "psr-4": {
-            "SugarCraft\\Dash\\": "src/",
-            "SugarCraft\\Dash\\Layout\\": "src/Layout/",
-            "SugarCraft\\Dash\\Components\\": "src/Components/",
-            "SugarCraft\\Dash\\Drawable\\": "src/Drawable/",
-            "SugarCraft\\Dash\\Module\\": "src/Module/",
-            "SugarCraft\\Dash\\System\\": "src/System/",
-            "SugarCraft\\Dash\\Util\\": "src/Util/",
-            "SugarCraft\\Dash\\Theme\\": "src/Theme/"
+            "SugarCraft\\Dashboard\\": "src/",
+            "SugarCraft\\Dashboard\\Layout\\": "src/Layout/",
+            "SugarCraft\\Dashboard\\Components\\": "src/Components/",
+            "SugarCraft\\Dashboard\\Drawable\\": "src/Drawable/",
+            "SugarCraft\\Dashboard\\Module\\": "src/Module/",
+            "SugarCraft\\Dashboard\\System\\": "src/System/",
+            "SugarCraft\\Dashboard\\Util\\": "src/Util/",
+            "SugarCraft\\Dashboard\\Theme\\": "src/Theme/"
         }
     },
     "repositories": [
@@ -757,5 +757,5 @@ interface Layout extends Sizer {
 
 ---
 
-*Plan generated from analysis of 7 upstream Go repositories and current sugar-dash state.*
+*Plan generated from analysis of 7 upstream Go repositories and current sugar-dashboard state.*
 *Save this file and update as implementation progresses.*

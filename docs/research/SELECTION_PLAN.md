@@ -14,56 +14,56 @@
 
 ---
 
-## SUGAR-DASH (TUI Dashboard) - Your Starting Point
+## SUGAR-DASHBOARD (TUI Dashboard) - Your Starting Point
 
 ### [ ] Constraint-based Layout (like Ratatui)
 
 - **Priority**: P1 - High
 - **Effort**: 2-3 weeks
 - **Impact**: Major layout system improvement
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ### [ ] StatefulWidget Separation (external state for selection)
 
 - **Priority**: P1 - High
 - **Effort**: 1-2 weeks
 - **Impact**: Better state management for tables/lists
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ### [ ] Reactive Properties (watch pattern)
 
 - **Priority**: P1 - High
 - **Effort**: 1 week
 - **Impact**: Auto-calling watchers on property change
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ### [ ] Block Wrapper (composable borders/padding)
 
 - **Priority**: P2 - Medium
 - **Effort**: 3-5 days
 - **Impact**: Cleaner component composition
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ### [ ] Improved Spinner (explicit tick, not time-based)
 
 - **Priority**: P3 - Low
 - **Effort**: 1 day
 - **Impact**: Better animation control
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ### [ ] Lifecycle Interface (mount/unmount hooks)
 
 - **Priority**: P2 - Medium
 - **Effort**: 2-3 days
 - **Impact**: Better component lifecycle
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ### [ ] FlexBox Layout API (justifyContent/alignItems)
 
 - **Priority**: P2 - Medium
 - **Effort**: 1-2 weeks
 - **Impact**: CSS-like flexbox for TUIs
-- **Research**: `libraries/sugar-dash-research.md`
+- **Research**: `libraries/sugar-dashboard-research.md`
 
 ---
 
@@ -461,7 +461,7 @@ All 45 research documents available at:
 | sugar-charts | 23KB |
 | sugar-crumbs | 14KB |
 | sugar-crush | 15KB |
-| sugar-dash | 25KB |
+| sugar-dashboard | 25KB |
 | candy-mdview | 17KB |
 | candy-mail | 25KB |
 | candy-forms | 20KB |

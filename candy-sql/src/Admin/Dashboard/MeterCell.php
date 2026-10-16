@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Dashboard;
 
-use SugarCraft\Dash\Plot\Chart\Donut;
-use SugarCraft\Dash\Plot\Chart\Gauge;
-use SugarCraft\Dash\Plot\Chart\Meter;
-use SugarCraft\Dash\Foundation\Color;
+use SugarCraft\Dashboard\Plot\Chart\Donut;
+use SugarCraft\Dashboard\Plot\Chart\Gauge;
+use SugarCraft\Dashboard\Plot\Chart\Meter;
+use SugarCraft\Dashboard\Foundation\Color;
 
 /**
- * Renders round and level meter widgets using sugar-dash chart components.
+ * Renders round and level meter widgets using sugar-dashboard chart components.
  *
  * - "round" kind: uses Donut (Workbench's DBRoundMeter is a ring gauge: the
  *   filled arc is the used share, the hole carries the percentage readout)
@@ -168,7 +168,7 @@ final class MeterCell
      *
      * Workbench's DBRoundMeter is exactly this shape: an annulus whose filled
      * sweep is the used share and whose center prints the numeric readout, so
-     * sugar-dash Donut replaces the earlier GaugeCircle here. Two segments
+     * sugar-dashboard Donut replaces the earlier GaugeCircle here. Two segments
      * (used vs free) keep the ring total constant at 100 so Donut never hits
      * its empty-render path, and the free segment carries a muted grey so the
      * fill reads as progress against a visible track.

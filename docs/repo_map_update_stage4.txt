@@ -3,7 +3,7 @@
 ## 1. Top 3 Critical Gaps
 
 ### 1.1 Buffer Diffing / Dirty-Region Tracking
-**Affects:** sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister
+**Affects:** sugar-boxer, sugar-dashboard, sugar-crush, sugar-veil, sugar-stickers, candy-lister
 All do full re-render every frame. External repos (ultraviolet, ratatui, php-tui) track touched lines and emit only delta ANSI sequences via ECH/REP/ICH/DCH escape sequences. Critical for SSH connections and live dashboards.
 
 **Why critical:** Without diffing, every render sends the full viewport — wastefully for unchanged regions, causes flicker on some terminals, and prevents smooth animations.
@@ -15,7 +15,7 @@ sugar-readline cannot read actual terminal keypresses — only processes pre-dec
 **Why critical:** Libraries without input drivers are demo-only; cannot be used in production CLI tools without significant additional wiring.
 
 ### 1.3 Constraint-Based Layout (Cassowary Solver)
-**Affects:** sugar-boxer, sugar-dash, candy-git, sugar-stickers
+**Affects:** sugar-boxer, sugar-dashboard, candy-git, sugar-stickers
 Tree-based weighted distribution cannot express constraints like "column A = 30% but never less than 10". External repos (ratatui, php-tui) use Cassowary constraint solver with Min/Max/Percent/Ratio/Fill constraints.
 
 **Why critical:** Complex responsive dashboards need constraint solving — sidebar at 20% width with min 20 / max 40 cells, main content filling remaining space.
@@ -25,7 +25,7 @@ Tree-based weighted distribution cannot express constraints like "column A = 30%
 ## 2. Top 2 Shared Architectural Weaknesses
 
 ### 2.1 No StatefulWidget / Event-Driven Separation
-Components across sugar-dash, sugar-crush, sugar-readline, candy-lister mix state and rendering. External repos (ratatui, textual) separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). This enables testability, multiple views of same data, and cleaner update cycles.
+Components across sugar-dashboard, sugar-crush, sugar-readline, candy-lister mix state and rendering. External repos (ratatui, textual) separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). This enables testability, multiple views of same data, and cleaner update cycles.
 
 **Pattern needed:** `ListState` / `TableState` / `TabsState` as external state objects passed to constructors, rather than internal mutable state.
 
@@ -40,7 +40,7 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 
 ### 3.1 ratatui/ratatui (cited 7+ times)
 **Purpose:** Full TUI framework reference for constraint-based layout, buffer diffing, StatefulWidget pattern, and immediate-mode rendering.
-**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dash), buffer diffing algorithm (sugar-crush, sugar-veil), Widget/StatefulWidget traits (sugar-dash, candy-git).
+**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dashboard), buffer diffing algorithm (sugar-crush, sugar-veil), Widget/StatefulWidget traits (sugar-dashboard, candy-git).
 **Key citation:** "The layout system uses the Cassowary constraint solver algorithm to resolve conflicting layout constraints"
 
 ### 3.2 charmbracelet/bubbletea (cited 6+ times)

@@ -24,7 +24,7 @@
     {"batch":"C","kind":"rename","old":"sugar-veil","new":"sugar-overlay","ns_old":"Veil","ns_new":"Overlay","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-hermit","new":"sugar-quickpick","ns_old":"Hermit","ns_new":"QuickPick","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-lister","new":"sugar-treelist","ns_old":"Lister","ns_new":"TreeList","type":"lib","bins":{},"status":"pending"},
-    {"batch":"C","kind":"rename","old":"sugar-dash","new":"sugar-dashboard","ns_old":"Dash","ns_new":"Dashboard","type":"lib","bins":{},"status":"pending"},
+    {"batch":"C","kind":"rename","old":"sugar-dash","new":"sugar-dashboard","ns_old":"Dash","ns_new":"Dashboard","type":"lib","bins":{},"status":"renamed"},
     {"batch":"C","kind":"rename","old":"sugar-mcp","new":"sugar-mcp-client","ns_old":"Mcp","ns_new":"McpClient","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"sugar-bits","new":"sugar-widgets","ns_old":"Bits","ns_new":"Widgets","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-forms","new":"sugar-forms","ns_old":"Forms","ns_new":"Forms","type":"lib","bins":{},"status":"pending"},

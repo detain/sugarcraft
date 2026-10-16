@@ -6,9 +6,9 @@ namespace SugarCraft\Sql\Admin\ServerStatus;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Components\Card\Badge;
-use SugarCraft\Dash\Components\Card\Card;
-use SugarCraft\Dash\Components\Card\DefinitionList;
+use SugarCraft\Dashboard\Components\Card\Badge;
+use SugarCraft\Dashboard\Components\Card\Card;
+use SugarCraft\Dashboard\Components\Card\DefinitionList;
 use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\CacheTtl;
 use SugarCraft\Sql\Admin\Format;
@@ -25,7 +25,7 @@ use SugarCraft\Sprinkles\Style;
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.
  *
  * Provides a comprehensive overview of the MySQL/MariaDB server configuration
- * and runtime state. Each category is a sugar-dash Card wrapping a
+ * and runtime state. Each category is a sugar-dashboard Card wrapping a
  * DefinitionList; boolean features render as Badge::bool() instead of
  * hand-rolled Yes/No ANSI.
  *
@@ -421,7 +421,7 @@ final class ServerStatusPage extends PageBase
      *
      * Used for features that may be present, absent, or unknown
      * (e.g., from server variables that may not be set). Delegates to
-     * Badge::bool() so the Yes/No/Unknown styling lives in sugar-dash.
+     * Badge::bool() so the Yes/No/Unknown styling lives in sugar-dashboard.
      *
      * @param bool|string|null $value
      */

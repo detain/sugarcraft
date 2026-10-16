@@ -160,7 +160,7 @@ final class StatusBarTest extends TestCase
 
     public function testBarWideStyleWrapsWholeLine(): void
     {
-        // Mirrors sugar-dash: one fg+bg over the whole padded bar.
+        // Mirrors sugar-dashboard: one fg+bg over the whole padded bar.
         $style = Style::new()->background(Color::hex('#1A1B26'))->foreground(Color::hex('#874BFD'));
         $b = StatusBar::new()->left('X')->right('Y')->width(5)->style($style);
         $this->assertSame("\x1b[38;2;135;75;253m\x1b[48;2;26;27;38mX   Y\x1b[0m", $b->render());

@@ -7,7 +7,7 @@ namespace SugarCraft\Top\Tests\Theme;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dash\Foundation\GradientStore;
+use SugarCraft\Dashboard\Foundation\GradientStore;
 use SugarCraft\Top\Theme\ThemeConfig;
 
 final class ThemeConfigTest extends TestCase

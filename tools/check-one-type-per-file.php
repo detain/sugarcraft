@@ -12,7 +12,7 @@ declare(strict_types=1);
  * construction, an instanceof target, `class_exists()`), it is "class not
  * found". That is not theoretical in this tree: `sugar-crush`'s
  * `App\LayoutResetMsg`, declared inside `App.php`, died that way once a
- * regenerated shard plan put the unloaded case first, and `sugar-dash` carried
+ * regenerated shard plan put the unloaded case first, and `sugar-dashboard` carried
  * a `SortDirection` enum both in its own file and again inside `Sort.php` — a
  * hard "Cannot declare enum" fatal as soon as both loaded. The fix was to give
  * every type its own file in all 13 affected libs; this gate keeps it that way.

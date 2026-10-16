@@ -19,7 +19,7 @@ Comprehensive code audit of the SugarCraft PHP monorepo — 57 TUI library ports
 See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patterns across the codebase:
 
 - **35+ mutate() re-implementations** — every with*() builder duplicates the same 4-line pattern
-- **AsyncOps duplication** — candy-async's AsyncOps reproduced in candy-buffer, sugar-dash, others
+- **AsyncOps duplication** — candy-async's AsyncOps reproduced in candy-buffer, sugar-dashboard, others
 - **Clamping logic** — min/max clamping copied across 10+ projects with no shared utility
 - **Style object allocation** — hot-render loops creating Style chains per-frame (candy-starter, candy-flappy)
 - **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-scriptui)
@@ -111,7 +111,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-mouse | 0 HIGH, 2 MED, 4 LOW | current() returns null, switchTo() no bounds check |
 | candy-mouse | (see findings/candy-mouse.md) | Comprehensive mouse event handling audit |
 | sugar-bits | (see findings/sugar-bits.md) | Stopwatch/teardown patterns |
-| sugar-dash | (see findings/sugar-dash.md) | Largest sugar-* project — 52KB findings |
+| sugar-dashboard | (see findings/sugar-dashboard.md) | Largest sugar-* project — 52KB findings |
 | candy-vt | (see findings/candy-vt.md) | Terminal emulation |
 | candy-kv | (see findings/candy-kv.md) | First-ever audit 2026-09-15 (E719, round 82): zero P0; two empirically-verified P1 defects + P2/P3 backlog, remediation planned |
 | others | various | See individual findings/*.md files |
@@ -123,7 +123,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 ### 1. Extract Shared Utilities to candy-core
 
 - **mutate() trait** — currently reimplemented 35+ times; create a `SugarCraft\Core\Concerns\WithBuilder` trait
-- **AsyncOps class** — duplicated in candy-async, candy-buffer, sugar-dash; consolidate into candy-core
+- **AsyncOps class** — duplicated in candy-async, candy-buffer, sugar-dashboard; consolidate into candy-core
 - **Clamping utility** — `SugarCraft\Core\clamp(int $value, int $min, int $max): int` — appears in 10+ projects
 - **Grapheme splitting** — 3-level fallback scattered across 8+ projects; extract `SugarCraft\Core\grapheme_split(string $s): array`
 - **escapeshellarg+stripslashes fix** — create `SugarCraft\Core\ safe_env_value(string $v): string` that doesn't strip escaping

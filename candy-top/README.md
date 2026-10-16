@@ -1,6 +1,6 @@
 # candy-top
 
-A full-screen terminal system monitor for PHP 8.3+, built on the SugarCraft TUI stack. candy-top shows live CPU, memory, disk, network, process and container panels with braille, block or sextant graphs, gradient meters and themes in the btop tradition, and follows the feature set of aristocratos/btop v1.4.7 plus a set of adopted upstream pull requests. Everything runs on the [candy-core](../candy-core) Model/Cmd runtime, and the drawing uses [sugar-dash](../sugar-dash), [sugar-bits](../sugar-bits) and [candy-sprinkles](../candy-sprinkles).
+A full-screen terminal system monitor for PHP 8.3+, built on the SugarCraft TUI stack. candy-top shows live CPU, memory, disk, network, process and container panels with braille, block or sextant graphs, gradient meters and themes in the btop tradition, and follows the feature set of aristocratos/btop v1.4.7 plus a set of adopted upstream pull requests. Everything runs on the [candy-core](../candy-core) Model/Cmd runtime, and the drawing uses [sugar-dashboard](../sugar-dashboard), [sugar-bits](../sugar-bits) and [candy-sprinkles](../candy-sprinkles).
 
 ![candy-top demo](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif)
 
@@ -91,7 +91,7 @@ Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is c
 ### net
 
 - **Graphs.** Download and upload graphs for the selected interface, plus a stats sub-box with the current rate, the top rate and the total for each direction. `swap_upload_download` puts upload on top.
-- **Auto-scale.** `net_auto`, toggled by `a`, rescales the graphs with hysteresis (sugar-dash `NetAutoScale`), never going below 10 KiB. `net_sync`, toggled by `y`, gives both directions the same scale. With auto-scale off, `net_download` and `net_upload` set fixed ceilings in Mebibits. Toggling either option rescales at once.
+- **Auto-scale.** `net_auto`, toggled by `a`, rescales the graphs with hysteresis (sugar-dashboard `NetAutoScale`), never going below 10 KiB. `net_sync`, toggled by `y`, gives both directions the same scale. With auto-scale off, `net_download` and `net_upload` set fixed ceilings in Mebibits. Toggling either option rescales at once.
 - **Interface selection.** At startup the interface is `net_iface` if it exists. Otherwise the first connected interface with the most traffic is picked, and that pick sticks until the interface disappears. `b` and `n` cycle through the interfaces. That choice is not saved.
 - **Zeroing.** `z` resets the totals of the current interface, and a second `z` restores them.
 - **Addresses.** The interface's IPv4 address (otherwise its global IPv6 address) is shown in the title (btop #1573). `net_hide_ip` hides it.

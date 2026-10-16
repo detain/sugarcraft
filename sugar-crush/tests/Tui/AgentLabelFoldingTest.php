@@ -45,12 +45,12 @@ final class AgentLabelFoldingTest extends TestCase
     public function testTwoWordPrefixesActivateTheFold(): void
     {
         $folded = AgentLabelFolding::fold([
-            'You are auditing one library in sugar-dash',
+            'You are auditing one library in sugar-dashboard',
             'You are auditing one library in candy-mosaic',
         ]);
 
         $this->assertSame(
-            ['You are … sugar-dash', 'You are … candy-mosaic'],
+            ['You are … sugar-dashboard', 'You are … candy-mosaic'],
             $folded,
         );
     }
@@ -71,7 +71,7 @@ final class AgentLabelFoldingTest extends TestCase
 
     public function testIdenticalLabelsNeverFold(): void
     {
-        $labels = ['You are auditing sugar-dash', 'You are auditing sugar-dash'];
+        $labels = ['You are auditing sugar-dashboard', 'You are auditing sugar-dashboard'];
 
         $this->assertSame($labels, AgentLabelFolding::fold($labels));
     }
@@ -80,7 +80,7 @@ final class AgentLabelFoldingTest extends TestCase
     {
         // 'You are' has no remainder — the group cannot be disambiguated
         // honestly, so nothing folds.
-        $labels = ['You are', 'You are auditing sugar-dash'];
+        $labels = ['You are', 'You are auditing sugar-dashboard'];
 
         $this->assertSame($labels, AgentLabelFolding::fold($labels));
     }
@@ -95,12 +95,12 @@ final class AgentLabelFoldingTest extends TestCase
     public function testTheFoldSurvivesTheThirtyCellClipWithItsDifference(): void
     {
         $plain = [
-            'You are auditing one very long shared prefix across many words in sugar-dash',
+            'You are auditing one very long shared prefix across many words in sugar-dashboard',
             'You are auditing one very long shared prefix across many words in candy-mosaic',
         ];
         $folded = AgentLabelFolding::fold($plain);
 
-        foreach ([['sugar-dash', 0], ['candy-mosaic', 1]] as [$needle, $i]) {
+        foreach ([['sugar-dashboard', 0], ['candy-mosaic', 1]] as [$needle, $i]) {
             $this->assertLessThanOrEqual(
                 30,
                 Width::string($folded[$i]),
@@ -118,7 +118,7 @@ final class AgentLabelFoldingTest extends TestCase
     public function testFoldingIsOrderInvariantPerLabel(): void
     {
         $labels = [
-            'You are auditing one library in sugar-dash',
+            'You are auditing one library in sugar-dashboard',
             'You are auditing one library in candy-mosaic',
             'You are auditing one library in honey-bounce',
         ];
@@ -134,7 +134,7 @@ final class AgentLabelFoldingTest extends TestCase
     public function testOnlyCollidingGroupsFold(): void
     {
         $folded = AgentLabelFolding::fold([
-            'You are auditing one library in sugar-dash',
+            'You are auditing one library in sugar-dashboard',
             'You are auditing one library in candy-mosaic',
             'Summarize the changelog for release day',
         ]);
@@ -164,7 +164,7 @@ final class AgentLabelFoldingTest extends TestCase
         $entries = AgentDashboardPane::managerEntries($manager);
 
         $this->assertSame(
-            ['You are … sugar-dash', 'You are … candy-mosaic'],
+            ['You are … sugar-dashboard', 'You are … candy-mosaic'],
             array_map(static fn ($e): string => $e->operation, $entries),
         );
         $this->assertSame(
@@ -180,7 +180,7 @@ final class AgentLabelFoldingTest extends TestCase
 
         $out = AgentSplitColumn::renderRuns(array_values($manager->liveRuns()), Theme::default(), 40, 20);
 
-        $this->assertStringContainsString('You are … sugar-dash', $out);
+        $this->assertStringContainsString('You are … sugar-dashboard', $out);
         $this->assertStringContainsString('You are … candy-mosaic', $out);
         $this->assertStringNotContainsString(
             'across many words',
@@ -208,7 +208,7 @@ final class AgentLabelFoldingTest extends TestCase
             SubAgentActivity::OP_STARTED,
             'run-a',
             'reviewer',
-            'You are auditing one library across many words in sugar-dash',
+            'You are auditing one library across many words in sugar-dashboard',
             1,
             '',
         ));

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\ServerStatus;
 
-use SugarCraft\Dash\Components\Card\Card;
-use SugarCraft\Dash\Components\Card\DefinitionList;
+use SugarCraft\Dashboard\Components\Card\Card;
+use SugarCraft\Dashboard\Components\Card\DefinitionList;
 use SugarCraft\Sql\Admin\Format;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 
@@ -13,7 +13,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
  * Info card displaying server connection details and uptime.
  *
  * Shows: host, socket, port, version, and uptime (formatted as duration
- * with computed running-since timestamp). Rendered as a sugar-dash
+ * with computed running-since timestamp). Rendered as a sugar-dashboard
  * Card wrapping a DefinitionList; missing fields fall back to the
  * "Unknown" placeholder rather than hand-rolled ANSI.
  *
@@ -34,7 +34,7 @@ final class ServerInfoCard
     }
 
     /**
-     * Render the info card via a sugar-dash Card + DefinitionList.
+     * Render the info card via a sugar-dashboard Card + DefinitionList.
      */
     public function render(): string
     {

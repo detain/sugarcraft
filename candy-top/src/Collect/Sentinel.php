@@ -12,7 +12,7 @@ namespace SugarCraft\Top\Collect;
  * was just unplugged. A collector that throws turns one missing file into a
  * dead frame; a fabricated zero draws a flat line that lies about an idle
  * machine. -1 ("not measured") and 'n/a' are the honest middle: renderers
- * test for them and draw a gap. Values match sugar-dash's ProcAvailability
+ * test for them and draw a gap. Values match sugar-dashboard's ProcAvailability
  * (UNMEASURED / UNAVAILABLE_SENTINEL) so both libs speak one dialect.
  */
 final class Sentinel

@@ -25,7 +25,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   and the grid stays aligned. `box()` pads short cards and (defensively) clips
   tall ones.
 - **Immutability via clone-mutate (PHP 8.3).** `PosterGrid` has too many fields
-  for `new self(...)` everywhere, so it uses the sugar-dash `FocusManager`
+  for `new self(...)` everywhere, so it uses the sugar-dashboard `FocusManager`
   pattern: non-readonly private props + `$clone = clone $this; $clone->x = …`.
   `synced()` is the single choke point for cursor-clamp + scroll-follow; every
   navigation method routes through it and returns `$this` on a no-op so callers

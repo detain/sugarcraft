@@ -1,4 +1,4 @@
-// Independent oracle for sugar-dash Foundation\NetAutoScale (candy-top lane L7).
+// Independent oracle for sugar-dashboard Foundation\NetAutoScale (candy-top lane L7).
 //
 // The counter-update and rescale blocks are transcribed from aristocratos/btop
 // src/linux/btop_collect.cpp Net::collect (max_count/graph_max/rescale, the
@@ -12,7 +12,7 @@
 // Build: g++ -O2 -std=c++20 -o oracle btop-netscale-oracle.cpp
 // Usage: ./oracle <net_sync 0|1> <seed> <ticks>
 // Row:   forced download upload dl_fast dl_slow ul_fast ul_slow dl_max ul_max
-// Fixture: sugar-dash/tests/fixtures/btop-netscale-oracle.json (sync 0/1 ×
+// Fixture: sugar-dashboard/tests/fixtures/btop-netscale-oracle.json (sync 0/1 ×
 // seeds 7,42,99 × 200 ticks), consumed by NetAutoScaleOracleTest.
 #include <bits/stdc++.h>
 using namespace std;

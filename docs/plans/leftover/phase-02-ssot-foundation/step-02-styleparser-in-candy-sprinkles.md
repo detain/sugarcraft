@@ -6,10 +6,10 @@
 
 ## Deliverable
 
-Move `sugar-dash/src/Foundation/StyleParser.php` (251 LOC, state-machine
+Move `sugar-dashboard/src/Foundation/StyleParser.php` (251 LOC, state-machine
 parser for the inline `[text](fg:red,bg:blue)` syntax) into
 `candy-sprinkles/src/StyleParser.php`. After this, every lib gets the
-inline-styling syntax via candy-sprinkles. sugar-dash will retire its
+inline-styling syntax via candy-sprinkles. sugar-dashboard will retire its
 copy in step 03.05.
 
 ## Files
@@ -17,7 +17,7 @@ copy in step 03.05.
 **Create:**
 
 - `candy-sprinkles/src/StyleParser.php` — verbatim port of the
-  sugar-dash version, except:
+  sugar-dashboard version, except:
   - Namespace becomes `SugarCraft\Sprinkles`.
   - Type-hint return uses `\SugarCraft\Sprinkles\Style` and
     `\SugarCraft\Sprinkles\Cell` (which already live there).
@@ -26,7 +26,7 @@ copy in step 03.05.
 **Tests:**
 
 - `candy-sprinkles/tests/StyleParserTest.php` — ported from
-  `sugar-dash/tests/Foundation/StyleParserTest.php`. Cases:
+  `sugar-dashboard/tests/Foundation/StyleParserTest.php`. Cases:
   - Nested `[[x]]` parsing.
   - Malformed `[(` returns default-styled cells (no crash).
   - Empty input.
@@ -37,7 +37,7 @@ copy in step 03.05.
 
 **Note:**
 
-- Do NOT delete `sugar-dash/src/Foundation/StyleParser.php` in this
+- Do NOT delete `sugar-dashboard/src/Foundation/StyleParser.php` in this
   step. That deletion is step 03.05's job. Two parallel parsers ship
   briefly; they are byte-for-byte identical so consumer code is
   unaffected.
@@ -45,13 +45,13 @@ copy in step 03.05.
 ## Acceptance
 
 - `cd candy-sprinkles && vendor/bin/phpunit --filter StyleParser` green.
-- Doc-comment on `StyleParser` cites the originating sugar-dash file
+- Doc-comment on `StyleParser` cites the originating sugar-dashboard file
   and the termui state-machine description from the dash plan.
 
 ## Notes
 
-- The dash plan's "clean-room rewrite" caveat (termui is GPLv3, sugar-dash
-  is MIT) applies — verify the existing sugar-dash StyleParser.php
+- The dash plan's "clean-room rewrite" caveat (termui is GPLv3, sugar-dashboard
+  is MIT) applies — verify the existing sugar-dashboard StyleParser.php
   was written from the algorithmic description, not copied from termui
   source. Spot-check the constants and comments.
 - If you discover the existing parser quoted GPL'd source, that is a

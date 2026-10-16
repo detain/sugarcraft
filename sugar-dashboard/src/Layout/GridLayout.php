@@ -1,0 +1,469 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Dashboard\Layout;
+
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\Drawable;
+use SugarCraft\Dashboard\Foundation\Theme;
+
+/**
+ * A CSS Grid-style layout component.
+ *
+ * Provides:
+ * - Configurable rows and columns
+ * - Cell-based item placement
+ * - Gap support between cells
+ * - Spanning support (items can span multiple cells)
+ *
+ * Mirrors CSS Grid layout concepts adapted to PHP with wither-style immutable setters.
+ */
+final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
+{
+    private ?int $width = null;
+    private ?int $height = null;
+
+    private readonly int $columns;
+    private readonly int $rows;
+    private readonly int $columnGap;
+    private readonly int $rowGap;
+
+    /**
+     * GridLayout walks the plain array positionally — the GridItem wrapper
+     * class is never read here. Every element is used as a bare Item
+     * (render(), setSize()/getInnerSize() behind instanceof guards).
+     *
+     * @param list<\SugarCraft\Dashboard\Foundation\Item> $items
+     */
+    public function __construct(
+        private readonly array $items = [],
+        int $columns = 1,
+        int $rows = 0,
+        int $columnGap = 0,
+        int $rowGap = 0,
+    ) {
+        // Mirrors the clamps every factory and wither already applies
+        // (columns >= 1, rows >= 0 with 0 = auto, gaps >= 0) so the
+        // promoted constructor cannot smuggle render-fatal values past
+        // them — columns:0 divided by zero in the row/col math and
+        // negative gaps inflated cellWidth.
+        $this->columns = max(1, $columns);
+        $this->rows = max(0, $rows);
+        $this->columnGap = max(0, $columnGap);
+        $this->rowGap = max(0, $rowGap);
+    }
+
+    /**
+     * Create a new grid layout with the specified columns.
+     *
+     * @param list<\SugarCraft\Dashboard\Foundation\Item> $items
+     */
+    public static function columns(int $columns, array $items = []): self
+    {
+        return new self(
+            items: $items,
+            columns: max(1, $columns),
+            rows: 0,
+            columnGap: 0,
+            rowGap: 0,
+        );
+    }
+
+    /**
+     * Create a new grid layout with fixed rows.
+     *
+     * @param list<\SugarCraft\Dashboard\Foundation\Item> $items
+     */
+    public static function rows(int $rows, array $items = []): self
+    {
+        return new self(
+            items: $items,
+            columns: 1,
+            rows: max(1, $rows),
+            columnGap: 0,
+            rowGap: 0,
+        );
+    }
+
+    /**
+     * Set the allocated dimensions for this grid layout.
+     */
+    public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+    {
+        $clone = clone $this;
+        $clone->width = $width;
+        $clone->height = $height;
+        return $clone;
+    }
+
+    /**
+     * Render the grid layout.
+     */
+    public function render(): string
+    {
+        if ($this->items === []) {
+            return '';
+        }
+
+        $w = $this->width ?? 0;
+        $h = $this->height ?? 0;
+
+        if ($w <= 0 || $h <= 0) {
+            return $this->renderNatural();
+        }
+
+        return $this->renderSized($w, $h);
+    }
+
+    /**
+     * Render with natural (unsized) dimensions.
+     */
+    private function renderNatural(): string
+    {
+        if ($this->items === []) {
+            return '';
+        }
+
+        // Calculate natural dimensions
+        $cols = $this->columns;
+        $itemCount = count($this->items);
+        $rows = $this->rows > 0 ? $this->rows : (int) ceil($itemCount / $cols);
+
+        // Measure all items
+        $itemSizes = $this->measureItems();
+
+        // Calculate max cell width and height
+        $cellWidth = 0;
+        $cellHeight = 0;
+        for ($i = 0; $i < $itemCount; $i++) {
+            $col = $i % $cols;
+            $row = (int) floor($i / $cols);
+            $w = $itemSizes[$i]['width'];
+            $h = $itemSizes[$i]['height'];
+            $cellWidth = max($cellWidth, $w);
+            $cellHeight = max($cellHeight, $h);
+        }
+
+        // Render grid
+        return $this->renderGrid($cols, $rows, $itemSizes, $cellWidth, $cellHeight, $w ?? 80, $h ?? 20);
+    }
+
+    /**
+     * Render with specific dimensions.
+     */
+    private function renderSized(int $totalWidth, int $totalHeight): string
+    {
+        $cols = $this->columns;
+        $itemCount = count($this->items);
+        $rows = $this->rows > 0 ? $this->rows : (int) ceil($itemCount / $cols);
+
+        // Calculate cell dimensions
+        $totalColumnGap = $this->columnGap * ($cols - 1);
+        $totalRowGap = $this->rowGap * ($rows - 1);
+        $cellWidth = (int) floor(($totalWidth - $totalColumnGap) / $cols);
+        $cellHeight = (int) floor(($totalHeight - $totalRowGap) / $rows);
+
+        $cellWidth = max(1, $cellWidth);
+        $cellHeight = max(1, $cellHeight);
+
+        // Measure items
+        $itemSizes = $this->measureItems();
+
+        return $this->renderGrid($cols, $rows, $itemSizes, $cellWidth, $cellHeight, $totalWidth, $totalHeight);
+    }
+
+    /**
+     * Render the grid with calculated dimensions.
+     */
+    private function renderGrid(
+        int $cols,
+        int $rows,
+        array $itemSizes,
+        int $cellWidth,
+        int $cellHeight,
+        int $totalWidth,
+        int $totalHeight
+    ): string {
+        $lines = array_fill(0, $totalHeight, '');
+
+        $itemCount = count($this->items);
+        for ($i = 0; $i < $itemCount; $i++) {
+            $item = $this->items[$i];
+            $col = $i % $cols;
+            $row = (int) floor($i / $cols);
+
+            $x = $col * ($cellWidth + $this->columnGap);
+            $y = $row * ($cellHeight + $this->rowGap);
+
+            // Set size on item
+            if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
+                $sized = $item->setSize($cellWidth, $cellHeight);
+            } else {
+                $sized = $item;
+            }
+            $rendered = $sized->render();
+
+            // Split into lines
+            $itemLines = explode("\n", $rendered);
+
+            // Place item content in grid
+            for ($dy = 0; $dy < $cellHeight; $dy++) {
+                $lineIndex = $y + $dy;
+                if ($lineIndex >= $totalHeight) {
+                    break;
+                }
+
+                // Normalise the cell to exactly $cellWidth display columns.
+                // truncateToWidth may land a column short when a wide
+                // grapheme straddles the cut, so pad unconditionally after.
+                $lineContent = Width::padRight(
+                    $this->truncateToWidth($itemLines[$dy] ?? '', $cellWidth),
+                    $cellWidth,
+                );
+
+                // Compose at DISPLAY-COLUMN boundaries. $existingLine can
+                // carry wide (CJK) content from earlier cells, so its
+                // character offsets drift from its column offsets — the old
+                // mb_substr/str_pad splice misplaced every cell after a
+                // wide one. Width's cell-aware take/drop slice at columns.
+                $afterStart = $x + $cellWidth;
+                $before = Width::padRight(Width::takeAnsi($lines[$lineIndex], $x), $x);
+                $after = Width::dropAnsi($lines[$lineIndex], $afterStart);
+
+                $lines[$lineIndex] = $before . $lineContent . $after;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Measure all items to get their natural dimensions.
+     *
+     * @return list<array{width:int,height:int}>
+     */
+    private function measureItems(): array
+    {
+        $sizes = [];
+        foreach ($this->items as $item) {
+            if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
+                [$w, $h] = $item->getInnerSize();
+                if ($w === 0 || $h === 0) {
+                    $rendered = $item->render();
+                    $lines = explode("\n", $rendered);
+                    $w = 0;
+                    foreach ($lines as $line) {
+                        $w = max($w, Width::string($line));
+                    }
+                    $h = count($lines);
+                }
+            } else {
+                $rendered = $item->render();
+                $lines = explode("\n", $rendered);
+                $w = 0;
+                foreach ($lines as $line) {
+                    $w = max($w, Width::string($line));
+                }
+                $h = count($lines);
+            }
+            $sizes[] = ['width' => max(1, $w), 'height' => max(1, $h)];
+        }
+        return $sizes;
+    }
+
+    /**
+     * Truncate a string to fit within the given width.
+     */
+    private function truncateToWidth(string $s, int $width): string
+    {
+        if ($width <= 0) {
+            return '';
+        }
+        if (Width::string($s) <= $width) {
+            return $s;
+        }
+        $lo = 0;
+        $hi = mb_strlen($s, 'UTF-8');
+        while ($lo < $hi) {
+            $mid = (int) (($lo + $hi + 1) / 2);
+            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
+            if (Width::string($candidate) <= $width) {
+                $lo = $mid;
+            } else {
+                $hi = $mid - 1;
+            }
+        }
+        if ($lo === 0) {
+            return '';
+        }
+        return mb_substr($s, 0, $lo, 'UTF-8');
+    }
+
+    /**
+     * Calculate the natural dimensions of this layout.
+     *
+     * @return array{0:int,1:int} [width, height]
+     */
+    public function getInnerSize(): array
+    {
+        $w = $this->width ?? 0;
+        $h = $this->height ?? 0;
+
+        if ($w > 0 && $h > 0) {
+            return [$w, $h];
+        }
+
+        // Calculate natural size
+        $itemSizes = $this->measureItems();
+        $itemCount = count($this->items);
+
+        if ($itemCount === 0) {
+            return [0, 0];
+        }
+
+        $cols = $this->columns;
+        $rows = $this->rows > 0 ? $this->rows : (int) ceil($itemCount / $cols);
+
+        // Calculate max cell dimensions
+        $cellWidth = 0;
+        $cellHeight = 0;
+        for ($i = 0; $i < $itemCount; $i++) {
+            $cellWidth = max($cellWidth, $itemSizes[$i]['width']);
+            $cellHeight = max($cellHeight, $itemSizes[$i]['height']);
+        }
+
+        $totalColumnGap = $this->columnGap * ($cols - 1);
+        $totalRowGap = $this->rowGap * ($rows - 1);
+
+        return [
+            ($cellWidth * $cols) + $totalColumnGap,
+            ($cellHeight * $rows) + $totalRowGap,
+        ];
+    }
+
+    // ─── Withers ──────────────────────────────────────────────────
+
+    /**
+     * Add an item to the grid layout.
+     */
+    public function withItem(\SugarCraft\Dashboard\Foundation\Item $item): self
+    {
+        return new self(
+            items: [...$this->items, $item],
+            columns: $this->columns,
+            rows: $this->rows,
+            columnGap: $this->columnGap,
+            rowGap: $this->rowGap,
+        );
+    }
+
+    /**
+     * Set the items in this grid layout.
+     *
+     * @param list<\SugarCraft\Dashboard\Foundation\Item> $items
+     */
+    public function withItems(array $items): self
+    {
+        return new self(
+            items: $items,
+            columns: $this->columns,
+            rows: $this->rows,
+            columnGap: $this->columnGap,
+            rowGap: $this->rowGap,
+        );
+    }
+
+    /**
+     * Set the number of columns.
+     */
+    public function withColumns(int $columns): self
+    {
+        return new self(
+            items: $this->items,
+            columns: max(1, $columns),
+            rows: $this->rows,
+            columnGap: $this->columnGap,
+            rowGap: $this->rowGap,
+        );
+    }
+
+    /**
+     * Set the number of rows.
+     */
+    public function withRows(int $rows): self
+    {
+        return new self(
+            items: $this->items,
+            columns: $this->columns,
+            rows: max(0, $rows),
+            columnGap: $this->columnGap,
+            rowGap: $this->rowGap,
+        );
+    }
+
+    /**
+     * Set the column gap.
+     */
+    public function withColumnGap(int $gap): self
+    {
+        return new self(
+            items: $this->items,
+            columns: $this->columns,
+            rows: $this->rows,
+            columnGap: max(0, $gap),
+            rowGap: $this->rowGap,
+        );
+    }
+
+    /**
+     * Set the row gap.
+     */
+    public function withRowGap(int $gap): self
+    {
+        return new self(
+            items: $this->items,
+            columns: $this->columns,
+            rows: $this->rows,
+            columnGap: $this->columnGap,
+            rowGap: max(0, $gap),
+        );
+    }
+
+    /**
+     * Set both column and row gaps.
+     */
+    public function withGap(int $gap): self
+    {
+        return new self(
+            items: $this->items,
+            columns: $this->columns,
+            rows: $this->rows,
+            columnGap: max(0, $gap),
+            rowGap: max(0, $gap),
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $item) {
+            if ($item instanceof Drawable) {
+                $themedItems[] = $item->withTheme($theme);
+            } else {
+                $themedItems[] = $item;
+            }
+        }
+
+        return new self(
+            items: $themedItems,
+            columns: $this->columns,
+            rows: $this->rows,
+            columnGap: $this->columnGap,
+            rowGap: $this->rowGap,
+        );
+    }
+}

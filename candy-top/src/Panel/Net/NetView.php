@@ -6,7 +6,7 @@ namespace SugarCraft\Top\Panel\Net;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\View\FrameBuilder;

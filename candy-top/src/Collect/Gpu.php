@@ -17,7 +17,7 @@ use function React\Promise\resolve;
  *
  * Mirrors aristocratos/btop Gpu::collect in spirit only: btop dlopen()s
  * libnvidia-ml / ROCm SMI, which PHP cannot do without FFI (plan §1
- * non-goal). sugar-dash SystemModule's nvidia-smi query is the precedent
+ * non-goal). sugar-dashboard SystemModule's nvidia-smi query is the precedent
  * for the memoized-absent law, refined here:
  *  - before any query has succeeded, every `nvidia-smi` candidate is tried
  *    in order (each PATH hit, then the WSL2 / container-toolkit locations —

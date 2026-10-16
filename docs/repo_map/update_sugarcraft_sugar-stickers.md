@@ -109,7 +109,7 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 | `docs/repo_map/textualize_textual.md` | Medium — CSS flexbox reference | CSS flexbox layout algorithm, reactive state, message pump, widget system | Medium |
 | `docs/repo_map/ratatui_ratatui.md` | Medium — constraint-based layout | Cassowary constraint solver, buffer diffing, widget traits, immediate mode rendering | Medium |
 | `docs/repo_map/charmbracelet_lipgloss.md` | Medium — styling system | Style inheritance (Style.Inherit()), CSS shorthand, CIELAB color blending, layer compositing, borders | Medium |
-| `docs/repo_map/sugarcraft_sugar-dash.md` | Medium — dashboard layout | StackedGrid, responsive collapse at breakpoints, panel/frame system | Medium |
+| `docs/repo_map/sugarcraft_sugar-dashboard.md` | Medium — dashboard layout | StackedGrid, responsive collapse at breakpoints, panel/frame system | Medium |
 | `docs/repo_map/charmbracelet_bubbletea.md` | Low — architecture reference | Elm architecture, command pattern, subscription system | Low |
 
 ---
@@ -716,16 +716,16 @@ final readonly class RenderContext {
 - sugar-bits Table is more featureful (keyed access)
 - Could share `TableInterface` with render contract
 
-## 2. Integration with sugar-dash Layout
+## 2. Integration with sugar-dashboard Layout
 
-**Current:** sugar-dash has its own StackedGrid layout system
-**Improvement:** Explore using FlexBox within sugar-dash panels
+**Current:** sugar-dashboard has its own StackedGrid layout system
+**Improvement:** Explore using FlexBox within sugar-dashboard panels
 
 - FlexBox provides CSS flexbox-like layout within a panel
 - StackedGrid provides dashboard-level column layout
 - Compose together for complex dashboards
 
-**Source:** `docs/repo_map/sugarcraft_sugar-dash.md` — "StackedGrid multi-column stacked grid"
+**Source:** `docs/repo_map/sugarcraft_sugar-dashboard.md` — "StackedGrid multi-column stacked grid"
 
 ## 3. Integration with candy-sprinkles Style System
 
@@ -851,7 +851,7 @@ public function withAsyncContentGenerator(
 
 # Final Strategic Assessment
 
-**sugar-stickers** occupies a unique niche in the SugarCraft ecosystem as the layout foundation library. Its FlexBox component provides the only ratio-based layout system in SugarCraft (vs. the StackedGrid in sugar-dash and constraint-based layout in ratatui-inspired systems), making it essential for responsive TUI layouts. The Table component, while simpler than sugar-table, serves as a lightweight alternative for cases where the full sugar-table feature set is unnecessary.
+**sugar-stickers** occupies a unique niche in the SugarCraft ecosystem as the layout foundation library. Its FlexBox component provides the only ratio-based layout system in SugarCraft (vs. the StackedGrid in sugar-dashboard and constraint-based layout in ratatui-inspired systems), making it essential for responsive TUI layouts. The Table component, while simpler than sugar-table, serves as a lightweight alternative for cases where the full sugar-table feature set is unnecessary.
 
 **Key strategic observations:**
 

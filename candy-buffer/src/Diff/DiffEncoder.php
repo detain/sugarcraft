@@ -72,7 +72,7 @@ final class DiffEncoder
             $this->currentLink = null;
         }
         // The reset half of that promise is load-bearing: sugar-veil and
-        // sugar-dash return encode() output verbatim to a live terminal, so
+        // sugar-dashboard return encode() output verbatim to a live terminal, so
         // a frame ending on a styled cell would leave the terminal styled
         // and every following UNSTYLED write (a clear, a space, the next
         // frame's blanks) inherits the ghost colour. Buffer::toAnsi() has

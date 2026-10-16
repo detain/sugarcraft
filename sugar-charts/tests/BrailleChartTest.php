@@ -6,7 +6,7 @@ namespace SugarCraft\Charts\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\LineChart\LineChart;
-use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Sprinkles\Theme;
 
 final class BrailleChartTest extends TestCase

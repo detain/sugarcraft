@@ -360,7 +360,7 @@ textualize's CSS flexbox is a full CSS box model with margin/padding/border, com
 | **tealeaves/bubbletea-tilelayout** | Constraint-based tiling | Uses constraint solver, not ratios |
 | **treilik/bubbleboxer** | Composite tree (Boxer) | Wraps tea.Model instances, not pure content |
 | **charmbracelet/lipgloss** | Layout utilities (Place, Join) | No layout algorithm — just positioning helpers |
-| **sugar-dash StackedGrid** | Column-based dashboard | Dashboard-specific, not general flexbox |
+| **sugar-dashboard StackedGrid** | Column-based dashboard | Dashboard-specific, not general flexbox |
 | **sugar-boxer** | Tree-based H/V distribution | Uses weight ratios, similar to FlexBox but different algorithm |
 
 ---
@@ -463,4 +463,4 @@ sugar-stickers/
 - [`./textualize_textual.md`](./textualize_textual.md) — CSS flexbox reference
 - [`./charmbracelet_lipgloss.md`](./charmbracelet_lipgloss.md) — styling system reference
 - [`./sugar-boxer.md`](./sugar-boxer.md) — tree-based layout renderer
-- [`./sugar-dash.md`](./sugar-dash.md) — dashboard layout (includes FlexBox)
+- [`./sugar-dashboard.md`](./sugar-dashboard.md) — dashboard layout (includes FlexBox)

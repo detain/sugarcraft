@@ -10,7 +10,7 @@
 
 - **Upstream:** NimbleMarkets/ntcharts (primary), with Charmbracelet/bubbletea (canvas rendering patterns), ratatui/ratatui (widget trait patterns), rasjonell/dashbrew (dashboard integration)
 
-- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-dash`
+- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-dashboard`
 
 - **Description:** PHP terminal charting library providing ASCII/Unicode chart rendering with ANSI SGR color support for SugarCraft TUI ecosystem
 
@@ -137,7 +137,7 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 
 - Area fill mode (`withFill(true)`) fills vertical space from baseline to point row
 
-- BrailleCanvas integration via `withCanvas(BrailleCanvas)` for sub-cell dot-matrix rendering (bridge to sugar-dash)
+- BrailleCanvas integration via `withCanvas(BrailleCanvas)` for sub-cell dot-matrix rendering (bridge to sugar-dashboard)
 
 - Theme integration via `withTheme(Theme)` — passes through to base `Chart` class
 
@@ -368,7 +368,7 @@ Based on source analysis and CALIBER_LEARNINGS.md, the following gaps exist:
 
 ### Platform Integration
 
-11. **BrailleCanvas path is experimental** — `LineChart::withCanvas(BrailleCanvas)` integrates with sugar-dash but is marked as bridging pattern in CALIBER_LEARNINGS
+11. **BrailleCanvas path is experimental** — `LineChart::withCanvas(BrailleCanvas)` integrates with sugar-dashboard but is marked as bridging pattern in CALIBER_LEARNINGS
 12. **No batch/animated rendering** — Individual frame rendering only; no `Animation` helper class
 13. **Kitty/iTerm2 need PNG bytes** — `Picture::fromGrid()` works for Sixel but Kitty/iTerm2 require GD/Imagick for PNG encoding (external dependency)
 
@@ -398,9 +398,9 @@ Based on source analysis and CALIBER_LEARNINGS.md, the following gaps exist:
 | OHLC | ✅ Ported — wick/body glyphs, bullish/bearish |
 | Picture | ✅ Ported — Sixel pure PHP, Kitty/iTerm2 PNG-based |
 | MarkLine | ⚠️ Exists but not integrated |
-| BrailleCanvas | ⚠️ Bridge to sugar-dash works but experimental |
+| BrailleCanvas | ⚠️ Bridge to sugar-dashboard works but experimental |
 
-**Key difference:** ntcharts is a Go library with first-class terminal backend support (bubbletea). SugarCraft's implementation is self-contained and bridges to sugar-dash's BrailleCanvas separately.
+**Key difference:** ntcharts is a Go library with first-class terminal backend support (bubbletea). SugarCraft's implementation is self-contained and bridges to sugar-dashboard's BrailleCanvas separately.
 
 ### ratatui/ratatui (Secondary Reference)
 
@@ -468,10 +468,10 @@ Dashbrew uses `guptarohit/asciigraph` for ASCII charts. sugar-charts implements 
 sugar-charts
 ├── candy-core (foundation: Style, Ansi, Color, etc.)
 ├── candy-sprinkles (Theme, input handling)
-└── sugar-dash (BrailleCanvas, Plot/Braille for sub-cell rendering)
+└── sugar-dashboard (BrailleCanvas, Plot/Braille for sub-cell rendering)
 ```
 
-**Circular dependency risk:** sugar-dash has a Plot/Chart module with overlapping types (AreaChart, CandlestickChart, HeatMapChart, Sparkline, etc.). These are separate implementations — sugar-dash's Plot is for dashboard rendering while sugar-charts is for standalone chart objects.
+**Circular dependency risk:** sugar-dashboard has a Plot/Chart module with overlapping types (AreaChart, CandlestickChart, HeatMapChart, Sparkline, etc.). These are separate implementations — sugar-dashboard's Plot is for dashboard rendering while sugar-charts is for standalone chart objects.
 
 ## Test Coverage Analysis
 

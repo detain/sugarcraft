@@ -79,3 +79,14 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
   still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
   already-rewritten `.tape` files on the next tape run; do not hand-patch.
+
+## C8 sugar-dash → sugar-dashboard (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugar-dashboard/*.ansi` (179 files) — wordmark pixel art spells `SUGAR-DASH`; <!-- @rename-keep -->
+  content is rename-excluded (.ansi); re-generate via the ansi toolchain when triaged. <!-- @rename-keep -->
+- `sugar-dashboard/.vhs/*.gif` (153 GIFs) — renamed with the dir by R3; frames still show the pre-rename <!-- @rename-keep -->
+  wordmark. CI `.github/workflows/vhs.yml` re-renders from the already-rewritten `.tape` files; do not hand-patch.
+- `media/icons/sugar-dashboard.png` — icon carries copied pre-rename art bytes; redraw optional at owner triage.
+- Data paths rewritten by R3 with NO migration shim (verdict: honest rename): `~/.cache/sugar-dash/` → <!-- @rename-keep -->
+  `~/.cache/sugar-dashboard/` (WeatherModule cache — stale-tolerant, worst case one refetch) and <!-- @rename-keep -->
+  `~/.config/sugar-dash/plugins` → `~/.config/sugar-dashboard/plugins` (Plugin/Discovery — users with external <!-- @rename-keep -->
+  plugins under the old dir need to move them; owner triage if a shim is desired).

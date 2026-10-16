@@ -6,17 +6,17 @@
 
   updated: 2026-05-12
 
-  goal: Implement SugarDash dashboard TUI library
+  goal: Implement SugarDashboard dashboard TUI library
 
   ---
 
 
-  # Implementation Plan: SugarDash
+  # Implementation Plan: SugarDashboard
 
 
   ## Goal
 
-  Implement SugarDash, a comprehensive PHP dashboard TUI library synthesizing
+  Implement SugarDashboard, a comprehensive PHP dashboard TUI library synthesizing
   the best patterns from 7 upstream/community Go libraries: bubble-grid,
 Phase 1: Core Layout Systems
 
@@ -63,10 +63,10 @@ Phase 5: Utilities & Styling
 
 Phase 6: Scaffold & Integration
 
-    6.1 sugar-dash/composer.json (PHP ^8.3, PHPUnit ^10.5), phpunit.xml, README.md, CALIBER_LEARNINGS.md, src/ 18-package structure, lang/en.php, .vhs/ demos
+    6.1 sugar-dashboard/composer.json (PHP ^8.3, PHPUnit ^10.5), phpunit.xml, README.md, CALIBER_LEARNINGS.md, src/ 18-package structure, lang/en.php, .vhs/ demos
     6.2 Root composer.json + path repo, CI/vhs workflow matrix entries, MATCHUPS.md, PROJECT_NAMES.md, docs/index.html tile
 
-, docs/lib/sugar-dash.md
+, docs/lib/sugar-dashboard.md
 
 Phase 7: Tests
 
@@ -148,7 +148,7 @@ All 7 Repositories — Deep Dive Summary
 
 Unified Dashboard Architecture
 
-The plan synthesizes all 7 into SugarDash with 18 sub-packages:
+The plan synthesizes all 7 into SugarDashboard with 18 sub-packages:
 Category 	Packages 	Key Patterns
 Layout 	Grid, Boxer, Layout, RatioGrid 	3 distinct layout engines (column, constraint, ratio)
 Components 	GridTable, Tree, StatusBar, Modal, Select, Toast, Tabs, Plot 	Full dashboard component suite

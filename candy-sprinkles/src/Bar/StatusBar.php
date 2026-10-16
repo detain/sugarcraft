@@ -13,7 +13,7 @@ use SugarCraft\Sprinkles\Style;
  * A themed single-line status bar with left / center / right segment groups.
  *
  * This is the shared owner primitive behind the per-lib status bars in
- * candy-hermit, sugar-dash and sugar-crush: each becomes a thin themed
+ * candy-hermit, sugar-dashboard and sugar-crush: each becomes a thin themed
  * wrapper over this class. It is a superset of all three — it can express
  *
  *  - three positioned groups (left / center / right), each a list of

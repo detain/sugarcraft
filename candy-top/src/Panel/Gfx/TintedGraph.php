@@ -6,11 +6,11 @@ namespace SugarCraft\Top\Panel\Gfx;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\View\Ink;
 
 /**
- * Renders a sugar-dash {@see DualSampleGraph} in the App's theme and colour
+ * Renders a sugar-dashboard {@see DualSampleGraph} in the App's theme and colour
  * profile — btop's `Draw::Graph` with a `color_gradient` name.
  *
  * WHY markers: DualSampleGraph colours through a list of `Color`s it

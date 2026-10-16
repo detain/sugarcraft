@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\ServerStatus;
 
-use SugarCraft\Dash\Plot\Chart\AreaChart;
+use SugarCraft\Dashboard\Plot\Chart\AreaChart;
 use SugarCraft\Sql\Admin\Calc\HostLoadSampler;
 
 /**
  * One rolling time-series frame on the Server Status column.
  *
  * Holds per-series sample windows (never renders I/O) and draws them as a
- * sugar-dash AreaChart sized to the column. Two shapes, mirroring MySQL
+ * sugar-dashboard AreaChart sized to the column. Two shapes, mirroring MySQL
  * Workbench's Management :: Server Status graphs (query_dashboard.md
  * lines 49-68):
  *

@@ -29259,9 +29259,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-16-l-1.ansi": {
-        "name": "sugar-dash-1-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-16-l-1.ansi": {
+        "name": "sugar-dashboard-1-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x29",
         "width": 150,
         "height": 29,
@@ -29271,9 +29271,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-16-l-2.ansi": {
-        "name": "sugar-dash-1-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-16-l-2.ansi": {
+        "name": "sugar-dashboard-1-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "138x30",
         "width": 138,
         "height": 30,
@@ -29283,9 +29283,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-16-m-1.ansi": {
-        "name": "sugar-dash-1-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-16-m-1.ansi": {
+        "name": "sugar-dashboard-1-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x26",
         "width": 88,
         "height": 26,
@@ -29295,9 +29295,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-16-m-2.ansi": {
-        "name": "sugar-dash-1-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-16-m-2.ansi": {
+        "name": "sugar-dashboard-1-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -29307,9 +29307,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-16-s-1.ansi": {
-        "name": "sugar-dash-1-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-16-s-1.ansi": {
+        "name": "sugar-dashboard-1-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -29321,9 +29321,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-1-16-s-2.ansi": {
-        "name": "sugar-dash-1-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-16-s-2.ansi": {
+        "name": "sugar-dashboard-1-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -29335,9 +29335,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-1-256-l-1.ansi": {
-        "name": "sugar-dash-1-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-256-l-1.ansi": {
+        "name": "sugar-dashboard-1-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "201x29",
         "width": 201,
         "height": 29,
@@ -29347,9 +29347,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-256-l-2.ansi": {
-        "name": "sugar-dash-1-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-256-l-2.ansi": {
+        "name": "sugar-dashboard-1-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "160x32",
         "width": 160,
         "height": 32,
@@ -29359,9 +29359,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-256-m-1.ansi": {
-        "name": "sugar-dash-1-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-256-m-1.ansi": {
+        "name": "sugar-dashboard-1-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "90x23",
         "width": 90,
         "height": 23,
@@ -29371,9 +29371,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-256-m-2.ansi": {
-        "name": "sugar-dash-1-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-256-m-2.ansi": {
+        "name": "sugar-dashboard-1-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "87x24",
         "width": 87,
         "height": 24,
@@ -29383,9 +29383,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-256-s-1.ansi": {
-        "name": "sugar-dash-1-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-256-s-1.ansi": {
+        "name": "sugar-dashboard-1-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x11",
         "width": 68,
         "height": 11,
@@ -29395,9 +29395,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-256-s-2.ansi": {
-        "name": "sugar-dash-1-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-256-s-2.ansi": {
+        "name": "sugar-dashboard-1-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -29407,9 +29407,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-tc-l-1.ansi": {
-        "name": "sugar-dash-1-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-tc-l-1.ansi": {
+        "name": "sugar-dashboard-1-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -29419,9 +29419,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-tc-l-2.ansi": {
-        "name": "sugar-dash-1-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-tc-l-2.ansi": {
+        "name": "sugar-dashboard-1-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "168x31",
         "width": 168,
         "height": 31,
@@ -29431,9 +29431,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-tc-m-1.ansi": {
-        "name": "sugar-dash-1-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-tc-m-1.ansi": {
+        "name": "sugar-dashboard-1-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x26",
         "width": 86,
         "height": 26,
@@ -29443,9 +29443,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-tc-m-2.ansi": {
-        "name": "sugar-dash-1-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-tc-m-2.ansi": {
+        "name": "sugar-dashboard-1-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -29455,9 +29455,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-tc-s-1.ansi": {
-        "name": "sugar-dash-1-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-tc-s-1.ansi": {
+        "name": "sugar-dashboard-1-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "61x10",
         "width": 61,
         "height": 10,
@@ -29467,9 +29467,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-1-tc-s-2.ansi": {
-        "name": "sugar-dash-1-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-1-tc-s-2.ansi": {
+        "name": "sugar-dashboard-1-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -29479,9 +29479,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-16-l-1.ansi": {
-        "name": "sugar-dash-2-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-16-l-1.ansi": {
+        "name": "sugar-dashboard-2-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "170x36",
         "width": 170,
         "height": 36,
@@ -29491,9 +29491,9 @@
         "rating": 5,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-16-l-2.ansi": {
-        "name": "sugar-dash-2-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-16-l-2.ansi": {
+        "name": "sugar-dashboard-2-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -29503,9 +29503,9 @@
         "rating": 5,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-16-m-1.ansi": {
-        "name": "sugar-dash-2-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-16-m-1.ansi": {
+        "name": "sugar-dashboard-2-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "82x23",
         "width": 82,
         "height": 23,
@@ -29515,9 +29515,9 @@
         "rating": 5,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-16-m-2.ansi": {
-        "name": "sugar-dash-2-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-16-m-2.ansi": {
+        "name": "sugar-dashboard-2-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -29527,9 +29527,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-16-s-1.ansi": {
-        "name": "sugar-dash-2-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-16-s-1.ansi": {
+        "name": "sugar-dashboard-2-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -29539,9 +29539,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-16-s-2.ansi": {
-        "name": "sugar-dash-2-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-16-s-2.ansi": {
+        "name": "sugar-dashboard-2-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -29551,9 +29551,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-256-l-1.ansi": {
-        "name": "sugar-dash-2-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-256-l-1.ansi": {
+        "name": "sugar-dashboard-2-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "180x30",
         "width": 180,
         "height": 30,
@@ -29563,9 +29563,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-256-l-2.ansi": {
-        "name": "sugar-dash-2-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-256-l-2.ansi": {
+        "name": "sugar-dashboard-2-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "170x32",
         "width": 170,
         "height": 32,
@@ -29575,9 +29575,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-256-m-1.ansi": {
-        "name": "sugar-dash-2-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-256-m-1.ansi": {
+        "name": "sugar-dashboard-2-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -29587,9 +29587,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-256-m-2.ansi": {
-        "name": "sugar-dash-2-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-256-m-2.ansi": {
+        "name": "sugar-dashboard-2-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "84x19",
         "width": 84,
         "height": 19,
@@ -29599,9 +29599,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-256-s-1.ansi": {
-        "name": "sugar-dash-2-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-256-s-1.ansi": {
+        "name": "sugar-dashboard-2-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x16",
         "width": 66,
         "height": 16,
@@ -29611,9 +29611,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-256-s-2.ansi": {
-        "name": "sugar-dash-2-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-256-s-2.ansi": {
+        "name": "sugar-dashboard-2-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -29623,9 +29623,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-tc-l-1.ansi": {
-        "name": "sugar-dash-2-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-tc-l-1.ansi": {
+        "name": "sugar-dashboard-2-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "200x36",
         "width": 200,
         "height": 36,
@@ -29635,9 +29635,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-tc-l-2.ansi": {
-        "name": "sugar-dash-2-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-tc-l-2.ansi": {
+        "name": "sugar-dashboard-2-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "190x34",
         "width": 190,
         "height": 34,
@@ -29647,9 +29647,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-tc-m-1.ansi": {
-        "name": "sugar-dash-2-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-tc-m-1.ansi": {
+        "name": "sugar-dashboard-2-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -29659,9 +29659,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-tc-m-2.ansi": {
-        "name": "sugar-dash-2-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-tc-m-2.ansi": {
+        "name": "sugar-dashboard-2-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -29671,9 +29671,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-tc-s-1.ansi": {
-        "name": "sugar-dash-2-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-tc-s-1.ansi": {
+        "name": "sugar-dashboard-2-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "56x9",
         "width": 56,
         "height": 9,
@@ -29683,9 +29683,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-2-tc-s-2.ansi": {
-        "name": "sugar-dash-2-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-2-tc-s-2.ansi": {
+        "name": "sugar-dashboard-2-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -29695,9 +29695,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-16-l-1.ansi": {
-        "name": "sugar-dash-3-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-16-l-1.ansi": {
+        "name": "sugar-dashboard-3-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "158x30",
         "width": 158,
         "height": 30,
@@ -29707,9 +29707,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-16-l-2.ansi": {
-        "name": "sugar-dash-3-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-16-l-2.ansi": {
+        "name": "sugar-dashboard-3-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "152x32",
         "width": 152,
         "height": 32,
@@ -29719,9 +29719,9 @@
         "rating": 5,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-16-m-1.ansi": {
-        "name": "sugar-dash-3-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-16-m-1.ansi": {
+        "name": "sugar-dashboard-3-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -29731,9 +29731,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-16-m-2.ansi": {
-        "name": "sugar-dash-3-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-16-m-2.ansi": {
+        "name": "sugar-dashboard-3-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -29743,9 +29743,9 @@
         "rating": 5,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-16-s-1.ansi": {
-        "name": "sugar-dash-3-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-16-s-1.ansi": {
+        "name": "sugar-dashboard-3-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "56x11",
         "width": 56,
         "height": 11,
@@ -29755,9 +29755,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-16-s-2.ansi": {
-        "name": "sugar-dash-3-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-16-s-2.ansi": {
+        "name": "sugar-dashboard-3-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "60x9",
         "width": 60,
         "height": 9,
@@ -29767,9 +29767,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-256-l-1.ansi": {
-        "name": "sugar-dash-3-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-256-l-1.ansi": {
+        "name": "sugar-dashboard-3-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "182x34",
         "width": 182,
         "height": 34,
@@ -29779,9 +29779,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-256-l-2.ansi": {
-        "name": "sugar-dash-3-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-256-l-2.ansi": {
+        "name": "sugar-dashboard-3-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "172x30",
         "width": 172,
         "height": 30,
@@ -29791,9 +29791,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-256-m-1.ansi": {
-        "name": "sugar-dash-3-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-256-m-1.ansi": {
+        "name": "sugar-dashboard-3-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -29803,9 +29803,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-256-m-2.ansi": {
-        "name": "sugar-dash-3-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-256-m-2.ansi": {
+        "name": "sugar-dashboard-3-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -29815,9 +29815,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-256-s-1.ansi": {
-        "name": "sugar-dash-3-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-256-s-1.ansi": {
+        "name": "sugar-dashboard-3-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "48x12",
         "width": 48,
         "height": 12,
@@ -29827,9 +29827,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-256-s-2.ansi": {
-        "name": "sugar-dash-3-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-256-s-2.ansi": {
+        "name": "sugar-dashboard-3-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -29839,21 +29839,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-tc-l-1.ansi": {
-        "name": "sugar-dash-3-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-tc-l-1.ansi": {
+        "name": "sugar-dashboard-3-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "182x38",
         "width": 182,
         "height": 38,
         "depth": "truecolor",
         "colors": 130,
-        "description": "deep-sea panorama with gradient ocean and SugarDash sub",
+        "description": "deep-sea panorama with gradient ocean and SugarDashboard sub",
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-tc-l-2.ansi": {
-        "name": "sugar-dash-3-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-tc-l-2.ansi": {
+        "name": "sugar-dashboard-3-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "164x38",
         "width": 164,
         "height": 38,
@@ -29863,9 +29863,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-tc-m-1.ansi": {
-        "name": "sugar-dash-3-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-tc-m-1.ansi": {
+        "name": "sugar-dashboard-3-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -29875,9 +29875,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-tc-m-2.ansi": {
-        "name": "sugar-dash-3-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-tc-m-2.ansi": {
+        "name": "sugar-dashboard-3-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -29887,9 +29887,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-tc-s-1.ansi": {
-        "name": "sugar-dash-3-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-tc-s-1.ansi": {
+        "name": "sugar-dashboard-3-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "54x13",
         "width": 54,
         "height": 13,
@@ -29899,9 +29899,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-3-tc-s-2.ansi": {
-        "name": "sugar-dash-3-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-3-tc-s-2.ansi": {
+        "name": "sugar-dashboard-3-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -29911,9 +29911,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-16-l-1.ansi": {
-        "name": "sugar-dash-4-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-16-l-1.ansi": {
+        "name": "sugar-dashboard-4-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -29923,9 +29923,9 @@
         "rating": 5,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-16-l-2.ansi": {
-        "name": "sugar-dash-4-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-16-l-2.ansi": {
+        "name": "sugar-dashboard-4-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -29935,9 +29935,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-16-m-1.ansi": {
-        "name": "sugar-dash-4-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-16-m-1.ansi": {
+        "name": "sugar-dashboard-4-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -29947,9 +29947,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-16-m-2.ansi": {
-        "name": "sugar-dash-4-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-16-m-2.ansi": {
+        "name": "sugar-dashboard-4-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -29959,9 +29959,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-16-s-1.ansi": {
-        "name": "sugar-dash-4-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-16-s-1.ansi": {
+        "name": "sugar-dashboard-4-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -29971,9 +29971,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-l-1.ansi": {
-        "name": "sugar-dash-4-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-l-1.ansi": {
+        "name": "sugar-dashboard-4-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
@@ -29983,9 +29983,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-l-2.ansi": {
-        "name": "sugar-dash-4-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-l-2.ansi": {
+        "name": "sugar-dashboard-4-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "182x34",
         "width": 182,
         "height": 34,
@@ -29995,9 +29995,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-m-1.ansi": {
-        "name": "sugar-dash-4-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-m-1.ansi": {
+        "name": "sugar-dashboard-4-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -30007,9 +30007,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-m-2.ansi": {
-        "name": "sugar-dash-4-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-m-2.ansi": {
+        "name": "sugar-dashboard-4-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -30019,9 +30019,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-m-3.ansi": {
-        "name": "sugar-dash-4-256-m-3.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-m-3.ansi": {
+        "name": "sugar-dashboard-4-256-m-3.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -30031,9 +30031,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-s-1.ansi": {
-        "name": "sugar-dash-4-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-s-1.ansi": {
+        "name": "sugar-dashboard-4-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "52x10",
         "width": 52,
         "height": 10,
@@ -30043,9 +30043,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-256-s-2.ansi": {
-        "name": "sugar-dash-4-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-256-s-2.ansi": {
+        "name": "sugar-dashboard-4-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "48x12",
         "width": 48,
         "height": 12,
@@ -30055,9 +30055,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-l-1.ansi": {
-        "name": "sugar-dash-4-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-l-1.ansi": {
+        "name": "sugar-dashboard-4-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -30067,9 +30067,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-l-2.ansi": {
-        "name": "sugar-dash-4-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-l-2.ansi": {
+        "name": "sugar-dashboard-4-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x40",
         "width": 176,
         "height": 40,
@@ -30079,9 +30079,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-l-3.ansi": {
-        "name": "sugar-dash-4-tc-l-3.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-l-3.ansi": {
+        "name": "sugar-dashboard-4-tc-l-3.ansi",
+        "category": "sugar-dashboard",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -30091,9 +30091,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-m-1.ansi": {
-        "name": "sugar-dash-4-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-m-1.ansi": {
+        "name": "sugar-dashboard-4-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -30103,9 +30103,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-m-2.ansi": {
-        "name": "sugar-dash-4-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-m-2.ansi": {
+        "name": "sugar-dashboard-4-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -30115,9 +30115,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-s-1.ansi": {
-        "name": "sugar-dash-4-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-s-1.ansi": {
+        "name": "sugar-dashboard-4-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "63x11",
         "width": 63,
         "height": 11,
@@ -30127,9 +30127,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-tc-s-2.ansi": {
-        "name": "sugar-dash-4-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-4-tc-s-2.ansi": {
+        "name": "sugar-dashboard-4-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -30139,9 +30139,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-16-l-1.ansi": {
-        "name": "sugar-dash-5-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-16-l-1.ansi": {
+        "name": "sugar-dashboard-5-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "154x28",
         "width": 154,
         "height": 28,
@@ -30153,9 +30153,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-5-16-l-2.ansi": {
-        "name": "sugar-dash-5-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-16-l-2.ansi": {
+        "name": "sugar-dashboard-5-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "128x28",
         "width": 128,
         "height": 28,
@@ -30167,9 +30167,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-5-16-m-1.ansi": {
-        "name": "sugar-dash-5-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-16-m-1.ansi": {
+        "name": "sugar-dashboard-5-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "87x21",
         "width": 87,
         "height": 21,
@@ -30181,9 +30181,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-5-16-m-2.ansi": {
-        "name": "sugar-dash-5-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-16-m-2.ansi": {
+        "name": "sugar-dashboard-5-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "90x18",
         "width": 90,
         "height": 18,
@@ -30195,9 +30195,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-5-16-s-1.ansi": {
-        "name": "sugar-dash-5-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-16-s-1.ansi": {
+        "name": "sugar-dashboard-5-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -30209,9 +30209,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-5-256-l-1.ansi": {
-        "name": "sugar-dash-5-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-256-l-1.ansi": {
+        "name": "sugar-dashboard-5-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x29",
         "width": 176,
         "height": 29,
@@ -30221,9 +30221,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-256-l-2.ansi": {
-        "name": "sugar-dash-5-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-256-l-2.ansi": {
+        "name": "sugar-dashboard-5-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "167x28",
         "width": 167,
         "height": 28,
@@ -30233,9 +30233,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-256-m-1.ansi": {
-        "name": "sugar-dash-5-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-256-m-1.ansi": {
+        "name": "sugar-dashboard-5-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -30245,9 +30245,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-256-m-2.ansi": {
-        "name": "sugar-dash-5-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-256-m-2.ansi": {
+        "name": "sugar-dashboard-5-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -30257,9 +30257,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-256-s-1.ansi": {
-        "name": "sugar-dash-5-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-256-s-1.ansi": {
+        "name": "sugar-dashboard-5-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x8",
         "width": 64,
         "height": 8,
@@ -30269,9 +30269,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-256-s-2.ansi": {
-        "name": "sugar-dash-5-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-256-s-2.ansi": {
+        "name": "sugar-dashboard-5-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "67x8",
         "width": 67,
         "height": 8,
@@ -30281,9 +30281,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-tc-l-1.ansi": {
-        "name": "sugar-dash-5-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-tc-l-1.ansi": {
+        "name": "sugar-dashboard-5-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "214x28",
         "width": 214,
         "height": 28,
@@ -30293,9 +30293,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-tc-l-2.ansi": {
-        "name": "sugar-dash-5-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-tc-l-2.ansi": {
+        "name": "sugar-dashboard-5-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -30305,9 +30305,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-tc-m-1.ansi": {
-        "name": "sugar-dash-5-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-tc-m-1.ansi": {
+        "name": "sugar-dashboard-5-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -30317,9 +30317,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-tc-m-2.ansi": {
-        "name": "sugar-dash-5-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-tc-m-2.ansi": {
+        "name": "sugar-dashboard-5-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -30329,9 +30329,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-tc-s-1.ansi": {
-        "name": "sugar-dash-5-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-tc-s-1.ansi": {
+        "name": "sugar-dashboard-5-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -30341,9 +30341,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-5-tc-s-2.ansi": {
-        "name": "sugar-dash-5-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-5-tc-s-2.ansi": {
+        "name": "sugar-dashboard-5-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x8",
         "width": 68,
         "height": 8,
@@ -30353,9 +30353,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-16-l-1.ansi": {
-        "name": "sugar-dash-6-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-16-l-1.ansi": {
+        "name": "sugar-dashboard-6-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x31",
         "width": 150,
         "height": 31,
@@ -30367,9 +30367,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-6-16-l-2.ansi": {
-        "name": "sugar-dash-6-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-16-l-2.ansi": {
+        "name": "sugar-dashboard-6-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "140x28",
         "width": 140,
         "height": 28,
@@ -30379,9 +30379,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-16-m-1.ansi": {
-        "name": "sugar-dash-6-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-16-m-1.ansi": {
+        "name": "sugar-dashboard-6-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -30391,9 +30391,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-16-s-1.ansi": {
-        "name": "sugar-dash-6-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-16-s-1.ansi": {
+        "name": "sugar-dashboard-6-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -30403,9 +30403,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-16-s-2.ansi": {
-        "name": "sugar-dash-6-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-16-s-2.ansi": {
+        "name": "sugar-dashboard-6-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -30415,9 +30415,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-256-l-1.ansi": {
-        "name": "sugar-dash-6-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-256-l-1.ansi": {
+        "name": "sugar-dashboard-6-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "170x34",
         "width": 170,
         "height": 34,
@@ -30427,9 +30427,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-256-l-2.ansi": {
-        "name": "sugar-dash-6-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-256-l-2.ansi": {
+        "name": "sugar-dashboard-6-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x30",
         "width": 176,
         "height": 30,
@@ -30439,9 +30439,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-256-m-1.ansi": {
-        "name": "sugar-dash-6-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-256-m-1.ansi": {
+        "name": "sugar-dashboard-6-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -30451,9 +30451,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-256-m-2.ansi": {
-        "name": "sugar-dash-6-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-256-m-2.ansi": {
+        "name": "sugar-dashboard-6-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "90x19",
         "width": 90,
         "height": 19,
@@ -30463,9 +30463,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-256-s-1.ansi": {
-        "name": "sugar-dash-6-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-256-s-1.ansi": {
+        "name": "sugar-dashboard-6-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x8",
         "width": 68,
         "height": 8,
@@ -30475,9 +30475,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-256-s-2.ansi": {
-        "name": "sugar-dash-6-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-256-s-2.ansi": {
+        "name": "sugar-dashboard-6-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x11",
         "width": 66,
         "height": 11,
@@ -30487,9 +30487,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-tc-l-1.ansi": {
-        "name": "sugar-dash-6-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-tc-l-1.ansi": {
+        "name": "sugar-dashboard-6-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "180x29",
         "width": 180,
         "height": 29,
@@ -30499,9 +30499,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-tc-l-2.ansi": {
-        "name": "sugar-dash-6-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-tc-l-2.ansi": {
+        "name": "sugar-dashboard-6-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -30511,9 +30511,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-tc-m-1.ansi": {
-        "name": "sugar-dash-6-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-tc-m-1.ansi": {
+        "name": "sugar-dashboard-6-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -30523,9 +30523,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-tc-m-2.ansi": {
-        "name": "sugar-dash-6-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-tc-m-2.ansi": {
+        "name": "sugar-dashboard-6-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -30535,9 +30535,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-tc-s-1.ansi": {
-        "name": "sugar-dash-6-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-tc-s-1.ansi": {
+        "name": "sugar-dashboard-6-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -30547,9 +30547,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-6-tc-s-2.ansi": {
-        "name": "sugar-dash-6-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-6-tc-s-2.ansi": {
+        "name": "sugar-dashboard-6-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x9",
         "width": 68,
         "height": 9,
@@ -30559,9 +30559,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-16-l-1.ansi": {
-        "name": "sugar-dash-7-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-16-l-1.ansi": {
+        "name": "sugar-dashboard-7-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "168x32",
         "width": 168,
         "height": 32,
@@ -30571,9 +30571,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-16-l-2.ansi": {
-        "name": "sugar-dash-7-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-16-l-2.ansi": {
+        "name": "sugar-dashboard-7-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "164x30",
         "width": 164,
         "height": 30,
@@ -30583,9 +30583,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-16-m-1.ansi": {
-        "name": "sugar-dash-7-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-16-m-1.ansi": {
+        "name": "sugar-dashboard-7-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -30595,9 +30595,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-16-m-2.ansi": {
-        "name": "sugar-dash-7-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-16-m-2.ansi": {
+        "name": "sugar-dashboard-7-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -30607,9 +30607,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-16-s-1.ansi": {
-        "name": "sugar-dash-7-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-16-s-1.ansi": {
+        "name": "sugar-dashboard-7-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -30619,9 +30619,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-16-s-2.ansi": {
-        "name": "sugar-dash-7-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-16-s-2.ansi": {
+        "name": "sugar-dashboard-7-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -30631,9 +30631,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-256-l-1.ansi": {
-        "name": "sugar-dash-7-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-256-l-1.ansi": {
+        "name": "sugar-dashboard-7-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "180x34",
         "width": 180,
         "height": 34,
@@ -30643,9 +30643,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-256-l-2.ansi": {
-        "name": "sugar-dash-7-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-256-l-2.ansi": {
+        "name": "sugar-dashboard-7-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "170x30",
         "width": 170,
         "height": 30,
@@ -30655,9 +30655,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-256-m-1.ansi": {
-        "name": "sugar-dash-7-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-256-m-1.ansi": {
+        "name": "sugar-dashboard-7-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -30667,9 +30667,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-256-m-2.ansi": {
-        "name": "sugar-dash-7-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-256-m-2.ansi": {
+        "name": "sugar-dashboard-7-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -30679,9 +30679,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-256-s-1.ansi": {
-        "name": "sugar-dash-7-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-256-s-1.ansi": {
+        "name": "sugar-dashboard-7-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -30691,9 +30691,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-256-s-2.ansi": {
-        "name": "sugar-dash-7-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-256-s-2.ansi": {
+        "name": "sugar-dashboard-7-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -30703,9 +30703,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-tc-l-1.ansi": {
-        "name": "sugar-dash-7-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-tc-l-1.ansi": {
+        "name": "sugar-dashboard-7-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "190x36",
         "width": 190,
         "height": 36,
@@ -30715,9 +30715,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-tc-l-2.ansi": {
-        "name": "sugar-dash-7-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-tc-l-2.ansi": {
+        "name": "sugar-dashboard-7-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -30727,9 +30727,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-tc-m-1.ansi": {
-        "name": "sugar-dash-7-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-tc-m-1.ansi": {
+        "name": "sugar-dashboard-7-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -30739,9 +30739,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-tc-m-2.ansi": {
-        "name": "sugar-dash-7-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-tc-m-2.ansi": {
+        "name": "sugar-dashboard-7-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -30751,9 +30751,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-tc-s-1.ansi": {
-        "name": "sugar-dash-7-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-tc-s-1.ansi": {
+        "name": "sugar-dashboard-7-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -30763,9 +30763,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-7-tc-s-2.ansi": {
-        "name": "sugar-dash-7-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-7-tc-s-2.ansi": {
+        "name": "sugar-dashboard-7-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -30775,9 +30775,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-16-l-1.ansi": {
-        "name": "sugar-dash-8-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-16-l-1.ansi": {
+        "name": "sugar-dashboard-8-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -30789,9 +30789,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-8-16-l-2.ansi": {
-        "name": "sugar-dash-8-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-16-l-2.ansi": {
+        "name": "sugar-dashboard-8-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "146x28",
         "width": 146,
         "height": 28,
@@ -30803,9 +30803,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-8-16-m-1.ansi": {
-        "name": "sugar-dash-8-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-16-m-1.ansi": {
+        "name": "sugar-dashboard-8-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -30817,9 +30817,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-8-16-m-2.ansi": {
-        "name": "sugar-dash-8-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-16-m-2.ansi": {
+        "name": "sugar-dashboard-8-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "82x18",
         "width": 82,
         "height": 18,
@@ -30831,9 +30831,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-8-16-s-1.ansi": {
-        "name": "sugar-dash-8-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-16-s-1.ansi": {
+        "name": "sugar-dashboard-8-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -30845,9 +30845,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-8-16-s-2.ansi": {
-        "name": "sugar-dash-8-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-16-s-2.ansi": {
+        "name": "sugar-dashboard-8-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -30859,9 +30859,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-8-256-l-1.ansi": {
-        "name": "sugar-dash-8-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-256-l-1.ansi": {
+        "name": "sugar-dashboard-8-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "148x28",
         "width": 148,
         "height": 28,
@@ -30871,9 +30871,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-256-l-2.ansi": {
-        "name": "sugar-dash-8-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-256-l-2.ansi": {
+        "name": "sugar-dashboard-8-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "144x32",
         "width": 144,
         "height": 32,
@@ -30883,9 +30883,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-256-m-1.ansi": {
-        "name": "sugar-dash-8-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-256-m-1.ansi": {
+        "name": "sugar-dashboard-8-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x19",
         "width": 86,
         "height": 19,
@@ -30895,9 +30895,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-256-m-2.ansi": {
-        "name": "sugar-dash-8-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-256-m-2.ansi": {
+        "name": "sugar-dashboard-8-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -30907,9 +30907,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-256-s-1.ansi": {
-        "name": "sugar-dash-8-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-256-s-1.ansi": {
+        "name": "sugar-dashboard-8-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x13",
         "width": 66,
         "height": 13,
@@ -30919,9 +30919,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-256-s-2.ansi": {
-        "name": "sugar-dash-8-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-256-s-2.ansi": {
+        "name": "sugar-dashboard-8-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x13",
         "width": 68,
         "height": 13,
@@ -30931,9 +30931,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-tc-l-1.ansi": {
-        "name": "sugar-dash-8-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-tc-l-1.ansi": {
+        "name": "sugar-dashboard-8-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -30943,9 +30943,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-tc-l-2.ansi": {
-        "name": "sugar-dash-8-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-tc-l-2.ansi": {
+        "name": "sugar-dashboard-8-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -30955,9 +30955,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-tc-m-1.ansi": {
-        "name": "sugar-dash-8-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-tc-m-1.ansi": {
+        "name": "sugar-dashboard-8-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -30967,9 +30967,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-tc-m-2.ansi": {
-        "name": "sugar-dash-8-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-tc-m-2.ansi": {
+        "name": "sugar-dashboard-8-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "84x19",
         "width": 84,
         "height": 19,
@@ -30979,9 +30979,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-tc-s-1.ansi": {
-        "name": "sugar-dash-8-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-tc-s-1.ansi": {
+        "name": "sugar-dashboard-8-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x16",
         "width": 66,
         "height": 16,
@@ -30991,9 +30991,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-8-tc-s-2.ansi": {
-        "name": "sugar-dash-8-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-8-tc-s-2.ansi": {
+        "name": "sugar-dashboard-8-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -31003,9 +31003,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-16-l-1.ansi": {
-        "name": "sugar-dash-9-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-16-l-1.ansi": {
+        "name": "sugar-dashboard-9-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "162x30",
         "width": 162,
         "height": 30,
@@ -31015,9 +31015,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-16-l-2.ansi": {
-        "name": "sugar-dash-9-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-16-l-2.ansi": {
+        "name": "sugar-dashboard-9-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x29",
         "width": 150,
         "height": 29,
@@ -31027,9 +31027,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-16-m-1.ansi": {
-        "name": "sugar-dash-9-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-16-m-1.ansi": {
+        "name": "sugar-dashboard-9-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -31039,9 +31039,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-16-m-2.ansi": {
-        "name": "sugar-dash-9-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-16-m-2.ansi": {
+        "name": "sugar-dashboard-9-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -31051,9 +31051,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-16-s-1.ansi": {
-        "name": "sugar-dash-9-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-16-s-1.ansi": {
+        "name": "sugar-dashboard-9-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -31063,9 +31063,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-16-s-2.ansi": {
-        "name": "sugar-dash-9-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-16-s-2.ansi": {
+        "name": "sugar-dashboard-9-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x13",
         "width": 68,
         "height": 13,
@@ -31075,9 +31075,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-256-l-1.ansi": {
-        "name": "sugar-dash-9-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-256-l-1.ansi": {
+        "name": "sugar-dashboard-9-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -31087,9 +31087,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-256-l-2.ansi": {
-        "name": "sugar-dash-9-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-256-l-2.ansi": {
+        "name": "sugar-dashboard-9-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "152x29",
         "width": 152,
         "height": 29,
@@ -31099,9 +31099,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-256-m-1.ansi": {
-        "name": "sugar-dash-9-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-256-m-1.ansi": {
+        "name": "sugar-dashboard-9-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -31111,9 +31111,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-256-m-2.ansi": {
-        "name": "sugar-dash-9-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-256-m-2.ansi": {
+        "name": "sugar-dashboard-9-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -31123,9 +31123,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-256-s-1.ansi": {
-        "name": "sugar-dash-9-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-256-s-1.ansi": {
+        "name": "sugar-dashboard-9-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -31135,9 +31135,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-256-s-2.ansi": {
-        "name": "sugar-dash-9-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-256-s-2.ansi": {
+        "name": "sugar-dashboard-9-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x16",
         "width": 68,
         "height": 16,
@@ -31147,9 +31147,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-tc-l-1.ansi": {
-        "name": "sugar-dash-9-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-tc-l-1.ansi": {
+        "name": "sugar-dashboard-9-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "168x30",
         "width": 168,
         "height": 30,
@@ -31159,9 +31159,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-tc-l-2.ansi": {
-        "name": "sugar-dash-9-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-tc-l-2.ansi": {
+        "name": "sugar-dashboard-9-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x29",
         "width": 150,
         "height": 29,
@@ -31171,9 +31171,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-tc-m-1.ansi": {
-        "name": "sugar-dash-9-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-tc-m-1.ansi": {
+        "name": "sugar-dashboard-9-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -31183,9 +31183,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-tc-m-2.ansi": {
-        "name": "sugar-dash-9-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-tc-m-2.ansi": {
+        "name": "sugar-dashboard-9-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -31195,9 +31195,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-tc-s-1.ansi": {
-        "name": "sugar-dash-9-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-tc-s-1.ansi": {
+        "name": "sugar-dashboard-9-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "68x16",
         "width": 68,
         "height": 16,
@@ -31207,9 +31207,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-9-tc-s-2.ansi": {
-        "name": "sugar-dash-9-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-9-tc-s-2.ansi": {
+        "name": "sugar-dashboard-9-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -31219,9 +31219,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-16-l-1.ansi": {
-        "name": "sugar-dash-10-16-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-16-l-1.ansi": {
+        "name": "sugar-dashboard-10-16-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "152x30",
         "width": 152,
         "height": 30,
@@ -31231,9 +31231,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-16-l-2.ansi": {
-        "name": "sugar-dash-10-16-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-16-l-2.ansi": {
+        "name": "sugar-dashboard-10-16-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -31243,9 +31243,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-16-m-1.ansi": {
-        "name": "sugar-dash-10-16-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-16-m-1.ansi": {
+        "name": "sugar-dashboard-10-16-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -31255,9 +31255,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-16-m-2.ansi": {
-        "name": "sugar-dash-10-16-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-16-m-2.ansi": {
+        "name": "sugar-dashboard-10-16-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -31267,9 +31267,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-16-s-1.ansi": {
-        "name": "sugar-dash-10-16-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-16-s-1.ansi": {
+        "name": "sugar-dashboard-10-16-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -31279,9 +31279,9 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-16-s-2.ansi": {
-        "name": "sugar-dash-10-16-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-16-s-2.ansi": {
+        "name": "sugar-dashboard-10-16-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -31291,9 +31291,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-256-l-1.ansi": {
-        "name": "sugar-dash-10-256-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-256-l-1.ansi": {
+        "name": "sugar-dashboard-10-256-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "162x30",
         "width": 162,
         "height": 30,
@@ -31303,9 +31303,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-256-l-2.ansi": {
-        "name": "sugar-dash-10-256-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-256-l-2.ansi": {
+        "name": "sugar-dashboard-10-256-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "158x32",
         "width": 158,
         "height": 32,
@@ -31315,9 +31315,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-256-m-1.ansi": {
-        "name": "sugar-dash-10-256-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-256-m-1.ansi": {
+        "name": "sugar-dashboard-10-256-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -31327,9 +31327,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-256-m-2.ansi": {
-        "name": "sugar-dash-10-256-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-256-m-2.ansi": {
+        "name": "sugar-dashboard-10-256-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -31339,9 +31339,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-256-s-1.ansi": {
-        "name": "sugar-dash-10-256-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-256-s-1.ansi": {
+        "name": "sugar-dashboard-10-256-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -31351,9 +31351,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-256-s-2.ansi": {
-        "name": "sugar-dash-10-256-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-256-s-2.ansi": {
+        "name": "sugar-dashboard-10-256-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -31363,9 +31363,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-tc-l-1.ansi": {
-        "name": "sugar-dash-10-tc-l-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-tc-l-1.ansi": {
+        "name": "sugar-dashboard-10-tc-l-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "182x34",
         "width": 182,
         "height": 34,
@@ -31375,9 +31375,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-tc-l-2.ansi": {
-        "name": "sugar-dash-10-tc-l-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-tc-l-2.ansi": {
+        "name": "sugar-dashboard-10-tc-l-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "172x32",
         "width": 172,
         "height": 32,
@@ -31387,9 +31387,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-tc-m-1.ansi": {
-        "name": "sugar-dash-10-tc-m-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-tc-m-1.ansi": {
+        "name": "sugar-dashboard-10-tc-m-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -31399,9 +31399,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-tc-m-2.ansi": {
-        "name": "sugar-dash-10-tc-m-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-tc-m-2.ansi": {
+        "name": "sugar-dashboard-10-tc-m-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -31411,9 +31411,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-tc-s-1.ansi": {
-        "name": "sugar-dash-10-tc-s-1.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-tc-s-1.ansi": {
+        "name": "sugar-dashboard-10-tc-s-1.ansi",
+        "category": "sugar-dashboard",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -31423,9 +31423,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-dash/sugar-dash-10-tc-s-2.ansi": {
-        "name": "sugar-dash-10-tc-s-2.ansi",
-        "category": "sugar-dash",
+    "sugar-dashboard/sugar-dashboard-10-tc-s-2.ansi": {
+        "name": "sugar-dashboard-10-tc-s-2.ansi",
+        "category": "sugar-dashboard",
         "resolution": "63x13",
         "width": 63,
         "height": 13,

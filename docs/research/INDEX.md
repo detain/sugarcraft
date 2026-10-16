@@ -32,7 +32,7 @@ To implement an item:
 
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
-| **sugar-dash** | [research/libraries/sugar-dash-research.md](libraries/sugar-dash-research.md) | 1. Constraint layout, 2. StatefulWidget separation, 3. Reactive props |
+| **sugar-dashboard** | [research/libraries/sugar-dashboard-research.md](libraries/sugar-dashboard-research.md) | 1. Constraint layout, 2. StatefulWidget separation, 3. Reactive props |
 | **sugar-bits** | [research/libraries/sugar-bits-research.md](libraries/sugar-bits-research.md) | 1. validate_on timing, 2. restrict regex, 3. Table sorting/filtering |
 | **candy-forms** | [research/libraries/candy-forms-research.md](libraries/candy-forms-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
 | **sugar-table** | [research/libraries/sugar-table-research.md](libraries/sugar-table-research.md) | 1. StyleFunc, 2. Flex columns, 3. Viewport virtualization |
@@ -131,7 +131,7 @@ To implement an item:
 
 ### Layout & Compositing
 
-- **sugar-dash**: Constraint layout, StatefulWidget separation
+- **sugar-dashboard**: Constraint layout, StatefulWidget separation
 - **sugar-veil**: Backdrop, animation, overlay stacking
 - **sugar-boxer**: Multiple box styles, text alignment, titles
 - **sugar-stickers**: Viewport component, sticky positioning

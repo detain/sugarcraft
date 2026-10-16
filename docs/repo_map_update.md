@@ -131,7 +131,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **Byte-level string operations break UTF-8/grapheme content** — candy-hermit's `highlightMatches()` uses byte indexing; candy-codeshot's 0.6 font aspect ratio fails on CJK/multi-byte content; candy-ansi-inspect's parser has C1 limitations due to PHP's native UTF-8 handling. The ecosystem re-implements byte-loop parsing instead of using a shared state machine.
 
-3. **No Cassowary constraint solver** — candy-sprinkles, candy-core, candy-forms, sugar-bits, sugar-boxer, sugar-dash, candy-git, sugar-stickers all need constraint-based layout (column A = 30% but never less than 10). Currently each package implements greedy one-pass sizing manually.
+3. **No Cassowary constraint solver** — candy-sprinkles, candy-core, candy-forms, sugar-bits, sugar-boxer, sugar-dashboard, candy-git, sugar-stickers all need constraint-based layout (column A = 30% but never less than 10). Currently each package implements greedy one-pass sizing manually.
 
 4. **Greedy constraint solvers / no shared layout engine** — Every layout-sensitive package independently implements manual sizing logic. No shared layout engine exists at the foundation layer.
 
@@ -167,7 +167,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in candy-ssh-launcher.
 
-10. **Buffer diffing / dirty-region tracking** — sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
+10. **Buffer diffing / dirty-region tracking** — sugar-boxer, sugar-dashboard, sugar-crush, sugar-veil, sugar-stickers, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
 
 11. **Input driver / TTY integration** — sugar-readline cannot read actual terminal keypresses — only processes pre-decoded symbolic key names. No mechanism to decode terminal escape sequences (Kitty keyboard protocol, SGR mouse). Blocking real-world interactive usage.
 
@@ -185,7 +185,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 1. **Shared `Buffer`/`Cell` value object hierarchy** — No package has a shared cell buffer. This means: cell-level diffing cannot be shared, canvas layering is per-package, and a future cell-based renderer would need per-package implementation.
 
-2. **StatefulWidget / Event-Driven separation** — sugar-dash, sugar-crush, sugar-readline, candy-lister mix state and rendering. ratatui/textual separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). Enables testability and multiple views of same data.
+2. **StatefulWidget / Event-Driven separation** — sugar-dashboard, sugar-crush, sugar-readline, candy-lister mix state and rendering. ratatui/textual separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). Enables testability and multiple views of same data.
 
 3. **Consistent mouse hit-testing infrastructure** — Mouse support relies on external candy-mouse Manager wiring rather than bubblezone's self-contained Mark/Scan/Get pattern. No consistent coordinate translation or zone tracking.
 
@@ -351,9 +351,9 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 6 | Extract `DatabaseInterface` in candy-sql | candy-sql | Critical | Low | Low | P0 |
 | 7 | Fix `toSshArgv()` to emit ALL identity files | candy-ssh-launcher | High | Low | Low | P0 |
 | 8 | Wire `Mosaic::auto()` + `diagnose()` | candy-mosaic | High | Low | Low | P0 |
-| 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-bits, sugar-boxer, sugar-dash | Critical | High | Medium | P1 |
+| 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-bits, sugar-boxer, sugar-dashboard | Critical | High | Medium | P1 |
 | 10 | Implement cell-based buffer model | candy-core, sugar-bits, candy-sprinkles | Critical | High | Medium | P1 |
-| 11 | Implement buffer diffing / dirty-region tracking | sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister | High | Medium | Low | P1 |
+| 11 | Implement buffer diffing / dirty-region tracking | sugar-boxer, sugar-dashboard, sugar-crush, sugar-veil, sugar-stickers, candy-lister | High | Medium | Low | P1 |
 | 12 | Add input driver for terminal keypress decoding | sugar-readline | Critical | High | Medium | P1 |
 | 13 | Add `charmbracelet/x/ansi` state machine sharing | candy-ansi-inspect, candy-hermit, candy-codeshot, candy-vt | High | Medium | Low | P1 |
 | 14 | Implement GitHub/GitLab README fetching | candy-mdview | High | Medium | Low | P1 |
@@ -418,7 +418,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 1. **Shared `Buffer`/`Cell` rendering foundation** — Architectural investment enabling all packages to benefit from cell-level diffing, per-cell styling, and animation efficiency in one change.
 
-2. **Shared layout engine with Cassowary** — `SugarCraft\Layout` package used by candy-sprinkles, sugar-bits, sugar-boxer, sugar-dash, candy-forms.
+2. **Shared layout engine with Cassowary** — `SugarCraft\Layout` package used by candy-sprinkles, sugar-bits, sugar-boxer, sugar-dashboard, candy-forms.
 
 3. **Shared mouse hit-testing** — bubblezone-style Mark/Scan/Get pattern self-contained in each zone-aware package rather than external dependency.
 
@@ -438,7 +438,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 1. **`SugarCraft/Core`** — Already exists as candy-core; needs `ProgramOptions::builder()`, `Program::withLogger()`, `Program::withExceptionHandler()`, exposed `$lastFrameDuration`.
 
-2. **`SugarCraft/Layout`** — New package implementing Cassowary constraint solver. Consumed by candy-sprinkles, sugar-bits, sugar-boxer, sugar-dash, candy-forms.
+2. **`SugarCraft/Layout`** — New package implementing Cassowary constraint solver. Consumed by candy-sprinkles, sugar-bits, sugar-boxer, sugar-dashboard, candy-forms.
 
 3. **`SugarCraft/Buffer`** — New package implementing `Buffer`/`Cell` grid model. Consumed by candy-core renderer, candy-sprinkles Canvas, candy-shine Renderer, sugar-bits components, candy-forms primitives.
 

@@ -55,7 +55,7 @@ final class Graph
 
     /**
      * Rounded-corner preset — straight runs stay thin, corners arc over.
-     * Matches the box-drawing style sugar-dash defaults to org-wide, so
+     * Matches the box-drawing style sugar-dashboard defaults to org-wide, so
      * chart frames can shed the sharp `┌┐└┘` look without hand-rolling a
      * runeset at every call site.
      */

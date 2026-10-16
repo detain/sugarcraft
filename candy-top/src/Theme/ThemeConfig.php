@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Theme;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dash\Foundation\GradientStore;
+use SugarCraft\Dashboard\Foundation\GradientStore;
 
 /**
  * A resolved truecolor btop theme: the 48 semantic keys (21 singles + 9

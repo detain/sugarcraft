@@ -6,7 +6,7 @@ namespace SugarCraft\Sql\Admin\ServerStatus;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Chart\Gauge;
+use SugarCraft\Dashboard\Plot\Chart\Gauge;
 use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\CacheTtl;
 use SugarCraft\Sql\Admin\Calc\HostLoadMode;

@@ -135,7 +135,7 @@ interface Model
 - `candy-git/src/App.php`
 - `candy-codetime/src/Dashboard.php`
 - `candy-mdview/src/MdViewModel.php`
-- `sugar-dash/src/Modules/*` (multiple)
+- `sugar-dashboard/src/Modules/*` (multiple)
 
 **honey-* libs (2):**
 - `candy-flappy/src/Game.php`

@@ -21,7 +21,7 @@ use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Picture\Picture;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;
-use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 
 /**
  * Alias-completeness registry (BL-4).

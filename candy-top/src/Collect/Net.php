@@ -21,7 +21,7 @@ namespace SugarCraft\Top\Collect;
  * counters come from /proc/net/dev (one read for every interface) and
  * "connected" (btop: IFF_RUNNING) from sysfs `carrier`, falling back to
  * `operstate` up/unknown. Autoscale hysteresis is NOT here — that is
- * sugar-dash NetAutoScale's job on the rate stream.
+ * sugar-dashboard NetAutoScale's job on the rate stream.
  *
  * Addresses (btop #1573) come from net_get_interfaces() (getifaddrs, no
  * shell-out), re-read every sample since DHCP/VPN change them. The

@@ -304,7 +304,7 @@ goes back; `?` opens help.
 │   2                                                                       │
 │   3  declare(strict_types=1);                                             │
 │   4                                                                       │
-│   5  namespace SugarCraft\Dash\Foundation;                                │
+│   5  namespace SugarCraft\Dashboard\Foundation;                                │
 │   6                                                                       │
 │   7  /**                                                                  │
 │   8   * Cell grid for ANSI rendering.                                     │
@@ -660,7 +660,7 @@ A phase is "done" when:
 ### 9.1 Will candy-core handle this scale?
 
 candy-core's `Program` event loop has been tested on smaller TUIs
-(sugar-bits demos, sugar-dash dashboard). A repo-browser TUI is not
+(sugar-bits demos, sugar-dashboard dashboard). A repo-browser TUI is not
 unreasonably bigger — five screens, single-user, single-program. The
 main load point is the commit log on a large repo (10k+ commits);
 phase 4 addresses that with windowed loading. **No expected

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Panel\Gpu;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Cpu\CpuView;

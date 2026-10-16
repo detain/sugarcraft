@@ -11,7 +11,7 @@ Three features:
   `resample` on series data.
 - Optional `BrailleCanvas` rendering mode (depend on
   candy-sprinkles after StyleParser move; braille canvas itself
-  lives in sugar-dash's `Plot/Braille/` — consume it).
+  lives in sugar-dashboard's `Plot/Braille/` — consume it).
 - Named themes (`Theme::dracula()`, `oneDark()`, etc.) — consume from
   candy-sprinkles per step 02.01.
 
@@ -28,7 +28,7 @@ Three features:
 - `sugar-charts/src/LineChart.php` and `Chart.php` — `withCanvas(BrailleCanvas)`
   alternative mode.
 - `sugar-charts/composer.json` — add `sugarcraft/candy-sprinkles` (for
-  themes) and `sugarcraft/sugar-dash` (for braille canvas) if not
+  themes) and `sugarcraft/sugar-dashboard` (for braille canvas) if not
   already.
 
 ## Tests
