@@ -164,7 +164,7 @@ that are tiny but together justify a PR.
 - treilik/bubbleboxer → sugar-boxer
 - rmhubbert/bubbletea-overlay → sugar-veil
 - KevM/bubbleo → sugar-crumbs
-- Genekkion/theHermit → candy-hermit
+- Genekkion/theHermit → sugar-quickpick
 - Evertras/bubble-table → sugar-table
 - erikgeiser/promptkit → sugar-readline
 - EthanEFung/bubble-datepicker → sugar-datepicker

@@ -2,7 +2,7 @@
 
 Cross-cutting analysis of 9 update documents covering candy-ansi-inspect, candy-codeshot,
 sugar-datepicker, candy-metrics, sugar-toast, candy-kv, candy-git-server, candy-ssh-launcher,
-candy-hermit.
+sugar-quickpick.
 
 ---
 
@@ -23,8 +23,8 @@ incremental gaps.
 **Pattern:** Ported packages deliver CLI/library features but defer the interactive TUI
 layer that defines the upstream experience.
 
-### C. UTF-8 Grapheme / ANSI Width Blindness (candy-hermit, candy-ansi-inspect, candy-codeshot)
-candy-hermit's `highlightMatches()` uses byte-level indexing — breaks on emoji, CJK,
+### C. UTF-8 Grapheme / ANSI Width Blindness (sugar-quickpick, candy-ansi-inspect, candy-codeshot)
+sugar-quickpick's `highlightMatches()` uses byte-level indexing — breaks on emoji, CJK,
 combining characters. candy-codeshot's 0.6 font aspect ratio approximation works for ASCII
 but fails for multi-byte content. candy-ansi-inspect's manual parsing has C1 limitation due to
 PHP's UTF-8 handling.
@@ -37,7 +37,7 @@ on non-ASCII content.
 ## 2. Top 2 Shared Architectural Weaknesses
 
 ### A. Manual Byte-Loop Parsing vs. State Machine Architecture
-candy-ansi-inspect uses a manual byte-by-byte parsing loop (551-line Inspector.php). candy-hermit
+candy-ansi-inspect uses a manual byte-by-byte parsing loop (551-line Inspector.php). sugar-quickpick
 uses `strlen()`/`strpos()` at byte level. candy-vt (referenced as upstream source) already
 has the VT500 state machine from `charmbracelet/x/ansi`. The ecosystem is re-implementing
 manual parsing instead of sharing the state machine.
@@ -49,7 +49,7 @@ requires modifying core loops rather than registering handlers.
 candy-ansi-inspect has 116 unit tests but zero golden file regression tests. sugar-datepicker
 has 57 tests but no snapshot tests for `View()` output. candy-codeshot's WindowStyleTest
 tests SVG structure but could use full render comparison. Only candy-kv and
-candy-hermit have what could be called structured test coverage.
+sugar-quickpick have what could be called structured test coverage.
 
 **Shared risk:** Refactoring any rendering code can silently corrupt output format
 without detection.
@@ -68,7 +68,7 @@ The canonical TUI framework reference. Every package either:
 **Why:** It is the dominant Go TUI framework and the upstream source for half the
 SugarCraft ecosystem's component designs.
 
-### 2. charmbracelet/x/ansi (cited in candy-ansi-inspect, candy-hermit, candy-codeshot)
+### 2. charmbracelet/x/ansi (cited in candy-ansi-inspect, sugar-quickpick, candy-codeshot)
 Provides the ECMA-48 state machine parser (`ansi.Parser`), ANSI width calculation via
 `clipperhouse/displaywidth`, and C0/C1 control code tables. This is the foundational
 parsing layer for the entire ANSI-inspection and terminal emulation stack.
@@ -76,7 +76,7 @@ parsing layer for the entire ANSI-inspection and terminal emulation stack.
 **Why:** It's the upstream source for both candy-ansi-inspect's parser AND candy-vt's VT500
 implementation. Sharing it would eliminate duplicate state-machine ports.
 
-### 3. charmbracelet/lipgloss (cited in candy-ansi-inspect, sugar-toast, candy-ssh-launcher, candy-hermit)
+### 3. charmbracelet/lipgloss (cited in candy-ansi-inspect, sugar-toast, candy-ssh-launcher, sugar-quickpick)
 Style composition, adaptive color (light/dark theme detection via `HasDarkBackground`),
 `StyleRunes()` for matched/unmatched highlighting, and `Width()` for ANSI/Unicode-aware
 measurement. Referenced more than any other styling library.

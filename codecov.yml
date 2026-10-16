@@ -146,8 +146,8 @@ flag_management:
     - name: candy-flappy
       paths: ["candy-flappy/src/**"]
       carryforward: true
-    - name: candy-hermit
-      paths: ["candy-hermit/src/**"]
+    - name: sugar-quickpick
+      paths: ["sugar-quickpick/src/**"]
       carryforward: true
     - name: candy-input
       paths: ["candy-input/src/**"]
@@ -445,12 +445,12 @@ component_management:
         - "candy-flappy/src/**"
       flag_regexes:
         - "^candy-flappy$"
-    - component_id: candy-hermit
-      name: candy-hermit
+    - component_id: sugar-quickpick
+      name: sugar-quickpick
       paths:
-        - "candy-hermit/src/**"
+        - "sugar-quickpick/src/**"
       flag_regexes:
-        - "^candy-hermit$"
+        - "^sugar-quickpick$"
     - component_id: candy-input
       name: candy-input
       paths:

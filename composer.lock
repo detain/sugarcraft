@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9c4ccaeaa31c6a05ce073734e28972b8",
+    "content-hash": "c4518ed0bf7977add0b09c186c139865",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4371,65 +4371,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-hermit",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-hermit",
-                "reference": "926db38348f306638e7597f5eb5b33279573c377"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-fuzzy": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Hermit\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Hermit\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of Genekkion/theHermit — fuzzy finder / quick-fix overlay for terminal UIs. Wraps a background view, renders a filterable list overlay on top, background continues to update underneath.",
-            "homepage": "https://github.com/sugarcraft/candy-hermit",
-            "keywords": [
-                "finder",
-                "fuzzy",
-                "overlay",
-                "quickfix",
-                "sugarcraft",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-hermit/issues",
-                "source": "https://github.com/sugarcraft/candy-hermit"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-input",
             "version": "dev-master",
             "dist": {
@@ -6887,6 +6828,65 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-quickpick",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-quickpick",
+                "reference": "8883bd21693ed3cc510b89ce11f137bce5f4ff8b"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-fuzzy": "dev-master",
+                "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\QuickPick\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\QuickPick\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of Genekkion/theHermit — fuzzy finder / quick-fix overlay for terminal UIs. Wraps a background view, renders a filterable list overlay on top, background continues to update underneath.",
+            "homepage": "https://github.com/sugarcraft/sugar-quickpick",
+            "keywords": [
+                "finder",
+                "fuzzy",
+                "overlay",
+                "quickfix",
+                "sugarcraft",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-quickpick/issues",
+                "source": "https://github.com/sugarcraft/sugar-quickpick"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-readline",
             "version": "dev-master",
             "dist": {
@@ -8597,7 +8597,6 @@
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
         "sugarcraft/candy-git-server": 20,
-        "sugarcraft/candy-hermit": 20,
         "sugarcraft/candy-kit": 20,
         "sugarcraft/candy-kv": 20,
         "sugarcraft/candy-lister": 20,
@@ -8634,6 +8633,7 @@
         "sugarcraft/sugar-diff": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-mcp": 20,
+        "sugarcraft/sugar-quickpick": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-stickers": 20,

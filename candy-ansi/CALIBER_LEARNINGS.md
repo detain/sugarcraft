@@ -23,7 +23,7 @@ before. State machine actions in `start()` should only set up transitional
 state, not discard data that arrived earlier in the same logical sequence.
 
 **Impact:** candy-ansi-inspect Inspector now passes all 147 tests; also fixed
-candy-hermit and candy-codeshot consumers.
+sugar-quickpick and candy-codeshot consumers.
 
 ## 2026-07-10 — W1 defork-prep: grow CsiHandler, route CR/LF, fix OSC-8, configurable buffer cap
 

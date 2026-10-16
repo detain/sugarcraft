@@ -13,7 +13,7 @@ Resume the SugarCraft audit-fixing workflow from where it left off. This documen
 
 ## What Was Done
 
-The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
+The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, sugar-quickpick, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
 
 **The plan files themselves were NOT marked ✅ — the fixes landed but bookkeeping was not done.**
 
@@ -78,7 +78,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 1-A | 1.1–1.3 | candy-files (concurrency limiting, trash shutdown, syscall optimization) |
-| 1-B | 1.4–1.7 | candy-hermit (Highlighter cache, ANSI parser cache, StatusBar/HelpBar returns copy) |
+| 1-B | 1.4–1.7 | sugar-quickpick (Highlighter cache, ANSI parser cache, StatusBar/HelpBar returns copy) |
 | 1-C | 1.8–1.9 | candy-kit (Section header rune formula, rule min-width) |
 | 1-D | 1.10–1.14 | candy-kit (Theme type guard), candy-lister (RuntimeException→Throwable, dead enum case, UTF-8 grapheme, ANSI injection) |
 | 1-E | 1.15–1.17 | candy-focus (next/previous DRY), candy-input (Shift+scroll tests, equals docblock) |
@@ -93,8 +93,8 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 2-A | 2.1–2.3 | candy-core (Clamp migration incomplete), repeated_logic (Validation API mismatch), sugar-bits (sanitizeCell extraction) |
-| 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), candy-hermit (computeWidth redundant) |
-| 2-C | 2.7–2.9 | candy-hermit (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) |
+| 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), sugar-quickpick (computeWidth redundant) |
+| 2-C | 2.7–2.9 | sugar-quickpick (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) |
 | 2-D | 2.10–2.12 | sugar-bits (AnimatedProgress spring cache), candy-buffer (DiffOptimiser array_merge, DiffEncoder state reset) |
 | 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), candy-shine (string concat loops, Theme::fromJson issues) |
 | 2-F | 2.16–2.18 | candy-codeshot (LayoutCalculator extraction, match expression), candy-testing (O(n) array_shift) |

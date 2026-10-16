@@ -1,6 +1,6 @@
-# Step 09.05 — candy-hermit border/Style (sprinkles) + SIGWINCH (pty) + help/status bar
+# Step 09.05 — sugar-quickpick border/Style (sprinkles) + SIGWINCH (pty) + help/status bar
 
-**Source:** `leftover_updates_later.md` candy-hermit §3.4-6
+**Source:** `leftover_updates_later.md` sugar-quickpick §3.4-6
 **Branch:** `ai/hermit-border-sigwinch-help`
 
 ## Deliverable
@@ -14,15 +14,15 @@
 
 **Modify:**
 
-- `candy-hermit/src/Hermit.php` — accept
+- `sugar-quickpick/src/Hermit.php` — accept
   `\SugarCraft\Sprinkles\Border\Border` and `Style`.
-- `candy-hermit/src/Hermit.php` — SIGWINCH handler attaches via
+- `sugar-quickpick/src/Hermit.php` — SIGWINCH handler attaches via
   `SignalForwarder::attachSigwinch`.
-- `candy-hermit/composer.json` — add `candy-sprinkles` + `candy-pty`.
+- `sugar-quickpick/composer.json` — add `candy-sprinkles` + `candy-pty`.
 
 **Create:**
 
-- `candy-hermit/src/HelpBar.php`, `candy-hermit/src/StatusBar.php`.
+- `sugar-quickpick/src/HelpBar.php`, `sugar-quickpick/src/StatusBar.php`.
 
 ## Tests
 
@@ -30,8 +30,8 @@
 
 ## Acceptance
 
-- `cd candy-hermit && vendor/bin/phpunit` green.
-- `grep -n "stty\|shell_exec" candy-hermit/src` clean.
+- `cd sugar-quickpick && vendor/bin/phpunit` green.
+- `grep -n "stty\|shell_exec" sugar-quickpick/src` clean.
 
 ---
 

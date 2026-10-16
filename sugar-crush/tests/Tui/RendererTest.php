@@ -354,7 +354,7 @@ final class RendererTest extends TestCase
     //
     // The live status bar was migrated off a hand-rolled string concat onto the
     // shared SugarCraft\Sprinkles\Bar\StatusBar primitive (the same one behind
-    // sugar-dash / candy-hermit). These tests lock BOTH facets: (1) byte-parity
+    // sugar-dash / sugar-quickpick). These tests lock BOTH facets: (1) byte-parity
     // with the previous hand-rolled output for every populated case, and (2)
     // that the bytes are genuinely produced by the primitive with the expected
     // segment structure — so the migration is real, not just visually equal.

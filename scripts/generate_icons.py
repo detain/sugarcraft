@@ -107,7 +107,7 @@ SUBJECTS: dict[str, str] = {
     "candy-log":       "a stubby chocolate yule-log roll with rainbow sprinkles and creamy frosting on the end",
     "candy-palette":   "a glossy artist's paint palette shaped from candy with five jelly-bean paint blobs in red orange yellow green and blue and a small candy paintbrush",
     "candy-lister":    "a glossy candy clipboard with a checklist of three tiny gumdrop items each with a tick mark beside it",
-    "candy-hermit":    "a tiny cute hermit crab peeking out of a glossy pink-and-white striped candy spiral shell",
+    "sugar-quickpick":    "a tiny cute hermit crab peeking out of a glossy pink-and-white striped candy spiral shell",
     "candy-git-server":     "a stack of three glossy candy server-rack units shaped like horizontal chocolate bars with small blinking gumdrop status lights",
     "candy-wish":      "a glossy candy shooting star with a long sparkle trail behind it",
     "candy-flip":      "a glossy red-and-white peppermint disc mid-flip in the air with a soft motion-arc trail behind it",

@@ -16,7 +16,7 @@ use SugarCraft\Sprinkles\Style;
  * `key<keySeparator>label`, with entries joined by {@see separator()}.
  * Optional {@see keyStyle()} / {@see labelStyle()} theme the two halves.
  *
- * This is the shared owner primitive behind candy-hermit's HelpBar (and
+ * This is the shared owner primitive behind sugar-quickpick's HelpBar (and
  * the help rows the dash/crush status bars carry): each becomes a thin
  * themed wrapper over this class.
  *

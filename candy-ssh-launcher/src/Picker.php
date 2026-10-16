@@ -94,7 +94,7 @@ class Picker
                         // see highlightLine()), so the delete unit must be the
                         // codepoint. A byte-wise substr here stranded dangling
                         // continuation bytes mid-character and echoed invalid
-                        // UTF-8 to the terminal (mirrors candy-hermit
+                        // UTF-8 to the terminal (mirrors sugar-quickpick
                         // 530c750f1). Trade-off stated honestly, same as
                         // there: a multi-codepoint grapheme such as '👍🏽'
                         // takes two backspaces to clear, because the skin-tone

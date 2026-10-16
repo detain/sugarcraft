@@ -1,6 +1,6 @@
-# Step 09.04 — candy-hermit Item interface + filter fn + persistent history
+# Step 09.04 — sugar-quickpick Item interface + filter fn + persistent history
 
-**Source:** `leftover_updates_later.md` candy-hermit §3.1-3
+**Source:** `leftover_updates_later.md` sugar-quickpick §3.1-3
 **Branch:** `ai/hermit-item-filter-history`
 
 ## Deliverable
@@ -13,13 +13,13 @@
 
 **Create:**
 
-- `candy-hermit/src/Item.php` (interface).
-- `candy-hermit/src/FilteredItem.php` (numbered impl).
-- `candy-hermit/src/History/FileHistory.php`.
+- `sugar-quickpick/src/Item.php` (interface).
+- `sugar-quickpick/src/FilteredItem.php` (numbered impl).
+- `sugar-quickpick/src/History/FileHistory.php`.
 
 **Modify:**
 
-- `candy-hermit/src/Hermit.php` — accept `Item[]`; `setFilterFn`.
+- `sugar-quickpick/src/Hermit.php` — accept `Item[]`; `setFilterFn`.
 
 ## Tests
 
@@ -27,7 +27,7 @@
 
 ## Acceptance
 
-- `cd candy-hermit && vendor/bin/phpunit` green.
+- `cd sugar-quickpick && vendor/bin/phpunit` green.
 
 ---
 

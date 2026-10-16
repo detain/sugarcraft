@@ -424,11 +424,11 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     review for step 09.03 · clean · PR#714
     tests-ci for step 09.03 · clean
     docs for step 09.03 · PR#715 · document withAdaptiveSize() and FrameCache in README + end-user HTML + CALIBER_LEARNINGS
-    step 09.04 · PR#716 · candy-hermit: Item interface + FilteredItem readonly impl + FileHistory + setFilterFn() + Hermit accepts Item[] (leftover-rollout step 09.04)
+    step 09.04 · PR#716 · sugar-quickpick: Item interface + FilteredItem readonly impl + FileHistory + setFilterFn() + Hermit accepts Item[] (leftover-rollout step 09.04)
     fix for step 09.04 · PR#717 · resolved 2 findings (dead Model import + setFilterFn test)
     tests-ci for step 09.04 · clean
     docs for step 09.04 · PR#718 · document Item/FilteredItem/FileHistory/setFilterFn in README + end-user HTML + new CALIBER_LEARNINGS.md
-    step 09.05 · PR#719 · candy-hermit: border/Style (sprinkles) + SIGWINCH + help/status bar (leftover-rollout step 09.05)
+    step 09.05 · PR#719 · sugar-quickpick: border/Style (sprinkles) + SIGWINCH + help/status bar (leftover-rollout step 09.05)
     review for step 09.05 · clean · PR#719
     tests-ci for step 09.05 · clean
     docs for step 09.05 · PR#720 · document Border/Style/HelpBar/StatusBar/SIGWINCH in README + end-user HTML + CALIBER_LEARNINGS.md

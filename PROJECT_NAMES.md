@@ -129,6 +129,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarCharts** | sugar + charts = charts. literal. |
 | **SugarTable** | sugar + table = data table. literal. |
 | **SugarDatepicker** | sugar + datepicker = date picker. literal. |
+| **SugarQuickpick** | sugar + quickpick = fuzzy quick-pick / filter overlay component. "quickpick" says the function plainly, matching the established terminal picker concept (was CandyHermit — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarCrumbs** | crumbs = breadcrumbs nav IS the function. delightful. |
 | **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
@@ -173,7 +174,6 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarBits** | "Bits" is generic; the lib is a set of named widgets | `BiscuitWidgets`, `SprinkleParts`, `ChipParts` |
 | **CandyKit** | "Kit" is filler; the lib is CLI presentation primitives | `CupcakeKit`, `BentoCli`, `BiscuitCli` |
 | **CandyShine** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
-| **CandyHermit** | "Hermit" is an inherited name; doesn't say fuzzy-find | `TruffleFinder`, `MacaronFilter` |
 | **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
 | **CandySshLauncher** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
 | **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
@@ -205,7 +205,7 @@ matching package turns out to be.
 | **CookieClick** | mouse-zone tracker (CandyMouse alternative) |
 | **BentoBox** | layout (SugarBoxer alternative) |
 | **BentoLauncher** | launcher / picker (CandySshLauncher alternative) |
-| **MarshmallowFilter** | fuzzy-finder (CandyHermit alternative) |
+| **MarshmallowFilter** | fuzzy-finder (SugarQuickpick alternative) |
 | **HoneyTunnel** | SSH / tunnel (CandyWish alternative) |
 | **CaramelStore** | KV / cache (CandyKv alternative) |
 | **TruffleFinder** | fuzzy / search overlay |
