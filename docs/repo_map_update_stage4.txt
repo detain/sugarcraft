@@ -30,7 +30,7 @@ Components across sugar-dash, sugar-crush, sugar-readline, candy-lister mix stat
 **Pattern needed:** `ListState` / `TableState` / `TabsState` as external state objects passed to constructors, rather than internal mutable state.
 
 ### 2.2 No Consistent Mouse Hit-Testing Infrastructure
-Mouse support is missing or incomplete across most packages. When implemented, it relies on external candy-mouse Manager wiring (sugar-veil, sugar-crumbs) rather than self-contained Mark/Scan/Get pattern (bubblezone's zero-width ANSI markers). No consistent coordinate translation or zone tracking across the ecosystem.
+Mouse support is missing or incomplete across most packages. When implemented, it relies on external sugar-mouse Manager wiring (sugar-veil, sugar-crumbs) rather than self-contained Mark/Scan/Get pattern (bubblezone's zero-width ANSI markers). No consistent coordinate translation or zone tracking across the ecosystem.
 
 **Pattern needed:** bubblezone-style Mark/Scan/Get for self-contained hit-testing without external dependencies.
 

@@ -27,9 +27,9 @@ final class SanitizeTest extends TestCase
     /** � U+FFFD REPLACEMENT CHARACTER — cellValue's invalid-UTF-8 marker. */
     private const FFFD = "\xEF\xBF\xBD";
 
-    /** U+E000 — candy-mouse's zone-OPEN sentinel (ImageOverlay starts at U+E002, disjoint). */
+    /** U+E000 — sugar-mouse's zone-OPEN sentinel (ImageOverlay starts at U+E002, disjoint). */
     private const SENTINEL_OPEN = "\xEE\x80\x80";
-    /** U+E001 — candy-mouse's zone-CLOSE sentinel (never an image marker). */
+    /** U+E001 — sugar-mouse's zone-CLOSE sentinel (never an image marker). */
     private const SENTINEL_CLOSE = "\xEE\x80\x81";
     /** U+E002 — the first ImageOverlay marker (id 0); NOT a zone sentinel. */
     private const IMAGE_MARKER = "\xEE\x80\x82";

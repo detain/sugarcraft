@@ -41,7 +41,7 @@ final class ImageOverlayTest extends TestCase
         // ANSI-aware measure, so a marker row lays out as it always did.
         self::assertSame(1, Width::string($m));
         self::assertSame(' ', Ansi::strip(str_replace(mb_substr($m, -1, 1, 'UTF-8'), ' ', $m)));
-        // Arena starts at U+E002: U+E000/U+E001 belong to the candy-mouse zone
+        // Arena starts at U+E002: U+E000/U+E001 belong to the sugar-mouse zone
         // sentinels (Sanitize::ZONE_SENTINEL_*), disjoint by the a32c4faae ruling.
         self::assertSame(0xE002, self::markerCell(0));
         self::assertSame(0xE003, self::markerCell(1));

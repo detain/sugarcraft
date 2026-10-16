@@ -9,7 +9,7 @@ use SugarCraft\Layout\Dock\Side;
 /**
  * The mouse gesture state behind pane docking: one drag in flight, or idle.
  *
- * The gesture phase's answer to candy-mouse's `DragTracker` (which it does NOT
+ * The gesture phase's answer to sugar-mouse's `DragTracker` (which it does NOT
  * adopt — see the measurement in the phase plan's step 0): a resize needs raw
  * column arithmetic against the LIVE band while the pointer stays inside a
  * run of per-row single-cell zones, whereas `DragTracker` only speaks in

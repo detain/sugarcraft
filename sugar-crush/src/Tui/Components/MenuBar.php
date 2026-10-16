@@ -139,7 +139,7 @@ final class MenuBar
 
     /**
      * The very same bar, with every menu title AND every pane-tab label
-     * wrapped in a candy-mouse click zone ({@see MENU_TITLE_ZONE_PREFIX},
+     * wrapped in a sugar-mouse click zone ({@see MENU_TITLE_ZONE_PREFIX},
      * {@see PANE_TAB_ZONE_PREFIX}).
      *
      * A SEPARATE render rather than a flag on the painted one, because the

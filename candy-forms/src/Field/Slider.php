@@ -233,7 +233,7 @@ final class Slider implements \SugarCraft\Forms\Field
      * Slider stays dependency-free — it types candy-core's own `MouseMsg`
      * (already a required sibling, zero new composer requires), so a host on
      * the TEA channel just forwards messages to {@see update()}, while a
-     * host that owns the layout geometry (sugar-crush runs candy-mouse and
+     * host that owns the layout geometry (sugar-crush runs sugar-mouse and
      * knows the track's absolute screen rect) hit-tests itself and calls
      * THIS method with the zone it computed.
      *

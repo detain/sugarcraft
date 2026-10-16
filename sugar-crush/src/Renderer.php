@@ -816,7 +816,7 @@ final class Renderer
      * The session picker's mouse actions on the highlighted row (Appendix P
      * §3.2): `session-act:<row>:<verb>`, one zone per glyph of the `✎ ★ ✕`
      * cluster ({@see \SugarCraft\Crush\Tui\SessionPicker::actionSegments()}),
-     * nested inside that row's `session-row:` zone. candy-mouse registers
+     * nested inside that row's `session-row:` zone. sugar-mouse registers
      * zones in close order and the first registered wins a hit, so the inner
      * glyph outranks the row around it. `<row>` is the same absolute row index
      * as the row zone's, so {@see Chat::sessionRowIndex()} validates both
@@ -843,7 +843,7 @@ final class Renderer
      * WHY PER-ROW AND NEVER MULTI-LINE: the invariant documented on
      * {@see markPaneHeader()} is that no zone may span lines, because
      * `renderView()` drops whole LEADING lines under height clipping and a
-     * zone split across the drop loses its open tag: candy-mouse's
+     * zone split across the drop loses its open tag: sugar-mouse's
      * `Scan::parse()` skips the surviving orphan close and registers NO zone,
      * so the rows still on screen go silently unclickable. One single-cell
      * zone per row clips whole-or-not-at-all with its line, which is safe by
@@ -1452,7 +1452,7 @@ final class Renderer
     /**
      * The zone-scan pass, run exactly ONCE per frame and only at the root.
      *
-     * candy-mouse (like bubblezone) records absolute bounding boxes as it
+     * sugar-mouse (like bubblezone) records absolute bounding boxes as it
      * walks the string, so scanning a sub-widget's output would register
      * boxes relative to that widget's own origin rather than the terminal's
      * — every nested scan would have to be thrown away and redone here
@@ -1489,7 +1489,7 @@ final class Renderer
      * session tab strip is drawn at all (≥2 sessions on disk), so a
      * single-session run still takes this branch on every frame.
      *
-     * The scan is also non-fatal. Of candy-mouse's malformed-markup matrix
+     * The scan is also non-fatal. Of sugar-mouse's malformed-markup matrix
      * (the {@see \SugarCraft\Mouse\Scan} class docblock) only a DUPLICATE id
      * throws — an orphan close or an unclosed open is skipped and registers
      * no zone, and a lone sentinel's own 3 bytes are skipped as zero cells
@@ -2144,7 +2144,7 @@ final class Renderer
      * The rectangle of the last frame a mouse drag may select text in, as
      * inclusive `[rowFrom, rowTo, colFrom, colTo]` cells of that frame, or
      * null when nothing on it is selectable. The cells are 1-based — the
-     * space SGR mouse reports, zones and candy-mouse's
+     * space SGR mouse reports, zones and sugar-mouse's
      * {@see \SugarCraft\Mouse\Selection} use — so frame line R is
      * `selectableLines()[R - 1]`.
      *
@@ -3558,7 +3558,7 @@ final class Renderer
      * the terminal's height by dropping leading LINES, so a zone spanning
      * several rows can lose its opening sentinel while the closing one
      * survives. {@see \SugarCraft\Mouse\Scan::parse()} skips that orphan
-     * close and registers NO zone for it (candy-mouse's malformed-markup
+     * close and registers NO zone for it (sugar-mouse's malformed-markup
      * matrix: lenient by design, because viewport clipping is exactly how an
      * orphan arises) — so the pane's surviving rows would silently stop
      * answering clicks. A single-line zone is clipped whole or not at all,
@@ -7006,7 +7006,7 @@ final class Renderer
      *
      * The zone sentinels (U+E000/U+E001) are Private-Use TEXT to candy-core,
      * so {@see Sanitize::visibleControls()} keeps them; raw, they would forge
-     * candy-mouse zone markup inside the modal. Every other row in the frame
+     * sugar-mouse zone markup inside the modal. Every other row in the frame
      * strips them ({@see untrusted()}), but this one spells them as
      * `<U+E000>`/`<U+E001>`, the same codepoint form as C1: stripping an
      * invisible character still splices the text either side of it, so the

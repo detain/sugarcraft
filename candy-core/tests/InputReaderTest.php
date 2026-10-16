@@ -675,7 +675,7 @@ final class InputReaderTest extends TestCase
 
     public function testBracketedPasteStripsZoneSentinelsKeepsImageMarkers(): void
     {
-        // A pasted candy-mouse zone sentinel (U+E000 open / U+E001 close) is
+        // A pasted sugar-mouse zone sentinel (U+E000 open / U+E001 close) is
         // well-formed UTF-8 text, so the plain ANSI sweep lets it through —
         // yet once echoed into a zone-marked frame it forges click/frame
         // markup. untrustedForMarkedFrames() surgically drops exactly those

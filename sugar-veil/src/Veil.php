@@ -193,7 +193,7 @@ final class Veil
      * Set the click-outside-dismiss flag.
      *
      * When true, clicking outside the veil's zone will dismiss it.
-     * Uses the self-contained candy-mouse Scanner for hit testing.
+     * Uses the self-contained sugar-mouse Scanner for hit testing.
      */
     public function withClickOutsideDismiss(bool $enabled = true): self
     {
@@ -340,7 +340,7 @@ final class Veil
      * Call this after animate() or composite() return, before calling
      * hit() or isClickOutside().
      *
-     * Uses candy-mouse Scanner internally — no external Manager needed.
+     * Uses sugar-mouse Scanner internally — no external Manager needed.
      *
      * The clone carries a FRESH scanner holding only this render's zones:
      * Scanner::scan() replaces zones wholesale, so scanning the shared
@@ -372,7 +372,7 @@ final class Veil
      * Wrap $content with an invisible zone marker so the scanner
      * can later extract bounding boxes.
      *
-     * Uses candy-mouse Mark internally — no external Manager needed.
+     * Uses sugar-mouse Mark internally — no external Manager needed.
      */
     public function mark(string $id, string $content): string
     {
@@ -753,7 +753,7 @@ final class Veil
      *  - OSC 8 hyperlinks open/close a running link pen (an empty URI
      *    closes; SGR reset does NOT, per xterm) and other OSC sequences
      *    are consumed through BEL/ST — never emitted as visible cells.
-     *  - candy-mouse zone sentinels (U+E000 id U+E001 triples) are
+     *  - sugar-mouse zone sentinels (U+E000 id U+E001 triples) are
      *    invisible to terminals, so they consume ZERO columns here.
      *
      * @param string $output Multi-line string from composite()
@@ -840,7 +840,7 @@ final class Veil
                 continue;
             }
 
-            // candy-mouse zone sentinels: U+E000 … U+E001 triples (the id
+            // sugar-mouse zone sentinels: U+E000 … U+E001 triples (the id
             // rides BETWEEN them in plain ASCII) plus stray closes are
             // zero-column to a terminal. An unmatched open swallows the tail.
             if ($byte === "\xEE" && $pos + 2 < $len && $line[$pos + 1] === "\x80") {

@@ -115,13 +115,13 @@ sugar-stickers research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. *
 
 - SSOT-03 — sugar-stickers' `Viewport` becomes a `final class` extending or composing `\SugarCraft\Bits\Viewport\Viewport` with the sticky-positioning extras. Add sugar-bits to require.
 
-### SSOT-04 — sugar-crumbs click regions use candy-mouse
+### SSOT-04 — sugar-crumbs click regions use sugar-mouse
 
-sugar-crumbs research P4 calls for "Click-region rendering". `candy-mouse` is the canonical zone-tracking lib (APC marker + scan algorithm). sugar-crumbs should emit zone markers via candy-mouse, not embed click coordinates.
+sugar-crumbs research P4 calls for "Click-region rendering". `sugar-mouse` is the canonical zone-tracking lib (APC marker + scan algorithm). sugar-crumbs should emit zone markers via sugar-mouse, not embed click coordinates.
 
 **Action:**
 
-- SSOT-04 — When implementing click regions in sugar-crumbs, use `\SugarCraft\Mouse\Zones\Manager::mark()` for each crumb. Acceptance: `grep -n "zoneMark\|APC" sugar-crumbs/src` returns hits to candy-mouse, not inline copies.
+- SSOT-04 — When implementing click regions in sugar-crumbs, use `\SugarCraft\Mouse\Zones\Manager::mark()` for each crumb. Acceptance: `grep -n "zoneMark\|APC" sugar-crumbs/src` returns hits to sugar-mouse, not inline copies.
 
 ### SSOT-05 — Chart duplication: sugar-dash depends on sugar-charts
 
@@ -252,7 +252,7 @@ because research adds three items the PTY plan did not call out:)
 - `/dev/tty` size-forwarding variant of `SignalForwarder::attachSigwinch` — current variant writes only to PTY master.
 - Public `Pty::setControllingTerminal(int $fd)` extraction — currently embedded in `bin/pty-shim.php`.
 
-### candy-mouse
+### sugar-mouse
 
 - `ZoneHoverTracker` + `MsgZoneEnter` / `MsgZoneExit` (Priority 1).
 - `DragTracker` + `MsgZoneDragStart/Move/End` (Priority 2).
@@ -525,7 +525,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - Implement missing `pushDirectory` / `view` / `filter` referenced by `examples/navigation.php` (P1).
 - `Closable` + lifecycle hooks `onEnter` / `onLeave` (P2).
 - URL/path derivation methods on `NavStack` (P3).
-- Click-region rendering (P4) — see SSOT-04 (consume candy-mouse).
+- Click-region rendering (P4) — see SSOT-04 (consume sugar-mouse).
 - Separator escaping in titles (P5).
 - aria-current / semantic HTML rendering (P6).
 
@@ -923,7 +923,7 @@ are 1 PR each.
 - candy-bits Table sort/filter/paginate (Phase 2/3).
 - candy-prompt validators + fuzzy autocomplete.
 - candy-vt P0 items (DECSTBM, DECAWM, subparams).
-- candy-mouse hover/drag/click-counter.
+- sugar-mouse hover/drag/click-counter.
 - candy-mosaic quarter-block renderer + delete API.
 - … (each lib's bullet list above is its own backlog.)
 

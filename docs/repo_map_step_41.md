@@ -52,7 +52,7 @@ _The shared-foundation refactor outlined above ran across <N> PRs, creating <8> 
 - ✅ candy-buffer (step-02, PR #<n>)
 - ✅ candy-testing (step-04, PR #<n>)
 - ✅ candy-ansi (step-01, PR #<n>)
-- ✅ candy-mouse (step-05, PR #<n>)
+- ✅ sugar-mouse (step-05, PR #<n>)
 - ✅ candy-input (step-06, PR #<n>)
 - (also created: candy-fuzzy step-07, candy-async step-08)
 

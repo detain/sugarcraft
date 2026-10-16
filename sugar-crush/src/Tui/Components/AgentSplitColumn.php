@@ -52,7 +52,7 @@ use SugarCraft\Sprinkles\Style;
  * {@see \SugarCraft\Crush\Renderer}'s boundary, exactly as
  * {@see AgentDashboardPane}'s does. So the same two-part boundary is applied
  * here: {@see PaneLabel::of()} for escapes and line breaks, plus a
- * Private-Use sweep — the block hosts candy-mouse's zone sentinels
+ * Private-Use sweep — the block hosts sugar-mouse's zone sentinels
  * (U+E000/U+E001) and candy-core's image markers (U+E002 upward), so an agent
  * that echoes one would corrupt the frame's graphics/zone bookkeeping rather
  * than merely look wrong.

@@ -467,7 +467,7 @@ Go's goroutine-based async is elegant. SugarCraft can replicate this with ReactP
 
 ## 25. High ROI Recommendations
 
-### For SugarCraft `candy-mouse` (or `sugar-zone`) development:
+### For SugarCraft `sugar-mouse` (or `sugar-zone`) development:
 
 1. **Implement `ZoneManager::trackClick()`** (HIGH ROI) — Provides built-in click deduplication without depending on upstream mouse event structure changes. Go bubblezone users still implement this manually.
 

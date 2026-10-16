@@ -1,6 +1,6 @@
-# Step 07.10 — candy-mouse ClickCounter + setMotionTracking
+# Step 07.10 — sugar-mouse ClickCounter + setMotionTracking
 
-**Source:** `leftover_updates_later.md` candy-mouse Priority 3 + 4
+**Source:** `leftover_updates_later.md` sugar-mouse Priority 3 + 4
 **Branch:** `ai/zone-clickcounter-motion`
 
 ## Deliverable
@@ -14,22 +14,22 @@
 
 **Create:**
 
-- `candy-mouse/src/ClickCounter.php`.
-- `candy-mouse/src/Msg/DoubleClickMsg.php`, `TripleClickMsg.php`.
+- `sugar-mouse/src/ClickCounter.php`.
+- `sugar-mouse/src/Msg/DoubleClickMsg.php`, `TripleClickMsg.php`.
 
 **Modify:**
 
-- `candy-mouse/src/Manager.php` — `setMotionTracking(bool)` toggles
+- `sugar-mouse/src/Manager.php` — `setMotionTracking(bool)` toggles
   `\x1b[?1002` / `\x1b[?1003` mouse modes.
 
 ## Tests
 
-- `candy-mouse/tests/ClickCounterTest.php`.
-- `candy-mouse/tests/ManagerMotionTrackingTest.php`.
+- `sugar-mouse/tests/ClickCounterTest.php`.
+- `sugar-mouse/tests/ManagerMotionTrackingTest.php`.
 
 ## Acceptance
 
-- `cd candy-mouse && vendor/bin/phpunit --filter "ClickCounter|MotionTracking"` green.
+- `cd sugar-mouse && vendor/bin/phpunit --filter "ClickCounter|MotionTracking"` green.
 
 ---
 

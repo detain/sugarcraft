@@ -375,7 +375,7 @@ final class TabsTest extends TestCase
         $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withWidth(200)->withZoneManager($manager);
         $view = $t->view();
-        // Zone markers are candy-mouse PUA sentinels: U+E000 <id> U+E001 ...
+        // Zone markers are sugar-mouse PUA sentinels: U+E000 <id> U+E001 ...
         // Prefix is concatenated directly, so "test" + "tab-0" = "testtab-0".
         $this->assertStringContainsString(\SugarCraft\Mouse\Sentinel::OPEN, $view);
         $this->assertStringContainsString(
@@ -392,7 +392,7 @@ final class TabsTest extends TestCase
     {
         $t = $this->tabs();
         $view = $t->view();
-        $this->assertStringNotContainsString('candy-mouse:', $view);
+        $this->assertStringNotContainsString('sugar-mouse:', $view);
     }
 
     public function testMsgZoneInBoundsActivatesMatchingTab(): void

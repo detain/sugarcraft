@@ -14,7 +14,7 @@ use SugarCraft\Crush\Theme;
  *
  * Local rather than `sugar-bits`' `Tabs` because that one hit-tests through
  * the `SugarCraft\Mouse\Zones` Manager while this app's clicks run on the
- * `candy-mouse` Mark/Scan layer; the strip reports
+ * `sugar-mouse` Mark/Scan layer; the strip reports
  * each painted tab's column span instead, and the shell records those as
  * `settings:tab:<n>` zones (the `MenuBar` pane-tab pattern).
  */

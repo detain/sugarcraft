@@ -56,7 +56,7 @@ next one failing in CI rather than in someone's terminal.
 
 ## Private-use block collision: image markers vs mouse zones
 
-candy-core's image placeholders and candy-mouse's zone sentinels **both**
+candy-core's image placeholders and sugar-mouse's zone sentinels **both**
 allocate out of U+E000–U+F8FF. `Renderer::maskImageMarkers()` exists solely to
 mask that block out of the copy the mouse `Scanner` reads, so an image is not
 parsed as a zone. Any new rendered glyph must stay outside U+E000–U+F8FF.
@@ -70,7 +70,7 @@ parsed as a zone. Any new rendered glyph must stay outside U+E000–U+F8FF.
   `Tui\TextSelection` + `Chat::trackTextSelection()` own the gesture now;
   `Renderer::selectableRegion()` limits it to the transcript's text column so
   borders never reach the clipboard.
-- **SGR mouse x/y stay 1-based through `Chat::zoneSpace()`** (candy-mouse
+- **SGR mouse x/y stay 1-based through `Chat::zoneSpace()`** (sugar-mouse
   zones are 1-based too). Anything that indexes frame lines/cells must
   subtract 1 — the first live run of the selection highlighted one row and one
   column off.

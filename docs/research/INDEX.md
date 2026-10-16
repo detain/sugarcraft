@@ -69,7 +69,7 @@ To implement an item:
 | **candy-mdview** | [research/libraries/candy-mdview-research.md](libraries/candy-mdview-research.md) | 1. Pygments highlighting, 2. Enhanced themes, 3. File watching |
 | **candy-codeshot** | [research/libraries/candy-codeshot-research.md](libraries/candy-codeshot-research.md) | 1. Bg colors, 2. Lang detection, 3. VS Code themes |
 | **candy-mosaic** | [research/libraries/candy-mosaic-research.md](libraries/candy-mosaic-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
-| **candy-mouse** | [research/libraries/candy-mouse-research.md](libraries/candy-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
+| **sugar-mouse** | [research/libraries/sugar-mouse-research.md](libraries/sugar-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
 | **candy-palette** | [research/libraries/candy-palette-research.md](libraries/candy-palette-research.md) | 1. CLICOLOR, 2. Terminfo Tc, 3. tmux handling |
 | **candy-metrics** | [research/libraries/candy-metrics-research.md](libraries/candy-metrics-research.md) | 1. Histogram buckets, 2. Metric describe, 3. UpDownCounter |
 
@@ -153,7 +153,7 @@ To implement an item:
 
 - **candy-vt**: Scrollback buffer, subparam parsing, cursor shapes
 - **candy-pty**: openpty FFI, waitpid FFI, raw mode
-- **candy-mouse**: Hover tracking, drag detection, click count
+- **sugar-mouse**: Hover tracking, drag detection, click count
 - **candy-palette**: CLICOLOR, terminfo Tc, color space handling
 
 ### App-Level

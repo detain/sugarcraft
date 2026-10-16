@@ -536,7 +536,7 @@ final class AgentSplitCompositorTest extends TestCase
     {
         // Agent output is model- and tool-authored. A CR would return the
         // cursor to column 0 and let the buffer overwrite the tile border; a
-        // U+E000 is where candy-core's image markers and candy-mouse's zone
+        // U+E000 is where candy-core's image markers and sugar-mouse's zone
         // sentinels both begin.
         $manager = $this->managerWithLiveAgent('reviewer', "clean\u{E000}text\rOVERWRITE\x1b[2J");
 

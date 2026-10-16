@@ -157,7 +157,7 @@
 **Implementation ideas:**
 
 - Wire `MouseMsg` handler in `App::update()` alongside `KeyMsg`
-- Use `candy-mouse` for zone-based hit detection if available
+- Use `sugar-mouse` for zone-based hit detection if available
 - Click on pane border to switch focus
 - Click on entry to move cursor + optional action trigger
 - Mouse wheel for scrolling in long lists
@@ -549,7 +549,7 @@
 
 4. **Address performance** — async git operations and GitDriver caching would make the TUI feel more responsive, especially on slower systems or large repositories.
 
-5. **Consider ecosystem leverage** — `honey-bounce` (spring animations), `candy-mouse` (mouse zones), and fuzzy search libraries could all be integrated to improve the TUI without significant new development.
+5. **Consider ecosystem leverage** — `honey-bounce` (spring animations), `sugar-mouse` (mouse zones), and fuzzy search libraries could all be integrated to improve the TUI without significant new development.
 
 **Competitive position:** candy-git competes directly with lazygit (Go) and offers a PHP-native alternative that integrates well with PHP tooling and workflows. The TypeScript/JS ecosystem has no direct equivalent, making candy-git a unique offering for PHP developers who prefer git TUI applications.
 

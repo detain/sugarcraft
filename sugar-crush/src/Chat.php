@@ -1491,7 +1491,7 @@ final class Chat implements Model
         /**
          * The last click on a session tab — `[tab id, microtime]` — so a
          * second click on the same tab within {@see TAB_DOUBLE_CLICK_SECONDS}
-         * reads as a double-click. Kept here because candy-mouse's
+         * reads as a double-click. Kept here because sugar-mouse's
          * `ClickResult` carries a zone and a button, never a click count.
          *
          * @var array{0: string, 1: float}|null
@@ -7858,7 +7858,7 @@ final class Chat implements Model
      * zone registry recorded, by subtracting {@see Renderer::zoneOrigin()}.
      *
      * Every comparison against a recorded {@see Zone} has to go through here,
-     * not just the hit-test: candy-mouse's {@see ZoneClickTracker} pairs a
+     * not just the hit-test: sugar-mouse's {@see ZoneClickTracker} pairs a
      * press with its release through the RELEASE-AGREEMENT gate (cdcd550be) —
      * the release must re-resolve through the CURRENT registry to the very
      * zone the press stored (id and full box, re-tested with
@@ -7884,12 +7884,12 @@ final class Chat implements Model
      * two `update()` calls, and `Chat` is immutable — the press-half state
      * would be discarded with the intermediate instance if it lived on a
      * field, so no click could ever complete. One tracker per process
-     * mirrors the single global manager bubblezone (and candy-mouse) assumes.
+     * mirrors the single global manager bubblezone (and sugar-mouse) assumes.
      */
     private static ?ZoneClickTracker $clickTracker = null;
 
     /**
-     * The shared Press+Release pairing state machine (candy-mouse's
+     * The shared Press+Release pairing state machine (sugar-mouse's
      * {@see ZoneClickTracker}), which is what makes a press on a tab followed
      * by a release somewhere else — a drag, or a text selection started on
      * the tab strip — dispatch nothing instead of switching sessions.
@@ -7944,7 +7944,7 @@ final class Chat implements Model
      * are the one gesture that survives `SUGARCRUSH_DISABLE_MOUSE_CLICKS`
      * (see {@see mouseMode()}), and hit-testing them through
      * {@see zoneAt()} — which is where that flag is enforced — would take
-     * scrolling down with clicks. candy-mouse's tracker ignores Scroll
+     * scrolling down with clicks. sugar-mouse's tracker ignores Scroll
      * anyway. Only left press/release are fed to it; motion is still
      * dropped rather than translated, since nothing consumes hover yet.
      *
@@ -8047,7 +8047,7 @@ final class Chat implements Model
         }
 
         // zoneSpace() keeps the SGR report's 1-based cells - the base the zone
-        // scanner, candy-mouse's Selection and Renderer::selectableRegion()
+        // scanner, sugar-mouse's Selection and Renderer::selectableRegion()
         // all speak - so the pointer is wired straight in, never rebased.
         [$col, $row] = self::zoneSpace($msg->x, $msg->y);
 
@@ -8125,7 +8125,7 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        // Motion is still not translated into a candy-mouse event (nothing
+        // Motion is still not translated into a sugar-mouse event (nothing
         // consumes hover), but with the button down it is the terminal
         // narrating a drag, so it feeds §8 E8's drift before being dropped.
         if ($msg instanceof MouseMotionMsg) {
@@ -15937,7 +15937,7 @@ final class Chat implements Model
 
     /**
      * Two clicks on the same session tab this close together are a
-     * double-click (roadmap P-A4). candy-mouse reports no click count, so the
+     * double-click (roadmap P-A4). sugar-mouse reports no click count, so the
      * window is this model's own; 400 ms is the common desktop default.
      */
     public const TAB_DOUBLE_CLICK_SECONDS = 0.4;

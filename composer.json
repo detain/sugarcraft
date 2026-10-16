@@ -56,7 +56,7 @@
         "sugarcraft/candy-lister": "dev-master",
         "sugarcraft/candy-log": "dev-master",
         "sugarcraft/candy-metrics": "dev-master",
-        "sugarcraft/candy-mouse": "dev-master",
+        "sugarcraft/sugar-mouse": "dev-master",
         "sugarcraft/candy-minesweeper": "dev-master",
         "sugarcraft/candy-starter": "dev-master",
         "sugarcraft/candy-mosaic": "dev-master",
@@ -223,7 +223,7 @@
         },
         {
             "type": "path",
-            "url": "candy-mouse",
+            "url": "sugar-mouse",
             "options": {
                 "symlink": true
             }

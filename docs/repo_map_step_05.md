@@ -1,32 +1,32 @@
-# Step 05 — Create candy-mouse
+# Step 05 — Create sugar-mouse
 
-**Branch:** `ai/candy-mouse-new`
+**Branch:** `ai/sugar-mouse-new`
 **Depends on:** step-00 ✅
 **Blocks:** step-14 (sugar-bits uses it), step-22 (sugar-veil/sugar-crumbs/candy-lister consume it)
 
 ## Goal
 
-Create the `candy-mouse` foundation package — self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus `ZoneClickTracker` for press/release dedup. Replaces the current model where consumers wire candy-mouse's `Manager` externally; each consumer becomes responsible for its own zones with no external coordination.
+Create the `sugar-mouse` foundation package — self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus `ZoneClickTracker` for press/release dedup. Replaces the current model where consumers wire sugar-mouse's `Manager` externally; each consumer becomes responsible for its own zones with no external coordination.
 
 Reference: `docs/repo_map_update.md` §327.6 (framework), §345.5 (ZoneClickTracker), §369.4 (consolidation), §387.4 (reinvention of manual coordinate tracking).
 
 ## Files expected to be created
 
-- `candy-mouse/composer.json`
-- `candy-mouse/phpunit.xml`
-- `candy-mouse/README.md`
-- `candy-mouse/CALIBER_LEARNINGS.md`
-- `candy-mouse/src/Mark.php` — wrap rendered string with invisible OSC zone markers.
-- `candy-mouse/src/Scan.php` — extract zones from a marked string; compute bounding boxes.
-- `candy-mouse/src/Zone.php` — readonly value object (id, region).
-- `candy-mouse/src/Scanner.php` — stateful scan-then-get fluent API.
-- `candy-mouse/src/ZoneClickTracker.php` — dedup MouseDown/Up pairs per zone.
-- `candy-mouse/src/MouseEvent.php` — readonly (x, y, button, action: enum Press/Release/Drag/Scroll).
-- `candy-mouse/tests/MarkTest.php`, `ScannerTest.php`, `ZoneClickTrackerTest.php`.
+- `sugar-mouse/composer.json`
+- `sugar-mouse/phpunit.xml`
+- `sugar-mouse/README.md`
+- `sugar-mouse/CALIBER_LEARNINGS.md`
+- `sugar-mouse/src/Mark.php` — wrap rendered string with invisible OSC zone markers.
+- `sugar-mouse/src/Scan.php` — extract zones from a marked string; compute bounding boxes.
+- `sugar-mouse/src/Zone.php` — readonly value object (id, region).
+- `sugar-mouse/src/Scanner.php` — stateful scan-then-get fluent API.
+- `sugar-mouse/src/ZoneClickTracker.php` — dedup MouseDown/Up pairs per zone.
+- `sugar-mouse/src/MouseEvent.php` — readonly (x, y, button, action: enum Press/Release/Drag/Scroll).
+- `sugar-mouse/tests/MarkTest.php`, `ScannerTest.php`, `ZoneClickTrackerTest.php`.
 
 ## Files expected to be modified
 
-- Root composer.json, MATCHUPS, PROJECT_NAMES, README, docs/index.html, docs/lib/candy-mouse.html, codecov.yml.
+- Root composer.json, MATCHUPS, PROJECT_NAMES, README, docs/index.html, docs/lib/sugar-mouse.html, codecov.yml.
 
 ## Acceptance criteria
 
@@ -35,14 +35,14 @@ Reference: `docs/repo_map_update.md` §327.6 (framework), §345.5 (ZoneClickTrac
 - [ ] `Scanner::get(string $id): ?Zone` — returns Zone with its bounding region in (col, row) terms.
 - [ ] `Scanner::hit(int $col, int $row): ?Zone` — reverse lookup; O(log n) preferred (spatial index — but a flat list is fine if n < 100).
 - [ ] `ZoneClickTracker::track(MouseEvent): ?ClickResult` — returns a single Click per Press+Release pair on the same zone; suppresses duplicate Press events fired during drag.
-- [ ] **No deps on candy-mouse** — candy-mouse is self-contained. (candy-mouse keeps its existing Manager API for back-compat; consumers migrate in step-22.)
+- [ ] **No deps on sugar-mouse** — sugar-mouse is self-contained. (sugar-mouse keeps its existing Manager API for back-compat; consumers migrate in step-22.)
 - [ ] ≥95 % coverage.
 - [ ] `git status` clean on master.
 
 ## Coder brief
 
-1. **Invoke `scaffold-library`** with slug `candy-mouse`, namespace `SugarCraft\Mouse\`, role "Self-contained Mark/Scan/Get mouse hit-testing + click dedup".
-2. **Read `candy-mouse/src/Manager.php`** to understand the current pattern. Mirror its `Mark`/`Scan`/`Get` *semantics* but make `Scanner` standalone — no Manager passed around, the caller owns the Scanner instance.
+1. **Invoke `scaffold-library`** with slug `sugar-mouse`, namespace `SugarCraft\Mouse\`, role "Self-contained Mark/Scan/Get mouse hit-testing + click dedup".
+2. **Read `sugar-mouse/src/Manager.php`** to understand the current pattern. Mirror its `Mark`/`Scan`/`Get` *semantics* but make `Scanner` standalone — no Manager passed around, the caller owns the Scanner instance.
 3. **Sentinel design**: use Unicode Private Use Area codepoints (U+E000..U+F8FF) so they don't collide with ANSI escapes or regular text. Reference bubblezone's approach (zone id encoded inline + position metadata at scan time computed by walking the cell grid).
 4. **Use `\SugarCraft\Core\Util\Width::of`** for column accounting during scan (CJK wide chars).
 5. **ZoneClickTracker** state machine:
@@ -67,23 +67,23 @@ Reference: `docs/repo_map_update.md` §327.6 (framework), §345.5 (ZoneClickTrac
 - CALIBER_LEARNINGS: "Sentinel codepoints chosen for ANSI safety; do not collapse U+E000+ during normalization."
 - MATCHUPS: row referencing bubblezone as upstream (🟢 — port + ZoneClickTracker is a bubblezone-issue-#10 improvement).
 - PROJECT_NAMES Candy table.
-- Docs/index.html + docs/lib/candy-mouse.html.
+- Docs/index.html + docs/lib/sugar-mouse.html.
 
 ## Ship brief
 
-- **PR title**: `candy-mouse: self-contained Mark/Scan/Get + ZoneClickTracker`
+- **PR title**: `sugar-mouse: self-contained Mark/Scan/Get + ZoneClickTracker`
 - **PR body**:
   ```
   ## Summary
-  - New foundation lib candy-mouse mirrors bubblezone's Mark/Scan/Get pattern but is self-contained — no external Manager wiring needed.
+  - New foundation lib sugar-mouse mirrors bubblezone's Mark/Scan/Get pattern but is self-contained — no external Manager wiring needed.
   - ZoneClickTracker dedups Press+Release pairs (addresses bubblezone issue #10).
-  - candy-mouse is unchanged this PR; sugar-veil/sugar-crumbs/candy-lister migrate to candy-mouse in step-22.
+  - sugar-mouse is unchanged this PR; sugar-veil/sugar-crumbs/candy-lister migrate to sugar-mouse in step-22.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-mouse (≥95% coverage)
+  - [x] vendor/bin/phpunit in sugar-mouse (≥95% coverage)
   - [x] Wide-char column accounting verified via Width::of integration
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_05.md, docs/repo_map_update.md §327.6, §345.5, §387.4
   ```
-- Commit subject: `candy-mouse: self-contained zone tracking + click dedup`.
+- Commit subject: `sugar-mouse: self-contained zone tracking + click dedup`.

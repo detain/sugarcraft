@@ -1,13 +1,13 @@
-# Step 04.03 — sugar-crumbs click regions via candy-mouse
+# Step 04.03 — sugar-crumbs click regions via sugar-mouse
 
 **Source:** `leftover_updates_later.md` SSOT-04 + sugar-crumbs research P4
 **Branch:** `ai/crumbs-uses-zone`
 
 ## Deliverable
 
-sugar-crumbs research P4 calls for "Click-region rendering". `candy-mouse`
+sugar-crumbs research P4 calls for "Click-region rendering". `sugar-mouse`
 is canonical for zone-tracking (APC marker + scan algorithm). Wire
-crumbs to emit zone markers via candy-mouse.
+crumbs to emit zone markers via sugar-mouse.
 
 ## Files
 
@@ -16,7 +16,7 @@ crumbs to emit zone markers via candy-mouse.
 - `sugar-crumbs/src/Crumb.php` (or wherever the render method lives) —
   wrap each crumb's render output in `\SugarCraft\Mouse\Zones\Manager::mark(...)`
   emit/exit calls so click coordinates are mappable back to the crumb.
-- `sugar-crumbs/composer.json` — add `"sugarcraft/candy-mouse": "@dev"`
+- `sugar-crumbs/composer.json` — add `"sugarcraft/sugar-mouse": "@dev"`
   + path-repo.
 - `sugar-crumbs/src/NavStack.php` — when a click within a crumb zone
   is reported, dispatch `pushDirectory()` / `view()` (handled in
@@ -24,7 +24,7 @@ crumbs to emit zone markers via candy-mouse.
 
 ## Acceptance
 
-- `grep -n "APC\|zoneMark" sugar-crumbs/src` shows calls into candy-mouse,
+- `grep -n "APC\|zoneMark" sugar-crumbs/src` shows calls into sugar-mouse,
   not inline coordinate math.
 - `cd sugar-crumbs && vendor/bin/phpunit` green.
 

@@ -75,7 +75,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
 - [x] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
 - [x] [Step 04 — Create candy-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
-- [x] [Step 05 — Create candy-mouse](repo_map_step_05.md) — branch: `ai/candy-mouse-new`
+- [x] [Step 05 — Create sugar-mouse](repo_map_step_05.md) — branch: `ai/sugar-mouse-new`
 - [x] [Step 06 — Create candy-input](repo_map_step_06.md) — branch: `ai/candy-input-new`
 - [x] [Step 07 — Create candy-fuzzy](repo_map_step_07.md) — branch: `ai/candy-fuzzy-new`
 - [x] [Step 08 — Create candy-async](repo_map_step_08.md) — branch: `ai/candy-async-new`
@@ -98,7 +98,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 ### Phase 4 — Replace reinventions (6)
 - [x] [Step 20 — ANSI parsers replaced (candy-ansi-inspect, candy-hermit, candy-codeshot)](repo_map_step_20.md) — branch: `ai/ansi-consumers`, PR #899
 - [x] [Step 21 — sugar-readline onto candy-input](repo_map_step_21.md) — branch: `ai/sugar-readline-input`, PR #900
-- [x] [Step 22 — Mouse hit-test consumers onto candy-mouse](repo_map_step_22.md) — branch: `ai/mouse-consumers`, PR #901
+- [x] [Step 22 — Mouse hit-test consumers onto sugar-mouse](repo_map_step_22.md) — branch: `ai/mouse-consumers`, PR #901
 - [x] [Step 23 — Async consumers onto candy-async](repo_map_step_23.md) — branch: `ai/async-consumers`, PR #902
 - [x] [Step 24 — Vim mode consolidation](repo_map_step_24.md) — branch: `ai/vim-mode-shared`, PR #903
 - [x] [Step 25 — God-class refactors (super-candy + candy-sql)](repo_map_step_25.md) — branch: `ai/god-class-builders`, PR #904
@@ -136,9 +136,9 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 The shared-foundation refactor is **complete**. Summary:
 
 - **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 candy-forms migration which was not completed)
-- **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, candy-fuzzy, candy-async
+- **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, sugar-mouse, candy-input, candy-fuzzy, candy-async
 - **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy
-- **4 items deferred** to future plan (candy-metrics, candy-log, candy-mouse, candy-starter — see docs/repo_map_update_followups.md)
+- **4 items deferred** to future plan (candy-metrics, candy-log, sugar-mouse, candy-starter — see docs/repo_map_update_followups.md)
 - **1 step not completed** (step-15 candy-forms — FuzzyMatcher API incompatibility; deferred)
 - Retrospective: docs/repo_map_update.md § Plan retrospective
 - All Active Items drained to docs/repo_map_updates.md Resolved section

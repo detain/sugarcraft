@@ -68,7 +68,7 @@ Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.
   `update()` answers the widget-relative form (focused + press on the track row; track is always view()'s
   LAST line — `trackLine()` counts title/description), and the public host-callable
   `handleZoneMouse(MouseMsg, int $zoneLeft, int $zoneWidth): ?self` serves geometry-owning hosts
-  (sugar-crush runs candy-mouse and hit-tests the absolute rect itself). Mapping is endpoint-inclusive —
+  (sugar-crush runs sugar-mouse and hit-tests the absolute rect itself). Mapping is endpoint-inclusive —
   `(x - zoneLeft) / ($zoneWidth - 1 floored at 1)` scaled into [min, max] — and the number ALWAYS routes
   through `withValue()` so normalise() stays the single clamp/snap site (SliderTest's `max(`/`min(` token
   census counts comments too: never write `max(1, ...)` in this file's prose, guard the span with an if).

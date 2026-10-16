@@ -172,7 +172,7 @@ final class MenuBarMouseTest extends TestCase
 
     /**
      * A press on a title followed by a release somewhere else is a drag, not
-     * a click — candy-mouse's tracker pairs the two and this must dispatch
+     * a click — sugar-mouse's tracker pairs the two and this must dispatch
      * nothing.
      */
     public function testAPressOnATitleReleasedElsewhereOpensNothing(): void
@@ -386,7 +386,7 @@ final class MenuBarMouseTest extends TestCase
         return array_keys($names)[$index - 1];
     }
 
-    /** Strip candy-mouse zone sentinels, leaving the painted bytes. */
+    /** Strip sugar-mouse zone sentinels, leaving the painted bytes. */
     private function unmark(string $marked): string
     {
         return (string) preg_replace(

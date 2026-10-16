@@ -14,7 +14,7 @@ use SugarCraft\Sprinkles\Style;
  * spans, extraction and the reverse-video repaint.
  *
  * Coordinates are 1-based terminal cells (frame line R is `$lines[R - 1]`),
- * the space candy-mouse's Selection/SelectionRange speak since the rewire
+ * the space sugar-mouse's Selection/SelectionRange speak since the rewire
  * onto them dropped the old `[$col - 1, $row - 1]` rebase.
  */
 final class TextSelectionTest extends TestCase

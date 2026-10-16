@@ -92,8 +92,8 @@ flag_management:
     - name: candy-starter
       paths: ["candy-starter/src/**"]
       carryforward: true
-    - name: candy-mouse
-      paths: ["candy-mouse/src/**"]
+    - name: sugar-mouse
+      paths: ["sugar-mouse/src/**"]
       carryforward: true
     - name: candy-tetris
       paths: ["candy-tetris/src/**"]
@@ -337,12 +337,12 @@ component_management:
         - "candy-starter/src/**"
       flag_regexes:
         - "^candy-starter$"
-    - component_id: candy-mouse
-      name: candy-mouse
+    - component_id: sugar-mouse
+      name: sugar-mouse
       paths:
-        - "candy-mouse/src/**"
+        - "sugar-mouse/src/**"
       flag_regexes:
-        - "^candy-mouse$"
+        - "^sugar-mouse$"
     - component_id: candy-tetris
       name: candy-tetris
       paths:

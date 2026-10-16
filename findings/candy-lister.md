@@ -246,9 +246,9 @@ Only `cursorUp(int $n = 1)` and `cursorDown(int $n = 1)` exist. Missing:
 
 **Files:** `src/Model.php`, `src/Prefixer.php`, `src/Suffixer.php`
 
-No click-to-select, no hover detection, no mouse event handling. The CALIBER_LEARNINGS.md mentions `candy-mouse` integration intent but no mouse-related code exists in the library.
+No click-to-select, no hover detection, no mouse event handling. The CALIBER_LEARNINGS.md mentions `sugar-mouse` integration intent but no mouse-related code exists in the library.
 
-**Recommendation:** Add `setMouseEnabled(bool)`, `onMouseClick(callable)`, and `onMouseHover(callable)` hooks, or integrate with `candy-mouse` for hit-testing.
+**Recommendation:** Add `setMouseEnabled(bool)`, `onMouseClick(callable)`, and `onMouseHover(callable)` hooks, or integrate with `sugar-mouse` for hit-testing.
 
 ---
 

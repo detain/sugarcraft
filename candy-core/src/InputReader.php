@@ -81,7 +81,7 @@ final class InputReader
      *                            before being surfaced as a {@see PasteMsg}, so
      *                            an embedded OSC-52 / control sequence can't
      *                            reach the model or the terminal raw — and
-     *                            neither can a pasted candy-mouse zone sentinel
+     *                            neither can a pasted sugar-mouse zone sentinel
      *                            (U+E000/U+E001), which survives a plain ANSI
      *                            sweep as well-formed text and would otherwise
      *                            forge click/frame markup once the paste is
@@ -429,7 +429,7 @@ final class InputReader
 
     /**
      * Paste content is attacker-influenced (whatever was on the clipboard);
-     * neutralize embedded escapes/control bytes AND the candy-mouse zone
+     * neutralize embedded escapes/control bytes AND the sugar-mouse zone
      * sentinels (U+E000/U+E001) by default — sentinels survive a plain ANSI
      * sweep as well-formed text and would forge click/frame markup once
      * echoed into a marked frame. Opt out via ProgramOptions::$sanitizePaste.

@@ -51,7 +51,7 @@ use SugarCraft\Mouse\Zone;
  * documents.
  *
  * Rows covered here (W4.S1a): the session store, session tabs, and background
- * sessions. (W4.S1b): the Skills subsystem. (W4.S1c): candy-mouse (Mark/Scan/Get + Zones).
+ * sessions. (W4.S1b): the Skills subsystem. (W4.S1c): sugar-mouse (Mark/Scan/Get + Zones).
  * Later sub-steps extend this class with the remaining rows.
  */
 final class FeatWiringReachabilityTest extends TestCase
@@ -828,7 +828,7 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     // =========================================================================
-    // Row: candy-mouse (Mark/Scan/Get + Zones)
+    // Row: sugar-mouse (Mark/Scan/Get + Zones)
     // "grep -rln \"Mouse\" src/ returns zero files in sugar-crush. Mouse mode
     //  isn't even turned on (ProgramOptions::$mouseMode defaults Off and is
     //  never overridden)." — crush_feat.md §8 D/E1.

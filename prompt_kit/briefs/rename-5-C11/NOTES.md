@@ -14,3 +14,19 @@ Lane: C11 (batch-C line 31, ns Mouse→Mouse UNCHANGED, type=lib, bins {}). cand
 
 - R0 baseline: pending (worktree created; refresh-deps linked candy-mouse next). Baseline era figure per brief: 343T/916A = rename-baseline.md rows 204/500 + 139/416 (pre + zone-tests counted) — verify live. <!-- @rename-keep lane record, verbatim vocabulary -->
 - Tag-prep: curated historical records tagged `@rename-keep` BEFORE R1 (baseline rows, CONTEXT.md, CHANGELOG, php74_branch table, crush_code worklog/RESUME/backlog, rename-1.1/2.2/2.3 NOTES, resume_prompt, crush-report impact, btop prs, monorepo-audit, improvements-2026-05, plan_crush_media, leftover/updates.md step row, crush-dep-surface.txt). Everything else under docs//findings//code/CI = living → tool rewrites (C4 precedent).
+
+## Procedure log (final)
+- R0 baseline: candy-mouse suite 343T/916A exact (timeout 600, cwd=lib, linked). <!-- @rename-keep -->
+- R1 dry-run: 161 files, 9 paths; scrutinized; second pass rc=0. <!-- @rename-keep -->
+- R2 rename-remote.sh candy-mouse sugar-mouse rc=0 -> github.com/sugarcraft/sugar-mouse. <!-- @rename-keep -->
+- R3 rename-lib.php tool rc=0; php -l all pass; Lang.php NAMESPACE='mouse' intact (hazard4 CLEAR).
+- R3 extras: suffixed variants escaped the template path rule -> manual git mv: docs/repo_map/{sugarcraft,update_sugarcraft}_candy-mouse-zones.md + research/libraries/candy-mouse-zones-research.md to sugar- spellings. <!-- @rename-keep -->
+- R3 glued-pointer fixes: findings plan_candy-mouse*.md pointers, CALIBER_LEARNINGS, sugar-crumbs repo_map, update- zones sibling pointers -> sugar-mouse spellings (targets exist). <!-- @rename-keep -->
+- R3 glued crush test: TextSelectionCandyMouseTest.php -> TextSelectionSugarMouseTest.php (class+method+durations.tsv row). <!-- @rename-keep -->
+- R3 PROJECT_NAMES.md:157 etymology flipped to retired-wordplay note (minesweeper precedent).
+- R4: README Formerly notice (tagged); keywords mouse/bubblezone kept; no bins/env/data-paths -> no shims. CANDY_MOUSE_DEBUG never implemented in code -> dual-read getenv shim N/A (deviation, R5 rewrote its 4 doc mentions). <!-- @rename-keep -->
+- R5: root composer update sugarcraft/sugar-mouse --no-install (lock diff pure sugarcraft); refresh-deps linked x7 (sugar-mouse + crush/minesweeper/bits/crumbs/veil/gallery) all ok; gen-docs + --check ok; gen-ansi --check ok.
+- R5 note: docs/lib/candy-zone.html stub lagged until batch-C status flip (resolve_final_slug skips pending) -> regenerated post-R7 to sugar-mouse.html; old-page stub count 17->18.
+- R6 suites EXACT vs baseline: sugar-mouse 343/916, bits 570/1246, crumbs 144/260, gallery 264/1162, veil 258/561, minesweeper 180/820/1F+4W (pre-existing catalog #1).
+- R6 crush: sharded K=8 vs suite-figure 22564/423652/2S CONSERVATION PASS on committed tip; tools/tests + child-lifetimes + path-repos + five-guard per logs below.
+- R7: renames.json L31 status->renamed; L60 batch-1 merge entry new bumped to sugar-mouse (plan :990 law). <!-- @rename-keep -->

@@ -23,11 +23,11 @@ use SugarCraft\Sprinkles\Style;
  * {@see Selection} (the press → drag state machine, region clamp included)
  * and {@see SelectionRange} (the reading-order span and the text extraction);
  * it is now the immutable adapter sugar-crush's update loop needs over them:
- * candy-mouse's machine is deliberately mutable, while a Chat rebuilds its
+ * sugar-mouse's machine is deliberately mutable, while a Chat rebuilds its
  * gesture state per event, so every step here works on a CLONE of the
  * machine and the instance it came from never changes. What stays local is
- * what candy-mouse leaves to the app: the drift-latched {@see $dragging}
- * flag (candy-mouse's own `dragging()` is geometric — a there-and-back sweep
+ * what sugar-mouse leaves to the app: the drift-latched {@see $dragging}
+ * flag (sugar-mouse's own `dragging()` is geometric — a there-and-back sweep
  * un-drags — while crush latches past its click tolerance), the settled /
  * copied-count record of the release, and the reverse-video repaint.
  *
@@ -44,7 +44,7 @@ use SugarCraft\Sprinkles\Style;
  * spaces INSIDE it (code indentation) survive, because only the chrome is
  * outside the region.
  *
- * Coordinates are 1-based terminal cells, the space candy-mouse's zones and
+ * Coordinates are 1-based terminal cells, the space sugar-mouse's zones and
  * SGR mouse reports speak, in the frame the region was measured on (the
  * hosted chat's own frame; the shell rebases the pointer into it first via
  * the zone origin). Frame line R is `$lines[R - 1]`.
@@ -52,7 +52,7 @@ use SugarCraft\Sprinkles\Style;
 final class TextSelection
 {
     private function __construct(
-        /** The candy-mouse gesture this snapshot froze; never mutated — every step clones it. */
+        /** The sugar-mouse gesture this snapshot froze; never mutated — every step clones it. */
         private readonly Selection $gesture,
         public readonly int $anchorCol,
         public readonly int $anchorRow,
@@ -101,7 +101,7 @@ final class TextSelection
         $gesture->dragTo($row, $col);
         $range = self::rangeOf($gesture);
 
-        // candy-mouse reports the covered cells in reading order, not which
+        // sugar-mouse reports the covered cells in reading order, not which
         // end is the head; the anchor never moves, so the head is whichever
         // end the anchor is not.
         $anchorFirst = $range->startRow === $this->anchorRow && $range->startCol === $this->anchorCol;
@@ -123,7 +123,7 @@ final class TextSelection
     }
 
     /**
-     * The covered cells as candy-mouse's frozen, reading-order range.
+     * The covered cells as sugar-mouse's frozen, reading-order range.
      */
     public function range(): SelectionRange
     {

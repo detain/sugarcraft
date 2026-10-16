@@ -10,7 +10,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 ## Mouse hit-testing
 
-- Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.
+- Mouse hit-testing self-contained via sugar-mouse. Don't pass Managers around for new code.
 
 ## Buffer diffing
 

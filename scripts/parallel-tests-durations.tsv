@@ -135,7 +135,7 @@ sugar-crush/tests/Hooks/BuiltIn/AutoTestHookTest.php	3.430	13
 sugar-crush/tests/Server/AgentsWorkflowMethodsTest.php	3.423	7
 sugar-crush/tests/Backend/ProviderErrorSurfacingTest.php	3.351	10
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	3.333	13
-sugar-crush/tests/Tui/TextSelectionCandyMouseTest.php	3.327	4
+sugar-crush/tests/Tui/TextSelectionSugarMouseTest.php	3.327	4
 sugar-crush/tests/Agents/AgentWorkerPoolRetryTest.php	3.314	14
 sugar-crush/tests/Runtime/AgentHardCancelTest.php	3.271	7
 sugar-crush/tests/Hooks/HookRegistryTest.php	3.194	71

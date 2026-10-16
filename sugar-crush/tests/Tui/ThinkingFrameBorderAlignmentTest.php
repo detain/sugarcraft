@@ -217,7 +217,7 @@ final class ThinkingFrameBorderAlignmentTest extends TestCase
     }
 
     /**
-     * Strip SGR, OSC hyperlinks and the candy-mouse zone marks.
+     * Strip SGR, OSC hyperlinks and the sugar-mouse zone marks.
      *
      * Zone marks are U+E000…U+E001 sentinel runs — metadata the house scan
      * strips before measuring (they cost ~27 cells of chrome each); charging
