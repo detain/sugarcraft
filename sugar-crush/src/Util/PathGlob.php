@@ -24,7 +24,7 @@ namespace SugarCraft\Crush\Util;
  * WHY THE NAME `PathGlob`. The class is the dialect, not a matcher object: it
  * holds no pattern and answers no per-instance question, so `GlobMatcher` would
  * promise an instance that does not exist and a `Matcher` suffix would collide
- * with the `Match`/`Matcher` vocabulary of `candy-fuzzy`. `PathGlob::compile()`
+ * with the `Match`/`Matcher` vocabulary of `sugar-fuzzy`. `PathGlob::compile()`
  * and `PathGlob::matchCompiled()` read as what they do, and the neutral
  * `SugarCraft\Crush\Util\` home follows {@see TokenTracker} — the one existing
  * utility both `Context\` and `Skills\` consumers could reach without either

@@ -1,57 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SugarCraft — CandyFuzzy</title>
-<meta name="description" content="CandyFuzzy: Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from candy-forms; unblocks filter-highlighting UI across the ecosystem.">
-<meta property="og:title" content="SugarCraft — CandyFuzzy">
-<meta property="og:description" content="Fuzzy string matcher that returns which characters matched and their score. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style). Enables filter-highlighting UIs impossible with score-only matchers.">
-<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-fuzzy.png">
-<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-fuzzy.html">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-fuzzy.html">
-<meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="../img/icons/candy-fuzzy.png">
-<link rel="stylesheet" href="../css/style.css">
-    <link rel="stylesheet" href="../css/search.css">
-</head>
-<body>
-
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
-    <div class="nav-links">
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
-    </div>
-</div></nav>
-
-<section class="section">
-  <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
-
-    <div class="detail-header">
-      <img class="detail-icon" src="../img/icons/candy-fuzzy.png" alt="CandyFuzzy">
-      <div>
-        <h2>CandyFuzzy</h2>
-        <p class="detail-sub">Fuzzy string matching with scored matched indices</p>
-        <div class="detail-meta">
-          <span class="tag-chip accent">foundation-package</span>
-          <span class="tag-chip">fuzzy</span>
-          <span class="tag-chip">filter</span>
-        </div>
-      </div>
-    </div>
-    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-fuzzy"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-fuzzy" alt="CandyFuzzy code coverage" loading="lazy"></a></p>
-
-    <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>which characters matched and their score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from candy-forms; back-compat shims left in candy-forms and candy-lister for migration.</p>
+<p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>which characters matched and their score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from candy-forms; back-compat shims left in candy-forms and candy-lister for migration.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-fuzzy:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-fuzzy:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Fuzzy\FuzzyMatcher;
@@ -114,9 +64,9 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-fuzzy">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-fuzzy/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-fuzzy/tree/master/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-fuzzy">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-fuzzy/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-fuzzy/tree/main/tests">Test suite</a></li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -142,37 +92,3 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 </table>
   </div>
 </section>
-
-<footer class="footer">
-    <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
-        <div>
-            <a href="https://github.com/sugarcraft">GitHub</a> ·
-            <a href="https://packagist.org/packages/sugarcraft/candy-fuzzy">Packagist</a> ·
-            <a href="https://www.interserver.net/">InterServer</a> ·
-            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
-            <a href="https://github.com/sugarcraft/candy-fuzzy/issues">Issues</a>
-        </div>
-    </div>
-</footer>
-
-<script src="../js/main.js"></script>
-<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
-    <div class="search-backdrop"></div>
-    <div class="search-dialog">
-        <div class="search-input-wrap">
-            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
-            <kbd class="search-kbd">esc</kbd>
-        </div>
-        <ul id="search-results" class="search-results" role="listbox"></ul>
-        <div class="search-footer">
-            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-            <span><kbd>↵</kbd> open</span>
-            <span><kbd>esc</kbd> close</span>
-        </div>
-    </div>
-</div>
-<script src="../js/search.js" defer></script>
-</body>
-</html>

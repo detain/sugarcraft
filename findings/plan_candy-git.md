@@ -14,7 +14,7 @@ Address all 8 code review findings (2 critical, 2 major, 4 minor) from the candy
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| Run `php tools/check-path-repos.php` to verify C-2 before declaring it fixed | The finding raised a potential transitive closure gap but candy-fuzzy has no deps itself; verification needed | `candy-git.md:39-53` |
+| Run `php tools/check-path-repos.php` to verify C-2 before declaring it fixed | The finding raised a potential transitive closure gap but sugar-fuzzy has no deps itself; verification needed | `candy-git.md:39-53` |
 | M-1 fix is prerequisite for all other changes | Duplicate code cleanup should happen first to avoid propagating the pattern | `candy-git.md:59-75` |
 | N-1 + N-2 are independent infrastructure additions | Can be done in parallel after M-1 | `candy-git.md:104-139` |
 | C-1 requires design decision before implementation | Async vs documented limitation is architectural; scope it separately | `candy-git.md:20-33` |
@@ -25,8 +25,8 @@ Address all 8 code review findings (2 critical, 2 major, 4 minor) from the candy
 
 - [x] **1.1 Run path-repo closure check** ✅ (2026-06-30)
   - Command: `php tools/check-path-repos.php`
-  - Expected: clean exit (0) confirming candy-fuzzy path-repo is sufficient
-  - Notes: candy-fuzzy has NO `sugarcraft/*` dependencies (leaf lib), so its closure is empty. candy-git's `repositories[]` already includes candy-fuzzy path-repo at lines 94-100. The finding was a "may have" concern that does not materialize.
+  - Expected: clean exit (0) confirming sugar-fuzzy path-repo is sufficient
+  - Notes: sugar-fuzzy has NO `sugarcraft/*` dependencies (leaf lib), so its closure is empty. candy-git's `repositories[]` already includes sugar-fuzzy path-repo at lines 94-100. The finding was a "may have" concern that does not materialize.
 
 - [x] **1.2 Create `candy-git/.github/workflows/ci.yml`** ✅ (2026-06-30)
   - Location: `candy-git/.github/workflows/ci.yml` (new file)
@@ -154,11 +154,11 @@ Address all 8 code review findings (2 critical, 2 major, 4 minor) from the candy
 
 - [ ] **6.2 Run path-repo check one final time**
   - Command: `php tools/check-path-repos.php`
-  - Confirms: C-2 is definitively resolved (candy-fuzzy needs no additional path repos)
+  - Confirms: C-2 is definitively resolved (sugar-fuzzy needs no additional path repos)
 
 ## Notes
 
 - 2026-06-30: The finding file incorrectly references `GitTrapTest.php` at line 63 — the actual file containing the duplicate `removeDir()` is `GitGuardTest.php` at lines 27-35.
-- 2026-06-30: candy-git already has candy-fuzzy in its `repositories[]` array at lines 94-100 of `composer.json`, and candy-fuzzy itself has zero `sugarcraft/*` dependencies, making C-2 a non-issue that should be verified with `check-path-repos.php`.
+- 2026-06-30: candy-git already has sugar-fuzzy in its `repositories[]` array at lines 94-100 of `composer.json`, and sugar-fuzzy itself has zero `sugarcraft/*` dependencies, making C-2 a non-issue that should be verified with `check-path-repos.php`.
 - 2026-06-30: Root `codecov.yml` already defines `candy-git` flag (line 111-113) and component (line 362-367), so N-2 is partially addressed. Per-lib `codecov.yml` would allow lib-specific threshold overrides.
 - 2026-06-30: No lib in the monorepo currently has a per-lib `.github/workflows/ci.yml` — candy-git would be the first to add one (N-1).

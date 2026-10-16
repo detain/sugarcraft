@@ -2,7 +2,7 @@
 
 ## Summary
 
-`candy-forms` is almost entirely a backward-compatibility facade / re-export layer over `candy-forms` (`SugarCraft\Forms\*`). Of the 21 PHP source files in `src/`, **20 are `class_alias` re-exports** pointing to `candy-forms`, `candy-fuzzy`, or other foundation packages. Only one file contains any real implementation logic:
+`candy-forms` is almost entirely a backward-compatibility facade / re-export layer over `candy-forms` (`SugarCraft\Forms\*`). Of the 21 PHP source files in `src/`, **20 are `class_alias` re-exports** pointing to `candy-forms`, `sugar-fuzzy`, or other foundation packages. Only one file contains any real implementation logic:
 
 - **`src/Spinner.php`** (193 lines) — A blocking "loading spinner" that uses `pcntl_fork` to run an action in a child process while animating a spinner on the parent.
 

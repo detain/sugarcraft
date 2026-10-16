@@ -855,7 +855,7 @@ final class Manager implements Model
             // Empty query shows all entries but stays in search mode
             return $this->withSearch('', $allEntries, 0);
         }
-        // Fuzzy-match filenames through the candy-fuzzy SSOT (Smith-Waterman
+        // Fuzzy-match filenames through the sugar-fuzzy SSOT (Smith-Waterman
         // local alignment). matchAll() ranks by score descending, so the
         // strongest subsequence matches float to the top and a query whose
         // characters never appear yields no results. This upgrades the old

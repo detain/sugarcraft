@@ -25,7 +25,7 @@ The 8 shared packages:
 - **candy-layout** — constraint-based sizing (LayoutSolver, Region, Direction, Constraint*)
 - **candy-mouse** — mouse hit-testing & decode (MouseMsg, Zone, Manager)
 - **candy-input** — input decode & KeyEvent (InputDriver, KeyEvent, SymbolicKey)
-- **candy-fuzzy** — filter/search via Smith-Waterman (Matcher, MatchResult)
+- **sugar-fuzzy** — filter/search via Smith-Waterman (Matcher, MatchResult)
 - **candy-async** — ReactPHP helpers (AsyncOps, CancellationSource, CancellationToken)
 - **candy-testing** — golden-file snapshot tests (assertGoldenAnsi, GoldenRenderTest)
 
@@ -37,7 +37,7 @@ The 8 shared packages:
 |------|-------------|--------------------------|
 | Step 31 | candy-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
-| Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
+| Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
@@ -120,10 +120,10 @@ The 8 shared packages:
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
-| candy-fuzzy | Entry.php/Store.php filter/search database entries — SmithWatermanMatcher would replace ad-hoc string matching | S |
+| sugar-fuzzy | Entry.php/Store.php filter/search database entries — SmithWatermanMatcher would replace ad-hoc string matching | S |
 | candy-buffer | Store.php renders list output via string — Buffer would give diff-friendly rendering | S |
 
-**Notes:** candy-kv is a database-migration tool. Fuzzy entry lookup (search for a migration by partial name) is a natural fit for candy-fuzzy.
+**Notes:** candy-kv is a database-migration tool. Fuzzy entry lookup (search for a migration by partial name) is a natural fit for sugar-fuzzy.
 
 ---
 
@@ -132,10 +132,10 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Picker.php + Launcher.php render lists via string — Buffer would give per-cell styling + diff | M |
-| candy-fuzzy | Launcher.php/Picker.php filter app list — SmithWatermanMatcher would improve fuzzy search quality | S |
+| sugar-fuzzy | Launcher.php/Picker.php filter app list — SmithWatermanMatcher would improve fuzzy search quality | S |
 | candy-mouse | Picker.php supports mouse selection — Zone-based hit-testing via candy-mouse would help | S |
 
-**Notes:** candy-ssh-launcher is an app launcher TUI. Fuzzy app search is a direct use case for candy-fuzzy. Mouse selection in a list view would benefit from candy-mouse zone tracking.
+**Notes:** candy-ssh-launcher is an app launcher TUI. Fuzzy app search is a direct use case for sugar-fuzzy. Mouse selection in a list view would benefit from candy-mouse zone tracking.
 
 ---
 
@@ -144,7 +144,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | DiffViewer.php renders git diff hunks via string — Buffer would enable per-cell diff coloring + redraw | M |
-| candy-fuzzy | StashManager.php/HistoryManager.php filter stash entries — SmithWatermanMatcher would improve interactive search | S |
+| sugar-fuzzy | StashManager.php/HistoryManager.php filter stash entries — SmithWatermanMatcher would improve interactive search | S |
 | candy-mouse | InteractiveRebase.php uses mouse for branch selection — candy-mouse would standardize zone hit-testing | M |
 
 **Notes:** candy-git is a git stash TUI with diff viewing and interactive rebase. DiffViewer rendering is a direct use case for candy-buffer (git diff lines with syntax coloring). Interactive rebase uses mouse zone tracking that would benefit from candy-mouse.

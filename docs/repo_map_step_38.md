@@ -46,7 +46,7 @@ This step is mostly Scribe-driven; the Coder is a placeholder for any small file
 
 - Update each root doc per acceptance.
 - Maintain prose tone consistent with existing files (terse, technical).
-- For new lib rows in MATCHUPS, pick the right emoji per status (🚀 candy-testing/candy-input/candy-async — no upstream; 🟢 candy-ansi/candy-buffer/candy-layout/candy-mouse/candy-fuzzy — port of upstream).
+- For new lib rows in MATCHUPS, pick the right emoji per status (🚀 candy-testing/candy-input/candy-async — no upstream; 🟢 candy-ansi/candy-buffer/candy-layout/candy-mouse/sugar-fuzzy — port of upstream).
 
 ## Ship brief
 

@@ -47,7 +47,7 @@
 - candy-async: OperationCancelledException, dead $operationPromise, retry() loop param, disposeAll throw-guard, retry bounded wall-clock
 - candy-buffer: Region validation
 - candy-core: AtomicJsonFile/Json::decodeArray/Sanitize SSOT
-- candy-fuzzy: ScoringProfile port, DoS caps
+- sugar-fuzzy: ScoringProfile port, DoS caps
 - candy-git: rename parsing
 - candy-kv: sanitizeForTty
 

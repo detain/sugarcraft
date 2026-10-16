@@ -1,22 +1,22 @@
 # Step 14 — sugar-bits onto shared foundations
 
 **Branch:** `ai/sugar-bits-shared`
-**Depends on:** step-02 (candy-buffer), step-03 (candy-layout), step-05 (candy-mouse), step-07 (candy-fuzzy)
+**Depends on:** step-02 (candy-buffer), step-03 (candy-layout), step-05 (candy-mouse), step-07 (sugar-fuzzy)
 **Blocks:** —
 
 ## Goal
 
-Migrate `sugar-bits` (TextInput, TextArea, ItemList, FilePicker, Cursor, Spinner, Table, Tabs primitives) onto candy-buffer (cell rendering), candy-layout (component sizing), candy-mouse (self-contained zone tracking for Tabs / Table / FilePicker), and candy-fuzzy (ItemList filtering uses str_contains today — upgrade to scored fuzzy with highlight indices).
+Migrate `sugar-bits` (TextInput, TextArea, ItemList, FilePicker, Cursor, Spinner, Table, Tabs primitives) onto candy-buffer (cell rendering), candy-layout (component sizing), candy-mouse (self-contained zone tracking for Tabs / Table / FilePicker), and sugar-fuzzy (ItemList filtering uses str_contains today — upgrade to scored fuzzy with highlight indices).
 
 Reference: `docs/repo_map_update.md` Phase 3 migration; §387.1 (fuzzy reinvention), §387.5 (layout reinvention).
 
 ## Files expected to be modified
 
-- `sugar-bits/composer.json` — add `sugarcraft/candy-buffer`, `sugarcraft/candy-layout`, `sugarcraft/candy-mouse`, `sugarcraft/candy-fuzzy` (all via `path-repo-closure`).
+- `sugar-bits/composer.json` — add `sugarcraft/candy-buffer`, `sugarcraft/candy-layout`, `sugarcraft/candy-mouse`, `sugarcraft/sugar-fuzzy` (all via `path-repo-closure`).
 - `sugar-bits/src/Table/Table.php` — render through candy-buffer; layout columns via candy-layout.
 - `sugar-bits/src/Tabs/Tabs.php` — replace any direct candy-mouse Manager wiring with candy-mouse Scanner.
 - `sugar-bits/src/ItemList/ItemList.php` — swap `str_contains` filter for `\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`; expose matched indices for highlight rendering.
-- `sugar-bits/src/FilePicker/FilePicker.php` — candy-mouse for clickable rows; candy-fuzzy for filename filter.
+- `sugar-bits/src/FilePicker/FilePicker.php` — candy-mouse for clickable rows; sugar-fuzzy for filename filter.
 - Renderers across primitives: emit through candy-buffer where possible, fall back to string composition only if migration is non-trivial (note any deferrals in `docs/repo_map_updates.md`).
 
 ## Acceptance criteria
@@ -35,10 +35,10 @@ Reference: `docs/repo_map_update.md` Phase 3 migration; §387.1 (fuzzy reinventi
 2. **Migrate ONE primitive at a time** (commit per primitive in this branch is fine; final PR squashes via merge):
    - Table → candy-buffer + candy-layout
    - Tabs → candy-mouse
-   - ItemList → candy-fuzzy (mandatory) + candy-buffer (if low-risk)
-   - FilePicker → candy-mouse + candy-fuzzy
+   - ItemList → sugar-fuzzy (mandatory) + candy-buffer (if low-risk)
+   - FilePicker → candy-mouse + sugar-fuzzy
 3. **For each primitive**: read existing `view()` output, generate the same bytes via candy-buffer's render path, assert byte-identical (snapshot test) before/after.
-4. **If ItemList currently does NOT highlight matched chars** (it doesn't — that's the whole point of candy-fuzzy), add the highlight render path AND add a new snapshot showing it.
+4. **If ItemList currently does NOT highlight matched chars** (it doesn't — that's the whole point of sugar-fuzzy), add the highlight render path AND add a new snapshot showing it.
 5. Run phpunit in sugar-bits + every dependent lib via `affected-libs.php`.
 
 ## Tester brief
@@ -54,12 +54,12 @@ Reference: `docs/repo_map_update.md` Phase 3 migration; §387.1 (fuzzy reinventi
 
 ## Ship brief
 
-- **PR title**: `sugar-bits: adopt candy-buffer + candy-layout + candy-mouse + candy-fuzzy`
+- **PR title**: `sugar-bits: adopt candy-buffer + candy-layout + candy-mouse + sugar-fuzzy`
 - **PR body**:
   ```
   ## Summary
   - sugar-bits primitives migrated onto shared foundation packages.
-  - ItemList now shows match highlights via candy-fuzzy scored indices (new UX).
+  - ItemList now shows match highlights via sugar-fuzzy scored indices (new UX).
   - Tabs / Table / FilePicker use candy-mouse self-contained scanners.
   - Table column layout via candy-layout's constraint solver.
   - Byte-snapshot tests confirm no regression on existing primitives.

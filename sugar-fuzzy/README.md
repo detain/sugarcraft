@@ -1,11 +1,13 @@
-# CandyFuzzy
+# SugarFuzzy
+
+> Formerly published as `sugarcraft/candy-fuzzy` (renamed 2026-10). <!-- @rename-keep -->
 
 Fuzzy string matching library with scored matched character indices — enables filter highlighting UI across the SugarCraft ecosystem.
 
 ## Installation
 
 ```bash
-composer require sugarcraft/candy-fuzzy
+composer require sugarcraft/sugar-fuzzy
 ```
 
 ## Role
@@ -188,7 +190,7 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 
 ## Canonical matcher & consumer migration
 
-`candy-fuzzy` is the single source of truth for fuzzy matching across the
+`sugar-fuzzy` is the single source of truth for fuzzy matching across the
 ecosystem. Consumer migration is **complete** — no duplicate scoring core
 remains outside this library:
 
@@ -212,7 +214,7 @@ The highlighter is presentation-neutral and forwards unmatched haystack segments
 - [Smith-Waterman algorithm](https://en.wikipedia.org/wiki/Smith%E2%80%93Waterman_algorithm)
 - [sahilm/fuzzy (Go)](https://github.com/sahilm/fuzzy)
 
-[![codecov](https://codecov.io/gh/sugarcraft/candy-fuzzy/branch/master/graph/badge.svg?flag=candy-fuzzy)](https://codecov.io/gh/sugarcraft/candy-fuzzy)
+[![codecov](https://codecov.io/gh/sugarcraft/sugar-fuzzy/branch/master/graph/badge.svg?flag=sugar-fuzzy)](https://codecov.io/gh/sugarcraft/sugar-fuzzy)
 
 ## Credits & inspiration
 

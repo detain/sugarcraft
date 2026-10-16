@@ -166,11 +166,11 @@ Critical issues: deprecated FuzzyMatcher still actively used; async suggestions 
 
 ## Compatibility Issues
 
-1. **candy-fuzzy dependency is deprecated in favor of candy-fuzzy v2** — FuzzyMatcher.php is marked @deprecated but Input and Select use it directly via `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` in Select and `SugarCraft\Forms\Fuzzy\FuzzyMatcher` in Input. The class-level deprecation comment at line 10-11 says to use `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` — which is what Select::update() already does at line 268. But Input::withFuzzySuggestions() uses the internal `FuzzyMatcher` class at line 218, not SmithWatermanMatcher. Inconsistent: Select uses the proper external lib, Input uses the deprecated internal shim.
+1. **sugar-fuzzy dependency is deprecated in favor of sugar-fuzzy v2** — FuzzyMatcher.php is marked @deprecated but Input and Select use it directly via `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` in Select and `SugarCraft\Forms\Fuzzy\FuzzyMatcher` in Input. The class-level deprecation comment at line 10-11 says to use `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` — which is what Select::update() already does at line 268. But Input::withFuzzySuggestions() uses the internal `FuzzyMatcher` class at line 218, not SmithWatermanMatcher. Inconsistent: Select uses the proper external lib, Input uses the deprecated internal shim.
 
 2. **ItemList uses `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`** but `FuzzyMatcher` (the internal one) uses its own Smith-Waterman implementation. Two different fuzzy matching implementations in the same library — may produce different ranking results for the same query/candidates.
 
-3. **candy-forms depends on candy-async, candy-buffer, candy-core, candy-fuzzy, candy-layout, candy-sprinkles** — This is a heavy dependency. The lib is labeled "Foundation lib for form primitives" in composer.json but pulls in layout, fuzzy, async, etc. If other libs (like sugar-bits or candy-forms) also use candy-forms as a base, the dependency graph needs careful management.
+3. **candy-forms depends on candy-async, candy-buffer, candy-core, sugar-fuzzy, candy-layout, candy-sprinkles** — This is a heavy dependency. The lib is labeled "Foundation lib for form primitives" in composer.json but pulls in layout, fuzzy, async, etc. If other libs (like sugar-bits or candy-forms) also use candy-forms as a base, the dependency graph needs careful management.
 
 4. **FuzzyMatcher is not multibyte-safe** — This is a correctness bug for non-ASCII input. Systems processing Japanese/Chinese filenames or emoji in file paths will get incorrect fuzzy matching results.
 

@@ -196,7 +196,7 @@ strip — with the single exception of a byte in the 8-bit C1 band that no
 well-formed sequence claimed: a terminal reads that one as a control, so it goes.
 
 `withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
-[candy-fuzzy](https://github.com/sugarcraft/candy-fuzzy) match highlight). It is
+[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) match highlight). It is
 emitted **verbatim** — only ANSI-aware *truncated*, never stripped — because
 sanitising it would destroy the very SGR escapes it exists to carry. That makes
 **you** the trust boundary: pass only styling you produced yourself over

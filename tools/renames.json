@@ -30,7 +30,7 @@
     {"batch":"C","kind":"rename","old":"candy-forms","new":"sugar-forms","ns_old":"Forms","ns_new":"Forms","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-mouse","new":"sugar-mouse","ns_old":"Mouse","ns_new":"Mouse","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-focus","new":"sugar-focus","ns_old":"Focus","ns_new":"Focus","type":"lib","bins":{},"status":"pending"},
-    {"batch":"C","kind":"rename","old":"candy-fuzzy","new":"sugar-fuzzy","ns_old":"Fuzzy","ns_new":"Fuzzy","type":"lib","bins":{},"status":"pending"},
+    {"batch":"C","kind":"rename","old":"candy-fuzzy","new":"sugar-fuzzy","ns_old":"Fuzzy","ns_new":"Fuzzy","type":"lib","bins":{},"status":"renamed"},
 
     {"batch":"D","kind":"rename","old":"candy-shine","new":"sugar-markdown","ns_old":"Shine","ns_new":"Markdown","type":"lib","bins":{},"status":"pending"},
     {"batch":"D","kind":"rename","old":"candy-mosaic","new":"sugar-image","ns_old":"Mosaic","ns_new":"Image","type":"lib","bins":{},"status":"pending"},

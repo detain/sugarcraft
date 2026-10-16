@@ -9,7 +9,7 @@ use SugarCraft\Files\Manager;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Covers the candy-fuzzy-backed file search/filter path.
+ * Covers the sugar-fuzzy-backed file search/filter path.
  *
  * The listing below is chosen so fuzzy behaviour is distinguishable from the
  * historical exact-substring filter: e.g. "rdme" is a subsequence of

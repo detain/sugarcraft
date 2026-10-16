@@ -190,7 +190,7 @@ final class PickerInputIntegrityTest extends TestCase
     public function testHighlightWalksCodepointsNotGraphemes(): void
     {
         // "é" written as e + U+0301 is TWO codepoints but ONE grapheme.
-        // candy-fuzzy indexes the haystack by codepoint, so the match on 'f'
+        // sugar-fuzzy indexes the haystack by codepoint, so the match on 'f'
         // arrives as index 2 — the grapheme walk used to wrap index 2's
         // WRONG cluster (none) and desync every later highlight.
         [$in, $out, $p] = $this->makePicker('');

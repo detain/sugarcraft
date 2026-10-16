@@ -222,8 +222,8 @@ Interactive rebase shows a todo list of commits, each with an assignable action
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
-### 2026-05-31 — Use candy-fuzzy for scored filter matching
-Pattern: When a lib needs type-to-filter with ranked results, adopt `sugarcraft/candy-fuzzy` and use `SmithWatermanMatcher::matchAll()` — it returns scored `MatchResult` objects with grapheme-aligned highlight indices.
+### 2026-05-31 — Use sugar-fuzzy for scored filter matching
+Pattern: When a lib needs type-to-filter with ranked results, adopt `sugarcraft/sugar-fuzzy` and use `SmithWatermanMatcher::matchAll()` — it returns scored `MatchResult` objects with grapheme-aligned highlight indices.
 Anti-pattern: Ad-hoc `str_contains()` or `stripos()` boolean filtering; it gives no ranking signal and no match-position data for highlighting.
 Source: step-33 ai/filter-consumers
 

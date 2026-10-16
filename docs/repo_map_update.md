@@ -15,7 +15,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - ✅ candy-testing (step-04, PR #885)
 - ✅ candy-mouse (step-05, PR #886)
 - ✅ candy-input (step-06, PR #887)
-- ✅ candy-fuzzy (step-07, PR #888)
+- ✅ sugar-fuzzy (step-07, PR #888)
 - ✅ candy-async (step-08, PR #889)
 - ✅ candy-core enhancements (step-09, PR #890)
 
@@ -41,7 +41,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - Consolidate styling foundations → candy-sprinkles + candy-shine (PRs #891/#892)
 
 ### §386 Repeated Reinventions — covered by:
-- Fuzzy matching (candy-scriptui, candy-forms, candy-forms, sugar-bits) → candy-fuzzy (PR #888 step-07, PR #912 step-33)
+- Fuzzy matching (candy-scriptui, candy-forms, candy-forms, sugar-bits) → sugar-fuzzy (PR #888 step-07, PR #912 step-33)
 - Byte-loop ANSI parsing (candy-ansi-inspect, candy-hermit, candy-codeshot) → candy-ansi (PR #882 step-01, PR #899 step-20)
 - String-based layout → candy-layout (PR #884 step-03)
 - Manual mouse coordinate tracking → candy-mouse (PR #886 step-05, PR #901 step-22)
@@ -55,7 +55,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 ### Ecosystem-wide adoption sweep (Phase 6, steps 31–37)
 - step-31 candy-pty: adopted candy-input + candy-ansi (PR #910)
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + candy-mouse + candy-testing (PR #911)
-- step-33 candy-kv + candy-ssh-launcher + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
+- step-33 candy-kv + candy-ssh-launcher + candy-git: adopted sugar-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 candy-codetime + candy-mail + candy-git-server: adopted candy-async (PR #915)
 - step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)

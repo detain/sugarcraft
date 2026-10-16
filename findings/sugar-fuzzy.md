@@ -1,9 +1,9 @@
 > ⚠️ SUPERSEDED 2026-10-06 — findings largely landed (see PRs/commits era r85-r89 + crush_libs.md re-verify). Item-level status below may misrepresent master. Re-derive before acting.
-> **ACTIVE HAZARD:** §1.1's prescription to delete the `if ($indices === [])` guard in `Highlighter.php` is now WRONG — the guard is load-bearing behind the out-of-range filter (9c1f14e9c); do not follow it. §2.1/2.3's full-matrix memory limits were removed by the one-byte-traceback rework; §6.3/§7.1/§7.4/§8.1 are implemented. **Open at 2026-10-06 audit time; re-verify:** deprecated `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` (open *deliberately* pending candy-lister's `FuzzyMatch` migration), the SMP/emoji test gap, and malformed-UTF-8 handling (crush_libs.md §candy-fuzzy).
+> **ACTIVE HAZARD:** §1.1's prescription to delete the `if ($indices === [])` guard in `Highlighter.php` is now WRONG — the guard is load-bearing behind the out-of-range filter (9c1f14e9c); do not follow it. §2.1/2.3's full-matrix memory limits were removed by the one-byte-traceback rework; §6.3/§7.1/§7.4/§8.1 are implemented. **Open at 2026-10-06 audit time; re-verify:** deprecated `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` (open *deliberately* pending candy-lister's `FuzzyMatch` migration), the SMP/emoji test gap, and malformed-UTF-8 handling (crush_libs.md §sugar-fuzzy).
 
-# Code Audit: candy-fuzzy
+# Code Audit: sugar-fuzzy
 
-**Library:** `sugarcraft/candy-fuzzy`  
+**Library:** `sugarcraft/sugar-fuzzy`  
 **Date:** 2026-06-29  
 **Tests:** 97 tests, 4216 assertions — all passing
 
@@ -11,7 +11,7 @@
 
 ## Summary
 
-`candy-fuzzy` provides fuzzy string matching with two algorithms (Smith-Waterman and Sahilm-style) and matched character index extraction for UI highlighting. The codebase is generally well-structured with solid UTF-8 handling, good test coverage, and performance guards against O(n³) regressions. However, several issues ranging from dead code to missing features were identified.
+`sugar-fuzzy` provides fuzzy string matching with two algorithms (Smith-Waterman and Sahilm-style) and matched character index extraction for UI highlighting. The codebase is generally well-structured with solid UTF-8 handling, good test coverage, and performance guards against O(n³) regressions. However, several issues ranging from dead code to missing features were identified.
 
 ---
 
@@ -472,4 +472,4 @@ No testing gaps identified.
 
 ## Conclusion
 
-`candy-fuzzy` is a well-implemented library with good UTF-8 handling, solid performance characteristics (with guards against O(n³) regressions), and comprehensive test coverage. The main issues are minor: dead code in Highlighter, duplicated sorting logic, and missing async/generator support for very large datasets. The library is suitable for its intended use case in the SugarCraft TUI ecosystem.
+`sugar-fuzzy` is a well-implemented library with good UTF-8 handling, solid performance characteristics (with guards against O(n³) regressions), and comprehensive test coverage. The main issues are minor: dead code in Highlighter, duplicated sorting logic, and missing async/generator support for very large datasets. The library is suitable for its intended use case in the SugarCraft TUI ecosystem.

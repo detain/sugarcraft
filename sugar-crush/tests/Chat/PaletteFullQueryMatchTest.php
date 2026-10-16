@@ -10,8 +10,8 @@ use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\MatchResult;
 
 /**
- * The Ctrl+P palette's filter on candy-fuzzy's `requireFullQuery` mode, plus
- * its per-(query, labels) memo (crush_libs candy-fuzzy #2/#3).
+ * The Ctrl+P palette's filter on sugar-fuzzy's `requireFullQuery` mode, plus
+ * its per-(query, labels) memo (crush_libs sugar-fuzzy #2/#3).
  *
  * The palette used to hand the query to a plain local-alignment matcher with
  * no coverage check at all, so any label sharing one character with the query

@@ -20,7 +20,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 | sugar-reel runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-reel-audit` |
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
 | honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:honey-bounce-audit` |
-| candy-git path-repo closure check deferred | candy-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
+| candy-git path-repo closure check deferred | sugar-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
 | candy-codetime plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:candy-codetime-audit` |
 
 ## Dependency Graph (Summary)
@@ -116,7 +116,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | candy-mail | P1 | 3 | Attachment silent failure; unchecked fwrite(); @ suppression on fgets() |
 | candy-forms | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
 | candy-log | P1 | 2 | Log level filtering; Handler interface consistency |
-| candy-git | P1 | 2 | Path-repo closure check (verify candy-fuzzy is clean) |
+| candy-git | P1 | 2 | Path-repo closure check (verify sugar-fuzzy is clean) |
 | candy-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
 | candy-codeshot | P1 | 2 | WeakMap for allocateColor cache (memory leak fix) |
 
@@ -132,7 +132,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | candy-mosaic | P1 | 2 | Mosaic grid layout edge cases |
 | candy-hermit | P1 | 2 | Shell environment isolation |
 | candy-focus | P1 | 2 | Focus ring rendering |
-| candy-fuzzy | P1 | 2 | Fuzzy matcher state |
+| sugar-fuzzy | P1 | 2 | Fuzzy matcher state |
 | sugar-table | P1 | 2 | Table layout overflow |
 | candy-ansi-inspect | P1 | 2 | Empty data set guard |
 | sugar-toast | P1 | 2 | Viewport overflow; non-cancellable timer |
@@ -192,7 +192,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_candy-mosaic.md` — Phase 1 (mosaic grid layout edge cases)
 - `findings/plan_candy-hermit.md` — Phase 1 (shell environment isolation)
 - `findings/plan_candy-focus.md` — Phase 1 (focus ring rendering)
-- `findings/plan_candy-fuzzy.md` — Phase 1 (fuzzy matcher state)
+- `findings/plan_sugar-fuzzy.md` — Phase 1 (fuzzy matcher state)
 - `findings/plan_sugar-table.md` — Phase 1 (table layout overflow)
 - `findings/plan_candy-ansi-inspect.md` — Phase 1 (empty data set guard)
 - `findings/plan_sugar-toast.md` — Phase 1 (viewport overflow, non-cancellable timer)

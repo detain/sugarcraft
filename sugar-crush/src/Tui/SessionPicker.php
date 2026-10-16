@@ -37,7 +37,7 @@ use SugarCraft\Crush\Theme;
  *   and the last prompt sent in it.
  *
  * What it does, beyond ↑↓ / Enter / Esc:
- * - `/` filters: typed text goes to the query, which candy-fuzzy's
+ * - `/` filters: typed text goes to the query, which sugar-fuzzy's
  *   Smith-Waterman matcher ranks over title, last prompt, agent, id and
  *   branch, with the matched characters highlighted. `/` (rather than
  *   type-to-filter) is what keeps `k`/`j` moving the highlight.
@@ -1280,7 +1280,7 @@ final class SessionPicker
 
     /**
      * $title (already fitted) in $style, with the characters the filter
-     * matched picked out through candy-fuzzy's {@see Highlighter}. The match
+     * matched picked out through sugar-fuzzy's {@see Highlighter}. The match
      * is re-run on the fitted text so the indices name what is painted.
      */
     private function highlightTitle(string $title, Style $style, Theme $theme): string

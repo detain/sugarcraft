@@ -17046,7 +17046,7 @@ final class Chat implements Model
 
     /**
      * The palette's one matcher, built on first use. `requireFullQuery`
-     * (candy-fuzzy #3): the matcher is a LOCAL alignment, so in plain mode
+     * (sugar-fuzzy #3): the matcher is a LOCAL alignment, so in plain mode
      * any label sharing a single character with the query matched - "xq"
      * listed "Exit" on its "x" alone - and the palette widened instead of
      * narrowing as the user typed. Full-query mode keeps exactly the labels
@@ -17057,7 +17057,7 @@ final class Chat implements Model
 
     /**
      * Ranked results per query for the label set they were computed over
-     * (candy-fuzzy #2). paletteMatchResults() is asked several times per
+     * (sugar-fuzzy #2). paletteMatchResults() is asked several times per
      * keystroke - the key arm, the zone mapping, the renderer - and the
      * labels do not change between keystrokes, so each (query, labels) pair
      * is aligned once. A different label list (palette mode switch, a

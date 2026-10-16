@@ -10,7 +10,7 @@ Finalise CI/workflow files for the post-refactor ecosystem: codecov flags for th
 
 ## Files expected to be modified
 
-- `codecov.yml` — add 8 new flags for candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, candy-fuzzy, candy-async.
+- `codecov.yml` — add 8 new flags for candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, sugar-fuzzy, candy-async.
 - `.github/workflows/vhs.yml` — `all=(...)` typically not extended for these (non-visual foundations); audit each new lib to be sure. Visual libs that may have gained `.vhs/*.tape` files in any step get added.
 - `.github/workflows/tests.yml` — confirm SVN creds remain HARDCODED per CALIBER_LEARNINGS (this isn't an edit, it's a verification — don't accidentally secretify them).
 - `scripts/affected-libs.php` — verify it auto-discovers the 8 new libs (it should; if not, document why in CALIBER_LEARNINGS).
@@ -53,7 +53,7 @@ No new docs. The repo_map_update.md status section (step-39) already covers what
 - **PR body**:
   ```
   ## Summary
-  - codecov.yml: 8 new flags (candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, candy-fuzzy, candy-async).
+  - codecov.yml: 8 new flags (candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, sugar-fuzzy, candy-async).
   - vhs.yml: audited; <X> new libs added to all=(...) array (most foundations non-visual).
   - scripts/affected-libs.php auto-discovers the 8 new libs (verified).
   - tools/check-path-repos.php exits 0 (verified).

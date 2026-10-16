@@ -334,7 +334,7 @@ final class Select implements \SugarCraft\Forms\Field
                 );
                 $l = $l->setItems($items);
             } else {
-                // Apply fuzzy ranking via candy-fuzzy's SmithWatermanMatcher.
+                // Apply fuzzy ranking via sugar-fuzzy's SmithWatermanMatcher.
                 $results = $this->matcher->matchAll($filterText, $this->fuzzyCandidates);
                 if ($results !== []) {
                     $ranked = array_map(static fn($r) => $r->haystack, $results);
