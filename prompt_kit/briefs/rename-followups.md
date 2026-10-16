@@ -131,3 +131,11 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `ansi/candy-forms/candy-forms-2-256-m-1.ansi`, `ansi/sugarcraft/sugarcraft-4-256-l-1.ansi`, <!-- @rename-keep -->
   `ansi/sugarcraft/sugarcraft-5-256-l-1.ansi` — art CONTENT carries the pre-rename `candy-fuzzy` <!-- @rename-keep -->
   wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->
+
+## D4 candy-flip → sugar-animation (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-3-16-l-2.ansi` — art CONTENT carries the pre-rename `candy-flip` <!-- @rename-keep -->
+  wordmark (C.3 excludes *.ansi content); no `ansi/candy-flip/` dir existed. Redraw at owner triage. <!-- @rename-keep -->
+- `sugar-animation/.vhs/play.gif` — recorded GIF frames show the pre-rename prompt wordmark; CI <!-- @rename-keep -->
+  re-renders from the already-rewritten `.tape` on the next tape run; do not hand-patch.
+- `sugar-animation/tests` temp-name prefixes `sc_flip_*`/`flip-color-`/`flip-lct-` kept — bare <!-- @rename-keep -->
+  lowercase `flip` is C.4-rule-exempt opaque fixture noise, not brand prose.
