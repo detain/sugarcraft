@@ -52,7 +52,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-pty | — | — | — | — | — | 137 | HUNG: lib's own HangWatchdog SIGKILLed the runner at 53% (418/708) — PosixPumpTest::testRunWithNullChildReturnsZero in-flight 90.5s > 90s budget (child stuck in do_select with [true] defunct zombie). Pre-existing under this env; see /tmp/opencode/rename-baseline/candy-pty.txt forensic dump |
 | candy-query | 1580 | 11900 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-serve | 354 | 875 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
-| candy-shell | 334 | 694 | 0 | 0 | 0 | 0 |  |
+| candy-shell | 334 | 694 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
 | candy-shine | 938 | 2378 | 0 | 0 | 0 | 0 |  |
 | candy-sprinkles | 865 | 2896 | 0 | 0 | 0 | 0 |  |
 | candy-testing | 267 | 5417 | 0 | 0 | 2 | 0 |  |
