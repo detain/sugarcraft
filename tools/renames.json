@@ -35,7 +35,7 @@
     {"batch":"D","kind":"rename","old":"candy-shine","new":"sugar-markdown","ns_old":"Shine","ns_new":"Markdown","type":"lib","bins":{},"status":"renamed"},
     {"batch":"D","kind":"rename","old":"candy-mosaic","new":"sugar-image","ns_old":"Mosaic","ns_new":"Image","type":"lib","bins":{},"status":"renamed"},
     {"batch":"D","kind":"rename","old":"sugar-reel","new":"sugar-video","ns_old":"Reel","ns_new":"Video","type":"lib","bins":{},"status":"renamed"},
-    {"batch":"D","kind":"rename","old":"candy-flip","new":"sugar-animation","ns_old":"Flip","ns_new":"Animation","type":"lib","bins":{},"status":"pending"},
+    {"batch":"D","kind":"rename","old":"candy-flip","new":"sugar-animation","ns_old":"Flip","ns_new":"Animation","type":"lib","bins":{},"status":"renamed"},
     {"batch":"D","kind":"rename","old":"candy-kit","new":"sugar-cli","ns_old":"Kit","ns_new":"Cli","type":"lib","bins":{},"status":"pending"},
     {"batch":"D","kind":"rename","old":"honey-bounce","new":"sugar-spring","ns_old":"Bounce","ns_new":"Spring","type":"lib","bins":{},"status":"pending"},
     {"batch":"D","kind":"rename","old":"candy-palette","new":"sugar-colorprofile","ns_old":"Palette","ns_new":"ColorProfile","type":"lib","bins":{},"status":"pending"},

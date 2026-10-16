@@ -1,6 +1,6 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
-Sourced from 11 update docs: candy-kit, candy-flip, candy-mail, candy-sql,
+Sourced from 11 update docs: candy-kit, sugar-animation, candy-mail, candy-sql,
 candy-minesweeper, candy-tetris, candy-starter, candy-flappy, super-candy, candy-codetime.
 
 ---
@@ -16,10 +16,10 @@ Affected: candy-starter (critical), candy-sql, candy-minesweeper, candy-tetris,
 super-candy, candy-codetime.
 
 ### B. Concurrent Write Safety — Data Corruption Risk
-candy-codetime's JSONL append is unsafe across multiple editors. candy-flip's
+candy-codetime's JSONL append is unsafe across multiple editors. sugar-animation's
 DISPOSAL_PREVIOUS mode can race in the same way. Any package doing file
 append without flock() is one `Ctrl+C` away from corrupt data.
-Affected: candy-codetime (critical, P0), candy-flip (DISPOSAL_PREVIOUS canvas race).
+Affected: candy-codetime (critical, P0), sugar-animation (DISPOSAL_PREVIOUS canvas race).
 
 ### C. Progress Feedback Missing From Async Operations
 super-candy's AsyncOps fires copy/move without any progress callback — the

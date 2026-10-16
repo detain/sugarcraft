@@ -453,7 +453,7 @@ public function renderAsJpeg(ImageSource $image, int $width, ?int $height = null
 
 # Ecosystem / Integration Opportunities
 
-1. **candy-flip integration:** Bridge for decoding animated GIF frames into `ImageSource[]` for use with `AnimationDriver`
+1. **sugar-animation integration:** Bridge for decoding animated GIF frames into `ImageSource[]` for use with `AnimationDriver`
 
 2. **candy-vcr integration:** Record/replay of image rendering for testing
 

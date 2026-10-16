@@ -175,22 +175,22 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'see PosixBackendRestoreLastDescriptorTest.',
         ],
 
-        // ---- candy-flip -------------------------------------------------
-        'candy-flip/src/Renderer.php::SizeIoctl::query(1)' => [
+        // ---- sugar-animation -------------------------------------------------
+        'sugar-animation/src/Renderer.php::SizeIoctl::query(1)' => [
             DescriptorSinkScanner::LITERAL_INT,
             'CORRECT. withAdaptiveSize(). Was `(int) STDOUT`, which is 2, i.e. STDERR -- the one '
             . 'member of this family that misbehaved with no unusual process state, only '
-            . '`2>err.log`. See RendererAdaptiveSizeDescriptorTest in candy-flip.',
+            . '`2>err.log`. See RendererAdaptiveSizeDescriptorTest in sugar-animation.',
         ],
 
         // ---- candy-gifview ------------------------------------------------
         'candy-gifview/src/Cli.php::SizeIoctl::query(1)' => [
             DescriptorSinkScanner::LITERAL_INT,
             'CORRECT. viewportCells(). The literal 1 is STDOUT\'s descriptor -- the site '
-            . 'arrived verbatim from candy-flip\'s old bin in the rename campaign step 1.3 '
+            . 'arrived verbatim from sugar-animation\'s old bin in the rename campaign step 1.3 '
             . 'with the `(int) STDOUT` cast (resource id 2, i.e. STDERR) already replaced, '
             . 'behind a core `stream_isatty(STDOUT)` gate. See BinSizeQueryPolarityTest in '
-            . 'candy-gifview, the app-package twin of the candy-flip pin above.',
+            . 'candy-gifview, the app-package twin of the sugar-animation pin above.',
         ],
 
         // ---- candy-pty ---------------------------------------------------

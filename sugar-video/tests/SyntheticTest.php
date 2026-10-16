@@ -7,7 +7,7 @@ namespace SugarCraft\Video\Tests;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use SugarCraft\Flip\Decoder;
+use SugarCraft\Animation\Decoder;
 use SugarCraft\Video\Synthetic;
 
 /**
@@ -15,7 +15,7 @@ use SugarCraft\Video\Synthetic;
  *
  * The primary regression: the original buildSyntheticGif() produced a
  * single-frame GIF.  The new Synthetic::generate() must produce an animated
- * GIF that candy-flip's GifDecoder can decode into ≥2 frames.
+ * GIF that sugar-animation's GifDecoder can decode into ≥2 frames.
  */
 final class SyntheticTest extends TestCase
 {
@@ -38,7 +38,7 @@ final class SyntheticTest extends TestCase
         $bytes = file_get_contents($path);
         $this->assertStringStartsWith('GIF8', $bytes);
 
-        // The regression: candy-flip's GifDecoder must decode ≥2 frames from
+        // The regression: sugar-animation's GifDecoder must decode ≥2 frames from
         // an animated GIF.  A single-frame static GIF (the old behavior)
         // decodes to exactly 1 frame and this assertion fails.
         $decoder = new Decoder();

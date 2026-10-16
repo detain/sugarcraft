@@ -20,7 +20,7 @@ use SugarCraft\Video\Subtitle\WebVtt;
  * No single upstream: the decode → render → pace pipeline draws on prior art in
  * maxcurzi/tplay, seatedro/glyph, and joelibaceta/video-to-ascii. The rendering
  * stack is reused from the SugarCraft ecosystem (sugar-image image renderers,
- * candy-flip downsampling, candy-palette color mapping, candy-core TEA runtime)
+ * sugar-animation downsampling, candy-palette color mapping, candy-core TEA runtime)
  * rather than reinvented.
  *
  * Usage:

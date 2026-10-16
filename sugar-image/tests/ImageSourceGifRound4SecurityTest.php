@@ -18,7 +18,7 @@ use SugarCraft\Image\Tests\Support\AnimatedImageFixtures as F;
  *    structured 60-frame 316×316 GIF (5.99 M cells) is now refused BEFORE flip decodes.
  *  - CRITICAL-2 (`phantom.gif`/`delayforge.gif`, 107 B → previously ACCEPTED with a
  *    silently wrong / forged-delay frame because the reconcile only compared counts):
- *    the loader now reconciles candy-flip's descriptor OFFSET LIST against the honest
+ *    the loader now reconciles sugar-animation's descriptor OFFSET LIST against the honest
  *    container walk, so a phantom descriptor that preserves the frame COUNT while
  *    shifting a POSITION is refused.
  *  - HIGH (TOCTOU): the GIF logical screen and flip's pixel payload are taken from the

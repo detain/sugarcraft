@@ -79,7 +79,7 @@ For a continuous ship-as-you-go cadence per `AGENTS.md`:
 2. **Wave 2 — Windows console (4-5 days)**
    - Run as 6-7 small PRs per the slice list in `x-windows.md`
 3. **Wave 3 — image rendering (5 days for v1; 5 more for v1.5)**
-   - PR set: `x-mosaic` v1 lib + candy-flip refactor onto it
+   - PR set: `x-mosaic` v1 lib + sugar-animation refactor onto it
    - Pulls in `x-ansi` sixel/kitty/iTerm2 helpers as it needs them
    - Optional v1.5 follow-up wave absorbs go-termimg + ratatui-image features (dithering, tmux passthrough, font-size CSI, two-tier API, async resize)
 4. **Wave 4 — virtual terminal (1-2 weeks)**

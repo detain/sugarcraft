@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-gifview",
-    "description": "Terminal GIF and .ansi-art viewer (gifterm port) \u2014 the command-line front end of sugarcraft/candy-flip.",
+    "description": "Terminal GIF and .ansi-art viewer (gifterm port) \u2014 the command-line front end of sugarcraft/sugar-animation.",
     "type": "project",
     "license": "MIT",
     "keywords": [
@@ -32,11 +32,11 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-flip": "dev-master",
+        "sugarcraft/sugar-animation": "dev-master",
         "sugarcraft/candy-pty": "dev-master"
     },
     "suggest": {
-        "ext-gd": "Required to decode GIF animations (via sugarcraft/candy-flip); ANSI art playback needs neither."
+        "ext-gd": "Required to decode GIF animations (via sugarcraft/sugar-animation); ANSI art playback needs neither."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",

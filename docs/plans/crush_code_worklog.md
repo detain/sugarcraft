@@ -18,7 +18,7 @@ Three lanes, nine agents, zero errors, ~2.8 hours wall clock.
 |---|---|---|
 | sugar-crush | 9994 / 144819 / 1 | **10059 / 148589 / 1** |
 | candy-core | 842 / 7573 / 25 | **842 / 7587 / 24** |
-| candy-flip | 83 / 227 / 2 | 83 / 227 / 2 |
+| candy-flip | 83 / 227 / 2 | 83 / 227 / 2 | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 | 459 / 7753 / 6 | <!-- @rename-keep historical provenance -->
 | candy-pty | 606 / ~1476 / 16 | **610 / 1408 / 16** |
 
@@ -148,7 +148,7 @@ one day and is now replaced by the command that derives it.
 defect family (E443, E444+E439, E441, E437) · **c** takes reach and reachability (E449, E448, E447, E453).
 
 Base floors, observed at `a8acfcc9` **after** the composer sweep and a verified closure restore:
-sugar-crush `9994 / 144819 / 1`, candy-core `842 / 7573 / 25`, candy-flip `83 / 227 / 2`, candy-pty
+sugar-crush `9994 / 144819 / 1`, candy-core `842 / 7573 / 25`, candy-flip `83 / 227 / 2`, candy-pty <!-- @rename-keep -->
 `606 / 1476 / 16 / 1 warning`. They match the pre-sweep floor exactly, so the sweep round-tripped.
 
 **Two new standing rules, both distilled from round 54's interruptions rather than from its code:**
@@ -164,7 +164,7 @@ that the split libs resolve the way an outside consumer gets them, and they do.
 
 🔴 **The restore is where the interesting failure was, and it is now E454.** The documented procedure —
 `check-path-repos.php --fix --strict-closure`, `composer update`, revert the manifests — **does not
-restore the closure.** It left candy-flip at 4/6 and candy-pty at 3/7. The tool walks the `require` graph
+restore the closure.** It left candy-flip at 4/6 and candy-pty at 3/7. The tool walks the `require` graph <!-- @rename-keep -->
 only (its own `--help` says so), so every miss was a `require-dev` sibling; a lib whose harness comes
 from a sibling gets a *Packagist copy* of `candy-testing` while its runtime deps are symlinks, and
 nothing announces it. `candy-buffer` was invisible even after hand-adding the direct dev deps, because it
@@ -198,7 +198,7 @@ interruptions landed in the fix stage. It still closed on an exact prediction.
 |---|---|---|
 | sugar-crush | **9994 / 144819 / 1 skipped / rc 0** | +48 tests, +550 assertions |
 | candy-core | **842 / 7573 / 25 / rc 0** | +23 tests, +183 assertions |
-| candy-flip | **83 / 227 / 2 / rc 0** | unchanged |
+| candy-flip | **83 / 227 / 2 / rc 0** | unchanged | <!-- @rename-keep -->
 | backlog | **428 → 452** | 21 lane ids (E429-E449) + 3 supervisor (E450-E452) |
 
 🔴 **THE PREDICTION WAS EXACT ON BOTH NUMBERS — tests for the twelfth consecutive round, assertions for
@@ -275,7 +275,7 @@ and reports UNCLASSIFIED — the correct failure direction, and pinned.
 ## Round 54 — IN FLIGHT (this entry is a checkpoint, not a result)
 
 **Base `606a131c` · run `wf_945b0ccb-cb9`, task `wpfjwoxt2` · launched 2026-08-24, three lanes.** Base
-floors: sugar-crush 9946/144269/1, candy-core 819/7390/25, candy-flip 83/227/2, candy-pty 606/1476/16
+floors: sugar-crush 9946/144269/1, candy-core 819/7390/25, candy-flip 83/227/2, candy-pty 606/1476/16 <!-- @rename-keep -->
 (+1 warning), candy-mosaic 459/7753/6 — all rc 0. Lanes: **a** finishes the candy-core descriptor census <!-- @rename-keep historical provenance -->
 (E396/E404/E398), **b** takes three real runtime bugs round 53 spotted out-of-lane (E411/E412/E413), **c**
 closes the fd 3+ inheritance the round-53 guard proves (E417/E418/E425/E426). Lanes b and c overlap on
@@ -304,7 +304,7 @@ anything is measured again** → launch round 55. The full instruction lives at 
 ## Round 53 — the descriptor family, child reaping, and a guard that reddened correct code
 
 **Base `9ed3e200` · merged `3074d2ec` · floor `b8808d5a` — sugar-crush 9946/144269/1, candy-core
-819/7390/25, candy-flip 83/227/2, all rc 0.** Backlog 394 → 428 (lane ids E395–E426, supervisor
+819/7390/25, candy-flip 83/227/2, all rc 0.** Backlog 394 → 428 (lane ids E395–E426, supervisor <!-- @rename-keep -->
 E427/E428). Nine agents, 0 errors, 665 tool calls, ~98 minutes of wall clock across two session kills.
 
 **Tests predicted exactly for the eleventh consecutive round (9943), assertions exactly on the lower
@@ -344,7 +344,7 @@ Run `wf_1771adc7-288`, task `wapbf9zqa`. Script:
 
 Base floors observed at `cb0a7c69`, code byte-identical to `9ed3e200` (docs-only diff, verified):
 sugar-crush **9860 / 143784 / 1**, candy-core **807 / 7288 / 25**, candy-mosaic **459 / 7753 / 6**, <!-- @rename-keep historical provenance -->
-candy-flip **80 / 186 / 2**, all rc 0.
+candy-flip **80 / 186 / 2**, all rc 0. <!-- @rename-keep -->
 
 Lanes were refreshed by `git fetch` + `reset --hard`, **not re-copied** — a fresh `cp -a` would repoint the
 vendor symlinks out of the lane. Closure re-verified per lane per package: 18/18, 3/3, 6/6.
@@ -352,7 +352,7 @@ vendor symlinks out of the lane. Closure re-verified per lane per package: 18/18
 **Lane a — the descriptor family, entirely outside sugar-crush.** The two worst instances of E368 are
 still open, left over because round 52's lane a had them out of its file list. `PosixBackend::size()`'s
 `/dev/tty` arm is wrong on every run rather than latent; `restoreLast()` reads descriptor 1 while its
-comment says STDIN. `candy-flip/src/Renderer.php` is the sixth instance, and the brief explicitly permits
+comment says STDIN. `candy-flip/src/Renderer.php` is the sixth instance, and the brief explicitly permits <!-- @rename-keep -->
 refuting it with a measurement rather than fixing it.
 
 **Lane b — child reaping.** The sugar-crush HIGHs from E366, with `MCP/StdioMcpServer` named as the
@@ -12645,7 +12645,7 @@ Backlog **630 → 651** (E631–E651, 21 entries).
 | **sugar-crush** | **10351 / 160648 / 1 skipped / rc 0** — MEASURED | +70 / +1270 |
 | **tools/tests** | **58 / 214 / rc 0** — MEASURED | unchanged |
 | **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED | unchanged |
-| candy-core · candy-flip · candy-mosaic | **CARRIED from round 55, NOT re-measured.** An inference. | — | <!-- @rename-keep historical provenance -->
+| candy-core · sugar-animation · candy-mosaic | **CARRIED from round 55, NOT re-measured.** An inference. | — | <!-- @rename-keep historical provenance -->
 
 Lane figures: a **10287 / 159406**, b **10326 / 159730**, c **10300 / 160268**.
 
@@ -12660,7 +12660,7 @@ brief told three lanes the suite floors at `10269 / 159236` (round 58's number) 
 **Pre-launch verification had checked everything that executes and nothing that is merely read** —
 `node --check`, nine rendered prompts, both required commands dry-run in all three sandboxes. A
 floor paragraph is data to the script and an instruction to the agent, and no static check crosses
-that boundary. Two further false claims came out with it: `candy-core`/`candy-flip`/`candy-mosaic` <!-- @rename-keep historical provenance -->
+that boundary. Two further false claims came out with it: `candy-core`/`sugar-animation`/`candy-mosaic` <!-- @rename-keep historical provenance -->
 were asserted as *"measured by the supervisor at this exact commit, per E167"* when they are carried
 from round 55 and were never measured at this base, and `tools/tests` 58/214 — which *was* measured
 — was missing entirely.
@@ -12800,7 +12800,7 @@ zero errors**. Backlog **592 → 630** by max id (count 591 → 629; the +38 rec
 | **sugar-crush** | **10281 / 159378 / 1 skipped / rc 0** | +12 tests, +142 assertions |
 | **tools/tests** | **58 / 214 / rc 0** | +30 tests, +78 assertions |
 | **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** | +14 tests, +291 assertions |
-| candy-core · candy-flip · candy-mosaic | CARRIED, not re-measured | no file touched in any of them | <!-- @rename-keep historical provenance -->
+| candy-core · sugar-animation · candy-mosaic | CARRIED, not re-measured | no file touched in any of them | <!-- @rename-keep historical provenance -->
 
 **The merge went GREEN on the first try** — no red, no fix pass. Second consecutive green merge.
 
@@ -12978,7 +12978,7 @@ went red"). **Four in three rounds, and the brief is the artefact nothing downst
 | **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** |
 | **tools/tests** | **28 / 136 / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — measured **240 times**, see E593 |
-| candy-core · candy-flip · candy-mosaic | CARRIED, not re-measured | <!-- @rename-keep historical provenance -->
+| candy-core · sugar-animation · candy-mosaic | CARRIED, not re-measured | <!-- @rename-keep historical provenance -->
 
 ### 🔴 THE ROUND'S REAL EXPERIMENT: OWNERSHIP STOPPED BEING PROSE
 
@@ -13067,7 +13067,7 @@ both runs, zero errors in the recovery. Backlog **555 → 592**.
 | **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** |
 | **tools/tests** | **28 / 136 / rc 0** (was 9 / 41 two rounds ago) |
 | **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — see the campaign below; measured **165+ times**, not once |
-| candy-core · candy-flip · candy-mosaic | CARRIED, not re-measured — `git diff --name-only` shows no file in any of them | <!-- @rename-keep historical provenance -->
+| candy-core · sugar-animation · candy-mosaic | CARRIED, not re-measured — `git diff --name-only` shows no file in any of them | <!-- @rename-keep historical provenance -->
 
 ### THE ROUND DIED FIRST, AND WHAT SURVIVED IS THE POINT
 
@@ -13249,7 +13249,7 @@ Backlog **523 → 555**.
 | **sugar-crush** | **10215 / 156961 / 1 skipped / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** |
 | candy-core | 842 / 7587 / 24 — **NOT re-run**, no lane touched it |
-| candy-flip | 83 / 227 / 2 — **NOT re-run** |
+| candy-flip | 83 / 227 / 2 — **NOT re-run** | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 — **NOT re-run** | <!-- @rename-keep historical provenance -->
 
 > The three untouched packages are carried forward, **not measured**. `git diff --name-only` shows no file
@@ -13391,7 +13391,7 @@ errors. Backlog **492 → 523**.
 | **sugar-crush** | **10126 / 149182 / 1 skipped / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** |
 | candy-core | 842 / 7587 / 24 / rc 0 (untouched) |
-| candy-flip | 83 / 227 / 2 / rc 0 (untouched) |
+| candy-flip | 83 / 227 / 2 / rc 0 (untouched) | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 / rc 0 (untouched) | <!-- @rename-keep historical provenance -->
 
 > **Worklog gap, stated rather than papered over:** rounds 53, 54 and 55 were never written up here; they
@@ -13521,7 +13521,7 @@ hang has not reproduced. Side-prediction (a) holds.
 | sugar-crush assertions ≥ 152,200 | ❌ **149182** |
 | skipped exactly 1 · rc 0 | ✅ |
 | candy-pty ≥ 614 tests | ✅ **630** |
-| candy-core / candy-flip / candy-mosaic unchanged | ✅ | <!-- @rename-keep historical provenance -->
+| candy-core / sugar-animation / candy-mosaic unchanged | ✅ | <!-- @rename-keep historical provenance -->
 | backlog 491 → 512–528 | ✅ **523** |
 | backlog conflicts 3×, one per lane merge | ✅ exactly |
 | a SECOND conflict in `sugar-crush/src/Runtime.php` | ⚠️ **did not happen** — correctly hedged as a risk, and lane b never touched the file |
@@ -13569,7 +13569,7 @@ agents, zero errors.
 |---|---|
 | **sugar-crush** | **10059 / 148589 / 1 / rc 0** |
 | **candy-core** | **842 / 7587 / 24 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** | <!-- @rename-keep -->
 | **candy-mosaic** | **459 / 7753 / 6 / rc 0** | <!-- @rename-keep historical provenance -->
 | **candy-pty** | **610 / 1408 / 16 / 1 warning / rc 0** |
 
@@ -13615,7 +13615,7 @@ session limit, both landing in the fix stage.
 |---|---|
 | **sugar-crush** | **9994 / 144819 / 1 skipped / rc 0** |
 | **candy-core** | **842 / 7573 / 25 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 / rc 0 (untouched since round 52) | <!-- @rename-keep historical provenance -->
 | candy-pty | 606 tests / 16 skipped / 1 warning / rc 0 — **assertions are NOT a constant here (E430); do not quote one as a floor** |
 
@@ -13689,7 +13689,7 @@ an `until grep -q` wait there can be satisfied by work that is not yours.
 |---|---|
 | **sugar-crush** | **9946 / 144269 / 1 / rc 0** |
 | **candy-core** | **819 / 7390 / 25 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 (untouched) | <!-- @rename-keep historical provenance -->
 
 Backlog **394 → 428**: lane ids **E395–E426**, supervisor E427/E428. Skips must stay exactly 1 —

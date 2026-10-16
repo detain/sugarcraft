@@ -18,7 +18,7 @@ LIBS=(
     candy-wish candy-ssh-launcher candy-metrics
     candy-starter candy-tetris super-candy sugar-crush
     candy-git candy-sql candy-codetime
-    candy-minesweeper candy-flip candy-top candy-flappy
+    candy-minesweeper sugar-animation candy-top candy-flappy
 )
 
 if ! command -v gh >/dev/null 2>&1; then

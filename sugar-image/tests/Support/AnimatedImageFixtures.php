@@ -29,7 +29,7 @@ final class AnimatedImageFixtures
      * The LZW image data is not hand-rolled: each frame is rendered through GD's
      * own `imagegif()` and its Image Descriptor + LZW sub-blocks are spliced into
      * the assembly verbatim (mirroring the recipe {@see
-     * \SugarCraft\Flip\Decoder} is built and tested against), so every frame is
+     * \SugarCraft\Animation\Decoder} is built and tested against), so every frame is
      * a real, length-terminated LZW stream GD itself can decode again.
      *
      * Palette index 0 MUST be opaque black: GD's `imagecreate()` claims index 0

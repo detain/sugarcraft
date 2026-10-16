@@ -6,8 +6,8 @@ namespace SugarCraft\GifView\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Flip\Player;
-use SugarCraft\Flip\Renderer;
+use SugarCraft\Animation\Player;
+use SugarCraft\Animation\Renderer;
 use SugarCraft\GifView\Cli;
 
 /**
@@ -88,7 +88,7 @@ final class CliTest extends TestCase
         $exit = Cli::main(['candy-gifview', '/nonexistent/candy-gifview-test-absent.gif'], $stdout, $stderr);
 
         $this->assertSame(1, $exit);
-        // The decoder's own wording (a candy-flip library string) may change;
+        // The decoder's own wording (a sugar-animation library string) may change;
         // "no such file" is the fragment the CLI contract keeps stable.
         $this->assertStringContainsString('no such file', self::drain($stderr));
         $this->assertSame('', self::drain($stdout));

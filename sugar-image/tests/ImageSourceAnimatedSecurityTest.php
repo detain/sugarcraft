@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Flip\Decoder as FlipDecoder;
+use SugarCraft\Animation\Decoder as AnimationDecoder;
 use SugarCraft\Image\ApngDecoder;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Tests\Support\AnimatedImageFixtures as F;
 
 /**
  * Round-2 review regressions for the animated-file ingress (PR #1442). These pin the
- * bypasses the adversarial re-attack demonstrated survived round 1: candy-flip's
+ * bypasses the adversarial re-attack demonstrated survived round 1: sugar-animation's
  * header walk landing on positions the container does not describe (NEW-1 — since
  * flip's `2d5117e1e` resync only its blind fixed-8-byte GCE skip and one-byte advance
  * on an unknown block remain; the clone's parity with flip is pinned in
@@ -71,7 +71,7 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
 
     /**
      * Sanity anchor for the clean-GIF case: on a WELL-FORMED GIF the honest container
-     * count, the flip-walk predictor, and candy-flip's actual return all agree. This is
+     * count, the flip-walk predictor, and sugar-animation's actual return all agree. This is
      * exactly the condition under which the offset-list reconcile PASSES and the loader
      * proceeds — when flip lands on the honest descriptor positions its pixels are
      * trustworthy, so the (now-equal) lists also make the aggregate cost bound exact.
@@ -90,7 +90,7 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
             $gif = F::gif(2, 2, $colors, $frames);
             $path = $this->write("clean{$n}.gif", $gif);
 
-            $actual = count(FlipDecoder::decode($path, 2, 2));
+            $actual = count(AnimationDecoder::decode($path, 2, 2));
 
             self::assertSame($n, $declared($gif), "honest walk of a {$n}-frame GIF");
             self::assertSame($actual, $predicted($gif), "flip-walk prediction must equal flip's real return ({$n}f)");
@@ -99,7 +99,7 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
 
     /**
      * Round-4 CRITICAL-2: a phantom descriptor that preserves the frame COUNT while
-     * shifting a frame POSITION must be refused. candy-flip skips a Graphics Control
+     * shifting a frame POSITION must be refused. sugar-animation skips a Graphics Control
      * Extension by a BLIND fixed 8 bytes regardless of its declared sub-block length, so
      * a GCE whose data is longer than 8 lands flip's cursor INSIDE the extension body —
      * onto a 0x2C that is NOT a real Image Descriptor. Here the honest walk lands on

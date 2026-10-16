@@ -9,7 +9,7 @@ use SugarCraft\GifView\Lang;
 
 /**
  * Tests for the candy-gifview i18n Lang wrapper. The `cli.*` keys moved here
- * from candy-flip when the viewer CLI split out (rename campaign step 1.3).
+ * from sugar-animation when the viewer CLI split out (rename campaign step 1.3).
  */
 final class LangTest extends TestCase
 {

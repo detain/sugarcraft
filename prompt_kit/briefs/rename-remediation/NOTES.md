@@ -7,11 +7,11 @@ d034580dc→4d6f81799, adopted and committed). NEVER pushed (operator authority)
 ## T1 — DescriptorSinkArgumentCensus roster row — DONE
 
 Commit 52b0ce279 `candy-core: census roster row for candy-gifview SizeIoctl::query`.
-- Row shape mirrors the closest sibling (candy-flip Renderer query(1) row):
+- Row shape mirrors the closest sibling (candy-flip Renderer query(1) row): <!-- @rename-keep -->
   LITERAL_INT + judgement prose naming viewportCells(), the stream_isatty(STDOUT)
   gate, and BinSizeQueryPolarityTest (exists in candy-gifview/tests — disk-verified).
 - History claims verified: site arrived via 4d6f81799 (bin split out of
-  candy-flip) after d034580dc fixed the `(int) STDOUT` polarity in the old bin.
+  candy-flip) after d034580dc fixed the `(int) STDOUT` polarity in the old bin. <!-- @rename-keep -->
 - Discrimination: WITH row → `--filter DescriptorSinkArgumentCensus` OK (20T/129A);
   WITHOUT row (file-swapped HEAD version, cp-restore after) → FAILURES naming
   exactly `candy-gifview/src/Cli.php::SizeIoctl::query(1) [LITERAL_INT]` (matches

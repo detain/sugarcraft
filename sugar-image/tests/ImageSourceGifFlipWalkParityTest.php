@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Flip\Decoder as FlipDecoder;
+use SugarCraft\Animation\Decoder as AnimationDecoder;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Tests\Support\AnimatedImageFixtures as F;
 
 /**
- * Pins sugar-image's byte-only clone of candy-flip's GIF header walk
+ * Pins sugar-image's byte-only clone of sugar-animation's GIF header walk
  * (`ImageSource::gifFlipWalkDescriptorOffsets()`) against what flip ACTUALLY does.
  *
  * The clone used to mirror flip's pre-resync walk (image data skipped from
  * descriptor+10, i.e. the LZW minimum-code-size byte read as a sub-block length, no
- * LCT skip). candy-flip fixed its own walk in `2d5117e1e`, so the stale clone made the
+ * LCT skip). sugar-animation fixed its own walk in `2d5117e1e`, so the stale clone made the
  * offset-equality gate in `fromAnimatedFile()` refuse every valid GIF whose LZW data
  * carries full 255-byte sub-blocks — i.e. everything a real encoder emits — with
  * "frame decoder disagrees with the container". The tiny GD fixtures elsewhere in the
@@ -69,15 +69,15 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
         self::assertCount(2, $honest);
         self::assertSame($honest, $this->flipWalk($gif), 'clone must skip the LCT exactly as flip\'s walk does');
 
-        // flip re-assembles each frame as GCE → descriptor → LCT → LZW (candy-flip
+        // flip re-assembles each frame as GCE → descriptor → LCT → LZW (sugar-animation
         // 9da784a81), so every LCT frame decodes, and the walk + count gates agree.
         $this->assertWalksAgreeWithFlip($gif, 2);
 
         // The colours must be the real ones, not a mis-assembled frame GD happened
         // to accept: the same pixels carried in a GLOBAL table are the control.
         $control = $this->noiseGif(2, localTables: false);
-        $lctFrames = FlipDecoder::decode($this->write($gif), 32, 32);
-        $gctFrames = FlipDecoder::decode($this->write($control), 32, 32);
+        $lctFrames = AnimationDecoder::decode($this->write($gif), 32, 32);
+        $gctFrames = AnimationDecoder::decode($this->write($control), 32, 32);
         self::assertCount(2, $lctFrames);
         foreach ($lctFrames as $i => $frame) {
             self::assertSame($gctFrames[$i]->cells, $frame->cells, "LCT frame {$i} must decode to the GCT control's pixels");
@@ -120,8 +120,8 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
             . chr(0x2C) . pack('v', 0) . pack('v', 0) . pack('v', 1) . pack('v', 1);
 
         try {
-            FlipDecoder::decode($this->write($bytes), 4, 4);
-            self::fail('candy-flip is expected to refuse a truncated image descriptor');
+            AnimationDecoder::decode($this->write($bytes), 4, 4);
+            self::fail('sugar-animation is expected to refuse a truncated image descriptor');
         } catch (\RuntimeException) {
             // flip refuses — the clone must agree.
         }
@@ -136,8 +136,8 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
         $bytes = 'GIF89a' . pack('v', 4) . pack('v', 4) . chr(0x87) . chr(0) . chr(0) . str_repeat("\x00", 9);
 
         try {
-            FlipDecoder::decode($this->write($bytes), 4, 4);
-            self::fail('candy-flip is expected to refuse a GCT past EOF');
+            AnimationDecoder::decode($this->write($bytes), 4, 4);
+            self::fail('sugar-animation is expected to refuse a GCT past EOF');
         } catch (\RuntimeException) {
         }
 
@@ -146,7 +146,7 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
     }
 
     /**
-     * Byte-exact drift guard: the clone's offset list must equal the one candy-flip's
+     * Byte-exact drift guard: the clone's offset list must equal the one sugar-animation's
      * own `Decoder::parseHeader()` computes, on every committed GIF fixture (including
      * the round-4 attacker artifacts) and on the encoder-shaped GIFs built here. If flip
      * changes its walk again this goes red before the loader's gate starts refusing
@@ -163,14 +163,14 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
         $cases['noise-lct'] = $this->noiseGif(2, localTables: true);
         $cases['gd-10f']    = F::gif(2, 2, [[0, 0, 0], [255, 0, 0]], array_fill(0, 10, ['pixels' => [1, 0, 0, 1], 'delay' => 5]));
 
-        $parse = new \ReflectionMethod(FlipDecoder::class, 'parseHeader');
+        $parse = new \ReflectionMethod(AnimationDecoder::class, 'parseHeader');
         foreach ($cases as $name => $bytes) {
             /** @var array{frameInfos: list<array{offset: int}>} $header */
             $header = $parse->invoke(null, $bytes);
             self::assertSame(
                 array_column($header['frameInfos'], 'offset'),
                 $this->flipWalk($bytes),
-                "clone diverges from candy-flip's parseHeader() on {$name}",
+                "clone diverges from sugar-animation's parseHeader() on {$name}",
             );
         }
     }
@@ -182,7 +182,7 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
 
         self::assertCount($frames, $honest);
         self::assertSame($honest, $clone, 'clone of flip\'s walk must land on the honest descriptor offsets');
-        self::assertCount($frames, FlipDecoder::decode($this->write($gif), (int) unpack('v', $gif, 6)[1], (int) unpack('v', $gif, 8)[1]));
+        self::assertCount($frames, AnimationDecoder::decode($this->write($gif), (int) unpack('v', $gif, 6)[1], (int) unpack('v', $gif, 8)[1]));
     }
 
     /**

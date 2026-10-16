@@ -274,7 +274,7 @@ video file (mp4/gif/avi/webm)
                     └────────────────────────┘
 ```
 
-- **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps candy-flip's pure-PHP GIF decoder.
+- **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps sugar-animation's pure-PHP GIF decoder.
 - **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses candy-palette for color mapping. Delta repaint via candy-buffer.
 - **Pace:** `Cmd::tick()` wall-clock alignment via `Sync`, no busy-waiting.
 - **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio master clock.
@@ -290,7 +290,7 @@ three terminal-video projects, credited here:
 
 The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented: [sugar-image](../sugar-image) (image → cell renderers),
-[candy-flip](../candy-flip) (downsampling / dithering), [candy-palette](../candy-palette)
+[sugar-animation](../sugar-animation) (downsampling / dithering), [candy-palette](../candy-palette)
 (color mapping), and [candy-core](../candy-core) (Model–Update–View runtime + frame pacing).
 
 ## Known limitations

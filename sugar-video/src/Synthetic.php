@@ -8,7 +8,7 @@ namespace SugarCraft\Video;
  * Synthetic animated test-pattern generator.
  *
  * Produces a valid GIF89a with multiple phase-shifted gradient frames so
- * that candy-flip's GifDecoder can extract and display an animated sequence.
+ * that sugar-animation's GifDecoder can extract and display an animated sequence.
  * This is the single source of truth for the built-in demo pattern used by
  * both Reel::new()->play() and examples/play.php.
  *
@@ -97,7 +97,7 @@ final class Synthetic
         // Image Descriptor + LZW data, and a 0x3B trailer. Concatenating them
         // naively goes wrong three ways, all of which this assembly avoids:
         //   - frame 0's trailer left in place ends the stream after one frame,
-        //     so every decoder (candy-flip's included) sees a still image;
+        //     so every decoder (sugar-animation's included) sees a still image;
         //   - each frame's indices point into that frame's palette, so frames
         //     1..n must carry their palette along as a Local Color Table —
         //     dropping it repaints them through frame 0's palette;

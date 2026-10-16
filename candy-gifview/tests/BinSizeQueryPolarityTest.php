@@ -5,7 +5,7 @@
  * gate in front of it.
  *
  * The bug these guard (inherited with the bin when the viewer CLI split out of
- * candy-flip, rename campaign step 1.3): the old `bin/candy-flip` ran
+ * sugar-animation, rename campaign step 1.3): the old `bin/sugar-animation` ran
  * `SizeIoctl::query((int) STDOUT)` behind a `posix_isatty(STDOUT)` check. An
  * `(int)` cast of a PHP stream yields its RESOURCE ID, not its file descriptor
  * — measured, PHP 8.3.6, `(int) STDOUT` is 2, and descriptor 2 is STDERR. The
@@ -13,7 +13,7 @@
  * about STDERR: `php candy-gifview demo.gif 2>err.log` — a routine
  * invocation — died with `RuntimeException: Cannot query size of non-tty fd`
  * on a live terminal. Renderer::withAdaptiveSize() carried exactly this defect
- * and is pinned by RendererAdaptiveSizeDescriptorTest in candy-flip; the bin
+ * and is pinned by RendererAdaptiveSizeDescriptorTest in sugar-animation; the bin
  * was the sibling that never got the fix.
  *
  * The size query now lives in `src/Cli.php::viewportCells()`, spelling

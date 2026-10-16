@@ -31,14 +31,14 @@ Accumulated patterns and gotchas specific to this library.
 - **[Kitty chunk size]** Protocol specifies max 4096 bytes per chunk.
   Round down to 4092 to account for base64 padding overhead.
 - **[Animated GIFs]** (step 11.04 / PR#660) Animation lives in
-  `sugar-image` — not `candy-flip`. `Animation` is frame-source-agnostic:
+  `sugar-image` — not `sugar-animation`. `Animation` is frame-source-agnostic:
   ctor takes `list<ImageSource>` (any grid-backed image, not just GIFs).
-  ~~sugar-image does **not** depend on candy-flip. A future GIF→Mosaic bridge
-  (decoding GIF frames into `ImageSource[]`) lives in candy-flip if needed.~~
-  **SUPERSEDED by #18:** `ImageSource::fromAnimatedFile()` now pulls candy-flip
+  ~~sugar-image does **not** depend on sugar-animation. A future GIF→Mosaic bridge
+  (decoding GIF frames into `ImageSource[]`) lives in sugar-animation if needed.~~
+  **SUPERSEDED by #18:** `ImageSource::fromAnimatedFile()` now pulls sugar-animation
   in as a `require`-only sibling dep to bridge GIF frames into `ImageSource[]`
   (no `repositories[]` in the lib manifest). See the #18 entry below for the
-  frame-layout (offset-list) reconcile / cost-bound hardening and the blocking candy-flip
+  frame-layout (offset-list) reconcile / cost-bound hardening and the blocking sugar-animation
   multi-frame decode bug it works around.
 - **[pattern:animation-value-object]** `Animation` is an immutable
   readonly value object: `list<ImageSource> $frames` + `list<int> $delaysMs`.
@@ -134,8 +134,8 @@ kept as design rationale for what shipped._
 
 - **#18 GIF/APNG multi-frame decode (IMPLEMENTED).** New
   `ImageSource::fromAnimatedFile(string $path, int $maxPixels = self::MAX_PIXELS): Animation`
-  sniffs the container: GIF87a/89a → `SugarCraft\Flip\Decoder` (**added
-  `sugarcraft/candy-flip` as a `require` line ONLY — no `repositories[]` in the
+  sniffs the container: GIF87a/89a → `SugarCraft\Animation\Decoder` (**added
+  `sugarcraft/sugar-animation` as a `require` line ONLY — no `repositories[]` in the
   committed manifest per the split-repo rule; CI injects the path-repo closure**);
   animated PNG (acTL before IDAT/IEND) → the new `@internal ApngDecoder` (pure-PHP
   fcTL/fdAT walk over the PNG container, zlib-inflate + per-row unfilter, a real
@@ -159,7 +159,7 @@ kept as design rationale for what shipped._
    on `strlen() === $expected` (PNG scanline matrices are exact) so an oversized
    stream is refused rather than materialised. The loader caps the file READ at
    `ImageSource::MAX_BYTES` (a pixel budget cannot, because bytes must be resident
-   before geometry is inspectable). **candy-flip GIF walk (resynced upstream in
+   before geometry is inspectable). **sugar-animation GIF walk (resynced upstream in
    `2d5117e1e` — keep the clone in lockstep):** `Flip\Decoder::parseHeader` used to
    skip image data from descriptor+10 (reading the LZW min-code-size byte as a
    sub-block length, no LCT skip); it now skips `$i + 11 + $lctBytes` and throws on a
@@ -172,7 +172,7 @@ kept as design rationale for what shipped._
    flip's walk changes again that test goes red first. Remaining flip quirks the clone
    mirrors: blind fixed-8-byte GCE skip, one-byte advance on an unknown block, 256-frame
    slice. flip's `assembleFrameGif()` once wrote a frame's LCT BEFORE its image
-   descriptor, so GD rejected every LCT frame; fixed in candy-flip `9da784a81`, and
+   descriptor, so GD rejected every LCT frame; fixed in sugar-animation `9da784a81`, and
    `testGifWithLocalColourTablesPassesLayoutGate` now asserts LCT GIFs decode to every
    frame with the same pixels as a GCT control — no try/catch tolerance left.
       mosaic walks GIF image descriptors TWICE with byte-only structural passes (no
@@ -213,11 +213,11 @@ kept as design rationale for what shipped._
       translated `animation.gif_decode_failed`. A post-decode `$declared !== count($flipFrames)`
       reconcile is retained as defence in depth (`animation.gif_frame_count_mismatch`,
       round-1 C2), though equality makes it unreachable in practice.
-      **Net product consequence (blocking sibling finding):** because candy-flip silently
+      **Net product consequence (blocking sibling finding):** because sugar-animation silently
       mis-decodes most real multi-frame GIFs (an ffmpeg 10-frame GIF arrives as ~2), and
       mosaic now refuses whenever flip's walk diverges from the honest one, the animated-GIF
       path is **safe-but-inert** for real-world multi-frame GIFs; full support needs the
-      one-byte candy-flip header-walk fix, which is out of this lib's authority. The APNG
+      one-byte sugar-animation header-walk fix, which is out of this lib's authority. The APNG
       path is fully functional (pure-PHP decode, no sibling dependency).
 
     **Sixel DCS-state safety (rounds 1-2):** a sixel payload is exactly one DCS, so a

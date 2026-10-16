@@ -48,7 +48,7 @@ called out in the table below.
 | **CandyLog** (`candy-log/`) | 🟢 ready | Minimal, colorful logging library. |
 | **CandyPalette** (`candy-palette/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
-| **CandyFlip** (`candy-flip/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
+| **SugarAnimation** (`sugar-animation/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
 | **CandyVt** (`candy-vt/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
 | **CandyAnsi** (`candy-ansi/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into CandyVt for cell-grid rendering. |
 | **CandyBuffer** (`candy-buffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
@@ -95,7 +95,7 @@ called out in the table below.
 | **CandySql** (`candy-sql/`) | 🟢 ready | SQLite/MySQL/PostgreSQL client TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
 | **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL on disk. |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
-| **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF + .ansi-art viewer CLI (ext-gd via candy-flip) — port of gifterm. |
+| **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF + .ansi-art viewer CLI (ext-gd via sugar-animation) — port of gifterm. |
 | **SugarVideo** (`sugar-video/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
 | **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a HoneyBounce projectile. |

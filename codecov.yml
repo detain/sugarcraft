@@ -122,8 +122,8 @@ flag_management:
     - name: candy-minesweeper
       paths: ["candy-minesweeper/src/**"]
       carryforward: true
-    - name: candy-flip
-      paths: ["candy-flip/src/**"]
+    - name: sugar-animation
+      paths: ["sugar-animation/src/**"]
       carryforward: true
     - name: candy-gifview
       paths: ["candy-gifview/src/**"]
@@ -397,12 +397,12 @@ component_management:
         - "candy-minesweeper/src/**"
       flag_regexes:
         - "^candy-minesweeper$"
-    - component_id: candy-flip
-      name: candy-flip
+    - component_id: sugar-animation
+      name: sugar-animation
       paths:
-        - "candy-flip/src/**"
+        - "sugar-animation/src/**"
       flag_regexes:
-        - "^candy-flip$"
+        - "^sugar-animation$"
     - component_id: candy-gifview
       name: candy-gifview
       paths:

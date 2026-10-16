@@ -10,7 +10,7 @@ use SugarCraft\Video\Render\Mode;
  * Interface for video decoders that produce RgbFrame objects.
  *
  * Implementations wrap external tools (ffmpeg) or pure-PHP libraries
- * (candy-flip for GIF) to decode video into a cell-grid of RGB pixels.
+ * (sugar-animation for GIF) to decode video into a cell-grid of RGB pixels.
  */
 interface Decoder
 {

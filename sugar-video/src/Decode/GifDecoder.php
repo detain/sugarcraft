@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Decode;
 
-use SugarCraft\Flip\Decoder as FlipDecoder;
-use SugarCraft\Flip\Frame as FlipFrame;
+use SugarCraft\Animation\Decoder as AnimationDecoder;
+use SugarCraft\Animation\Frame as AnimationFrame;
 use SugarCraft\Video\Lang;
 use SugarCraft\Video\Render\Mode;
 
 /**
- * Decoder implementation that wraps candy-flip's pure-PHP GIF decoder.
+ * Decoder implementation that wraps sugar-animation's pure-PHP GIF decoder.
  *
- * Uses FlipDecoder::decode() to get a list of FlipFrame objects, then
+ * Uses AnimationDecoder::decode() to get a list of AnimationFrame objects, then
  * converts each frame's cell grid to an RgbFrame:
- *   - FlipFrame::$cells is list<list<array{0:int,1:int,2:int}|null>>
+ *   - AnimationFrame::$cells is list<list<array{0:int,1:int,2:int}|null>>
  *   - null cells become black [0, 0, 0]
  *   - Each row is left-to-right, top-to-bottom scanning
  *   - The decode height is cellsH * $mode->rowsPerCell() so a GIF frame has the
@@ -26,7 +26,7 @@ use SugarCraft\Video\Render\Mode;
  */
 final class GifDecoder implements Decoder
 {
-    /** @var list<FlipFrame> */
+    /** @var list<AnimationFrame> */
     private array $frames = [];
 
     private int $frameIndex = 0;
@@ -72,7 +72,7 @@ final class GifDecoder implements Decoder
      */
     public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
-        // A GIF is decoded from a local file by candy-flip, not fetched, so HTTP
+        // A GIF is decoded from a local file by sugar-animation, not fetched, so HTTP
         // request headers never apply here. They are accepted (interface parity with
         // the ffmpeg path) and dropped — but said so out loud, not silently, so a
         // caller who believed credentials were being sent for a GIF source learns the
@@ -87,7 +87,7 @@ final class GifDecoder implements Decoder
         $this->cellsH = $cellsH;
         $this->frameIndex = 0;
 
-        // Decode the GIF using candy-flip's pure-PHP decoder, at the resolution the
+        // Decode the GIF using sugar-animation's pure-PHP decoder, at the resolution the
         // render mode needs: graphics modes want full pixel resolution; the text
         // modes scale the cell grid by their source-pixels-per-cell packing.
         if ($mode?->isGraphics() ?? false) {
@@ -100,13 +100,13 @@ final class GifDecoder implements Decoder
             [$decodeW, $decodeH] = [$cellsW * ($mode?->colsPerCell() ?? 1), $cellsH * ($mode?->rowsPerCell() ?? 2)];
         }
 
-        // A3b guard: candy-flip documents RuntimeException, but an older vendored
+        // A3b guard: sugar-animation documents RuntimeException, but an older vendored
         // copy (or a new crafted-header shape) could still leak a raw ValueError
         // from imagecreatetruecolor(). Reel's decoder contract is RuntimeException
         // (see FfmpegDecoder), so translate narrowly instead of letting the
         // engine-level error class escape.
         try {
-            $this->frames = FlipDecoder::decode($source, $decodeW, $decodeH);
+            $this->frames = AnimationDecoder::decode($source, $decodeW, $decodeH);
         } catch (\ValueError $e) {
             throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
         }
@@ -128,19 +128,19 @@ final class GifDecoder implements Decoder
             return null;
         }
 
-        $flipFrame = $this->frames[$this->frameIndex++];
-        return $this->flipFrameToRgbFrame($flipFrame);
+        $animationFrame = $this->frames[$this->frameIndex++];
+        return $this->animationFrameToRgbFrame($animationFrame);
     }
 
     /**
-     * The grid candy-flip is actually asked for on the graphics path.
+     * The grid sugar-animation is actually asked for on the graphics path.
      *
      * THE BUG THIS CLOSES: `php examples/play.php synthetic sixel` died with
-     * `candy-flip: cell grid product exceeds maximum (100000)`. The graphics
+     * `sugar-animation: cell grid product exceeds maximum (100000)`. The graphics
      * branch asked for the terminal's full pixel box — 80×24 cells at the
-     * default 10×20 cell geometry is 800×480, or 384,000 — and candy-flip
-     * caps a decode at {@see FlipDecoder::MAX_CELLS}. That cap is not
-     * arbitrary: candy-flip area-averages in PHP, one `imagecolorat()` per
+     * default 10×20 cell geometry is 800×480, or 384,000 — and sugar-animation
+     * caps a decode at {@see AnimationDecoder::MAX_CELLS}. That cap is not
+     * arbitrary: sugar-animation area-averages in PHP, one `imagecolorat()` per
      * source pixel per cell, so 384k cells would have been a multi-second,
      * multi-gigabyte way to fail instead of an instant one.
      *
@@ -151,7 +151,7 @@ final class GifDecoder implements Decoder
      *     real resolution — every one of those pixels is invented by the
      *     slowest resampler in the stack. The upscale to the terminal's box
      *     happens later, in C, in {@see upscaleToTarget()}.
-     *  2. candy-flip's cap, for the case where the source genuinely is huge.
+     *  2. sugar-animation's cap, for the case where the source genuinely is huge.
      *
      * @return array{0:int,1:int}
      */
@@ -167,8 +167,8 @@ final class GifDecoder implements Decoder
             $h = max(1, (int) round($h * $scale));
         }
 
-        if ($w * $h > FlipDecoder::MAX_CELLS) {
-            $scale = sqrt(FlipDecoder::MAX_CELLS / ($w * $h));
+        if ($w * $h > AnimationDecoder::MAX_CELLS) {
+            $scale = sqrt(AnimationDecoder::MAX_CELLS / ($w * $h));
             $w = max(1, (int) floor($w * $scale));
             $h = max(1, (int) floor($h * $scale));
         }
@@ -238,14 +238,14 @@ final class GifDecoder implements Decoder
     }
 
     /**
-     * Convert a FlipFrame to an RgbFrame.
+     * Convert a AnimationFrame to an RgbFrame.
      *
-     * @param FlipFrame $flipFrame
+     * @param AnimationFrame $animationFrame
      * @return RgbFrame
      */
-    private function flipFrameToRgbFrame(FlipFrame $flipFrame): RgbFrame
+    private function animationFrameToRgbFrame(AnimationFrame $animationFrame): RgbFrame
     {
-        $cells = $flipFrame->cells;
+        $cells = $animationFrame->cells;
         $h = count($cells);
         $w = $h > 0 ? count($cells[0]) : 0;
 
@@ -266,7 +266,7 @@ final class GifDecoder implements Decoder
         }
 
         // Graphics modes: hand back the terminal's full pixel box, not the
-        // (deliberately smaller) grid candy-flip was asked for. A GD failure
+        // (deliberately smaller) grid sugar-animation was asked for. A GD failure
         // degrades to the raw grid rather than killing playback — the image
         // lands small, which is visible and survivable, unlike a fatal.
         if ($this->targetW > 0 && ($w !== $this->targetW || $h !== $this->targetH) && $w > 0 && $h > 0) {

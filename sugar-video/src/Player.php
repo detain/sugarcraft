@@ -51,7 +51,7 @@ use SugarCraft\Video\Subtitle\WebVtt;
  *   m          — cycle rendering mode
  *   q / Esc    — quit
  *
- * Mirrors the TEA player structure in candy-flip/src/Player.php but
+ * Mirrors the TEA player structure in sugar-animation/src/Player.php but
  * adapted for continuous video rather than discrete GIF frames.
  */
 final class Player implements Model

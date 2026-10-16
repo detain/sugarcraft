@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Top\View;
 
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Flip\AnsiArt;
-use SugarCraft\Flip\ArtLibrary;
+use SugarCraft\Animation\AnsiArt;
+use SugarCraft\Animation\ArtLibrary;
 
 /**
  * The animated/logo alternative to the block-letter {@see Banner}: ANSI art
- * from candy-flip, re-picked every time a menu opens (the App calls
+ * from sugar-animation, re-picked every time a menu opens (the App calls
  * {@see pick()} again on each transition into the main, options or help
  * menu) and painted in place of the banner.
  *

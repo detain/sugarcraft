@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Flip\Decoder as FlipDecoder;
+use SugarCraft\Animation\Decoder as AnimationDecoder;
 use SugarCraft\Video\Decode\Decoder;
 use SugarCraft\Video\Decode\DecoderFactory;
 use SugarCraft\Video\Decode\GifDecoder;
@@ -321,11 +321,11 @@ final class GifDecoderTest extends TestCase
 
     /**
      * REGRESSION. `php examples/play.php synthetic sixel` died outright with
-     * `candy-flip: cell grid product exceeds maximum (100000)`.
+     * `sugar-animation: cell grid product exceeds maximum (100000)`.
      *
      * An ordinary 80×24 terminal at the default 10×20 cell box is 800×480 =
-     * 384,000 — six times {@see FlipDecoder::MAX_CELLS} — and the graphics
-     * branch handed that straight to candy-flip as a CELL grid, which it
+     * 384,000 — six times {@see AnimationDecoder::MAX_CELLS} — and the graphics
+     * branch handed that straight to sugar-animation as a CELL grid, which it
      * area-averages one `imagecolorat()` at a time. So every graphics mode
      * was unusable on any real terminal size, not merely slow.
      *
@@ -333,7 +333,7 @@ final class GifDecoderTest extends TestCase
      * {@see \SugarCraft\Video\Render\GraphicsRenderer} recovers the cell
      * footprint by dividing that size by the cell geometry.
      *
-     * @testdox a graphics decode larger than candy-flip's cap still yields a full-box frame
+     * @testdox a graphics decode larger than sugar-animation's cap still yields a full-box frame
      */
     public function testGraphicsModeAboveFlipCellCapStillDecodes(): void
     {
@@ -350,7 +350,7 @@ final class GifDecoderTest extends TestCase
         $decoder->close();
 
         $this->assertNotNull($frame);
-        $this->assertGreaterThan(FlipDecoder::MAX_CELLS, 800 * 480, 'the box under test must exceed the cap, or this proves nothing');
+        $this->assertGreaterThan(AnimationDecoder::MAX_CELLS, 800 * 480, 'the box under test must exceed the cap, or this proves nothing');
         $this->assertSame(800, $frame->w);
         $this->assertSame(480, $frame->h);
         // Presented as PNG, like FfmpegDecoder's graphics frames: rebuilding an

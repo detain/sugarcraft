@@ -7,8 +7,8 @@ namespace SugarCraft\Image;
 use React\Http\Browser;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Flip\Decoder as FlipDecoder;
-use SugarCraft\Flip\Frame as FlipFrame;
+use SugarCraft\Animation\Decoder as AnimationDecoder;
+use SugarCraft\Animation\Frame as AnimationFrame;
 
 use function React\Promise\reject;
 
@@ -38,14 +38,14 @@ final class ImageSource
     public const MAX_BYTES = 67_108_864;
 
     /**
-     * candy-flip's internal cell-grid ceiling (its `Decoder::MAX_CELLS`). Exposed
+     * sugar-animation's internal cell-grid ceiling (its `Decoder::MAX_CELLS`). Exposed
      * here so {@see self::fromAnimatedFile()} can refuse an over-large GIF with a
      * clear mosaic-owned message rather than surfacing flip's exception mid-decode.
      */
     private const FLIP_MAX_CELLS = 100_000;
 
     /**
-     * candy-flip slices a GIF's frame list to this many, so it can never materialise
+     * sugar-animation slices a GIF's frame list to this many, so it can never materialise
      * more. Mirrored by {@see self::gifFlipWalkDescriptorOffsets()} so the predictor's
      * walk halts on the same frame the sibling's slice discards — keeping the two offset
      * lists comparable up to that cap.
@@ -53,7 +53,7 @@ final class ImageSource
     private const FLIP_FRAME_CAP = 256;
 
     /**
-     * Ceiling on the total cell footprint candy-flip will be asked to build for a
+     * Ceiling on the total cell footprint sugar-animation will be asked to build for a
      * GIF (`width × height × frameCount`). flip stores one PHP array per cell — measured
      * at ~250 bytes each, FAR heavier than a packed RGBA buffer — so
      * {@see self::MAX_PIXELS} (tuned for the packed path) alone lets an honest,
@@ -461,7 +461,7 @@ final class ImageSource
      * frame and an APNG decodes as its base image — so animation is decoded by
      * hand through the two container walks this library owns a dependency on:
      *
-     *   • GIF  → candy-flip's pure-PHP LZW decoder ({@see \SugarCraft\Flip\Decoder}),
+     *   • GIF  → sugar-animation's pure-PHP LZW decoder ({@see \SugarCraft\Animation\Decoder}),
      *     requested at the GIF's own pixel dimensions so a frame is 1:1 with the
      *     source (no resample loss) and flip's disposal compositing already baked
      *     in. flip speaks centiseconds; this converts to the milliseconds that
@@ -562,7 +562,7 @@ final class ImageSource
      * POSIX offers no non-blocking `fopen()`/`O_NONBLOCK` path through PHP's stream
      * layer, and any later re-open of `$path` would re-expose the same window. This is
      * why {@see self::animatedFramesFromGif()} decodes from the bytes read HERE and hands
-     * candy-flip a private temp copy (round-4 HIGH): the attacker-reachable path is
+     * sugar-animation a private temp copy (round-4 HIGH): the attacker-reachable path is
      * opened at most once, so a post-read swap cannot be re-followed. Closing the last
      * microsecond needs O_NONBLOCK at the host/loader boundary, out of scope for a
      * pure-PHP library; callers must not point `$path` at attacker-writable directories.
@@ -627,7 +627,7 @@ final class ImageSource
     }
 
     /**
-     * Decode a GIF via candy-flip into a validated {@see Animation}.
+     * Decode a GIF via sugar-animation into a validated {@see Animation}.
      *
      * @throws \InvalidArgumentException  on an unreadable header or an over-ceiling
      *                                    per-frame/aggregate pixel count
@@ -656,7 +656,7 @@ final class ImageSource
         // Per-frame ceiling on the logical-screen size, before flip allocates.
         self::guardPixelCount($w, $h, $maxPixels);
 
-        // candy-flip renders one cell per pixel and caps its cell grid at 100k, so
+        // sugar-animation renders one cell per pixel and caps its cell grid at 100k, so
         // a GIF above ~316×316 is unloadable by it. Fail loud with a mosaic-owned,
         // translated reason instead of leaking flip's untranslated RuntimeException.
         if ($w * $h > self::FLIP_MAX_CELLS) {
@@ -671,12 +671,12 @@ final class ImageSource
         //   • $honestOffsets — the spec-correct walk: skips the LCT AND the mandatory LZW
         //                    minimum-code-size byte. This is the container's true frame
         //                    layout (count + positions).
-        //   • $flipOffsets   — a mirror of candy-flip's OWN header walk, reproducing its
+        //   • $flipOffsets   — a mirror of sugar-animation's OWN header walk, reproducing its
         //                    blind fixed-8-byte GCE skip, its one-byte advance on an
         //                    unknown block, and its 256-frame slice (byte-exact parity
         //                    with flip is pinned by ImageSourceGifFlipWalkParityTest).
         //
-        // candy-flip only emits trustworthy pixels when its walk lands on EXACTLY the
+        // sugar-animation only emits trustworthy pixels when its walk lands on EXACTLY the
         // same descriptor positions a correct walk does. So the authoritative gate is
         // the ORDERED OFFSET LISTS being equal (round-4 CRITICAL-2), NOT the counts: a
         // phantom descriptor forged into a GCE region can preserve the frame COUNT while
@@ -774,7 +774,7 @@ final class ImageSource
      * minimum-code-size byte before following the image-data sub-blocks, and — unlike the
      * sibling header walk — follows a GCE by its declared sub-block length and throws on
      * an unknown block. The offsets (not just the count) let the
-     * loader reconcile frame POSITIONS against candy-flip's walk, so a phantom
+     * loader reconcile frame POSITIONS against sugar-animation's walk, so a phantom
      * descriptor that happens to preserve the frame count cannot masquerade as a valid
      * frame (round-4 CRITICAL-2: `{33,68,91}` vs flip's `{33,56,91}`).
      *
@@ -858,7 +858,7 @@ final class ImageSource
     }
 
     /**
-     * How many image-descriptor frames candy-flip's header walk records for this GIF —
+     * How many image-descriptor frames sugar-animation's header walk records for this GIF —
      * `count(self::gifFlipWalkDescriptorOffsets())`. Retained as a thin int wrapper for
      * tests that assert the predictor/flip frame-count relationship directly; the
      * production loader reconciles the offset LIST, not this count.
@@ -869,8 +869,8 @@ final class ImageSource
     }
 
     /**
-     * The exact image-descriptor byte offsets candy-flip's header walk lands on — a
-     * byte-only clone of `SugarCraft\Flip\Decoder::parseHeader()` as of flip's walk
+     * The exact image-descriptor byte offsets sugar-animation's header walk lands on — a
+     * byte-only clone of `SugarCraft\Animation\Decoder::parseHeader()` as of flip's walk
      * resync (`2d5117e1e`). Since that fix flip skips image data correctly (LCT sized
      * from the descriptor's packed byte, then the LZW minimum-code-size byte, then the
      * sub-blocks), and it throws on a global colour table or an image descriptor that
@@ -881,7 +881,7 @@ final class ImageSource
      * sliced to {@see self::FLIP_FRAME_CAP}.
      *
      * Load-bearing role (round-4): the ORDERED OFFSET LIST is reconciled against the
-     * honest {@see self::gifHonestDescriptorOffsets()}. candy-flip only emits trustworthy
+     * honest {@see self::gifHonestDescriptorOffsets()}. sugar-animation only emits trustworthy
      * pixels when its walk lands on exactly the same descriptor positions a spec-correct
      * walk does. A phantom descriptor that preserves the frame COUNT while shifting a
      * POSITION (round-4 CRITICAL-2: honest `{33,68,91}` vs flip `{33,56,91}`, reachable
@@ -954,7 +954,7 @@ final class ImageSource
     }
 
     /**
-     * candy-flip's sub-block walk: read a length byte, stop on 0 or on a length that
+     * sugar-animation's sub-block walk: read a length byte, stop on 0 or on a length that
      * would run past the end. Returns the offset of the byte after the last block.
      */
     private static function flipSkipSubBlocks(string $bytes, int $j, int $len): int
@@ -975,19 +975,19 @@ final class ImageSource
     }
 
     /**
-     * Drive candy-flip's decoder over the ALREADY-VALIDATED bytes via a private,
+     * Drive sugar-animation's decoder over the ALREADY-VALIDATED bytes via a private,
      * 0600, unique temp file, under a temporary error handler so a corrupt GIF
      * (which trips GD/`imagecreatefromstring` warnings inside the sibling) and any
      * foreign exception surface as one clean, translated fail-fast rather than warning
      * text sprayed across a terminal or an untranslated RuntimeException.
      *
      * Writing to a fresh temp file (rather than passing the caller's `$path`) closes the
-     * cross-open TOCTOU: candy-flip re-reads the file by name, so a swap of the original
+     * cross-open TOCTOU: sugar-animation re-reads the file by name, so a swap of the original
      * path after our bounded read could otherwise hand it an arbitrarily large file
      * (bypassing `MAX_BYTES`) and size its canvas from the re-read header (round-4 HIGH).
      * The temp inode is private, unlink-on-exit, and holds exactly the bytes we audited.
      *
-     * @return list<FlipFrame>
+     * @return list<AnimationFrame>
      */
     private static function decodeGifFramesFromBytesSafely(string $bytes, int $w, int $h): array
     {
@@ -1012,7 +1012,7 @@ final class ImageSource
             };
             set_error_handler($handler);
             try {
-                $frames = FlipDecoder::decode($tmp, $w, $h);
+                $frames = AnimationDecoder::decode($tmp, $w, $h);
             } catch (\Throwable $e) {
                 throw new \InvalidArgumentException(Lang::t('animation.gif_decode_failed', [
                     'reason' => $e->getMessage(),
@@ -1028,10 +1028,10 @@ final class ImageSource
     }
 
     /**
-     * Convert one candy-flip frame (a cell grid of RGB triples or null) to an
+     * Convert one sugar-animation frame (a cell grid of RGB triples or null) to an
      * RGBA PNG-backed {@see ImageSource}. Null cells become fully transparent.
      */
-    private static function gifFrameToImageSource(FlipFrame $frame, int $w, int $h, int $maxPixels): self
+    private static function gifFrameToImageSource(AnimationFrame $frame, int $w, int $h, int $maxPixels): self
     {
         $cells = $frame->cells;
         $bytes = '';

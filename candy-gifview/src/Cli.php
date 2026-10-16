@@ -6,17 +6,17 @@ namespace SugarCraft\GifView;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
-use SugarCraft\Flip\Decoder;
-use SugarCraft\Flip\Player;
-use SugarCraft\Flip\Renderer;
+use SugarCraft\Animation\Decoder;
+use SugarCraft\Animation\Player;
+use SugarCraft\Animation\Renderer;
 use SugarCraft\Pty\SizeIoctl;
 
 /**
  * Command-line entry point: parse argv, size the decode grid to the viewport,
- * hand the frames to candy-flip's Player, and run the SugarCraft Program.
+ * hand the frames to sugar-animation's Player, and run the SugarCraft Program.
  *
  * Mirrors charmbracelet-style gifterm front-end behaviour; extracted verbatim
- * from candy-flip's `bin/candy-flip` when the viewer CLI split out into this
+ * from sugar-animation's `bin/sugar-animation` when the viewer CLI split out into this
  * app package (rename campaign step 1.3). The bin is a two-line shim over
  * {@see main()} so every branch here is testable in-process.
  */

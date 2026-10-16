@@ -1,6 +1,6 @@
 https://sugarcraft.github.io/lib/candy-layout.html
 https://sugarcraft.github.io/lib/sugar-video.html
-https://sugarcraft.github.io/lib/candy-flip.html
+https://sugarcraft.github.io/lib/sugar-animation.html
 https://sugarcraft.github.io/lib/sugar-panels.html
 https://sugarcraft.github.io/lib/sugar-navstack.html
 https://sugarcraft.github.io/lib/sugar-dashboard.html

@@ -1,0 +1,734 @@
+# sugar-animation vs sugar-image — image-output split strategic plan
+
+**Status:** plan-only · **Owner:** product call → phase-7/phase-9 implementers · **Branch:** `ai/plan-sugar-animation-mosaic-split`
+
+**Origin:** `plans/leftover_updates_later.md` §6 strategic-decision items ·
+`plans/leftover_updates_later.md` §3 sugar-animation P10 + sugar-image P2 #8 ·
+`plans/leftover/phase-11-strategic-plans/step-04-sugar-animation-mosaic-split.md`
+
+> This document does **not** ship code. It is a decision memo defining
+> the responsibility boundary between `sugar-animation` (frame source) and
+> `sugar-image` (terminal-protocol output) so that step 07.15
+> (sugar-image animation support) and steps 09.01–09.03 (sugar-animation
+> quality + adaptive sizing) can land without re-litigating the
+> overlap. The single decision below unblocks step 07.15.
+
+---
+
+## TL;DR
+
+**Decision (for step 07.15): mosaic animation lives in `sugar-image`.**
+The animation type, frame timing, and per-frame renderer dispatch all
+land under `sugar-image/src/`. `sugar-animation` does **not** grow a
+Kitty / iTerm2 / WezTerm / Sixel output path; its `Renderer` stays as
+the ASCII-block fallback emitter it already is.
+
+**Direction of the dependency:** `sugar-image` does **not** depend on
+`sugar-animation`. Step 07.15's draft suggested adding
+`"sugarcraft/sugar-animation": "@dev"` to `sugar-image/composer.json`
+"IF the split says so" — the split says **no**. Reverse coupling
+(`sugar-animation` → `sugar-image`) is fine for a future "play this GIF
+through the best available protocol" demo and does not affect the
+07.15 scope.
+
+**Shape of the contract:** step 07.15 creates a frame-agnostic
+`Animation` value object in `sugar-image` whose constructor takes
+an ordered list of `ImageSource` + per-frame delay (ms). The
+animation does not know or care that the frames came from a GIF,
+an MP4 export, or a procedural generator. A trivial bridge function
+in `sugar-animation` (next-phase step 09.04, not 07.15) can adapt a
+`sugar-animation\Frame[]` list to `sugar-image\Animation` when someone
+wants to play a GIF through Kitty / iTerm2 / Sixel — but the bridge
+lives in `sugar-animation` (the upstream-of-mosaic lib) and is purely
+additive.
+
+The 30-second test: if a downstream consumer wants to play an MP4
+export, a procedural CA fractal, or a real-time video feed through
+Kitty graphics, they should not be forced through a GIF-decoder
+detour. `Animation` is therefore decoupled from `Frame`.
+
+---
+
+## 1. Current state — what shipped
+
+### 1.1 sugar-animation today (the GIF viewer)
+
+`sugar-animation/src/` (348 LOC over six files):
+
+| File | LOC | Role |
+|---|---|---|
+| `Decoder.php` | 119 | Reads GIF bytes, walks image-descriptor offsets, downsamples per frame via GD nearest-neighbor, returns `list<Frame>` capped at 256 |
+| `Frame.php` | 29 | Immutable value: 2-D `list<list<array{0:int,1:int,2:int}>>` of cell-space RGB triples |
+| `Renderer.php` | 48 | ANSI emitter. Two presets: `solid` (`█` painted in 24-bit truecolor SGR) or `density` (ASCII luminance ramp) |
+| `Player.php` | 109 | `SugarCraft\Core\Model` impl — index/paused/preset state, `Cmd::tick($interval)` for frame advance, keys: space/←/→/d/q |
+| `TickMsg.php` | 12 | `Msg` for the frame-tick |
+| `Lang.php` | 31 | i18n facade — wraps `SugarCraft\Core\I18n\T` |
+
+Composer surface: `sugarcraft/sugar-animation` requires `php:>=8.3`,
+`sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `ext-gd`.
+Ships a `bin/sugar-animation` binary that loads frames, instantiates a
+`Player`, and runs it through `SugarCraft\Core\Program`.
+
+What `sugar-animation` is **not**: there is no Kitty path, no iTerm2 path,
+no Sixel path, no protocol detection. The README and `leftover_updates_later.md`
+§3 list "P10 — Kitty/WezTerm graphics-protocol output path" as a
+research backlog item — that item is the subject of this memo.
+
+### 1.2 sugar-image today (the protocol-output renderer)
+
+`sugar-image/src/` (3,426 LOC over 22 files; 7 of those under `Renderer/`):
+
+| File | LOC | Role |
+|---|---|---|
+| `Mosaic.php` | 407 | Public facade — `probe() / halfBlock() / sixel() / kitty() / iterm2() / chafa() / builder()`; the `Picker` from `ratatui-image`. Also hosts the `MosaicBuilder` fluent builder (`withRenderer/withResize/withDither/withScale`) in the same file. |
+| `ImageSource.php` | 243 | Decoded image value: raw bytes + format MIME + pixel W/H; `fromFile() / fromString() / crop() / resize() / aspectRatio()` |
+| `PixelGrid.php` | 171 | RGB grid extraction from `ImageSource` for half-block / quarter-block paths |
+| `Capability.php` | 77 | Detected terminal capability snapshot (sixel/kitty/iterm2/halfblock/chafa + cellSize + inTmux) |
+| `CellSize.php` | 16 | Cell pixel dimensions tuple |
+| `Detect.php` | 457 | DA1 / env-var / XTWINOPS capability probing; `Detect::cached()` caches per-process |
+| `KittyOptions.php` | 161 | Virtual-image placement (`a=p`) + chunked transmit + zlib compression options |
+| `Scale.php` | 137 | `Fit / Crop / Stretch / None` scale enum + dimension math |
+| `Dither.php` | 36 | Floyd-Steinberg / Stucki / None enum |
+| `AdaptiveImage.php` | 154 | Memoises render output per (w,h) bucket; re-encodes on cell-size change |
+| `PrecomputedImage.php` | 36 | Frozen render result for one specific (w,h) |
+| `TmuxPassthroughDecorator.php` | 164 | Wraps DCS/APC/OSC in tmux passthrough envelope |
+| `SyncAsyncRenderer.php` | 49 | Wraps a `Renderer` so callers can await it as a ReactPHP `PromiseInterface` |
+| `AsyncRenderer.php` | 23 | Marker interface for async renderers |
+| `Lang.php` | 32 | i18n facade |
+| `Renderer/Renderer.php` | 48 | Renderer interface — `render(ImageSource, w, h)` / `name()` / `supportsAlpha()` / `delete(imageId)` |
+| `Renderer/KittyRenderer.php` | 204 | Kitty graphics APC chunked transmit + `renderWithOptions(KittyOptions)` for virtual placement + compression |
+| `Renderer/Iterm2Renderer.php` | 85 | OSC 1337 `File=` inline images |
+| `Renderer/SixelRenderer.php` | 563 | DCS-q full Sixel encoder: median-cut quantize + dither + RLE bands + 256-color fallback |
+| `Renderer/HalfBlockRenderer.php` | 120 | `▀` + 24-bit fg/bg fallback; transparent-pixel-aware (step 07.14) |
+| `Renderer/QuarterBlockRenderer.php` | 128 | `░▒▓█` 2×2 fallback (step 07.11) |
+| `Renderer/ChafaRenderer.php` | 115 | Shells out to `chafa` |
+
+Composer surface: `sugarcraft/sugar-image` requires `php:^8.3`,
+`sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `ext-gd`,
+`ext-mbstring`, `react/promise`. Library type (no `bin/`).
+
+What `sugar-image` is **not**: it is single-frame only today.
+Nothing iterates frames, nothing schedules ticks, nothing diffs frame
+N against frame N-1 to issue a per-protocol delete-and-redraw cycle.
+`leftover_updates_later.md` §3 lists "Animation/GIF support (P2 #8)"
+as a research backlog item — that item is the subject of this memo.
+
+### 1.3 The visible overlap
+
+Both libs claim some piece of image-to-terminal:
+
+- `sugar-animation\Renderer` emits truecolor SGR + Unicode blocks — that is
+  exactly what `sugar-image\Renderer\HalfBlockRenderer` (universal
+  fallback) does. The two implementations are independent, came from
+  different upstream sources (`namzug16/gifterm` vs
+  `charmbracelet/x/mosaic`), and differ in details (gifterm uses `█` +
+  background SGR per cell; HalfBlock uses `▀` + paired fg/bg per
+  2-row band for 2× vertical resolution).
+- `sugar-animation\Player` is a `SugarCraft\Core\Model` already wired up
+  for frame-advance ticks. `sugar-image` has no analogue.
+- `sugar-image\ImageSource` knows PNG / JPEG / static GIF. It does
+  not iterate animated GIF frames. `sugar-animation\Decoder` does.
+
+The first-order question: when someone wants to play a GIF through
+Kitty graphics protocol, which lib's surface do they call?
+
+---
+
+## 2. The three split options
+
+### 2.1 Option A — mosaic depends on flip (flip emits frames, mosaic owns protocol output)
+
+This is the recommendation from `leftover_updates_later.md` §6 and the
+sketch in step 07.15's draft.
+
+```
+sugar-animation  ── exposes ── list<Frame>  ─→  bridge  ─→  sugar-image.Animation
+                                                        └─→ Renderer.render(frame, w, h)
+                                                            for each frame, then sleep delay
+```
+
+**Pros:**
+
+- Maps to the existing lib boundaries: sugar-image already owns every
+  ANSI / DCS / APC / OSC protocol path. Adding animation extends an
+  existing surface rather than spawning a parallel one.
+- Reuse is real: `KittyRenderer::delete()`, `Iterm2Renderer::delete()`
+  (step 07.12), `KittyOptions::place()` (step 07.13), and the existing
+  `AdaptiveImage` memoiser all become directly useful inside the
+  animation loop.
+
+**Cons (load-bearing):**
+
+- Forces `sugar-image` to require `sugar-animation`. That is the *wrong*
+  direction. sugar-animation is a higher-level lib that already requires
+  candy-core + candy-sprinkles + ext-gd — making mosaic depend on
+  flip pulls a binary-shipping app into the dependency closure of
+  every consumer of sugar-image (sugar-charts, sugar-dashboard, hypothetical
+  candy-glow image-in-markdown, etc.). That is a dependency-direction
+  inversion the monorepo has been careful to avoid.
+- The `Animation` type only consumes `Frame` if it ties itself to
+  GIF semantics. Future MP4 export, procedural animation, real-time
+  video feed all want the same animation surface but don't have a
+  `Frame` to give it.
+
+**Verdict:** rejected — the dependency points the wrong way.
+
+### 2.2 Option B — flip absorbs mosaic's image protocols (flip becomes the animation hub)
+
+Move Kitty / iTerm2 / Sixel rendering into sugar-animation. sugar-image
+becomes a pure single-image lib; sugar-animation handles both static and
+animated cases.
+
+**Pros:**
+
+- Single home for all "image to terminal" work.
+- sugar-animation's existing `Player` Model becomes the universal frame
+  scheduler.
+
+**Cons (load-bearing):**
+
+- Wrecks the existing architecture. sugar-image ships
+  3,236 LOC across 21 files specifically *because* protocol output
+  is hard and benefits from focused ownership. Bolting that subtree
+  onto sugar-animation means every single-image consumer of mosaic now
+  pulls in GIF decoders, frame schedulers, Player tick machinery, etc.
+- sugar-animation's namespace is `SugarCraft\Animation\` — that is the GIF-
+  viewer namespace from upstream `namzug16/gifterm`. Promoting it to
+  "the image lib" mis-credits the upstream.
+- Multiple consumers (sugar-dashboard preview pane, hypothetical glow port)
+  want single-image rendering with zero animation overhead. Forcing
+  them through a flip dep is worse than the current state.
+
+**Verdict:** rejected — it inverts the lib boundary the wrong way.
+
+### 2.3 Option C — neither depends on the other; animation is intrinsic to mosaic; flip stays a separate consumer (RECOMMENDED)
+
+sugar-image grows an `Animation` type and an `AnimationDriver`
+**without** consuming `sugar-animation`. The `Animation` constructor takes
+`ImageSource[]` + per-frame delays (the types it already understands).
+sugar-animation's `Decoder` already produces an in-cell-space `Frame[]` —
+that representation is GIF-viewer specific and does **not** flow into
+mosaic. If someone wants to play a GIF through Kitty graphics, they
+write the bridge themselves (and the bridge lives in sugar-animation, not
+mosaic, because `sugar-animation` is downstream of `sugar-image`'s
+dependency closure).
+
+```
+sugar-animation ── (independent path) ── Decoder.frames ─→ Renderer (truecolor blocks)  ─→ Player Model ─→ Program
+
+sugar-image ── (independent path) ── ImageSource[] ─→ Animation ─→ AnimationDriver ─→ Renderer ─→ stdout
+                                                                                 (Kitty/iTerm2/Sixel/HalfBlock)
+
+(optional future bridge, in sugar-animation, not in mosaic:)
+
+sugar-animation ── Decoder.frames → ImageSource[] (re-encode each cell-grid frame as PNG via GD)
+            ─→ sugar-image.Animation
+```
+
+**Pros:**
+
+- No dependency-direction inversion. sugar-image stays a foundation-
+  tier lib; sugar-animation stays an end-user GIF viewer.
+- `Animation` is reusable for any frame source: GIF (via bridge),
+  MP4 export, procedural generation, video stream. Each non-GIF
+  source provides its own `ImageSource[]` adapter and never touches
+  sugar-animation.
+- step 07.15 ships entirely inside sugar-image — no composer.json
+  edits to add a flip dep, no path-repo closure ripple, no new
+  transitive requirements landing on sugar-dashboard / sugar-charts /
+  whoever else consumes mosaic.
+- sugar-animation's GIF-specific code path keeps its own optimisation
+  story (the planned step 09.01 `imagecreatefromstring()` + per-frame
+  GCE timing work). That work is *also* useful for the bridge later,
+  so it's not wasted.
+
+**Cons:**
+
+- A subtle duplication risk: if both libs evolve a "per-frame ANSI
+  output" path, they could drift. This is the same risk the existing
+  dual-foundation SSOT pattern (CALIBER entry 38) already manages —
+  we document the boundary and accept it.
+- A demo that says "play this GIF through the best protocol" needs
+  the bridge to be written first. The bridge is ~40 LOC of GD glue
+  and is purely additive in step 09.04 (not gating step 07.15).
+
+**Verdict:** **recommended.**
+
+---
+
+## 3. The decision (for step 07.15)
+
+For the step 07.15 blocker specifically, the answers are:
+
+| Question step 07.15 asks | Answer |
+|---|---|
+| Where does the `Animation` class live? | `sugar-image/src/Animation.php` |
+| Where does the driver live? | `sugar-image/src/AnimationDriver.php` |
+| Does `sugar-image/composer.json` add `sugarcraft/sugar-animation: "@dev"`? | **No.** Drop that bullet from step 07.15's "Modify" list. |
+| What does `Animation::__construct()` accept? | `array<int, ImageSource>` (ordered frames) + `array<int, int>` (per-frame delay ms, same length) — or a single shared `int $delayMs` for fixed-cadence animations |
+| What does `AnimationDriver` do? | Holds an `Animation` + a `Renderer` + cell W/H. Owns the frame index. Emits `Cmd::tick($delay, fn() => new FrameTickMsg($next))`. On each `update(FrameTickMsg)`, returns `[new driver state, $renderer->delete($prevId) . $renderer->render($nextFrame, w, h) . newId]` |
+| Does `KittyRenderer` need new methods? | One small addition: `renderFrame(ImageSource, int $width, ?int $height, int $imageId): string` — wraps `renderWithOptions()` with a stable id so `delete()` can target the same id. Existing `renderWithOptions` is the underlying impl. `Iterm2Renderer`, `SixelRenderer`, `HalfBlockRenderer`, `QuarterBlockRenderer` keep their existing `render()` + `delete()` signatures; the driver just calls them in sequence. |
+
+Step 07.15's draft already gets most of this right — the one bullet
+to drop is the composer.json edit.
+
+> **Note on divergence from step 11.04's stated deliverable.** The step
+> file (`plans/leftover/phase-11-strategic-plans/step-04-sugar-animation-mosaic-split.md`)
+> originally framed the API contract as "`sugar-animation::Frame[]` →
+> `sugar-image::Animation` → `Renderer`" — i.e. Option A in §2.1
+> above. After working through the three options, this memo
+> deliberately diverges to Option C: `Animation` accepts
+> `ImageSource[]`, not `Frame[]`, and `sugar-image` does not depend
+> on `sugar-animation`. Rationale: avoids inverting the dependency
+> direction (see §2.1 Cons), keeps `Animation` reusable for non-GIF
+> frame sources (MP4, procedural, live video), and lets step 07.15
+> ship without any composer.json edits. The step file's acceptance
+> criteria are still met (boundary documented + step 07.15 unblocked);
+> only the shape of the contract changed.
+
+---
+
+## 4. API contract
+
+### 4.1 `sugar-image\Animation` shape
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image;
+
+/**
+ * An ordered sequence of frames with per-frame delays.
+ *
+ * Frame-source-agnostic: the constructor takes ImageSource[], which
+ * means a GIF decoder, an MP4 frame extractor, a procedural generator,
+ * or a live video feed adapter can all produce an Animation.
+ *
+ * Mirrors no upstream — there is no equivalent class in
+ * charmbracelet/x/mosaic. The driver layer (see {@see AnimationDriver})
+ * is the SugarCraft addition that turns this passive value object into
+ * a running animation through {@see Renderer}.
+ */
+final class Animation
+{
+    /**
+     * @param list<ImageSource> $frames     Ordered frames, length >= 1
+     * @param list<int>         $delaysMs   Per-frame delay in milliseconds, length == count($frames)
+     */
+    public function __construct(
+        public readonly array $frames,
+        public readonly array $delaysMs,
+    ) {
+        if ($frames === []) {
+            throw new \InvalidArgumentException(Lang::t('animation.empty'));
+        }
+        if (count($frames) !== count($delaysMs)) {
+            throw new \InvalidArgumentException(Lang::t('animation.delay_count_mismatch'));
+        }
+    }
+
+    /** Convenience: same delay for every frame. */
+    public static function fixed(array $frames, int $delayMs): self
+    {
+        return new self($frames, array_fill(0, count($frames), $delayMs));
+    }
+
+    public function frameCount(): int { return count($this->frames); }
+    public function totalDurationMs(): int { return array_sum($this->delaysMs); }
+
+    public function withFrame(int $index, ImageSource $frame, int $delayMs): self
+    {
+        if ($index < 0 || $index >= count($this->frames)) {
+            throw new \OutOfRangeException(Lang::t('animation.index_out_of_range', ['index' => $index]));
+        }
+        $frames = $this->frames;
+        $delays = $this->delaysMs;
+        $frames[$index] = $frame;
+        $delays[$index] = $delayMs;
+        return $this->mutate(frames: $frames, delaysMs: $delays);
+    }
+
+    /**
+     * Private clone-and-replace helper. Mirrors the canonical
+     * `with()` pattern in candy-sprinkles/src/Style.php: each named
+     * parameter defaults to null and the body falls back to the
+     * existing `$this->*` field when the argument is omitted. Keeps
+     * `with*()` callers terse without giving up immutability.
+     */
+    private function mutate(?array $frames = null, ?array $delaysMs = null): self
+    {
+        return new self(
+            frames:   $frames   ?? $this->frames,
+            delaysMs: $delaysMs ?? $this->delaysMs,
+        );
+    }
+}
+```
+
+Follows the standard SugarCraft pattern: `final`, `readonly` props,
+`with*()` via private `mutate()`. Factory methods mirror nothing
+upstream (no upstream exists for this surface). The snippet above is
+a plan-only **sketch** — the actual implementation in step 07.15
+should follow `candy-sprinkles/src/Style.php`'s named-parameter
+`with()` helper for the canonical shape, including a `bool $XSet`
+sentinel companion if the type ever grows a nullable field that needs
+"explicit null" vs "omitted" disambiguation.
+
+### 4.2 `sugar-image\AnimationDriver` shape
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image;
+
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Image\Renderer\Renderer;
+
+/**
+ * Drives an {@see Animation} onto a {@see Renderer}. Implements
+ * candy-core's Model contract so it can be embedded directly in a
+ * Program, or composed into a parent Model via Composite.
+ *
+ * Frame timing comes from Cmd::tick(); per-frame delete-and-redraw
+ * uses the Renderer::delete() API added in step 07.12.
+ */
+final class AnimationDriver implements Model
+{
+    public function __construct(
+        public readonly Animation $animation,
+        public readonly Renderer  $renderer,
+        public readonly int       $cellWidth,
+        public readonly ?int      $cellHeight = null,
+        public readonly int       $index = 0,
+        public readonly bool      $paused = false,
+        public readonly int       $imageId = 1,
+    ) {}
+
+    public function init(): ?\Closure
+    {
+        if ($this->paused) return null;
+        return Cmd::tick(
+            $this->animation->delaysMs[$this->index] / 1000.0,
+            static fn(): Msg => new FrameTickMsg(),
+        );
+    }
+
+    public function update(Msg $msg): array { /* tick → advance index, schedule next tick */ }
+
+    /**
+     * For Renderers that support deletion (Kitty, iTerm2), the view
+     * emits delete(prev id) + render(current frame) so the screen
+     * shows only the current frame. For Renderers that do not
+     * (Sixel, HalfBlock, QuarterBlock, Chafa), delete() returns ''
+     * and the existing cell grid is naturally overwritten on next
+     * render — this is correct per step 07.12.
+     */
+    public function view(): string
+    {
+        $delete = $this->renderer->delete((string) $this->imageId);
+        $frame  = $this->animation->frames[$this->index];
+        return $delete . $this->renderer->render($frame, $this->cellWidth, $this->cellHeight);
+    }
+
+    // with*() omitted; same pattern.
+}
+
+/** Frame-advance message — internal. */
+final class FrameTickMsg implements Msg {}
+```
+
+### 4.3 `sugar-image\Renderer\KittyRenderer::renderFrame()` addendum
+
+```php
+/**
+ * Render a single animation frame with a stable image id. The id
+ * is what {@see delete()} later targets, so calling delete($id)
+ * followed by renderFrame(..., $id) yields a clean per-frame redraw
+ * on Kitty-capable terminals.
+ *
+ * Internally calls {@see renderWithOptions()} with
+ * KittyOptions::transmit($id) — the existing surface from step 07.13.
+ */
+public function renderFrame(ImageSource $image, int $width, ?int $height, int $imageId): string
+{
+    return $this->renderWithOptions(
+        $image,
+        $width,
+        $height,
+        KittyOptions::transmit($imageId),
+    );
+}
+```
+
+`Iterm2Renderer` already returns its OSC 1337 image as a self-
+contained sequence; no `renderFrame()` is strictly needed — the
+driver calls plain `render()`. `Iterm2Renderer::delete()` already
+emits the OSC 1337 Pop (step 07.12). The driver issues delete before
+the next render so the stack stays at depth 1.
+
+`SixelRenderer`, `HalfBlockRenderer`, `QuarterBlockRenderer`,
+`ChafaRenderer` — no new methods. The driver issues a cursor-up +
+cursor-to-column-1 sequence between frames (`\x1b[<rows>A\r`) so
+the next frame overwrites the previous block-grid cleanly. That
+cursor-juggling lives in `AnimationDriver::view()`, not in the
+renderers, so each renderer stays single-frame.
+
+### 4.4 Wire flow
+
+```
+            ┌─────────────┐
+Program ────► AnimationDriver.init() ── Cmd::tick(delay[0]) ──┐
+            └─────────────┘                                    │
+                  ▲                                            │
+                  │                                            ▼
+            ┌─────┴────┐                              ┌────────────────┐
+            │ update() │ ◄────────── FrameTickMsg ────│ event loop     │
+            └─────┬────┘                              └────────────────┘
+                  │
+                  ▼ returns [new AnimationDriver, Cmd::tick(delay[next])]
+                  │
+            ┌─────┴────┐
+            │  view()  │ ──► delete(id) . render(frame[n]) ──► stdout
+            └──────────┘
+```
+
+No new types in candy-core. No new types in candy-sprinkles. The
+animation surface is entirely additive to sugar-image.
+
+---
+
+## 5. Migration plan
+
+This memo proposes no migration — neither lib gives anything up.
+
+### 5.1 What stays in sugar-animation (unchanged by this plan)
+
+- `Decoder` — GIF decode + downsample.
+- `Frame` — cell-grid RGB triples.
+- `Renderer` — block + density ASCII presets.
+- `Player` — interactive GIF viewer Model.
+- `TickMsg` — frame-tick message.
+- `bin/sugar-animation` — viewer binary.
+
+sugar-animation's scheduled work in phase 09 (steps 09.01 `imagecreatefromstring()`
++ per-frame timing, 09.02 dithering + transparency, 09.03 adaptive
+cell size + frame cache) is **unaffected** by this memo — it lands
+on the existing Decoder / Renderer / Player surface. None of those
+steps touch sugar-image.
+
+### 5.2 What lands in sugar-image (new, step 07.15)
+
+- `sugar-image/src/Animation.php` — value object (see §4.1).
+- `sugar-image/src/AnimationDriver.php` — Model + per-frame dispatch
+  (see §4.2).
+- `sugar-image/src/FrameTickMsg.php` — internal Msg (or co-located
+  in `AnimationDriver.php`).
+- One small method on `KittyRenderer::renderFrame()` (see §4.3).
+- One example: `sugar-image/examples/animation.php` — animate a 5-
+  frame procedurally-generated colour cycle through the probed
+  protocol.
+- One test: `sugar-image/tests/AnimationDriverTest.php` — fixture
+  animation with 5 procedurally-generated `ImageSource` frames,
+  assert `view()` emits delete + render for each tick, snapshot the
+  exact escape sequences for the HalfBlock + Kitty paths.
+
+**No edits to `sugar-image/composer.json`.** No new requires. No
+new path-repo entries.
+
+### 5.3 The optional GIF→Mosaic bridge (deferred, NOT step 07.15)
+
+For a future "play this GIF through the best protocol" demo, add
+a bridge in sugar-animation:
+
+```php
+// sugar-animation/src/MosaicBridge.php — NEW IN A LATER STEP (sketched 09.04 or 09.05)
+namespace SugarCraft\Animation;
+
+use SugarCraft\Image\Animation;
+use SugarCraft\Image\ImageSource;
+
+final class MosaicBridge
+{
+    /**
+     * Re-encode a sugar-animation Frame[] as sugar-image ImageSource[]
+     * via GD truecolor PNG. Each Frame is its own PNG; the bridge
+     * is intentionally lossless (no quantization) so the receiving
+     * renderer (Kitty / Sixel / iTerm2) can do its own optimisation.
+     *
+     * @param list<Frame> $frames
+     */
+    public static function toAnimation(array $frames, int $delayMs): Animation
+    {
+        $sources = [];
+        foreach ($frames as $f) {
+            $sources[] = self::frameToImageSource($f);
+        }
+        return Animation::fixed($sources, $delayMs);
+    }
+
+    private static function frameToImageSource(Frame $f): ImageSource { /* GD truecolor → PNG bytes */ }
+}
+```
+
+This bridge lives in sugar-animation (which already requires
+candy-sprinkles + candy-core + ext-gd; it just needs sugar-image
+added). **sugar-image does not depend on sugar-animation; sugar-animation
+depends on sugar-image only IF and WHEN the bridge ships.** This
+dependency direction is fine — sugar-animation is downstream of
+sugar-image in the foundation graph.
+
+The bridge is out of scope for step 07.15 and out of scope for
+this memo's acceptance criteria. It's mentioned only so future
+implementers can see the obvious extension and not invent a
+different one.
+
+### 5.4 What does NOT happen
+
+- ❌ No Kitty / iTerm2 / Sixel / WezTerm renderer added to sugar-animation.
+- ❌ No `Frame` class added to sugar-image.
+- ❌ No animation Model in sugar-animation beyond the existing `Player`.
+- ❌ No `sugarcraft/sugar-animation` require added to sugar-image.
+
+---
+
+## 6. Dependencies and ripple
+
+### 6.1 Composer
+
+| Lib | composer.json change for step 07.15 |
+|---|---|
+| `sugar-image` | **none** (no new requires; the animation code is internal and uses only existing deps) |
+| `sugar-animation` | **none** (step 07.15 does not touch sugar-animation) |
+| Any future consumer of `sugar-image` (sugar-dashboard, sugar-charts, candy-glow, etc. — none today; `grep -l sugar-image */composer.json` returns only `sugar-image/composer.json` itself) | **none** (the addition is purely additive; future consumers inherit a clean closure) |
+
+### 6.2 Path-repo closure
+
+No new transitive `sugarcraft/*` deps land. The closure stays clean.
+`php tools/check-path-repos.php` should pass on the step 07.15 PR
+without any edits beyond the lib itself.
+
+### 6.3 PHP extensions
+
+sugar-image already requires `ext-gd` for the existing Sixel / Kitty
+PNG path. The animation code does not add a new extension dep.
+
+### 6.4 Downstream impact
+
+The 07.15 PR is purely additive to sugar-image's public API. No
+existing renderer changes shape. No constructor signature changes.
+No library currently requires `sugarcraft/sugar-image`
+(`grep -l sugar-image */composer.json` returns only `sugar-image`'s
+own manifest), so the migration risk is zero — future consumers
+(sugar-dashboard preview pane, sugar-charts inline-image axis, hypothetical
+candy-glow image-in-markdown) inherit the animation surface for free
+when they take the dep.
+
+---
+
+## 7. Test plan (for step 07.15, derived from this memo)
+
+Phase-1 (step 07.15) PR ships:
+
+- `sugar-image/tests/AnimationTest.php` — Animation value object
+  invariants: empty-frames throws, delay-count-mismatch throws,
+  `fixed()` builds correct delays, `frameCount()`,
+  `totalDurationMs()`, `withFrame()` returns new instance.
+- `sugar-image/tests/AnimationDriverTest.php` — Driver Model:
+  - `init()` returns `Cmd::tick(delay[0])` when not paused
+  - `init()` returns `null` when paused
+  - `update(FrameTickMsg)` advances index modulo frameCount, returns
+    next tick Cmd
+  - `view()` emits `delete($id) . render($frame[idx])` in that order
+  - Snapshot test against `HalfBlockRenderer` (deterministic; no
+    network / probe required)
+  - Snapshot test against `KittyRenderer` (deterministic; uses
+    `KittyOptions::transmit($id)`)
+- `sugar-image/tests/Renderer/KittyRendererTest.php` — extend the
+  existing test with a `renderFrame()` case that verifies the
+  emitted sequence is identical to `renderWithOptions(..., KittyOptions::transmit($id))`.
+
+No sugar-animation test changes for step 07.15.
+
+---
+
+## 8. Decision criteria revisited (for future re-litigation)
+
+If a future contributor wants to revisit this split:
+
+- **The split flips to Option A (mosaic requires flip)** only if more
+  than one upstream-relevant frame source materialises and the
+  re-encode cost of going through `ImageSource[]` becomes the bottleneck.
+  Today the only frame source is `sugar-animation\Decoder`; the re-encode
+  cost is one-shot at load time. Don't bother.
+- **The split flips to Option B (flip absorbs mosaic)** only if
+  `sugar-image` is decommissioned for some other reason (e.g. a
+  decision to wrap libchafa exclusively). No such reason exists.
+- **A separate "candy-anim" lib** is overkill until at least three
+  consumers want the animation surface without wanting the protocol
+  surface — none do today.
+
+---
+
+## 9. Sequencing
+
+This memo lands **before** step 07.15. The supervisor's `updates.md`
+Blockers section explicitly cites this plan as the precondition.
+
+Step ordering after this memo lands:
+
+1. ✅ **this memo** (step 11.04) ← unblocks 07.15
+2. **step 07.15** — sugar-image Animation + AnimationDriver +
+   KittyRenderer::renderFrame() + tests (no composer.json edits).
+3. **step 09.01** — sugar-animation `imagecreatefromstring()` + per-frame
+   GCE timing (independent of 07.15).
+4. **step 09.02** — sugar-animation Floyd-Steinberg + transparency
+   (independent of 07.15).
+5. **step 09.03** — sugar-animation adaptive cell size via candy-pty
+   `SizeIoctl::query()` + frame cache (independent of 07.15).
+6. **(later, optional, NOT yet stepped)** — sugar-animation `MosaicBridge`
+   that re-encodes `Frame[]` → `ImageSource[]` → `Animation`, behind
+   a new `sugar-animation` → `sugar-image` composer dep. Adds the
+   "play this GIF through Kitty" CLI flag to `bin/sugar-animation`.
+
+Step 07.15 and steps 09.01–09.03 are independent and can ship in
+parallel (different lib roots; no MATCHUPS.md conflict).
+
+---
+
+## 10. Acceptance for this memo
+
+- [x] `ls plans/sugar-animation-mosaic-split.md` returns the file.
+- [x] Boundary clearly documented (§§1–4) so step 07.15 can proceed
+      without re-litigating.
+- [x] Explicit answer to step 07.15's "IF the split says so" composer
+      bullet: it says **no**. Drop the `sugarcraft/sugar-animation: "@dev"`
+      line from step 07.15's Modify list. (See §3 table + §6.1.)
+- [x] Direction of any future dependency named (sugar-animation →
+      sugar-image, if and when the bridge ships; never the reverse).
+- [x] sugar-animation's existing phase-09 work (09.01 / 09.02 / 09.03)
+      explicitly noted as unaffected (§5.1).
+- [x] No code shipped; this is a plan-only deliverable per the step
+      file (§Deliverable).
+
+---
+
+## 11. Out of scope for this memo
+
+- The sugar-animation phase-09 quality work itself (covered by phase-09
+  step files).
+- The sugar-image phase-07 work outside 07.15 (covered by phase-07
+  step files).
+- Whether `sugar-image` should grow a `videoSource` adapter for
+  MP4 / WebM — that is a separate strategic question (no consumer
+  asks for it yet).
+- Receive-side graphics-protocol decode — covered by
+  `plans/candy-vt-graphics.md` (step 11.03), which is a different
+  axis entirely.
+- A `bin/sugar-image-play` binary — out of scope; if anyone wants
+  a CLI demo, it lives in `sugar-image/examples/animation.php`.

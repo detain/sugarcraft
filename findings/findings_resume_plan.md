@@ -308,12 +308,12 @@ For each phase:
 **Files:** `sugar-mouse/src/Scan.php:133`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.27 🔴 candy-flip: Player::scheduleTick() uses fixed interval (Item 1.2)
+#### 0.27 🔴 sugar-animation: Player::scheduleTick() uses fixed interval (Item 1.2)
 
-**Plan:** `findings/plan_candy-flip.md` — Item 1.2
+**Plan:** `findings/plan_sugar-animation.md` — Item 1.2
 **Issue:** `Player.php:119-122` — uses `$this->interval` uniformly instead of `$this->frames[$this->index]->delay / 100.0`
 **Fix:** Use per-frame delay from Frame::$delay
-**Files:** `candy-flip/src/Player.php:119-122`
+**Files:** `sugar-animation/src/Player.php:119-122`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 0.28 🔴 candy-async: markCancelled() visibility (Item 1.1) — PHP LANGUAGE ERROR
@@ -1199,20 +1199,20 @@ Same verification as previous phases.
 **Files:** `sugar-table/tests/TableTest.php`
 **Agent:** Same coder agent as 5.1 (grouped — same lib)
 
-#### 5.3 🟢 candy-flip: Per-frame delay test (Item 1.3)
+#### 5.3 🟢 sugar-animation: Per-frame delay test (Item 1.3)
 
-**Plan:** `findings/plan_candy-flip.md` — Item 1.3
+**Plan:** `findings/plan_sugar-animation.md` — Item 1.3
 **Fix:** Add `testPerFrameDelaySchedulesAppropriateInterval()` to `PlayerTest.php`
-**Files:** `candy-flip/tests/PlayerTest.php`
+**Files:** `sugar-animation/tests/PlayerTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 5.4 🟢 candy-flip: DISPOSAL_PREVIOUS test (Item 4.3)
+#### 5.4 🟢 sugar-animation: DISPOSAL_PREVIOUS test (Item 4.3)
 
-**Plan:** `findings/plan_candy-flip.md` — Item 4.3
+**Plan:** `findings/plan_sugar-animation.md` — Item 4.3
 **Fix:** Add `testDisposalPreviousRestoresFromSnapshot()` to `DecoderCompositingTest.php`
-**Files:** `candy-flip/tests/DecoderCompositingTest.php`
+**Files:** `sugar-animation/tests/DecoderCompositingTest.php`
 **Agent:** Same coder agent as 5.3 (grouped — same lib)
 
 #### 5.5 🟢 candy-input: FocusEvent tests (Item 3.1)

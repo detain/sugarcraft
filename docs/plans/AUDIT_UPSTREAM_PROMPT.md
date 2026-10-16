@@ -188,7 +188,7 @@ that are tiny but together justify a PR.
 - jorgerojas26/lazysql → candy-sql
 - Rtarun3606k/TakaTime → candy-codetime
 - maxpaulus43/go-sweep → candy-minesweeper
-- namzug16/gifterm → candy-flip
+- namzug16/gifterm → sugar-animation
 - kbrgl/flapioca → candy-flappy
 
 Verify against current MATCHUPS.md — the list above may have grown.

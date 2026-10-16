@@ -15,7 +15,7 @@ namespace SugarCraft\Image;
  * rest, each carrying a 4-byte sequence number), and `fcTL`/`acTL` give the
  * geometry, timing, and disposal bookkeeping.
  *
- * Unlike GIF (handled through candy-flip), APNG frame compositing is a genuine
+ * Unlike GIF (handled through sugar-animation), APNG frame compositing is a genuine
  * state machine: each frame is painted onto a persistent canvas under a blend
  * op (`source` replaces the frame rect, `over` alpha-composites), and after it
  * is shown the canvas is disposed per the frame's dispose op — `none` (leave),

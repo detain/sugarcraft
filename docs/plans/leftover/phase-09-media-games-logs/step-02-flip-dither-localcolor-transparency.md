@@ -1,6 +1,6 @@
-# Step 09.02 — candy-flip area downsample + Floyd-Steinberg + local color + transparency
+# Step 09.02 — sugar-animation area downsample + Floyd-Steinberg + local color + transparency
 
-**Source:** `leftover_updates_later.md` candy-flip P3-P6
+**Source:** `leftover_updates_later.md` sugar-animation P3-P6
 **Branch:** `ai/flip-dither`
 
 ## Deliverable
@@ -15,9 +15,9 @@ Four quality improvements:
 
 **Modify:**
 
-- `candy-flip/src/Downsampler.php` — area-average mode.
-- `candy-flip/src/Dither/FloydSteinberg.php` (new).
-- `candy-flip/src/GifDecoder.php` — local color tables + disposal.
+- `sugar-animation/src/Downsampler.php` — area-average mode.
+- `sugar-animation/src/Dither/FloydSteinberg.php` (new).
+- `sugar-animation/src/GifDecoder.php` — local color tables + disposal.
 
 ## Tests
 
@@ -25,7 +25,7 @@ Four quality improvements:
 
 ## Acceptance
 
-- `cd candy-flip && vendor/bin/phpunit` green.
+- `cd sugar-animation && vendor/bin/phpunit` green.
 
 ---
 

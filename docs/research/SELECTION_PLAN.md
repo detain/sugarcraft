@@ -168,12 +168,12 @@
 - **Effort**: 1 hour
 - **Research**: `libraries/candy-kv-research.md`
 
-### candy-flip
+### sugar-animation
 
 ### [ ] Replace temp-file I/O with `imagecreatefromstring()`
 
 - **Effort**: 1-2 hours
-- **Research**: `libraries/candy-flip-research.md`
+- **Research**: `libraries/sugar-animation-research.md`
 
 ### sugar-navstack
 
@@ -433,7 +433,7 @@ All 45 research documents available at:
 | Library | File Size |
 |---------|-----------|
 | candy-core | 17KB |
-| candy-flip | 16KB |
+| sugar-animation | 16KB |
 | candy-codeshot | 23KB |
 | sugar-quickpick | 21KB |
 | sugar-treelist | 15KB |

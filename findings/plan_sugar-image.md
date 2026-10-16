@@ -512,9 +512,9 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 ## Phase 5: Missing Features — New APIs [PENDING]
 
-### 5.1 Implement GIF frame extraction in candy-flip — FINDING 17 ⏭️ deferred (API sketch + constraints recorded in `sugar-image/CALIBER_LEARNINGS.md` → “Deferred”)
+### 5.1 Implement GIF frame extraction in sugar-animation — FINDING 17 ⏭️ deferred (API sketch + constraints recorded in `sugar-image/CALIBER_LEARNINGS.md` → “Deferred”)
 
-**What:** The finding correctly notes this belongs in `candy-flip`. Add a `GifDecoder` class that decodes `ImageSource` (GIF format) into `Animation`.
+**What:** The finding correctly notes this belongs in `sugar-animation`. Add a `GifDecoder` class that decodes `ImageSource` (GIF format) into `Animation`.
 
 **Why:** Users have `Animation` and `AnimationDriver` but no way to load a GIF file as an `Animation`.
 
@@ -529,12 +529,12 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 - `sugar-image/src/Animation.php` — immutable value object (exists)
 - `sugar-image/src/AnimationDriver.php` — drives animation (exists)
-- `sugar-image/CALIBER_LEARNINGS.md:33-37` — notes GIF belongs in candy-flip
+- `sugar-image/CALIBER_LEARNINGS.md:33-37` — notes GIF belongs in sugar-animation
 
 **Investigation notes:**
 
 - Use `imagecreatefromgif()` to extract individual frames, build `Animation::fromFrames()`
-- If candy-flip doesn't exist yet, document the gap in CALIBER_LEARNINGS
+- If sugar-animation doesn't exist yet, document the gap in CALIBER_LEARNINGS
 
 ---
 
@@ -679,11 +679,11 @@ The following findings are positive — the code is correct and well-designed. N
 ### New Files to Create
 
 - `candy-core/src/Util/ColorUtil.php` — shared `luma()` and `squaredDistance()` static methods (3.2)
-- `candy-flip/src/GifDecoder.php` — GIF frame extraction (5.1, if candy-flip exists)
+- `sugar-animation/src/GifDecoder.php` — GIF frame extraction (5.1, if sugar-animation exists)
 
 ### Cross-Library Dependencies
 
-- Finding 17 (GIF decoder) requires `candy-flip` — depends on whether it exists in monorepo
+- Finding 17 (GIF decoder) requires `sugar-animation` — depends on whether it exists in monorepo
 - Finding 16 (ColorUtil) requires adding to `candy-core` which is a dependency of sugar-image
 
 ### Testing Requirements

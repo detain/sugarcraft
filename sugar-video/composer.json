@@ -37,7 +37,7 @@
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-palette": "dev-master",
         "sugarcraft/sugar-image": "dev-master",
-        "sugarcraft/candy-flip": "dev-master"
+        "sugarcraft/sugar-animation": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

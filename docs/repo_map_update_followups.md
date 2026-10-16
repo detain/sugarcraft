@@ -40,7 +40,7 @@ The 8 shared packages:
 | Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, sugar-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
-| Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
+| Step 36 | sugar-animation, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing |
 
 ---
@@ -81,7 +81,7 @@ The 8 shared packages:
 
 ---
 
-### candy-flip
+### sugar-animation
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -210,14 +210,14 @@ The 8 shared packages:
 
 ---
 
-### candy-flip
+### sugar-animation
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Renderer.php composes video frames via string concat — Buffer would enable per-cell frame diff | M |
 | candy-async | Player.php uses Timer loops for playback — CancellationToken would simplify seek/pause | M |
 
-**Notes:** candy-flip is a GIF/frame player with dithering. Frame rendering is a direct Buffer use case. See also candy-tetris/candy-minesweeper which share the same buffer-adoption pattern.
+**Notes:** sugar-animation is a GIF/frame player with dithering. Frame rendering is a direct Buffer use case. See also candy-tetris/candy-minesweeper which share the same buffer-adoption pattern.
 
 ---
 
@@ -298,8 +298,8 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, sugar-animation (buffer+async), candy-flappy (all 3) |
+| **M** (multiple pkgs or larger surface) | candy-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---
 

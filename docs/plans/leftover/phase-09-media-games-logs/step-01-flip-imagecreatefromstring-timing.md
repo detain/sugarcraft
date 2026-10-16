@@ -1,6 +1,6 @@
-# Step 09.01 — candy-flip imagecreatefromstring + per-frame timing
+# Step 09.01 — sugar-animation imagecreatefromstring + per-frame timing
 
-**Source:** `leftover_updates_later.md` candy-flip P1 + P2
+**Source:** `leftover_updates_later.md` sugar-animation P1 + P2
 **Branch:** `ai/flip-image-timing`
 
 ## Deliverable
@@ -13,16 +13,16 @@
 
 **Modify:**
 
-- `candy-flip/src/GifDecoder.php` (or equivalent) — in-memory frame
+- `sugar-animation/src/GifDecoder.php` (or equivalent) — in-memory frame
   decode; parse GCE for `delay` field per frame.
 
 ## Tests
 
-- `candy-flip/tests/PerFrameTimingTest.php`.
+- `sugar-animation/tests/PerFrameTimingTest.php`.
 
 ## Acceptance
 
-- `cd candy-flip && vendor/bin/phpunit --filter "Image|Timing"` green.
+- `cd sugar-animation && vendor/bin/phpunit --filter "Image|Timing"` green.
 
 ---
 
