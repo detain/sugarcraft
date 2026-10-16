@@ -425,7 +425,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **5.5** `sugar-charts`(28,med, buffer+core+sprinkles+**sugar‑dash**) → **5.5a** `LineChart/
   Canvas/Picture` (10), **5.5b** `Aggregation/OHLC/Heatmap/Chart/BarChart` (≈11), **5.5c**
   remainder. *(Note: charts depends on dash → dash must precede.)*
-- **5.6** `sugar-dash` (**345 src, high — the largest single effort**, deps buffer+core+pty+
+- **5.6** `sugar-dash` (**345 src, high — the largest single effort**, deps buffer+core+pty+ <!-- @rename-keep -->
   sprinkles). Split by subtree into ~20 steps, each ≤ ~12 files:
   `Components/Card` (36→4 steps), `Plot/Chart` (35→3), `Components/Tree` (31→3),
   `Layout`+`Layout/Tile`+`Layout/Boxer` (46→4), `Components/GridTable` (17→2),
@@ -489,7 +489,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | honey-bounce | high | 12 | enum-with-methods, ctor-promotion, match, named-args, readonly |
 | sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init |
 | sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
-| sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) |
+| sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) | <!-- @rename-keep -->
 | candy-mail | high | 7 | ctor-promotion, mixed, named-args, php8-strfn, readonly |
 | sugar-reel | high | 19 | backed-enum, enum-with-methods, ctor-promotion, first-class-callable, match — **in progress** |
 | candy-git | high | 14 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, new-in-init |

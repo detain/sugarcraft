@@ -70,7 +70,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-charts | 654 | 1551 | 0 | 0 | 0 | 0 |  |
 | sugar-crumbs | 144 | 260 | 0 | 0 | 0 | 0 |  |
 | sugar-crush-web | 5 | 36 | 0 | 0 | 0 | 0 |  |
-| sugar-dash | 7483 | 14859 | 2 | 0 | 0 | 1 |  |
+| sugar-dash | 7483 | 14859 | 2 | 0 | 0 | 1 |  | <!-- @rename-keep -->
 | sugar-diff | 70 | 225 | 0 | 0 | 0 | 0 |  |
 | sugar-gallery | 264 | 1162 | 0 | 0 | 0 | 0 |  |
 | sugar-glow | 122 | 313 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
@@ -101,7 +101,7 @@ Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E67
 ## Pre-existing failures catalog (RECORDED, not fixed)
 
 1. **candy-mines** — `DifficultyStatsTest::testSaveLeavesNoTempArtifacts` fails (+4 Warnings) — 180T/820A/1F, rc=1. <!-- @rename-keep -->
-2. **sugar-dash** — `Weather\WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp` and
+2. **sugar-dash** — `Weather\WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp` and <!-- @rename-keep -->
    `State\PersistenceTest::testSaveLeavesNoLeftoverTempFiles` fail — 7483T/14859A/2F, rc=1.
    (Known AtomicJsonFile temp-residue family in dash.)
 3. **candy-pty** — suite HUNG under its own HangWatchdog (see row above); no figures recorded.

@@ -110,7 +110,7 @@ Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcra
   mb_strlen fall back to the full 140-cell row — exactly the CI-vs-local
   divergence. Suggested follow-up (not taken; outside T5 remit): pin the test
   config to `%H:%M:%S` or setlocale in-test.
-- F7 sugar-dash WeatherModuleTest+PersistenceTest residue pair:
+- F7 sugar-dash WeatherModuleTest+PersistenceTest residue pair: <!-- @rename-keep -->
   PRE-EXISTING-RECORDED — byte-matches rename-baseline.md catalog item 2
   (AtomicJsonFile temp-residue family).
 - F8 sugar-crush DoctorExtensionProbesTest::testTheManifestDeclaresBothExtensionsAnd

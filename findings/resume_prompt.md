@@ -83,7 +83,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 1-D | 1.10–1.14 | candy-kit (Theme type guard), candy-lister (RuntimeException→Throwable, dead enum case, UTF-8 grapheme, ANSI injection) |
 | 1-E | 1.15–1.17 | candy-focus (next/previous DRY), candy-input (Shift+scroll tests, equals docblock) |
 | 1-F | 1.18 | candy-palette (DetectionChain creation + refactor — large, give extra time) |
-| 1-G | 1.19–1.23 | candy-palette (StandardColors cache), sugar-dash (EventDispatcher mutation, Chart render mutation, SystemModule mutation, array_search false) |
+| 1-G | 1.19–1.23 | candy-palette (StandardColors cache), sugar-dash (EventDispatcher mutation, Chart render mutation, SystemModule mutation, array_search false) | <!-- @rename-keep -->
 | 1-H | 1.24–1.27 | candy-git (removeDir DRY, interactive rebase), candy-vcr (FrameStream mutation, negative dt, double iteration) |
 | 1-I | 1.28–1.30 | sugar-reel (rebuildAudio extraction, PNG buffer unbounded, DecoderInterface reopen) |
 | 1-J | 1.31–1.33 | honey-bounce (CubicBezier validation, SpringConfig silent clamping) |
@@ -93,7 +93,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 2-A | 2.1–2.3 | candy-core (Clamp migration incomplete), repeated_logic (Validation API mismatch), sugar-bits (sanitizeCell extraction) |
-| 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), candy-hermit (computeWidth redundant) |
+| 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), candy-hermit (computeWidth redundant) | <!-- @rename-keep -->
 | 2-C | 2.7–2.9 | candy-hermit (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) |
 | 2-D | 2.10–2.12 | sugar-bits (AnimatedProgress spring cache), candy-buffer (DiffOptimiser array_merge, DiffEncoder state reset) |
 | 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), candy-shine (string concat loops, Theme::fromJson issues) |
