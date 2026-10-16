@@ -15,3 +15,4 @@ Procedure R chain from base `9ba813b8d` (== origin at start; tree clean except f
 - `rename-lib.php --old=candy-query --dry-run`: 384 content files, 178 paths, R1=1163 R2=27 R3=1325 R5=2 R6=1. exit 0. Non-zero counts, ns pair Query→Sql present, dir move + bins sane. Cross-lib hits are docblock prose (sugar-dash/sugar-table/sugar-toast/tools/tests) — correct mechanical rewrites. <!-- @rename-keep -->
 - Tag-prep commit (this entry): 26 CONTEXT.md historical lines + 1 rename-baseline.md row tagged `@rename-keep` (B1/A2 pattern). R5=2 hits were both CONTEXT.md historical `CANDY_QUERY_UPSTREAM*` mentions → vanish with tagging.
 - Re-dry-run expected: 382 files (CONTEXT+baseline drop), R3 1325→1292, R5→0.
+- Re-dry-run after tag-prep: 382 files (−2 exact), R3 1325→1292 (−33 exact), R5 2→0. Delta byte-clean vs prediction. Tag-prep commit c92c30e3a.
