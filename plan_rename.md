@@ -955,6 +955,8 @@ Order: `sugar-stash`, `candy-query`, `candy-serve`, `candy-shell`, `sugar-glow`,
 - **candy-mold → candy-starter:** namespace stays `App\` (it's a project template). The README instructions become
   `composer create-project sugarcraft/candy-starter my-app` — verify.
 
+Entry status: `sugar-stash` → `candy-git` ✅ **R1–R9 complete** — tag-prep 6b9a854a5, R7 1d2860811 (131 files), remote-done aeaae7583, published 6abff90d4 (packagist create HTTP 202 clean; dev-master indexed at split SHA 9c8d1fdbe0f710b1c3ae0a95cac02613b6352c8b after forced update 23705a76; continuity refs/heads/master + refs/heads/legacy/sugar-stash + tag sugar-stash-final at 00a369998 live). Suite 326T/4638A exact baseline; consumers sugar-diff 70T/225A exact; tools/tests 426T/1484A; zero env reads / zero old-slug data paths — no LegacyEnv/LegacyPaths (honest none); R4.8 section move moot (already under Apps).
+
 **Done when:** all 12 are `packagist-done`, CI and sync are green.
 
 ## Phase 5 — Batch C (components)
