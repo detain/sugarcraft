@@ -2242,8 +2242,8 @@ DOC;
     public function testBuildSystemPromptIncludesForcedInstructionGlobMatches(): void
     {
         $root = $this->makeTempRepo();
-        mkdir($root . '/candy-shine');
-        file_put_contents($root . '/candy-shine/CALIBER_LEARNINGS.md', 'FORCED LEARNINGS BODY');
+        mkdir($root . '/candy-shine'); // @rename-keep functional synthetic-tree fixture: force-load pattern input is `candy-*/`
+        file_put_contents($root . '/candy-shine/CALIBER_LEARNINGS.md', 'FORCED LEARNINGS BODY'); // @rename-keep functional synthetic-tree fixture: force-load pattern input is `candy-*/`
 
         $app = App::new($this->provider, 'gpt-4')
             ->withInstructionLoader(new InstructionFileLoader($root, ['*/CALIBER_LEARNINGS.md']));

@@ -21,8 +21,8 @@ final class InstructionFileLoaderTest extends TestCase
         // Create a temporary directory structure for testing
         $this->tempDir = sys_get_temp_dir() . '/instruction_file_loader_test_' . uniqid((string) getmypid(), true);
         $this->repoRoot = $this->tempDir . '/repo';
-        mkdir($this->repoRoot . '/candy-shine/src', 0777, true);
-        mkdir($this->repoRoot . '/candy-shine/lang', 0777, true);
+        mkdir($this->repoRoot . '/candy-shine/src', 0777, true); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        mkdir($this->repoRoot . '/candy-shine/lang', 0777, true); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         mkdir($this->repoRoot . '/sugar-widgets/src', 0777, true);
         mkdir($this->repoRoot . '/docs', 0777, true);
     }
@@ -113,7 +113,7 @@ final class InstructionFileLoaderTest extends TestCase
     {
         // Create CALIBER_LEARNINGS.md files in multiple candy-* libs
         mkdir($this->repoRoot . '/candy-sprinkles', 0777, true);
-        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# Candy Shine Learnings');
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# Candy Shine Learnings'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $this->touch($this->repoRoot . '/candy-sprinkles/CALIBER_LEARNINGS.md', '# Candy Sprinkles Learnings');
 
         $loader = new InstructionFileLoader($this->repoRoot, ['candy-*/CALIBER_LEARNINGS.md']);
@@ -217,12 +217,12 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testLoadForcedIsMemoizedForTheLifetimeOfTheLoader(): void
     {
-        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# FIRST FORCED');
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# FIRST FORCED'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot, ['candy-*/CALIBER_LEARNINGS.md']);
         $first = $loader->loadForced();
 
-        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# SECOND FORCED');
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# SECOND FORCED'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $second = $loader->loadForced();
 
         $this->assertSame($first, $second);
@@ -235,7 +235,7 @@ final class InstructionFileLoaderTest extends TestCase
         // Exercises the `return $this->forcedCache = []` early-out branch --
         // the shape Bootstrap builds today, since forcedInstructions is not
         // sourced from user config until W1.B4.
-        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# NEVER FORCED');
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# NEVER FORCED'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
@@ -247,14 +247,14 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testNestedFileInjectedOnFirstTouch(): void
     {
-        // Create a nested CLAUDE.md in candy-shine/
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Candy Shine Instructions');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        // Create a nested CLAUDE.md in candy-shine/ @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Candy Shine Instructions'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
-        // Touch a file in candy-shine/src/
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        // Touch a file in candy-shine/src/ @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $this->assertNotNull($result);
         $this->assertStringContainsString('Candy Shine Instructions', $result);
@@ -263,12 +263,12 @@ final class InstructionFileLoaderTest extends TestCase
     public function testNestedFilePrefersClaudeOverAgents(): void
     {
         // Create both CLAUDE.md and AGENTS.md at same level
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# CLAUDE wins');
-        $this->touch($this->repoRoot . '/candy-shine/AGENTS.md', '# AGENTS loses');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# CLAUDE wins'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/AGENTS.md', '# AGENTS loses'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $this->assertNotNull($result);
         $this->assertStringContainsString('CLAUDE wins', $result);
@@ -278,19 +278,19 @@ final class InstructionFileLoaderTest extends TestCase
     public function testNestedFileNotReinjected(): void
     {
         // Create nested CLAUDE.md
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Candy Shine Instructions');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Candy Shine Instructions'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
         // First touch - should load the file
-        $result1 = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result1 = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $this->assertNotNull($result1);
         $this->assertStringContainsString('Candy Shine Instructions', $result1);
 
         // Second touch of different file in same lib - should return null (already injected)
-        $this->touch($this->repoRoot . '/candy-shine/src/Another.php', '<?php // another');
-        $result2 = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Another.php');
+        $this->touch($this->repoRoot . '/candy-shine/src/Another.php', '<?php // another'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $result2 = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Another.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $this->assertNull($result2);
     }
 
@@ -300,12 +300,12 @@ final class InstructionFileLoaderTest extends TestCase
         $this->touch($this->repoRoot . '/CLAUDE.md', '# Root CLAUDE');
         $this->touch($this->repoRoot . '/AGENTS.md', '# Root AGENTS');
         // Create a nested file
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Nested');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Nested'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
         // Touch a deeply nested file
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         // Should find the nested CLAUDE.md, NOT the root one
         $this->assertNotNull($result);
@@ -316,25 +316,25 @@ final class InstructionFileLoaderTest extends TestCase
     public function testLoadForPathReturnsNullWhenNoNestedFile(): void
     {
         // No nested CLAUDE.md or AGENTS.md anywhere
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $this->assertNull($result);
     }
 
     public function testLoadForPathWalksUpDirectoryTree(): void
     {
-        // Create CLAUDE.md only at candy-shine/ level (not in src/)
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Candy Shine at lib level');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        // Create CLAUDE.md only at candy-shine/ level (not in src/) @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Candy Shine at lib level'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
         // Touch a deeply nested file - should find CLAUDE.md by walking up
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $this->assertNotNull($result);
         $this->assertStringContainsString('Candy Shine at lib level', $result);
@@ -342,17 +342,17 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testLoadForPathWithFreshLoader(): void
     {
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Instructions');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', '# Instructions'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         // First loader instance - should load
         $loader1 = new InstructionFileLoader($this->repoRoot);
-        $result1 = $loader1->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result1 = $loader1->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $this->assertNotNull($result1);
 
         // Second loader instance (simulating fresh session) - should load again
         $loader2 = new InstructionFileLoader($this->repoRoot);
-        $result2 = $loader2->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result2 = $loader2->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $this->assertNotNull($result2);
     }
 
@@ -419,12 +419,12 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testLoadForPathExpandsNestedImportReference(): void
     {
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'Nested @./LOCAL.md');
-        $this->touch($this->repoRoot . '/candy-shine/LOCAL.md', 'LOCAL IMPORTED BODY');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'Nested @./LOCAL.md'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/LOCAL.md', 'LOCAL IMPORTED BODY'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $this->assertNotNull($result);
         $this->assertStringContainsString('LOCAL IMPORTED BODY', $result);
@@ -498,15 +498,15 @@ final class InstructionFileLoaderTest extends TestCase
     {
         // Root CLAUDE.md pulls the nested file in up front; touching a file in
         // that subtree later must not re-inject the identical content.
-        $this->touch($this->repoRoot . '/CLAUDE.md', 'Root @candy-shine/CLAUDE.md');
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'NESTED BODY MARKER');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        $this->touch($this->repoRoot . '/CLAUDE.md', 'Root @candy-shine/CLAUDE.md'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'NESTED BODY MARKER'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
         $contents = $loader->loadRoot();
         $this->assertStringContainsString('NESTED BODY MARKER', $contents[0]);
 
-        $this->assertNull($loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'));
+        $this->assertNull($loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php')); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
     }
 
     public function testLoadRootHandlesSelfImportingFileWithoutRepeatingIt(): void
@@ -524,14 +524,14 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testLoadForPathBlocksNestedImportEscapingRepoRoot(): void
     {
-        // From candy-shine/CLAUDE.md, "../../secret.md" resolves two levels
+        // From candy-shine/CLAUDE.md, "../../secret.md" resolves two levels @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         // up (past repoRoot) into $tempDir -- outside the repo boundary.
         $this->touch($this->tempDir . '/secret.md', 'TOP SECRET CONTENT');
-        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'Ref @../../secret.md');
-        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'Ref @../../secret.md'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot);
-        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $this->assertNotNull($result);
         $this->assertStringNotContainsString('TOP SECRET CONTENT', $result);

@@ -68,7 +68,7 @@ use RecursiveIteratorIterator;
  * `deferred-wiring` lookup has the same never-expires property for the other
  * 57 libs; only `sugar-crush`'s rows are pinned here. Recorded rather than
  * fixed: `tools/` belongs to no lane this round." WHAT IS TRUE NOW: it was
- * right, it was measured - two rows added to `candy-shine`, one for a package
+ * right, it was measured - two rows added to `candy-shine`, one for a package @rename-keep historical provenance: measurement trail row from the reach audit
  * its `src/` references on every page and one for a package it does not
  * require at all, produced no output and exit 0 - and `tools/` DID belong to a
  * lane the round after. `check-path-repos.php --unused` now validates every

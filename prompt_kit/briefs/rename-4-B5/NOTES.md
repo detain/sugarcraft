@@ -12,7 +12,7 @@ Base: master 7002ff6d4 == origin; tag-prep commit 40155b129. <!-- @rename-keep -
 - 89 tracked files outside lib carry the slug; tools handle plan_rename.md, tools/*, docs/old/**,
   composer.lock (basename-excluded), .ansi content (C.3), binary ext, vendor — all inert to rewrite.
 - Composer REQUIRE consumers: root composer.json:88 only. NO sibling lib requires sugarcraft/sugar-glow. <!-- @rename-keep -->
-  Docblock-only mentions: candy-core/src/Util/TtyDetect.php:23, candy-shine/src/StyleGuide.php:22,
+  Docblock-only mentions: candy-core/src/Util/TtyDetect.php:23, candy-shine/src/StyleGuide.php:22, <!-- @rename-keep historical provenance -->
   sugar-readline/src/Highlight.php (:10,:13,:22 incl github URL), candy-git CALIBER+DiffHighlighter,
   tools/check-path-repos.php:21 comment. Tool rewrites these mechanically — consumers' suites re-run anyway.
 - Env: `SUGARGLOW_BIN` appeared ONLY in examples/render-readme.sh (test/example-only) → tool R5 <!-- @rename-keep -->
@@ -86,7 +86,7 @@ g. tempnam prefixes 'glow-*'→'mdview-*' (RenderCommandTest ×15, MdViewModelRe
 h. examples/render-readme.sh: tool's CANDY_MDVIEW_BIN kept, but rewrite minted the INVALID bash function
    name `candy-mdview()` → manual run_mdview() (def + export -f + loop call).
 i. README Formerly block under `# CandyMdview` H1 (2 tagged lines, Formerly/Namespace-changed per R4.1).
-j. composer.json description de-framed per R4.2: 'Markdown CLI viewer / pager composing CandyShine +
+j. composer.json description de-framed per R4.2: 'Markdown CLI viewer / pager composing CandyShine + <!-- @rename-keep historical provenance -->
    Viewport, modeled on charmbracelet/glow.' — keywords keep glow+markdown+sugarcraft (upstream keyword ✓).
 Post-R4 sweep: zero untagged old vocab in the lib (vendor/ copies die at R5 relink).
 
@@ -106,7 +106,7 @@ Post-R4 sweep: zero untagged old vocab in the lib (vendor/ copies die at R5 reli
 ## R6 verification
 - Residue `check-rename-residue --old=sugar-glow`: 0 findings at every staging point (after git add -A). <!-- @rename-keep -->
 - candy-mdview suite EXACT baseline shape: 122T/313A/0F/0E/0S/0W rc0 (watchdog harness).
-- Consumers green: candy-shine 938T/2378A, sugar-readline 336T/1076A, candy-git 326T/4638A, candy-core 1401T/28944A/28S.
+- Consumers green: candy-shine 938T/2378A, sugar-readline 336T/1076A, candy-git 326T/4638A, candy-core 1401T/28944A/28S. <!-- @rename-keep historical provenance -->
 - tools/tests floor EXACT 426T/1484A; check-path-repos --no-lib-path-repos rc0 (61 libs); gen-ansi-readme --check ok.
 - DIFF AUDIT: full --stat reviewed (135 files). Fix-sets: stale GlowModel/glowmodel cites in 9 living doc files
   outside lib → sed to MdViewModel/mdviewmodel (path cites must resolve post git-mv); capital-hyphen

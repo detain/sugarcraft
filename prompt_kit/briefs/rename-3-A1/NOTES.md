@@ -48,7 +48,7 @@ Path plan targets `findings/plan_<old>.md`, `docs/repo_map/sugarcraft_<old>.md`,
 moved (contents were rewritten). Fixed with a relaxed path-context class
 (`pathContext` flag threaded through rewritePath→rewriteSegment→r3/r4 patterns);
 content rules stay strict (pinned by new RenameLibTest case incl. negative
-fixtures: `docs/candy-shine_scores.md` must NOT move, `_slug` in content must
+fixtures: `docs/candy-shine_scores.md` must NOT move, `_slug` in content must <!-- @rename-keep historical provenance -->
 survive). Mutation proof: flipping the flag back → exactly 1 failure.
 The 3 doc paths themselves land post-R7 by re-running the fixed tool on the
 clean tree (it re-detects moved-state and applies only remaining pathPlan moves),
