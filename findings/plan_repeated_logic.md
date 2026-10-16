@@ -30,7 +30,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 
 **What:** Create `candy-core/src/Util/Clamp.php` with a reusable clamping utility.
 
-**Why:** Four different clamp implementations exist across candy-git, candy-palette, sugar-bits, and candy-forms. A centralized utility ensures consistency and reduces maintenance burden.
+**Why:** Four different clamp implementations exist across candy-git, candy-palette, sugar-widgets, and candy-forms. A centralized utility ensures consistency and reduces maintenance burden.
 
 **Severity:** Medium
 
@@ -38,7 +38,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 
 - `candy-git/src/App.php:L515` — `private function clamp(int $i, int $size): int`
 - `candy-palette/src/Color.php:L67` — `private static function clamp(int $v): int` (0-255 range)
-- `sugar-bits/src/Tree/Tree.php:L317` — `private function clamp(): self`
+- `sugar-widgets/src/Tree/Tree.php:L317` — `private function clamp(): self`
 - `candy-forms/src/Viewport/Viewport.php:L462` — `private function clamp(): self`
 
 **Implementation:**
@@ -112,7 +112,7 @@ final class Clamp
 
 - `candy-forms/src/Viewport/Viewport.php:L57` — `throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'))`
 - `sugar-charts/src/Heatmap/Heatmap.php:L55` — `throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'))`
-- `sugar-bits/src/Table/Table.php:L66` — `throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'))`
+- `sugar-widgets/src/Table/Table.php:L66` — `throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'))`
 - `candy-minesweeper/src/Board.php:L36` — `throw new \InvalidArgumentException(Lang::t('board.too_small'))`
 
 **Implementation:**
@@ -187,7 +187,7 @@ final class Validation
 
 **Source locations:**
 
-- `sugar-bits/src/Stopwatch/Stopwatch.php:L382` — example with validation
+- `sugar-widgets/src/Stopwatch/Stopwatch.php:L382` — example with validation
 - `candy-sprinkles/src/Style.php:L103` — simple factory
 
 **Implementation:**
@@ -195,7 +195,7 @@ final class Validation
 Add to `CALIBER_LEARNINGS.md`:
 
 ```markdown
-- **[pattern:new-factory-required]** All new SugarCraft classes MUST provide a `::new(): self` factory method. This is a de facto standard with 3,000+ uses across the monorepo. The factory MAY include validation (e.g., `Stopwatch::new()` validates interval > 0), but MUST return `new self()` for no-arg construction. Canonical: `candy-sprinkles/src/Style.php::new()`, `sugar-bits/src/Stopwatch/Stopwatch.php::new()`.
+- **[pattern:new-factory-required]** All new SugarCraft classes MUST provide a `::new(): self` factory method. This is a de facto standard with 3,000+ uses across the monorepo. The factory MAY include validation (e.g., `Stopwatch::new()` validates interval > 0), but MUST return `new self()` for no-arg construction. Canonical: `candy-sprinkles/src/Style.php::new()`, `sugar-widgets/src/Stopwatch/Stopwatch.php::new()`.
 ```
 
 **Verification:**
@@ -383,7 +383,7 @@ If evaluation recommends keeping as-is:
 | Priority | Item | Action | Files Affected |
 |----------|------|--------|----------------|
 | High | 3.1 Mutable trait gap audit | Delegation to researcher | All 35 implementation files |
-| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, candy-palette, sugar-bits, candy-forms |
+| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, candy-palette, sugar-widgets, candy-forms |
 | Medium | 1.2 Validation utilities | Create new utility + migrate callers | candy-core, + 5-10 calling libs |
 | Medium | 2.1 AsyncOps audit | Delegation/investigation | candy-async, candy-files |
 | Medium | 4.1 Mutable trait guidance | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |

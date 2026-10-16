@@ -422,9 +422,9 @@ Following ratatui's third-party widget ecosystem pattern, declare `sugarcraft/da
 
 The codebase is clean enough to serve as the canonical SugarCraft example app. Create `examples/` demonstrating each component in isolation: `Database` standalone, `SchemaBrowser` standalone, `ResultTable` standalone.
 
-## Share ResultTable with sugar-bits
+## Share ResultTable with sugar-widgets
 
-`ResultTable` in candy-sql is a specialized result set renderer. Consider extracting a general-purpose `Table` component to `sugar-bits` that `ResultTable` composes, so other SugarCraft apps can use the scrolling table.
+`ResultTable` in candy-sql is a specialized result set renderer. Consider extracting a general-purpose `Table` component to `sugar-widgets` that `ResultTable` composes, so other SugarCraft apps can use the scrolling table.
 
 ## Export sugar-query as a Reusable Component
 

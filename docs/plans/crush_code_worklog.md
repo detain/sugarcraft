@@ -737,8 +737,8 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    #45 (Task), #32 (allow/deny filter). Lane T builds and tests each tool
    standalone; the registration line is applied by the supervisor at commit
    time. Lane T never edits `Bootstrap.php`.
-2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`candy-forms`, #19
-   wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil` <!-- @rename-keep historical provenance -->
+2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`candy-forms`, #19 <!-- @rename-keep historical provenance -->
+   wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil`
    and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work.
    Add all three missing deps in **one prep commit** before U or W reach them.
 3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
@@ -11598,9 +11598,9 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
-## ROUND 87 (2026-09-17) — PHASE-5 TAIL WELD: candy-vt 9-row tail + sugar-bits 2.4 + sugar-charts P5 dispositioned; E742 MINTED; ZERO sugar-crush files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census 1 → 2 (E736 renoted + E742 ruling)
+## ROUND 87 (2026-09-17) — PHASE-5 TAIL WELD: candy-vt 9-row tail + sugar-bits 2.4 + sugar-charts P5 dispositioned; E742 MINTED; ZERO sugar-crush files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census 1 → 2 (E736 renoted + E742 ruling) <!-- @rename-keep historical provenance -->
 
-**Lanes (all base `cfb26f8f2`, worktrees clean at tips, all reviewed APPROVE-class BEFORE merge):** w1 candy-vt `d40802f16` (4 commits — API batch 4.1/4.3/4.4/12.3, perf 6.1/6.3, DRY 2.3, 6.2 gated-no-build; 6.4 carved OUT by design per §0-NOW-89 §2(b); vt 926/12689 +14T/+46A exact, render-dump md5-identical `dccc5c48…` 9,728 lines, 10/10 mutations; rv-w1 APPROVE 0C/0M/2MINOR — era-figure 305 + plan stamps folded IN-LANE; SEAM → §E742). w2 sugar-bits `4903d6727` (1 amended commit — `Tabs::view()` consumes stored scrollEnd; rv-w2 MAJOR-1 (left-ellipsis over-claim, 9 sweep regressions) fixed IN-LANE via POLICY-G: `computeScrollEnd` seeds `(1+dividerWidth)` iff `rendersLeftEllipsis()`, tail bounds width-1/width, first-tab force-include; P2 honestly re-measured scrollEnd 2→1 byte-pin unchanged; NEW P5 walk-form pin — LESSON LANDED: withActive-jump form missed the seed-neuter mutation, walk-form mandatory for adjust-gating defects; audit harness tuple-paired census: 15,506 rows 0 width-fail improve=46 regress=0 9/9 flips; rv-re-review CONFIRM-RESOLVED; zone-cost ≈13 cells erratum folded to §E736). w3 sugar-charts `30eb1ce18` (Phase-5 4/4 dispositioned: 5.1 verified-landed, 5.2/5.3/5.4 ruled-skip — feature/new-dep/API-sprawl; rv-v4 MINOR-1 Sixel key-collapse hardening tests-only; charts 577/1453, query+tick UNMOVED; rv APPROVE 0C/0M).
+**Lanes (all base `cfb26f8f2`, worktrees clean at tips, all reviewed APPROVE-class BEFORE merge):** w1 candy-vt `d40802f16` (4 commits — API batch 4.1/4.3/4.4/12.3, perf 6.1/6.3, DRY 2.3, 6.2 gated-no-build; 6.4 carved OUT by design per §0-NOW-89 §2(b); vt 926/12689 +14T/+46A exact, render-dump md5-identical `dccc5c48…` 9,728 lines, 10/10 mutations; rv-w1 APPROVE 0C/0M/2MINOR — era-figure 305 + plan stamps folded IN-LANE; SEAM → §E742). w2 sugar-bits `4903d6727` (1 amended commit — `Tabs::view()` consumes stored scrollEnd; rv-w2 MAJOR-1 (left-ellipsis over-claim, 9 sweep regressions) fixed IN-LANE via POLICY-G: `computeScrollEnd` seeds `(1+dividerWidth)` iff `rendersLeftEllipsis()`, tail bounds width-1/width, first-tab force-include; P2 honestly re-measured scrollEnd 2→1 byte-pin unchanged; NEW P5 walk-form pin — LESSON LANDED: withActive-jump form missed the seed-neuter mutation, walk-form mandatory for adjust-gating defects; audit harness tuple-paired census: 15,506 rows 0 width-fail improve=46 regress=0 9/9 flips; rv-re-review CONFIRM-RESOLVED; zone-cost ≈13 cells erratum folded to §E736). w3 sugar-charts `30eb1ce18` (Phase-5 4/4 dispositioned: 5.1 verified-landed, 5.2/5.3/5.4 ruled-skip — feature/new-dep/API-sprawl; rv-v4 MINOR-1 Sixel key-collapse hardening tests-only; charts 577/1453, query+tick UNMOVED; rv APPROVE 0C/0M). <!-- @rename-keep historical provenance -->
 
 **Weld:** picks `f48537daf` `c37486747` `848f1fbb0` `232686276` `66debe01c` `971c0fa96` zero conflicts (file-disjoint); companion `7988f2305` (E742 MINT backlog+triage, zone-cost erratum, vt 6.2 stamp verify); stamps+filemap ride after. ZERO sugar-crush files diffed per lane (verified `git diff --name-only cfb26f8f2..tip | grep -c '^sugar-crush/'`=0 x3) → floor carried EXACT (4th consecutive zero-move round), NO re-pin, NO durations row. Link census 19/19 + 8/8 verified; config md5 `d96e124ee…231ad` start==end.
 
@@ -11617,7 +11617,7 @@ prose sat above an unrelated declaration.
 |---|---|---|---|---|
 | v1 `ea16cf74a` | candy-scriptui | → `c887c1458` | 12/12 plan rows verified-stamped + 4.1 mis-file test relocation | **334T/694A** (rv-corrected +3T/+7A) |
 | v2 `30beda267` | candy-layout | → `86dd9807c` | Phase-5/6 `SolverEdgeCaseTest` 10T + MAX_FLOOR_RECLAIM const + docblocks; zero behavior bug | **157T/882A** |
-| v3 `2cfd90bba` | sugar-bits | → `2d11ab830` | Table shrink-through-mutate + visibleRows memo (E736/3.3) + Tree twin + multisort/7.1 stamps + LEARNINGS | **509T/1066A** |
+| v3 `2cfd90bba` | sugar-bits | → `2d11ab830` | Table shrink-through-mutate + visibleRows memo (E736/3.3) + Tree twin + multisort/7.1 stamps + LEARNINGS | **509T/1066A** | <!-- @rename-keep historical provenance -->
 | v4 `926585f2b` | sugar-charts | → `7dfa8de45` | P2–P4 perf builds (Heatmap/BufferHelper/Legend/Sixel) + `Phase2PerfPinsTest`; render-dump md5-identical proof | **576T/1445A** (+6T) |
 | v5 `018739046` | candy-vt docs | → `3696b7bf7` | plan RE-DERIVATION: 22/31 non-actionable, 9-row surviving tail | docs-only |
 
@@ -11645,7 +11645,7 @@ Pick order u1(2) → u2 → u3, ZERO conflicts except the ONE predicted: `TextIn
 
 ### Gates (all plain-pipe, linked vendors via refresh-deps --mode=linked, weld tree)
 
-dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · candy-forms **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`.
+dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · candy-forms **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`. <!-- @rename-keep historical provenance -->
 
 ### ROUND-85 WAVE-2 + CLOSE (2026-09-17) — u4 (E741 + E736 F2) + u6 (E731 COMP-2 (b)) welded; two umbrellas CLOSED; census 3 → 1 (E736 sole survivor); OPERATOR DECISION POINT
 
@@ -11660,7 +11660,7 @@ dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/303
 
 **Decisions taken this round:** 1.5 + 6.3 workerPool DOCUMENT-RESERVED (removal = public-API STOP; wiring deferred to a Phase-6 successor lane); 2.5 DECLINED (sound per rv-u4); vim j/k inverted motion behavior PRESERVED, product-seam carried; COMP-2 option (b) ADOPTED at wave-1, IMPLEMENTED at wave-2. rv-u4 APPROVE-WITH-FIX 0C/0M/3MINOR (MINOR-1 fixed in `2aba19b05`; MINOR-2 fold-note recorded; MINOR-3 no action); rv-u6 APPROVE 0C/0M/2MINOR — race-leg non-latch UNPINNED + readMemLoad clamp kernel-invariant recorded as honest residuals, NOT minted.
 
-**Gates (weld tree, plain pipe, linked 19/19+8/8):** forms 1891/3164/0W · dash 6006/10076/1S · bits 493/1015 · prompt 158/310/2S · readline 336/1076 · shell window 78/163 · query window 111/204 · crush `Form|Input|Select|Cursor` **633/3943 EXACT** · five-guard **125/7362 EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end · ZERO sugar-crush files moved (`git diff --name-only ccb86e5fa..0f26082fe | grep -c '^sugar-crush/'` = 0) → NO crush serial, NO re-pin — floor stays **12,027 / 170,392 / 0F / 0E / 1S / EXIT 0**. Chain: `ccb86e5fa` → `ac82cf822` → `c1cebb634` → `5461ded56` → `2aba19b05` → `0f26082fe`. **ROUND 85 CLOSED** (5 lanes; forms complete modulo Phase 5). Census 3 → **1**: E731 + E741 CLOSED, E736 sole survivor — decision point (§0-NOW-88 §2): cut E736-sugar-bits after per-lib re-derivation probe / forms-Phase-5 product-scoping session / close campaign.
+**Gates (weld tree, plain pipe, linked 19/19+8/8):** forms 1891/3164/0W · dash 6006/10076/1S · bits 493/1015 · prompt 158/310/2S · readline 336/1076 · shell window 78/163 · query window 111/204 · crush `Form|Input|Select|Cursor` **633/3943 EXACT** · five-guard **125/7362 EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end · ZERO sugar-crush files moved (`git diff --name-only ccb86e5fa..0f26082fe | grep -c '^sugar-crush/'` = 0) → NO crush serial, NO re-pin — floor stays **12,027 / 170,392 / 0F / 0E / 1S / EXIT 0**. Chain: `ccb86e5fa` → `ac82cf822` → `c1cebb634` → `5461ded56` → `2aba19b05` → `0f26082fe`. **ROUND 85 CLOSED** (5 lanes; forms complete modulo Phase 5). Census 3 → **1**: E731 + E741 CLOSED, E736 sole survivor — decision point (§0-NOW-88 §2): cut E736-sugar-bits after per-lib re-derivation probe / forms-Phase-5 product-scoping session / close campaign. <!-- @rename-keep historical provenance -->
 
 ## ROUND 84 (2026-09-16) — E735 leftover tail CLOSED in a single six-lane weld; floor UNCHANGED 12,027 / 172,610 (zero sugar-crush test files moved — no re-pin); census survivors 3 to 2 (E731/E736); the 68d73f9ba downstream-goldens family FULLY swept
 
@@ -14283,7 +14283,7 @@ Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows,
 
 Operator directed round 88 (overriding the r87 "mechanically complete" hold): a 7-lane cut —
 forms Phase-5 build-out (x3 cluster A / x4 Date-Slider-Color / x5 mouse-clipboard), candy-vt E742
-palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4 row-shift API
+palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4 row-shift API <!-- @rename-keep historical provenance -->
 (x6), candy-shine streaming render (x7). **SALVAGE-FIRST caught it: only 3 lanes existed on disk.**
 
 - **Landed (all rv-APPROVE, picked `-x` in order x6→x4→x5; single auto-merge in `findings/plan_candy-forms.md`):**

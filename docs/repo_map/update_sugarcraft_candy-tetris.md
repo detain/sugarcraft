@@ -71,7 +71,7 @@ src/
 | `charmbracelet/lipgloss` → candy-sprinkles | High | Declarative styling, color system, border rendering | P0 |
 | `charmbracelet/harmonica` → honey-bounce | High | Spring physics for ghost-piece animation, line-clear particles, camera shake | P1 |
 | `ratatui/ratatui` | Medium | Widget trait pattern, immediate-mode rendering, buffer diffing | P1 |
-| `charmbracelet/bubbles` → sugar-bits | Medium | Component patterns (Timer, Progress, Help) for game UI chrome | P1 |
+| `charmbracelet/bubbles` → sugar-widgets | Medium | Component patterns (Timer, Progress, Help) for game UI chrome | P1 |
 | `charmbracelet/vhs` | Medium | Demo recording infrastructure (.tape format) | P2 |
 | `sugarcraft/honey-bounce` | High | Spring physics, easing curves, WCAG REDUCE_MOTION | P0 |
 | `sugarcraft/candy-sprinkles` | High | Styling foundation for board rendering, borders, colors | P0 |
@@ -469,7 +469,7 @@ Record game inputs (key presses + timestamps) and replay them for demos or analy
 
 Two-player network play via WebSocket or TCP. Each player's garbage rows would be sent over the network.
 
-## 5. Integration with sugar-bits Timer Component
+## 5. Integration with sugar-widgets Timer Component
 
 **Priority:** Low | **Complexity:** Low
 

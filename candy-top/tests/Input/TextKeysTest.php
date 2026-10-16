@@ -7,10 +7,10 @@ namespace SugarCraft\Top\Tests\Input;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Top\Input\TextKeys;
 
-/** btop TextEdit::command over sugar-bits TextEdit (proc filter + options editor). */
+/** btop TextEdit::command over sugar-widgets TextEdit (proc filter + options editor). */
 final class TextKeysTest extends TestCase
 {
     private static function key(KeyType $type, string $rune = '', bool $ctrl = false): KeyMsg

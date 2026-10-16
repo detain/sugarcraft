@@ -2,7 +2,7 @@
 
 ## Overview
 
-`candy-mdview` is a PHP port of `charmbracelet/glow`, a Markdown CLI viewer that composes candy-shine (ANSI rendering) and sugar-bits Viewport (scrolling). It provides dual-mode output: direct stdout rendering and a fullscreen pager via `MdViewModel` + `Viewport`. The package is 🟢 v1 ready with 15 locales, 11 themes, streaming pager, and file watching via mtime polling.
+`candy-mdview` is a PHP port of `charmbracelet/glow`, a Markdown CLI viewer that composes candy-shine (ANSI rendering) and sugar-widgets Viewport (scrolling). It provides dual-mode output: direct stdout rendering and a fullscreen pager via `MdViewModel` + `Viewport`. The package is 🟢 v1 ready with 15 locales, 11 themes, streaming pager, and file watching via mtime polling.
 
 **Biggest opportunity areas:** GitHub/GitLab README fetching (glow's signature feature), file stash browser with fuzzy filtering, proper Chroma-style lexer for syntax highlighting, native file watching (fsnotify-equivalent), and clipboard integration.
 
@@ -18,7 +18,7 @@
 RenderCommand::loadInput()
     ↓ (file path or stdin)
 Renderer::render($markdown)
-    ├── League\CommonMark\MarkdownRenderer (from sugar-bits)
+    ├── League\CommonMark\MarkdownRenderer (from sugar-widgets)
     └── Renderer (from candy-shine)
         ├── ->withWordWrap($width)
         └── ->withHyperlinks($enabled)
@@ -30,7 +30,7 @@ Renderer::render($markdown)
 
 | Feature | Implementation |
 |---|---|
-| Markdown parsing | League\CommonMark via `sugar-bits` |
+| Markdown parsing | League\CommonMark via `sugar-widgets` |
 | ANSI styling | `SugarCraft\Shine\Renderer` with 11 built-in themes |
 | Pager mode | `MdViewModel` + `Viewport` (ReactPHP-based) |
 | Word wrap | `Renderer::withWordWrap()` |
@@ -741,6 +741,6 @@ For the PHP ecosystem, candy-mdview fills an important niche as the only product
 2. Adding the missing TUI pager features (line numbers, clipboard, help overlay)
 3. Implementing configuration persistence
 
-The package's position in the SugarCraft ecosystem is as a **leaf library** consuming core infrastructure (candy-core, candy-shine, sugar-bits). This means enhancements to core libraries automatically benefit candy-mdview, but candy-mdview-specific features (like GitHub fetching) require independent implementation.
+The package's position in the SugarCraft ecosystem is as a **leaf library** consuming core infrastructure (candy-core, candy-shine, sugar-widgets). This means enhancements to core libraries automatically benefit candy-mdview, but candy-mdview-specific features (like GitHub fetching) require independent implementation.
 
 **Overall verdict:** Candy-mdview is production-ready for its current feature set (single-file markdown rendering/paging) but requires significant investment to close the gap with upstream glow. The highest-ROI next step is adding GitHub/GitLab integration.

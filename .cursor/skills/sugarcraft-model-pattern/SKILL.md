@@ -22,7 +22,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 ## Instructions
 
 1. **Identify the target lib and class shape.** From the user request, pick:
-   - Target lib slug (`<slug>`, e.g. `sugar-bits`, `candy-shine`).
+   - Target lib slug (`<slug>`, e.g. `sugar-widgets`, `candy-shine`).
    - Class name in PascalCase (e.g. `Style`, `Spinner`, `Theme`).
    - Shape: **Data** (value object — `Style`, `Theme`, `KeyMap`) or **TUI Root** (implements `SugarCraft\Core\Model`).
    - Upstream reference if porting (`charmbracelet/<repo>.<Type>`).
@@ -150,7 +150,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 
    **Verify**: `cd <slug> && composer validate` (drop `--strict` — `"@dev"` constraints are flagged but expected pre-1.0).
 
-6. **Write at least one PHPUnit test** at `<slug>/tests/<Class>Test.php` under namespace `SugarCraft\<Sub>\Tests`. Mirror the patterns in `candy-core/tests/` and `sugar-bits/tests/`:
+6. **Write at least one PHPUnit test** at `<slug>/tests/<Class>Test.php` under namespace `SugarCraft\<Sub>\Tests`. Mirror the patterns in `candy-core/tests/` and `sugar-widgets/tests/`:
    - **Immutability**: assert `$a->withX(v) !== $a` and `$a->x !== $a->withX(v)->x`.
    - **Snapshot** (if it renders): assert raw `\x1b[...m` bytes from `view()`. Don't abstract.
    - **Coercion** (if it accepts user input): feed negative/oversized/empty/null, assert clamp/no-op.

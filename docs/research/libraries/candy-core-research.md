@@ -248,7 +248,7 @@ abstract class Component {
 
 - Define `Component` abstract class
 - Add lifecycle hooks
-- Add example in `sugar-bits` tests
+- Add example in `sugar-widgets` tests
 
 ---
 

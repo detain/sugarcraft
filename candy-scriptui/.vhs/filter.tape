@@ -4,7 +4,7 @@ Set Width 700
 Set Height 320
 Set TypingSpeed 80ms
 Set Theme "TokyoNight"
-Type "printf 'SugarCraft\nCandySprinkles\nHoneyBounce\nSugarBits\nSugarPrompt\nCandyScriptui\n' | ./bin/candy-scriptui filter --placeholder 'type to filter…'"
+Type "printf 'SugarCraft\nCandySprinkles\nHoneyBounce\nSugarWidgets\nSugarPrompt\nCandyScriptui\n' | ./bin/candy-scriptui filter --placeholder 'type to filter…'"
 Enter
 Sleep 800ms
 Type "sug"

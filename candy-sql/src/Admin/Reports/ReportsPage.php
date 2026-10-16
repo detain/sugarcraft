@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Reports;
 
-use SugarCraft\Bits\Tree\Node;
-use SugarCraft\Bits\Tree\Tree;
+use SugarCraft\Widgets\Tree\Node;
+use SugarCraft\Widgets\Tree\Tree;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;

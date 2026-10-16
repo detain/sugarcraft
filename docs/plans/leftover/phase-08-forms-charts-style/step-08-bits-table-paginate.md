@@ -1,6 +1,6 @@
-# Step 08.08 — sugar-bits Table pagination + Paginator nav
+# Step 08.08 — sugar-widgets Table pagination + Paginator nav
 
-**Source:** `leftover_updates_later.md` sugar-bits Phase 3-4
+**Source:** `leftover_updates_later.md` sugar-widgets Phase 3-4
 **Branch:** `ai/bits-table-paginate`
 
 ## Deliverable
@@ -13,21 +13,21 @@
 
 **Modify:**
 
-- `sugar-bits/src/Table/Table.php` — page-size handling, current-page
+- `sugar-widgets/src/Table/Table.php` — page-size handling, current-page
   state.
 
 **Create:**
 
-- `sugar-bits/src/Paginator/Paginator.php`.
+- `sugar-widgets/src/Paginator/Paginator.php`.
 
 ## Tests
 
-- `sugar-bits/tests/Table/PaginationTest.php`.
-- `sugar-bits/tests/Paginator/PaginatorTest.php`.
+- `sugar-widgets/tests/Table/PaginationTest.php`.
+- `sugar-widgets/tests/Paginator/PaginatorTest.php`.
 
 ## Acceptance
 
-- `cd sugar-bits && vendor/bin/phpunit --filter "Pagination|Paginator"` green.
+- `cd sugar-widgets && vendor/bin/phpunit --filter "Pagination|Paginator"` green.
 
 ---
 

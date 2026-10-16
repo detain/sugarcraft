@@ -33,7 +33,7 @@ From `repo_map/charmbracelet_confettysh.md`:
 
 | SugarCraft Lib | Mapping | Confidence |
 |---|---|---|
-| `sugar-bits` | Bubble Tea `Model` pattern (`init/update/view` cycle) | Direct |
+| `sugar-widgets` | Bubble Tea `Model` pattern (`init/update/view` cycle) | Direct |
 | `honey-bounce` | Particle physics (velocity, gravity, projectile trajectory) | Conceptual |
 | `candy-core` | SSH server infrastructure (wish, ssh) | Theoretical |
 | `sugar-charts` | ANSI color palette + terminal rendering | Loose |
@@ -366,7 +366,7 @@ The project only works over SSH. A local `./confettysh --effect fireworks` mode 
 
 ### Problem 3: Dependency Velocity
 
-**Risk to sugar-bits**: The Bubble Tea ecosystem updates frequently. SugarCraft's sugar-bits (Bubble Tea PHP port) will need active maintenance as the upstream API evolves.
+**Risk to sugar-widgets**: The Bubble Tea ecosystem updates frequently. SugarCraft's sugar-widgets (Bubble Tea PHP port) will need active maintenance as the upstream API evolves.
 
 ### Problem 4: Hardcoded Physics Constants
 
@@ -485,7 +485,7 @@ Using pseudo-version for a critical dependency means builds can break silently i
 ```
 Using the terminal's alternate screen buffer prevents particle effects from polluting the user's terminal scrollback. This is essential for demo applications.
 
-**SugarCraft implication**: sugar-bits should use `\x1b[?1049h` (enter alt screen) and `\x1b[?1049l` (leave alt screen) around TUI sessions.
+**SugarCraft implication**: sugar-widgets should use `\x1b[?1049h` (enter alt screen) and `\x1b[?1049l` (leave alt screen) around TUI sessions.
 
 ## 21. Defensive Design Lessons
 
@@ -537,7 +537,7 @@ SSH provides a zero-installation distribution model: users only need an SSH clie
 
 ### Trend 3: Bubble Tea as the Standard Go TUI Framework
 
-The rapid evolution of `charmbracelet/bubbletea` (multiple updates per month) shows it is the de facto standard for Go TUI. PHP has no equivalent — `sugar-bits` could fill this gap but must track a rapidly moving target.
+The rapid evolution of `charmbracelet/bubbletea` (multiple updates per month) shows it is the de facto standard for Go TUI. PHP has no equivalent — `sugar-widgets` could fill this gap but must track a rapidly moving target.
 
 ### Trend 4: Charm Ecosystem Composability
 

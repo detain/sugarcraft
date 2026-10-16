@@ -14,7 +14,7 @@ body:
         - candy-sprinkles (styling / layout)
         - honey-bounce (spring physics)
         - candy-mouse (mouse zones)
-        - sugar-bits (components)
+        - sugar-widgets (components)
         - sugar-charts (charts)
         - candy-forms (forms)
         - candy-scriptui (CLI)

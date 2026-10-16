@@ -455,7 +455,7 @@ final class DatePicker
     public function WithLocale(string $locale): self
     {
         // Use IntlDateFormatter or loaded translations
-        // Follow LOCALES.md pattern from sugar-bits lang/
+        // Follow LOCALES.md pattern from sugar-widgets lang/
     }
 }
 ```
@@ -600,7 +600,7 @@ private const DEFAULT_KEY_MAP = [
 | Focus enum | Breaking API change | Add new methods, keep old ones |
 | DateRangePicker | Complexity creep | Keep it in separate file, compose with DatePicker |
 | EventStore | Performance (HashMap lookup per cell) | Cache computed styles, profile |
-| Localization | Incomplete i18n chain | Follow existing `lang/` pattern from sugar-bits |
+| Localization | Incomplete i18n chain | Follow existing `lang/` pattern from sugar-widgets |
 | Compound widgets | Multiple classes | Use consistent factory method pattern |
 
 ---

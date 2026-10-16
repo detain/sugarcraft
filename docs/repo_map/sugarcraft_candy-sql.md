@@ -484,7 +484,7 @@ candy-sql has `ExplainView` which:
 - **charmbracelet/bubbletea** — upstream TUI framework (Go)
 - **charmbracelet/gum** — CLI tool picker (Go, ported as candy-scriptui)
 - **Evertras/bubble-table** — table component (Go, ported as sugar-table)
-- **charmbracelet/bubbles** — component library (Go, ported as sugar-bits)
+- **charmbracelet/bubbles** — component library (Go, ported as sugar-widgets)
 - **erikgeiser/promptkit** — prompt library (Go, ported as sugar-readline)
 
 No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools outside the map:
@@ -623,6 +623,6 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 
 - `/home/sites/sugarcraft/repo_map/jorgerojas26_lazysql.md` — Primary upstream (Go, multi-driver)
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — SugarCraft runtime foundation
-- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-bits.md` — Component library used by the TUI
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-widgets.md` — Component library used by the TUI
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-sprinkles.md` — Styling system
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-skate.md` — SQLite-backed KV store (shares backend technology)

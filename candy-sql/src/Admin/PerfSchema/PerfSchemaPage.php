@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\PerfSchema;
 
-use SugarCraft\Bits\Tabs\Tabs;
+use SugarCraft\Widgets\Tabs\Tabs;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;

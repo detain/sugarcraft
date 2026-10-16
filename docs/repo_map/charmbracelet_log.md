@@ -200,13 +200,13 @@ The charmbracelet/log library maps to several SugarCraft libraries for TUI/loggi
 
 | charmbracelet/log Feature | SugarCraft Library | Notes |
 |--------------------------|---------------------|-------|
-| Structured logging with levels | `sugar-bits` | Output/rendering infrastructure |
+| Structured logging with levels | `sugar-widgets` | Output/rendering infrastructure |
 | Text formatting with ANSI colors | `candy-shine` | ANSI/SGR rendering via Lip Gloss |
-| JSON/Logfmt formatters | `sugar-bits` | Structured output formatting |
+| JSON/Logfmt formatters | `sugar-widgets` | Structured output formatting |
 | Color/profile detection | `candy-shine` | TTY color profile detection |
 | Context propagation | `candy-core` | Context utilities |
-| slog.Handler interface | `sugar-bits` | Handler pattern implementation |
-| Sub-loggers with fields | `sugar-bits` | Immutable builder pattern |
+| slog.Handler interface | `sugar-widgets` | Handler pattern implementation |
+| Sub-loggers with fields | `sugar-widgets` | Immutable builder pattern |
 | Standard log adapter | `candy-core` | Adapter/wrapper patterns |
 
 ### Direct Port Candidates
@@ -217,7 +217,7 @@ The charmbracelet/log library maps to several SugarCraft libraries for TUI/loggi
 
 ### SugarCraft lib Relevance
 
-- **sugar-bits**: Core output/rendering — shares concepts of buffered output, formatting
+- **sugar-widgets**: Core output/rendering — shares concepts of buffered output, formatting
 - **candy-shine**: ANSI styling — directly ports Lip Gloss styling concepts
 - **candy-core**: Utilities and patterns — context, adapter patterns
 
@@ -229,4 +229,4 @@ The architecture is clean with clear separation: `Logger` handles the core logic
 
 The main weaknesses are the runtime frame walking when caller reporting is enabled (necessary for accurate source locations but costly at high log volumes) and the `sync.Map` for helper functions that grows unbounded. However, these are reasonable trade-offs for the functionality provided. The Lip Gloss dependency, while heavy, is justified by the visual quality it produces.
 
-For SugarCraft, this library would primarily inform the design of `sugar-bits` (output infrastructure) and potential new logging libraries. The structured logging with key-value pairs, multiple formatters, and the slog handler pattern are all portable concepts. The text formatter's multiline handling and string escaping algorithms would be particularly useful reference implementations for PHP ports.
+For SugarCraft, this library would primarily inform the design of `sugar-widgets` (output infrastructure) and potential new logging libraries. The structured logging with key-value pairs, multiple formatters, and the slog handler pattern are all portable concepts. The text formatter's multiline handling and string escaping algorithms would be particularly useful reference implementations for PHP ports.

@@ -28,7 +28,7 @@ From the first-stage analysis, glamour maps to:
 
 | SugarCraft Lib | Glamour Feature | Mapping Type |
 |---|---|---|
-| `sugar-bits` | ANSI escape sequences, word wrap | Direct port target — glamour's `ansi` package is the canonical reference for TUI rendering architecture |
+| `sugar-widgets` | ANSI escape sequences, word wrap | Direct port target — glamour's `ansi` package is the canonical reference for TUI rendering architecture |
 | `sugar-charts` | Table rendering | Reference — glamour's `TableElement` using Lip Gloss table.Builder is production-quality |
 | `candy-shine` | Styles/theme system | Reference — glamour's `StyleConfig` + `cascadeStyle()` is the canonical JSON stylesheet-in-JSON pattern |
 | `candy-core` | BaseElement, Element, Renderer pattern | Direct port — Entering/Exiting/Renderer/Finisher tuple pattern is portable |
@@ -312,7 +312,7 @@ Users want to customize how links render: full URL, text-only, shortened GitHub 
 
 Support rendering actual images in terminals (using iTerm2 inline images, sixel, etc.). **Status**: Not implemented. "Not widespread" and "compatibility is important" per maintainers.
 
-**SugarCraft Opportunity**: Consider supporting at least iTerm2 inline images protocol for image rendering in `sugar-bits`.
+**SugarCraft Opportunity**: Consider supporting at least iTerm2 inline images protocol for image rendering in `sugar-widgets`.
 
 ---
 
@@ -1054,7 +1054,7 @@ Charm ecosystem (glamour, lipgloss, bubbletea, bubbles) demonstrates a mature pa
 - Component model (bubbletea)
 - Widgets (bubbles)
 
-**Match**: SugarCraft's planned architecture (candy-shine for styles, sugar-bits for rendering, candy-forms for components) mirrors this.
+**Match**: SugarCraft's planned architecture (candy-shine for styles, sugar-widgets for rendering, candy-forms for components) mirrors this.
 
 ---
 

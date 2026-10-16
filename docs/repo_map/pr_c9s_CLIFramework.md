@@ -34,7 +34,7 @@
 From `repo_map/c9s_CLIFramework.md`:
 - **Primary:** `candy-scriptui` (framework/command hierarchy)
 - **Secondary:** `candy-forms` (Prompter, Chooser)
-- **Tertiary:** `candy-shine` (Formatter, Logger), `sugar-bits` (Table, ProgressBar, utilities)
+- **Tertiary:** `candy-shine` (Formatter, Logger), `sugar-widgets` (Table, ProgressBar, utilities)
 
 ### First-Pass Assessment
 

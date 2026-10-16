@@ -343,7 +343,7 @@ The Python TUI framework with reactive state, CSS styling, 40+ widgets. The **te
 
 7. **Bin entry point is minimal** — The Go template's `main.go` includes explicit error handling with `fmt.Println(err); os.Exit(1)`. candy-starter's `bin/start` delegates all error handling to `Program::run()` silently.
 
-8. **No integration with sugar-bits components** — The README's "common next steps" table mentions `sugar-bits` Spinner, `candy-forms` Group, etc., but the scaffold itself uses only raw `Style` from `candy-sprinkles`. A version that embeds a `Spinner` from `sugar-bits` would show the component model.
+8. **No integration with sugar-widgets components** — The README's "common next steps" table mentions `sugar-widgets` Spinner, `candy-forms` Group, etc., but the scaffold itself uses only raw `Style` from `candy-sprinkles`. A version that embeds a `Spinner` from `sugar-widgets` would show the component model.
 
 9. **Tests do not use data providers** — The 7 tests are explicit individual methods. Using `@dataProvider` for the key-type → expected-count matrix would reduce boilerplate.
 
@@ -357,10 +357,10 @@ The README's "common next steps" table maps developer intents to SugarCraft libr
 
 | Want to... | Library | Addition |
 |---|---|---|
-| Add a text input | `sugar-bits` | `use SugarCraft\Bits\TextInput; ... $input = new TextInput();` |
-| Show a spinner while loading | `sugar-bits` | `use SugarCraft\Bits\Spinner; $spinner = new Spinner();` |
+| Add a text input | `sugar-widgets` | `use SugarCraft\Widgets\TextInput; ... $input = new TextInput();` |
+| Show a spinner while loading | `sugar-widgets` | `use SugarCraft\Widgets\Spinner; $spinner = new Spinner();` |
 | Render Markdown help text | `candy-shine` | `use SugarCraft\Shine\Renderer; echo (new Renderer())->render($md);` |
-| Tail a log into scrollable pane | `sugar-bits` | `use SugarCraft\Bits\Viewport;` |
+| Tail a log into scrollable pane | `sugar-widgets` | `use SugarCraft\Widgets\Viewport;` |
 | Build a multi-page wizard | `candy-forms` | `use SugarCraft\Forms\Group;` |
 | Plot a sparkline | `sugar-charts` | `use SugarCraft\Charts\Sparkline;` |
 | Make it `ssh`-accessible | `candy-wish` | `use SugarCraft\Wish\Wish;` |
@@ -527,7 +527,7 @@ SugarCraft/candy-starter (PHP scaffold)  ◀── Entry point for PHP developer
          │
          ├──► sugarcraft/candy-core     (TEA runtime)
          ├──► sugarcraft/candy-sprinkles (styling)
-         └──► sugarcraft/sugar-bits     (components)
+         └──► sugarcraft/sugar-widgets     (components)
 ```
 
 Without candy-starter, a PHP developer would have to:
@@ -547,6 +547,6 @@ candy-starter gives them a **working running app** in 30 seconds via `composer c
 
 candy-starter is a **minimal, well-designed scaffold** that correctly demonstrates the Elm Architecture in PHP. Its 72-line `Counter` Model shows immutability, message dispatch, command scheduling, and declarative styling. The 7-unit test suite demonstrates deterministic model testing without event loops or mocking. The `composer create-project` lifecycle makes it the correct entry point for PHP developers new to SugarCraft.
 
-The most significant improvement opportunity is **adding sub-component composition** (a `Spinner` from `sugar-bits` as a field of `Counter`) to mirror the Go template's demonstration of `spinner.Model` within the parent model. This would show developers how to build larger apps from smaller TEA components.
+The most significant improvement opportunity is **adding sub-component composition** (a `Spinner` from `sugar-widgets` as a field of `Counter`) to mirror the Go template's demonstration of `spinner.Model` within the parent model. This would show developers how to build larger apps from smaller TEA components.
 
 As a scaffold, candy-starter succeeds at its job: **get a developer from zero to a running SugarCraft TUI app in under a minute**. The architecture is clean, the documentation is clear, and the test coverage is meaningful. It is a solid foundation for the SugarCraft ecosystem.

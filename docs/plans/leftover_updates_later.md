@@ -61,7 +61,7 @@ Today:
 | `Cell` | `candy-vt/src/Cell/Cell.php` | `sugar-dashboard/src/Foundation/Cell.php` |
 | `Theme` | (none yet — gap) | `sugar-dashboard/src/Foundation/Theme.php` (349 LOC) |
 | `Border` / `BorderTitle` | `candy-sprinkles/src/Border/*` | sugar-panels plans to add its own; sugar-dashboard has `Components/Modal` border re-rolls |
-| `Viewport` / `Scrollbar` | `sugar-bits/src/Viewport/`, `sugar-bits/src/Scrollbar/` | `sugar-flexbox` research plans to add these from scratch |
+| `Viewport` / `Scrollbar` | `sugar-widgets/src/Viewport/`, `sugar-widgets/src/Scrollbar/` | `sugar-flexbox` research plans to add these from scratch |
 | `StyleParser` (`[text](fg:red,bg:blue)`) | `sugar-dashboard/src/Foundation/StyleParser.php` (251 LOC) | `candy-sprinkles` will likely want it too; pick one home before second consumer ships |
 
 **Decision points:**
@@ -107,13 +107,13 @@ sugar-panels research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hi
 
 - SSOT-02 — Refactor sugar-panels to accept `Style` and `Border` from candy-sprinkles. Delete any internal `Border*`. Adds candy-sprinkles to require (transitive via candy-core OK; verify path-repo per `tools/check-path-repos.php`).
 
-### SSOT-03 — sugar-flexbox composes sugar-bits
+### SSOT-03 — sugar-flexbox composes sugar-widgets
 
-sugar-flexbox research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. **Both already exist** in `sugar-bits/src/Viewport/Viewport.php` and `sugar-bits/src/Scrollbar/`. The sticker-specific behaviour (sticky positioning, scroll sync) should layer **on top** of sugar-bits, not replace.
+sugar-flexbox research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. **Both already exist** in `sugar-widgets/src/Viewport/Viewport.php` and `sugar-widgets/src/Scrollbar/`. The sticker-specific behaviour (sticky positioning, scroll sync) should layer **on top** of sugar-widgets, not replace.
 
 **Action:**
 
-- SSOT-03 — sugar-flexbox' `Viewport` becomes a `final class` extending or composing `\SugarCraft\Bits\Viewport\Viewport` with the sticky-positioning extras. Add sugar-bits to require.
+- SSOT-03 — sugar-flexbox' `Viewport` becomes a `final class` extending or composing `\SugarCraft\Widgets\Viewport\Viewport` with the sticky-positioning extras. Add sugar-widgets to require.
 
 ### SSOT-04 — sugar-navstack click regions use candy-mouse
 
@@ -316,7 +316,7 @@ because research adds three items the PTY plan did not call out:)
 - Select with enum/index mode (§3.6).
 - `Theme::$errorSummary` separate from `Theme::$error` (§2.4).
 
-### sugar-bits
+### sugar-widgets
 
 - TextInput `validate_on` timing enum (Phase 1, HIGH).
 - TextInput `restrict` regex pattern (Phase 1, HIGH).
@@ -484,7 +484,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 
 ### sugar-flexbox
 
-- See SSOT-03 (Viewport / Scrollbar consume sugar-bits).
+- See SSOT-03 (Viewport / Scrollbar consume sugar-widgets).
 - Sticky positioning via FlexBox extension (Priority 2).
 - Scroll synchronization (Priority 4, low).
 

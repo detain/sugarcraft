@@ -179,7 +179,7 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` indirection | Both use address/key lookup pattern separating reference from data |
 | `SizeFunc` custom allocation | `honey-bounce` layout weights | Custom size distribution similar to flex-weight or grid-template sizing |
 | `EditLeaf()` safe edit pattern | Immutable `with*()` builders | Both provide safe mutation patterns; bubbleboxer uses functional edit, SugarCraft uses copy-on-write |
-| `View()` string rendering | `sugar-bits` view rendering | Both produce final string output for terminal display |
+| `View()` string rendering | `sugar-widgets` view rendering | Both produce final string output for terminal display |
 | `renderHorizontal()` / `renderVertical()` | Table rendering in `candy-shine` | Horizontal join with separator parallels table cell rendering |
 | `UpdateSize()` propagation | `candy-core` resize handling | Both propagate size constraints down a hierarchy |
 | `tea.Model` interface compliance | SugarCraft `Model` contract | Both implement Charmbracelet-style Model pattern for TEA architecture |
@@ -190,7 +190,7 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 
 - `candy-shine` (table/grid layout with separators)
 
-- `sugar-bits` (view rendering pipeline)
+- `sugar-widgets` (view rendering pipeline)
 
 - `honey-bounce` (flex-weight sizing via SizeFunc)
 

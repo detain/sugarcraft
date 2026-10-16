@@ -189,22 +189,22 @@ pub struct Buffer {
 | ratatui Component | SugarCraft Library | Notes |
 |-----------------|-------------------|-------|
 | `ratatui-core` (Widget/StatefulWidget traits, Buffer, Layout, Style, Text, Symbols) | `candy-core` | Core TUI framework - models, buffer, rendering primitives |
-| `ratatui-widgets` (Block, Paragraph, List, Table, Chart, Gauge, etc.) | `sugar-bits` | Component library - all the visual widgets |
+| `ratatui-widgets` (Block, Paragraph, List, Table, Chart, Gauge, etc.) | `sugar-widgets` | Component library - all the visual widgets |
 | `ratatui-crossterm` backend | `candy-scriptui` | Terminal I/O and backend abstraction |
 | `Layout` + Cassowary constraints | `candy-shine` | Layout system for positioning |
 | `Stylize` trait | `candy-forms` | Text styling helpers (Stylize trait mirrors styled() pattern) |
-| `ratatui-macros` | `sugar-bits` (likely) | Declarative macros for boilerplate |
+| `ratatui-macros` | `sugar-widgets` (likely) | Declarative macros for boilerplate |
 | `Terminal::draw` + `Frame` pattern | `candy-core` (Model) | The terminal draw loop mirrors the Model::view() pattern |
 | `StatefulWidget` + State types | `candy-core` (State) | Stateful widgets with `*State` types mirror React state |
-| `Text`/`Line`/`Span` hierarchy | `sugar-bits` (Text rendering) | Styled text primitives |
+| `Text`/`Line`/`Span` hierarchy | `sugar-widgets` (Text rendering) | Styled text primitives |
 | Buffer diffing for efficient render | `candy-core` (render optimization) | Only redraw changed cells |
 | `ratatui::run()` initialization | `candy-scriptui` (Tty initialization) | Terminal setup/teardown helpers |
 
 **Many-to-Many Mapping:**
 
 - `ratatui` as a whole → Maps to multiple SugarCraft libs in combination
-- `ratatui-core` → `candy-core` (foundation) + `sugar-bits` (text/layout)
-- `ratatui-widgets` → `sugar-bits` (visual components)
+- `ratatui-core` → `candy-core` (foundation) + `sugar-widgets` (text/layout)
+- `ratatui-widgets` → `sugar-widgets` (visual components)
 - Backend abstraction → `candy-scriptui` (TTY I/O)
 
 ## Analysis

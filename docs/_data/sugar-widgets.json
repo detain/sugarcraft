@@ -1,0 +1,11 @@
+{
+    "title": "SugarWidgets — SugarCraft",
+    "description": "SugarWidgets: A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.",
+    "ogTitle": "SugarWidgets — SugarCraft",
+    "ogDescription": "A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.",
+    "emoji": "🧁",
+    "displayName": "SugarWidgets",
+    "tagline": "Ready-made TUI components — inputs, tables, spinners, and more",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/bubbles\" style=\"color: inherit;\">charmbracelet/bubbles</a></span>\n          <span class=\"tag-chip\">components</span>\n          <span class=\"tag-chip\">widgets</span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">input</span>"
+}

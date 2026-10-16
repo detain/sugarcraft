@@ -9,7 +9,7 @@ paths:
 
 ## Critical
 
-- Test file lives **always** alongside the lib's other tests (e.g. `sugar-bits/tests/SpinnerTest.php`, `candy-core/tests/RendererTest.php`) — never under a top-level test root, never colocated with `src/`.
+- Test file lives **always** alongside the lib's other tests (e.g. `sugar-widgets/tests/SpinnerTest.php`, `candy-core/tests/RendererTest.php`) — never under a top-level test root, never colocated with `src/`.
 - First three lines are exactly: `<?php`, blank, `declare(strict_types=1);`. Top of every file. No exceptions.
 - Namespace is `SugarCraft\<Sub>\Tests` where `<Sub>` matches the lib's source namespace (look at the lib's `composer.json` `autoload.psr-4` — drop the trailing `\`). Never invent a sub-namespace.
 - Test class is `final` and extends `PHPUnit\Framework\TestCase` — not any project base class.

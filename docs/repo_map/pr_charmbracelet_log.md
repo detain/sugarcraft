@@ -17,13 +17,13 @@ Based on the first-stage analysis, charmbracelet/log maps to:
 
 | charmbracelet/log Feature | SugarCraft Library | Status |
 |---------------------------|--------------------|--------|
-| Structured logging with levels | `sugar-bits` | Existing |
+| Structured logging with levels | `sugar-widgets` | Existing |
 | Text formatting with ANSI colors | `candy-shine` | Existing |
-| JSON/Logfmt formatters | `sugar-bits` | Existing |
+| JSON/Logfmt formatters | `sugar-widgets` | Existing |
 | Color/profile detection | `candy-shine` | Existing |
 | Context propagation | `candy-core` | Existing |
-| slog.Handler interface | `sugar-bits` | Partial |
-| Sub-loggers with fields | `sugar-bits` | Existing |
+| slog.Handler interface | `sugar-widgets` | Partial |
+| Sub-loggers with fields | `sugar-widgets` | Existing |
 | Standard log adapter | `candy-core` | Partial |
 
 **No dedicated `sugar-log` or `candy-log` library exists yet.** This represents a gap.

@@ -142,7 +142,7 @@
 
 | SugarCraft Lib | Glamour Feature | Mapping Type |
 |---|---|---|
-| `sugar-bits` (TUI base) | ANSI escape sequences, word wrap | **Direct port target** — glamour's `ansi` package is essentially a renderer for a TUI. The block stack, margin writer, and element rendering pattern map directly to `sugar-bits`'s view/render architecture. |
+| `sugar-widgets` (TUI base) | ANSI escape sequences, word wrap | **Direct port target** — glamour's `ansi` package is essentially a renderer for a TUI. The block stack, margin writer, and element rendering pattern map directly to `sugar-widgets`'s view/render architecture. |
 | `sugar-charts` | Table rendering | **Reference** — glamour's `TableElement` using Lip Gloss's table.Builder with alignments and borders is a production-quality table rendering example. The `TableCellElement` with children rendering mirrors chart data binding. |
 | `candy-shine` | Styles/theme system | **Reference** — glamour's `StyleConfig` + `cascadeStyle()` is a complete stylesheet-in-JSON pattern. The `StylePrimitive` (Color, Bold, Italic, Underline, etc.) maps to `candy-shine`'s style primitives. |
 | `candy-core` (rendering) | BaseElement, Element, Renderer pattern | **Direct port** — The `BaseElement.doRender()` with prefix/suffix/blockPrefix/blockSuffix and the Entering/Exiting/Renderer/Finisher tuple pattern is directly portable to `candy-core`'s render architecture. |

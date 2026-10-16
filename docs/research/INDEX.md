@@ -33,7 +33,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **sugar-dashboard** | [research/libraries/sugar-dashboard-research.md](libraries/sugar-dashboard-research.md) | 1. Constraint layout, 2. StatefulWidget separation, 3. Reactive props |
-| **sugar-bits** | [research/libraries/sugar-bits-research.md](libraries/sugar-bits-research.md) | 1. validate_on timing, 2. restrict regex, 3. Table sorting/filtering |
+| **sugar-widgets** | [research/libraries/sugar-widgets-research.md](libraries/sugar-widgets-research.md) | 1. validate_on timing, 2. restrict regex, 3. Table sorting/filtering |
 | **candy-forms** | [research/libraries/candy-forms-research.md](libraries/candy-forms-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
 | **sugar-table** | [research/libraries/sugar-table-research.md](libraries/sugar-table-research.md) | 1. StyleFunc, 2. Flex columns, 3. Viewport virtualization |
 | **sugar-charts** | [research/libraries/sugar-charts-research.md](libraries/sugar-charts-research.md) | 1. Nice ticks, 2. Streaming, 3. Area fill |
@@ -146,7 +146,7 @@ To implement an item:
 
 - **candy-forms**: Built-in validators, vim keys, fuzzy suggestions
 - **sugar-readline**: History persistence, auto-suggest, vi mode
-- **sugar-bits**: validate_on timing, restrict regex, table sorting
+- **sugar-widgets**: validate_on timing, restrict regex, table sorting
 - **sugar-datepicker**: Date range picker, event store, localization
 
 ### Terminal Capabilities

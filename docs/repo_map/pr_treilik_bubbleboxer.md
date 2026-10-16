@@ -35,7 +35,7 @@ From `repo_map/treilik_bubbleboxer.md`, the following mappings were identified:
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` | Address/key lookup indirection |
 | `SizeFunc` | `honey-bounce` layout weights | Flex-weight/grid-template sizing |
 | `EditLeaf()` safe edit | Immutable `with*()` builders | Functional edit vs copy-on-write |
-| `View()` rendering | `sugar-bits` view pipeline | String output for terminal |
+| `View()` rendering | `sugar-widgets` view pipeline | String output for terminal |
 | `renderHorizontal/Vertical` | `candy-shine` table rendering | Separator-based cell rendering |
 | `UpdateSize()` propagation | `candy-core` resize handling | Size constraint hierarchy |
 | `tea.Model` interface | SugarCraft `Model` contract | Charmbracelet TEA pattern |
@@ -685,7 +685,7 @@ $layout = $rootLayout->withChildren(
 
 **Effort**: Low — documentation only
 **Impact**: High — reduces issue #7 class of problems
-**Action**: Add comprehensive resize examples to `candy-core` or `sugar-bits` documentation
+**Action**: Add comprehensive resize examples to `candy-core` or `sugar-widgets` documentation
 
 ---
 

@@ -20,17 +20,17 @@ From `repo_map/charmbracelet_wish.md`:
 
 | Wish Component | SugarCraft Equivalent | Status |
 |---|---|---|
-| `bubbletea.Middleware` (serve TUI over SSH) | `sugar-bits`, `candy-forms` | **Gap:** No SSH transport layer exists |
+| `bubbletea.Middleware` (serve TUI over SSH) | `sugar-widgets`, `candy-forms` | **Gap:** No SSH transport layer exists |
 | `git.Middleware` (git server with hooks) | `candy-core` (process execution) | **Gap:** No git server equivalent |
 | `logging.Middleware` (connection logging) | `(none)` | No SSH server library in SugarCraft |
 | `ratelimiter.Middleware` (per-IP throttling) | `(none)` | No SSH-level rate limiting |
 | `accesscontrol.Middleware` (command allowlist) | `(none)` | No SSH command restriction |
 | `recover.Middleware` (panic recovery) | `candy-core` error handling | Partial - worth reviewing |
-| `scp.Middleware` (file transfer) | `sugar-bits` file components | **Gap:** SCP is a specific protocol |
+| `scp.Middleware` (file transfer) | `sugar-widgets` file components | **Gap:** SCP is a specific protocol |
 | `Cmd` / PTY execution helper | `candy-pty` (FFI/syscall PTY wrappers) | **Opportunity:** ssh-wrapped version |
 | `WithAuthorizedKeys` (public key auth) | `SugarCraft\Core\Auth` | Different credential systems |
 
-**Overall Assessment:** Wish = SSH transport + Bubble Tea integration + Git server + middleware toolkit. SugarCraft has no SSH transport equivalent. The closest SugarCraft analogue for TUI-over-transport is `sugar-bits`/`candy-forms`, but without an SSH transport layer these cannot be served remotely.
+**Overall Assessment:** Wish = SSH transport + Bubble Tea integration + Git server + middleware toolkit. SugarCraft has no SSH transport equivalent. The closest SugarCraft analogue for TUI-over-transport is `sugar-widgets`/`candy-forms`, but without an SSH transport layer these cannot be served remotely.
 
 ---
 
@@ -765,7 +765,7 @@ Rate limiting before auth (#325) reflects security-conscious users wanting prote
 
 8. **SFTP Subsystem**
    - File transfer support via WithSubsystem
-   - Integrates with existing file handling in sugar-bits
+   - Integrates with existing file handling in sugar-widgets
 
 ---
 

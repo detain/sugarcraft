@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
-use SugarCraft\Bits\Scrollbar\Scrollbar as BitsScrollbar;
-use SugarCraft\Bits\Scrollbar\ScrollbarState;
+use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
+use SugarCraft\Widgets\Scrollbar\ScrollbarState;
 
 /**
  * Sticker-level scrollbar wrapping the canonical {@see BitsScrollbar}.
  *
- * Composes sugar-bits Scrollbar rather than reimplementing it.
+ * Composes sugar-widgets Scrollbar rather than reimplementing it.
  *
- * @see \SugarCraft\Bits\Scrollbar\Scrollbar
+ * @see \SugarCraft\Widgets\Scrollbar\Scrollbar
  */
 final readonly class Scrollbar
 {

@@ -49,7 +49,7 @@ Fix all HIGH and MEDIUM severity findings in sugar-flexbox library (multibyte co
 
 - Confirmed bug exists at line 302: `\x7F\x80-\x9F` pattern
 - The Column.php sanitize method at lines 122-126 already has the correct fix with detailed comment explaining why
-- sugar-bits Table.php sanitizeCell at line 580-584 uses simpler approach (only removes C0 controls)
+- sugar-widgets Table.php sanitizeCell at line 580-584 uses simpler approach (only removes C0 controls)
 
 **Implementation:**
 ```php

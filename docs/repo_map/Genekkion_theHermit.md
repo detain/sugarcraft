@@ -155,17 +155,17 @@ items = model.items[model.offset : model.offset+model.height-1]
 | theHermit Feature | SugarCraft Library | Notes |
 |-------------------|---------------------|-------|
 | List overlay/quick fix popup | `sugar-list` | SugarCraft's list component; would need overlay/wrapper pattern |
-| Item interface (`Title()`) | `sugar-bits` | Mirrors the component/item protocol in SugarCraft TUI |
+| Item interface (`Title()`) | `sugar-widgets` | Mirrors the component/item protocol in SugarCraft TUI |
 | Border rendering + styling | `candy-shine` | Lipgloss-based styling system; border primitives |
 | Overlay rendering (centered on background) | `candy-scriptui` | Viewport/window management, fullscreen overlay |
-| Background view preservation | `sugar-bits` (renderer) | BubbleTea's concurrent view update pattern |
+| Background view preservation | `sugar-widgets` (renderer) | BubbleTea's concurrent view update pattern |
 | Keyboard navigation (up/down) | `candy-forms` | Input handling, cursor movement |
 | tea.Model interface (Init/Update/View) | `candy-core` | Core TUI component contract |
 
 **Mapping Notes:**
 
 - The Hermit is a **wrapper/overlay pattern** that doesn't directly map to a single SugarCraft lib — it would span multiple:
-  - `sugar-bits` for the item/component model
+  - `sugar-widgets` for the item/component model
   - `candy-shine` for lipgloss-based styling  
   - A new `sugar-overlay` or `sugar-quickfix` lib for the overlay rendering mechanism
 - The background-view-continues-updating pattern is similar to how `candy-sprinkles` handles layered rendering
@@ -177,4 +177,4 @@ The Hermit is a Go library providing a quick fix list overlay for the Charm Bubb
 
 The implementation demonstrates thoughtful handling of ANSI escape codes, which is critical for any terminal application dealing with styled text. The library uses regex pattern matching to detect ANSI codes and excludes them from character position calculations when computing padding — a common source of bugs in TUI development. The `lipgloss.Width()` function is used throughout instead of naive string length, ensuring proper handling of double-width Unicode characters and ANSI sequences.
 
-The library is relatively small (4 source files, ~640 lines) but focused. It fills a specific niche that the official charmbracelet/bubbles list component doesn't address: the quick fix popup pattern for fullscreen applications. The author (Genekkion) has also contributed to the official bubbles repository, indicating familiarity with the ecosystem. While currently limited to fullscreen views and lacking features like fuzzy filtering, the architecture is clean and extensible. For a SugarCraft port, this would likely map to a combination of the existing list handling (sugar-bits), styling (candy-shine), and potentially a new overlay/renderer component for the overlay mechanism.
+The library is relatively small (4 source files, ~640 lines) but focused. It fills a specific niche that the official charmbracelet/bubbles list component doesn't address: the quick fix popup pattern for fullscreen applications. The author (Genekkion) has also contributed to the official bubbles repository, indicating familiarity with the ecosystem. While currently limited to fullscreen views and lacking features like fuzzy filtering, the architecture is clean and extensible. For a SugarCraft port, this would likely map to a combination of the existing list handling (sugar-widgets), styling (candy-shine), and potentially a new overlay/renderer component for the overlay mechanism.

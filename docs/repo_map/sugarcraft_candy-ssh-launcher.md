@@ -16,7 +16,7 @@
 
 - **Upstream:** `charmbracelet/wishlist` (Go, ~700 stars)
 
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-bits`, `sugarcraft/candy-pty`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-forms`, `sugarcraft/candy-mouse`, `sugarcraft/honey-bounce`, `sugarcraft/candy-palette`
+- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-widgets`, `sugarcraft/candy-pty`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-forms`, `sugarcraft/candy-mouse`, `sugarcraft/honey-bounce`, `sugarcraft/candy-palette`
 
 ---
 
@@ -120,7 +120,7 @@ Ignored keywords (intentionally): `Match`, `Include`, `Set`, `SendEnv`, `Forward
 
 **File: `src/Picker.php`**
 
-A lightweight, single-purpose TUI widget (not a full SugarBits `List`). Key design decisions:
+A lightweight, single-purpose TUI widget (not a full SugarWidgets `List`). Key design decisions:
 
 - **No full event loop** — Uses a simple `while(true)` loop with blocking `fread()` on STDIN. Directly draws to STDOUT via ANSI escape sequences.
 
@@ -264,7 +264,7 @@ This is architecturally cleaner than a PHP-based SSH proxy, but means candy-ssh-
 
 1. **Process model**: Upstream `charmbracelet/wishlist` uses `golang.org/x/crypto/ssh` for in-process SSH connections. candy-ssh-launcher uses `pcntl_exec` to hand off to the system `ssh` binary. This is a philosophical difference — upstream gets full programmatic SSH control; candy-ssh-launcher gets zero-knowledge simplicity and 100% fidelity with manual `ssh` usage.
 
-2. **TUI framework**: Upstream uses `charmbracelet/bubbletea` with `bubbles/list`. candy-ssh-launcher uses a hand-rolled single-purpose picker (40 lines of ANSI rendering) to avoid pulling in the full SugarBits component library for a one-shot use case.
+2. **TUI framework**: Upstream uses `charmbracelet/bubbletea` with `bubbles/list`. candy-ssh-launcher uses a hand-rolled single-purpose picker (40 lines of ANSI rendering) to avoid pulling in the full SugarWidgets component library for a one-shot use case.
 
 3. **No intermediate network layer**: Upstream maintains live SSH connections. candy-ssh-launcher simply selects an endpoint and execs — no persistent state, no connection pooling.
 
@@ -340,7 +340,7 @@ SSH server middleware framework. candy-ssh-launcher declares it as a dependency 
 
 The SSH config parser (`SshConfigParser`) is the most substantial piece of infrastructure — it properly handles OpenSSH's first-match-wins semantics, global `Host *` defaults, and `~` path expansion. This could be extracted into a standalone `candy-sshconfig` leaf library if other projects need SSH config parsing.
 
-The picker is deliberately minimal — a single `while(true) { draw(); readKey(); switch() }` loop with hand-rolled ANSI rendering rather than a full SugarBits `List` component. This is the right trade-off: the picker is a fire-and-forget widget that immediately exits via `pcntl_exec`; wiring in the full SugarBits event loop would be unnecessary complexity.
+The picker is deliberately minimal — a single `while(true) { draw(); readKey(); switch() }` loop with hand-rolled ANSI rendering rather than a full SugarWidgets `List` component. This is the right trade-off: the picker is a fire-and-forget widget that immediately exits via `pcntl_exec`; wiring in the full SugarWidgets event loop would be unnecessary complexity.
 
 The main gap vs upstream is the lack of SSH-server mode and dynamic service discovery. The architecture is cleanly structured so these could be added later using `candy-wish` (for SSH serving) and a future `sugar-discovery` leaf library (for Zeroconf/SRV/Tailscale). The deferred features are clearly marked in this analysis.
 

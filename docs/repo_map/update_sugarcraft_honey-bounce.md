@@ -334,7 +334,7 @@ honey-bounce/src/
 # UX / TUI Improvements
 
 1. **Animator wrapper for candy-core**: `SugarCraft\Bounce\Animator` class that auto-hooks springs to reactive properties in candy-core models — similar to textual's Animator class
-2. **Animation presets in sugar-bits**: Pre-built animated components (animated list item, spring button, bounce notification) using honey-bounce springs
+2. **Animation presets in sugar-widgets**: Pre-built animated components (animated list item, spring button, bounce notification) using honey-bounce springs
 3. **REDUCE_MOTION documentation**: Prominently document the accessibility feature — this is SugarCraft's strongest differentiation from upstream
 
 # Testing / Reliability Improvements

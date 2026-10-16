@@ -199,8 +199,8 @@
 
 | charmbracelet/charm | SugarCraft Library | Notes |
 |--------------------|-------------------|-------|
-| `kv/` package | `sugar-bits` | Key-value store; sugar-bits provides BitArray, Table rendering primitives. Not a direct KV port but complementary. |
-| `fs/` package | `candy-shine` or `sugar-bits` | Filesystem FS interface; shine has output/styling, bits has data structures. |
+| `kv/` package | `sugar-widgets` | Key-value store; sugar-widgets provides BitArray, Table rendering primitives. Not a direct KV port but complementary. |
+| `fs/` package | `candy-shine` or `sugar-widgets` | Filesystem FS interface; shine has output/styling, bits has data structures. |
 | `crypt/` package | (no direct equivalent) | Encryption/crypto utilities not yet ported. |
 | `client/` package | `candy-scriptui` | Shell utilities; client config/env management similar to shell setup. |
 | `ui/` package (Bubble Tea) | `candy-sprinkles` | Sprinkles provides Bubble Tea components. The TUI pattern matches. |

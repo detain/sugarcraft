@@ -32,14 +32,14 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Cursor tracking** — get current row/cell on selection
 
 ### Viewport
-- **Scrollable viewport** — composes `sugar-bits` `Viewport` (SSOT)
+- **Scrollable viewport** — composes `sugar-widgets` `Viewport` (SSOT)
 - **Keyboard navigation** — line-up/down, page-up/down, goto-top/bottom
 - **Mouse wheel** support with configurable delta
 - **Horizontal scrolling** with step-based navigation
 - **Smooth scroll** and scrollbar toggle
 
 ### Scrollbar
-- **Scrollbar** — composes `sugar-bits` `Scrollbar` (SSOT)
+- **Scrollbar** — composes `sugar-widgets` `Scrollbar` (SSOT)
 - **Vertical and horizontal** scrollbars with configurable thumb/track characters
 - **Arrow toggling** for scrollbar ends
 

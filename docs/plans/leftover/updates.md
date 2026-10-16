@@ -3,13 +3,13 @@
 **2026-05-17 — Clean, no showstoppers found.** Details:
 
 - **CI Status**: ✅ `php tools/check-path-repos.php` reports "closure clean" across all 46 libs. CI workflows (`.github/workflows/`) are structurally sound — no obvious issues.
-- **Composer validation**: ✅ All key libs (`candy-core`, `candy-pty`, `sugar-bits`, `sugar-charts`, `candy-scriptui`) pass `composer validate --no-check-all`. Root warns only about the `version` field on the monorepo root — expected/benign.
+- **Composer validation**: ✅ All key libs (`candy-core`, `candy-pty`, `sugar-bits`, `sugar-charts`, `candy-scriptui`) pass `composer validate --no-check-all`. Root warns only about the `version` field on the monorepo root — expected/benign. <!-- @rename-keep historical provenance -->
 - **Untracked files**: ✅ Only `.claude/scheduled_tasks.lock` — benign, matches task description.
 - **MATCHUPS.md**: ✅ Properly formatted. No duplicate rows. The Python "duplicate Upstream" finding was a false alarm — "Upstream" appears in two table *header* rows (one per section: Charmbracelet libs + Apps), which is correct. 53 data rows, no inconsistencies.
 - **PHP syntax**: ✅ Sampled 20 `src/*.php` files — all pass `php -l`. Also verified `PosixBackend.php`, `PosixPump.php`, `RealProcess.php`, `Process.php` individually.
 - **Step 07 preconditions**: ⚠️ P3-LO-01 and CC-LO-08 are NOT YET in the done log — step 01.07 is the next logical step (matching `step-07-realprocess-deletion.md`). Pre-step grep was run during this health check; `RealProcess` has **active callers** in `candy-scriptui/src/Command/SpinCommand.php:71` and `candy-scriptui/tests/Process/RealProcessTest.php` — deletion is NOT safe. The step file's own logic handles this correctly (keep as deprecated alias if callers exist). No blocker — the step can proceed on its defined path.
 - **leftover_updates.md**: ✅ Reviewed. No urgent items missed. Sequencing in that file (P5-LO-01 first, CC-LO-02 second, step 07 fifth) is consistent with current done-log state.
-- **Symlinks**: ✅ All `composer.json` files in consumer libs resolve to real files — no broken symlinks. Verified `candy-pty`, `candy-scriptui`, `sugar-bits`, `sugar-charts`, `sugar-dash`, `candy-sprinkles`, `candy-vt`. <!-- @rename-keep -->
+- **Symlinks**: ✅ All `composer.json` files in consumer libs resolve to real files — no broken symlinks. Verified `candy-pty`, `candy-scriptui`, `sugar-bits`, `sugar-charts`, `sugar-dash`, `candy-sprinkles`, `candy-vt`. <!-- @rename-keep historical provenance -->
 - **candy-scriptui dep on candy-pty**: ✅ Already satisfied — `candy-scriptui/composer.json` already has `sugarcraft/candy-pty: dev-master` in `require`.
 
 ---
@@ -93,7 +93,7 @@ step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
 review for step 01.05 · clean · PR#498
 step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
 candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue)
-path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02) <!-- @rename-keep -->
+path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02) <!-- @rename-keep historical provenance -->
 step 01.07 · PR#502 · candy-scriptui: RealProcess kept as deprecated alias; Process interface aligned with candy-pty/Contract
 review for step 01.07 · clean · PR#502
 docs for step 01.07 · clean · PR#502
@@ -192,10 +192,10 @@ review for step 03.08 · clean · PR#541
   docs for step 03.18 · clean
   carry-forward: step 03.17 Issue #1: 760+ hardcoded Color::hex() calls remain in Components/ (Modal/Notification, Alert, Toast, Card/*, Tree/*, Media/*, Feedback/*, Gauge, Bullet, etc.) — bulk hex→theme conversion needed as follow-up
   carry-forward: step 03.17 Issue #3 (minor): DrawableThemeTest.php naming (vs step-spec RenderUsesThemeTest.php per family) — acceptable as test covers same ground; no action needed
-  carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix <!-- @rename-keep -->
+  carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix
   step 04.01 · PR#564 · sugar-panels: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
   docs for step 04.01 · PR#565 · sugar-panels: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-panels.html quickstart + API table
-  step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
+  step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02) <!-- @rename-keep historical provenance -->
 review for step 04.02 · clean · PR#566
 docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-flexbox.html
 step 04.03 · PR#568 · sugar-navstack: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep
@@ -370,17 +370,17 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.04 · clean · PR#690 (2 docs gaps: validateAll + withEnum not in README API tables)
   tests-ci for step 08.04 · clean
   docs for step 08.04 · PR#691 · document validateAll in Form chainables table + withEnum in Select knobs + MultiSelect vim keys + errorSummary in README/end-user HTML
-  step 08.05 · PR#692 · sugar-bits: add withValidateOn(ValidateOn) timing control + withRestrict(string $pattern) keystroke filter to TextInput (leftover-rollout step 08.05)
+  step 08.05 · PR#692 · sugar-bits: add withValidateOn(ValidateOn) timing control + withRestrict(string $pattern) keystroke filter to TextInput (leftover-rollout step 08.05) <!-- @rename-keep historical provenance -->
   tests-ci for step 08.05 · clean
   docs for step 08.05 · PR#693 · document ValidateOn + withRestrict in README + end-user HTML
-  step 08.06 · PR#694 · sugar-bits: Table sort (withSort/thenSortBy/clearSort + SortDirection/SortState; 32 SortTest tests; leftover-rollout step 08.06)
+  step 08.06 · PR#694 · sugar-bits: Table sort (withSort/thenSortBy/clearSort + SortDirection/SortState; 32 SortTest tests; leftover-rollout step 08.06) <!-- @rename-keep historical provenance -->
   review for step 08.06 · clean · PR#694
   tests-ci for step 08.06 · clean
   docs for step 08.06 · PR#695 · document SortDirection/SortState/withSort/thenSortBy/clearSort/getSortState in README + end-user HTML
-  step 08.07 · PR#696 · sugar-bits: Table filter (withFilterable/withFilter/withFilterPredicate + 27 FilterTest tests; leftover-rollout step 08.07)
+  step 08.07 · PR#696 · sugar-bits: Table filter (withFilterable/withFilter/withFilterPredicate + 27 FilterTest tests; leftover-rollout step 08.07) <!-- @rename-keep historical provenance -->
   review for step 08.07 · clean · PR#696
   tests-ci for step 08.07 · clean
-  step 08.08 · PR#698 · sugar-bits: Table pagination (withPageSize/getPaginator + pageFirst/pageLast/nextPage/prevPage + 27 PaginationTest; leftover-rollout step 08.08)
+  step 08.08 · PR#698 · sugar-bits: Table pagination (withPageSize/getPaginator + pageFirst/pageLast/nextPage/prevPage + 27 PaginationTest; leftover-rollout step 08.08) <!-- @rename-keep historical provenance -->
   review for step 08.08 · clean · PR#698
   tests-ci for step 08.08 · clean
   docs for step 08.07 · PR#697 · document withFilterable/withFilter/withFilterPredicate + default substring-match in README + end-user HTML

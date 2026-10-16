@@ -442,7 +442,7 @@ The handler is injectable into `InProcessTransport` via `setChannelHandler()`, e
 | Auth | Ed25519/RSA key, password, KI | sshd handles; middleware validates sshd's result |
 | SFTP/SCP | No | Stub only |
 | Middleware | None | Express-style composable pipeline |
-| SugarCraft integration | None | Deep (candy-pty, sugar-bits via BubbleTea) |
+| SugarCraft integration | None | Deep (candy-pty, sugar-widgets via BubbleTea) |
 
 **Fundamental difference:** Whisp is a complete SSH server application. CandyWish is a middleware framework that expects to run under an existing SSH server. Whisp has no concept of middleware composition, while candy-wish builds entirely around it.
 
@@ -579,7 +579,7 @@ CandyWish is a leaf-level library in the dependency graph. It is not depended on
 |---|---|
 | `candy-core` | Dependency — provides `Context`, i18n, exception types |
 | `candy-pty` | Dependency — PTY syscalls, pump, signal forwarding |
-| `sugar-bits` | Potential consumer — BubbleTea middleware mounts sugar-bits Programs over SSH |
+| `sugar-widgets` | Potential consumer — BubbleTea middleware mounts sugar-widgets Programs over SSH |
 | `candy-metrics` | Parallel — `SessionMetrics` middleware pattern mirrors promwish; both are SSH session middleware |
 | `candy-sshconfig` | Future — wishlist's `sshconfig.ParseFile()` would be a natural `candy-sshconfig` leaf lib |
 

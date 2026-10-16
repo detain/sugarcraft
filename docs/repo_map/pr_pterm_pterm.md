@@ -25,20 +25,20 @@ Key architectural pillars:
 
 ## 2. Existing SugarCraft Mapping
 
-From `repo_map/pterm_pterm.md`, pterm maps almost entirely to `sugar-bits`:
+From `repo_map/pterm_pterm.md`, pterm maps almost entirely to `sugar-widgets`:
 
 | pterm Component | SugarCraft Lib |
 |---|---|
 | Color, Style, RGB, RGBStyle | `candy-core` |
 | Print/Sprint family, SetDefaultOutput | `candy-core` |
 | ThemeDefault | `candy-shine` |
-| ProgressbarPrinter, SpinnerPrinter, AreaPrinter | `sugar-bits` |
-| Logger + SlogHandler | `sugar-bits` |
-| TablePrinter, BoxPrinter, PanelPrinter, BarChartPrinter | `sugar-bits` |
-| BigTextPrinter, HeaderPrinter, SectionPrinter, TreePrinter | `sugar-bits` |
-| InteractiveSelectPrinter, InteractiveMultiSelectPrinter | `sugar-bits` |
-| InteractiveConfirmPrinter, InteractiveContinuePrinter | `sugar-bits` |
-| InteractiveTextInputPrinter, PrefixPrinter | `sugar-bits` |
+| ProgressbarPrinter, SpinnerPrinter, AreaPrinter | `sugar-widgets` |
+| Logger + SlogHandler | `sugar-widgets` |
+| TablePrinter, BoxPrinter, PanelPrinter, BarChartPrinter | `sugar-widgets` |
+| BigTextPrinter, HeaderPrinter, SectionPrinter, TreePrinter | `sugar-widgets` |
+| InteractiveSelectPrinter, InteractiveMultiSelectPrinter | `sugar-widgets` |
+| InteractiveConfirmPrinter, InteractiveContinuePrinter | `sugar-widgets` |
+| InteractiveTextInputPrinter, PrefixPrinter | `sugar-widgets` |
 | MapRangeToRange() | `honey-bounce` |
 | RGB.Fade() multi-stop color interpolation | `candy-shine` or `honey-bounce` |
 
@@ -76,7 +76,7 @@ From `repo_map/pterm_pterm.md`, the known weaknesses of pterm that SugarCraft sh
 - **Summary**: Request to simultaneously show a progress bar on top and an area with detailed processing information below
 - **This is a known architectural limitation**: pterm uses `\r` to rewrite the last line, so multiple live printers compete for the same cursor position
 - **Solution exists**: The `MultiPrinter` (added in v0.12.66 via PR #544) can combine multiple LivePrinters by giving each its own buffer and rendering via AreaPrinter
-- **Direct Risk for SugarCraft**: **HIGH** — This is a fundamental concurrency problem. SugarCraft's `sugar-bits` progressbar and spinner implementations must handle concurrent updates properly. The MultiPrinter pattern (multiple buffers feeding into one area) is the correct solution and should be replicated.
+- **Direct Risk for SugarCraft**: **HIGH** — This is a fundamental concurrency problem. SugarCraft's `sugar-widgets` progressbar and spinner implementations must handle concurrent updates properly. The MultiPrinter pattern (multiple buffers feeding into one area) is the correct solution and should be replicated.
 
 ### Issue #714: `DefaultInteractiveMultiselect` re-printing text on each keystroke (April 2025)
 
@@ -191,7 +191,7 @@ The most recurring pain point across issues is the concurrency model for live pr
 
 **Pattern**: pterm's original approach was to spawn goroutines in `Start()` that modify shared state (`IsActive`, `currentSequence`, `Text`), which caused race conditions. The fix was adding mutexes and redesigning state transitions.
 
-**SugarCraft Implication**: Live printers in `sugar-bits` must use mutex-protected state machines. The `Start()` method should return an instance that holds the authoritative state, not a shared global.
+**SugarCraft Implication**: Live printers in `sugar-widgets` must use mutex-protected state machines. The `Start()` method should return an instance that holds the authoritative state, not a shared global.
 
 ### 6.2 Cross-Platform Terminal Compatibility
 
@@ -572,7 +572,7 @@ Inconsistent default output destinations (stdout vs stderr) caused real user pro
 ### 19.1 MultiPrinter / Multi Live Printer Support
 
 **Priority**: HIGH
-The buffer-per-printer pattern is the correct architecture. Implement in `sugar-bits` using ReactPHP's event loop for the scheduler.
+The buffer-per-printer pattern is the correct architecture. Implement in `sugar-widgets` using ReactPHP's event loop for the scheduler.
 
 ### 19.2 TreeInteractive with Collapsible Nodes
 

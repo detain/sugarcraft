@@ -227,7 +227,7 @@ These would be leaf libs under `Sugar\` (components/data/forms/apps) rather than
 ### Tertiary: Component-Level Libraries
 
 - **`candy-shine`** (styling/output) — `CLIFramework\Formatter` + `CLIFramework\Logger` = ANSI text styling
-- **`sugar-bits`** (small utilities) — `Buffer`, `Corrector`, `ValueCollection`, `ArgInfo`, `ArgInfoList`, `CommandGroup`
+- **`sugar-widgets`** (small utilities) — `Buffer`, `Corrector`, `ValueCollection`, `ArgInfo`, `ArgInfoList`, `CommandGroup`
 - **`sugar-charts`** — not relevant (Table component is text-only, not data visualization)
 - **`honey-bounce`** — not relevant (no physics/animation)
 
@@ -242,10 +242,10 @@ Command                            Per-command classes
 ServiceContainer                   DI / service provision
 GetOptionKit (external)             (candy-core option parsing)
 Formatter                          candy-shine (ANSI styling)
-Logger                             candy-shine / sugar-bits
+Logger                             candy-shine / sugar-widgets
 Prompter / Chooser                 candy-forms
-Table                              sugar-bits
-ProgressBar                        sugar-bits
+Table                              sugar-widgets
+ProgressBar                        sugar-widgets
 ZshGenerator / BashGenerator       candy-forms (completion)
 Extension system                   (plugin architecture)
 ```
@@ -260,4 +260,4 @@ The service container (Pimple-based) centralizes framework-wide dependencies (lo
 
 The main weaknesses are architectural. Despite targeting PHP 7.2+, the codebase uses no return type declarations, no typed properties, no named arguments, and almost no attributes — it's PHP 5.6 style code wearing PHP 7.2 compatibility. The `CommandBase` class is a 945-line god object that mixes IO, class loading, extension management, argument parsing, and command resolution. The reliance on reflection for argument introspection on every `execute()` call has performance implications. And while it has an extension/plugin system, the coupling between `Application` and concrete services like `Formatter` and `Logger` makes swapping implementations awkward.
 
-For the SugarCraft ecosystem, CLIFramework maps most naturally to `candy-scriptui` as the console application foundation. The interactive prompt and chooser components would become `candy-forms` leaf libs, while the ANSI formatting and logging infrastructure belongs in `candy-shine`. The table rendering and progress bar components are utility-level leaf libs that could live in `sugar-bits`. The completion generation system is a specialized `candy-forms` feature. The overall architecture — hierarchical commands, fluent option building, service container, event hooks — is the same model that `candy-scriptui` should implement in idiomatic PHP 8.3+ style.
+For the SugarCraft ecosystem, CLIFramework maps most naturally to `candy-scriptui` as the console application foundation. The interactive prompt and chooser components would become `candy-forms` leaf libs, while the ANSI formatting and logging infrastructure belongs in `candy-shine`. The table rendering and progress bar components are utility-level leaf libs that could live in `sugar-widgets`. The completion generation system is a specialized `candy-forms` feature. The overall architecture — hierarchical commands, fluent option building, service container, event hooks — is the same model that `candy-scriptui` should implement in idiomatic PHP 8.3+ style.

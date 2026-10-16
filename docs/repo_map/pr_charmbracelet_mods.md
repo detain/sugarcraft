@@ -24,7 +24,7 @@ The first-pass analysis identified these unmapped areas relevant to SugarCraft:
 | Streaming LLM client | `candy-forms` or new `sugar-llm` |
 | Conversation caching | `candy-sprinkles` (caching utilities) |
 | MCP client integration | `sugar-mcp-client` or `honey-mcp` |
-| SQLite storage | leveraging `sugar-bits` persistence |
+| SQLite storage | leveraging `sugar-widgets` persistence |
 
 This second-stage analysis drills into the *why* these gaps existed and whatSugarCraft should learn from mods' architectural decisions and failures.
 

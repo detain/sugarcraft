@@ -6,7 +6,7 @@
 <title>SugarCraft — CandyForms</title>
 <meta name="description" content="CandyForms: Form library (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.">
 <meta property="og:title" content="SugarCraft — CandyForms">
-<meta property="og:description" content="Form engine (port of charmbracelet/huh) plus the raw component implementations that sugar-bits re-exports — Groups, themes, validators, fuzzy / async suggestions.">
+<meta property="og:description" content="Form engine (port of charmbracelet/huh) plus the raw component implementations that sugar-widgets re-exports — Groups, themes, validators, fuzzy / async suggestions.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-forms.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-forms.html">
 <meta property="og:type" content="website">
@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-forms"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-forms" alt="CandyForms code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, six themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-bits</code> re-exports, folded together with the interactive form library (port of charmbracelet/huh) into a single standalone dependency.</p>
+    <p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, six themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library (port of charmbracelet/huh) into a single standalone dependency.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-forms</code></pre>
@@ -117,9 +117,9 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Declarative form wizards</strong> — multi-page Groups, validation, themes, fuzzy / async suggestions, out of the box.</li>
-      <li><strong>Standalone form primitives</strong> — when you want the raw inputs without sugar-bits overhead.</li>
+      <li><strong>Standalone form primitives</strong> — when you want the raw inputs without sugar-widgets overhead.</li>
       <li><strong>Custom form engines</strong> — build your own form system on top of the Field interface.</li>
-      <li><strong>Spinner and progress components</strong> — standalone spinner and the fork-safe ActionSpinner live here, previously in sugar-bits / the retired prompt façade.</li>
+      <li><strong>Spinner and progress components</strong> — standalone spinner and the fork-safe ActionSpinner live here, previously in sugar-widgets / the retired prompt façade.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

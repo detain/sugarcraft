@@ -667,7 +667,7 @@ The cursor management patterns are identical. php-console-spinner's delta-timer 
 
 2. **Layout system** — No constraint-based layout, no flex/grid/table layout. `view()` must compose strings manually.
 
-3. **Widget library** — No prebuilt components (text input, spinner, list, table, etc.) in core. sugar-bits provides these but as separate leaf libs.
+3. **Widget library** — No prebuilt components (text input, spinner, list, table, etc.) in core. sugar-widgets provides these but as separate leaf libs.
 
 4. **Streaming/incremental rendering** — Full frame redraw every time. No dirty-region tracking beyond changed-row detection.
 
@@ -991,7 +991,7 @@ This allows modifying a model without touching the layout tree. candy-core's `Co
 
 - [ ] `Widget` interface: `render(Buffer, Rect): void`
 - [ ] `StatefulWidget` interface with associated `*State` type
-- [ ] Port basic widgets from `sugar-bits` into core: `Block`, `Paragraph`
+- [ ] Port basic widgets from `sugar-widgets` into core: `Block`, `Paragraph`
 - [ ] `WidgetRenderer` visitor pattern for composing renderers
 - [ ] `Extension` system for optional widget sets
 

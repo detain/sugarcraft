@@ -297,7 +297,7 @@ The design decision to style only the glyph (not the message) keeps output scann
 ▸ 4/5 Done
 ```
 
-This is distinguishable from a progress bar (which would use `sugar-bits` progress components) and from a log (which would use `candy-log`). Stage is specifically for visual sequencing of multi-step operations where the user needs to see which step they're on.
+This is distinguishable from a progress bar (which would use `sugar-widgets` progress components) and from a log (which would use `candy-log`). Stage is specifically for visual sequencing of multi-step operations where the user needs to see which step they're on.
 
 ### Help Page Pattern
 

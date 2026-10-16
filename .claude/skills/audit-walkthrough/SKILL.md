@@ -88,23 +88,23 @@ Flagged for user decision:
 
 **Actions taken:**
 1. Read the file — eight-category quality sweep; guard rail "stop after each PR, never break public API silently."
-2. Touches `candy-core` (6), `sugar-bits` (5), `sugar-charts` (4). Queue: `candy-core` → `sugar-bits` → `sugar-charts` (charts requires core + bits).
+2. Touches `candy-core` (6), `sugar-widgets` (5), `sugar-charts` (4). Queue: `candy-core` → `sugar-widgets` → `sugar-charts` (charts requires core + bits).
 3. Pre-filtered 2 "credit upstream author" items → `⏭️ skipped — pre-1.0, out of scope` in place.
 4. `candy-core` Cat A: 3 missing `declare(strict_types=1);` (fix), 1 `==`-on-`mixed` (flag — type-widening on public surface). Added the declares; appended `✅ added declare(strict_types=1) (candy-core/src/Util/Width.php:1)` etc. to each original line.
 5. `cd candy-core && composer install && vendor/bin/phpunit` → 142 tests OK.
 6. Branch `ai/candy-core-audit-quality` → commit (author Joe Huss) → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge --merge --delete-branch` → `git checkout master && git pull --ff-only`.
-7. Reported the `==`/type-widening item as flagged-for-user. Advanced to `sugar-bits`.
+7. Reported the `==`/type-widening item as flagged-for-user. Advanced to `sugar-widgets`.
 
 **Result:** One merged PR per lib in dependency order, audit file marked in place, API-breaking item surfaced for the user, credit items skipped.
 
 **Inline marker shape** — correct:
 ```
-- [ ] sugar-bits: Model::update() should clamp negative cursor index to 0 ✅ added clamp + test (sugar-bits/src/Model.php:88, ::test_negative_cursor_clamps_to_zero)
+- [ ] sugar-widgets: Model::update() should clamp negative cursor index to 0 ✅ added clamp + test (sugar-widgets/src/Model.php:88, ::test_negative_cursor_clamps_to_zero)
 ```
 Wrong (moved into a new section — DON'T):
 ```
 ## Completed
-- [x] sugar-bits: clamp negative cursor — DONE
+- [x] sugar-widgets: clamp negative cursor — DONE
 ```
 
 ## Common Issues
@@ -113,7 +113,7 @@ Wrong (moved into a new section — DON'T):
 - **`vendor/bin/phpunit` fails on a `sugarcraft/*` dep that looks correct:** local `vendor/`/`composer.lock` is stale (gitignored; CI unaffected). `cd <slug> && composer update` then re-run. Only treat the failure as real afterward.
 - **`composer install` errors `Could not find package sugarcraft/<dep> matching @dev`:** the consuming lib's `composer.json` `repositories` array is missing a path-repo. Copy the full block from `sugar-charts/composer.json`, paste in, re-run.
 - **`composer validate` complains about every `"sugarcraft/*": "@dev"`:** expected for path-repos pre-1.0. Drop `--strict`.
-- **PR title rejected / linter wants `<lib>:` prefix:** title MUST start with the slug + colon, e.g. `sugar-bits: clamp negative cursor (audit #7)`. Fix with `gh pr edit <n> --title "..."`.
+- **PR title rejected / linter wants `<lib>:` prefix:** title MUST start with the slug + colon, e.g. `sugar-widgets: clamp negative cursor (audit #7)`. Fix with `gh pr edit <n> --title "..."`.
 - **Reviewer says the PR mixes two libs:** you bundled across libs. Split into one `ai/<slug>-audit-<short>` branch/PR each, sequenced candy-core → candy-sprinkles → honey-bounce → leaf.
 - **You moved audit items into a 'Completed' section:** revert (`git checkout -- docs/plans/AUDIT_*.md`) and re-apply only inline `✅`/`⏭️` markers on the original lines.
 - **Pre-commit hook fails:** fix the underlying issue and create a NEW commit — never `--no-verify`, never `--amend` a commit whose hook failed. If Caliber is missing, run `/setup-caliber`.

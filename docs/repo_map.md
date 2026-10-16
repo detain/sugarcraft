@@ -10,12 +10,12 @@
 
 | 3rd-Party Repo | Language | Stars | SugarCraft Libraries |
 |---|---|---|---|
-| [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-bits |
-| [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-bits, candy-core |
+| [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-widgets |
+| [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-widgets, candy-core |
 | [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | candy-mosaic |
 | [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, candy-kit, candy-forms |
-| [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-bits, candy-forms |
-| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-bits, candy-scriptui |
+| [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-widgets, candy-forms |
+| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-widgets, candy-scriptui |
 | [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | candy-core |
 | [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, candy-forms |
 | [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, candy-sprinkles, candy-core |
@@ -26,10 +26,10 @@
 | [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
 | [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-codeshot |
 | [charmbracelet/glamour](#charmbraceletglamour) | Go | ~3400 | candy-shine |
-| [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | candy-mdview, sugar-bits, candy-shine |
-| [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-bits |
+| [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | candy-mdview, sugar-widgets, candy-shine |
+| [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-widgets |
 | [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | honey-bounce |
-| [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | candy-forms, sugar-bits, candy-shine |
+| [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | candy-forms, sugar-widgets, candy-shine |
 | [charmbracelet/lipgloss](#charmbraceletlipgloss) | Go | ~3500 | candy-sprinkles |
 | [charmbracelet/log](#charmbraceletlog) | Go | ~700 | candy-log |
 | [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-scriptui |
@@ -40,34 +40,34 @@
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 | [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | candy-kv |
 | [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-git-server |
-| [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-bits |
+| [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-widgets |
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, candy-shine |
 | charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
 | [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | candy-wish |
 | [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, candy-pty, candy-core |
-| [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-bits, candy-shine |
+| [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-widgets, candy-shine |
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
-| [KevM/bubbleo](#kevmbubbleo) | Go | 69 | candy-forms, sugar-bits, candy-scriptui |
+| [KevM/bubbleo](#kevmbubbleo) | Go | 69 | candy-forms, sugar-widgets, candy-scriptui |
 | [kojiflowers/php-tui-chart](#kojiflowersphp-tui-chart) | PHP | ~niche | sugar-charts (data parsing only) |
 | [lrstanley/bubblezone](#lrstanleybubblezone) | Go | 880 | candy-mouse |
 | [p-gen/smenu](#p-gensmenu) | C | ~900 | candy-scriptui |
-| [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-bits, candy-shine, candy-core |
-| [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-bits, candy-scriptui |
-| [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | candy-core, candy-sprinkles, sugar-bits |
+| [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-widgets, candy-shine, candy-core |
+| [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-widgets, candy-scriptui |
+| [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | candy-core, candy-sprinkles, sugar-widgets |
 | [rasjonell/dashbrew](#rasjonelldashbrew) | Go | ~100 | candy-core, candy-shine, sugar-charts |
-| [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | candy-core, sugar-bits, candy-sprinkles |
+| [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | candy-core, sugar-widgets, candy-sprinkles |
 | [ratatui/ratatui-image](#ratatuiratatui-image) | Rust | ~400 | candy-mosaic |
-| [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-bits, candy-sprinkles |
-| [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | candy-core, candy-shine, sugar-bits |
-| [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-bits, candy-core |
+| [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-widgets, candy-sprinkles |
+| [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | candy-core, candy-shine, sugar-widgets |
+| [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-widgets, candy-core |
 | [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | candy-pty, candy-core |
-| [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-bits, sugar-table |
+| [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-widgets, sugar-table |
 | [daltonsw/bubbleup](#daltonswbubbleup) | Go | ~50 | sugar-toast |
 | [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | candy-forms |
 | [EthanEFung/bubble-datepicker](#ethanefungbubble-datepicker) | Go | ~40 | sugar-datepicker |
-| [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-bits |
-| [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-bits |
-| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-bits, candy-scriptui |
+| [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-widgets |
+| [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-widgets |
+| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-widgets, candy-scriptui |
 | charmbracelet/meta | Go | ~100 | (CI infrastructure only) |
 | charmbracelet/scoop-bucket | JSON/YAML | 29 | (distribution manifests) |
 | charmbracelet/soft-serve-action | TypeScript | ~30 | (GitHub Action) |
@@ -95,7 +95,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → ANSI cursor management (`ConsoleCursor`, `SequenceStateWriter`) patterns
-- `sugar-bits` → Spinner/progress component
+- `sugar-widgets` → Spinner/progress component
 
 **Strengths:** Zero external deps, high-res timing (hrtime), correct pipe handling, extensible.
 **Weaknesses:** Steep learning curve, 419 files, pre-1.0 API, complex DI/factory hierarchy.
@@ -115,7 +115,7 @@
 **Features:** Menu with label + callback, theme configuration (colors, borders, padding), vim keybindings, pagination, centered layout.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Menu component (single widget)
+- `sugar-widgets` → Menu component (single widget)
 - `candy-core` → Rendering/event loop patterns
 
 **Strengths:** Simple, no dependencies, ANSI 8-bit colors, vim keys.
@@ -178,7 +178,7 @@
 **Features:** 14 components, fuzzy filtering (List), pagination, row selection, progress gradients, textarea with line numbers.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Primary target (all components)
+- `sugar-widgets` → Primary target (all components)
 - `candy-forms` → TextInput, TextArea
 - `sugar-table` → Table
 - `sugar-datepicker` → Timer/Stopwatch
@@ -202,7 +202,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → Primary port (main framework)
-- `sugar-bits` → Components built on core
+- `sugar-widgets` → Components built on core
 - `candy-scriptui` → Application shell
 - `candy-sprinkles` → Styling
 - `honey-bounce` → Animations
@@ -226,7 +226,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → TEA runner pattern
-- `sugar-bits` → Components
+- `sugar-widgets` → Components
 - `candy-shine` → Styling
 
 ---
@@ -245,7 +245,7 @@
 
 **SugarCraft Mapping:**
 - No direct TUI component mapping. Not a TUI library.
-- Indirect: model-picker TUI (sugar-bits), pricing chart (sugar-charts)
+- Indirect: model-picker TUI (sugar-widgets), pricing chart (sugar-charts)
 
 ---
 
@@ -381,7 +381,7 @@
 **SugarCraft Mapping:**
 - `candy-shine` → ANSI parsing, styling
 - `candy-codeshot` → Primary port
-- `sugar-bits` → Theme registry, PTY execution
+- `sugar-widgets` → Theme registry, PTY execution
 
 **Note:** Port exists as `candy-codeshot` (🟢 in MATCHUPS.md).
 
@@ -401,7 +401,7 @@
 
 **SugarCraft Mapping:**
 - `candy-shine` → Primary port
-- `sugar-bits` → Word wrap
+- `sugar-widgets` → Word wrap
 
 **Note:** Port exists as `candy-shine` (🟢 in MATCHUPS.md).
 
@@ -421,7 +421,7 @@
 
 **SugarCraft Mapping:**
 - `candy-mdview` → Primary port
-- `sugar-bits` → TUI components
+- `sugar-widgets` → TUI components
 - `candy-shine` → Markdown rendering
 
 **Note:** Port exists as `candy-mdview` (🟢 in MATCHUPS.md).
@@ -442,7 +442,7 @@
 
 **SugarCraft Mapping:**
 - `candy-scriptui` → Primary umbrella (shell/framework)
-- `sugar-bits` → Individual commands (choose, filter, input, spin, style, etc.)
+- `sugar-widgets` → Individual commands (choose, filter, input, spin, style, etc.)
 
 **Note:** Port exists as `candy-scriptui` (🟢 in MATCHUPS.md).
 
@@ -481,7 +481,7 @@
 
 **SugarCraft Mapping:**
 - `candy-forms` → Primary port
-- `sugar-bits` → Individual fields
+- `sugar-widgets` → Individual fields
 - `candy-shine` → Theming (Lipgloss equivalent)
 
 **Note:** Port exists as `candy-forms` (🟢 in MATCHUPS.md).
@@ -693,7 +693,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → Buffer/screen/terminal
-- `sugar-bits` → Styling/input/width methods
+- `sugar-widgets` → Styling/input/width methods
 - `candy-scriptui`/`candy-sprinkles` → Borders/windows
 - `honey-bounce` → Cassowary layout
 
@@ -714,7 +714,7 @@
 **SugarCraft Mapping:**
 - `candy-core` → Input simulation, TTY handling
 - `candy-shine` → ANSI/Theming
-- `sugar-bits` → Component concepts
+- `sugar-widgets` → Component concepts
 
 **Note:** Port exists as `candy-vcr` (🟢 in MATCHUPS.md).
 
@@ -774,7 +774,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → ansi, term, termios, cellbuf
-- `sugar-bits` → colors, charmtone
+- `sugar-widgets` → colors, charmtone
 - `candy-vt` → virtual terminal emulator
 
 **Note:** `candy-vt` exists in MATCHUPS (🟡 partial).
@@ -795,7 +795,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-table` → Primary port
-- `sugar-bits` → Table component
+- `sugar-widgets` → Table component
 
 **Note:** Port exists as `sugar-table` (🟢 in MATCHUPS.md).
 
@@ -852,7 +852,7 @@
 **Features:** TST-based word indexing, bitmap for match highlighting, 3 display modes (line/column/tabulate), UTF-8 grapheme support, scrollbars.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Selection component
+- `sugar-widgets` → Selection component
 - `candy-scriptui` → CLI tool patterns
 
 ---
@@ -870,7 +870,7 @@
 **Features:** ANSI 3/4-bit/TrueColor, RGB gradient Fade(), MapRangeToRange scaling, fuzzy search in InteractiveSelect, slog bridge.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Primary target (all components)
+- `sugar-widgets` → Primary target (all components)
 - `candy-shine` → Color/style system
 - `candy-core` → Terminal utilities
 - `honey-bounce` → Math utilities (MapRangeToRange, Fade)
@@ -890,7 +890,7 @@
 **Features:** CliMenu builder, MenuStyle (margin/border/padding/content), 8 item types (Selectable/Checkbox/Radio/Static/LineBreak/AsciiArt/MenuMenu/Split), Input for Text/Number/Password, Dialogue (Flash/Confirm).
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Individual menu items
+- `sugar-widgets` → Individual menu items
 - `candy-scriptui` → Full menu runtime + builder
 
 ---
@@ -911,7 +911,7 @@
 - `candy-core` → Display/Buffer/Backend/Widget interfaces
 - `candy-sprinkles` → Style/Color/Modifier/Text/Span
 - `honey-bounce` → Cassowary constraint solver
-- `sugar-bits` → Individual widgets
+- `sugar-widgets` → Individual widgets
 
 ---
 
@@ -949,7 +949,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → Framework foundation (Display/Buffer/Terminal)
-- `sugar-bits` → Widget library
+- `sugar-widgets` → Widget library
 - `candy-sprinkles` → Styling/layout
 - `candy-scriptui` → TTY I/O
 - `honey-bounce` → Cassowary constraint solver
@@ -987,7 +987,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → App/Widget/Screen/MessagePump
-- `sugar-bits` → Widget library
+- `sugar-widgets` → Widget library
 - `candy-sprinkles` → CSS/layout engine
 
 **Sister project:** Textual is the Python equivalent of the Bubble Tea ecosystem that SugarCraft ports to PHP.
@@ -1009,7 +1009,7 @@
 **SugarCraft Mapping:**
 - `candy-core` → Viewport
 - `candy-shine` → Table layout
-- `sugar-bits` → View rendering
+- `sugar-widgets` → View rendering
 
 ---
 
@@ -1026,7 +1026,7 @@
 **Features:** sort.Interface for Go sorting, Elm architecture, concurrent GetIndex via goroutine.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → List widget with cursor navigation
+- `sugar-widgets` → List widget with cursor navigation
 - `candy-core` → Core model infrastructure
 
 ---
@@ -1062,7 +1062,7 @@
 **Features:** Ratio-based layout with minimums, fixed dimension locking, style inheritance, ContentGenerator, bubble sort table.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → FlexBox/Table primitives
+- `sugar-widgets` → FlexBox/Table primitives
 - `sugar-table` → Table component
 
 ---
@@ -1098,7 +1098,7 @@
 
 **SugarCraft Mapping:**
 - `candy-forms` → Primary target
-- `sugar-bits` → Individual prompt types
+- `sugar-widgets` → Individual prompt types
 
 ---
 
@@ -1132,7 +1132,7 @@
 **Features:** Model with tea.Model interface, Item interface (Title()), views.go overlay rendering, ANSI escape handling.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Overlay/component patterns
+- `sugar-widgets` → Overlay/component patterns
 
 ---
 
@@ -1150,7 +1150,7 @@
 
 **SugarCraft Mapping:**
 - `candy-forms` → Navigation
-- `sugar-bits` → Menu/list widgets
+- `sugar-widgets` → Menu/list widgets
 - `candy-scriptui` → Shell composition
 
 ---
@@ -1168,7 +1168,7 @@
 **Features:** Model with tea.Model, Viewable interface, Composite() algorithm, Position enum, ANSI-aware string handling.
 
 **SugarCraft Mapping:**
-- `sugar-bits` → Overlay/modal patterns
+- `sugar-widgets` → Overlay/modal patterns
 
 ---
 

@@ -357,7 +357,7 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 
 ### bubbleo Components NOT in sugar-navstack
 
-1. **Menu component** (`menu/model.go`) — wraps `bubbles/list` for choice selection. sugar-navstack does not port this; use `SugarCraft\Bits\ItemList` or `SugarCraft\Forms\Form` instead.
+1. **Menu component** (`menu/model.go`) — wraps `bubbles/list` for choice selection. sugar-navstack does not port this; use `SugarCraft\Widgets\ItemList` or `SugarCraft\Forms\Form` instead.
 
 2. **Styles package** — lipgloss-based styling constants. sugar-navstack is unstyled by default; apply `SugarCraft\Sprinkles\Style` to output strings as desired.
 
@@ -443,7 +443,7 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 
 ### Gaps
 
-1. **No Menu component** — bubbleo's menu (wrapping bubbles/list) is not ported. Use `SugarCraft\Bits\ItemList` or `SugarCraft\Forms\Form` for selection UI.
+1. **No Menu component** — bubbleo's menu (wrapping bubbles/list) is not ported. Use `SugarCraft\Widgets\ItemList` or `SugarCraft\Forms\Form` for selection UI.
 
 2. **No message-driven navigation** — bubbleo's `PushNavigation`/`PopNavigation` messages with `tea.Cmd` return values have no PHP equivalent. Applications must call methods directly.
 

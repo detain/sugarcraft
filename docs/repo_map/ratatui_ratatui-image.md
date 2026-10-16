@@ -177,8 +177,8 @@ ratatui-image is a Rust library that would map to SugarCraft's TUI image renderi
 | Sixel protocol | N/A | No sugar-something yet |
 | Kitty protocol | N/A | No sugar-something yet |
 | iTerm2 protocol | N/A | No sugar-something yet |
-| Halfblocks (ASCII) | `sugar-bits` | Could be CharacterCell renderer |
-| Image widget | `sugar-bits` | Base widget infrastructure |
+| Halfblocks (ASCII) | `sugar-widgets` | Could be CharacterCell renderer |
+| Image widget | `sugar-widgets` | Base widget infrastructure |
 | Picker/cap detection | `candy-core` | Terminal capability detection |
 | StatefulImage | `sugar-charts`? | Dynamic resize behavior |
 | ThreadProtocol | `candy-core` | Async/thread messaging |
@@ -187,7 +187,7 @@ ratatui-image is a Rust library that would map to SugarCraft's TUI image renderi
 
 **Mapping Analysis:**
 
-- **sugar-bits**: Closest match for base widget infrastructure (Image widget, Ratatui integration)
+- **sugar-widgets**: Closest match for base widget infrastructure (Image widget, Ratatui integration)
 - **candy-core**: For Picker (terminal capability detection) and ThreadProtocol (async messaging)
 - **honey-bounce**: For resize algorithms (fit_area_proportionally, aspect-ratio math)
 - No direct SugarCraft equivalent for Sixel/Kitty/iTerm2 protocols — would be a new sugar-* or honey-* lib

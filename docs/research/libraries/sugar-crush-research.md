@@ -190,7 +190,7 @@ interface Backend {
 | Feature | sugar-crush | crush | aichat | rust-code |
 |---------|-------------|-------|--------|-----------|
 | Language | PHP | Go | Rust | Rust |
-| TUI Framework | SugarBits | Bubble Tea | Ratatui | Ratatui |
+| TUI Framework | SugarWidgets | Bubble Tea | Ratatui | Ratatui |
 | Markdown | CandyShine | Glamour | Custom | Custom |
 | Syntax Highlight | ❌ | ✅ | ✅ | ✅ (syntect) |
 | Streaming | Basic | Real-time | Real-time | Real-time |
@@ -405,7 +405,7 @@ interface Backend {
 
 - **CandyShine:** Markdown rendering (league/commonmark wrapper)
 - **CandySprinkles:** Terminal styling (borders, padding)
-- **SugarBits:** TUI components
+- **SugarWidgets:** TUI components
 - **ReactPHP:** Async promise handling
 
 ---

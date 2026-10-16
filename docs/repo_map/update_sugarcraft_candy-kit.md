@@ -637,9 +637,9 @@ candy-kit's StatusLine is visually similar to log levels but lacks log semantics
 
 - **candy-log:** Time-stamped, leveled, potentially high-volume logging
 
-## 3. sugar-bits Progress Integration
+## 3. sugar-widgets Progress Integration
 
-Stage is for visual sequencing; `sugar-bits` progress components are for bars/gauges. Document the distinction.
+Stage is for visual sequencing; `sugar-widgets` progress components are for bars/gauges. Document the distinction.
 
 ---
 

@@ -6,13 +6,13 @@
 - **Composer package:** `sugarcraft/candy-forms`
 - **Namespace:** `SugarCraft\Forms`
 - **Status:** 🟡 in progress (extraction in progress, gaps tracked)
-- **Upstream sources:** Extracted from `sugar-bits` + `candy-forms`
+- **Upstream sources:** Extracted from `sugar-widgets` + `candy-forms`
 - **Depends on:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`
 - **PHP minimum:** `^8.3`
 
 ## Overview
 
-`candy-forms` is the foundational library for form primitive widgets in the SugarCraft monorepo. It provides the low-level building blocks (TextInput, TextArea, ItemList, Viewport, FilePicker) and the `Field` interface + `Form` compositor that compose into the higher-level `candy-forms` (which maps to upstream `charmbracelet/huh`). The package status is 🟡 because the extraction from `sugar-bits` and `candy-forms` was in progress at the time of this analysis, with some surface area already shipped but gaps remaining in tests and demos.
+`candy-forms` is the foundational library for form primitive widgets in the SugarCraft monorepo. It provides the low-level building blocks (TextInput, TextArea, ItemList, Viewport, FilePicker) and the `Field` interface + `Form` compositor that compose into the higher-level `candy-forms` (which maps to upstream `charmbracelet/huh`). The package status is 🟡 because the extraction from `sugar-widgets` and `candy-forms` was in progress at the time of this analysis, with some surface area already shipped but gaps remaining in tests and demos.
 
 ---
 
@@ -320,7 +320,7 @@ pterm provides 25+ interactive printers including `InteractiveSelectPrinter`, `I
 | `InteractiveMultiSelectPrinter` | `Field\MultiSelect` |
 | `InteractiveConfirmPrinter` | `Field\Confirm` |
 | `InteractiveTextInputPrinter` | `Field\Input` |
-| `ProgressbarPrinter` | Not in candy-forms (in sugar-bits) |
+| `ProgressbarPrinter` | Not in candy-forms (in sugar-widgets) |
 
 **Key difference:** pterm's interactive components use `atomicgo.dev/keyboard` for blocking keyboard capture. candy-forms uses the Bubble Tea message-passing model via `candy-core` with `KeyMsg` dispatched from the runtime's TTY reader.
 

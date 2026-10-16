@@ -47,7 +47,7 @@ registered on Packagist (authoring-only per step 2.4; real actions start at
      `ABSENT` with reason (exit 1). No abandon API — manual web UI, Phase 10.
 3. `scripts/bootstrap-org-repos.sh` — added `--print-description <slug>`
    (offline: map hit → renames.json new→old map hit → `<slug>|<old>/composer.json`
-   description fallback → exit 1). Fixed sugar-bits stale description
+   description fallback → exit 1). Fixed sugar-bits stale description <!-- @rename-keep historical provenance -->
    ("Fourteen…" → "Seventeen pre-built TUI components — port of
    charmbracelet/bubbles on the SugarCraft stack.", matching its composer.json).
    Note: DESCRIPTIONS has only 29 pre-split-era keys, hence the composer.json

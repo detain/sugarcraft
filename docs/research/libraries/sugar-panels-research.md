@@ -406,7 +406,7 @@ public function renderColored(Node $root, int $width, int $height, Style $style)
 }
 ```
 
-**Integration:** Requires coordination with sugar-bits (candy-core already has Width utility for Unicode width calculation).
+**Integration:** Requires coordination with sugar-widgets (candy-core already has Width utility for Unicode width calculation).
 
 **Reference:** boxen and box-cli-maker both embed ANSI codes in output.
 
@@ -549,7 +549,7 @@ final class SugarPanels
 
 ## 6. Testing Recommendations
 
-Based on existing `sugar-bits` and `candy-core` patterns:
+Based on existing `sugar-widgets` and `candy-core` patterns:
 
 1. **Snapshot tests** for each BoxStyle rendering
 2. **Alignment tests** with known input/output pairs

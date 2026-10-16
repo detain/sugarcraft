@@ -517,7 +517,7 @@ Bundles `ColorProfile` + `hasDarkBackground` flag:
 | List with nested sublists | ✅ | ✅ | Same |
 | Viewport with soft-wrap line info | ✅ | ❌ | No per-line cursor tracking |
 
-**Verdict:** Feature parity on table/list/tree renderers. Interactive features (keyboard navigation, fuzzy filtering) belong in sugar-bits, not styling.
+**Verdict:** Feature parity on table/list/tree renderers. Interactive features (keyboard navigation, fuzzy filtering) belong in sugar-widgets, not styling.
 
 ### pterm (printer patterns reference)
 
@@ -528,10 +528,10 @@ Bundles `ColorProfile` + `hasDarkBackground` flag:
 | RGB.Fade() multi-stop gradients | ✅ | ❌ | No Fade() method |
 | AreaPrinter (dynamic region updates) | ✅ | ❌ | No cursor-based live updates |
 | BigTextPrinter (ASCII art font map) | ✅ | ❌ | No ASCII art rendering |
-| Interactive select with fuzzy | ✅ | ❌ | Interactive belongs to sugar-bits |
+| Interactive select with fuzzy | ✅ | ❌ | Interactive belongs to sugar-widgets |
 | Logger with slog bridge | ✅ | ❌ | Logging separate concern |
 
-**Verdict:** pterm's printer interface pattern is a strong model for sugar-bits. The Fade() gradient and BigTextPrinter are unique to pterm.
+**Verdict:** pterm's printer interface pattern is a strong model for sugar-widgets. The Fade() gradient and BigTextPrinter are unique to pterm.
 
 ### 76creates/stickers (flexbox layout reference)
 
@@ -620,7 +620,7 @@ pterm's `RGB.Fade(min, max float32, end ...RGB)` interpolates through N color st
 
 ### From lipgloss: `WrapWriter` for ANSI-safe streaming wrap
 
-lipgloss's `WrapWriter` tracks current style + link state across newlines, emitting `ansi.ResetStyle` before each newline and re-applying the tracked style after — ensuring hyperlinks and styles survive line breaks. A PHP equivalent would be valuable for `Viewport` and text-area components in sugar-bits.
+lipgloss's `WrapWriter` tracks current style + link state across newlines, emitting `ansi.ResetStyle` before each newline and re-applying the tracked style after — ensuring hyperlinks and styles survive line breaks. A PHP equivalent would be valuable for `Viewport` and text-area components in sugar-widgets.
 
 **Implementation hint:** State machine tracking current SGR attributes + OSC 8 link state; reset before `\n`, replay after.
 
@@ -634,7 +634,7 @@ Textual's `_spatial_map.SpatialMap` (R-tree-like) for O(log n) widget lookup by 
 
 ### From pterm: `TextPrinter` interface pattern
 
-Every pterm printer implements `TextPrinter` with 8 methods (Sprint/Sprintf/Sprintln/Sprintfln × return string vs. write). This consistency enables generic code like `func Print[T TextPrinter](t T) { t.Println("msg") }`. Adopting this in sugar-bits would make the component API uniform.
+Every pterm printer implements `TextPrinter` with 8 methods (Sprint/Sprintf/Sprintln/Sprintfln × return string vs. write). This consistency enables generic code like `func Print[T TextPrinter](t T) { t.Println("msg") }`. Adopting this in sugar-widgets would make the component API uniform.
 
 ### From php-tui: `Buffer::diff()` cell-level diffing
 
@@ -728,7 +728,7 @@ The remaining 15% of lipgloss features (Blend2D, Wrap integration, StyleRunes, t
 
 ### Cassowary solver as separate package
 
-Extract the constraint solver into `sugarcraft/honey-layout` or similar, making it reusable across sugar-charts (for axis layout), sugar-bits (for component internal layout), and any future layout-sensitive library. This would mirror how ratatui's layout is a separate crate.
+Extract the constraint solver into `sugarcraft/honey-layout` or similar, making it reusable across sugar-charts (for axis layout), sugar-widgets (for component internal layout), and any future layout-sensitive library. This would mirror how ratatui's layout is a separate crate.
 
 ### Declarative layout via TCSS
 
@@ -745,7 +745,7 @@ Replacing the current string-composition model with a `Buffer` class (grid of ce
 
 - Eventually, a proper widget rendering system
 
-### Integration with sugar-bits interactive components
+### Integration with sugar-widgets interactive components
 
 The `Renderer::fromEnvironment()` should be used to pre-configure styles in interactive components (TextInput, Viewport, etc.) so they respect terminal color profiles automatically. Currently each component independently calls `ColorProfile::detect()`.
 

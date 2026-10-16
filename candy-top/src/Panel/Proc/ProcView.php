@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Proc;
 
-use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;

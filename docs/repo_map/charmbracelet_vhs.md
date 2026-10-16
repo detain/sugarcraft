@@ -138,10 +138,10 @@
 
 | VHS Concept | SugarCraft Lib | Notes |
 |------------|----------------|-------|
-| `.tape` format / DSL | `sugar-bits` | Both define scripting formats for TUI demos |
+| `.tape` format / DSL | `sugar-widgets` | Both define scripting formats for TUI demos |
 | Frame capture / recording | `candy-scriptui` | Could provide terminal capture primitives |
 | Video encoding / FFmpeg | `sugar-charts` | Both produce output files, FFmpeg could be wrapped |
-| Theme system (base16) | `sugar-bits` | 16-color theme mapping aligns with Charm color systems |
+| Theme system (base16) | `sugar-widgets` | 16-color theme mapping aligns with Charm color systems |
 | Typing simulation | `candy-forms` | Input emulation concepts overlap |
 | Window chrome (bars, borders) | `candy-shine` | Visual styling of terminal windows |
 | SSH server | N/A | PHP has no native SSH server lib in SugarCraft |

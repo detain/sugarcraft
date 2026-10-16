@@ -4,7 +4,7 @@
 
 ## Ecosystem Positioning
 
-candy-ssh-launcher sits at the intersection of TUI interaction and SSH connectivity — a focused, single-purpose tool that doesn't try to be a general-purpose SSH library. It consumes several SugarCraft foundation libraries (`candy-core` for RawMode/i18n, `candy-sprinkles` for styling, `candy-pty` for terminal control) but implements its own lightweight picker rather than pulling in the full `sugar-bits` component library.
+candy-ssh-launcher sits at the intersection of TUI interaction and SSH connectivity — a focused, single-purpose tool that doesn't try to be a general-purpose SSH library. It consumes several SugarCraft foundation libraries (`candy-core` for RawMode/i18n, `candy-sprinkles` for styling, `candy-pty` for terminal control) but implements its own lightweight picker rather than pulling in the full `sugar-widgets` component library.
 
 ## Biggest Opportunity Areas
 
@@ -463,16 +463,16 @@ $frames = $output->getFrames();  // For testing or streaming
 
 **Source reference:** `charmbracelet/bubbletea.md` — "tea.Program.Send()" for injecting messages from outside
 
-## 3. Introduce Optional Dependency on sugar-bits for List Widget
+## 3. Introduce Optional Dependency on sugar-widgets for List Widget
 
-**Current state:** Hand-rolled picker not using sugar-bits `List` component  
-**Improvement:** Consider using `sugar-bits` `List` widget for the endpoint picker
+**Current state:** Hand-rolled picker not using sugar-widgets `List` component  
+**Improvement:** Consider using `sugar-widgets` `List` widget for the endpoint picker
 
-**Rationale:** The sugar-bits `List` provides full keyboard navigation, filtering, and rendering already. Using it would reduce maintenance burden and improve consistency with the rest of the ecosystem.
+**Rationale:** The sugar-widgets `List` provides full keyboard navigation, filtering, and rendering already. Using it would reduce maintenance burden and improve consistency with the rest of the ecosystem.
 
-**Tradeoff:** The current minimal picker is ~40 lines; using sugar-bits would pull in more dependencies and add complexity for a use case that doesn't need full list functionality.
+**Tradeoff:** The current minimal picker is ~40 lines; using sugar-widgets would pull in more dependencies and add complexity for a use case that doesn't need full list functionality.
 
-**Source:** `docs/repo_map/charmbracelet_wishlist.md` — "uses a hand-rolled single-purpose picker (40 lines of ANSI rendering) to avoid pulling in the full SugarBits component library"
+**Source:** `docs/repo_map/charmbracelet_wishlist.md` — "uses a hand-rolled single-purpose picker (40 lines of ANSI rendering) to avoid pulling in the full SugarWidgets component library"
 
 ---
 
@@ -688,7 +688,7 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 ## Major Architectural Upgrades
 
 10. **Dynamic discovery** — Implement `sugar-discovery` with Zeroconf/SRV/Tailscale support
-11. **Full sugar-bits integration** — Replace hand-rolled picker with `List` widget from sugar-bits
+11. **Full sugar-widgets integration** — Replace hand-rolled picker with `List` widget from sugar-widgets
 12. **Broadcast relay** — Add endpoint refresh/broadcast for SSH-server mode
 
 ## Experimental Ideas
@@ -713,7 +713,7 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 | Extract candy-sshconfig | Medium | Medium | Medium | **Medium** |
 | SSH-server mode | Critical | High | High | **Long-term** |
 | Dynamic discovery | High | High | Medium | **Long-term** |
-| Full sugar-bits integration | Medium | Medium | Low | **Long-term** |
+| Full sugar-widgets integration | Medium | Medium | Low | **Long-term** |
 | Broadcast relay | Medium | High | High | **Long-term** |
 | SSH config `Match` blocks | Low | High | Medium | **Deferred** |
 | Web-based TUI | Low | Very High | High | **Experimental** |

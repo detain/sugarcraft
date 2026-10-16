@@ -2,7 +2,7 @@
 
 **sugar-quickpick** is a fuzzy finder / quick-fix overlay library for PHP TUI applications. It renders a filterable list overlay on top of a background view while the background continues to update — a "type-to-filter" pattern used in command palettes (VS Code Ctrl+P style), quick-fix navigation, and context-sensitive item selection.
 
-**Ecosystem positioning:** It occupies a distinct niche in the SugarCraft ecosystem as the only overlay-specific fuzzy filter (versus `sugar-bits` inline components, `sugar-treelist` inline lists, or `sugar-overlay` general-purpose overlay compositor). It is a v1-ready library with solid fundamentals but significant enhancement opportunities.
+**Ecosystem positioning:** It occupies a distinct niche in the SugarCraft ecosystem as the only overlay-specific fuzzy filter (versus `sugar-widgets` inline components, `sugar-treelist` inline lists, or `sugar-overlay` general-purpose overlay compositor). It is a v1-ready library with solid fundamentals but significant enhancement opportunities.
 
 **Biggest opportunity areas:**
 
@@ -503,7 +503,7 @@ Create `SugarCraft\Core\Util\Width` class with static methods:
 
 - `ansiStrip(string $s): string` — remove ANSI codes for width calculation
 
-This could be used by `sugar-quickpick`, `sugar-bits`, `candy-forms`, and other rendering components.
+This could be used by `sugar-quickpick`, `sugar-widgets`, `candy-forms`, and other rendering components.
 
 ## 2. Extract Grapheme Aware String Utils
 
@@ -893,4 +893,4 @@ sugar-quickpick is a well-architected PHP port that enhances its upstream (`Gene
 
 **Recommended focus:** Address the two critical gaps (UTF-8 and ANSI width) first, then improve filtering quality with scored ranking. These changes maintain backward compatibility while significantly improving robustness and UX.
 
-**Long-term positioning:** sugar-quickpick could become the PHP standard for "type-to-filter overlay" if it closes the Unicode/ANSI gaps and adds pagination. The overlay pattern is distinct from inline list components, making it complementary rather than competitive with `sugar-bits` or `sugar-treelist`.
+**Long-term positioning:** sugar-quickpick could become the PHP standard for "type-to-filter overlay" if it closes the Unicode/ANSI gaps and adds pagination. The overlay pattern is distinct from inline list components, making it complementary rather than competitive with `sugar-widgets` or `sugar-treelist`.

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Bits\Scrollbar\Scrollbar as BitsScrollbar;
-use SugarCraft\Bits\Timer\TickMsg;
+use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
+use SugarCraft\Widgets\Timer\TickMsg;
 use SugarCraft\Flexbox\Viewport;
 
 /**

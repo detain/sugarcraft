@@ -292,7 +292,7 @@ goes back; `?` opens help.
 ```
 
 - Selected ref shown in title (default `master`); `b` pops a small
-  modal to pick a branch/tag (sugar-bits `Selector`).
+  modal to pick a branch/tag (sugar-widgets `Selector`).
 - Dirs sort first (alpha), then files (alpha).
 - Sizes for files only.
 
@@ -345,7 +345,7 @@ candy-sprinkles).
 
 ### 4.6 Help panel (phase 5)
 
-Modal overlay (sugar-bits `Toast`-style) showing the global keymap +
+Modal overlay (sugar-widgets `Toast`-style) showing the global keymap +
 per-screen extras. Press `?` again or `Esc` to dismiss.
 
 ---
@@ -660,7 +660,7 @@ A phase is "done" when:
 ### 9.1 Will candy-core handle this scale?
 
 candy-core's `Program` event loop has been tested on smaller TUIs
-(sugar-bits demos, sugar-dashboard dashboard). A repo-browser TUI is not
+(sugar-widgets demos, sugar-dashboard dashboard). A repo-browser TUI is not
 unreasonably bigger — five screens, single-user, single-program. The
 main load point is the commit log on a large repo (10k+ commits);
 phase 4 addresses that with windowed loading. **No expected

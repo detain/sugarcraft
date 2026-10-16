@@ -194,10 +194,10 @@ while len(output) < needed_length:
 |----------------------|-------------------|-------|
 | SSH Server / Connection handling | `candy-core` | Core TUI infrastructure, event loop patterns |
 | PTY management / Terminal I/O | `candy-pty` | Could be a direct port - PTY creation and management |
-| SSH protocol packets / Binary protocols | `sugar-bits` | Low-level bit/byte manipulation patterns |
-| Terminal mode handling | `candy-terminal` or `sugar-bits` | Terminal capability handling |
+| SSH protocol packets / Binary protocols | `sugar-widgets` | Low-level bit/byte manipulation patterns |
+| Terminal mode handling | `candy-terminal` or `sugar-widgets` | Terminal capability handling |
 | Channel / Session management | `candy-core` | Similar event/channel model |
-| Environment variable passing | `sugar-bits` | Parameter passing conventions |
+| Environment variable passing | `sugar-widgets` | Parameter passing conventions |
 | Signal handling (SIGCHLD, SIGHUP) | `candy-core` | Process management patterns |
 | Logging (PSR-3) | Already present in SugarCraft\Core | LoggerInterface patterns |
 | Process forking (pcntl) | `candy-core` | Process management |
@@ -207,7 +207,7 @@ while len(output) < needed_length:
 
 - `candy-core` — Foundation library with TUI event loop, process management
 - `candy-pty` — Would be a logical port target for PTY functionality
-- `sugar-bits` — Low-level data handling, could use packet construction patterns
+- `sugar-widgets` — Low-level data handling, could use packet construction patterns
 - `candy-terminal` — Terminal capability handling
 
 **Note:** Whisp is a server application, while SugarCraft is primarily focused on TUI (Terminal User Interface) client applications. However, the SSH protocol implementation, PTY management, and process handling patterns would be valuable additions to the SugarCraft ecosystem.

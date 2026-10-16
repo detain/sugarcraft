@@ -1,6 +1,6 @@
 # Overview
 
-CandySprinkles (`candy-sprinkles`) is SugarCraft's foundational styling and layout library — a PHP port of `charmbracelet/lipgloss` v2 providing declarative, immutable styling for terminal UIs. The package occupies the critical foundation layer that every other SugarCraft consumer (`sugar-bits`, `candy-forms`, `sugar-charts`) imports for styling. It delivers comprehensive ANSI SGR coverage (bold/italic/underline/hyperlinks), CSS-like shorthand (padding/margin 1/2/4-arg), per-side border colors with gradient blends, a constraint-based layout solver, multi-layer canvas compositing, and structured renderers for tables, trees, and lists.
+CandySprinkles (`candy-sprinkles`) is SugarCraft's foundational styling and layout library — a PHP port of `charmbracelet/lipgloss` v2 providing declarative, immutable styling for terminal UIs. The package occupies the critical foundation layer that every other SugarCraft consumer (`sugar-widgets`, `candy-forms`, `sugar-charts`) imports for styling. It delivers comprehensive ANSI SGR coverage (bold/italic/underline/hyperlinks), CSS-like shorthand (padding/margin 1/2/4-arg), per-side border colors with gradient blends, a constraint-based layout solver, multi-layer canvas compositing, and structured renderers for tables, trees, and lists.
 
 **Biggest opportunity areas:** Word-wrap integration into Style::render() (gap vs. lipgloss), CIELAB perceptually-uniform color blending, Text/Line/Span structured text hierarchy, Cassowary constraint solver for inter-constraint ratio support, and canvas cell-buffer diffing for efficient partial redraws.
 
@@ -284,7 +284,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 **Tradeoffs:** Cell buffers require more memory (one Cell struct per terminal cell). String composition is simpler but less efficient. PHP's weaker numeric performance makes cell-level diffing more costly.
 
-**Applicability:** Medium — would benefit sugar-bits interactive components more than candy-sprinkles styling layer.
+**Applicability:** Medium — would benefit sugar-widgets interactive components more than candy-sprinkles styling layer.
 
 ### ANSI Width Measurement: Repeated mb_strwidth Calls
 
@@ -325,7 +325,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 6. **StyleRunes implementation** — `StyleRunes(string, indices, matched, unmatched)` for sub-string styling. ~50 lines using grapheme-aware index mapping.
 
-7. **Extract constraint solver to `honey-bounce`** — Reusable across sugar-charts (axis layout), sugar-bits (component layout), future layout-sensitive libs. Mirror ratatui's layout crate separation.
+7. **Extract constraint solver to `honey-bounce`** — Reusable across sugar-charts (axis layout), sugar-widgets (component layout), future layout-sensitive libs. Mirror ratatui's layout crate separation.
 
 ## Long-term (new capabilities)
 
@@ -415,15 +415,15 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 1. **Integrate `Width::wrap()` into `Style::render()`** — Currently separate utility; should be called automatically when `width()` is set.
 
-2. **`Renderer::fromEnvironment()` usage in sugar-bits** — Each sugar-bits component independently calls `ColorProfile::detect()`. Should use `Renderer::fromEnvironment()` for consistency.
+2. **`Renderer::fromEnvironment()` usage in sugar-widgets** — Each sugar-widgets component independently calls `ColorProfile::detect()`. Should use `Renderer::fromEnvironment()` for consistency.
 
 3. **candy-shine (Glamour) integration** — Markdown/code syntax highlighting not yet connected to candy-sprinkles rendering pipeline.
 
-4. **candy-core `Width` utility sharing** — Both candy-sprinkles and sugar-bits import from `SugarCraft\Core\Util\Width`. Ensure API consistency.
+4. **candy-core `Width` utility sharing** — Both candy-sprinkles and sugar-widgets import from `SugarCraft\Core\Util\Width`. Ensure API consistency.
 
 5. **sugar-charts heatmap using `Blend2D`** — `Color::blend2D()` would enable heatmap cell coloring in charts.
 
-6. **sugar-bits progress bar using RGB.Fade()** — pterm's multi-stop gradient pattern for progress visualization.
+6. **sugar-widgets progress bar using RGB.Fade()** — pterm's multi-stop gradient pattern for progress visualization.
 
 7. **`honey-bounce` extraction** — Constraint solver currently in candy-sprinkles should be extracted for reuse.
 
@@ -545,7 +545,7 @@ PHP could achieve similar via `__call` magic on strings returning `Span` instanc
 
 # Final Strategic Assessment
 
-CandySprinkles is a well-executed, ~85% complete port of charmbracelet/lipgloss v2 that delivers the most critical styling and layout primitives for the SugarCraft monorepo. Its immutable + fluent `Style` architecture, comprehensive ANSI SGR coverage, CSS-like shorthand, and constraint-based layout solver provide a solid foundation that the rest of SugarCraft (`sugar-bits`, `candy-forms`, `sugar-charts`) builds upon.
+CandySprinkles is a well-executed, ~85% complete port of charmbracelet/lipgloss v2 that delivers the most critical styling and layout primitives for the SugarCraft monorepo. Its immutable + fluent `Style` architecture, comprehensive ANSI SGR coverage, CSS-like shorthand, and constraint-based layout solver provide a solid foundation that the rest of SugarCraft (`sugar-widgets`, `candy-forms`, `sugar-charts`) builds upon.
 
 **The main gaps relative to lipgloss are:** word-wrap integration (most impactful user expectation gap), CIELAB blending (visual quality), StyleRunes (sub-string styling), table column constraints (dashboard usability), and grapheme-aware border measurement (correctness with emoji). These are not trivial — they represent real feature surface area — but they are well-understood and documented.
 

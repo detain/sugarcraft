@@ -1,6 +1,6 @@
-# Step 08.05 — sugar-bits TextInput validate_on + restrict
+# Step 08.05 — sugar-widgets TextInput validate_on + restrict
 
-**Source:** `leftover_updates_later.md` sugar-bits Phase 1 HIGH
+**Source:** `leftover_updates_later.md` sugar-widgets Phase 1 HIGH
 **Branch:** `ai/bits-textinput-validate-restrict`
 
 ## Deliverable
@@ -13,20 +13,20 @@
 
 **Modify:**
 
-- `sugar-bits/src/TextInput/TextInput.php`.
+- `sugar-widgets/src/TextInput/TextInput.php`.
 
 **Create:**
 
-- `sugar-bits/src/TextInput/ValidateOn.php` (enum).
+- `sugar-widgets/src/TextInput/ValidateOn.php` (enum).
 
 ## Tests
 
-- `sugar-bits/tests/TextInput/ValidateOnTest.php`.
-- `sugar-bits/tests/TextInput/RestrictTest.php`.
+- `sugar-widgets/tests/TextInput/ValidateOnTest.php`.
+- `sugar-widgets/tests/TextInput/RestrictTest.php`.
 
 ## Acceptance
 
-- `cd sugar-bits && vendor/bin/phpunit --filter "ValidateOn|Restrict"` green.
+- `cd sugar-widgets && vendor/bin/phpunit --filter "ValidateOn|Restrict"` green.
 
 ---
 

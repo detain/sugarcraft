@@ -91,17 +91,17 @@
 
 | bubblezone concept | SugarCraft lib | Notes |
 |---|---|---|
-| `zone.Mark(id, v)` wrapping zone content | `sugar-bits` (focus/mouse zone tracking) | sugar-bits handles viewport/layout + focus management; mouse zones would be a sub-concern |
+| `zone.Mark(id, v)` wrapping zone content | `sugar-widgets` (focus/mouse zone tracking) | sugar-widgets handles viewport/layout + focus management; mouse zones would be a sub-concern |
 | `zone.Get(id).InBounds(msg)` collision | `candy-core` (BubbleTea model port) | The `Model::update()` + `KeyMsg`/`MouseMsg` dispatch loop in `candy-core` provides the TEA message bus; zones would integrate there |
 | `zone.Scan()` stripping ANSI markers | `candy-forms` / lipgloss port (TBD) | If/when a lipgloss-style styling library is ported, zone scanning for marker stripping would live there |
 | `zone.NewPrefix()` unique ID generation | `candy-scriptui` (BubbleShell port) | Shell-level component ID generation for nested components would use prefix pattern |
-| Mouse tracking (`tea.MouseModeCellMotion`) | `sugar-bits` + `candy-core` | `candy-core` would carry the mouse event constants (`MouseButtonLeft`, `MouseMotionMsg`, etc.) |
-| `ZoneInfo.Pos()` relative coordinates | `sugar-bits` (cursor/selection tracking) | Relative mouse position within a focused region |
+| Mouse tracking (`tea.MouseModeCellMotion`) | `sugar-widgets` + `candy-core` | `candy-core` would carry the mouse event constants (`MouseButtonLeft`, `MouseMotionMsg`, etc.) |
+| `ZoneInfo.Pos()` relative coordinates | `sugar-widgets` (cursor/selection tracking) | Relative mouse position within a focused region |
 
 **Many-to-many mapping:**
 
 - `candy-core` — Ports the BubbleTea `Model`/`Msg`/`Cmd` architecture; would be the natural host for mouse event handling and zone dispatch
-- `sugar-bits` — Ports bubbletea components (list, spinner, etc.); would need zone integration for interactive child components
+- `sugar-widgets` — Ports bubbletea components (list, spinner, etc.); would need zone integration for interactive child components
 - `sugar-charts` — If it has interactive/clickable chart elements, would use zone-based hit testing
 - A potential new `sugar-zone` leaf library could encapsulate the zone scanning/marking/bounds-checking as a standalone component, usable by any TUI component
 

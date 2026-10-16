@@ -167,14 +167,14 @@ SugarCraft is a PHP monorepo of TUI library ports from the Charmbracelet ecosyst
 | **Bubble Tea (TUI framework)** | `candy-scriptui` | Core TUI framework - `bubbletea` port |
 | **Lipgloss (styling)** | `candy-shine` | Terminal styling library - `lipgloss` port |
 | **Viewport scrolling** | `candy-scriptui` components | Textarea/viewport components |
-| **Glamour (markdown rendering)** | `sugar-bits` (rendering) | Markdown/ANSI rendering |
+| **Glamour (markdown rendering)** | `sugar-widgets` (rendering) | Markdown/ANSI rendering |
 | **Streaming LLM client** | Not yet ported | Could be `candy-forms` or new `sugar-llm` |
 | **Conversation caching** | Not yet ported | Could be `candy-sprinkles` (caching utilities) |
 | **MCP client integration** | Not yet ported | Could be `sugar-mcp-client` or `honey-mcp` |
 | **Interactive forms (huh)** | `candy-scriptui` input | `huh` form library port |
 | **Spinner/Animation** | `candy-scriptui` spinner | `bubbletea` spinner components |
 | **Config/YAML** | `candy-core` | Configuration management patterns |
-| **SQLite storage** | Not yet ported | Could leverage existing `sugar-bits` persistence |
+| **SQLite storage** | Not yet ported | Could leverage existing `sugar-widgets` persistence |
 
 ### Specific Mapping Candidates:
 

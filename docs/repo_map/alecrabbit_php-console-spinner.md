@@ -127,11 +127,11 @@
 - **Mapping**: The spinner architecture (especially `Driver`, `Renderer`, `SequenceStateWriter`) provides patterns for rendering ANSI terminal output that could inform candy-core's TTY rendering infrastructure
 - **Note**: The `ConsoleCursor` and cursor hide/show management (`\e[?25l`, `\e[?25h`) is directly applicable
 
-### sugar-bits
+### sugar-widgets
 
-- **Relevant**: Potential — sugar-bits is described as components/data/forms/apps
-- **Mapping**: A spinner/progress indicator component could be built as part of sugar-bits using patterns from this library
-- **Note**: This library is too low-level to be a direct sugar-bits dependency but could inspire component patterns
+- **Relevant**: Potential — sugar-widgets is described as components/data/forms/apps
+- **Mapping**: A spinner/progress indicator component could be built as part of sugar-widgets using patterns from this library
+- **Note**: This library is too low-level to be a direct sugar-widgets dependency but could inspire component patterns
 
 ### honey-bounce
 

@@ -55,7 +55,7 @@ namespace SugarCraft\Core\Util;
  * SugarCraft-original assembled from three separate internal predecessors, not a
  * port (candy-core's ported upstream is `charmbracelet/bubbletea`, an
  * Elm-architecture TUI runtime with no text sanitizer — see `docs/MATCHUPS.md`):
- *   - `controlChars()` — extracted from sugar-bits' per-cell `sanitizeCell`
+ *   - `controlChars()` — extracted from sugar-widgets' per-cell `sanitizeCell`
  *     helper (commit 114118393);
  *   - `cellValue()` — byte-identical to candy-sql's `CellValue::sanitize()`
  *     (commit 8ac981ebf);
@@ -127,7 +127,7 @@ final class Sanitize
      * survives of `\x1b[31m` is the inert printable text `[31m`: ugly in a
      * label, but never re-interpreted by a terminal. Components that want
      * styled output sanitize the PLAIN text and apply their own SGR after
-     * (see sugar-bits `Help`, `Tabs`, `Table`), never before.
+     * (see sugar-widgets `Help`, `Tabs`, `Table`), never before.
      *
      * Need more than a C0 sweep? Pick the hardened sibling rather than
      * widening this method — the gap matters most for 8-bit input, where a raw

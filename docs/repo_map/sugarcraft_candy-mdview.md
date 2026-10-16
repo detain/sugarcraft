@@ -59,7 +59,7 @@
 ```
 candy-mdview/
 ├── bin/candy-mdview                  # CLI entry point (20 lines)
-├── composer.json                  # deps: candy-core, candy-shine, sugar-bits, symfony/console
+├── composer.json                  # deps: candy-core, candy-shine, sugar-widgets, symfony/console
 ├── phpunit.xml                    # colors=true, failOnWarning=true, cacheDirectory=.phpunit.cache
 ├── README.md                      # CLI usage, library API, VHS demo links
 ├── CALIBER_LEARNINGS.md           # WidthHelper mb_strwidth, FileWatcher Generator gotcha
@@ -110,7 +110,7 @@ candy-mdview/
 RenderCommand::loadInput()
     ↓ (file path or stdin)
 Renderer::render($markdown)
-    ├── League\CommonMark\MarkdownRenderer (from sugar-bits)
+    ├── League\CommonMark\MarkdownRenderer (from sugar-widgets)
     └── Renderer (from candy-shine)
         ├── ->withWordWrap($width)
         └── ->withHyperlinks($enabled)
@@ -202,7 +202,7 @@ Uses `filemtime()` polling — no extension required. Resolution is filesystem-d
 |---------|------|
 | `sugarcraft/candy-core` | `Viewport`, `Model`, `Cmd`, `Msg`, `Program`, `TtyDetect`, `Width`, `Ansi` |
 | `sugarcraft/candy-shine` | `Renderer`, `Theme` (ANSI text styling engine) |
-| `sugarcraft/sugar-bits` | Markdown parsing (League CommonMark integration) |
+| `sugarcraft/sugar-widgets` | Markdown parsing (League CommonMark integration) |
 | `symfony/console` | `Application`, `Command`, `InputInterface`, `OutputInterface` |
 
 ## Comparison with Upstream (charmbracelet/glow)
@@ -211,7 +211,7 @@ Uses `filemtime()` polling — no extension required. Resolution is filesystem-d
 |--------|----------------------|-----------------|
 | **Markdown rendering** | glamour (goldmark-based) | Renderer via candy-shine (League CommonMark) |
 | **TUI framework** | Bubble Tea (bubbletea) | Custom MdViewModel + Program (ReactPHP-based) |
-| **Pager** | bubbles/viewport | SugarCraft\Bits\Viewport |
+| **Pager** | bubbles/viewport | SugarCraft\Widgets\Viewport |
 | **File discovery** | gitcha (git-aware recursive search) | Not implemented |
 | **Fuzzy filtering** | sahilm/fuzzy (real-time) | Not implemented |
 | **GitHub README fetch** | GitHub API v3 | Not implemented |
@@ -380,7 +380,7 @@ This is critical for correct visual rendering since `strlen()` counts code units
 ```
 candy-core (Viewport, Model, Cmd, Program, Tty, Width, Ansi)
     ↓
-sugar-bits (MarkdownRenderer via League\CommonMark)
+sugar-widgets (MarkdownRenderer via League\CommonMark)
     ↓
 candy-shine (Renderer, Theme)
     ↓
@@ -392,12 +392,12 @@ Dependencies:
 
 - `sugarcraft/candy-shine` — Renderer, Theme
 
-- `sugarcraft/sugar-bits` — MarkdownRenderer
+- `sugarcraft/sugar-widgets` — MarkdownRenderer
 
 - `symfony/console` — Application, Command
 
 Path repos in `composer.json`:
-- candy-core, candy-shine, sugar-bits, candy-pty, candy-sprinkles, candy-forms, candy-mouse, honey-bounce, candy-palette
+- candy-core, candy-shine, sugar-widgets, candy-pty, candy-sprinkles, candy-forms, candy-mouse, honey-bounce, candy-palette
 
 ## Potential Enhancements
 

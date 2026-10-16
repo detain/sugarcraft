@@ -9,7 +9,7 @@ alwaysApply: false
 - `declare(strict_types=1);` first line, PSR-4 `SugarCraft\<Sub>\` (quirk: `candy-core` → `SugarCraft\Core\`).
 - Public classes `final` unless extension is part of contract. Public `readonly` properties for state.
 - **Immutable + fluent**: every `with*()` returns a NEW instance via a private `mutate(...)` helper. Canonical `candy-sprinkles/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`.
-- Nullable fields need a paired `bool $XSet = false` sentinel. Canonical `sugar-bits/src/TextInput/TextInput.php`.
+- Nullable fields need a paired `bool $XSet = false` sentinel. Canonical `sugar-widgets/src/TextInput/TextInput.php`.
 - Bare accessors (no `get`). Factories mirror upstream — `::new()` default, `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`; never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`candy-core/src/Model.php`): `init(): ?\Closure` · `update(Msg): [Model, ?Cmd]` · `view(): string`. Side effects → `Cmd`s, never `view()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.

@@ -310,7 +310,7 @@ func (m *Model[T]) filteredAndPagedChoices() ([]*Choice[T], int) {
 | KeyMap/keybindings | `candy-forms` | Key binding configuration |
 | Lipgloss styling | `candy-shine` | Style system for terminal colors/formatting |
 | BubbleTea Model pattern | `candy-core` | MVC pattern implementation |
-| WrapMode (WordWrap/HardWrap/Truncate) | `sugar-bits` | Text wrapping utilities |
+| WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text wrapping utilities |
 
 **Mapping Notes:**
 

@@ -168,7 +168,7 @@ Uses `setitimer()` with `SECOND/FREQ` granularity (100ms ticks via `TCK`). Multi
 
 ## SugarCraft Mapping
 
-### sugar-bits (Low-level components)
+### sugar-widgets (Low-level components)
 
 The TST implementation in `index.c` maps to tree-based data structures. The bitmap tracking for search matches is a notable pattern. However, `smenu` is a full application, not a library, so this is only a partial conceptual match.
 

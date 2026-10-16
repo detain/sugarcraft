@@ -110,7 +110,7 @@ own still needs a two-word name of its own.
 
 Both sides, for the record: **for `Sugar-`**, candy-top ships no reusable
 primitives — every rendering gap it needed was closed in `sugar-dashboard`,
-`sugar-charts`, `sugar-bits` and `candy-sprinkles`, and the app only
+`sugar-charts`, `sugar-widgets` and `candy-sprinkles`, and the app only
 assembles them, which is exactly the `Sugar-` "components / apps" role.
 **For `Candy-`**, the AGENTS.md naming line gives `Candy-` to
 "foundation / **system**", and a system monitor is about as literally
@@ -146,7 +146,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyFlip**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). "flip" carries the frame-by-frame animation metaphor for free. |
 | **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/candy-flip`, split into its own package (rename campaign step 1.3). "view" states the app role beside the CandyFlip toolkit. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
-| **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits. |
+| **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
 | **CandyFocus** | candy + focus = focus management. dependency-free focus ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here. |
 | **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
 | **CandyFuzzy** | candy + fuzzy = fuzzy string matching with scored matched indices. extracted from candy-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type). |
@@ -171,7 +171,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | Current | Issue | Sketches |
 |---|---|---|
 | (the runtime, `candy-core`) | "SugarCraft" is also the umbrella; the sub-package needs a less-collision-prone name | `CakeStage`, `BatterCore`, `WhiskLoop`, `MochiCore` |
-| **SugarBits** | "Bits" is generic; the lib is a set of named widgets | `BiscuitWidgets`, `SprinkleParts`, `ChipParts` |
+| ~~**SugarBits**~~ → **SugarWidgets** | resolved by the 2026-10 rename — "Bits" was generic; the lib is a set of named widgets <!-- @rename-keep --> | `BiscuitWidgets`, `SprinkleParts`, `ChipParts` |
 | **CandyKit** | "Kit" is filler; the lib is CLI presentation primitives | `CupcakeKit`, `BentoCli`, `BiscuitCli` |
 | **CandyShine** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
 | **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
@@ -213,7 +213,7 @@ matching package turns out to be.
 | **IcingTheme** | theme system / palette extension |
 | **FrostingPaint** | colors / styling overlay |
 | **SherbetSnap** | screenshot / capture (CandyCodeshot alternative) |
-| **BiscuitWidgets** | components grab-bag (SugarBits alternative) |
+| **BiscuitWidgets** | components grab-bag (SugarWidgets alternative) |
 | **SundaeServe** | SSH-served app aggregator |
 | **MochiTunnel** | SSH multiplexer |
 | **GumdropTimer** | stopwatch / countdown |
@@ -230,7 +230,7 @@ vocabulary above — these three remain reserved as the safe defaults.
 | Prefix | Meaning | Example uses |
 |---|---|---|
 | **Candy-** | foundation / system / framework | runtime (SugarCraft), terminal scripting (CandyScriptui), markdown (CandyShine) |
-| **Sugar-** | components / data / forms / apps | components (SugarBits), charts (SugarCharts) |
+| **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce); the Flappy clone left this prefix family in the 2026-10 rename (now CandyFlappy) |
 
 `Candy-` (Files) is the naming for the file manager (formerly SuperCandy).

@@ -250,7 +250,7 @@ candy-mail is a PHP email sending library ported from charmbracelet/pop (Go). It
 **Source:** `docs/repo_map/charmbracelet_pop.md` — Feature list #17
 **Implementation ideas:**
 
-- Integrate sugar-bits FilePicker or candy-scriptui file command
+- Integrate sugar-widgets FilePicker or candy-scriptui file command
 - Use Bubble Tea filepicker as reference
 
 **Expected impact:** TUI attachment selection (if TUI mode added).

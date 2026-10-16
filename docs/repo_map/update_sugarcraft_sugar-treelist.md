@@ -528,7 +528,7 @@ Use sugar-treelist for `Table::Filter()` row filtering. bubble-table uses `filte
 
 ## 3. Integration with candy-forms
 
-Expose sugar-treelist as `ItemList` component in candy-forms (the form primitives base). Currently `sugar-bits` ItemList is 🟡 with fuzzy filtering gaps.
+Expose sugar-treelist as `ItemList` component in candy-forms (the form primitives base). Currently `sugar-widgets` ItemList is 🟡 with fuzzy filtering gaps.
 
 **Source:** `docs/repo_map/sugarcraft_candy-forms.md` (ItemList), `docs/repo_map/charmbracelet_bubbles.md` (List component)
 

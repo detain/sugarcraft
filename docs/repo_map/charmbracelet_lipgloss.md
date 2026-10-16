@@ -290,7 +290,7 @@ All setter methods on `Style` return `Style` (not `*Style`). Calling `s.Bold(tru
 - **No built-in syntax highlighting:** Lip Gloss handles ANSI SGR sequences but does not include a syntax highlighter. For that you need Glamour (also a Charmbracelet project, already mapped to `candy-shine`).
 - **No built-in markdown rendering:** Lip Gloss styles individual strings; it doesn't parse markdown structure. Glamour (`candy-shine`) handles that.
 - **Color blending is 1D around border perimeter only:** `Blend2D` is diagonal-linear, not a full 2D rectangular gradient. True rectangular gradients require custom iteration over `Blend1D` results.
-- **Limited widget set:** Lip Gloss provides styling primitives and the table/list/tree sub-packages, but no text input, scrollable viewports, progress bars, spinners, or other interactive components. Those are in `bubbles` (mapped to `sugar-bits`).
+- **Limited widget set:** Lip Gloss provides styling primitives and the table/list/tree sub-packages, but no text input, scrollable viewports, progress bars, spinners, or other interactive components. Those are in `bubbles` (mapped to `sugar-widgets`).
 - **Go 1.25 dependency:** `go.mod` declares `go 1.25.0` which is very recent (future version), limiting adoption in older codebases.
 - **Hard dependency on Charmbracelet infrastructure:** `charmbracelet/x/ansi`, `charmbracelet/colorprofile`, `charmbracelet/ultraviolet` are all internal Charm libraries — porting requires understanding this full stack.
 
@@ -301,13 +301,13 @@ All setter methods on `Style` return `Style` (not `*Style`). Calling `s.Bold(tru
 | SugarCraft Lib | Namespace | Lipgloss Sub-package/Feature |
 |---|---|---|
 | **CandySprinkles** (`candy-sprinkles/`) | `SugarCraft\Sprinkles` | **Primary mapping:** The core `Style` type and all its setters (`Bold`, `Italic`, `Foreground`, `Background`, `Padding`, `Margin`, `Border*`, `Align`, etc.), color system (`Color`, `Darken`, `Lighten`, `Complementary`, `Alpha`, `Blend1D`, `Blend2D`, `AdaptiveColor`), border presets, position types, measurement utilities (`Width`, `Height`, `Size`), text wrapping/joining/placement, layer compositing (`Layer`, `Compositor`, `Canvas`), `StyleRunes` |
-| **SugarBits** (`sugar-bits/`) | `SugarCraft\Bits` | `table` sub-package → `Table.php` with `Column.php`, `SortState.php`, `Styles.php`; `list` sub-package → potential future `ItemList.php` enhancements |
+| **SugarWidgets** (`sugar-widgets/`) | `SugarCraft\Widgets` | `table` sub-package → `Table.php` with `Column.php`, `SortState.php`, `Styles.php`; `list` sub-package → potential future `ItemList.php` enhancements |
 | **CandyPalette** (`candy-palette/`) | `SugarCraft\Palette` | `charmbracelet/colorprofile` → terminal color detection (`HasDarkBackground`, `BackgroundColor`, `LightDark`, `Complete`) — but note SugarCraft's `candy-palette` maps directly to `colorprofile` itself |
 | **CandyShine** (`candy-shine/`) | `SugarCraft\Shine` | Adjacent: Lip Gloss handles ANSI styling; Glamour handles Markdown → these compose together in Charm apps |
 | **SugarCharts** (`sugar-charts/`) | `SugarCraft\Charts` | `Blend2D` / color gradient functions could power heatmap cell coloring |
 | **CandyForms** (`candy-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
 
-**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-bits`, `candy-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
+**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-widgets`, `candy-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
 
 ---
 
@@ -319,4 +319,4 @@ The library's most sophisticated features are its color system and border render
 
 The layer compositing system (`Layer`, `Compositor`, `Canvas`) is the most powerful and least-known feature. It implements a simple 2D graphics compositor: layers have X/Y/Z coordinates, the `Compositor` flattens the hierarchy once into a sorted slice, and `Draw()` renders each layer in order. Combined with `Canvas` (a cell-buffer), this enables overlay UIs, modal dialogs, and non-rectangular layouts — patterns that would otherwise require manual coordinate math. The `Hit()` method provides mouse coordinate → layer lookup, enabling clickable terminal UI regions.
 
-The main limitation is that Lip Gloss is fundamentally a styling library, not a component library. It styles text; it doesn't manage focus, input, or state transitions. The table, list, and tree sub-packages are renderers for structured data, not interactive widgets. For interactive components like text inputs, spinners, or paginated lists, you need `bubbles` (mapped to `sugar-bits`). In the SugarCraft ecosystem, this division of labor is explicit: `CandySprinkles` styles, `SugarBits` provides prebuilt interactive components, and `CandyCore` (Bubble Tea) manages the event loop and state.
+The main limitation is that Lip Gloss is fundamentally a styling library, not a component library. It styles text; it doesn't manage focus, input, or state transitions. The table, list, and tree sub-packages are renderers for structured data, not interactive widgets. For interactive components like text inputs, spinners, or paginated lists, you need `bubbles` (mapped to `sugar-widgets`). In the SugarCraft ecosystem, this division of labor is explicit: `CandySprinkles` styles, `SugarWidgets` provides prebuilt interactive components, and `CandyCore` (Bubble Tea) manages the event loop and state.

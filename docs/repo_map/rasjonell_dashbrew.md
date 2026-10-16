@@ -209,16 +209,16 @@ SugarCraft is a PHP TUI library monorepo (Charmbracelet ecosystem ports). Dashbr
 |---|---|---|
 | Dashboard model (layout tree, component containers, flex routing) | `candy-core` (foundation) | `candy-core` provides the core TUI model pattern with `Model::init/update/view`; would need a dashboard/layout composer |
 | Terminal rendering (lipgloss borders, styles, ANSI colors) | `candy-core` + `candy-shine` | `candy-shine` is the styling/rendering lib; `candy-core` provides terminal capabilities |
-| Text/scrollable viewport component | `sugar-bits` (components/data) | `sugar-bits` is the canonical leaf lib for basic TUI components |
+| Text/scrollable viewport component | `sugar-widgets` (components/data) | `sugar-widgets` is the canonical leaf lib for basic TUI components |
 | Line/area chart (ASCII art) | `sugar-charts` | Charts component — likely the most direct mapping |
 | Histogram/bar chart | `sugar-charts` | Same lib; histogram would be a specialized chart type |
-| Table (column-flex layout, paginated) | `sugar-bits` or `sugar-charts` | Table component would live alongside charts |
-| Todo list (persistent, keyboard-driven) | `sugar-bits` or a new `sugar-todo` leaf | No dedicated todo lib yet in SugarCraft |
+| Table (column-flex layout, paginated) | `sugar-widgets` or `sugar-charts` | Table component would live alongside charts |
+| Todo list (persistent, keyboard-driven) | `sugar-widgets` or a new `sugar-todo` leaf | No dedicated todo lib yet in SugarCraft |
 | Action system (shell dispatch, timeout, sticky state) | `candy-core` (process/spawn handling) | Would live in core as part of the update loop |
 | Bounding-box navigation (focus ring, neighbor finding) | `candy-core` (focus management) | Navigation model; `candy-sprinkles` for key bindings |
 | Theme system (named palettes, auto detection) | `candy-shine` (styling) | Palette/theme management is shine's domain |
 | Key bindings / action palette | `candy-sprinkles` (key handling) | `candy-sprinkles` is for input/bindings |
-| HTTP data fetching (API source, JSONPath) | `sugar-bits` (HTTP utilities) | Would be a data-fetch utility, not a component |
+| HTTP data fetching (API source, JSONPath) | `sugar-widgets` (HTTP utilities) | Would be a data-fetch utility, not a component |
 | Layout containers (row/column flex) | `candy-core` (layout system) | Flexbox layout algorithm could be a shared utility |
 
 **Key insight:** Dashbrew's architecture bundles all of these into one app. SugarCraft's approach would split them: a `SugarCraft\Dashboard` layout composer (not yet built), separate component leaf libs for each widget type (text, chart, histogram, table, todo), and `candy-core` for the underlying TEA model infrastructure and action dispatch system.

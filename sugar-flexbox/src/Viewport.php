@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
-use SugarCraft\Bits\Scrollbar\Scrollbar;
-use SugarCraft\Bits\Viewport\Viewport as BitsViewport;
+use SugarCraft\Widgets\Scrollbar\Scrollbar;
+use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 
 /**
  * Sticker-level viewport wrapping the canonical {@see BitsViewport}.
  *
- * Composes sugar-bits Viewport rather than reimplementing it. Adds
+ * Composes sugar-widgets Viewport rather than reimplementing it. Adds
  * sticky header/footer positioning and scroll-sync (step 10.12).
  *
- * @see \SugarCraft\Bits\Viewport\Viewport
+ * @see \SugarCraft\Widgets\Viewport\Viewport
  */
 final readonly class Viewport
 {

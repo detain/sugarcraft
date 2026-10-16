@@ -12,7 +12,7 @@ use SugarCraft\Crush\Theme;
  * The settings view's category strip: one line, the active tab highlighted,
  * scrolled sideways so the active tab is always on it.
  *
- * Local rather than `sugar-bits`' `Tabs` because that one hit-tests through
+ * Local rather than `sugar-widgets`' `Tabs` because that one hit-tests through
  * the `SugarCraft\Mouse\Zones` Manager while this app's clicks run on the
  * `candy-mouse` Mark/Scan layer; the strip reports
  * each painted tab's column span instead, and the shell records those as

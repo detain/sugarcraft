@@ -79,7 +79,7 @@
 ## SugarCraft Mapping
 
 - **candy-core**: The core rendering and event loop patterns (`show()`, `run_navigation()`, `draw()`) map to how `candy-core` handles TUI loop infrastructure. The ANSI color handling via the `color` module parallels `candy-core`'s theme/color support.
-- **sugar-bits**: This library is most directly comparable to `sugar-bits` — it's a single component (a menu/selector widget) rather than a full application framework. The `Menu` struct is analogous to a `Component` in SugarCraft's `Component` trait.
+- **sugar-widgets**: This library is most directly comparable to `sugar-widgets` — it's a single component (a menu/selector widget) rather than a full application framework. The `Menu` struct is analogous to a `Component` in SugarCraft's `Component` trait.
 - **honey-bounce**: Not directly relevant — this library has no animation/timing physics.
 
 ## Analysis
@@ -90,6 +90,6 @@ The rendering approach is straightforward: on each keypress, the entire menu is 
 
 The navigation system supports both arrow keys and vim-style bindings (hjkl + bw for page movement), plus Enter to confirm and Escape/q/Backspace to exit. Pagination is automatic when the number of options exceeds the calculated `options_per_page` value. Nested menus are supported by calling `show()` recursively from within a callback.
 
-Compared to SugarCraft's architecture, this library would fit best as a `sugar-bits` component — it's a self-contained UI widget rather than a framework. The key differences are that SugarCraft uses the Bubble Tea model's `update()`/`view()` separation and immutable state with `with*()` builders, whereas this Rust library uses mutable state directly in the `Menu` struct. The Rust library is also much simpler — it lacks SugarCraft's sophisticated event handling, component composition, and state management patterns.
+Compared to SugarCraft's architecture, this library would fit best as a `sugar-widgets` component — it's a self-contained UI widget rather than a framework. The key differences are that SugarCraft uses the Bubble Tea model's `update()`/`view()` separation and immutable state with `with*()` builders, whereas this Rust library uses mutable state directly in the `Menu` struct. The Rust library is also much simpler — it lacks SugarCraft's sophisticated event handling, component composition, and state management patterns.
 
 In summary, this is a competent but minimal single-purpose menu library suitable for simple CLI tools, whereas SugarCraft's approach with Charmbracelet's bubbletea provides a more comprehensive and extensible TUI architecture suitable for complex applications.

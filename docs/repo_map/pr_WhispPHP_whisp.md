@@ -27,10 +27,10 @@ From `repo_map/WhispPHP_whisp.md`:
 |----------------------|-------------------|--------|
 | SSH Server / Connection handling | `candy-core` | Reference patterns |
 | PTY management / Terminal I/O | `candy-pty` | Direct port candidate |
-| SSH protocol packets / Binary protocols | `sugar-bits` | Low-level patterns |
+| SSH protocol packets / Binary protocols | `sugar-widgets` | Low-level patterns |
 | Terminal mode handling | `candy-terminal` | Capability handling |
 | Channel / Session management | `candy-core` | Event/channel model |
-| Environment variable passing | `sugar-bits` | Parameter passing |
+| Environment variable passing | `sugar-widgets` | Parameter passing |
 | Signal handling (SIGCHLD, SIGHUP) | `candy-core` | Process management |
 | Logging (PSR-3) | Already in `SugarCraft\Core` | Complete |
 | Process forking (pcntl) | `candy-core` | Process management |
@@ -521,7 +521,7 @@ if ($channelType === 'direct-tcpip') {
 
 4. **SSH Key Validation Patterns**
    - Whisp's `PublicKeyValidator` class
-   - Could be useful for sugar-bits if SSH support is ever added
+   - Could be useful for sugar-widgets if SSH support is ever added
 
 ### Defensive Opportunities:
 

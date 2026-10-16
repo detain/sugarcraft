@@ -108,7 +108,7 @@ the public *contract* and are required documentation. The dividing line:
 ### Per-lib README.md structure
 
 Each lib's README should match this skeleton (cross-reference
-sugar-bits/README.md or sugar-charts/README.md as canonical):
+sugar-widgets/README.md or sugar-charts/README.md as canonical):
 
   # <LibName>
 

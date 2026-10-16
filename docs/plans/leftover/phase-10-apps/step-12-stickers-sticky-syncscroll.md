@@ -6,7 +6,7 @@
 
 ## Deliverable
 
-After step 04.02 made sugar-flexbox consume sugar-bits, add the
+After step 04.02 made sugar-flexbox consume sugar-widgets, add the
 sticker-specific features:
 
 - Sticky positioning: header/footer regions stay visible as content
@@ -16,7 +16,7 @@ sticker-specific features:
 
 ## Files
 
-**Modify:** `sugar-flexbox/src/Viewport.php` (extends sugar-bits).
+**Modify:** `sugar-flexbox/src/Viewport.php` (extends sugar-widgets).
 Add `withStickyHeader(int $rows)`, `withStickyFooter(int $rows)`,
 `syncWith(Viewport)`.
 

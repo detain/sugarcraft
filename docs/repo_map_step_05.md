@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-mouse-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-14 (sugar-bits uses it), step-22 (sugar-overlay/sugar-navstack/sugar-treelist consume it)
+**Blocks:** step-14 (sugar-widgets uses it), step-22 (sugar-overlay/sugar-navstack/sugar-treelist consume it)
 
 ## Goal
 

@@ -617,11 +617,11 @@ Server::new()
     ->serve();
 ```
 
-## 2. sugar-bits Integration
+## 2. sugar-widgets Integration
 
 **Already documented:** `BubbleTea` middleware mounts SugarCraft Programs over SSH.
 
-**Improvement:** Document integration with `sugar-bits` components for rich TUI over SSH.
+**Improvement:** Document integration with `sugar-widgets` components for rich TUI over SSH.
 
 ## 3. candy-sshconfig Parser
 

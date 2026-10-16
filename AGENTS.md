@@ -16,11 +16,11 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 ## Naming
 
-`Candy-` foundation/system, `Sugar-` components/data/apps, `Honey-` math/physics. Slug → kebab dir → composer pkg → namespace: `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`). Foundation `candy-forms` is the form-primitives base that `sugar-bits` + `candy-scriptui` depend on.
+`Candy-` foundation/system, `Sugar-` components/data/apps, `Honey-` math/physics. Slug → kebab dir → composer pkg → namespace: `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`). Foundation `candy-forms` is the form-primitives base that `sugar-widgets` + `candy-scriptui` depend on.
 
 ## Lib skeleton & composer.json
 
-Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
+Reference `sugar-widgets/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
 
 PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`. Libs whose suites arm timers on the shared ReactPHP loop point `bootstrap` at `tests/bootstrap.php` instead (`candy-async`, `candy-mosaic`, `candy-pty`, `candy-testing`, `sugar-crush`).
 
@@ -40,7 +40,7 @@ PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR),
 
 **Docs are pinned by tests.** `sugar-crush` ships documentation-drift guards — `sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `EnvRosterDriftTest.php`, `ConfigWriteProducerDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php` — that re-derive the rosters in `sugar-crush/README.md` + `sugar-crush/docs/*.md` from their generators in `sugar-crush/src/`. A tool, slash command, env var, or key binding added without the matching doc edit goes red.
 
-**Façade = alias smoke-test only.** A façade lib that re-exports a canonical class via `class_alias` (e.g. `sugar-bits` → `SugarCraft\Forms\*`, `sugar-treelist`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`) must NOT copy the canonical lib's full test suite under its own namespace — that re-tests identical code and drifts. Ship ONE `AliasesTest`/`AliasResolutionTest` asserting each alias symbol resolves to its canonical FQN, plus tests only for genuinely lib-local behaviour the façade adds. (See #1275/#1312/#1314 which deleted ~4300 LOC of duplicated façade tests.)
+**Façade = alias smoke-test only.** A façade lib that re-exports a canonical class via `class_alias` (e.g. `sugar-widgets` → `SugarCraft\Forms\*`, `sugar-treelist`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`) must NOT copy the canonical lib's full test suite under its own namespace — that re-tests identical code and drifts. Ship ONE `AliasesTest`/`AliasResolutionTest` asserting each alias symbol resolves to its canonical FQN, plus tests only for genuinely lib-local behaviour the façade adds. (See #1275/#1312/#1314 which deleted ~4300 LOC of duplicated façade tests.)
 
 ```sh
 cd candy-core && composer install && vendor/bin/phpunit

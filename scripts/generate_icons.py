@@ -122,7 +122,7 @@ SUBJECTS: dict[str, str] = {
     "candy-flappy":      "a chubby cartoon bee with tiny flappy wings caught mid-flap",
 
     # --- sugar libs / apps ---
-    "sugar-bits":      "a glass jar full of colorful glossy candy bits with a purple lid on top",
+    "sugar-widgets":      "a glass jar full of colorful glossy candy bits with a purple lid on top",
     "sugar-charts":    "a row of four glossy candy bar-chart bars in pink orange green and blue with a striped lollipop perched on top",
     "candy-forms":    "a glossy candy speech bubble with three small candy form-input cards inside",
     "candy-ansi-inspect":     "a glossy yellow five-point candy star surrounded by bright sparkles",

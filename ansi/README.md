@@ -146,7 +146,7 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugarcraft/44-sweetshop-window.ansi` | 58x13 | 24 | A terminal window titled sugarcraft x sweetshop framing a two-row shelf of 16 candy-colored library tiles, a composer require line, and a sugar-crush agent session mid-task |
 | `sugarcraft/45-sugar-sky.ansi` | 66x16 | 225 | candy-rainbow night arch over chocolate sprinkle hills with glowing moon, a comet trailing sugar-crush, and SUGARCRAFT neon logo |
 | `sugarcraft/45-sugarcraft-forge.ansi` | 60x20 | 723 | rainbow SUGARCRAFT block logo over a glossy truecolor swirl lollipop with sparkles and a composer require line |
-| `sugarcraft/46-candy-jars.ansi` | 49x11 | 8 | three shimmer-shaded candy jars on a sweetshop shelf labeled candy-core, sugar-bits, sugar-crush with a composer prompt |
+| `sugarcraft/46-candy-jars.ansi` | 49x11 | 8 | three shimmer-shaded candy jars on a sweetshop shelf labeled candy-core, sugar-widgets, sugar-crush with a composer prompt |
 | `sugarcraft/46-sweetshop.ansi` | 52x15 | 9 | candy-stripe awning over rainbow SUGAR/CRAFT block letters dusted with sprinkles — SugarCraft sweetshop splash |
 | `sugarcraft/47-sugar-geode.ansi` | 60x17 | 532 | truecolor sugar-crystal cavern: glowing candy geode spikes under a starry aura, SUGARCRAFT carved in rainbow blocks |
 | `sugarcraft/47-sugarcraft-sweetshop.ansi` | 64x16 | 102 | candy-shop logo card: rainbow block-letter SUGARCRAFT framed by pink stripes, confetti, wrapped candies and lollipops |
@@ -296,7 +296,7 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugarcraft-2-16-l-1.ansi` | 139x28 | 16 | 7 | monorepo tree poster: three box-drawing columns, family-colored libs, upstream-port notes, big wordmark header |
 | `sugarcraft-2-16-l-2.ansi` | 150x30 | 16 | 11 | retro platformer attract screen: blue sky, sun, clouds, ?-blocks, coin arc, SC flag, checkerboard ground, wordmark |
 | `sugarcraft-2-16-m-1.ansi` | 76x18 | 16 | 7 | huh-style multiselect picker: magenta dialog frame, green [x] toggles, blue title plate, reverse key legend |
-| `sugarcraft-2-16-m-2.ansi` | 84x18 | 16 | 8 | sugar-bits component rack: rainbow braille spinner, magenta progress, spring sparkline, table, help bar, wordmark |
+| `sugarcraft-2-16-m-2.ansi` | 84x18 | 16 | 8 | sugar-widgets component rack: rainbow braille spinner, magenta progress, spring sparkline, table, help bar, wordmark |
 | `sugarcraft-2-16-s-1.ansi` | 64x15 | 16 | 7 | composer-install terminal card: cyan frame, yellow prompt, green checks, magenta 52/52 bar, rainbow block wordmark |
 | `sugarcraft-2-16-s-2.ansi` | 61x16 | 16 | 6 | candy-corn parade in gold/ember/snow bands with white-on-blue and cyan CGA wordmark strip |
 | `sugarcraft-2-256-l-1.ansi` | 150x31 | 256 | 11 | constellation map of the lib galaxy: family-colored nodes with glow rings, require-edge threads, starfield grid |

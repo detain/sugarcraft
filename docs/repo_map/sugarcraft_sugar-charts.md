@@ -411,8 +411,8 @@ Based on source analysis and CALIBER_LEARNINGS.md, the following gaps exist:
 | Chart (X/Y axes, legend) | ✅ `LineChart` with `withAxes()` |
 | Canvas (Bresenham drawing) | ✅ `Graph` + `Canvas` |
 | Gauge | ❌ Not ported |
-| Table | ❌ Separate in sugar-bits |
-| Paragraph | ❌ In sugar-bits text rendering |
+| Table | ❌ Separate in sugar-widgets |
+| Paragraph | ❌ In sugar-widgets text rendering |
 
 **Key difference:** Ratatui uses immediate-mode rendering with buffer diffing (only changed cells written). SugarCraft's Canvas produces complete frame strings each render.
 

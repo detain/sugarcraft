@@ -79,12 +79,12 @@ This is a **Bubbletea port candidate** — a Go TUI framework that maps directly
 
 | EthanEFung/bubble-datepicker | SugarCraft Lib | Notes |
 |---|---|---|
-| Datepicker component | `sugar-bits` (foundation components) | The datepicker is a TUI "bubble" component like textinput, list, viewport — all bubbles in the Charmbracelet ecosystem |
-| Calendar grid rendering | `sugar-bits` `View()` rendering | Snapshot testing pattern applies here — calendar output is fixed-width text grid |
-| Focus state machine (HeaderMonth/Year/Calendar) | `sugar-bits` focus handling | SugarCraft follows same Elm-style Model/Update/View with focused sub-components |
+| Datepicker component | `sugar-widgets` (foundation components) | The datepicker is a TUI "bubble" component like textinput, list, viewport — all bubbles in the Charmbracelet ecosystem |
+| Calendar grid rendering | `sugar-widgets` `View()` rendering | Snapshot testing pattern applies here — calendar output is fixed-width text grid |
+| Focus state machine (HeaderMonth/Year/Calendar) | `sugar-widgets` focus handling | SugarCraft follows same Elm-style Model/Update/View with focused sub-components |
 | `KeyMap` + key bindings | `candy-core` key handling | Charmbracelet's `bubbles/key` package — same pattern |
-| `Styles` with lipgloss | `sugar-bits` styling | Lipgloss is used in both ecosystems |
-| Two-way data binding example | `sugar-bits` component integration | The `textinput` example demonstrates compositing bubbles, same as SugarCraft components |
+| `Styles` with lipgloss | `sugar-widgets` styling | Lipgloss is used in both ecosystems |
+| Two-way data binding example | `sugar-widgets` component integration | The `textinput` example demonstrates compositing bubbles, same as SugarCraft components |
 
 **Not a direct port target** — this is a user-contributed Bubbletea component, not upstream from Charmbracelet. SugarCraft ports from Charmbracelet directly (like `bubbletea` → would be `sugar-tea` if it existed). This repo is useful as a **reference implementation** for TUI component patterns.
 

@@ -11,7 +11,7 @@ use SugarCraft\Core\Msg;
  *
  * E735 step 10.25: armed by {@see MdViewModel::init()} /
  * {@see MdViewModel::update()} via `Cmd::tick()` — the same one-shot-re-arm
- * chain sugar-bits' Stopwatch runs (TickMsg + id routing). The message
+ * chain sugar-widgets' Stopwatch runs (TickMsg + id routing). The message
  * carries no payload; the sweep decision lives in the Model so tests can
  * drive it by dispatching the Msg directly, with no wall-clock in play.
  *

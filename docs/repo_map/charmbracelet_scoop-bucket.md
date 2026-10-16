@@ -64,9 +64,9 @@ depends?      array?   — optional Scoop dependencies
 
 | Scoop Manifest | SugarCraft Library | Rationale |
 |---|---|---|
-| `charm-gum.json` | `sugar-bits` (TUI components) | Gum is a tool for "glamorous shell scripts" — builds interactive TUI prompts with spinners, confirmation, input fields, and selection menus. SugarCraft ports: `candy-forms` (input/selection patterns), `sugar-spinner` |
-| `vhs.json` | `sugar-bits` + `candy-shine` | VHS records terminal sessions as GIFs — maps to `sugar-bits` view rendering + `candy-shine` (animation/frame composition) |
-| `glow.json` | `sugar-bits` (markdown rendering) | Glow renders markdown in the terminal with ANSI styling — SugarCraft has no direct markdown renderer; `sugar-bits` component layer could host a Bubbletea-based markdown view |
+| `charm-gum.json` | `sugar-widgets` (TUI components) | Gum is a tool for "glamorous shell scripts" — builds interactive TUI prompts with spinners, confirmation, input fields, and selection menus. SugarCraft ports: `candy-forms` (input/selection patterns), `sugar-spinner` |
+| `vhs.json` | `sugar-widgets` + `candy-shine` | VHS records terminal sessions as GIFs — maps to `sugar-widgets` view rendering + `candy-shine` (animation/frame composition) |
+| `glow.json` | `sugar-widgets` (markdown rendering) | Glow renders markdown in the terminal with ANSI styling — SugarCraft has no direct markdown renderer; `sugar-widgets` component layer could host a Bubbletea-based markdown view |
 | `mods.json` | **none** | AI on the command line — SugarCraft has no AI/LLM integration lib; this would be a new leaf lib if ported |
 | `soft-serve.json` | **none** (server infrastructure) | Self-hostable Git server — out of scope for SugarCraft (TUI component library) | <!-- @rename-keep upstream charm bucket record -->
 | `wishlist.json` | **none** (SSH directory) | SSH directory management — out of SugarCraft's TUI scope | <!-- @rename-keep -->
@@ -74,7 +74,7 @@ depends?      array?   — optional Scoop dependencies
 | `pop.json` | **none** (email sending) | Email from terminal — out of scope for TUI component library | <!-- @rename-keep -->
 | `crush.json` | **none** (AI assistant) | Terminal-based AI assistant — would need new `sugar-ai` leaf lib if ported |
 | `melt.json` | **none** (key management) | Ed25519 SSH key backup/restore — out of scope for TUI components |
-| `sequin.json` | `sugar-bits` (ANSI sequences) | Human-readable ANSI sequences — parsing/encoding ANSI escape codes; SugarCraft TUI libs handle ANSI but no dedicated library exists |
+| `sequin.json` | `sugar-widgets` (ANSI sequences) | Human-readable ANSI sequences — parsing/encoding ANSI escape codes; SugarCraft TUI libs handle ANSI but no dedicated library exists |
 | `skate.json` | **none** (key-value store) | Personal key-value store — out of TUI scope; if it were a TUI around key-value data, `sugar-bits` could provide the view layer | <!-- @rename-keep -->
 | `markscribe.json` | **none** (templating) | Markdown scribe with template engine + GitHub/RSS — templating is out of SugarCraft scope; could be a `sugar-template` leaf lib |
 | `confettysh.json` | `honey-bounce` (animation) | Confetti animation over SSH — `honey-bounce` spring/physics animation could port the confetti effect |
