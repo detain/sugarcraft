@@ -170,17 +170,17 @@ No high-comment open issues found. Repo is very quiet.
 
 ---
 
-## charmbracelet/fang → candy-kit
+## charmbracelet/fang → sugar-cli
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-kit | Notes |
+| Upstream | Title | Status in sugar-cli | Notes |
 |---|---|:--:|---|
 | [#86](https://github.com/charmbracelet/fang/pull/86) (2026-03-11) | fix: don't strip newlines in error messages | ✅ | Already handled in `Output` helper |
 | [#84](https://github.com/charmbracelet/fang/pull/84) (2026-03-09) | docs: add upgrade guide for v2 + release notes | ⚪ | v2 docs |
 | [#87](https://github.com/charmbracelet/fang/pull/87) (2026-03-07) | docs: minor housekeeping | ⚪ | Docs only |
 | [#48](https://github.com/charmbracelet/fang/pull/48) (2025-06-27) | feat: WithNotifySignal | 🟡 | Signal notification — check if useful for CLI apps |
-| [#28](https://github.com/charmbracelet/fang/pull/28) (2025-06-18) | feat: support having a custom error handler | 🟡 | Custom error handler pattern — may enhance candy-kit |
+| [#28](https://github.com/charmbracelet/fang/pull/28) (2025-06-18) | feat: support having a custom error handler | 🟡 | Custom error handler pattern — may enhance sugar-cli |
 | [#42](https://github.com/charmbracelet/fang/pull/42) (2025-06-23) | feat: support grouped commands and fix flag style | 🟡 | Grouped commands — already in CLI design? |
 | [#71](https://github.com/charmbracelet/fang/pull/71) (2025-09-19) | fix: preserve multiline formatting in flag descriptions | ✅ | Already preserved in HelpText |
 

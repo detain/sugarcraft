@@ -42,7 +42,7 @@ called out in the table below.
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture. |
 | **SugarForms** (`sugar-forms/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color. |
 | **SugarMarkdown** (`sugar-markdown/`) | 🟡 in progress | Markdown → ANSI renderer (themes, syntax, OSC 8 hyperlinks). |
-| **CandyKit** (`candy-kit/`) | 🟢 ready | CLI presentation helpers (StatusLine / Banner / Section / Stage / HelpText). |
+| **SugarCli** (`sugar-cli/`) | 🟢 ready | CLI presentation helpers (StatusLine / Banner / Section / Stage / HelpText). |
 | **CandyWish** (`candy-wish/`) | 🟢 ready | SSH-server middleware framework (leans on host `sshd`); pluggable Transport: InProcessTransport (default — candy-pty supervisor + Spawn middleware) or HostSshdTransport (legacy, opt-in — inline middleware, including running SugarCraft apps in SSH sessions). |
 | **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + CandyWish session middleware. |
 | **CandyLog** (`candy-log/`) | 🟢 ready | Minimal, colorful logging library. |
@@ -161,7 +161,7 @@ reference projects supplied the ideas, not the code.
 | SugarFuzzy (sugar-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
 | SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
 | CandyInput (candy-input/) | none — first-party |
-| CandyKit (candy-kit/) | [fang](https://github.com/charmbracelet/fang) |
+| SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) |
 | CandyLayout (candy-layout/) | [ratatui](https://github.com/ratatui/ratatui) |
 | SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
 | CandyLog (candy-log/) | [log](https://github.com/charmbracelet/log) |

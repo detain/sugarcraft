@@ -1,6 +1,6 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
-Sourced from 11 update docs: candy-kit, sugar-animation, candy-mail, candy-sql,
+Sourced from 11 update docs: sugar-cli, sugar-animation, candy-mail, candy-sql,
 candy-minesweeper, candy-tetris, candy-starter, candy-flappy, super-candy, candy-codetime.
 
 ---
@@ -62,7 +62,7 @@ This is the most-analyzed repo in the ecosystem.
 Styling foundation for all visual packages. Its CSS shorthand resolution,
 adaptive color system, and BorderTitle pattern are the reference
 implementations. The `Width::string()` for Unicode width is the canonical
-fix for the HelpText alignment bug in candy-kit.
+fix for the HelpText alignment bug in sugar-cli.
 
 ### C. textualize/textual — 4 citations
 Sister TUI framework providing reactive state patterns, CSS layout, widget
@@ -103,10 +103,10 @@ deterministic injectable RNG for testing, iterative flood-fill (no stack
 overflow on Expert boards). go-sweep has been dormant; candy-minesweeper
 has clear headroom to add undo/redo, achievements, and replay.
 
-### C. candy-kit: only framework-agnostic PHP CLI presenter
+### C. sugar-cli: only framework-agnostic PHP CLI presenter
 No comparable pure-presentation PHP library exists. pterm is Go-only.
 c9s/CLIFramework is a full CLI framework, not presentation-only.
-candy-kit occupies an empty niche: styled CLI output without Symfony
+sugar-cli occupies an empty niche: styled CLI output without Symfony
 Console dependency. This positioning is defensible and uncontested.
 
 ---
@@ -120,5 +120,5 @@ Architecturally, god classes and string-based undo detection are
 recurring weaknesses. bubble-tea is the most-cited reference; lipgloss
 and textual are secondary references. The immediate wins are file
 locking and DatabaseInterface extraction — both low complexity, high
-impact. Three packages (candy-tetris, candy-minesweeper, candy-kit) have already
+impact. Three packages (candy-tetris, candy-minesweeper, sugar-cli) have already
 surpassed their upstreams and should be marketed as such.

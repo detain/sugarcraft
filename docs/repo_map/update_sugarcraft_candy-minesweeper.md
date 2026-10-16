@@ -264,7 +264,7 @@ DifficultyStats (atomic JSON persistence)
 **Title:** Add command palette for navigation and actions
 **Description:** Textual's command palette pattern enables fuzzy search of available actions.
 **Why it matters:** Keyboard power users expect this pattern
-**Source repo:** `textualize/textual` command system, `candy-kit`
+**Source repo:** `textualize/textual` command system, `sugar-cli`
 **Source PR/issue/discussion:** `pr_textualize_textual.md:642-645`
 **Implementation ideas:**
 
@@ -807,7 +807,7 @@ public function testRendererOutput(): void
    - Shareable replay files
 
 7. **Command palette**
-   - Integrate with candy-kit
+   - Integrate with sugar-cli
 
    - Fuzzy search actions
 

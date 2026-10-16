@@ -454,7 +454,7 @@ the 2026-09-12 adjudication.
 
 **MEASURED 2026-09-10, before any of the figures above were trusted.** `sugar-crush/vendor/sugarcraft/`
 held **14 entries where the manifest's closure needs 18**. `sugar-forms`, `candy-focus` and <!-- @rename-keep -->
-`candy-kit` — all three named directly in `sugar-crush/composer.json`'s `require` — were **absent
+`candy-kit` — all three named directly in `sugar-crush/composer.json`'s `require` — were **absent <!-- @rename-keep historical provenance -->
 from vendor entirely**, and four more (`candy-fuzzy`, `candy-mouse`, `honey-bounce`, `sugar-veil`) <!-- @rename-keep historical provenance -->
 were real Packagist directories where the other ten were monorepo symlinks. `refresh-deps.php
 --status` called that state **`mixed 10/14`**.

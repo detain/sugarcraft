@@ -71,7 +71,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - sugar-datepicker: DatePicker widget + candy-testing golden-files; sugar-toast: border styling + queue management
   - Branch ai/widget-shared merged to master
 
-- [RESOLVED | 2026-06-01 | step-36 | shipper] sugar-animation + candy-kit + honey-bounce + candy-flappy: adopt candy-testing — MERGED PR #916:
+- [RESOLVED | 2026-06-01 | step-36 | shipper] sugar-animation + sugar-cli + honey-bounce + candy-flappy: adopt candy-testing — MERGED PR #916:
   - Branch ai/testing-rollout merged to master; Commit SHA: 0995878a
 
 - [RESOLVED | 2026-06-01 | step-37 | shipper] NO-OP step-37 catch-all — MERGED PR #917:
@@ -151,12 +151,12 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch: ai/filter-consumers
   - Note: `highlightLine()` re-matches displayLine against filter needle to get indices aligned with the rendered text; applies ANSI bold+cyan (sgr 1,36) on matched grapheme clusters
 
-- [2026-06-01 | step-36 | shipper] sugar-animation + candy-kit + honey-bounce + candy-flappy: adopt candy-testing — MERGED PR #916:
+- [2026-06-01 | step-36 | shipper] sugar-animation + sugar-cli + honey-bounce + candy-flappy: adopt candy-testing — MERGED PR #916:
   - Branch ai/testing-rollout merged to master
   - 25 files changed, 571 insertions(+), 5 deletions(-)
   - Added `GoldenRenderTest.php` snapshot tests to all 4 libs via candy-testing
-  - Added golden fixtures: sugar-animation (density-3x3), candy-kit (stage-step, stage-substep), honey-bounce (projectile-trajectory, spring-trajectory), candy-flappy (game-state-5ticks, game-state-crash)
-  - candy-kit: added new CALIBER_LEARNINGS.md
+  - Added golden fixtures: sugar-animation (density-3x3), sugar-cli (stage-step, stage-substep), honey-bounce (projectile-trajectory, spring-trajectory), candy-flappy (game-state-5ticks, game-state-crash)
+  - sugar-cli: added new CALIBER_LEARNINGS.md
   - Updated READMEs and composer.json (added candy-testing dev dep + path-repos) for all 4 libs
   - Commit SHA: 0995878a
 

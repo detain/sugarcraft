@@ -233,7 +233,7 @@ builds on it. From the same monorepo:
 - **SugarMarkdown** — Markdown → ANSI renderer.
 - **SugarMouse** — mouse-zone tracker.
 - **HoneyBounce** — spring physics + Newtonian projectile sim.
-- **CandyKit** — opinionated CLI presentation helpers.
+- **SugarCli** — opinionated CLI presentation helpers.
 - **CandyCodeshot** — code → SVG screenshot.
 - **CandyWish** — SSH server middleware framework.
 - **CandyAnsiInspect** — ANSI escape-sequence inspector.

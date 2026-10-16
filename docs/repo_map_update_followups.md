@@ -40,7 +40,7 @@ The 8 shared packages:
 | Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, sugar-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
-| Step 36 | sugar-animation, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
+| Step 36 | sugar-animation, sugar-cli, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing |
 
 ---
@@ -92,14 +92,14 @@ The 8 shared packages:
 
 ---
 
-### candy-kit
+### sugar-cli
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Banner.php/Logo.php/Section.php render via string concat — Buffer would give uniform ANSI composition | S |
 | candy-layout | Stage.php + Section.php use manual width calc — LayoutSolver would handle constraint-based sizing | S |
 
-**Notes:** candy-kit is a TUI component library (banners, help text, status lines). All rendering is string-based. Buffer adoption would make output diff-friendly; LayoutSolver adoption would replace ad-hoc width arithmetic.
+**Notes:** sugar-cli is a TUI component library (banners, help text, status lines). All rendering is string-based. Buffer adoption would make output diff-friendly; LayoutSolver adoption would replace ad-hoc width arithmetic.
 
 ---
 
@@ -221,14 +221,14 @@ The 8 shared packages:
 
 ---
 
-### candy-kit
+### sugar-cli
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Banner/Logo/Section/StatusLine render via string — Buffer would standardize ANSI composition | S |
 | candy-layout | Stage.php constrains section widths manually — LayoutSolver would replace ad-hoc sizing | S |
 
-**Notes:** Already listed above under step 36. Note: candy-kit ships components that other libs (sugar-datepicker, sugar-toast) will build on — buffer/layout adoption here propagates downstream benefit.
+**Notes:** Already listed above under step 36. Note: sugar-cli ships components that other libs (sugar-datepicker, sugar-toast) will build on — buffer/layout adoption here propagates downstream benefit.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, sugar-animation (buffer+async), candy-flappy (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, sugar-cli (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, sugar-animation (buffer+async), candy-flappy (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---

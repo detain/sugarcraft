@@ -59,7 +59,7 @@
         "sugarcraft/sugar-mouse": "dev-master",
         "sugarcraft/candy-layout": "dev-master",
         "sugarcraft/sugar-focus": "@dev",
-        "sugarcraft/candy-kit": "@dev",
+        "sugarcraft/sugar-cli": "@dev",
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/sugar-video": "@dev"
     },

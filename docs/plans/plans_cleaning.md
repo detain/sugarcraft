@@ -64,7 +64,7 @@
 ### ❓ UNCLEAR / NOT VERIFIED (40+)
 
 - sugar-toast: placeAnsiStringAt
-- candy-kit: Stage microtime
+- sugar-cli: Stage microtime
 - candy-ssh-launcher: Config non-scalar cast
 - sugar-mouse: Scan duplicate zone
 - candy-git-server: SEC issues

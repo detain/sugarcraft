@@ -713,7 +713,7 @@ $options = ProgramOptions::create()
 
 3. **Mouse routing is model's job** — coordinates come in but no hit-testing utility
 
-4. **No built-in command palette** — textual has extensive `command.py`; candy-kit is partial
+4. **No built-in command palette** — textual has extensive `command.py`; sugar-cli is partial
 
 ## Potential improvements
 
@@ -721,7 +721,7 @@ $options = ProgramOptions::create()
 
 2. **Spatial map for hit testing** — O(log n) widget lookup by screen position (from textual)
 
-3. **Command palette** — extend `candy-kit` with fuzzy search
+3. **Command palette** — extend `sugar-cli` with fuzzy search
 
 4. **Animation support** — smooth transitions via `honey-bounce` integration
 

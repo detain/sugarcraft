@@ -1025,6 +1025,8 @@ Order: `honey-bounce`, `candy-palette`, `candy-kit`, `candy-flip`, `candy-mosaic
   `tools/check-child-lifetimes.php` rows for `sugar-reel/src/AudioPlayer.php` and `Decode/FfmpegDecoder.php` → rewritten.
 - **candy-shine → sugar-markdown:** `CLAUDE.md`, `AGENTS.md`, `SECURITY.md`, `.claude/`, `.cursor/` mention it → R3.
 
+Entry status: `candy-kit` → `sugar-cli` ✅ **R1–R7 (lane-terminal)** — lane d5 tag-prep `4635ee4c0`, rename `159cfea58`; status `renamed`, R8/R9 (remote+packagist) owed by weld. Suite 272T/1634A exact baseline; consumers candy-sql 1580T/11900A exact, crush K=8 CONSERVATION PASS 22564T/423738A/0F/0E/2S (+86A tree-scan wobble); tools/tests 426T/1484A; residue 0; path-repos/child-lifetimes/gen-docs/gen-ansi rc0. No env/data paths/Lang (honest none); no Legacy shims. Formerly+ns notices, glued plan_candy-kit.md ×6, crush-dep-surface value, PROJECT_NAMES rationale in-step; ansi wordmark art + stale demo GIF → followups. <!-- @rename-keep -->
+
 ## Phase 7 — Batch E (foundation)
 
 Order: `candy-log`, `candy-metrics`, `candy-testing`, `candy-async`, `candy-input`, `candy-ansi`, `candy-vt`, `candy-buffer`, `candy-layout`, `candy-sprinkles`,

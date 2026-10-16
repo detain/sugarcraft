@@ -95,7 +95,7 @@ RESUME procedure, not left as a habit.
 ### E453 — CI had been red on master and the local guard could not see it
 
 The `--unused` step exits **1** at `a8acfcc9` and **0** on the merged tree, verified by the supervisor
-rather than taken on lane c's word. The fix was to RECORD the `candy-kit` deferral in
+rather than taken on lane c's word. The fix was to RECORD the `candy-kit` deferral in <!-- @rename-keep historical provenance -->
 `extra.sugarcraft.deferred-wiring` with the reason it is unwired and the condition for deleting the row —
 not to prune the dependency, which the standing rule forbids. Lane c then filed E487 and E488 against its
 own fix: `--unused` is candidate-grade output wired in as a hard gate, and the new escape hatch never
@@ -180,11 +180,11 @@ The procedure that works, in one atomic pass: `--fix --strict-closure` first, th
 every sibling directory (Composer ignores unused ones), then a single `composer update`, then revert the
 manifests, then verify with `is_link()` + `realpath()`. That reached 18/18 · 3/3 · 6/6 · 7/7 in one go.
 
-Also filed: **E453** — CI's path-repo policy job is RED on `master` over a dead `sugarcraft/candy-kit`
+Also filed: **E453** — CI's path-repo policy job is RED on `master` over a dead `sugarcraft/candy-kit` <!-- @rename-keep historical provenance -->
 require in `sugar-crush`, while the local `--no-lib-path-repos` guard exits 0 at the same commit. The
 more important half is that **the merge checklist has been passing a check CI fails.** The report
 recommends pruning; the standing rule says dormant code gets wired or documented, never deleted, and
-`candy-kit` is a foundation lib — so it went to lane c as a decision to make with evidence, not a prune.
+`candy-kit` is a foundation lib — so it went to lane c as a decision to make with evidence, not a prune. <!-- @rename-keep historical provenance -->
 
 ## Round 54 — the descriptor census finished, two real MCP bugs, and a round that survived two kills
 
@@ -743,7 +743,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    Add all three missing deps in **one prep commit** before U or W reach them.
 3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
    owns it exclusively; other lanes file requests rather than editing.
-4. **`Cli/Help.php`** — #24 (`--version`) then #21 (candy-kit restyle), in that
+4. **`Cli/Help.php`** — #24 (`--version`) then #21 (candy-kit restyle), in that <!-- @rename-keep historical provenance -->
    order.
 5. **`Runtime.php`** — lane P owns it; #55's adapter phase must wait for a
    quiet window.
@@ -10292,7 +10292,7 @@ measurement. Mark it as a hypothesis or have it settled before it is quoted.*
   misses it. Corrected Step: keep the test's structure (real fork, un-settled frames), replace all three
   literal anchors with a liveness anchor a real worker can satisfy. **L.**
 - **`statusLine`'s greenfield M holds, and both baits were confirmed baits.**
-  `Chat::budgetStatusLine()` is a private `/budget` formatter; `candy-kit`'s `StatusLine` is a glyph
+  `Chat::budgetStatusLine()` is a private `/budget` formatter; `candy-kit`'s `StatusLine` is a glyph <!-- @rename-keep historical provenance -->
   printer. `statusLine` appears **zero** times in `sugar-crush/src/` and `bin/`, and is absent from
   `LayeredSettings::LAYERED_KEYS` — so a `statusLine:` in `settings.json` is silently dropped today.
 - **Round 41's clean shape: E52 + E61(S) + statusLine.** Only `statusLine` needs `Bootstrap.php` *and*
@@ -13601,7 +13601,7 @@ five cycles, with a control.
 ### E453 CLOSED, AND THE LANE THEN FILED AGAINST ITS OWN FIX
 
 The `--unused` CI step exits 1 at `a8acfcc9` and 0 on the merged tree — verified independently, at both
-ends. It was fixed by **RECORDING** the `candy-kit` deferral in `extra.sugarcraft.deferred-wiring`, not by
+ends. It was fixed by **RECORDING** the `candy-kit` deferral in `extra.sugarcraft.deferred-wiring`, not by <!-- @rename-keep historical provenance -->
 pruning the dependency (never remove dormant code — wire it or pin the dormancy). Lane c then filed
 E487/E488 against that fix, which is the behaviour the round wanted: the lane that ships a mechanism is
 the lane best placed to say what is still wrong with it.

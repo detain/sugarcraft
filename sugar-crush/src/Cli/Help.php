@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Cli;
 
 use Composer\InstalledVersions;
 use SugarCraft\Crush\Lang;
-use SugarCraft\Kit\HelpText;
+use SugarCraft\Cli\HelpText;
 
 /**
  * Static factory for the one-shot (non-interactive) CLI's --help and

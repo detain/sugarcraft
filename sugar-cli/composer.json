@@ -1,0 +1,50 @@
+{
+    "name": "sugarcraft/sugar-cli",
+    "description": "PHP port of charmbracelet/fang \u2014 opinionated CLI presentation helpers: StatusLine (\u2713/\u2717/\u26a0/\u2139), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "cli",
+        "console",
+        "presentation",
+        "status-line",
+        "banner",
+        "help",
+        "fang",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-cli",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-cli/issues",
+        "source": "https://github.com/sugarcraft/sugar-cli",
+        "docs": "https://sugarcraft.github.io/lib/sugar-cli.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Cli\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Cli\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
