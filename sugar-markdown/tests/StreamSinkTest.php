@@ -119,7 +119,7 @@ final class StreamSinkTest extends TestCase
 
     public function testToPathMissingParentThrowsParentMissing(): void
     {
-        $missing = sys_get_temp_dir() . '/shine-sink-missing-' . getmypid() . '/out.txt';
+        $missing = sys_get_temp_dir() . '/markdown-sink-missing-' . getmypid() . '/out.txt';
         self::assertFalse(is_dir(dirname($missing)));
 
         try {
@@ -235,7 +235,7 @@ final class StreamSinkTest extends TestCase
 
     private function scratchPath(): string
     {
-        $path          = tempnam(sys_get_temp_dir(), 'shine-sink-') . '.bin';
+        $path          = tempnam(sys_get_temp_dir(), 'markdown-sink-') . '.bin';
         $this->paths[] = $path;
 
         return $path;
@@ -243,7 +243,7 @@ final class StreamSinkTest extends TestCase
 
     private function scratchDir(): string
     {
-        $dir = sys_get_temp_dir() . '/shine-sink-dir-' . getmypid() . '-' . count($this->paths);
+        $dir = sys_get_temp_dir() . '/markdown-sink-dir-' . getmypid() . '-' . count($this->paths);
         self::assertTrue(mkdir($dir, 0777, true));
         $this->paths[] = $dir;
 

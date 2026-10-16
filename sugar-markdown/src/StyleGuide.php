@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Style;
 
 /**
- * Parser + producer for Glamour STYLE JSON documents (E736 shine 7.1).
+ * Parser + producer for Glamour STYLE JSON documents (E736 sugar-markdown 7.1).
  *
  * Mirrors charmbracelet/glamour's style-file schema: a top-level object of
  * element blocks (`document`, `h1`…`h6`, `paragraph`, `block_quote`,
@@ -20,9 +20,9 @@ use SugarCraft\Sprinkles\Style;
  *
  * DIVERGENCE, stated honestly: candy-mdview ships the same vocabulary as the
  * adapter {@see \SugarCraft\MdView\GlamourTheme} (it converts parsed
- * primitives into a shine Theme on the consumer side). This class is NOT a
+ * primitives into a sugar-markdown Theme on the consumer side). This class is NOT a
  * re-export of it and cannot be — candy-mdview REQUIRES sugar-markdown, so a
- * shine→glow dependency would mint a sibling require-cycle (r88 design
+ * sugar-markdown→glow dependency would mint a sibling require-cycle (r88 design
  * ruling, reaffirmed r89): the producer never depends on its consumer. The
  * decode vocabulary is therefore duplicated locally; the two families share
  * the schema contract, not the code. Glow's adapter can in time delegate
@@ -40,7 +40,7 @@ use SugarCraft\Sprinkles\Style;
  * WHAT THEME() DROPS, and why: line-control `block_prefix` /
  * `block_suffix` on NON-document elements (glamour uses "\n" there purely
  * for vertical spacing this renderer manages itself), per-heading-level
- * prefixes (shine exposes one global headingPrefix whose semantics are a
+ * prefixes (sugar-markdown exposes one global headingPrefix whose semantics are a
  * visible glyph, not a newline), and chroma families beyond the four slots
  * (no target field exists). Nothing is silently lost: dropped keys stay
  * addressable on this object via {@see element()} / {@see chroma()}, so a

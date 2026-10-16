@@ -174,7 +174,7 @@ final class WriterTest extends TestCase
 
     public function testToPathDoorThrowsBeforeAnyRendering(): void
     {
-        $missing = sys_get_temp_dir() . '/shine-writer-missing-' . getmypid() . '/out.md';
+        $missing = sys_get_temp_dir() . '/markdown-writer-missing-' . getmypid() . '/out.md';
 
         try {
             Writer::toPath(new Renderer(Theme::plain()), $missing);

@@ -75,7 +75,7 @@ final class ThemeTest extends TestCase
 
     public function testFromJsonReadsFile(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'shine');
+        $tmp = tempnam(sys_get_temp_dir(), 'markdown');
         file_put_contents($tmp, json_encode(['bold' => ['bold' => true]]));
         try {
             $t = Theme::fromJson($tmp);

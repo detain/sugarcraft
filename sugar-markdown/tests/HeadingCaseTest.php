@@ -11,7 +11,7 @@ use SugarCraft\Sprinkles\Style;
 
 /**
  * `headingCase` transforms the heading's prose, never the bytes the
- * renderer emits around it (crush_libs shine #2: `upper` turned the bold
+ * renderer emits around it (crush_libs shine #2: `upper` turned the bold @rename-keep historical provenance: crush_libs audit citation
  * SGR terminator `m` into `M`).
  */
 final class HeadingCaseTest extends TestCase

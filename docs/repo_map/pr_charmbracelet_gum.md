@@ -1060,7 +1060,7 @@ if errors.Is(err, tea.ErrProgramKilled) {
 
 **Source**: Issue #966 (padding for join)
 **Match**: Fish's layout system with automatic padding
-**SugarCraft**: sugar-shine already has padding; extend to join
+**SugarCraft**: sugar-markdown already has padding; extend to join
 
 ---
 

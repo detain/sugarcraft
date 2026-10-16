@@ -11,7 +11,7 @@ use SugarCraft\Markdown\Theme;
 
 /**
  * A reused {@see Renderer} starts every render() from fresh block state
- * (crush_libs shine #4: each call pushed another Document context and
+ * (crush_libs shine #4: each call pushed another Document context and @rename-keep historical provenance: crush_libs audit citation
  * never popped it, so a long-lived renderer's stack grew without bound).
  */
 final class RendererReuseTest extends TestCase

@@ -24,7 +24,7 @@
 | `src/Renderer.php` | 684 | `league/commonmark` AST visitor — dispatches on `Node` type → styled ANSI output |
 | `src/Theme.php` | 657 | Immutable stylesheet — 45+ slots (headings, inline, blocks, syntax tokens) + 8 stock themes |
 | `src/SyntaxHighlighter.php` | 175 | Regex-based tokeniser — PHP/JS/TS/Python/Go/Bash/SQL + JSON; keyword/string/number/comment classes |
-| `src/Lang.php` | 22 | i18n facade wrapping `SugarCraft\Core\I18n\T` with `'shine'` namespace |
+| `src/Lang.php` | 22 | i18n facade wrapping `SugarCraft\Core\I18n\T` with `'markdown'` namespace |
 | `lang/en.php` + 14 locales | — | Translations: fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar |
 
 ### 1.2 Markdown Parsing Architecture
@@ -46,7 +46,7 @@ The `MarkdownParser` is instantiated per `Renderer` instance (cached, not rebuil
 
 **Rendering** is a single-pass visitor via `renderNode(Node $node)`. Unlike glamour's two-phase Enter/Exit pattern, sugar-markdown uses a single `renderChildren()` recursion that concatenates child output. Block-level nodes (heading, paragraph, list, blockquote, table, code) return text that already ends in `\n\n`; inline nodes return inline fragments.
 
-Key limitation vs upstream glamour: **no explicit block stack**. Glamour maintains `BlockStack` to track nested indent/margin for nested blockquotes, lists, and definition lists, allowing dynamic width computation as you descend. Candy-shine handles nesting directly in `renderList()` (calculates `indentN` from bullet width + `listLevelIndent`) and `renderBlockQuote()` (subtracts 2 cells for `▎ ` prefix), but does not propagate accumulated indent context to deeper nested structures beyond immediate parentage.
+Key limitation vs upstream glamour: **no explicit block stack**. Glamour maintains `BlockStack` to track nested indent/margin for nested blockquotes, lists, and definition lists, allowing dynamic width computation as you descend. sugar-markdown handles nesting directly in `renderList()` (calculates `indentN` from bullet width + `listLevelIndent`) and `renderBlockQuote()` (subtracts 2 cells for `▎ ` prefix), but does not propagate accumulated indent context to deeper nested structures beyond immediate parentage.
 
 ### 1.3 Rendering Pipeline
 
@@ -185,7 +185,7 @@ Delegates to `SugarCraft\Sprinkles\Table\Table` (Sprinkles border system):
 
 - No per-column width constraints (unlike glamour's column width specification)
 
-**Gap vs glamour**: glamour supports table footer links (collected via `collectLinksAndImages()` and rendered below the table). Candy-shine does not.
+**Gap vs glamour**: glamour supports table footer links (collected via `collectLinksAndImages()` and rendered below the table). sugar-markdown does not.
 
 ### 1.9 List Rendering
 
@@ -245,15 +245,15 @@ foreach ($lines as $line) {
 
 **Key architectural differences**:
 
-1. Glamour's BlockStack is the heart of its rendering — it computes available width dynamically as blocks nest. Candy-shine loses this by handling nesting directly in each renderer method.
+1. Glamour's BlockStack is the heart of its rendering — it computes available width dynamically as blocks nest. sugar-markdown loses this by handling nesting directly in each renderer method.
 
-2. Glamour's `Element` abstraction (Entering/Exiting/Renderer/Finisher) allows parent blocks to push state and child blocks to query it. Candy-shine lacks this abstraction.
+2. Glamour's `Element` abstraction (Entering/Exiting/Renderer/Finisher) allows parent blocks to push state and child blocks to query it. sugar-markdown lacks this abstraction.
 
-3. Glamour's `StyleBlock` distinguishes block-level properties (Indent, Margin, IndentToken) from inline `StylePrimitive`. Candy-shine conflates them into one `Style` type.
+3. Glamour's `StyleBlock` distinguishes block-level properties (Indent, Margin, IndentToken) from inline `StylePrimitive`. sugar-markdown conflates them into one `Style` type.
 
 ### 2.2 charmbracelet/glow (markdown reader) — 15k stars
 
-Glow consumes glamour for rendering. Candy-shine fills the same role:
+Glow consumes glamour for rendering. sugar-markdown fills the same role:
 - Glow's `glamourRender()` does: strip YAML frontmatter, optionally wrap in code fences, render via glamour, add line numbers
 
 - CandyMdview (`candy-mdview/`) consumes sugar-markdown the same way
@@ -273,7 +273,7 @@ Glow consumes glamour for rendering. Candy-shine fills the same role:
 Maps to sugar-markdown only for the **theme system** concept:
 - Huh uses `lipgloss` for all styling — its `Theme` maps different element types to `Styles` structs with `Base lipgloss.Style`
 
-- Candy-shine's `Theme` is the equivalent — a value object with per-element styles
+- sugar-markdown's `Theme` is the equivalent — a value object with per-element styles
 
 **Different focus**: huh is about form field presentation; sugar-markdown is about markdown rendering. They share the theming pattern (JSON-configurable stylesheet) but serve different rendering domains.
 
@@ -284,7 +284,7 @@ No direct markdown rendering. However:
 
 - The `Style` chain pattern (`color.go:L263-L396`) is functionally similar to `SugarCraft\Sprinkles\Style` — both use fluent builders returning new instances
 
-**Key insight**: pterm's 25+ printers cover the full spectrum from colored text to interactive TUI. Candy-shine's scope is narrower — markdown-to-ANSI only — but the styling primitives it uses (`Style`, `Color`) are shared infrastructure used by all SugarCraft libs.
+**Key insight**: pterm's 25+ printers cover the full spectrum from colored text to interactive TUI. sugar-markdown's scope is narrower — markdown-to-ANSI only — but the styling primitives it uses (`Style`, `Color`) are shared infrastructure used by all SugarCraft libs.
 
 ---
 
@@ -357,15 +357,15 @@ No direct markdown rendering. However:
 
 1. **Definition lists** (`dl`/`dt`/`dd`) — Theme has `$definitionTerm`, `$definitionDescription`, `$definitionList` slots, but `renderNode()` has no case for these node types. They fall through to `default => renderChildren($node)`.
 
-2. **Table footer links** — Glamour collects links referenced in table cells and renders them as a numeric footer. Candy-shine does not implement this.
+2. **Table footer links** — Glamour collects links referenced in table cells and renders them as a numeric footer. sugar-markdown does not implement this.
 
-3. **Cascading style inheritance** — Glamour's `cascadeStyle()` recursively merges parent and child `StyleBlock` structs. When a child element doesn't specify a property, it inherits from the parent in the block stack. Candy-shine uses null-slot fallthrough: `($this->theme->property ?? Style::new())`. This means nested elements cannot inherit from parent block styles.
+3. **Cascading style inheritance** — Glamour's `cascadeStyle()` recursively merges parent and child `StyleBlock` structs. When a child element doesn't specify a property, it inherits from the parent in the block stack. sugar-markdown uses null-slot fallthrough: `($this->theme->property ?? Style::new())`. This means nested elements cannot inherit from parent block styles.
 
-4. **Block-level style properties** — Glamour's `StyleBlock` has `Indent`, `Margin`, `IndentToken` fields. These allow blockquote rendering to dynamically adjust available width as nesting deepens. Candy-shine only supports the literal `blockquote` style — it can't express "indent this block by 2 cells and reduce available width by 4 cells."
+4. **Block-level style properties** — Glamour's `StyleBlock` has `Indent`, `Margin`, `IndentToken` fields. These allow blockquote rendering to dynamically adjust available width as nesting deepens. sugar-markdown only supports the literal `blockquote` style — it can't express "indent this block by 2 cells and reduce available width by 4 cells."
 
-5. **HTML sanitisation** — Glamour uses bluemonday to sanitise HTML blocks and inline HTML. Candy-shine passes HTML through verbatim with only the `htmlBlock`/`htmlSpan` style applied. For untrusted input this is a security gap.
+5. **HTML sanitisation** — Glamour uses bluemonday to sanitise HTML blocks and inline HTML. sugar-markdown passes HTML through verbatim with only the `htmlBlock`/`htmlSpan` style applied. For untrusted input this is a security gap.
 
-6. **Custom margin/indent writers** — Glamour's `MarginWriter`/`PaddingWriter`/`IndentWriter` are composable io.Writer wrappers. The margin writer is particularly important for nested blockquotes/lists. Candy-shine achieves similar effects with string concatenation but loses the composability.
+6. **Custom margin/indent writers** — Glamour's `MarginWriter`/`PaddingWriter`/`IndentWriter` are composable io.Writer wrappers. The margin writer is particularly important for nested blockquotes/lists. sugar-markdown achieves similar effects with string concatenation but loses the composability.
 
 7. **High-quality syntax highlighting** — The regex tokeniser cannot properly handle language grammar. For instance, a keyword inside a string literal would incorrectly be styled as a keyword. Glamour uses Chroma which is a proper lexer library. A proper integration would require a PHP port of Chroma or an equivalent (e.g., `和精神`/`PHP-Tokens`/`PHP-Parser` based highlighting).
 
@@ -437,7 +437,7 @@ This allows nested blockquotes at any depth to correctly compute their available
 
 ## 6. Summary
 
-**Candy-shine** is a well-structured, feature-rich PHP port of glamour that covers ~80% of the upstream functionality with significantly simpler architecture. Its primary strengths are:
+**sugar-markdown** is a well-structured, feature-rich PHP port of glamour that covers ~80% of the upstream functionality with significantly simpler architecture. Its primary strengths are:
 
 1. **Clean separation** between markdown parsing (league/commonmark), styling (Sprinkles Style), and layout (Width utilities)
 

@@ -33,7 +33,7 @@
 
 **Rendering:** Single-pass visitor via `renderChildren()` recursion. Block-level nodes return text ending in `\n\n`; inline nodes return inline fragments.
 
-**Key limitation vs glamour:** No explicit `BlockStack`. Glamour maintains `BlockStack` to track nested indent/margin for dynamic width computation. Candy-shine handles nesting directly in `renderList()` and `renderBlockQuote()` but cannot propagate accumulated indent to deeper nested structures.
+**Key limitation vs glamour:** No explicit `BlockStack`. Glamour maintains `BlockStack` to track nested indent/margin for dynamic width computation. sugar-markdown handles nesting directly in `renderList()` and `renderBlockQuote()` but cannot propagate accumulated indent to deeper nested structures.
 
 ## Features
 
@@ -168,7 +168,7 @@
 
 ### 2. Cascading Style Inheritance
 
-**Description:** Glamour's `cascadeStyle()` recursively merges parent and child `StyleBlock` structs. When a child element doesn't specify a property, it inherits from the parent in the block stack. Candy-shine uses null-slot fallthrough: `($this->theme->property ?? Style::new())`.
+**Description:** Glamour's `cascadeStyle()` recursively merges parent and child `StyleBlock` structs. When a child element doesn't specify a property, it inherits from the parent in the block stack. sugar-markdown uses null-slot fallthrough: `($this->theme->property ?? Style::new())`.
 
 **Why it matters:** Without inheritance, nested elements (blockquote inside blockquote, list item inside list) cannot inherit from parent block styles. This limits thematic expressiveness.
 
@@ -202,7 +202,7 @@
 
 ### 4. Table Footer Links
 
-**Description:** Glamour collects links referenced in table cells and renders them as a numeric footer. Candy-shine does not implement this.
+**Description:** Glamour collects links referenced in table cells and renders them as a numeric footer. sugar-markdown does not implement this.
 
 **Why it matters:** Tables with links don't show where those links point without inline `(url)` suffixes. Footer links are more readable for complex tables.
 
@@ -218,7 +218,7 @@
 
 ### 5. Block Stack for Dynamic Width
 
-**Description:** Glamour's `BlockStack` computes available width dynamically as blocks nest. Candy-shine handles nesting directly in `renderList()` and `renderBlockQuote()` but lacks a general abstraction. Deep nesting (blockquote inside list item inside blockquote) is not architecturally supported.
+**Description:** Glamour's `BlockStack` computes available width dynamically as blocks nest. sugar-markdown handles nesting directly in `renderList()` and `renderBlockQuote()` but lacks a general abstraction. Deep nesting (blockquote inside list item inside blockquote) is not architecturally supported.
 
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — BlockStack with `Indent()` / `Margin()` / `Width()` computed values
 
@@ -233,7 +233,7 @@
 
 ### 6. HTML Sanitisation
 
-**Description:** Glamour uses bluemonday to sanitise HTML blocks and inline HTML. Candy-shine passes HTML through verbatim with only the `htmlBlock`/`htmlSpan` style applied.
+**Description:** Glamour uses bluemonday to sanitise HTML blocks and inline HTML. sugar-markdown passes HTML through verbatim with only the `htmlBlock`/`htmlSpan` style applied.
 
 **Why it matters:** For untrusted input (e.g., rendering markdown from user comments), raw HTML is a security gap.
 
@@ -265,7 +265,7 @@
 
 ### 8. MarginWriter/PaddingWriter Abstraction
 
-**Description:** Glamour's `MarginWriter`/`PaddingWriter`/`IndentWriter` are composable io.Writer wrappers. Candy-shine achieves similar effects with string concatenation but loses composability.
+**Description:** Glamour's `MarginWriter`/`PaddingWriter`/`IndentWriter` are composable io.Writer wrappers. sugar-markdown achieves similar effects with string concatenation but loses composability.
 
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — custom `io.Writer` implementations
 
@@ -583,7 +583,7 @@ The BlockStack pattern is glamour's architectural heart. It computes available w
 
 ### Table Footer Links (lines 88-93 of glamour.md)
 
-The `collectLinksAndImages()` and `printTableLinks()` pattern shows how to implement glamour's distinctive table footer feature. **Lesson:** Candy-shine needs a pre-pass to collect links before rendering the table body.
+The `collectLinksAndImages()` and `printTableLinks()` pattern shows how to implement glamour's distinctive table footer feature. **Lesson:** sugar-markdown needs a pre-pass to collect links before rendering the table body.
 
 ## charmbracelet/lipgloss
 

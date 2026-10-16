@@ -24,7 +24,7 @@ final class LangTest extends TestCase
     public function testTReturnsNamespacedKeyWhenNotFound(): void
     {
         $result = Lang::t('nonexistent.key');
-        $this->assertSame('shine.nonexistent.key', $result);
+        $this->assertSame('markdown.nonexistent.key', $result);
     }
 
     public function testTIsIdempotent(): void

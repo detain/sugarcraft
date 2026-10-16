@@ -11,7 +11,7 @@ use SugarCraft\Markdown\Theme;
 
 /**
  * List bodies wrap at the width left after the marker column, so no
- * rendered line exceeds `withWordWrap()` (crush_libs shine #3: a
+ * rendered line exceeds `withWordWrap()` (crush_libs shine #3: a @rename-keep historical provenance: crush_libs audit citation
  * third-level item rendered 44 cells at wrap 40).
  */
 final class ListWrapWidthTest extends TestCase

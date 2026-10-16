@@ -266,7 +266,7 @@ libs depending on core) plus to any leaf lib that uses them without a core dep. 
 - `WeakMap` (candy‑flip) → `\SplObjectStorage` (audit confirms map‑style use; preserve semantics).
 - Array spread with string keys (8.1) → `array_merge(...)`.
 - Attributes `#[...]` in **src** (candy‑shell, candy‑vcr, candy‑tetris, candy‑testing, sugar‑glow,
-  sugar‑crush, candy‑boxer/sugar‑boxer, candy‑ansi, candy‑shine) → evaluate per case: if they are
+  sugar‑crush, candy‑boxer/sugar‑boxer, candy‑ansi, candy‑shine) → evaluate per case: if they are <!-- @rename-keep historical provenance -->
   a framework's own metadata read via Reflection, convert to a 7.4 mechanism (docblock parse, a
   static registry, or an interface method); if PHPUnit, see §4.10.
 
@@ -304,7 +304,7 @@ Folded into the relevant lib's first step (composer changes) or Phase 0 (global 
 | `symfony/console` | `^6.4 \|\| ^7.0` | `^5.4` | 6.4 needs 8.1 (candy‑shell, candy‑vcr, sugar‑glow) |
 | `symfony/process` | `^6.4 \|\| ^7.0` | `^5.4` | candy‑vcr |
 | `symfony/yaml` (dev) | `^6.4 \|\| ^7.0` | `^5.4` | candy‑vcr |
-| `league/commonmark` | `^2.4` | `~2.4.0` | 2.5+ bumped to PHP 8.1 (candy‑shine) |
+| `league/commonmark` | `^2.4` | `~2.4.0` | 2.5+ bumped to PHP 8.1 (candy‑shine) | <!-- @rename-keep historical provenance -->
 | `phpunit/phpunit` (dev) | `^10.x` | `^9.6` | all libs |
 | `phpstan/phpstan` (dev) | `^2.1` | `^2.1` | runs on 7.4 host — keep |
 | `friendsofphp/php-cs-fixer` (dev) | `^3.65` | `^3.65` | keep; set `'php_version' => 70400` |
@@ -401,10 +401,10 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   **4.1b** `Validator/` (6), **4.1c** `TextInput/Spinner/ItemList/FilePicker/Cursor` (≈16 → a/b),
   **4.1d** `Vim/Viewport/TextArea/Scrollbar`+root (≈18 → a/b).
 - **4.2** `sugar-quickpick`(7,med, ansi+pty+sprinkles), `candy-codeshot`(10,high,
-  ansi+buffer+core+shine+sprinkles).
+  ansi+buffer+core+shine+sprinkles). <!-- @rename-keep historical provenance -->
 - **4.3** `honey-bounce`(12,high, core+palette; enum‑with‑methods), then `candy-flappy`(6,low,
   core+sprinkles+honey‑bounce).
-- **4.4** `candy-scriptui`(41,med, core+forms+fuzzy+pty+shine+sprinkles; symfony console→^5.4,
+- **4.4** `candy-scriptui`(41,med, core+forms+fuzzy+pty+shine+sprinkles; symfony console→^5.4, <!-- @rename-keep historical provenance -->
   src attributes) → **4.4a** `Command/` (13→a/b), **4.4b** `Model/` (8), **4.4c** `Attribute/`
   (5, the attribute→7.4 mechanism), **4.4d** `Process/Completion/Style/Help/...`+root.
 - **4.5** `candy-tetris`(14,med, buffer+core+mouse+sprinkles; attributes, first‑class‑callable,
@@ -420,8 +420,8 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `sugar-veil`(7,high) — one step each (all small), in dependency order. <!-- @rename-keep historical provenance -->
 - **5.3** `sugar-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
-- **5.4** `candy-mdview`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →
-  a/b), `sugar-crush`(20,high, buffer+core+shine+sprinkles; attributes, MCP) → a/b.
+- **5.4** `candy-mdview`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input → <!-- @rename-keep historical provenance -->
+  a/b), `sugar-crush`(20,high, buffer+core+shine+sprinkles; attributes, MCP) → a/b. <!-- @rename-keep historical provenance -->
 - **5.5** `sugar-charts`(28,med, buffer+core+sprinkles+**sugar‑dash**) → **5.5a** `LineChart/
   Canvas/Picture` (10), **5.5b** `Aggregation/OHLC/Heatmap/Chart/BarChart` (≈11), **5.5c**
   remainder. *(Note: charts depends on dash → dash must precede.)*
@@ -462,7 +462,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | **Enum `::Case` → `::Case()` ripple across lib boundaries** | enum producers→consumers | Strict topo order; consumer steps update call sites; CI catches misses |
 | **psr/log 1.1 typed‑signature mismatch** | candy‑log | Drop param types from LoggerInterface impls |
 | **Symfony 5.4 API gaps vs 6.x** | candy‑shell, candy‑vcr, sugar‑glow | Pin `^5.4`; Tester runs console/process paths; adjust any 6‑only call |
-| **league/commonmark 2.5 auto‑upgrade to PHP 8.1** | candy‑shine | Pin `~2.4.0` |
+| **league/commonmark 2.5 auto‑upgrade to PHP 8.1** | candy‑shine | Pin `~2.4.0` | <!-- @rename-keep historical provenance -->
 | **sugar‑dash size (345 files)** | Phase 5.6 | ~20 small subtree steps; longest pole — start its phase early in parallel‑safe ordering once deps done |
 | **In‑progress work** | sugar‑reel (+ any other active libs) | Backport **last**; re‑audit immediately before; never touch a lib while the user is mid‑edit |
 | **Runtime immutability lost** (no `readonly` on 7.4) | 52 libs | Accepted; `@readonly` PHPDoc + existing `with*()` convention; PHPStan can enforce statically |

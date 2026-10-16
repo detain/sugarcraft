@@ -84,7 +84,7 @@ The SugarCraft mapping is **indirect** — `colorprofile` deals with terminal de
 
 - **`candy-core`**: The foundational TUI framework. Terminal capability detection and color management are foundational concerns that `candy-core` would need to address. SugarCraft's equivalent would handle terminal detection for proper rendering.
 - **`sugar-widgets`**: Contains basic UI components (gum). Color detection and downsampling would be a utility service available to `sugar-widgets` components.
-- **`sugar-markdown`**: Terminal styling library. `shine` works at the ANSI sequence level (producing styled output), while `colorprofile` works at the detection and conversion level — they are complementary.
+- **`sugar-markdown`**: Terminal styling library. `sugar-markdown` works at the ANSI sequence level (producing styled output), while `colorprofile` works at the detection and conversion level — they are complementary.
 
 The **architectural relationship**: `colorprofile` is a dependency that would typically be vendored or utilized by the core rendering layer to answer "what can this terminal handle?" before producing ANSI output. A SugarCraft port would likely be a utility service class (e.g., `SugarCraft\Core\Terminal\ColorProfile`) rather than a full component lib.
 

@@ -192,7 +192,7 @@ final class CoverageBoostTest extends TestCase
         }
 
         // Create a special file that exists but is unreadable (CI runs non-root).
-        $tmp = tempnam(sys_get_temp_dir(), 'shine_unreadable');
+        $tmp = tempnam(sys_get_temp_dir(), 'markdown_unreadable');
         chmod($tmp, 0);
         try {
             $this->expectException(\RuntimeException::class);
@@ -215,7 +215,7 @@ final class CoverageBoostTest extends TestCase
             $this->markTestSkipped('chmod(0) does not make files unreadable on Windows.');
         }
 
-        $tmp = tempnam(sys_get_temp_dir(), 'shine_unreadable');
+        $tmp = tempnam(sys_get_temp_dir(), 'markdown_unreadable');
         chmod($tmp, 0);
         if (is_readable($tmp)) {
             chmod($tmp, 0644);

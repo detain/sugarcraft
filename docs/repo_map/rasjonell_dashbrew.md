@@ -216,7 +216,7 @@ SugarCraft is a PHP TUI library monorepo (Charmbracelet ecosystem ports). Dashbr
 | Todo list (persistent, keyboard-driven) | `sugar-widgets` or a new `sugar-todo` leaf | No dedicated todo lib yet in SugarCraft |
 | Action system (shell dispatch, timeout, sticky state) | `candy-core` (process/spawn handling) | Would live in core as part of the update loop |
 | Bounding-box navigation (focus ring, neighbor finding) | `candy-core` (focus management) | Navigation model; `candy-sprinkles` for key bindings |
-| Theme system (named palettes, auto detection) | `sugar-markdown` (styling) | Palette/theme management is shine's domain |
+| Theme system (named palettes, auto detection) | `sugar-markdown` (styling) | Palette/theme management is sugar-markdown's domain |
 | Key bindings / action palette | `candy-sprinkles` (key handling) | `candy-sprinkles` is for input/bindings |
 | HTTP data fetching (API source, JSONPath) | `sugar-widgets` (HTTP utilities) | Would be a data-fetch utility, not a component |
 | Layout containers (row/column flex) | `candy-core` (layout system) | Flexbox layout algorithm could be a shared utility |

@@ -10,7 +10,7 @@ use SugarCraft\Markdown\Theme;
 
 /**
  * {@see Renderer::withPreservedNewLines()} keeps every run of blank lines
- * between blocks, exactly and in place (crush_libs shine #5: one blank line
+ * between blocks, exactly and in place (crush_libs shine #5: one blank line @rename-keep historical provenance: crush_libs audit citation
  * was dropped from every run, and runs were applied to the first
  * separators of the output rather than where they stood).
  */

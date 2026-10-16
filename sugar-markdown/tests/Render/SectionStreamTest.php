@@ -129,7 +129,7 @@ final class SectionStreamTest extends TestCase
     public function testABracketWithNoOpenerHoldsNothing(): void
     {
         // A `]` with no `[` before it in its block can never become a link,
-        // so it must not stall every section behind it (crush_libs shine #1).
+        // so it must not stall every section behind it (crush_libs shine #1). @rename-keep historical provenance: crush_libs audit citation
         $doc = "# A\n\nx] and y]\n\n# B\n\ntwo\n\n# C\n";
         $stream = new SectionStream($this->renderer());
 
@@ -162,7 +162,7 @@ final class SectionStreamTest extends TestCase
     {
         // A held section keeps its body: a preview (clone + finish) of a
         // long reply must not re-render it, and every section queued
-        // behind it, on every frame (crush_libs shine #1).
+        // behind it, on every frame (crush_libs shine #1). @rename-keep historical provenance: crush_libs audit citation
         $doc = "# A\n\nsee array[0]\n\n# B\n\ntwo\n\n# C\n";
         $stream = new SectionStream($this->renderer());
         $this->assertSame([], $stream->push($doc));
