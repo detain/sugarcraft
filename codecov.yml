@@ -158,8 +158,8 @@ flag_management:
     - name: candy-log
       paths: ["candy-log/src/**"]
       carryforward: true
-    - name: candy-palette
-      paths: ["candy-palette/src/**"]
+    - name: sugar-colorprofile
+      paths: ["sugar-colorprofile/src/**"]
       carryforward: true
     - name: candy-git-server
       paths: ["candy-git-server/src/**"]
@@ -469,12 +469,12 @@ component_management:
         - "candy-log/src/**"
       flag_regexes:
         - "^candy-log$"
-    - component_id: candy-palette
-      name: candy-palette
+    - component_id: sugar-colorprofile
+      name: sugar-colorprofile
       paths:
-        - "candy-palette/src/**"
+        - "sugar-colorprofile/src/**"
       flag_regexes:
-        - "^candy-palette$"
+        - "^sugar-colorprofile$"
     - component_id: candy-git-server
       name: candy-git-server
       paths:

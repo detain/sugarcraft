@@ -406,7 +406,7 @@ final class ColorTest extends TestCase
 
     /**
      * The two slots that make this table xterm's rather than charmbracelet's or
-     * candy-palette's fork — pinned by name so a silent edit to a single number
+     * sugar-colorprofile's fork — pinned by name so a silent edit to a single number
      * fails loudly with the slot in the message. slot 4 is xterm `DEF_COLOR4
      * "blue2"` (#0000EE), slot 12 is `DEF_COLOR12 "rgb:5c/5c/ff"` (#5C5CFF).
      */

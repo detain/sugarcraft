@@ -8,7 +8,7 @@
 - `SpringChain` — sequence multiple springs in order; one's settle
   triggers the next.
 - Reduced-motion support — consume
-  `\SugarCraft\Palette\Probe::reducedMotion()` from step 02.03; if
+  `\SugarCraft\ColorProfile\Probe::reducedMotion()` from step 02.03; if
   enabled, skip all animation (snap to final value instantly).
 
 ## Files
@@ -20,7 +20,7 @@
 **Modify:**
 
 - `honey-bounce/src/Spring.php` — respect Probe::reducedMotion().
-- `honey-bounce/composer.json` — add `sugarcraft/candy-palette`.
+- `honey-bounce/composer.json` — add `sugarcraft/sugar-colorprofile`.
 
 ## Tests
 

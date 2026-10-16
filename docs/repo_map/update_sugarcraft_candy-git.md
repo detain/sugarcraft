@@ -418,7 +418,7 @@
    - Remote tracking branch name display
 
 3. **Status Line Colors:** Currently fixed hex colors. Consider:
-   - Respecting user's terminal color profile (candy-palette integration)
+   - Respecting user's terminal color profile (sugar-colorprofile integration)
    - Dark/light theme variants
 
 4. **Tab Cycling Direction:** Currently Tab cycles Status→Branches→Log→Status. Consider Shift+Tab for reverse cycling.

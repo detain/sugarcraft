@@ -1,0 +1,211 @@
+<img src=".assets/icon.png" alt="sugar-colorprofile" width="160" align="right">
+
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-colorprofile)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-colorprofile)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-colorprofile?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-colorprofile)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+# SugarColorprofile
+
+> Formerly published as `sugarcraft/candy-palette` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Palette\` → `SugarCraft\ColorProfile\`. <!-- @rename-keep -->
+
+sugar-colorprofile — terminal color profile detection and color degradation for PHP 8.3+.
+
+## Features
+
+- **Detect terminal color profile** from environment variables and TTY info
+- **Profile enum**: `TrueColor` (24-bit) → `ANSI256` (255-color) → `ANSI` (16-color) → `Ascii` (no color) → `NoTTY`
+- **Color conversion**: downsample RGBA colors to any target profile
+- **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
+- **ANSI stripping**: `NoTTY` strips all ANSI sequences from output
+- **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
+- **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
+- **ColorProfile enum**: SSOT env-detection enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor) for libs that need raw profile values without constructing a Palette instance
+- **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops
+
+## Install
+
+```bash
+composer require sugarcraft/sugar-colorprofile
+```
+
+## Quick Start
+
+```php
+use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\Palette;
+use SugarCraft\ColorProfile\ProfileWriter;
+
+// Detect the terminal's color profile
+$palette = new Palette();
+$profile = $palette->profile();
+
+echo "Your terminal supports: {$profile->label()}\n";
+
+// Downsample a TrueColor color to the detected profile
+$color = new Color(0x6b, 0x50, 0xff); // #6b50ff
+$converted = $palette->convert($color);
+echo "Converted: {$converted->toHex()}\n";
+
+// Wrap a stream for automatic color degradation on write
+$writer = ProfileWriter::wrap(STDOUT);
+$writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
+```
+
+## Profiles
+
+| Profile   | Colors | Description                      |
+|-----------|--------|----------------------------------|
+| TrueColor | 16.7M  | Full 24-bit RGB (24-bit ANSI)    |
+| ANSI256   | 256    | 216 cube + 24 grey + 16 standard |
+| ANSI      | 16     | Standard terminal colors         |
+| Ascii     | 2      | Black & white                    |
+| NoTTY     | 0      | No color (ANSI stripped)         |
+
+## Color Degradation
+
+```php
+use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\Palette;
+use SugarCraft\ColorProfile\Profile;
+
+$color = new Color(100, 50, 255, 255);
+
+// Downsample to an explicit profile (static one-off shortcut)
+$ansi256 = Palette::toProfile($color, Profile::ANSI256); // nearest cube/grey index
+$ansi    = Palette::toProfile($color, Profile::ANSI);    // nearest of the 16 slots
+
+echo $ansi256->toAnsi256Foreground(); // "\x1b[38;5;…m"
+echo $ansi->toAnsi16Foreground();     // "\x1b[…m" — 4-bit SGR
+
+// Or convert against the detected terminal
+$auto = (new Palette())->convert($color);
+```
+
+## Perceptual Color Distance (opt-in)
+
+Default nearest-color matching stays Euclidean (RGB) for byte-for-byte back-compat.
+For perceptual matching — where blues, greens and near-greys rank correctly — opt in:
+
+```php
+use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\ColorDistance;
+use SugarCraft\ColorProfile\ColorMath;
+use SugarCraft\ColorProfile\DeltaE;
+use SugarCraft\ColorProfile\NearestColor;
+
+// sRGB -> linear -> XYZ (D65) -> CIELAB
+$lab  = ColorMath::toLab(64, 96, 128);         // ['l' => …, 'a' => …, 'b' => …]
+$lab2 = (new Color(200, 30, 90))->toLab();     // same chain, from a Color
+
+// ΔE metrics (CIE 15:2004; CIEDE2000 per Sharma/Wu/Dalal 2005)
+$d76 = DeltaE::cie76($lab, $lab2);
+$d94 = DeltaE::cie94($lab, $lab2);             // graphic-arts kL = 1
+$d00 = DeltaE::cie2000($lab, $lab2);
+
+// Nearest ANSI-256 palette index under a chosen strategy (default: EUCLIDEAN)
+$matcher = new NearestColor(ColorDistance::Cie2000);
+$index   = $matcher->ansi256(new Color(30, 120, 30));
+
+// Arbitrary palette (list or map), returns the key of the winner
+$brand = ['logo' => new Color(10, 20, 30), 'accent' => new Color(240, 250, 255)];
+$key   = $matcher->closest(new Color(12, 34, 56), $brand);
+```
+
+The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm
+CIEDE2000 search costs ~1 ms on a stock laptop; recomputing the 256 sRGB→Lab
+conversions per search would add ≈40 % on top (see `NearestColorTest`).
+
+The matcher's 256-entry table is the canonical xterm palette: slots 0-15 are the
+ANSI-16 set, 16-231 the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
+232-255 the `8+10n` grey ramp — derived from `Color::fromAnsi256Index()` and
+cross-pinned to candy-core's decoder (`Ansi256TableParityTest`). Earlier
+versions shipped a private even-51-step cube; that table never matched a real
+terminal and is gone.
+
+## Probe — Static Environment Detection
+
+The `Probe` class provides precedence-ordered environment probing for terminal color capability and reduced-motion preference. Use it directly when you need raw detection values without constructing a `Palette` instance.
+
+```php
+use SugarCraft\ColorProfile\Probe;
+use SugarCraft\ColorProfile\ColorProfile;
+
+// Detect the negotiated color profile
+$profile = Probe::colorProfile(); // ColorProfile::TrueColor|Ansi256|Ansi|Ascii|NoTTY
+echo $profile->label(); // "TrueColor"
+
+// Check for explicit disable/enable flags
+if (Probe::isNoColor()) {
+    // NO_COLOR env var is set — disable all color output
+}
+if (Probe::isForceColor()) {
+    // CLICOLOR_FORCE=1 — force full color regardless of terminal
+}
+
+// Reduced-motion preference (REDUCE_MOTION or PREFERS_REDUCED_MOTION)
+if (Probe::reducedMotion()) {
+    // Skip animations, spinners, and other motion
+}
+```
+
+**Detection precedence**:
+1. `CLICOLOR_FORCE=1` → `TrueColor` (overrides everything)
+2. `NO_COLOR` (any value) → `NoTTY`
+3. `CLICOLOR=0` → `NoTTY`
+4. `TERM=dumb` → `NoTTY`
+5. `COLORTERM=24bit|truecolor|yes` → `TrueColor`
+6. `WT_SESSION` (set) → `TrueColor` (Windows Terminal)
+7. `GOOGLE_CLOUD_SHELL=true` → `TrueColor`
+8. `TMUX`/`STY` + `screen*`/`tmux*` base term → `Ansi256`
+9. `TERM=xterm-kitty|xterm-ghostty|*-256color` → `Ansi256`
+10. `TERM=xterm*|screen*|tmux*` → `Ansi`
+11. Default → `Ansi`, then **Phase 2 infocmp upgrade** → `TrueColor` if `Tc`/`RGB` capability found
+
+## ColorProfile Enum
+
+`ColorProfile` is the SSOT enum for environment-driven color capability. It is used by `Probe` and consumed by libs that need the raw profile value (candy-log, candy-mosaic, candy-codeshot, candy-vt).
+
+```php
+use SugarCraft\ColorProfile\ColorProfile;
+use SugarCraft\ColorProfile\Probe;
+
+$profile = Probe::colorProfile();
+
+// Human-readable label
+echo $profile->label(); // "TrueColor"
+```
+
+| Case      | Value       | Label        |
+|-----------|-------------|--------------|
+| `NoTTY`  | `'notty'`    | No TTY       |
+| `Ascii`  | `'ascii'`    | ASCII        |
+| `Ansi`   | `'ansi'`     | ANSI         |
+| `Ansi256` | `'ansi256'`  | ANSI 256     |
+| `TrueColor` | `'truecolor'` | TrueColor  |
+
+## Architecture
+
+```
+SugarCraft\ColorProfile\
+├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
+├── Palette        — instance-based detection + degradation + ProfileWriter
+├── Profile         — legacy detection enum (richest→simplest order)
+├── ColorProfile    — new SSOT detection enum (simplest→richest order, Probe-driven)
+├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
+├── StandardColors  — ANSI/ANSI256 standard palette
+├── ProfileWriter  — stream wrapper for automatic color degradation
+└── Lang           — i18n strings
+```
+
+## License
+
+[MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

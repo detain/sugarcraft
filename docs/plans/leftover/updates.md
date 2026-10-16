@@ -126,7 +126,7 @@ docs for step 02.01 · PR#520 · document Theme in README/end-user docs/PHPDoc/C
 step 02.02 · PR#521 · candy-sprinkles: StyleParser SSOT port from sugar-dash (inline [text](fg:red) syntax) <!-- @rename-keep -->
 review for step 02.02 · clean · PR#521
 docs for step 02.02 · clean
-step 02.03 · PR#522 · candy-palette: Probe class (colorProfile/isNoColor/isForceColor/reducedMotion) + ColorProfile enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor)
+step 02.03 · PR#522 · sugar-colorprofile: Probe class (colorProfile/isNoColor/isForceColor/reducedMotion) + ColorProfile enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor)
 review for step 02.03 · clean · PR#522
 docs for step 02.03 · PR#523 · document Probe + ColorProfile in README + add CALIBER_LEARNINGS.md
 step 02.04 · PR#524 · sugar-dash: Module aligned with Core Model (update returns [Module,?Cmd]) + LegacyModuleAdapter for compat <!-- @rename-keep -->
@@ -461,7 +461,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 ## Open review findings — 02.03
 
-- [x] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
+- [x] sugar-colorprofile/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
 
 ## Open review findings — 01.08
 

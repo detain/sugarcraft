@@ -137,9 +137,9 @@ Width::truncate('hello world', 8); // "hello wo"
 
 ## Shared foundations
 
-candy-mdview uses **candy-palette** for terminal capability probing. The
+candy-mdview uses **sugar-colorprofile** for terminal capability probing. The
 `RenderCommand::terminalSupportsColor()` wrapper calls
-`\SugarCraft\Palette\Probe\TerminalProbe::run()` and falls back to
+`\SugarCraft\ColorProfile\Probe\TerminalProbe::run()` and falls back to
 `true` (assume color) if the probe throws — ensuring graceful degradation
 on Windows, over SSH, and in old terminals.
 

@@ -135,19 +135,19 @@ paths:
 
 ## Examples
 
-**User**: "add a test for `candy-palette/src/Color.php`'s `Color::hex()` factory"
+**User**: "add a test for `sugar-colorprofile/src/Color.php`'s `Color::hex()` factory"
 
 **Actions**:
-1. Read `candy-palette/composer.json` → namespace `SugarCraft\Palette`, test namespace `SugarCraft\Palette\Tests`.
-2. Create `candy-palette/tests/ColorTest.php` (or add to it if it exists).
+1. Read `sugar-colorprofile/composer.json` → namespace `SugarCraft\ColorProfile`, test namespace `SugarCraft\ColorProfile\Tests`.
+2. Create `sugar-colorprofile/tests/ColorTest.php` (or add to it if it exists).
 3. Write tests covering: valid 6-digit hex, 3-digit hex shorthand, leading `#` optional, lowercase/uppercase, malformed hex coercion to fallback, immutability of returned `Color`.
 4. Run:
 
    ```sh
-   cd candy-palette && vendor/bin/phpunit --filter ColorTest
+   cd sugar-colorprofile && vendor/bin/phpunit --filter ColorTest
    ```
 
-**Result**: `candy-palette/tests/ColorTest.php` with ~6 `public function testX(): void` methods, suite green.
+**Result**: `sugar-colorprofile/tests/ColorTest.php` with ~6 `public function testX(): void` methods, suite green.
 
 ---
 

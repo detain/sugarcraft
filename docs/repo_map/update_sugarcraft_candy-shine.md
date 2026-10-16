@@ -555,9 +555,9 @@ Add screenshot-style tests comparing rendered output against stored "golden" ANS
 
 **Reference:** `docs/repo_map/charmbracelet_glow.md` — `RemoveFrontmatter()`, file watching, GitHub/GitLab fetching
 
-## 2. Integration with candy-palette
+## 2. Integration with sugar-colorprofile
 
-Use `candy-palette`'s color manipulation (darken, lighten, complementary, blend) in theme generation.
+Use `sugar-colorprofile`'s color manipulation (darken, lighten, complementary, blend) in theme generation.
 
 **Reference:** `charmbracelet_lipgloss.md` — `Darken()`, `Lighten()`, `Complementary()`, `Blend1D()`, `Blend2D()` using CIELAB color space
 
@@ -593,7 +593,7 @@ The `Inherit(Style)` method overlays unset properties from another style. **Less
 
 ### Color Adaptive (lines 41, 149, 226 of lipgloss.md)
 
-`LightDark(bool)` and `AdaptiveColor` for terminal background-aware color selection. **Lesson:** Add to `candy-palette` and use in `Theme` construction.
+`LightDark(bool)` and `AdaptiveColor` for terminal background-aware color selection. **Lesson:** Add to `sugar-colorprofile` and use in `Theme` construction.
 
 ## charmbracelet/soft-serve
 

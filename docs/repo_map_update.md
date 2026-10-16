@@ -49,7 +49,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - Golden file assertions (zero packages) → candy-testing (PR #885 step-04, PR #907 step-28)
 - Vim mode (4 independent implementations) → unified in sugar-forms (PR #903 step-24)
 - Snapshot test pattern → candy-testing (PR #907 step-28)
-- Terminal capability probing → candy-palette + TerminalProbe (PR #893 step-13, PR #908 step-29)
+- Terminal capability probing → sugar-colorprofile + TerminalProbe (PR #893 step-13, PR #908 step-29)
 - God class construction → builder patterns (PR #904 step-25)
 
 ### Ecosystem-wide adoption sweep (Phase 6, steps 31–37)
@@ -530,7 +530,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **honey-bounce > harmonica** — REDUCE_MOTION accessibility, immutable `Projectile::update()`, UIKit spring presets, Easing/CubicBezier library (15 + 24 CSS), SpringChain/SpringCollection.
 
-5. **candy-palette > colorprofile** — 12-step detection hierarchy with infocmp Phase 2, full NO_COLOR/CLICOLOR/CLICOLOR_FORCE/COLORTERM/terminfo compliance, good test coverage.
+5. **sugar-colorprofile > colorprofile** — 12-step detection hierarchy with infocmp Phase 2, full NO_COLOR/CLICOLOR/CLICOLOR_FORCE/COLORTERM/terminfo compliance, good test coverage.
 
 6. **sugar-datepicker > EthanEFung/bubble-datepicker** — Immutable + fluent, date range selection, 16-locale i18n, pure ANSI renderer, event store architecture.
 
@@ -570,7 +570,7 @@ The ecosystem has 5+ packages each doing their own layout, buffer rendering, fuz
 
 ### Position Superior Packages as Flagships
 
-candy-tetris, candy-minesweeper, candy-kit, honey-bounce, candy-palette, and sugar-widgets all have genuine competitive advantages over their upstreams. These should be highlighted prominently — they represent proof that SugarCraft is not merely a porting effort but an active improvement on the originals.
+candy-tetris, candy-minesweeper, candy-kit, honey-bounce, sugar-colorprofile, and sugar-widgets all have genuine competitive advantages over their upstreams. These should be highlighted prominently — they represent proof that SugarCraft is not merely a porting effort but an active improvement on the originals.
 
 ### Close the Input Driver Gap First
 

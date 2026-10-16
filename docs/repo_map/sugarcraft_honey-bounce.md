@@ -257,7 +257,7 @@ This ensures monotonic behavior even when control point configurations would oth
 
 ```
 candy-core (TUI runtime)
-    └── candy-palette (color detection, Probe::reducedMotion())
+    └── sugar-colorprofile (color detection, Probe::reducedMotion())
             └── honey-bounce (depends on both)
 
 candy-flappy (Flappy Bird game)
@@ -268,7 +268,7 @@ candy-flappy (Flappy Bird game)
 
 ### Reduced Motion Integration
 
-**Source**: `honey-bounce/src/Spring.php:114-116` + `candy-palette/src/Probe.php`
+**Source**: `honey-bounce/src/Spring.php:114-116` + `sugar-colorprofile/src/Probe.php`
 
 ```php
 // Spring.php
@@ -548,4 +548,4 @@ $value = $ease->evaluate($t);
 | `honey-bounce/examples/projectile.php` | 2D projectile arc demo |
 | `honey-bounce/examples/particle.php` | Multi-particle system demo |
 | `candy-flappy/src/Bird.php` | Real-world integration: Projectile for game physics |
-| `candy-palette/src/Probe.php` | `REDUCE_MOTION` detection implementation |
+| `sugar-colorprofile/src/Probe.php` | `REDUCE_MOTION` detection implementation |

@@ -563,7 +563,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'CORRECT. The resource, not a cast of it. Not named in E368\'s carve-out list -- '
             . 'found by re-deriving the population with the corrected instrument.',
         ],
-        'candy-palette/src/Probe/TerminalProbe.php::posix_isatty(STDOUT)' => [
+        'sugar-colorprofile/src/Probe/TerminalProbe.php::posix_isatty(STDOUT)' => [
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT, and an E368 carve-out: the resource, no cast.',
         ],

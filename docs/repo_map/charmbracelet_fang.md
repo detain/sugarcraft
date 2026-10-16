@@ -107,7 +107,7 @@
 | **CandyKit** (`candy-kit/`) | **Direct port** | `candy-kit` is SugarCraft's fang equivalent — `StatusLine`, `Banner`, `Section`, `Stage`, `HelpText` helpers |
 | **CandyShine** (`candy-shine/`) | **Thematic cousin** | Both deal with terminal styling; fang for CLI help/errors, Glamour port for markdown rendering |
 | **CandyLog** (`candy-log/`) | **Indirect complement** | Both produce styled terminal output; fang styles CLI framework output, CandyLog is a logging library |
-| **CandyPalette** (`candy-palette/`) | **Dependency** | fang uses `colorprofile` for terminal color detection; both handle terminal capability detection |
+| **SugarColorprofile** (`sugar-colorprofile/`) | **Dependency** | fang uses `colorprofile` for terminal color detection; both handle terminal capability detection |
 | **CandySprinkles** (`candy-sprinkles/`) | **Thematic relation** | Both build on lipgloss for terminal styling; fang applies it to help/error rendering |
 
 ## Analysis

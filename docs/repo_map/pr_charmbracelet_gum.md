@@ -968,7 +968,7 @@ if errors.Is(err, tea.ErrProgramKilled) {
 
 **Observation**: Truecolor (v0.10), OSC 8 hyperlinks, color profiles
 **Direction**: Progressive enhancement based on terminal capabilities
-**SugarCraft**: `candy-palette` provides this; integrate into shell commands
+**SugarCraft**: `sugar-colorprofile` provides this; integrate into shell commands
 
 ### Trend 3: Horizontal Navigation
 

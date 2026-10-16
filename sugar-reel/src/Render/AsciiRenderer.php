@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Render;
 
-use SugarCraft\Palette\Color;
+use SugarCraft\ColorProfile\Color;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Render\Color as RgbColor;
 

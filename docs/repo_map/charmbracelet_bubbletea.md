@@ -266,7 +266,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 | `ntcharts` | `sugar-charts` | Terminal charting library |
 | `huh` | `sugar-forms` | Interactive form library |
 | `glamour` | `candy-shine` | Markdown rendering |
-| `colorprofile` | `candy-palette` | Terminal color detection |
+| `colorprofile` | `sugar-colorprofile` | Terminal color detection |
 | `exec` (internal) | `candy-pty` | Process spawning (PTY) |
 | `x/vt` | `candy-vt` | Virtual terminal emulation |
 | `x/vcr` | `candy-vcr` | Session recording/replay |
@@ -292,7 +292,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 | Cursor control | `View::cursor` |
 | Window title | `View::windowTitle` |
 | Progress bar | `View::progressBar` |
-| Color profile | `SugarCraft\Palette\ColorProfile` |
+| Color profile | `SugarCraft\ColorProfile\ColorProfile` |
 
 ## Analysis
 

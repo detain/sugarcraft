@@ -168,7 +168,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Observation:** Every repo re-implements terminal detection; failures are silent
 - **Opportunity:** Create `TerminalCapabilities` registry with graceful degradation
-- **Action:** Build `candy-palette` as definitive terminal capability detection
+- **Action:** Build `sugar-colorprofile` as definitive terminal capability detection
 
 ### 5. Cell-Based Buffer Rendering (HIGH-VALUE)
 

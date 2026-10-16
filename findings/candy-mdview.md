@@ -283,7 +283,7 @@ The library appears security-conscious. No user-provided data is passed to `exec
 3. Uses `SugarCraft\Shine\Renderer` and `Theme` for markdown rendering
 4. Uses `SugarCraft\Core\Util\TtyDetect` for TTY detection
 5. Uses `SugarCraft\Core\Util\Tty` for terminal size
-6. Uses `SugarCraft\Palette\Probe\TerminalProbe` for color capability probing
+6. Uses `SugarCraft\ColorProfile\Probe\TerminalProbe` for color capability probing
 7. Uses `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()` for snapshot tests
 
 ### No Obvious Compatibility Issues

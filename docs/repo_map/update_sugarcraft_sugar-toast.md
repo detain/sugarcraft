@@ -189,7 +189,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 
 **Implementation Ideas**:
 
-- Implement LAB color space conversion in `candy-core` or `candy-palette`
+- Implement LAB color space conversion in `candy-core` or `sugar-colorprofile`
 - Use `SugarCraft\Core\Color\Lab` value object with `blend(Lab $other, float $t)` method
 - Apply to background/border colors during fade animation
 

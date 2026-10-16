@@ -10619,9 +10619,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-16-l-1.ansi": {
-        "name": "candy-palette-1-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-16-l-1.ansi": {
+        "name": "sugar-colorprofile-1-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "164x32",
         "width": 164,
         "height": 32,
@@ -10631,9 +10631,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-palette/candy-palette-1-16-l-2.ansi": {
-        "name": "candy-palette-1-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-16-l-2.ansi": {
+        "name": "sugar-colorprofile-1-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "192x34",
         "width": 192,
         "height": 34,
@@ -10643,9 +10643,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-palette/candy-palette-1-16-m-1.ansi": {
-        "name": "candy-palette-1-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-16-m-1.ansi": {
+        "name": "sugar-colorprofile-1-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -10655,9 +10655,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-palette/candy-palette-1-16-m-2.ansi": {
-        "name": "candy-palette-1-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-16-m-2.ansi": {
+        "name": "sugar-colorprofile-1-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -10667,9 +10667,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-palette/candy-palette-1-16-s-1.ansi": {
-        "name": "candy-palette-1-16-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-16-s-1.ansi": {
+        "name": "sugar-colorprofile-1-16-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -10681,9 +10681,9 @@
             "alignment-fix"
         ]
     },
-    "candy-palette/candy-palette-1-16-s-2.ansi": {
-        "name": "candy-palette-1-16-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-16-s-2.ansi": {
+        "name": "sugar-colorprofile-1-16-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -10693,9 +10693,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-1-256-l-1.ansi": {
-        "name": "candy-palette-1-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-256-l-1.ansi": {
+        "name": "sugar-colorprofile-1-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "132x30",
         "width": 132,
         "height": 30,
@@ -10705,9 +10705,9 @@
         "rating": 7,
         "tags": []
     },
-    "candy-palette/candy-palette-1-256-l-2.ansi": {
-        "name": "candy-palette-1-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-256-l-2.ansi": {
+        "name": "sugar-colorprofile-1-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -10717,9 +10717,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-256-m-1.ansi": {
-        "name": "candy-palette-1-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-256-m-1.ansi": {
+        "name": "sugar-colorprofile-1-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -10729,9 +10729,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-256-m-2.ansi": {
-        "name": "candy-palette-1-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-256-m-2.ansi": {
+        "name": "sugar-colorprofile-1-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -10741,9 +10741,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-256-s-1.ansi": {
-        "name": "candy-palette-1-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-256-s-1.ansi": {
+        "name": "sugar-colorprofile-1-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -10753,9 +10753,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-256-s-2.ansi": {
-        "name": "candy-palette-1-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-256-s-2.ansi": {
+        "name": "sugar-colorprofile-1-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "68x13",
         "width": 68,
         "height": 13,
@@ -10765,9 +10765,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-tc-l-1.ansi": {
-        "name": "candy-palette-1-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-1-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "184x40",
         "width": 184,
         "height": 40,
@@ -10777,9 +10777,9 @@
         "rating": 8,
         "tags": []
     },
-    "candy-palette/candy-palette-1-tc-l-2.ansi": {
-        "name": "candy-palette-1-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-1-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -10789,9 +10789,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-tc-m-1.ansi": {
-        "name": "candy-palette-1-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-1-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -10801,9 +10801,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-tc-m-2.ansi": {
-        "name": "candy-palette-1-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-1-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -10813,9 +10813,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-tc-s-1.ansi": {
-        "name": "candy-palette-1-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-1-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "68x12",
         "width": 68,
         "height": 12,
@@ -10825,9 +10825,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-1-tc-s-2.ansi": {
-        "name": "candy-palette-1-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-1-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-1-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -10837,9 +10837,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-16-l-1.ansi": {
-        "name": "candy-palette-2-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-16-l-1.ansi": {
+        "name": "sugar-colorprofile-2-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -10849,9 +10849,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-2-16-l-2.ansi": {
-        "name": "candy-palette-2-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-16-l-2.ansi": {
+        "name": "sugar-colorprofile-2-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "156x29",
         "width": 156,
         "height": 29,
@@ -10861,9 +10861,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-palette/candy-palette-2-16-m-1.ansi": {
-        "name": "candy-palette-2-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-16-m-1.ansi": {
+        "name": "sugar-colorprofile-2-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -10873,9 +10873,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-palette/candy-palette-2-16-m-2.ansi": {
-        "name": "candy-palette-2-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-16-m-2.ansi": {
+        "name": "sugar-colorprofile-2-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "76x19",
         "width": 76,
         "height": 19,
@@ -10885,9 +10885,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-2-16-s-1.ansi": {
-        "name": "candy-palette-2-16-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-16-s-1.ansi": {
+        "name": "sugar-colorprofile-2-16-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -10897,9 +10897,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-2-256-l-1.ansi": {
-        "name": "candy-palette-2-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-256-l-1.ansi": {
+        "name": "sugar-colorprofile-2-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "140x36",
         "width": 140,
         "height": 36,
@@ -10909,9 +10909,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-256-l-2.ansi": {
-        "name": "candy-palette-2-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-256-l-2.ansi": {
+        "name": "sugar-colorprofile-2-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "138x28",
         "width": 138,
         "height": 28,
@@ -10921,9 +10921,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-256-m-1.ansi": {
-        "name": "candy-palette-2-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-256-m-1.ansi": {
+        "name": "sugar-colorprofile-2-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -10933,9 +10933,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-256-m-2.ansi": {
-        "name": "candy-palette-2-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-256-m-2.ansi": {
+        "name": "sugar-colorprofile-2-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -10945,9 +10945,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-256-s-1.ansi": {
-        "name": "candy-palette-2-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-256-s-1.ansi": {
+        "name": "sugar-colorprofile-2-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x6",
         "width": 64,
         "height": 6,
@@ -10957,9 +10957,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-256-s-2.ansi": {
-        "name": "candy-palette-2-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-256-s-2.ansi": {
+        "name": "sugar-colorprofile-2-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "57x12",
         "width": 57,
         "height": 12,
@@ -10969,9 +10969,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-tc-l-1.ansi": {
-        "name": "candy-palette-2-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-2-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x40",
         "width": 150,
         "height": 40,
@@ -10981,9 +10981,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-tc-l-2.ansi": {
-        "name": "candy-palette-2-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-2-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "168x33",
         "width": 168,
         "height": 33,
@@ -10993,9 +10993,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-tc-m-1.ansi": {
-        "name": "candy-palette-2-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-2-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -11005,9 +11005,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-tc-m-2.ansi": {
-        "name": "candy-palette-2-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-2-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -11017,9 +11017,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-tc-s-1.ansi": {
-        "name": "candy-palette-2-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-2-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x6",
         "width": 62,
         "height": 6,
@@ -11029,9 +11029,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-2-tc-s-2.ansi": {
-        "name": "candy-palette-2-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-2-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-2-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "46x12",
         "width": 46,
         "height": 12,
@@ -11041,9 +11041,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-16-l-1.ansi": {
-        "name": "candy-palette-3-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-16-l-1.ansi": {
+        "name": "sugar-colorprofile-3-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -11053,9 +11053,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-3-16-l-2.ansi": {
-        "name": "candy-palette-3-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-16-l-2.ansi": {
+        "name": "sugar-colorprofile-3-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "156x30",
         "width": 156,
         "height": 30,
@@ -11065,9 +11065,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-3-16-m-1.ansi": {
-        "name": "candy-palette-3-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-16-m-1.ansi": {
+        "name": "sugar-colorprofile-3-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -11077,9 +11077,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-3-16-m-2.ansi": {
-        "name": "candy-palette-3-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-16-m-2.ansi": {
+        "name": "sugar-colorprofile-3-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -11091,9 +11091,9 @@
             "alignment-fix"
         ]
     },
-    "candy-palette/candy-palette-3-16-s-1.ansi": {
-        "name": "candy-palette-3-16-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-16-s-1.ansi": {
+        "name": "sugar-colorprofile-3-16-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -11103,9 +11103,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-3-16-s-2.ansi": {
-        "name": "candy-palette-3-16-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-16-s-2.ansi": {
+        "name": "sugar-colorprofile-3-16-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x9",
         "width": 60,
         "height": 9,
@@ -11115,9 +11115,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-3-256-l-1.ansi": {
-        "name": "candy-palette-3-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-256-l-1.ansi": {
+        "name": "sugar-colorprofile-3-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "140x36",
         "width": 140,
         "height": 36,
@@ -11127,9 +11127,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-256-l-2.ansi": {
-        "name": "candy-palette-3-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-256-l-2.ansi": {
+        "name": "sugar-colorprofile-3-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "140x30",
         "width": 140,
         "height": 30,
@@ -11139,9 +11139,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-256-m-1.ansi": {
-        "name": "candy-palette-3-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-256-m-1.ansi": {
+        "name": "sugar-colorprofile-3-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -11151,9 +11151,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-256-m-2.ansi": {
-        "name": "candy-palette-3-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-256-m-2.ansi": {
+        "name": "sugar-colorprofile-3-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -11163,9 +11163,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-256-s-1.ansi": {
-        "name": "candy-palette-3-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-256-s-1.ansi": {
+        "name": "sugar-colorprofile-3-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x8",
         "width": 60,
         "height": 8,
@@ -11175,9 +11175,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-256-s-2.ansi": {
-        "name": "candy-palette-3-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-256-s-2.ansi": {
+        "name": "sugar-colorprofile-3-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -11187,9 +11187,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-tc-l-1.ansi": {
-        "name": "candy-palette-3-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-3-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "176x40",
         "width": 176,
         "height": 40,
@@ -11199,9 +11199,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-tc-l-2.ansi": {
-        "name": "candy-palette-3-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-3-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x42",
         "width": 150,
         "height": 42,
@@ -11211,9 +11211,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-tc-m-1.ansi": {
-        "name": "candy-palette-3-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-3-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -11223,9 +11223,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-tc-m-2.ansi": {
-        "name": "candy-palette-3-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-3-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -11235,21 +11235,21 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-tc-s-1.ansi": {
-        "name": "candy-palette-3-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-3-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x7",
         "width": 62,
         "height": 7,
         "depth": "truecolor",
         "colors": 64,
-        "description": "Smooth analogous 24-bit ramp with luminance-aware CandyPalette mark",
+        "description": "Smooth analogous 24-bit ramp with luminance-aware SugarColorprofile mark",
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-3-tc-s-2.ansi": {
-        "name": "candy-palette-3-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-3-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-3-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
@@ -11259,9 +11259,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-16-l-1.ansi": {
-        "name": "candy-palette-4-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-16-l-1.ansi": {
+        "name": "sugar-colorprofile-4-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "160x32",
         "width": 160,
         "height": 32,
@@ -11271,9 +11271,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-4-16-l-2.ansi": {
-        "name": "candy-palette-4-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-16-l-2.ansi": {
+        "name": "sugar-colorprofile-4-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -11283,9 +11283,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-4-16-m-1.ansi": {
-        "name": "candy-palette-4-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-16-m-1.ansi": {
+        "name": "sugar-colorprofile-4-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -11295,9 +11295,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-4-16-m-2.ansi": {
-        "name": "candy-palette-4-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-16-m-2.ansi": {
+        "name": "sugar-colorprofile-4-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -11307,9 +11307,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-4-256-l-1.ansi": {
-        "name": "candy-palette-4-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-256-l-1.ansi": {
+        "name": "sugar-colorprofile-4-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "170x34",
         "width": 170,
         "height": 34,
@@ -11319,9 +11319,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-256-l-2.ansi": {
-        "name": "candy-palette-4-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-256-l-2.ansi": {
+        "name": "sugar-colorprofile-4-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "180x36",
         "width": 180,
         "height": 36,
@@ -11331,9 +11331,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-256-m-1.ansi": {
-        "name": "candy-palette-4-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-256-m-1.ansi": {
+        "name": "sugar-colorprofile-4-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -11343,9 +11343,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-256-m-2.ansi": {
-        "name": "candy-palette-4-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-256-m-2.ansi": {
+        "name": "sugar-colorprofile-4-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -11355,9 +11355,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-256-s-1.ansi": {
-        "name": "candy-palette-4-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-256-s-1.ansi": {
+        "name": "sugar-colorprofile-4-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -11367,9 +11367,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-256-s-2.ansi": {
-        "name": "candy-palette-4-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-256-s-2.ansi": {
+        "name": "sugar-colorprofile-4-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -11379,9 +11379,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-tc-l-1.ansi": {
-        "name": "candy-palette-4-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-4-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "200x38",
         "width": 200,
         "height": 38,
@@ -11391,9 +11391,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-tc-l-2.ansi": {
-        "name": "candy-palette-4-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-4-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "190x34",
         "width": 190,
         "height": 34,
@@ -11403,9 +11403,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-tc-m-1.ansi": {
-        "name": "candy-palette-4-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-4-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -11415,9 +11415,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-tc-m-2.ansi": {
-        "name": "candy-palette-4-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-4-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -11427,9 +11427,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-tc-s-1.ansi": {
-        "name": "candy-palette-4-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-4-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -11439,9 +11439,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-4-tc-s-2.ansi": {
-        "name": "candy-palette-4-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-4-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-4-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -11451,9 +11451,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-256-l-1.ansi": {
-        "name": "candy-palette-5-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-256-l-1.ansi": {
+        "name": "sugar-colorprofile-5-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "168x40",
         "width": 168,
         "height": 40,
@@ -11463,9 +11463,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-256-l-2.ansi": {
-        "name": "candy-palette-5-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-256-l-2.ansi": {
+        "name": "sugar-colorprofile-5-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "152x32",
         "width": 152,
         "height": 32,
@@ -11475,9 +11475,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-256-m-1.ansi": {
-        "name": "candy-palette-5-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-256-m-1.ansi": {
+        "name": "sugar-colorprofile-5-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -11487,9 +11487,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-256-m-2.ansi": {
-        "name": "candy-palette-5-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-256-m-2.ansi": {
+        "name": "sugar-colorprofile-5-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -11499,9 +11499,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-256-s-1.ansi": {
-        "name": "candy-palette-5-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-256-s-1.ansi": {
+        "name": "sugar-colorprofile-5-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -11511,9 +11511,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-256-s-2.ansi": {
-        "name": "candy-palette-5-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-256-s-2.ansi": {
+        "name": "sugar-colorprofile-5-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -11523,9 +11523,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-tc-l-1.ansi": {
-        "name": "candy-palette-5-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-5-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "176x40",
         "width": 176,
         "height": 40,
@@ -11535,9 +11535,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-tc-l-2.ansi": {
-        "name": "candy-palette-5-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-5-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "184x42",
         "width": 184,
         "height": 42,
@@ -11547,9 +11547,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-tc-m-1.ansi": {
-        "name": "candy-palette-5-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-5-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -11559,9 +11559,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-tc-m-2.ansi": {
-        "name": "candy-palette-5-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-5-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -11571,9 +11571,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-tc-s-1.ansi": {
-        "name": "candy-palette-5-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-5-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "48x9",
         "width": 48,
         "height": 9,
@@ -11583,9 +11583,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-5-tc-s-2.ansi": {
-        "name": "candy-palette-5-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-5-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-5-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "52x14",
         "width": 52,
         "height": 14,
@@ -11595,9 +11595,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-16-l-1.ansi": {
-        "name": "candy-palette-6-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-16-l-1.ansi": {
+        "name": "sugar-colorprofile-6-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "152x36",
         "width": 152,
         "height": 36,
@@ -11607,9 +11607,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-6-16-l-2.ansi": {
-        "name": "candy-palette-6-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-16-l-2.ansi": {
+        "name": "sugar-colorprofile-6-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "143x34",
         "width": 143,
         "height": 34,
@@ -11619,9 +11619,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-6-16-m-1.ansi": {
-        "name": "candy-palette-6-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-16-m-1.ansi": {
+        "name": "sugar-colorprofile-6-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "83x22",
         "width": 83,
         "height": 22,
@@ -11631,9 +11631,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-6-16-s-1.ansi": {
-        "name": "candy-palette-6-16-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-16-s-1.ansi": {
+        "name": "sugar-colorprofile-6-16-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -11643,9 +11643,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-6-16-s-2.ansi": {
-        "name": "candy-palette-6-16-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-16-s-2.ansi": {
+        "name": "sugar-colorprofile-6-16-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "48x9",
         "width": 48,
         "height": 9,
@@ -11655,9 +11655,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-6-256-l-1.ansi": {
-        "name": "candy-palette-6-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-256-l-1.ansi": {
+        "name": "sugar-colorprofile-6-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "176x42",
         "width": 176,
         "height": 42,
@@ -11667,9 +11667,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-256-l-2.ansi": {
-        "name": "candy-palette-6-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-256-l-2.ansi": {
+        "name": "sugar-colorprofile-6-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "168x37",
         "width": 168,
         "height": 37,
@@ -11679,9 +11679,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-256-m-1.ansi": {
-        "name": "candy-palette-6-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-256-m-1.ansi": {
+        "name": "sugar-colorprofile-6-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -11691,9 +11691,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-256-m-2.ansi": {
-        "name": "candy-palette-6-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-256-m-2.ansi": {
+        "name": "sugar-colorprofile-6-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -11703,9 +11703,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-256-s-1.ansi": {
-        "name": "candy-palette-6-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-256-s-1.ansi": {
+        "name": "sugar-colorprofile-6-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -11715,9 +11715,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-256-s-2.ansi": {
-        "name": "candy-palette-6-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-256-s-2.ansi": {
+        "name": "sugar-colorprofile-6-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "50x11",
         "width": 50,
         "height": 11,
@@ -11727,9 +11727,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-tc-l-1.ansi": {
-        "name": "candy-palette-6-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-6-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "196x43",
         "width": 196,
         "height": 43,
@@ -11739,9 +11739,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-tc-l-2.ansi": {
-        "name": "candy-palette-6-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-6-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "204x45",
         "width": 204,
         "height": 45,
@@ -11751,9 +11751,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-tc-m-1.ansi": {
-        "name": "candy-palette-6-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-6-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -11763,9 +11763,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-tc-m-2.ansi": {
-        "name": "candy-palette-6-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-6-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -11775,9 +11775,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-tc-s-1.ansi": {
-        "name": "candy-palette-6-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-6-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -11787,9 +11787,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-6-tc-s-2.ansi": {
-        "name": "candy-palette-6-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-6-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-6-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "51x12",
         "width": 51,
         "height": 12,
@@ -11799,9 +11799,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-16-l-1.ansi": {
-        "name": "candy-palette-7-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-16-l-1.ansi": {
+        "name": "sugar-colorprofile-7-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "148x31",
         "width": 148,
         "height": 31,
@@ -11811,9 +11811,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-7-16-l-2.ansi": {
-        "name": "candy-palette-7-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-16-l-2.ansi": {
+        "name": "sugar-colorprofile-7-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x33",
         "width": 150,
         "height": 33,
@@ -11823,9 +11823,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-7-16-m-1.ansi": {
-        "name": "candy-palette-7-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-16-m-1.ansi": {
+        "name": "sugar-colorprofile-7-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -11835,9 +11835,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-7-16-m-2.ansi": {
-        "name": "candy-palette-7-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-16-m-2.ansi": {
+        "name": "sugar-colorprofile-7-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -11847,9 +11847,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-7-16-s-1.ansi": {
-        "name": "candy-palette-7-16-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-16-s-1.ansi": {
+        "name": "sugar-colorprofile-7-16-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -11859,9 +11859,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-7-16-s-2.ansi": {
-        "name": "candy-palette-7-16-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-16-s-2.ansi": {
+        "name": "sugar-colorprofile-7-16-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -11871,9 +11871,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-7-256-l-1.ansi": {
-        "name": "candy-palette-7-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-256-l-1.ansi": {
+        "name": "sugar-colorprofile-7-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "168x36",
         "width": 168,
         "height": 36,
@@ -11883,9 +11883,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-256-l-2.ansi": {
-        "name": "candy-palette-7-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-256-l-2.ansi": {
+        "name": "sugar-colorprofile-7-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "172x40",
         "width": 172,
         "height": 40,
@@ -11895,9 +11895,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-256-m-1.ansi": {
-        "name": "candy-palette-7-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-256-m-1.ansi": {
+        "name": "sugar-colorprofile-7-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -11907,9 +11907,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-256-m-2.ansi": {
-        "name": "candy-palette-7-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-256-m-2.ansi": {
+        "name": "sugar-colorprofile-7-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -11919,9 +11919,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-256-s-1.ansi": {
-        "name": "candy-palette-7-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-256-s-1.ansi": {
+        "name": "sugar-colorprofile-7-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
@@ -11931,9 +11931,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-256-s-2.ansi": {
-        "name": "candy-palette-7-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-256-s-2.ansi": {
+        "name": "sugar-colorprofile-7-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -11943,9 +11943,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-tc-l-1.ansi": {
-        "name": "candy-palette-7-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-7-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "196x44",
         "width": 196,
         "height": 44,
@@ -11955,9 +11955,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-tc-l-2.ansi": {
-        "name": "candy-palette-7-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-7-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x40",
         "width": 150,
         "height": 40,
@@ -11967,9 +11967,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-tc-m-1.ansi": {
-        "name": "candy-palette-7-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-7-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -11979,9 +11979,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-tc-m-2.ansi": {
-        "name": "candy-palette-7-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-7-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -11991,9 +11991,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-tc-s-1.ansi": {
-        "name": "candy-palette-7-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-7-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -12003,9 +12003,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-7-tc-s-2.ansi": {
-        "name": "candy-palette-7-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-7-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-7-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -12015,9 +12015,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-16-l-1.ansi": {
-        "name": "candy-palette-8-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-16-l-1.ansi": {
+        "name": "sugar-colorprofile-8-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -12027,9 +12027,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-8-16-l-2.ansi": {
-        "name": "candy-palette-8-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-16-l-2.ansi": {
+        "name": "sugar-colorprofile-8-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -12039,9 +12039,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-8-16-m-1.ansi": {
-        "name": "candy-palette-8-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-16-m-1.ansi": {
+        "name": "sugar-colorprofile-8-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -12051,9 +12051,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-8-16-s-2.ansi": {
-        "name": "candy-palette-8-16-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-16-s-2.ansi": {
+        "name": "sugar-colorprofile-8-16-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -12063,9 +12063,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-8-256-l-1.ansi": {
-        "name": "candy-palette-8-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-256-l-1.ansi": {
+        "name": "sugar-colorprofile-8-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -12075,9 +12075,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-256-l-2.ansi": {
-        "name": "candy-palette-8-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-256-l-2.ansi": {
+        "name": "sugar-colorprofile-8-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -12087,9 +12087,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-256-m-1.ansi": {
-        "name": "candy-palette-8-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-256-m-1.ansi": {
+        "name": "sugar-colorprofile-8-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -12099,9 +12099,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-256-m-2.ansi": {
-        "name": "candy-palette-8-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-256-m-2.ansi": {
+        "name": "sugar-colorprofile-8-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -12111,9 +12111,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-256-s-1.ansi": {
-        "name": "candy-palette-8-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-256-s-1.ansi": {
+        "name": "sugar-colorprofile-8-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -12123,9 +12123,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-256-s-2.ansi": {
-        "name": "candy-palette-8-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-256-s-2.ansi": {
+        "name": "sugar-colorprofile-8-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "50x14",
         "width": 50,
         "height": 14,
@@ -12135,9 +12135,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-tc-l-1.ansi": {
-        "name": "candy-palette-8-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-8-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -12147,9 +12147,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-tc-l-2.ansi": {
-        "name": "candy-palette-8-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-8-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -12159,9 +12159,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-tc-m-1.ansi": {
-        "name": "candy-palette-8-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-8-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -12171,9 +12171,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-tc-m-2.ansi": {
-        "name": "candy-palette-8-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-8-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -12183,9 +12183,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-tc-s-1.ansi": {
-        "name": "candy-palette-8-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-8-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12195,9 +12195,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-8-tc-s-2.ansi": {
-        "name": "candy-palette-8-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-8-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-8-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -12207,9 +12207,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-16-l-1.ansi": {
-        "name": "candy-palette-9-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-16-l-1.ansi": {
+        "name": "sugar-colorprofile-9-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -12219,9 +12219,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-9-16-l-2.ansi": {
-        "name": "candy-palette-9-16-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-16-l-2.ansi": {
+        "name": "sugar-colorprofile-9-16-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "158x32",
         "width": 158,
         "height": 32,
@@ -12231,9 +12231,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-9-16-m-1.ansi": {
-        "name": "candy-palette-9-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-16-m-1.ansi": {
+        "name": "sugar-colorprofile-9-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -12243,9 +12243,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-9-16-m-2.ansi": {
-        "name": "candy-palette-9-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-16-m-2.ansi": {
+        "name": "sugar-colorprofile-9-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -12255,9 +12255,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-9-16-s-1.ansi": {
-        "name": "candy-palette-9-16-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-16-s-1.ansi": {
+        "name": "sugar-colorprofile-9-16-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -12267,9 +12267,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-9-256-l-1.ansi": {
-        "name": "candy-palette-9-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-256-l-1.ansi": {
+        "name": "sugar-colorprofile-9-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "170x30",
         "width": 170,
         "height": 30,
@@ -12279,9 +12279,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-256-l-2.ansi": {
-        "name": "candy-palette-9-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-256-l-2.ansi": {
+        "name": "sugar-colorprofile-9-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "156x32",
         "width": 156,
         "height": 32,
@@ -12291,9 +12291,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-256-m-1.ansi": {
-        "name": "candy-palette-9-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-256-m-1.ansi": {
+        "name": "sugar-colorprofile-9-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -12303,9 +12303,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-256-m-2.ansi": {
-        "name": "candy-palette-9-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-256-m-2.ansi": {
+        "name": "sugar-colorprofile-9-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "82x24",
         "width": 82,
         "height": 24,
@@ -12315,9 +12315,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-256-s-1.ansi": {
-        "name": "candy-palette-9-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-256-s-1.ansi": {
+        "name": "sugar-colorprofile-9-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "54x14",
         "width": 54,
         "height": 14,
@@ -12327,9 +12327,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-256-s-2.ansi": {
-        "name": "candy-palette-9-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-256-s-2.ansi": {
+        "name": "sugar-colorprofile-9-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -12339,9 +12339,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-tc-l-1.ansi": {
-        "name": "candy-palette-9-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-9-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "164x34",
         "width": 164,
         "height": 34,
@@ -12351,9 +12351,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-tc-l-2.ansi": {
-        "name": "candy-palette-9-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-9-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "168x32",
         "width": 168,
         "height": 32,
@@ -12363,9 +12363,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-tc-m-1.ansi": {
-        "name": "candy-palette-9-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-9-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -12375,9 +12375,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-tc-m-2.ansi": {
-        "name": "candy-palette-9-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-9-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -12387,9 +12387,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-tc-s-1.ansi": {
-        "name": "candy-palette-9-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-9-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -12399,9 +12399,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-9-tc-s-2.ansi": {
-        "name": "candy-palette-9-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-9-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-9-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -12411,9 +12411,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-16-l-1.ansi": {
-        "name": "candy-palette-10-16-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-16-l-1.ansi": {
+        "name": "sugar-colorprofile-10-16-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "156x32",
         "width": 156,
         "height": 32,
@@ -12423,9 +12423,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-10-16-m-1.ansi": {
-        "name": "candy-palette-10-16-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-16-m-1.ansi": {
+        "name": "sugar-colorprofile-10-16-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -12435,9 +12435,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-10-16-m-2.ansi": {
-        "name": "candy-palette-10-16-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-16-m-2.ansi": {
+        "name": "sugar-colorprofile-10-16-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -12447,9 +12447,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-10-16-s-2.ansi": {
-        "name": "candy-palette-10-16-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-16-s-2.ansi": {
+        "name": "sugar-colorprofile-10-16-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -12459,9 +12459,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-l-1.ansi": {
-        "name": "candy-palette-10-256-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-l-1.ansi": {
+        "name": "sugar-colorprofile-10-256-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
@@ -12471,9 +12471,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-l-2.ansi": {
-        "name": "candy-palette-10-256-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-l-2.ansi": {
+        "name": "sugar-colorprofile-10-256-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "172x33",
         "width": 172,
         "height": 33,
@@ -12483,9 +12483,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-m-1.ansi": {
-        "name": "candy-palette-10-256-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-m-1.ansi": {
+        "name": "sugar-colorprofile-10-256-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -12495,9 +12495,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-m-2.ansi": {
-        "name": "candy-palette-10-256-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-m-2.ansi": {
+        "name": "sugar-colorprofile-10-256-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -12507,9 +12507,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-s-1.ansi": {
-        "name": "candy-palette-10-256-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-s-1.ansi": {
+        "name": "sugar-colorprofile-10-256-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -12519,9 +12519,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-s-2.ansi": {
-        "name": "candy-palette-10-256-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-s-2.ansi": {
+        "name": "sugar-colorprofile-10-256-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -12531,9 +12531,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-256-s-3.ansi": {
-        "name": "candy-palette-10-256-s-3.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-256-s-3.ansi": {
+        "name": "sugar-colorprofile-10-256-s-3.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -12543,9 +12543,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-l-1.ansi": {
-        "name": "candy-palette-10-tc-l-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-l-1.ansi": {
+        "name": "sugar-colorprofile-10-tc-l-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "180x36",
         "width": 180,
         "height": 36,
@@ -12555,9 +12555,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-l-2.ansi": {
-        "name": "candy-palette-10-tc-l-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-l-2.ansi": {
+        "name": "sugar-colorprofile-10-tc-l-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "176x38",
         "width": 176,
         "height": 38,
@@ -12567,9 +12567,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-m-1.ansi": {
-        "name": "candy-palette-10-tc-m-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-m-1.ansi": {
+        "name": "sugar-colorprofile-10-tc-m-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -12579,9 +12579,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-m-2.ansi": {
-        "name": "candy-palette-10-tc-m-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-m-2.ansi": {
+        "name": "sugar-colorprofile-10-tc-m-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -12591,9 +12591,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-s-1.ansi": {
-        "name": "candy-palette-10-tc-s-1.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-s-1.ansi": {
+        "name": "sugar-colorprofile-10-tc-s-1.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -12603,9 +12603,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-s-2.ansi": {
-        "name": "candy-palette-10-tc-s-2.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-s-2.ansi": {
+        "name": "sugar-colorprofile-10-tc-s-2.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -12615,9 +12615,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-palette/candy-palette-10-tc-s-3.ansi": {
-        "name": "candy-palette-10-tc-s-3.ansi",
-        "category": "candy-palette",
+    "sugar-colorprofile/sugar-colorprofile-10-tc-s-3.ansi": {
+        "name": "sugar-colorprofile-10-tc-s-3.ansi",
+        "category": "sugar-colorprofile",
         "resolution": "56x14",
         "width": 56,
         "height": 14,

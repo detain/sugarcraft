@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ee305de6efeed88a824a4e54b5e08847",
+    "content-hash": "c63f6f52923ac15dc71216896d187adc",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4439,14 +4439,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-log",
-                "reference": "29dccccfcc0c32d098cc30eb3d6633cf1d2987f0"
+                "reference": "88f2935e018b6fd9ed338fc8f556da9ab2b935d5"
             },
             "require": {
                 "php": "^8.3",
                 "psr/log": "^3.0",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-palette": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-colorprofile": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -4747,7 +4747,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "9694eb017c85d53ae1cbe69f7a3097fdb360ed61"
+                "reference": "cccd838b28d4dfd36a57037ebef487cab49ce5d5"
             },
             "require": {
                 "ext-gd": "*",
@@ -4756,7 +4756,7 @@
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-flip": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/sugar-colorprofile": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -4804,67 +4804,6 @@
                 "issues": "https://github.com/sugarcraft/candy-mosaic/issues",
                 "source": "https://github.com/sugarcraft/candy-mosaic",
                 "docs": "https://sugarcraft.github.io/lib/candy-mosaic.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-palette",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-palette",
-                "reference": "a9c55aaaff688f10f6bfc51f3c0ff576c3c496e0"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/child-process": "^0.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpstan/phpstan": "^2.1",
-                "phpstan/phpstan-phpunit": "^2.0",
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Palette\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Palette\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/colorprofile — magical terminal color profile detection and color degradation (TrueColor → ANSI256 → ANSI → ASCII).",
-            "homepage": "https://github.com/sugarcraft/candy-palette",
-            "keywords": [
-                "ansi",
-                "color",
-                "colorprofile",
-                "sugarcraft",
-                "terminal",
-                "truecolor",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-palette/issues",
-                "source": "https://github.com/sugarcraft/candy-palette",
-                "docs": "https://sugarcraft.github.io/lib/candy-palette.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -5748,12 +5687,12 @@
             "dist": {
                 "type": "path",
                 "url": "honey-bounce",
-                "reference": "16986118de976cf2dcbd24aa08b009b1cc7f3c4e"
+                "reference": "95fba89ab38e1270bd463f96909546d5daab71b4"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/sugar-colorprofile": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -5866,6 +5805,68 @@
                 "issues": "https://github.com/sugarcraft/sugar-charts/issues",
                 "source": "https://github.com/sugarcraft/sugar-charts",
                 "docs": "https://sugarcraft.github.io/lib/sugar-charts.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-colorprofile",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-colorprofile",
+                "reference": "dbf0d51bbfcc70b384e94837f657d7b29bb36789"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/child-process": "^0.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\ColorProfile\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\ColorProfile\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/colorprofile — magical terminal color profile detection and color degradation (TrueColor → ANSI256 → ANSI → ASCII).",
+            "homepage": "https://github.com/sugarcraft/sugar-colorprofile",
+            "keywords": [
+                "ansi",
+                "color",
+                "colorprofile",
+                "palette",
+                "sugarcraft",
+                "terminal",
+                "truecolor",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-colorprofile/issues",
+                "source": "https://github.com/sugarcraft/sugar-colorprofile",
+                "docs": "https://sugarcraft.github.io/lib/sugar-colorprofile.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -6940,7 +6941,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-reel",
-                "reference": "682ca1818a65e6f59a91c51f7485358607d0ad5b"
+                "reference": "edf91bd5ca571dc7774049366162e49bc8b31bea"
             },
             "require": {
                 "php": "^8.3",
@@ -6948,7 +6949,7 @@
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-flip": "dev-master",
                 "sugarcraft/candy-mosaic": "dev-master",
-                "sugarcraft/candy-palette": "dev-master"
+                "sugarcraft/sugar-colorprofile": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -8606,7 +8607,6 @@
         "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
         "sugarcraft/candy-mosaic": 20,
-        "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-scriptui": 20,
         "sugarcraft/candy-shine": 20,
@@ -8622,6 +8622,7 @@
         "sugarcraft/candy-wish": 20,
         "sugarcraft/honey-bounce": 20,
         "sugarcraft/sugar-charts": 20,
+        "sugarcraft/sugar-colorprofile": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dashboard": 20,

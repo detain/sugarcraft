@@ -62,7 +62,7 @@ candy-log/src/
 
 3. **Structured Context**: Key=value pairs merged via `with()` sub-loggers
 
-4. **Probe-Driven Colors**: Respects `NO_COLOR`/`FORCE_COLOR` via candy-palette's Probe
+4. **Probe-Driven Colors**: Respects `NO_COLOR`/`FORCE_COLOR` via sugar-colorprofile's Probe
 
 5. **Hook System**: Per-level callback registry for middleware-style interception
 

@@ -549,7 +549,7 @@ private function clamp(int $i, int $size): int
 }
 ```
 
-**`candy-palette/src/Color.php:L67`** - Static private helper
+**`sugar-colorprofile/src/Color.php:L67`** - Static private helper
 ```php
 private static function clamp(int $v): int
 {

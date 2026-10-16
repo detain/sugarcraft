@@ -312,7 +312,7 @@ Coverage runs via `cd candy-codeshot && composer install && vendor/bin/phpunit`.
 
 - **Depends on**: `candy-core` (Ansi::strip), `candy-sprinkles` (?), `candy-shine` (?)
 - **Consumed by**: Not yet used by other packages in the monorepo (verified by searching composer.json files for sugarcraft/candy-codeshot)
-- **candy-palette** (ColorProfile) is consumed by candy-codeshot for color profile detection in terminals, but the dependency is not declared in composer.json — ColorProfile is accessed through candy-core
+- **sugar-colorprofile** (ColorProfile) is consumed by candy-codeshot for color profile detection in terminals, but the dependency is not declared in composer.json — ColorProfile is accessed through candy-core
 
 The package is at the **output edge** of the rendering pipeline — it produces static image files rather than interactive TUIs, making it complementary to (not overlapping with) the core TUI libraries.
 

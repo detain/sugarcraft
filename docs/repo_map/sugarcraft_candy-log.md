@@ -297,7 +297,7 @@ public function __construct(
 }
 ```
 
-**Integration:** `candy-palette`'s `Probe::colorProfile()` respects `NO_COLOR` and `FORCE_COLOR` environment variables.
+**Integration:** `sugar-colorprofile`'s `Probe::colorProfile()` respects `NO_COLOR` and `FORCE_COLOR` environment variables.
 
 ### String Builder Pooling
 
@@ -386,7 +386,7 @@ Using -4/0/4/8/12 instead of sequential integers (0-4) enables:
 
 ### 2. Probe-Driven Color Intelligence
 
-Delegating color decision to `candy-palette`'s `Probe::colorProfile()` means:
+Delegating color decision to `sugar-colorprofile`'s `Probe::colorProfile()` means:
 - Respects `NO_COLOR` environment variable
 - Respects `FORCE_COLOR` for CI environments
 - Proper degradation for non-TTY output
@@ -439,14 +439,14 @@ Configurable log-part ordering enables:
         "php": "^8.3",
         "psr/log": "^3.0",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-palette": "dev-master",
+        "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     }
 }
 ```
 
 - **candy-core** — `Tty::restoreLast()` for terminal recovery
-- **candy-palette** — `Probe::colorProfile()->allowsColor()` for color detection
+- **sugar-colorprofile** — `Probe::colorProfile()->allowsColor()` for color detection
 - **candy-sprinkles** — `Style` for ANSI SGR rendering
 
 ## Strengths

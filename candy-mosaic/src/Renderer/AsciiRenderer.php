@@ -7,7 +7,7 @@ namespace SugarCraft\Mosaic\Renderer;
 use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Lang;
-use SugarCraft\Palette\Color;
+use SugarCraft\ColorProfile\Color;
 
 /**
  * ASCII / ANSI renderer — maps each pixel to a luminance character, optionally

@@ -114,7 +114,7 @@ final class SuiteChildStdinIsolationTest extends TestCase
      * that has now been made.
      *
      * WHAT IS TRUE NOW. The 107 was never 107 costs. It was ONE defect — a
-     * candy-mosaic fallback naming a `Capability` case candy-palette spells
+     * candy-mosaic fallback naming a `Capability` case sugar-colorprofile spells
      * differently — multiplied by every test that reached it, and the unguarded
      * read that triggered it is guarded now (E302/E318:
      * `Detect::stdinFd()` answers null for a dead handle rather than passing it

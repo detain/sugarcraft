@@ -1,7 +1,7 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
 Sources: candy-core, candy-scriptui, sugar-forms, candy-sprinkles, sugar-widgets,
-sugar-forms, honey-bounce, candy-palette, candy-shine, candy-pty
+sugar-forms, honey-bounce, sugar-colorprofile, candy-shine, candy-pty
 
 ---
 
@@ -124,7 +124,7 @@ The `SubStyleParser` for per-element styles already exists in candy-scriptui —
 - **SpringChain/SpringCollection** for multi-spring orchestration — not in upstream
 - **Note**: harmonica has the canonical Ryan Juckett algorithm; honey-bounce's extensions are SugarCraft-only
 
-### candy-palette > colorprofile (Partial Superiority)
+### sugar-colorprofile > colorprofile (Partial Superiority)
 - **12-step detection hierarchy** with infocmp Phase 2 upgrade — more comprehensive than upstream
 - **Standards compliance**: fully implements NO_COLOR, CLICOLOR, CLICOLOR_FORCE, COLORTERM, terminfo
 - **Good test coverage**: 6 test files with data providers and env preservation

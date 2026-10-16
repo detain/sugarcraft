@@ -7,7 +7,7 @@ namespace SugarCraft\Bounce;
 use SugarCraft\Bounce\Lang;
 use SugarCraft\Bounce\SpringPreset;
 use SugarCraft\Bounce\SpringConfig;
-use SugarCraft\Palette\Probe;
+use SugarCraft\ColorProfile\Probe;
 
 /**
  * Damped harmonic oscillator (Ryan Juckett's "Damped Springs"), with

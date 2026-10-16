@@ -378,7 +378,7 @@ foreach ($this->beats as $b) {
 2. **candy-core Tick subscription** — Subscribe to filesystem changes for live updates
    - Source: `docs/repo_map/pr_charmbracelet_bubbletea.md` — tick subscriptions
 
-3. **candy-palette color detection** — Respect terminal color profile for dashboard
+3. **sugar-colorprofile color detection** — Respect terminal color profile for dashboard
    - Source: `docs/repo_map/pr_charmbracelet_colorprofile.md` — OSC 2026/2027 queries
 
 4. **Editor integrations** — Publish editor plugin SDK/guidelines

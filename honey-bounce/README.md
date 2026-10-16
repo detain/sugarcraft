@@ -50,7 +50,7 @@ When the `REDUCE_MOTION=1` environment variable is set or the terminal
 signals `prefers-reduced-motion`, `Spring::update()` snaps to `$target`
 instantly and returns `[<target>, 0.0]`. This satisfies the
 [WCAG 2.1 reduced-motion guideline](https://www.w3.org/WIA/WDAG-ACCRM/)
-and matches the behaviour of `SugarCraft\Palette\Probe::reducedMotion()`.
+and matches the behaviour of `SugarCraft\ColorProfile\Probe::reducedMotion()`.
 
 ```php
 // With REDUCE_MOTION=1 the spring skips animation entirely:

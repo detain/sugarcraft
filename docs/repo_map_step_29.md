@@ -1,21 +1,21 @@
 # Step 29 — Terminal-probe consumers (candy-mdview + candy-wish)
 
 **Branch:** `ai/probe-consumers`
-**Depends on:** step-13 (TerminalProbe in candy-palette)
+**Depends on:** step-13 (TerminalProbe in sugar-colorprofile)
 **Blocks:** —
 
 ## Goal
 
-Migrate `candy-mdview` and `candy-wish` to consume `TerminalProbe` from candy-palette (extracted in step-13). Today both libs do their own probing; both have known failure modes on Windows/SSH/old terminals.
+Migrate `candy-mdview` and `candy-wish` to consume `TerminalProbe` from sugar-colorprofile (extracted in step-13). Today both libs do their own probing; both have known failure modes on Windows/SSH/old terminals.
 
 Reference: §387.9 (terminal-probing reinvention), §13.5 (probing failures cited for these libs).
 
 ## Files expected to be modified
 
-- `candy-mdview/composer.json` · `candy-wish/composer.json` — add `sugarcraft/candy-palette` if not already there (it might already be there for color profile); confirm via `path-repo-closure`.
-- `candy-mdview/src/` — replace any direct env-var/terminfo probing with `\SugarCraft\Palette\Probe\TerminalProbe::run()`. Read `Capability` enum to decide rendering paths (e.g., Sixel vs HalfBlock).
+- `candy-mdview/composer.json` · `candy-wish/composer.json` — add `sugarcraft/sugar-colorprofile` if not already there (it might already be there for color profile); confirm via `path-repo-closure`.
+- `candy-mdview/src/` — replace any direct env-var/terminfo probing with `\SugarCraft\ColorProfile\Probe\TerminalProbe::run()`. Read `Capability` enum to decide rendering paths (e.g., Sixel vs HalfBlock).
 - `candy-wish/src/` — same.
-- Both libs' existing probing-related tests can be removed (now tested centrally in candy-palette) — replace with consumer-side tests confirming the lib correctly maps Capabilities to its rendering choices.
+- Both libs' existing probing-related tests can be removed (now tested centrally in sugar-colorprofile) — replace with consumer-side tests confirming the lib correctly maps Capabilities to its rendering choices.
 
 ## Acceptance criteria
 
@@ -28,7 +28,7 @@ Reference: §387.9 (terminal-probing reinvention), §13.5 (probing failures cite
 
 ## Coder brief
 
-1. **path-repo closure**: candy-palette in both libs if not already there.
+1. **path-repo closure**: sugar-colorprofile in both libs if not already there.
 2. **candy-mdview**: identify probing call sites (look for `getenv('TERM_PROGRAM')`, `getenv('COLORTERM')`, terminfo lookups). Replace each with a `Capability` check via TerminalProbe.
 3. **candy-wish**: same.
 4. **Graceful failure**: ensure that if TerminalProbe throws (it shouldn't after step-13, but defensively), both libs fall back to the lowest-common-denominator rendering.
@@ -42,7 +42,7 @@ Reference: §387.9 (terminal-probing reinvention), §13.5 (probing failures cite
 
 ## Scribe brief
 
-- Each lib's README: `## Shared foundations` mentioning candy-palette's TerminalProbe.
+- Each lib's README: `## Shared foundations` mentioning sugar-colorprofile's TerminalProbe.
 - CALIBER_LEARNINGS in each: "Don't getenv() or read terminfo directly — go through TerminalProbe."
 
 ## Ship brief
@@ -51,7 +51,7 @@ Reference: §387.9 (terminal-probing reinvention), §13.5 (probing failures cite
 - **PR body**:
   ```
   ## Summary
-  - candy-mdview + candy-wish migrated to candy-palette's TerminalProbe (step-13).
+  - candy-mdview + candy-wish migrated to sugar-colorprofile's TerminalProbe (step-13).
   - Direct env-var/terminfo probing removed from both libs.
   - Graceful fallback on simulated probe failure verified.
   - Closes §387.9 (probing reinvention) and addresses Windows/SSH/old-terminal failure modes.

@@ -45,10 +45,10 @@ use PHPUnit\Framework\TestCase;
  *
  * WHAT IS TRUE NOW: that run predated E302, and it was never 107 costs. It was
  * ONE defect multiplied by every test that reached it — `candy-mosaic` naming
- * `Capability::Iterm2Image`, a case candy-palette spells `ITerm2`, in a
+ * `Capability::Iterm2Image`, a case sugar-colorprofile spells `ITerm2`, in a
  * fallback that nothing entered until fd 0 was closed. The unguarded read
  * below was the TRIGGER; the enum name was the FAULT, and `1a2caebb` fixed it.
- * Verified by symbol: `candy-palette/src/Probe/Capability.php` declares
+ * Verified by symbol: `sugar-colorprofile/src/Probe/Capability.php` declares
  * `case ITerm2`, and that commit is an ancestor of this tree. RE-MEASURED
  * here after it, PHP 8.3.6, full suite, with the descriptor replacement
  * applied to `tests/bootstrap.php`: one error and two failures, all three in
