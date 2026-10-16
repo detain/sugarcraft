@@ -47,3 +47,5 @@ Procedure R chain from base `6bac4090d` (== origin at start; tree clean except f
 ## Deviations / notes
 - Harness self-inflicted (recorded so later lanes skip it): `cd <lib> && ( watchdog ) &` backgrounds the whole `&&` chain (cd lost); campaign law form uses `;` separator. And `pkill -f parallel-tests` from a bash-tool call self-matches the wrapper's own command line → orphan run + no output; script-internal `--timeout` is the reliable guard for sharded crush runs.
 - Pre-existing crush shard-3 reds mean PARALLEL-RC=1 on every future K=8 run at this era until the Reel family is adopted — conservation figures (tests/skipped) remain the discriminating gate.
+- Mid-lane foreign commit 030ac223a "vhs: regenerate demo GIFs" absorbed by pull --rebase at R8: new .vhs gif bytes land under the renamed dir; gates unaffected (binary render only — frames still paint the old wordmark, consistent with the followups entry).
+- R9: create HTTP 202 clean (no 406 cure needed); dev-master appeared after one forced update (job 23705a76); packagist.sh check == split tip 9c8d1fdbe0f710b1c3ae0a95cac02613b6352c8b.
