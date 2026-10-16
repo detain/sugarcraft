@@ -49,10 +49,10 @@ NEVER tag (paths must move): candy-shine/**, findings/{candy-shine.md,plan_candy
 - gen-docs minted 31st redirect stub docs/lib/candy-shine.html (self-tagged, residue-invisible ✓); root composer.lock updated (--no-install); refresh-deps 4/4 linked escaping=0 after purging 3 stale BROKEN candy-shine vendor symlinks my own R0 link left behind (gitignored cruft; the escaping=1 "WANTED LINKED" scare = verify() counts realpath(false) as escaping — stale-symlink fingerprint, NEW harness lesson). <!-- @rename-keep lane record quoting old token -->
 
 ## Gate evidence (tip 588d2cb25, all on committed tree)
-- residue --old=candy-shine: 0 findings rc0 (after 2 self-tags on NOTES step-log lines — lane records quoting old tokens need sentinels too)
+- residue --old=candy-shine: 0 findings rc0 (after 2 self-tags on NOTES step-log lines — lane records quoting old tokens need sentinels too) <!-- @rename-keep -->
 - sugar-markdown suite: OK 938T/2378A rc0 = base EXACT (LangTest namespace-literal failure caught + fixed in sweeps commit)
 - candy-mdview 122/313 OK; candy-scriptui 334/694 OK (both = base EXACT)
 - sugar-crush --filter Markdown 42/134 OK = base; --filter Shine "No tests executed" = base shape (vacuity documented)
-- tools/tests 426/1484 OK (RenameLibTest fixture coupling unaffected by status flip — D1 proof reconfirmed); check-path-repos rc0; check-child-lifetimes rc0; gen-docs --check rc0 (31 stubs incl candy-shine.html); gen-ansi-readme --check rc0
+- tools/tests 426/1484 OK (RenameLibTest fixture coupling unaffected by status flip — D1 proof reconfirmed); check-path-repos rc0; check-child-lifetimes rc0; gen-docs --check rc0 (31 stubs incl candy-shine.html); gen-ansi-readme --check rc0 <!-- @rename-keep -->
 - candy-git: docblock-comment-only edit, php -l clean, suite not baselined at R0 (disclosed)
 - NEW BLINDSPOT CLASSES this lane: (1) bare lowercase ns-word (`shine`, incl `'shine.'` Lang key prefixes + tempnam prefixes) invisible to every rule incl residue; (2) leadcap-hyphen `Candy-shine` variant survived; (3) U+2011 non-breaking-hyphen `candy‑shine` in php74_branch.md invisible (tagged); (4) prose-only consumer libs absent from composer/NS censuses (candy-git); (5) stale broken vendor symlink after dir rename surfaces as refresh-deps escaping=1 / "*** WANTED LINKED ***" red herring — purge find -type l -delete; (6) `$<var>`-style vars named from brand ($shine locals) judged cosmetic-keep (identifier, not token).
