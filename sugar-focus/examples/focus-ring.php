@@ -12,7 +12,7 @@ declare(strict_types=1);
  *
  *   php examples/focus-ring.php
  *
- * candy-focus itself carries no rendering — this example hand-rolls the ANSI so
+ * sugar-focus itself carries no rendering — this example hand-rolls the ANSI so
  * the library stays dependency-free. It shows the one job the ring has: "which
  * panel has focus", moving as Tab is pressed.
  */
@@ -54,7 +54,7 @@ $panel = static function (string $label, bool $focused) use ($esc, $reset): arra
 $render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset): void {
     // Home the cursor and clear the screen so each redraw overwrites the last.
     $out = "{$esc}[H{$esc}[2J";
-    $out .= "{$esc}[1mcandy-focus — FocusRing traversal{$reset}\n";
+    $out .= "{$esc}[1msugar-focus — FocusRing traversal{$reset}\n";
     $out .= "{$esc}[90mTab: next   Shift-Tab: previous   q: quit{$reset}\n\n";
 
     $panels = array_map(

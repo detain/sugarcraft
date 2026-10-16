@@ -120,3 +120,9 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - media/icons/sugar-forms.png + docs/img/icons/sugar-forms.png: bytes unchanged (old-brand artwork at new path).
 - .vhs/*.tape render rules kept filenames; recorded GIFs still show old brand until CI re-render. <!-- @rename-keep -->
 - ansi/sugarcraft/sugarcraft-{2-16-l-1,2-256-l-1,3-16-l-2,5-256-l-1}.ansi banner art embeds old candy-forms slug in <!-- @rename-keep -->pixel content. <!-- @rename-keep -->
+
+## C12 candy-focus → sugar-focus (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-2-16-l-1.ansi` + `sugarcraft-3-16-l-2.ansi` — wordmark art content lists the <!-- @rename-keep -->
+  pre-rename slug (`.ansi` content is C.3-excluded); redraw optional at owner triage.
+- `sugar-focus/.vhs/focus-ring.gif` — demo GIF frames show the pre-rename prompt wordmark; CI <!-- @rename-keep -->
+  `.github/workflows/vhs.yml` re-renders from the already-rewritten `.tape` on the next tape run; do not hand-patch.

@@ -58,7 +58,7 @@
         "sugarcraft/candy-mosaic": "dev-master",
         "sugarcraft/sugar-mouse": "dev-master",
         "sugarcraft/candy-layout": "dev-master",
-        "sugarcraft/candy-focus": "@dev",
+        "sugarcraft/sugar-focus": "@dev",
         "sugarcraft/candy-kit": "@dev",
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/sugar-reel": "@dev"

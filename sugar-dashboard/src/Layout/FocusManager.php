@@ -10,7 +10,7 @@ use SugarCraft\Focus\FocusRing;
 /**
  * Manages focus state for a layout hierarchy.
  *
- * A thin persistence wrapper over candy-focus's {@see FocusRing}: the ring owns
+ * A thin persistence wrapper over sugar-focus's {@see FocusRing}: the ring owns
  * the ordered set of focusable ids and the wrap-around Tab/Shift-Tab traversal,
  * while this class layers on the dashboard's own conventions — a nullable
  * "nothing focused yet" state (a fresh manager seeds the root id but focuses

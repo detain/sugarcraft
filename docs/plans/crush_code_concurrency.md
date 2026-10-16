@@ -206,8 +206,8 @@ by phase: 2→3, 3→4, 4→1, 6→6, 7→4, 8→9 = **27**. ✅
 | **P2.4** | `CommandLoader` into `Chat` + `$ARGUMENTS`/`$1..$9`, then `` !`cmd` `` (ReactPHP `Process`) + `@file` | `src/Chat.php`, `src/Commands/CommandLoader.php`, `src/Cli/Bootstrap.php` | **W** | part 1 (C4a) in flight; part 2 (C4b) needs part 1's instance seam | L | ✅ | ✅ | — |
 | **P2.7** | write `LspTool implements Tool` over the built `src/LSP/LspClient.php`, append to `Bootstrap::tools()` | new `src/Tools/BuiltIn/LspTool.php`, `src/Cli/Bootstrap.php:3277-3316` | **W** | nothing | M | ✅ | — | ✅ |
 | **P2.9** | unified `crush-plugin.json` + `PluginLoader`; directory-convention auto-discovery | new `src/Plugins/*`, `src/Cli/Bootstrap.php`, probably `src/Chat.php` (plugin commands into the slash menu) | **W** | plan says "once items 1-7 land"; the *real* prerequisite is P2.4 (a plugin ships `commands/`, and there is no file-command seam until P2.4 wires one) and P2.7 | L | ✅ | ⚠ likely | ✅ |
-| **P3.2** | swap `Tui\Pane`'s hand-rolled `next()` for `candy-focus\FocusRing` (Shift-Tab for free) | `src/Tui/Pane.php`, `src/Tui/KeyboardHandler.php:343`, `composer.json` | **S** | **`sugarcraft/candy-focus` is NOT a dependency — see §2.4. Supervisor must add it first.** | S | — | — | — |
-| **P3.3** | `sugar-veil` `withClickOutsideDismiss()` on the palette / session-picker / permission overlays | `src/Chat.php:3478 handleMouse()`, `src/Renderer.php:1150` (the `Veil::new()` site) | **U** | nothing (`sugarcraft/sugar-veil` already required; `Veil::clickOutsideDismiss()` already exists at `sugar-veil/src/Veil.php:161`) | M | — | ✅ | — | <!-- @rename-keep historical provenance -->
+| **P3.2** | swap `Tui\Pane`'s hand-rolled `next()` for `candy-focus\FocusRing` (Shift-Tab for free) | `src/Tui/Pane.php`, `src/Tui/KeyboardHandler.php:343`, `composer.json` | **S** | **`sugarcraft/candy-focus` is NOT a dependency — see §2.4. Supervisor must add it first.** | S | — | — | — | <!-- @rename-keep -->
+| **P3.3** | `sugar-veil` `withClickOutsideDismiss()` on the palette / session-picker / permission overlays | `src/Chat.php:3478 handleMouse()`, `src/Renderer.php:1150` (the `Veil::new()` site) | **U** | nothing (`sugarcraft/sugar-veil` already required; `Veil::clickOutsideDismiss()` already exists at `sugar-veil/src/Veil.php:161`) | M | — | ✅ | — |
 | **P3.4** | adopt `candy-sprinkles\Table` for `/sessions`, `/agents`, MCP list, LSP diagnostics output | `src/Chat.php` (the `implode("\n", $lines)` sites at ~5410, 5842, 6025, 7810, 7885, 7919, 8037) | **U** | LSP-diagnostics slice needs P2.7; the other three do not — **land it incrementally, as the item itself says** | M | — | ✅ | — |
 | **P3.5** | (a) cell-width-aware padding in `SplitLayout.php:238` / `AgentViewPane.php:112`; (b) restyle `Cli\Help::screen()` with `candy-kit` | (a) `src/Tui/SplitLayout.php`, `src/Tui/AgentViewPane.php` → **S**; (b) `src/Cli/Help.php` → **W** | **split S+W** | (b) **`sugarcraft/candy-kit` is NOT a dependency — §2.4** | S | (b) — | — | — |
 | **P4.6** | subcommands, `--config`, exit codes, `--output-format` validation | see §2.2 | **W** | **IN FLIGHT** | M | ✅ | — | ✅ |
@@ -233,10 +233,10 @@ by phase: 2→3, 3→4, 4→1, 6→6, 7→4, 8→9 = **27**. ✅
 
 ### 2.4 THE BLOCKER NEITHER `crush_code.md` NOR RESUME MENTIONS
 
-**`sugarcraft/candy-focus` and `sugarcraft/candy-kit` are not dependencies of `sugar-crush`.** Measured:
-`sugar-crush/composer.json` requires `candy-sprinkles` and `sugar-veil` among the SugarCraft siblings; <!-- @rename-keep historical provenance -->
-`sugar-crush/vendor/sugarcraft/` holds **16** entries and neither `candy-focus` nor `candy-kit` is one
-of them. Both libs exist in the monorepo (`candy-focus/src/FocusRing.php`, `candy-kit/src/Banner.php`
+**`sugarcraft/candy-focus` and `sugarcraft/candy-kit` are not dependencies of `sugar-crush`.** Measured: <!-- @rename-keep -->
+`sugar-crush/composer.json` requires `candy-sprinkles` and `sugar-veil` among the SugarCraft siblings;
+`sugar-crush/vendor/sugarcraft/` holds **16** entries and neither `candy-focus` nor `candy-kit` is one <!-- @rename-keep -->
+of them. Both libs exist in the monorepo (`candy-focus/src/FocusRing.php`, `candy-kit/src/Banner.php` <!-- @rename-keep -->
 /`HelpText.php`/`Logo.php`).
 
 So **P3.2 and P3.5(b) cannot be executed by an agent under the current rules**, because closing the gap
@@ -441,7 +441,7 @@ confirmed RCE counting as functionality and jumping the queue whenever a user re
    confirmation that closes an item beats a 3-hour bundle that reimplements one.
 5. Lane C: P6.1, P8.10, P8.11, then P8.8 (P8.8 last in C because it is the census-mover — §6.5).
 6. Lane S: P8.3 (small, and §2.5(a) means it is smaller than the plan thinks), P8.4, P3.5a. P3.2 only
-   after the supervisor has added `candy-focus` (§2.4).
+   after the supervisor has added `candy-focus` (§2.4). <!-- @rename-keep -->
 
 **Tier 3 — lane W, after P6.2, in this order and for these reasons**
 7. P6.3, P6.4, P6.6 — the settings consumers; small, and they make P6.2 real rather than decorative.

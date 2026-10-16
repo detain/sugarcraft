@@ -660,7 +660,7 @@ final class FocusRingTest extends TestCase
         );
 
         // The private disabled set may only name registered ids; a phantom entry
-        // makes the counts disagree with the id lists (crush_libs candy-focus #1).
+        // makes the counts disagree with the id lists (crush_libs sugar-focus #1).
         $disabledRef = new \ReflectionProperty(FocusRing::class, 'disabled');
         /** @var array<string, true> $disabledSet */
         $disabledSet = $disabledRef->getValue($ring);
@@ -743,7 +743,7 @@ final class FocusRingTest extends TestCase
     }
 
     /**
-     * Regression (crush_libs candy-focus #2): focus parked on a disabled region
+     * Regression (crush_libs sugar-focus #2): focus parked on a disabled region
      * with exactly one enabled region left must still be carried off by next().
      * The sole-enabled no-op guard used to fire first and strand the user on a
      * dimmed panel forever, contradicting the documented contract.
@@ -876,7 +876,7 @@ final class FocusRingTest extends TestCase
 
     // ─── reorder() × disabled set ──────────────────────────────────────────
 
-    /** Regression (crush_libs candy-focus #1): reorder() must not leak the flag of an id it drops. */
+    /** Regression (crush_libs sugar-focus #1): reorder() must not leak the flag of an id it drops. */
     public function testReorderDroppingDisabledIdLeavesNoPhantomFlag(): void
     {
         $ring = FocusRing::of('a', 'b', 'c')->disable('b')->reorder('a', 'c');
@@ -972,7 +972,7 @@ final class FocusRingTest extends TestCase
 
     // ─── numeric-string ids ────────────────────────────────────────────────
 
-    /** Regression (crush_libs candy-focus #4): PHP key coercion must not turn "1" into int(1). */
+    /** Regression (crush_libs sugar-focus #4): PHP key coercion must not turn "1" into int(1). */
     public function testJsonSerializeKeepsNumericStringDisabledIdsAsStrings(): void
     {
         $ring = FocusRing::of('0', '1', '2')->disable('1');
@@ -1016,7 +1016,7 @@ final class FocusRingTest extends TestCase
 
     // ─── Countable ─────────────────────────────────────────────────────────
 
-    /** Regression (crush_libs candy-focus #5): count($ring) must work, not throw a TypeError. */
+    /** Regression (crush_libs sugar-focus #5): count($ring) must work, not throw a TypeError. */
     public function testRingIsCountable(): void
     {
         $ring = FocusRing::of('a', 'b', 'c')->disable('b');

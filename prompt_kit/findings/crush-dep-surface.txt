@@ -140,7 +140,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
     - Region  x1
   src entry points: src/Cli/Bootstrap.php, src/App/App.php, src/Tui/Renderer.php, src/Tui/Pane.php, src/Tui/PaneDragController.php, src/Config/LayeredSettings.php
 
-=== candy-focus (SugarCraft\Focus) ===
+=== candy-focus (SugarCraft\Focus) === @rename-keep
   referencing files: 2  (src=1, tests=1, other=0)
   distinct symbols imported: 1
     - FocusRing  x1

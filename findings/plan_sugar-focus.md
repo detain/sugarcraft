@@ -6,11 +6,11 @@ updated: 2026-10-06
 
 > SUPERSEDED 2026-10-06 — all phases shipped (era commits 1253ba0d6 Phase-3 accessors/iterable/serialisable, da8201d6f incremental cache, 6e4af183b reorder/disabled fixes; crush_libs.md re-verify: all 10 findings implemented). Phase PENDING markers below are historical.
 
-# Implementation Plan: candy-focus
+# Implementation Plan: sugar-focus
 
 ## Goal
 
-Address all findings from the `candy-focus` code review — fixing code duplication, completing API symmetry, adding missing interface implementations, and clarifying misleading comments.
+Address all findings from the `sugar-focus` code review — fixing code duplication, completing API symmetry, adding missing interface implementations, and clarifying misleading comments.
 
 ## Context & Decisions
 
@@ -212,7 +212,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
   - **Tests:** Add `testJsonSerializeReturnsCorrectStructure`
 
 - [ ] **3.5 Add new methods to README API table**
-  - **File:** `candy-focus/README.md:68-81`
+  - **File:** `sugar-focus/README.md:68-81`
   - **What:** Add `disabledIds(): list<string>`, `enabledCount(): int`, `disabledCount(): int` to API table
   - **Why:** Documentation must reflect added methods
   - **Severity:** low
@@ -234,7 +234,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
 ## Phase 5: Final Verification [PENDING]
 
 - [ ] **5.1 Run full test suite**
-  - **Command:** `cd candy-focus && composer install && vendor/bin/phpunit`
+  - **Command:** `cd sugar-focus && composer install && vendor/bin/phpunit`
   - **Expected:** All 48 tests pass (104 assertions), plus any new tests added in Phases 1-4
   - **Success:** 100% pass rate
 
@@ -243,7 +243,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
   - **Success:** After Phase 1.1 fix, this test verifies the fix works
 
 - [ ] **5.3 Update CALIBER_LEARNINGS.md if needed**
-  - **File:** `candy-focus/CALIBER_LEARNINGS.md`
+  - **File:** `sugar-focus/CALIBER_LEARNINGS.md`
   - **What:** Add notes about new interface implementations if relevant to future maintainers
   - **Why:** Keep learning file current with implementation decisions
 
@@ -251,7 +251,7 @@ Address all findings from the `candy-focus` code review — fixing code duplicat
 
 ## Notes
 
-- **2026-06-30:** Plan created based on `findings/candy-focus.md` review with code investigation of `src/FocusRing.php`, `tests/FocusRingTest.php`, `CALIBER_LEARNINGS.md`, `composer.json`, and similar implementations (`candy-mdview/src/Pager.php`, `candy-vcr/src/Render/FrameStream.php`)
+- **2026-06-30:** Plan created based on `findings/sugar-focus.md` review with code investigation of `src/FocusRing.php`, `tests/FocusRingTest.php`, `CALIBER_LEARNINGS.md`, `composer.json`, and similar implementations (`candy-mdview/src/Pager.php`, `candy-vcr/src/Render/FrameStream.php`)
 - **Assertion in production:** The `assert()` at `src/FocusRing.php:38` runs in production (PHP 8+ default). For a TUI focus ring this is sub-microsecond overhead and acceptable. Document that production should set `zend.assertions=0` if profiling shows it matters.
 - **ArrayAccess not planned:** `ArrayAccess` support (`$ring['grid']`) was listed as lower-priority in findings (5.5). Not included in this plan — revisit if concrete use case arises.
 - **Phases 1 and 2 must be completed before Phase 3** because the refactoring in Phase 2 modifies `next()` and `previous()` which are used by the new features in Phase 3.
