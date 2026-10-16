@@ -12,7 +12,17 @@
 - R3 tool run exit 0: 74 files changed, 158 paths renamed, R1=38 R2=28 R3=958 R6=1
   (plan dry-run said 75/959 — the tagged baseline line correctly skipped). php -l 39/39 clean;
   zero identifier-position hyphen results.
-- R7 `sugar-datepicker: rename from sugar-calendar` (see git log for SHA).
+- c646c6322 `sugar-datepicker: rename from sugar-calendar` (235 files; renames.json
+  status=renamed; gen-docs re-run minted docs/lib/sugar-calendar.html redirect stub — 66 pages,
+  --check rc=0; residue 0 again post-stub).
+- 826ef8797 `rename: sugar-datepicker remote done` (pushed; split master 9aa7ecd at check time,
+  legacy refs lagging sync — noted per A2, no polling).
+- R9 packagist: create HTTP 202 clean (no old-name 406 — old registration had pre-crawled the
+  301'd repo), one forced `update sugar-datepicker` (202, job 8b0863ba) → dev-master =
+  38780923ed82bc876b0979604738fa8859a87908 == split master tip. Continuity full: master +
+  legacy/sugar-calendar + sugar-calendar-final (9aa7ecd). Abandon-checklist line appended.
+  NOTE: first create attempt 406'd "invalid username/apiToken" — brief's token literal arrived
+  env-scrubbed (4th offense family); resumed with owner-supplied split-var assembly.
 
 ## R4 followups
 - README: formerly-notice + namespace-change rows under H1 (both @rename-keep). Also fixed a
