@@ -1,6 +1,6 @@
-# Step 10.18 — sugar-tick CSV/JSON export + tags + .sugartrackignore + gaps detection
+# Step 10.18 — candy-codetime CSV/JSON export + tags + .sugartrackignore + gaps detection
 
-**Source:** `leftover_updates_later.md` sugar-tick HIGH
+**Source:** `leftover_updates_later.md` candy-codetime HIGH
 **Branch:** `ai/tick-export-tags-ignore-gaps`
 
 ## Deliverable
@@ -12,9 +12,9 @@
 
 ## Files
 
-**Modify:** `sugar-tick/src/Tracker.php`, `Heartbeat.php`.
+**Modify:** `candy-codetime/src/Tracker.php`, `Heartbeat.php`.
 
-**Create:** `sugar-tick/src/Export/{CsvExporter,JsonExporter}.php`,
+**Create:** `candy-codetime/src/Export/{CsvExporter,JsonExporter}.php`,
 `Ignore/SugarTrackIgnore.php`, `Report/GapsReport.php`.
 
 ## Tests
@@ -23,7 +23,7 @@
 
 ## Acceptance
 
-- `cd sugar-tick && vendor/bin/phpunit` green.
+- `cd candy-codetime && vendor/bin/phpunit` green.
 
 ---
 

@@ -1,0 +1,278 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-codetime: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\LegacyEnv;
+use SugarCraft\Core\Util\LegacyPaths;
+use SugarCraft\CodeTime\Backup\AutoBackup;
+use SugarCraft\CodeTime\Dashboard;
+use SugarCraft\CodeTime\Export\CsvExporter;
+use SugarCraft\CodeTime\Export\IcalExporter;
+use SugarCraft\CodeTime\Export\JsonExporter;
+use SugarCraft\CodeTime\Heartbeat;
+use SugarCraft\CodeTime\Ignore\SugarTrackIgnore;
+use SugarCraft\CodeTime\Lang;
+use SugarCraft\CodeTime\Report\GapsReport;
+use SugarCraft\CodeTime\Storage\SqliteBackend;
+use SugarCraft\CodeTime\Store;
+
+// Pre-rename compatibility (plan_rename.md R4.4/R4.5, sugar-tick -> // @rename-keep
+// candy-codetime): import any old-prefix env exports under the new name first
+// (new name always wins), then move a pre-existing default data directory.
+// The migration is skipped when CANDY_CODETIME_DIR is set — an explicit
+// directory is the user's choice, and neither we nor the test suite should
+// relocate the ambient default dir under it.
+foreach (LegacyEnv::import([
+    'SUGARTICK_' => 'CANDY_CODETIME_', // @rename-keep
+]) as $legacyVar) {
+    fwrite(STDERR, sprintf("candy-codetime: %s is deprecated; set CANDY_CODETIME_DIR instead.\n", $legacyVar));
+}
+if (getenv('CANDY_CODETIME_DIR') === false) {
+    $dataBase = (static function (): string {
+        $xdg = getenv('XDG_DATA_HOME');
+        if ($xdg !== false && $xdg !== '') {
+            return rtrim($xdg, '/');
+        }
+
+        return rtrim(getenv('HOME') ?: '.', '/') . '/.local/share';
+    })();
+    $moved = LegacyPaths::migrate($dataBase . '/sugar-tick', $dataBase . '/candy-codetime'); // @rename-keep
+    if ($moved !== null) {
+        fwrite(STDERR, "candy-codetime: {$moved}\n");
+    }
+}
+
+$argv = $argv ?? [];
+
+// Pull the global `--backend=<file|sqlite>` option out of argv so it can appear
+// anywhere on the command line; everything else stays positional.
+$backend = 'file';
+$positional = [];
+foreach (array_slice($argv, 1) as $arg) {
+    if (str_starts_with($arg, '--backend=')) {
+        $backend = substr($arg, strlen('--backend='));
+        continue;
+    }
+    $positional[] = $arg;
+}
+if (!in_array($backend, ['file', 'sqlite'], true)) {
+    fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
+    exit(1);
+}
+
+$cmd = $positional[0] ?? 'dashboard';
+
+$store = new Store(getenv('CANDY_CODETIME_DIR') ?: Store::defaultDir());
+$dbPath = $store->dir . '/candy-codetime.db';
+
+// Lazily open the SQLite backend, ensuring the data dir exists first and failing
+// loudly (rather than fataling) when the sqlite3 extension is absent.
+$sqlite = static function () use ($store, $dbPath): SqliteBackend {
+    if (!extension_loaded('sqlite3')) {
+        fwrite(STDERR, Lang::t('cli.backend_unavailable') . "\n");
+        exit(1);
+    }
+    if (!is_dir($store->dir)) {
+        @mkdir($store->dir, 0755, true);
+    }
+    return new SqliteBackend($dbPath);
+};
+
+// Show usage for help flags or unknown commands
+if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {
+    fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+    exit(0);
+}
+
+if ($cmd === 'push') {
+    // candy-codetime push <project> <language> <file> [duration]
+    $project  = $positional[1] ?? null;
+    $language = $positional[2] ?? null;
+    $file     = $positional[3] ?? null;
+    if ($project === null || $language === null || $file === null) {
+        fwrite(STDERR, Lang::t('cli.push_missing_args') . "\n");
+        fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
+        exit(1);
+    }
+
+    // Honour a `.sugartrackignore` (from the current dir or the tracked file's
+    // dir) so opted-out paths never make it into the activity log.
+    $ignore = new SugarTrackIgnore([]);
+    $cwd = getcwd();
+    $candidates = [];
+    if ($cwd !== false) {
+        $candidates[] = $cwd . '/.sugartrackignore';
+    }
+    $candidates[] = dirname($file) . '/.sugartrackignore';
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            $ignore = SugarTrackIgnore::load($candidate);
+            break;
+        }
+    }
+    if ($ignore->isIgnored($file)) {
+        fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => $file]) . "\n");
+        exit(0);
+    }
+
+    $duration = (int)($positional[4] ?? 60);
+    $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
+    $hb = new Heartbeat(time(), $project, $language, $file, $duration);
+    if ($backend === 'sqlite') {
+        $sqlite()->insert($hb);
+    } else {
+        $store->append($hb);
+    }
+    fwrite(STDOUT, Lang::t('cli.tick_pushed', [
+        'project'  => $project,
+        'language' => $language,
+        'duration' => $duration,
+    ]) . "\n");
+    exit(0);
+}
+
+if ($cmd === 'milestone') {
+    // candy-codetime milestone <add|list> [name] [description]
+    // Milestones live only in the SQLite backend.
+    $sub = $positional[1] ?? null;
+
+    if ($sub === 'add') {
+        $name = $positional[2] ?? null;
+        if ($name === null) {
+            fwrite(STDERR, Lang::t('cli.milestone_missing_args') . "\n");
+            fwrite(STDERR, Lang::t('cli.milestone_usage') . "\n");
+            exit(1);
+        }
+        $description = (string)($positional[3] ?? '');
+        $sqlite()->insertMilestone($name, time(), $description);
+        fwrite(STDOUT, Lang::t('cli.milestone_added', ['name' => $name]) . "\n");
+        exit(0);
+    }
+
+    if ($sub === 'list') {
+        $milestones = $sqlite()->milestones();
+        if ($milestones === []) {
+            fwrite(STDOUT, Lang::t('cli.milestone_list_empty') . "\n");
+            exit(0);
+        }
+        fwrite(STDOUT, Lang::t('cli.milestone_list_header') . "\n");
+        foreach ($milestones as $m) {
+            fwrite(STDOUT, Lang::t('cli.milestone_entry', [
+                'date'        => date('Y-m-d', $m->time),
+                'name'        => $m->name,
+                'description' => $m->description,
+            ]) . "\n");
+        }
+        exit(0);
+    }
+
+    fwrite(STDERR, Lang::t('cli.milestone_usage') . "\n");
+    exit(1);
+}
+
+if ($cmd === 'export') {
+    $format = $positional[1] ?? null;
+    // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
+    $days = isset($positional[2]) ? Store::clampRangeDays((int)$positional[2]) : 7;
+
+    if ($format === null || !in_array($format, ['csv', 'json', 'ics'], true)) {
+        fwrite(STDERR, Lang::t('cli.export_invalid_format') . "\n");
+        fwrite(STDERR, Lang::t('cli.export_usage') . "\n");
+        exit(1);
+    }
+
+    $endDay = new \DateTimeImmutable('today');
+    $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
+    $beats = $backend === 'sqlite'
+        ? $sqlite()->query(
+            (int) $fromDay->setTime(0, 0)->getTimestamp(),
+            (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+        )
+        : $store->loadRange($fromDay, $endDay);
+
+    $exporter = match ($format) {
+        'csv' => new CsvExporter(),
+        'json' => new JsonExporter(),
+        'ics' => new IcalExporter(),
+    };
+    fwrite(STDOUT, $exporter->export('candy-codetime', $beats));
+    exit(0);
+}
+
+if ($cmd === 'gaps') {
+    // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
+    $days = isset($positional[1]) ? Store::clampRangeDays((int)$positional[1]) : 7;
+
+    $endDay = new \DateTimeImmutable('today');
+    $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
+    $beats = $backend === 'sqlite'
+        ? $sqlite()->query(
+            (int) $fromDay->setTime(0, 0)->getTimestamp(),
+            (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+        )
+        : $store->loadRange($fromDay, $endDay);
+
+    $report = new GapsReport($beats);
+    $gaps = $report->gaps();
+
+    if ($gaps === []) {
+        fwrite(STDOUT, Lang::t('cli.gaps_no_data') . "\n");
+        exit(0);
+    }
+
+    fwrite(STDOUT, Lang::t('cli.gaps_header') . "\n");
+    foreach ($gaps as $gap) {
+        $start = date('M j H:i', $gap['start']);
+        $end = date('H:i', $gap['end']);
+        fwrite(STDOUT, Lang::t('cli.gaps_entry', [
+            'start' => $start,
+            'end' => $end,
+            'seconds' => $gap['gapSeconds'],
+        ]) . "\n");
+    }
+    exit(0);
+}
+
+if ($cmd === 'backup') {
+    $dataDir = $store->dir;
+    $backupDir = $dataDir . '-backups';
+    $autoBackup = new AutoBackup($backupDir, [$dataDir]);
+    try {
+        $count = $autoBackup->rotate(30);
+    } catch (\RuntimeException $e) {
+        // rotate() now throws on mkdir/copy failure rather than losing data
+        // silently — surface it to the user with a non-zero exit.
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
+    }
+    if ($count > 0) {
+        fwrite(STDOUT, Lang::t('cli.backup_done', ['count' => $count]) . "\n");
+    } else {
+        fwrite(STDOUT, Lang::t('cli.backup_none') . "\n");
+    }
+    exit(0);
+}
+
+// Unknown command - show usage
+if ($cmd !== 'dashboard') {
+    fwrite(STDERR, "Unknown command: {$cmd}\n");
+    fwrite(STDERR, Lang::t('cli.usage') . "\n");
+    exit(1);
+}
+
+(new Program(Dashboard::start($store), new ProgramOptions(useAltScreen: true)))->run();

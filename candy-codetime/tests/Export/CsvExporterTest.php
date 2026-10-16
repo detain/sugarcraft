@@ -1,0 +1,106 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\CodeTime\Tests\Export;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Export\CsvExporter;
+use SugarCraft\CodeTime\Heartbeat;
+
+final class CsvExporterTest extends TestCase
+{
+    private CsvExporter $exporter;
+
+    protected function setUp(): void
+    {
+        $this->exporter = new CsvExporter();
+    }
+
+    public function testHeaders(): void
+    {
+        $this->assertSame(['time', 'project', 'language', 'file', 'duration', 'tags'], $this->exporter->headers());
+    }
+
+    public function testRowsEmptyList(): void
+    {
+        $this->assertSame([], $this->exporter->rows([]));
+    }
+
+    public function testRowsSingleHeartbeat(): void
+    {
+        $hb = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60);
+        $rows = $this->exporter->rows([$hb]);
+        $this->assertCount(1, $rows);
+        $this->assertSame([1700000000, 'demo', 'php', 'a.php', 60, ''], $rows[0]);
+    }
+
+    public function testRowsWithTags(): void
+    {
+        $hb = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['refactoring', 'feature']);
+        $rows = $this->exporter->rows([$hb]);
+        $this->assertSame([1700000000, 'demo', 'php', 'a.php', 60, 'refactoring,feature'], $rows[0]);
+    }
+
+    public function testRowsMultipleHeartbeats(): void
+    {
+        $hb1 = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['tag1']);
+        $hb2 = new Heartbeat(time: 1700000060, project: 'demo', language: 'php', file: 'b.php', duration: 120, tags: []);
+        $rows = $this->exporter->rows([$hb1, $hb2]);
+        $this->assertCount(2, $rows);
+        $this->assertSame([1700000000, 'demo', 'php', 'a.php', 60, 'tag1'], $rows[0]);
+        $this->assertSame([1700000060, 'demo', 'php', 'b.php', 120, ''], $rows[1]);
+    }
+
+    public function testFormat(): void
+    {
+        $this->assertSame('csv', $this->exporter->format());
+    }
+
+    public function testContentType(): void
+    {
+        $this->assertSame('text/csv', $this->exporter->contentType());
+    }
+
+    public function testFormulaInjectionIsNeutralized(): void
+    {
+        // Mirrors CsvExporter::safeCell() formula injection neutralization
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: '=cmd', language: '+alias', file: '-hack', duration: 60),
+        ];
+
+        $rows = $this->exporter->rows($hbs);
+
+        // Formula prefixes should be neutralized with leading quote
+        $this->assertSame("'=cmd", $rows[0][1]);
+        $this->assertSame("'+alias", $rows[0][2]);
+        $this->assertSame("'-hack", $rows[0][3]);
+    }
+
+    public function testCommaAndQuoteAreQuoted(): void
+    {
+        // Test that encode() produces RFC-4180 compliant CSV with proper quoting
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: 'has,comma', language: 'has"quote', file: 'normal', duration: 60),
+        ];
+
+        $csv = $this->exporter->encode($hbs);
+
+        // The CSV output should contain the properly quoted field
+        // fputcsv quotes fields containing commas, so we should see "has,comma" in quotes
+        $this->assertStringContainsString('"has,comma"', $csv);
+    }
+
+    public function testCarriageReturnPrefixIsNeutralized(): void
+    {
+        // Mirrors CsvExporter::safeCell() \r prefix neutralization
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: "project", language: "php", file: "\rand-clean.php", duration: 60),
+        ];
+
+        $rows = $this->exporter->rows($hbs);
+
+        // Lines starting with \r should be neutralized with leading quote
+        $this->assertSame("'\rand-clean.php", $rows[0][3]);
+    }
+}

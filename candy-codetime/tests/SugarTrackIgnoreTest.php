@@ -1,0 +1,134 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\CodeTime\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Ignore\SugarTrackIgnore;
+
+final class SugarTrackIgnoreTest extends TestCase
+{
+    private string $tmpDir;
+    private string $tmpFile;
+
+    protected function setUp(): void
+    {
+        $this->tmpDir = sys_get_temp_dir() . '/candy-codetime-ignore-test-' . uniqid();
+        mkdir($this->tmpDir, 0755, true);
+        $this->tmpFile = $this->tmpDir . '/.sugartrackignore';
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_dir($this->tmpDir)) {
+            $files = scandir($this->tmpDir);
+            foreach ($files as $file) {
+                if ($file !== '.' && $file !== '..') {
+                    unlink($this->tmpDir . '/' . $file);
+                }
+            }
+            rmdir($this->tmpDir);
+        }
+    }
+
+    public function testLoadReturnsEmptyForMissingFile(): void
+    {
+        $ignore = SugarTrackIgnore::load('/nonexistent/path/.sugartrackignore');
+        $this->assertFalse($ignore->isIgnored('any/file.php'));
+    }
+
+    public function testLoadIgnoresComments(): void
+    {
+        file_put_contents($this->tmpFile, "# This is a comment\n*.log\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertFalse($ignore->isIgnored('README.md'));
+        $this->assertTrue($ignore->isIgnored('debug.log'));
+    }
+
+    public function testLoadIgnoresEmptyLines(): void
+    {
+        file_put_contents($this->tmpFile, "\n\n*.log\n\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->isIgnored('debug.log'));
+    }
+
+    public function testIsIgnoredByBasename(): void
+    {
+        file_put_contents($this->tmpFile, "*.log\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->isIgnored('debug.log'));
+        $this->assertFalse($ignore->isIgnored('debug.txt'));
+    }
+
+    public function testIsIgnoredByFullPath(): void
+    {
+        file_put_contents($this->tmpFile, "vendor/*\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->isIgnored('vendor/autoload.php'));
+        $this->assertFalse($ignore->isIgnored('src/main.php'));
+    }
+
+    public function testIsIgnoredByFullPathPrefix(): void
+    {
+        file_put_contents($this->tmpFile, "/full/path/to/file\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->isIgnored('/full/path/to/file'));
+        $this->assertFalse($ignore->isIgnored('/other/path/to/file'));
+    }
+
+    public function testIsIgnoredMultiplePatterns(): void
+    {
+        file_put_contents($this->tmpFile, "*.log\nvendor/*\n*.tmp\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->isIgnored('debug.log'));
+        $this->assertTrue($ignore->isIgnored('vendor/autoload.php'));
+        $this->assertTrue($ignore->isIgnored('cache.tmp'));
+        $this->assertFalse($ignore->isIgnored('main.php'));
+    }
+
+    public function testLeadingWhitespacePatternMatches(): void
+    {
+        // Mirrors SugarTrackIgnore::load() trim before pattern matching
+        file_put_contents($this->tmpFile, "  *.log\n  vendor/*\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+
+        // Leading whitespace should be trimmed so patterns match correctly
+        $this->assertTrue($ignore->isIgnored('foo.log'));
+        $this->assertTrue($ignore->isIgnored('vendor/autoload.php'));
+    }
+
+    public function testIndentedCommentIgnored(): void
+    {
+        // Mirrors SugarTrackIgnore::load() trim before comment detection
+        file_put_contents($this->tmpFile, "   # this is a comment\n*.log\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+
+        // Indented comment should still be recognized as comment and ignored
+        $this->assertFalse($ignore->isIgnored('# this is a comment'));  // comment itself not a pattern
+        $this->assertTrue($ignore->isIgnored('debug.log'));  // *.log still works
+    }
+
+    public function testLoadReturnsEmptyWhenFileCannotBeRead(): void
+    {
+        // Create a file that exists but cannot be read (permission denied)
+        $unreadable = $this->tmpDir . '/unreadable.ignore';
+        file_put_contents($unreadable, "*.log\n");
+        chmod($unreadable, 0000);
+
+        try {
+            // file() returns false when it cannot read the file, resulting in empty patterns
+            // Suppress the expected E_WARNING from file() failing to open unreadable file
+            set_error_handler(static fn (): bool => true);
+            try {
+                $ignore = SugarTrackIgnore::load($unreadable);
+                $this->assertFalse($ignore->isIgnored('debug.log'));
+                $this->assertFalse($ignore->isIgnored('any/file.php'));
+            } finally {
+                restore_error_handler();
+            }
+        } finally {
+            chmod($unreadable, 0644);
+        }
+    }
+}

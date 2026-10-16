@@ -39,7 +39,7 @@ The 8 shared packages:
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
 | Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
-| Step 35 | sugar-tick, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
+| Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
 
@@ -175,7 +175,7 @@ The 8 shared packages:
 
 ---
 
-### sugar-tick
+### candy-codetime
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -183,7 +183,7 @@ The 8 shared packages:
 | candy-async | Heartbeat.php uses Timer loops for background ping — CancellationToken would simplify worker cancellation | M |
 | candy-testing | Renderer.php lacks golden tests — assertGoldenAnsi would pin dashboard ANSI output | S |
 
-**Notes:** sugar-tick is a time-tracking tool with a dashboard. Background heartbeat workers use manual timer loops; candy-async would provide structured cancellation. Dashboard rendering is a good candidate for Buffer-based diff.
+**Notes:** candy-codetime is a time-tracking tool with a dashboard. Background heartbeat workers use manual timer loops; candy-async would provide structured cancellation. Dashboard rendering is a good candidate for Buffer-based diff.
 
 ---
 
@@ -298,8 +298,8 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---
 

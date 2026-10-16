@@ -133,7 +133,7 @@ interface Model
 - `sugar-crush/src/Chat.php`
 - `sugar-reel/src/Player.php`
 - `candy-git/src/App.php`
-- `sugar-tick/src/Dashboard.php`
+- `candy-codetime/src/Dashboard.php`
 - `candy-mdview/src/MdViewModel.php`
 - `sugar-dash/src/Modules/*` (multiple)
 

@@ -505,7 +505,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - JSON output format `reportAsJson()` (P4).
 - Incremental/streaming parser `StreamingInspector` (P5).
 
-### sugar-tick
+### candy-codetime
 
 - CSV/JSON export (HIGH).
 - Tags on Heartbeat (HIGH).
