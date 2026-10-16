@@ -112,17 +112,17 @@ SugarCraft does not have a direct email-sending library. Pop maps to several Sug
 
 | pop feature | SugarCraft lib | Notes |
 |---|---|---|
-| TUI form with sequential field navigation (`textinput`, `textarea`, `list`) | `candy-forms` | The `Prompt` model with its multi-step keybinding flow and `with*()` state building is the closest structural match |
+| TUI form with sequential field navigation (`textinput`, `textarea`, `list`) | `sugar-forms` | The `Prompt` model with its multi-step keybinding flow and `with*()` state building is the closest structural match |
 | Bubble Tea `Model` with `State` enum and `Update`/`View` | `sugar-widgets` / `candy-core` | The Model/init/update/view pattern mirrors SugarCraft's `Model` TUI contract |
 | Lipgloss styling (`activeLabelStyle`, `textStyle`, etc.) | `sugar-shine` | Both use lipgloss for terminal color/style; `Shine` is the styling utility lib |
 | File picker for attachments | `sugar-widgets` | If `sugar-widgets` has filepicker-like `List`/`Delegate` patterns, those would be relevant |
 | Markdown → ANSI rendering (goldmark → SGR bytes) | `sugar-widgets` (via `candy-shine` ANSI rendering) | Snapshot-testing the raw SGR output matches the `view()` testing approach in `candy-core` tests |
-| Keymap struct with `key.Binding` fields | `candy-forms` or `candy-core` | Keybinding patterns with `WithKeys`, `WithHelp`, `SetEnabled` are directly reusable |
+| Keymap struct with `key.Binding` fields | `sugar-forms` or `candy-core` | Keybinding patterns with `WithKeys`, `WithHelp`, `SetEnabled` are directly reusable |
 | CLI flag parsing (Cobra) | N/A | SugarCraft libs don't expose CLI layer; this is app-level only |
 | Email sending (SMTP/Resend API) | N/A | No SugarCraft lib for network/email; would be net-new |
 
 **Summary:** Pop is primarily an application, not a library. The most useful SugarCraft ports would be:
-- **`candy-forms`** — for its sequential form-input TUI pattern
+- **`sugar-forms`** — for its sequential form-input TUI pattern
 - **`sugar-widgets`** — for the `textinput`/`textarea`/`list` Bubble Tea component wrappers and snapshot testing
 - **`sugar-shine`** — if it wraps `lipgloss` for reusable styling patterns
 
@@ -138,4 +138,4 @@ The state machine in `model.go` is the operational core. The `State` enum (`edit
 
 The delivery abstraction is clean and extensible. `DeliveryMethod` is a simple enum with four values, and `sendEmailCmd()` dispatches to either `sendSMTPEmail()` or `sendResendEmail()` at runtime. The Gmail smart-defaults in `sendSMTPEmail()` (auto-filling `smtp.gmail.com:587` when the username ends in `@gmail.com`) show thoughtful UX engineering — the most common SMTP configuration is zero-configuration for Gmail users. The `goldmark` Markdown→HTML conversion is a nice touch that makes the TUI body textarea feel natural to use; users can write Markdown and the email is sent as formatted HTML with a plain-text fallback.
 
-From a SugarCraft perspective, pop's TUI architecture maps well to the `candy-forms` and `sugar-widgets` components. The sequential-field navigation with `Tab`/`Shift+Tab` is structurally similar to how `Prompt` walks through steps. The `lipgloss` styling approach is directly parallel to `sugar-shine`. However, pop's core value proposition — actual email delivery via SMTP and the Resend API — has no SugarCraft equivalent and would require a net-new `sugar-mail` or similar library. The Bubble Tea patterns themselves (state machine, sub-model composition, keybinding context-sensitivity) are the most portable part and would translate cleanly to PHP-FFI-wrapped Bubble Tea or a native PHP TUI implementation following the SugarCraft immutable + fluent model pattern.
+From a SugarCraft perspective, pop's TUI architecture maps well to the `sugar-forms` and `sugar-widgets` components. The sequential-field navigation with `Tab`/`Shift+Tab` is structurally similar to how `Prompt` walks through steps. The `lipgloss` styling approach is directly parallel to `sugar-shine`. However, pop's core value proposition — actual email delivery via SMTP and the Resend API — has no SugarCraft equivalent and would require a net-new `sugar-mail` or similar library. The Bubble Tea patterns themselves (state machine, sub-model composition, keybinding context-sensitivity) are the most portable part and would translate cleanly to PHP-FFI-wrapped Bubble Tea or a native PHP TUI implementation following the SugarCraft immutable + fluent model pattern.

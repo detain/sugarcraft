@@ -2,7 +2,7 @@
 
 ## Overview
 
-**sugar-widgets** is a mature PHP port of `charmbracelet/bubbles` providing 15+ pre-built TUI components for the SugarCraft monorepo. The library occupies a critical position as the primary component layer (`SugarCraft\Widgets`) built on foundational libraries (`candy-core`, `candy-forms`, `candy-sprinkles`). The biggest opportunity is filling the fuzzy filtering gap (ranked matches with character indices), adding a FlexBox layout system (per `76creates/stickers`), and implementing the missing half-block color blending for high-resolution progress bars. The library correctly uses a stratified alias pattern where simple wrappers re-export from `candy-forms` while keeping original implementations for Table, Tree, Tabs, and other leaf components.
+**sugar-widgets** is a mature PHP port of `charmbracelet/bubbles` providing 15+ pre-built TUI components for the SugarCraft monorepo. The library occupies a critical position as the primary component layer (`SugarCraft\Widgets`) built on foundational libraries (`candy-core`, `sugar-forms`, `candy-sprinkles`). The biggest opportunity is filling the fuzzy filtering gap (ranked matches with character indices), adding a FlexBox layout system (per `76creates/stickers`), and implementing the missing half-block color blending for high-resolution progress bars. The library correctly uses a stratified alias pattern where simple wrappers re-export from `sugar-forms` while keeping original implementations for Table, Tree, Tabs, and other leaf components.
 
 ## Internal Capability Summary
 
@@ -10,7 +10,7 @@
 
 The library uses a **stratified alias pattern**:
 
-- **Aliases** (from `candy-forms`): `TextInput`, `ItemList`, `Viewport`, `FilePicker`, `Spinner`, `Cursor`, `TextArea`, `Scrollbar`
+- **Aliases** (from `sugar-forms`): `TextInput`, `ItemList`, `Viewport`, `FilePicker`, `Spinner`, `Cursor`, `TextArea`, `Scrollbar`
 - **Original implementations**: `Table` (720 lines), `Tree` (364 lines), `Tabs` (602 lines), `Help` (311 lines), `Paginator` (225 lines), `Timer` (177 lines), `Stopwatch` (141 lines), `Progress` (434 lines), `AnimatedProgress`, `Key\Binding`
 
 ### Core Components
@@ -475,7 +475,7 @@ The `p-gen/smenu` C library uses a Ternary Search Tree for indexing words, enabl
 
 ## Final Strategic Assessment
 
-**sugar-widgets** is a well-structured, mature PHP port that successfully provides 15+ TUI components for the SugarCraft ecosystem. The stratified alias pattern (re-exporting from candy-forms while keeping original implementations for complex leaf components) demonstrates sound architectural judgment. The library's SugarCraft-specific enhancements — per-cell `styleFunc`, vim mode for TextInput, ValidateOn timing control, and zone-based mouse for Tabs — show it is not merely a passive port but an active improvement over upstream.
+**sugar-widgets** is a well-structured, mature PHP port that successfully provides 15+ TUI components for the SugarCraft ecosystem. The stratified alias pattern (re-exporting from sugar-forms while keeping original implementations for complex leaf components) demonstrates sound architectural judgment. The library's SugarCraft-specific enhancements — per-cell `styleFunc`, vim mode for TextInput, ValidateOn timing control, and zone-based mouse for Tabs — show it is not merely a passive port but an active improvement over upstream.
 
 The most significant gaps are **fuzzy filtering** and **FlexBox layout**. Fuzzy filtering using simple substring match puts sugar-widgets behind upstream bubbles, pterm, and promptkit. The FlexBox absence means complex dashboard UIs must be built manually, a significant limitation. Both gaps are addressable: fuzzy filtering via a PHP fuzzy library implementation, FlexBox via careful port of the ratio distribution algorithms from stickers.
 

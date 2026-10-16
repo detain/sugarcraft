@@ -2,7 +2,7 @@
 
 **sugar-navstack** is a PHP port of KevM/bubbleo providing NavStack (navigation stack) and Breadcrumb components for terminal UIs. It is a focused, framework-agnostic library (~370 lines of core source across 8 files) that produces pure string output, making it usable with any TUI framework. The library is 🟢 v1 ready with comprehensive test coverage (678+ lines across 6 test files).
 
-**Biggest opportunity areas:** Integration with the broader SugarCraft ecosystem (candy-core for message-driven patterns, candy-sprinkles for styling, candy-forms for selection dialogs), fuzzy filtering matching the quality of `sahilm/fuzzy`, and modal/overlay compositing for stacked navigation.
+**Biggest opportunity areas:** Integration with the broader SugarCraft ecosystem (candy-core for message-driven patterns, candy-sprinkles for styling, sugar-forms for selection dialogs), fuzzy filtering matching the quality of `sahilm/fuzzy`, and modal/overlay compositing for stacked navigation.
 
 **Biggest missing capabilities:** No message-driven navigation equivalent to bubbleo's `PushNavigation`/`PopNavigation` tea.Msg pattern; no animation/transition support; no built-in back-button/keybinding infrastructure; no fuzzy filtering with ranking/scoring.
 
@@ -423,7 +423,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Register as a standard navigation component in candy-core
    - Document message types for PushNavigation/PopNavigation
 
-2. **sugar-navstack → candy-forms integration**
+2. **sugar-navstack → sugar-forms integration**
    - Menu component for selection-driven navigation
    - `Selection` prompt → push selected item onto Shell
 

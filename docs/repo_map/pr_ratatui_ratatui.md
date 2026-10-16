@@ -46,7 +46,7 @@ From `repo_map/ratatui_ratatui.md`, SugarCraft maps to Ratatui as follows:
 | ratatui-widgets (Block, Paragraph, List, Table, Chart, Gauge, etc.) | sugar-widgets |
 | ratatui-crossterm backend | candy-scriptui |
 | Layout + Cassowary constraints | candy-shine |
-| Stylize trait | candy-forms |
+| Stylize trait | sugar-forms |
 | ratatui-macros | sugar-widgets (likely) |
 | Terminal::draw + Frame pattern | candy-core (Model) |
 | StatefulWidget + State types | candy-core (State) |
@@ -951,7 +951,7 @@ impl Component {
 ```
 candy-core (stable)
   ↓ depend
-sugar-widgets, candy-scriptui, candy-shine, candy-forms
+sugar-widgets, candy-scriptui, candy-shine, sugar-forms
   ↓ depend
 sugar-* (user-facing components)
 ```

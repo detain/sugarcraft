@@ -8,7 +8,7 @@ use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Forms\TextArea\TextArea;
 
 /**
- * SQL-editor slice of the {@see \SugarCraft\Sql\App} model: the candy-forms
+ * SQL-editor slice of the {@see \SugarCraft\Sql\App} model: the sugar-forms
  * TextArea plus executed-query history and favorites. Grouped out of App's
  * constructor per plan 3.3.
  */
@@ -17,7 +17,7 @@ final class QueryState
     use Mutable;
 
     /**
-     * @param TextArea|null $editor Multi-line SQL editor widget (candy-forms);
+     * @param TextArea|null $editor Multi-line SQL editor widget (sugar-forms);
      *        null until the Query pane is first focused (see App::editor()).
      * @param list<string> $history Recently executed queries (newest first)
      * @param list<string> $favorites Saved/favorited queries

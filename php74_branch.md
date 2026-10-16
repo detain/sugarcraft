@@ -397,7 +397,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   core+pty+sprinkles; **WeakMap→SplObjectStorage**).
 
 ### Phase 4 — Components
-- **4.1** `candy-forms`(48,med, async+buffer+core+fuzzy+layout+sprinkles) → **4.1a** `Field/` (8),
+- **4.1** `sugar-forms`(48,med, async+buffer+core+fuzzy+layout+sprinkles) → **4.1a** `Field/` (8),
   **4.1b** `Validator/` (6), **4.1c** `TextInput/Spinner/ItemList/FilePicker/Cursor` (≈16 → a/b),
   **4.1d** `Vim/Viewport/TextArea/Scrollbar`+root (≈18 → a/b).
 - **4.2** `sugar-quickpick`(7,med, ansi+pty+sprinkles), `candy-codeshot`(10,high,
@@ -417,8 +417,8 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **5.2** `sugar-panels`(3,low), `sugar-datepicker`(6,low), `sugar-navstack`(8,low),
   `candy-kv`(8,med), `candy-ansi-inspect`(8,med), `sugar-flexbox`(7,med), `candy-ssh-launcher`(6,med),
   `candy-mail`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
-  `sugar-veil`(7,high) — one step each (all small), in dependency order. <!-- @rename-keep historical provenance -->
-- **5.3** `candy-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
+  `sugar-veil`(7,high) — one step each (all small), in dependency order.
+- **5.3** `sugar-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
 - **5.4** `candy-mdview`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →
   a/b), `sugar-crush`(20,high, buffer+core+shine+sprinkles; attributes, MCP) → a/b.
@@ -500,7 +500,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-async | medium | 8 | ctor-promotion, mixed, named-args, readonly-class, union; react |
 | candy-buffer | medium | 17 | ctor-promotion, nullsafe, readonly, union |
 | candy-flip | medium | 9 | WeakMap, ctor-promotion, named-args, readonly |
-| candy-forms | medium | 48 | backed-enum, ctor-promotion, match, non-capturing-catch, nullsafe |
+| sugar-forms | medium | 48 | backed-enum, ctor-promotion, match, non-capturing-catch, nullsafe |
 | sugar-quickpick | medium | 7 | ctor-promotion, first-class-callable, readonly-class |
 | candy-kit | medium | 7 | ctor-promotion, named-args, ??=, readonly, union |
 | sugar-treelist | medium | 10 | enum, match, nullsafe, php8-strfn, readonly |
@@ -531,7 +531,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-panels | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |
 | sugar-datepicker | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |
 | sugar-navstack | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |
-| candy-forms | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
+| sugar-forms | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
 
 *`candy-ansi` fiber appears in audit; confirm at step time — may be a feature‑detected path.*
 

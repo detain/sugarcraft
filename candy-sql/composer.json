@@ -33,7 +33,7 @@
         "php": ">=8.3",
         "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/candy-kit": "dev-master",
         "sugarcraft/candy-layout": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",

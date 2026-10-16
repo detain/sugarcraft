@@ -138,7 +138,7 @@ This is an LFS transfer server — it has **no direct equivalent** in SugarCraft
 | `VerifyingReader` integrity check | `candy-core` (data integrity) | End-to-end verification |
 | `LocalBackend` storage | `sugar-charts` (data backend) | Backend abstraction pattern |
 | `LockBackend` / `Lock` | `candy-shine` (state management) | Distributed state coordination |
-| Protocol state machine | `candy-forms` (readline state) | State-driven command processing |
+| Protocol state machine | `sugar-forms` (readline state) | State-driven command processing |
 | File-based lock atomicity | `candy-core` (atomic ops) | Ensuring consistent state |
 
 **Primary mapping**: `candy-core` for buffered I/O and data integrity primitives (VerifyingReader pattern → immutable stream processing). The `transfer.Backend` interface abstraction maps to `sugar-charts` data backend pattern.

@@ -47,7 +47,7 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-flip": "dev-master",
         "sugarcraft/candy-focus": "dev-master",
-        "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/candy-codeshot": "dev-master",
         "sugarcraft/candy-fuzzy": "dev-master",
         "sugarcraft/candy-gifview": "dev-master",
@@ -146,7 +146,7 @@
         },
         {
             "type": "path",
-            "url": "candy-forms",
+            "url": "sugar-forms",
             "options": {
                 "symlink": true
             }

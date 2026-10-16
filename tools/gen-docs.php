@@ -311,9 +311,8 @@ function parse_matchups(string $path): array
  *
  * The target follows the rename chain through executed entries only — a pending
  * hop's page still exists at its old name today, so redirecting past it would
- * 404. That is why the map's "Done when" pairs resolve to candy-mouse and
- * candy-forms (whose own renames are pending) rather than to their eventual
- * sugar- names. merge/fold entries start at `new` and follow its chain the same
+ * 404. That is why the map's "Done when" pair resolves to candy-mouse (whose
+ * own rename is still pending) rather than to its eventual sugar-mouse name. merge/fold entries start at `new` and follow its chain the same
  * way (step 2.2's prefixes_for walks the map in the same chain shape, but for
  * git history, where pending entries are facts too).
  *

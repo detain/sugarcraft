@@ -19,10 +19,10 @@ use SugarCraft\Readline\TextPrompt;
  * Submodes:
  * - insert: default; ESC enters normal mode; typing inserts characters via TextPrompt
  * - normal: h/l/0/$/b/w move cursor; i/a/A switch to insert mode; dd deletes line;
- *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via candy-forms TextObject
+ *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject
  * - visual: v from normal; movement extends selection (selection stored in prompt mode)
  *
- * Uses VimKeyHandler from candy-forms for key-to-action mapping.
+ * Uses VimKeyHandler from sugar-forms for key-to-action mapping.
  *
  * Mirrors erikgeiser/promptkit vi mode.
  */
@@ -343,7 +343,7 @@ final class ViMode implements ModeInterface
 
     /**
      * Resolve the final key of an operator + i/a + target sequence via
-     * candy-forms (VimKeyHandler::handleTextObject). Unresolvable objects
+     * sugar-forms (VimKeyHandler::handleTextObject). Unresolvable objects
      * (unknown target, unmatched delimiter, cursor outside every pair)
      * cancel the sequence with no buffer change, like vim's beep.
      */

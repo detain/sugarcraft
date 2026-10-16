@@ -183,7 +183,7 @@
 | `glamour` markdown rendering | `sugar-widgets` | Glamour is the upstream for SugarCraft's markdown rendering components. Glow's `utils.GlamourStyle()` maps directly to how SugarCraft would configure glamour. |
 | `lipgloss` styling system | `candy-shine` (styling), `sugar-widgets` (output) | Lipgloss is the Charm styling engine; SugarCraft ports lipgloss for ANSI text styling, colors, and layout. |
 | `bubbletea` TUI framework | `sugar-widgets` (TUI components) | Bubble Tea is the TUI framework; SugarCraft's TUI patterns (Model/Update/View) mirror Bubble Tea's architecture. |
-| File browsing & discovery | `candy-forms` or `sugar-charts` | The stash/file-browser UI could inspire SugarCraft's file picker or tree-view components. |
+| File browsing & discovery | `sugar-forms` or `sugar-charts` | The stash/file-browser UI could inspire SugarCraft's file picker or tree-view components. |
 | `viewport` for scrolling | `candy-core` (scroll buffer) | The Bubble Tea viewport model for paginated content. |
 | Fuzzy filtering | `sugar-widgets` (filter/search) | Real-time fuzzy string filtering of file lists. |
 | fsnotify file watching | `candy-pty` (file watching) | File system notification for live reload. |

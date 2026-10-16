@@ -431,7 +431,7 @@ sugar-quickpick is a **lighter-weight overlay** (not a full List replacement). I
 
 sugar-quickpick fills a **specific niche** in the SugarCraft ecosystem: the quick-fix / type-to-filter overlay that composes over a background view without blocking it. This is distinct from:
 
-- `sugar-widgets` / `candy-forms` — inline component rendering
+- `sugar-widgets` / `sugar-forms` — inline component rendering
 - `sugar-overlay` — general-purpose overlay compositor
 - `sugar-treelist` — inline list with fuzzy filtering
 

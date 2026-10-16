@@ -14,7 +14,7 @@ use SugarCraft\Forms\Field;
  *
  * The contract is the shape {@see MediaForm} renders and collects without
  * knowing what any section is: `rows()` says what is on screen, `fieldAt()`
- * says which rows own an editable candy-forms Field (or null for read-only
+ * says which rows own an editable sugar-forms Field (or null for read-only
  * rows), and `collect()` folds the section's current widget state into the
  * draft. A section never performs I/O and never builds a wire request of its
  * own — the draft is singular, folded section by section.

@@ -91,7 +91,7 @@ Each command follows `cmd/options.go + cmd/command.go + cmd/<model>.go`:
 
 | gum command | SugarCraft lib | Notes |
 |------------|----------------|-------|
-| `gum input` | `candy-forms` (planned) | Text input prompt with styling; mirrors `bubbles/textinput` |
+| `gum input` | `sugar-forms` (planned) | Text input prompt with styling; mirrors `bubbles/textinput` |
 | `gum write` | `sugar-textarea` (planned) | Multi-line text area; mirrors `bubbles/textarea` |
 | `gum filter` | `sugar-filter` (planned) | Fuzzy list filter; same fuzzy algorithm (`sahilm/fuzzy`) |
 | `gum choose` | `sugar-choose` (planned) | Item selector grid; similar to `bubbles/list` + paginator |

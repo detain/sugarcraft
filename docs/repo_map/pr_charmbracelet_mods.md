@@ -21,7 +21,7 @@ The first-pass analysis identified these unmapped areas relevant to SugarCraft:
 
 | Gap | Likely Candidate |
 |-----|-----------------|
-| Streaming LLM client | `candy-forms` or new `sugar-llm` |
+| Streaming LLM client | `sugar-forms` or new `sugar-llm` |
 | Conversation caching | `candy-sprinkles` (caching utilities) |
 | MCP client integration | `sugar-mcp-client` or `honey-mcp` |
 | SQLite storage | leveraging `sugar-widgets` persistence |
@@ -424,7 +424,7 @@ Long-context outputs (6k+ tokens) expose rendering performance issues that short
 
 ### 1. PHP-Native Streaming Client
 
-Mods proved the demand for CLI LLM tools. SugarCraft can provide `candy-forms` as a pure PHP streaming HTTP client, leveraging ReactPHP for async. Target use case: `php -r "echo (new CandyForms())->complete('Explain this', ['model' => 'claude-3'])"` 
+Mods proved the demand for CLI LLM tools. SugarCraft can provide `sugar-forms` as a pure PHP streaming HTTP client, leveraging ReactPHP for async. Target use case: `php -r "echo (new SugarForms())->complete('Explain this', ['model' => 'claude-3'])"` 
 
 ### 2. Incremental Render Engine
 
@@ -465,8 +465,8 @@ Build on mods' `stream.Client` pattern but add:
 | #635 streaming perf | `candy-scriptui` viewport needs delta rendering |
 | #316 LocalAI key required | `candy-core` config needs provider-aware validation |
 | #197 persistent TUI | `candy-scriptui` needs session model concept |
-| #352 cross-provider fallback | `candy-forms` needs multi-provider router |
-| #675 --return-id | `candy-forms` needs scriptable ConversationManager |
+| #352 cross-provider fallback | `sugar-forms` needs multi-provider router |
+| #675 --return-id | `sugar-forms` needs scriptable ConversationManager |
 | #567 mcp.json | `sugar-mcp-client` should adopt standard config format |
 
 ### From Crush (successor) back to SugarCraft
@@ -482,7 +482,7 @@ Crush's focus on `crush run` (non-interactive) and agentic workflows tells us:
 
 ### Immediate (Do First)
 
-1. **Design `candy-forms` with Delta Rendering**: Every TUI component must render only changed content. Use a dirty-flag or diff approach, never full re-render.
+1. **Design `sugar-forms` with Delta Rendering**: Every TUI component must render only changed content. Use a dirty-flag or diff approach, never full re-render.
 
 2. **Implement Provider-Agnostic Config Validation**: Config layer must not require credentials for unselected providers.
 

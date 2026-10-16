@@ -64,7 +64,7 @@ final class ScriptFields
 
     /**
      * Span half-width for an int argument with a missing bound. The
-     * candy-forms integer walk misbehaves at full PHP_INT width on the
+     * sugar-forms integer walk misbehaves at full PHP_INT width on the
      * negative side (measured: PHP_INT_MIN+1..PHP_INT_MAX-1 seeds garbage),
      * while ±2·10⁹ walks exactly — and no A1111 script arg legitimately
      * lives beyond 32-bit range. The server still validates; this is only

@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-layout-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-10 (candy-sprinkles uses candy-layout), step-14/15 (sugar-widgets/candy-forms layout)
+**Blocks:** step-10 (candy-sprinkles uses candy-layout), step-14/15 (sugar-widgets/sugar-forms layout)
 
 ## Goal
 

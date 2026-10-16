@@ -309,25 +309,25 @@
 - **Effort**: 2-3 hours
 - **Research**: `libraries/sugar-widgets-research.md`
 
-### candy-forms
+### sugar-forms
 
 ### [ ] Vim keys in MultiSelect (j/k/g/G)
 
 - **Priority**: P1 - High
 - **Effort**: 1 day
-- **Research**: `libraries/candy-forms-research.md`
+- **Research**: `libraries/sugar-forms-research.md`
 
 ### [ ] Built-in validators (Required, MinLength, Pattern, Email)
 
 - **Priority**: P1 - High
 - **Effort**: 1 day
-- **Research**: `libraries/candy-forms-research.md`
+- **Research**: `libraries/sugar-forms-research.md`
 
 ### [ ] Enhanced KeyMap defaults (j/k nav)
 
 - **Priority**: P1 - High
 - **Effort**: 4 hours
-- **Research**: `libraries/candy-forms-research.md`
+- **Research**: `libraries/sugar-forms-research.md`
 
 ### sugar-table
 
@@ -464,7 +464,7 @@ All 45 research documents available at:
 | sugar-dashboard | 25KB |
 | candy-mdview | 17KB |
 | candy-mail | 25KB |
-| candy-forms | 20KB |
+| sugar-forms | 20KB |
 | sugar-readline | 18KB |
 | candy-kv | 21KB |
 | candy-ansi-inspect | 13KB |

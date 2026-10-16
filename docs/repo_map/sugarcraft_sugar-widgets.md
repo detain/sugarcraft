@@ -8,7 +8,7 @@
 
 - **License:** MIT
 
-- **Status:** 🟡 In Progress (15 components, many as aliases to candy-forms)
+- **Status:** 🟡 In Progress (15 components, many as aliases to sugar-forms)
 
 - **Description:** PHP port of charmbracelet/bubbles — 15+ pre-built TUI components for SugarCraft, including interactive Tree, dynamic-height TextArea, per-cell Table::styleFunc(), and spring-physics AnimatedProgress.
 
@@ -20,14 +20,14 @@ sugar-widgets employs a **stratified alias pattern** where many components are r
 
 | sugar-widgets Source | Points To | Status |
 |---|---|---|
-| `TextInput` | `SugarCraft\Forms\TextInput\TextInput` | 🟡 alias (full impl in candy-forms) |
-| `ItemList` | `SugarCraft\Forms\ItemList\ItemList` | 🟡 alias (full impl in candy-forms) |
-| `Viewport` | `SugarCraft\Forms\Viewport\Viewport` | 🟡 alias (full impl in candy-forms) |
-| `FilePicker` | `SugarCraft\Forms\FilePicker\FilePicker` | 🟡 alias (full impl in candy-forms) |
-| `Spinner` | `SugarCraft\Forms\Spinner\Spinner` | 🟡 alias (full impl in candy-forms) |
-| `Cursor` | `SugarCraft\Forms\Cursor\Cursor` | 🟡 alias (full impl in candy-forms) |
-| `TextArea` | `SugarCraft\Forms\TextArea\TextArea` | 🟡 alias (full impl in candy-forms) |
-| `Scrollbar` | `SugarCraft\Forms\Scrollbar\Scrollbar` | 🟡 alias (full impl in candy-forms) |
+| `TextInput` | `SugarCraft\Forms\TextInput\TextInput` | 🟡 alias (full impl in sugar-forms) |
+| `ItemList` | `SugarCraft\Forms\ItemList\ItemList` | 🟡 alias (full impl in sugar-forms) |
+| `Viewport` | `SugarCraft\Forms\Viewport\Viewport` | 🟡 alias (full impl in sugar-forms) |
+| `FilePicker` | `SugarCraft\Forms\FilePicker\FilePicker` | 🟡 alias (full impl in sugar-forms) |
+| `Spinner` | `SugarCraft\Forms\Spinner\Spinner` | 🟡 alias (full impl in sugar-forms) |
+| `Cursor` | `SugarCraft\Forms\Cursor\Cursor` | 🟡 alias (full impl in sugar-forms) |
+| `TextArea` | `SugarCraft\Forms\TextArea\TextArea` | 🟡 alias (full impl in sugar-forms) |
+| `Scrollbar` | `SugarCraft\Forms\Scrollbar\Scrollbar` | 🟡 alias (full impl in sugar-forms) |
 
 **Original implementations** in sugar-widgets itself:
 - `Table` (720 lines) — sortable, filterable, paginated table with per-cell styleFunc
@@ -57,7 +57,7 @@ sugar-widgets employs a **stratified alias pattern** where many components are r
 ```json
 {
   "sugarcraft/candy-core": "dev-master",      // TUI framework foundation
-  "sugarcraft/candy-forms": "dev-master",        // Form primitives (most aliases)
+  "sugarcraft/sugar-forms": "dev-master",        // Form primitives (most aliases)
   "sugarcraft/candy-sprinkles": "dev-master",   // Styling system
   "sugarcraft/candy-mouse": "dev-master",          // Zone/mouse handling
   "sugarcraft/honey-bounce": "dev-master"     // Spring physics (AnimatedProgress)
@@ -126,9 +126,9 @@ public function withFilterPredicate(?\Closure $predicate): self
 
 - stickers has footer status bar; sugar-widgets does not
 
-### 2. TextInput (`candy-forms/src/TextInput/TextInput.php` — 987 lines, aliased)
+### 2. TextInput (`sugar-forms/src/TextInput/TextInput.php` — 987 lines, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -187,9 +187,9 @@ private function vimUpdate(KeyMsg $msg): array
 
 - Both support password hidden mode, validation, char limit
 
-### 3. ItemList (`candy-forms/src/ItemList/ItemList.php`, aliased)
+### 3. ItemList (`sugar-forms/src/ItemList/ItemList.php`, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -245,9 +245,9 @@ public function testFilteringMatchesSubstring(): void
 
 - sugar-widgets lacks fuzzy ranking
 
-### 4. Viewport (`candy-forms/src/Viewport/Viewport.php`, aliased)
+### 4. Viewport (`sugar-forms/src/Viewport/Viewport.php`, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -267,9 +267,9 @@ public function testFilteringMatchesSubstring(): void
 
 - Gutter functions available
 
-### 5. FilePicker (`candy-forms/src/FilePicker/FilePicker.php`, aliased)
+### 5. FilePicker (`sugar-forms/src/FilePicker/FilePicker.php`, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -341,9 +341,9 @@ public function view(): string
 
 - Returns cmd for re-tick until settled
 
-### 8. Spinner (`candy-forms/src/Spinner/Spinner.php`, aliased)
+### 8. Spinner (`sugar-forms/src/Spinner/Spinner.php`, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -353,9 +353,9 @@ public function view(): string
 
 - Styled via `Style`
 
-### 9. Cursor (`candy-forms/src/Cursor/Cursor.php`, aliased)
+### 9. Cursor (`sugar-forms/src/Cursor/Cursor.php`, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -539,9 +539,9 @@ if ($msg instanceof MsgZoneInBounds && $this->focused) {
 
 - Mirrors upstream API
 
-### 17. TextArea (`candy-forms/src/TextArea/TextArea.php`, aliased)
+### 17. TextArea (`sugar-forms/src/TextArea/TextArea.php`, aliased)
 
-**Full implementation** in candy-forms, re-exported from sugar-widgets.
+**Full implementation** in sugar-forms, re-exported from sugar-widgets.
 
 **Features:**
 
@@ -815,23 +815,23 @@ $tree = Tree::new(...)->withSize(40, 10);  // 10-row viewport
 
 - `/home/sites/sugarcraft/sugar-widgets/src/Key/Binding.php` — 149 lines
 
-### Alias Sources (candy-forms)
+### Alias Sources (sugar-forms)
 
-- `/home/sites/sugarcraft/candy-forms/src/TextInput/TextInput.php` — 987 lines
+- `/home/sites/sugarcraft/sugar-forms/src/TextInput/TextInput.php` — 987 lines
 
-- `/home/sites/sugarcraft/candy-forms/src/ItemList/ItemList.php` — 680+ lines
+- `/home/sites/sugarcraft/sugar-forms/src/ItemList/ItemList.php` — 680+ lines
 
-- `/home/sites/sugarcraft/candy-forms/src/Viewport/Viewport.php`
+- `/home/sites/sugarcraft/sugar-forms/src/Viewport/Viewport.php`
 
-- `/home/sites/sugarcraft/candy-forms/src/FilePicker/FilePicker.php`
+- `/home/sites/sugarcraft/sugar-forms/src/FilePicker/FilePicker.php`
 
-- `/home/sites/sugarcraft/candy-forms/src/TextArea/TextArea.php`
+- `/home/sites/sugarcraft/sugar-forms/src/TextArea/TextArea.php`
 
-- `/home/sites/sugarcraft/candy-forms/src/Spinner/Spinner.php`
+- `/home/sites/sugarcraft/sugar-forms/src/Spinner/Spinner.php`
 
-- `/home/sites/sugarcraft/candy-forms/src/Cursor/Cursor.php`
+- `/home/sites/sugarcraft/sugar-forms/src/Cursor/Cursor.php`
 
-- `/home/sites/sugarcraft/candy-forms/src/Scrollbar/Scrollbar.php`
+- `/home/sites/sugarcraft/sugar-forms/src/Scrollbar/Scrollbar.php`
 
 ### Tests
 
@@ -875,7 +875,7 @@ $tree = Tree::new(...)->withSize(40, 10);  // 10-row viewport
 
 ## Analysis
 
-**sugar-widgets** is a mature, well-structured PHP port of charmbracelet/bubbles with significant enhancements. The stratified architecture (aliases pointing to candy-forms while keeping original implementations for Table, Tree, Tabs, Help, etc.) allows parallel development and clear ownership.
+**sugar-widgets** is a mature, well-structured PHP port of charmbracelet/bubbles with significant enhancements. The stratified architecture (aliases pointing to sugar-forms while keeping original implementations for Table, Tree, Tabs, Help, etc.) allows parallel development and clear ownership.
 
 **Strengths:**
 
@@ -903,7 +903,7 @@ $tree = Tree::new(...)->withSize(40, 10);  // 10-row viewport
 
 - No TST-based fast prefix search (smenu pattern)
 
-**Strategic position:** sugar-widgets is the primary component library for building TUI applications in SugarCraft. Its layered relationship with candy-forms (where the heavier implementations live) allows sugar-widgets to focus on leaf components while forms provides the foundational widgets. The 🟡 status correctly reflects that fuzzy filtering and some advanced TextArea features remain incomplete.
+**Strategic position:** sugar-widgets is the primary component library for building TUI applications in SugarCraft. Its layered relationship with sugar-forms (where the heavier implementations live) allows sugar-widgets to focus on leaf components while forms provides the foundational widgets. The 🟡 status correctly reflects that fuzzy filtering and some advanced TextArea features remain incomplete.
 
 ---
 

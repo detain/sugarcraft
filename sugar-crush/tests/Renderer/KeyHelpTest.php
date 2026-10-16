@@ -975,7 +975,7 @@ final class KeyHelpTest extends TestCase
      * the very screen such a user is trying to get past.
      *
      * The cursor half of that measurement has since expired: the draft moved
-     * into `candy-forms`' TextArea (crush_code.md Phase 3 item 1), so a
+     * into `sugar-forms`' TextArea (crush_code.md Phase 3 item 1), so a
      * NON-empty draft now has a second route — Home, then `?` — driven by
      * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`.
      * On a genuinely empty line there is still no character for the cursor to
@@ -1065,7 +1065,7 @@ final class KeyHelpTest extends TestCase
         // reference does not list is exactly what this file exists to catch.
         // It moved 54 -> 62 when the draft's own editing keyboard was declared
         // — eight rows for keystrokes that had been live and undocumented since
-        // the draft moved into `candy-forms`' TextArea, which is the same
+        // the draft moved into `sugar-forms`' TextArea, which is the same
         // failure one round later. It moved 62 -> 63 when `chat.slash-complete`
         // was declared (W4: bare Tab completes the highlighted "/" row), and
         // 63 -> 65 with pane docking L2, which declared `shell.pane-prev` (the
@@ -1950,7 +1950,7 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The keys the draft grew when it moved into `candy-forms`' TextArea
+     * The keys the draft grew when it moved into `sugar-forms`' TextArea
      * (crush_code.md Phase 3 item 1) are swallowed by a live prompt too.
      *
      * The arm rule below was measured when `Chat` had no cursor at all: every

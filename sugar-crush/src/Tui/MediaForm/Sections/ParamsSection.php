@@ -22,7 +22,7 @@ use SugarCraft\Forms\Field\Slider;
  * The Params tab (crush-media W3.4, plan §2.1): the core numeric/select
  * knobs from the FieldSpec registry, plus the seed row's two action rows and
  * its "last generated seed" read-out (§2.3's 🎲/♻ buttons rendered as
- * press-on-commit rows — candy-forms carries no button widget).
+ * press-on-commit rows — sugar-forms carries no button widget).
  *
  * PRESS-ON-COMMIT RULING: a `Confirm` on an action row is a COMMAND, not a
  * question — committing the row fires it whatever side it shows, and the

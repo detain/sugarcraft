@@ -19,7 +19,7 @@ use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\FilePicker;
 
 /**
- * Plan W4.1 ingress law: the attach row is a candy-forms FilePicker whose
+ * Plan W4.1 ingress law: the attach row is a sugar-forms FilePicker whose
  * committed path goes through {@see ImageIngress} before it takes a slot —
  * accepted files fold into the draft as raw-base64 init_images in PICK
  * ORDER, refused files never occupy a slot (their message lands on the

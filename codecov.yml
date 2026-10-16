@@ -131,8 +131,8 @@ flag_management:
     - name: sugar-reel
       paths: ["sugar-reel/src/**"]
       carryforward: true
-    - name: candy-forms
-      paths: ["candy-forms/src/**"]
+    - name: sugar-forms
+      paths: ["sugar-forms/src/**"]
       carryforward: true
     - name: candy-focus
       paths: ["candy-focus/src/**"]
@@ -415,12 +415,12 @@ component_management:
         - "sugar-reel/src/**"
       flag_regexes:
         - "^sugar-reel$"
-    - component_id: candy-forms
-      name: candy-forms
+    - component_id: sugar-forms
+      name: sugar-forms
       paths:
-        - "candy-forms/src/**"
+        - "sugar-forms/src/**"
       flag_regexes:
-        - "^candy-forms$"
+        - "^sugar-forms$"
     - component_id: candy-focus
       name: candy-focus
       paths:

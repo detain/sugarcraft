@@ -16,7 +16,7 @@
 
 ![demo](.vhs/spinners.gif)
 
-sugar-widgets — 17 TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch) and 8 deprecated alias re-exports from `sugarcraft/candy-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
+sugar-widgets — 17 TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch) and 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
 ```sh
 composer require sugarcraft/sugar-widgets
@@ -32,7 +32,7 @@ composer require sugarcraft/sugar-widgets
 9 first-party components: Help, Key, Progress (includes AnimatedProgress
 spring-variant), Timer, Stopwatch, Paginator, Tree, Table, Tabs — plus
 two btop-derived render helpers, `Input\TextEdit` and `Menu\OptionRow`.
-8 deprecated alias re-exports from `sugarcraft/candy-forms`:
+8 deprecated alias re-exports from `sugarcraft/sugar-forms`:
 Cursor, TextInput, TextArea, Viewport, ItemList, FilePicker, Scrollbar,
 Spinner.
 
@@ -41,7 +41,7 @@ Spinner.
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
-| `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/candy-forms`)_ | `Spinner\TickMsg` |
+| `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
 | `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`) | — |
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (HoneyBounce-driven) | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer; `interval()`, `timeout()`, `withInterval(float)` | `Timer\TickMsg`, `TimeoutMsg` |
@@ -62,8 +62,8 @@ Spinner.
 ### Vim mode
 
 `TextInput` vim mode (Insert/Normal/Visual/VisualLine keybindings) is
-powered by `candy-forms`'s shared `VimKeyHandler` — the same handler
-backing `candy-forms` and `sugar-readline`. Adding a new binding to the
+powered by `sugar-forms`'s shared `VimKeyHandler` — the same handler
+backing `sugar-forms` and `sugar-readline`. Adding a new binding to the
 `VimAction` enum benefits all three libs at once. The per-lib opt-in flag
 `withVimMode(true)` is preserved; consumers control whether vim mode is
 enabled.

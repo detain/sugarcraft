@@ -997,7 +997,7 @@ final class Chat implements Model
          */
         private readonly ?int $keyHelp = null,
         /**
-         * The draft's editing widget — `candy-forms`' {@see TextArea}, which
+         * The draft's editing widget — `sugar-forms`' {@see TextArea}, which
          * owns the value AND the cursor (crush_code.md Phase 3 item 1).
          *
          * `$inputBuf` above is now a SEED for this, not a peer of it: when
@@ -2844,7 +2844,7 @@ final class Chat implements Model
         }
 
         // E744 WS5: the session picker's load-more edge. The ONLY production
-        // source of this Msg in crush is candy-forms ItemList's
+        // source of this Msg in crush is sugar-forms ItemList's
         // arrival-on-last-row rule (a keyboard step, wheel notch, or click
         // that moves the cursor onto the last row of the loaded page while
         // more may exist upstream), raised as Cmd::send and relayed back
@@ -3437,7 +3437,7 @@ final class Chat implements Model
             // file) ... so column 0 is only ever reached by typing the first
             // character". Both halves of that were true when written and the
             // first half is now FALSE: crush_code.md Phase 3 item 1 delegated
-            // the draft to candy-forms' TextArea, and Left/Right/Home/End
+            // the draft to sugar-forms' TextArea, and Left/Right/Home/End
             // reach it from the arms at the foot of this match. So there is now
             // a SECOND hatch, and it is the ordinary one a user would reach
             // for: type "why", press Home, type "?" - the guard does not fire
@@ -4825,7 +4825,7 @@ final class Chat implements Model
      * reference and the remaining runes were swallowed, leaving inputBuf empty.
      *
      * The cursor half of that is no longer true: crush_code.md Phase 3 item 1
-     * moved the draft into `candy-forms`' TextArea, so there is now a second
+     * moved the draft into `sugar-forms`' TextArea, so there is now a second
      * route — type "why", press Home, type "?" — which
      * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`
      * drives. This arm is still the only KEYSTROKE route on a genuinely EMPTY
@@ -16264,7 +16264,7 @@ final class Chat implements Model
      * A blank, focused draft editor.
      *
      * **TextArea, not TextInput, and that is measured rather than assumed.**
-     * `candy-forms` ships both; `TextInput` is single-line. This box is not:
+     * `sugar-forms` ships both; `TextInput` is single-line. This box is not:
      * the Alt/Shift/Ctrl+Enter arm in {@see update()} inserts a newline, and
      * {@see reviveCheckpointMessage()} can put a multi-line tool row in the
      * box via the Up arm. Driven before choosing — a two-line draft
@@ -16306,7 +16306,7 @@ final class Chat implements Model
      *     Chat's own recall (the Up-on-empty arm in {@see update()}, and
      *     {@see reviveCheckpointMessage()}'s checkpoint revival). TextArea has
      *     no history field at all — measured, `grep -n history` over
-     *     `candy-forms/src/TextArea/TextArea.php` returns nothing — so Chat
+     *     `sugar-forms/src/TextArea/TextArea.php` returns nothing — so Chat
      *     stays the sole owner and there is no second mechanism to disable.
      *   * **Completion has one owner.** Likewise `setSuggestions()`/
      *     `currentSuggestion()` exist only on `TextInput`. The "/" popup keeps
@@ -16509,7 +16509,7 @@ final class Chat implements Model
      * the draft up to the cursor rather than to the whole draft, so Ctrl+W
      * and Alt+Left cannot disagree about where a word starts. TextArea has no
      * word MOTION to delegate to — measured over
-     * `vendor/sugarcraft/candy-forms/src/TextArea/TextArea.php`, its only
+     * `vendor/sugarcraft/sugar-forms/src/TextArea/TextArea.php`, its only
      * word-aware member is the public `word()` (the run of non-whitespace
      * under the cursor, a reader with no cursor effect), and it has no vim
      * mode at all: `vimWordForward()`/`vimWordBackward()`/`$vimMode` live in

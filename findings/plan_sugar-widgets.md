@@ -17,7 +17,7 @@ Address all 25 findings from the sugar-widgets code review, organized into phase
 | Static $nextId in Timer/Stopwatch is a test isolation issue | Monotonic counter pollutes test state across test suite runs | `findings/sugar-widgets.md:13-35` |
 | C0 sanitization is security-critical | Terminal control sequence injection is a real TUI attack vector | `findings/sugar-widgets.md:265-271` |
 | DRY violations in sanitizeCell() should be centralized to candy-core | Single point for security auditing; eliminating 3 duplicate implementations | `findings/sugar-widgets.md:41-58` |
-| Deprecated aliases (8 files) are transitional architecture | sugar-widgets is a re-export layer; candy-forms is canonical home | `findings/sugar-widgets.md:159-174` |
+| Deprecated aliases (8 files) are transitional architecture | sugar-widgets is a re-export layer; sugar-forms is canonical home | `findings/sugar-widgets.md:159-174` |
 | Performance issues (sorting, shrinking, visibleRows caching) matter for large tables | O(N×M×log M) sort and O(budget×cols) shrink are measurable at scale | `findings/sugar-widgets.md:60-106` |
 
 ## Phase 1: Critical Issues [PENDING]
@@ -88,7 +88,7 @@ Address all 25 findings from the sugar-widgets code review, organized into phase
   - **Files:** `src/Viewport/Viewport.php` (all 8 identical), `sugar-widgets/README.md`, `sugar-widgets/CALIBER_LEARNINGS.md`, `tests/ShortAliasesTest.php`
   - **Verification:** ShortAliasesTest passes; documentation clearly explains transitional nature
   - **Severity:** medium
-  - **Notes:** 8 files are `class_alias()` shims pointing to candy-forms. External consumers using `SugarCraft\Widgets\*` get candy-forms implementations.
+  - **Notes:** 8 files are `class_alias()` shims pointing to sugar-forms. External consumers using `SugarCraft\Widgets\*` get sugar-forms implementations.
 
 - [x] **3.5** SortState — Readonly Array Property Still Mutable Internally — Add test verifying `$state->criteria[] = [...]` after construction doesn't affect original; document safety in code
   - **r86-v3:** ✅ landed (pre-v3, verified by read): chain-copy pins tests/Table/SortStateTest.php:37 + :79 (withCriterion returns new instance; original untouched).
@@ -161,7 +161,7 @@ Address all 25 findings from the sugar-widgets code review, organized into phase
 - [x] **6.1** Class Alias Deprecation Creates Confusing Consumer API — Addressed by Phase 3.4 (documentation update). Ensure README.md and CALIBER_LEARNINGS.md clearly document transitional architecture.
   - **r86-v3:** ✅ landed (pre-v3, verified by read): see 3.4 citations.
   - **Severity:** compatibility
-  - **Notes:** Consumers using `SugarCraft\Widgets\*` may not realize they're using candy-forms with no independent versioning.
+  - **Notes:** Consumers using `SugarCraft\Widgets\*` may not realize they're using sugar-forms with no independent versioning.
 
 - [x] **6.2** ReactPHP/Async Integration — subscriptions() Always Returns Null — Add note to CALIBER_LEARNINGS.md explaining Timer/Stopwatch/AnimatedProgress use `Cmd::tick()` not `subscriptions()`.
   - **r86-v3:** ✅ landed (pre-v3, verified by read): CALIBER_LEARNINGS.md:13 documents subscriptions()/Cmd::tick integration.

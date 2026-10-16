@@ -176,7 +176,7 @@ SugarCraft is a PHP monorepo of Charmbracelet TUI library ports. This mapping id
 | Word wrapping / text formatting | `candy-core` (StringUtil / WordWrap) | Reflow-based text wrapping |
 | tea.Model interface compliance | `candy-core` (Model trait) | init/update/view lifecycle |
 | Line number prefixes, tree prefixes | `sugar-widgets` (Border / Frameless) | Box-drawing chars and border rendering |
-| Multi-line item support | `candy-forms` (TextArea / input) | Multi-line input handling |
+| Multi-line item support | `sugar-forms` (TextArea / input) | Multi-line input handling |
 | Item sorting, LessFunc/EqualsFunc | `sugar-widgets` (ListModel) | Sortable list data structure |
 | Current item styling (reverse video) | `sugar-widgets` (CurrentItem) | Highlighted selection state |
 | Prefix/Suffix interfaces | `candy-core` (Decorator pattern) | Surrounding content hooks |

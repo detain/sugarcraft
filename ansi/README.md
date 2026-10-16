@@ -248,8 +248,8 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-crush/48-crush-bot.ansi` | 64x18 | 312 | chrome robot agent with glowing amber eyes and mint heart-core crushing a glowing seam of sugar crystals, lime-cyan-violet "s u g a r - c r u s h" wordmark, "terminal AI coding agent" caption |
 | `sugar-crush/49-crush-agent.ansi` | 66x20 | 29 | sugar-crush window with traffic-light titlebar: rose-pink robot and speech bubble, ⚙ Read/Edit/Run tool log, green 22-assertions tick, "> crush this bug" prompt, keybinding footer |
 | `sugar-crush/49-swirl-crush.ansi` | 56x19 | 268 | giant rainbow-swirl lollipop among floating code braces and dot-stars, green-to-violet SUGAR/CRUSH block letters, "the terminal AI agent" and "crush the code · sweeten the terminal" captions |
-| `sugar-crush/50-candy-forms.ansi` | 52x9 | 16 | Warm berry boot splash: `php bin/sugarcrush` streams 52 candy libraries loading and ends on a pink block cursor |
 | `sugar-crush/50-crush-bot.ansi` | 62x17 | 42 | Confection-bot robot waving a swirl lollipop beside a live sugar-crush chat pane (tool calls, 60% sugar meter, cursor) over a pink-violet SUGARCRUSH wordmark |
+| `sugar-crush/50-sugar-forms.ansi` | 52x9 | 16 | Warm berry boot splash: `php bin/sugarcrush` streams 52 candy libraries loading and ends on a pink block cursor |
 
 
 <!-- BEGIN sugarcraft SLOTS -->
@@ -779,170 +779,170 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-files-9-tc-s-2.ansi` | 60x13 | truecolor | 73 | Confectioner tempering slab: marble gloss gradient, tempered couverture pool with sheen, cocoa% ganache wells, thermometer |
 <!-- END candy-files SLOTS -->
 
-<!-- BEGIN candy-forms SLOTS -->
-### candy-forms — slot series
+<!-- BEGIN sugar-forms SLOTS -->
+### sugar-forms — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-forms-1-16-l-1.ansi` | 158x29 | 16 | 12 | Full-page intake sheet: CANDY FORMS masthead, sections A/B, checkbox grid, signature |
-| `candy-forms-1-16-l-2.ansi` | 142x28 | 16 | 11 | Wide field ledger: rainbow CANDY FORMS banner over a thirteen-row widget roll |
-| `candy-forms-1-16-m-1.ansi` | 80x18 | 16 | 6 | Green-phosphor console: CANDY/FORMS block letters flank a live status panel |
-| `candy-forms-1-16-m-2.ansi` | 77x19 | 16 | 11 | Overlapping CGA dialogs — select, input, confirm — tiled like a retro WM |
-| `candy-forms-1-16-s-1.ansi` | 44x10 | 16 | 10 | Confirm gate dialog with radio choice under a night sky |
-| `candy-forms-1-16-s-2.ansi` | 42x9 | 16 | 7 | Text input close-up with glowing block cursor and hint line |
-| `candy-forms-1-16-s-3.ansi` | 43x9 | 16 | 10 | Password field, segmented strength meter, validator tick row |
-| `candy-forms-1-256-l-1.ansi` | 169x30 | 256 | 31 | Three-pane FilePicker: folder tree, ☑ multi-select list, preview pane, scroll rail |
-| `candy-forms-1-256-l-2.ansi` | 160x31 | 256 | 75 | Election-ballot scene: punch holes, candy referenda, half-block ballot edges |
-| `candy-forms-1-256-m-1.ansi` | 71x19 | 256 | 29 | Open Select dropdown with fuzzy filter highlighting the matched prefix |
-| `candy-forms-1-256-m-2.ansi` | 82x19 | 256 | 21 | Validator gauntlet: pass/fail verdicts, red squiggle, rejection stamp |
-| `candy-forms-1-256-m-3.ansi` | 71x19 | 256 | 31 | TextArea editor: gutter line numbers, scrollbar rail, vim INSERT badge |
-| `candy-forms-1-256-s-1.ansi` | 51x7 | 256 | 25 | Spinner holding screen: candy dots, gradient progress bar, field roll-call |
-| `candy-forms-1-256-s-2.ansi` | 50x13 | 256 | 16 | Exploding required-asterisk starburst in hot magenta |
-| `candy-forms-1-tc-l-1.ansi` | 192x30 | truecolor | 262 | Cathedral of questionnaires: rose-window spinner, arches, pews that are input fields |
-| `candy-forms-1-tc-l-2.ansi` | 180x28 | truecolor | 605 | Garden scene: beds of input fields sprouting checkboxes, rain of keystrokes, signboard |
-| `candy-forms-1-tc-m-1.ansi` | 88x22 | truecolor | 151 | Candy factory: forms hopper, gears and rollers, conveyor of candy-colored fields |
-| `candy-forms-1-tc-m-2.ansi` | 87x20 | truecolor | 72 | Aurora night sky over an input box with a glowing fuzzy autocomplete dropdown |
-| `candy-forms-1-tc-m-3.ansi` | 87x18 | truecolor | 59 | Split panel of vim INSERT vs NORMAL modes with text-object buffer diagram |
-| `candy-forms-1-tc-s-1.ansi` | 48x9 | truecolor | 150 | Rainbow-bordered sign-in card with glowing cursor and candy button |
-| `candy-forms-1-tc-s-2.ansi` | 47x6 | truecolor | 57 | Range slider with rainbow track and glowing knob at 73 percent |
-| `candy-forms-10-16-l-1.ansi` | 131x28 | 16 | 7 | Election hall panorama: block CANDY FORMS banner over six lever booths, ballot box, tally |
-| `candy-forms-10-16-l-2.ansi` | 122x28 | 16 | 7 | Chairlift line of committed fields over regex switchbacks with gate-arm validator row |
-| `candy-forms-10-16-m-1.ansi` | 81x19 | 16 | 7 | Top-down field-focus maze: cursor threads name/email/passwd/city corridors to SUBMIT |
-| `candy-forms-10-16-m-2.ansi` | 76x19 | 16 | 7 | Night-shift security desk: six CCTV field-feeds, two flagged, REC counter running |
-| `candy-forms-10-16-s-1.ansi` | 69x9 | 16 | 7 | Voting booth trio with brass ballot levers, one mid-pull and counted |
-| `candy-forms-10-16-s-2.ansi` | 58x9 | 16 | 7 | Ski-lift turnstile gate scanning a pass, green arm lifted for the skier |
-| `candy-forms-10-256-l-1.ansi` | 132x28 | 256 | 26 | Café hall: espresso machine radio group, order wheel, menu board of every widget |
-| `candy-forms-10-256-l-2.ansi` | 122x29 | 256 | 35 | Dawn ski panorama: gradient sky bands, chairlift of fields, LED pass/scanner gates |
-| `candy-forms-10-256-m-1.ansi` | 87x18 | 256 | 25 | Apothecary counter: seven tincture bottles per field type, Rx ticket and brass scale |
-| `candy-forms-10-256-m-2.ansi` | 84x18 | 256 | 23 | Validation quilt in an embroidery hoop: 8 stitched patches, needle follows tab order |
-| `candy-forms-10-256-s-1.ansi` | 58x9 | 256 | 23 | Barista order ticket on the rail: size/milk/shots fields clipped under steam |
-| `candy-forms-10-tc-l-1.ansi` | 169x28 | truecolor | 654 | Security ops room: 8-feed gradient video wall, ticker, desk and floor glow |
-| `candy-forms-10-tc-l-2.ansi` | 149x28 | truecolor | 406 | Midnight apothecary: glowing bottle shelves under moon-window gradient, cat on ledgers |
-| `candy-forms-10-tc-m-1.ansi` | 84x19 | truecolor | 569 | Ballot booth close-up: gradient curtain folds, brass lever mid-throw, one ☑ card |
-| `candy-forms-10-tc-m-2.ansi` | 86x18 | truecolor | 238 | Latte-art autocomplete: foam-heart cup, ghost-text steam, suggestion chips |
-| `candy-forms-10-tc-s-1.ansi` | 52x12 | truecolor | 245 | Locksmith key cabinet: five brass keyed fields, one turned key glows in its ward |
-| `candy-forms-10-tc-s-2.ansi` | 69x10 | truecolor | 153 | CCTV tube close-up: phosphor scan of a validated email feed, REC dot lit |
-| `candy-forms-2-16-l-1.ansi` | 120x37 | 16 | 7 | Widget zoo: CANDY FORMS banner over eight boxed primitive exhibits |
-| `candy-forms-2-16-l-2.ansi` | 121x30 | 16 | 7 | Three-act validation drama from cascading red errors to a green curtain call |
-| `candy-forms-2-16-m-1.ansi` | 74x18 | 16 | 7 | Sign-up gauntlet: inputs, radios, checkboxes, candy meter, submit |
-| `candy-forms-2-16-m-2.ansi` | 82x18 | 16 | 5 | Open select dropdown: cursor row, underlined fuzzy match, scrollbar |
-| `candy-forms-2-16-m-3.ansi` | 72x18 | 16 | 6 | Confirm cascade: five yes/no forks with default-letter grammar |
-| `candy-forms-2-16-s-1.ansi` | 55x9 | 16 | 6 | Block CANDY FORMS wordmark above focused name and password inputs |
-| `candy-forms-2-16-s-2.ansi` | 50x9 | 16 | 6 | Validator ticket strip with one bitter MaxLength failure |
-| `candy-forms-2-256-l-1.ansi` | 135x28 | 256 | 23 | Theme console: sidebar navigation beside a Nocturne palette editor |
-| `candy-forms-2-256-l-2.ansi` | 140x28 | 256 | 15 | Vim keybindings poster: mode ring diagram plus text-object grammar table |
-| `candy-forms-2-256-m-1.ansi` | 87x18 | 256 | 12 | MultiSelect checklist with fuzzy filter, scrollbar and Smith-Waterman scores |
-| `candy-forms-2-256-m-2.ansi` | 78x19 | 256 | 11 | FilePicker tree: type-colored files, cursor row, path bar |
-| `candy-forms-2-256-s-1.ansi` | 52x5 | 256 | 19 | Masked password with 256-color strength ramp and validator line |
-| `candy-forms-2-256-s-2.ansi` | 58x6 | 256 | 36 | Spinner frame parade: braille dots, moons, cadence meter, async wait |
-| `candy-forms-2-tc-l-1.ansi` | 132x28 | truecolor | 404 | Giant CANDY FORMS gradient banner crowning a completed truecolor form |
-| `candy-forms-2-tc-l-2.ansi` | 143x31 | truecolor | 352 | Keystroke-to-submit dataflow with per-character live validation trace |
-| `candy-forms-2-tc-m-1.ansi` | 84x20 | truecolor | 179 | TextArea panel: gradient frame, line gutter, tinted rows, scrollbar |
-| `candy-forms-2-tc-m-2.ansi` | 90x18 | truecolor | 43 | Async autocomplete: gradient prefix matches, live spinner, cancel note |
-| `candy-forms-2-tc-s-1.ansi` | 54x5 | truecolor | 101 | Truecolor CandyForms wordmark over twin hue-swept gradient bars |
-| `candy-forms-2-tc-s-2.ansi` | 67x5 | truecolor | 28 | Email field close-up: gradient glyphs, glowing @ sigil, green checks |
-| `candy-forms-2-tc-s-3.ansi` | 47x5 | truecolor | 132 | Sweetness index: four truecolor gradient meters, tart to molten |
-| `candy-forms-3-16-l-1.ansi` | 150x36 | 16 | 7 | full blueprint: field lifecycle + form orchestration + transition ledger table |
-| `candy-forms-3-16-l-2.ansi` | 160x38 | 16 | 8 | tab-order panorama: CANDY FORMS block banner over numbered 9-field sheet |
-| `candy-forms-3-16-m-1.ansi` | 84x22 | 16 | 7 | form state machine: idle→editing→validating→submit→done with error edge |
-| `candy-forms-3-16-m-2.ansi` | 86x20 | 16 | 7 | key-to-focus travel map: keyboard left, field rail right, arrow glossary |
-| `candy-forms-3-16-m-3.ansi` | 80x20 | 16 | 7 | submission timeline lanes: keystrokes/validators/focus/network beats |
-| `candy-forms-3-16-s-1.ansi` | 56x14 | 16 | 7 | TAB focus-travel loop: six field chips ringed by forward/rewind arrows |
-| `candy-forms-3-16-s-2.ansi` | 52x11 | 16 | 7 | error-correction arc: squiggle field, sine-hop to a green fixed card |
-| `candy-forms-3-16-s-3.ansi` | 46x9 | 16 | 5 | compact three-field focus map with shift-tab rewind note |
-| `candy-forms-3-256-l-1.ansi` | 200x38 | 256 | 19 | five-panel wizard panorama with gradient rail and per-step state ledger |
-| `candy-forms-3-256-l-2.ansi` | 200x34 | 256 | 22 | autocomplete constellation: orbit rings, scored chips, rank bars |
-| `candy-forms-3-256-m-1.ansi` | 88x20 | 256 | 19 | multiselect heat lattice: option scores beside sine-heated combo grid |
-| `candy-forms-3-256-m-2.ansi` | 86x24 | 256 | 19 | error-correction arc panorama: attempt 1 fails, arc climbs to attempt 2 |
-| `candy-forms-3-256-s-1.ansi` | 62x10 | 256 | 14 | password entropy dots: ramp196→46 across masked glyphs, bits readout |
-| `candy-forms-3-256-s-2.ansi` | 68x8 | 256 | 6 | wizard step rail: five medallions, done/current/locked in 256 hues |
-| `candy-forms-3-256-s-3.ansi` | 58x6 | 256 | 7 | validator tick strip chips with chain short-circuit note |
-| `candy-forms-3-tc-l-1.ansi` | 180x30 | truecolor | 429 | CANDYFORMS block wordmark in pink→gold gradient over aurora + mini form |
-| `candy-forms-3-tc-l-2.ansi` | 200x42 | truecolor | 1141 | form state machine painted over a truecolor aurora field with legend |
-| `candy-forms-3-tc-m-1.ansi` | 88x22 | truecolor | 186 | password entropy art: per-glyph heat diamonds over a grain-noise field |
-| `candy-forms-3-tc-m-2.ansi` | 88x24 | truecolor | 167 | wizard ribbon: sine-wave gradient band threading five step knots |
-| `candy-forms-3-tc-m-3.ansi` | 88x22 | truecolor | 170 | textarea with gradient frame, fading cursor trail, resize corner |
-| `candy-forms-3-tc-s-1.ansi` | 60x7 | truecolor | 121 | gradient SUBMIT pill with half-cell shine and melting shadow |
-| `candy-forms-3-tc-s-2.ansi` | 66x10 | truecolor | 12 | half-cell focus glow: cyan ring bleeds through ▀▄ around focused input |
-| `candy-forms-4-16-l-1.ansi` | 153x29 | 16 | 7 | Block CANDY FORMS wordmark over a sixteen-pen field-creature menagerie |
-| `candy-forms-4-16-l-2.ansi` | 153x28 | 16 | 7 | Avalanche mural: a whole mountainside of fields sliding into the SUBMIT gate |
-| `candy-forms-4-16-m-1.ansi` | 85x20 | 16 | 7 | Widget petting zoo: fenced pens of field-creatures (blink-cat, tick-toad...) |
-| `candy-forms-4-16-m-2.ansi` | 83x18 | 16 | 7 | The Great Submit avalanche: a slope of fields tumbling into SUBMIT |
-| `candy-forms-4-256-l-1.ansi` | 181x28 | 256 | 63 | 256-color block wordmark over a 24-enclosure petting zoo of field creatures |
-| `candy-forms-4-256-l-2.ansi` | 179x28 | 256 | 12 | Border-control hall: six inspector lanes above a stamped arrivals ledger |
-| `candy-forms-4-256-m-1.ansi` | 87x18 | 256 | 13 | Border-patrol checkpoint: inspector booths over a queue of stamped values |
-| `candy-forms-4-256-m-2.ansi` | 85x18 | 256 | 15 | Password blacksmith at the forge: furnace, anvil, hammer, tempering ramp |
-| `candy-forms-4-256-s-1.ansi` | 55x11 | 256 | 9 | Password blacksmith mini-forge: glowing bar on anvil, heat-strength meter |
-| `candy-forms-4-tc-l-1.ansi` | 171x28 | truecolor | 239 | Truecolor forge epic: gradient wordmark over furnace, anvil, tempering ramp |
-| `candy-forms-4-tc-l-2.ansi` | 171x28 | truecolor | 1431 | Dreamscape mural: sleeping cursor, moon, and empty-field islands on gradient clouds |
-| `candy-forms-4-tc-m-1.ansi` | 89x18 | truecolor | 42 | Tab-key pinball playfield: ball of focus ricochets off glowing field bumpers |
-| `candy-forms-4-tc-m-2.ansi` | 85x19 | truecolor | 247 | Placeholder dreamscape: empty fields adrift on a moonlit cloud of ghost text |
-| `candy-forms-4-tc-s-1.ansi` | 59x10 | truecolor | 61 | Gradient SUBMIT rocket lifting off through a shower of sparks |
-| `candy-forms-4-tc-s-2.ansi` | 44x8 | truecolor | 97 | CANDY FORMS wordmark woven from stacked truecolor field bars |
-| `candy-forms-5-16-l-1.ansi` | 150x30 | 16 | 6 | form wizard as fifteen-tile serpentine board game with pawn and die |
-| `candy-forms-5-16-l-2.ansi` | 132x29 | 16 | 5 | owl oracle at maze gate lighting the prefix corridor of suggestions |
-| `candy-forms-5-16-m-1.ansi` | 82x21 | 16 | 7 | select dropdown revealed between folded playhouse curtains |
-| `candy-forms-5-16-m-2.ansi` | 80x19 | 16 | 6 | password vault door with three digit dials and validator checklist |
-| `candy-forms-5-16-s-1.ansi` | 56x11 | 16 | 5 | checkbox garden harvest rows with ripe crate meter |
-| `candy-forms-5-16-s-2.ansi` | 58x13 | 16 | 6 | radio mast with waves and ON AIR card over a tuned band |
-| `candy-forms-5-256-m-1.ansi` | 86x22 | 256 | 15 | textarea rice paddy with row gutter, scrollbar and cursor-heron |
-| `candy-forms-5-256-m-2.ansi` | 84x21 | 256 | 22 | radio tower fading signal arcs with boxed chosen frequency |
-| `candy-forms-5-256-s-1.ansi` | 62x13 | 256 | 17 | autocomplete oracle with ghost completion fading along the caret |
-| `candy-forms-5-256-s-2.ansi` | 58x11 | 256 | 9 | brass vault dial trio with turns meter and passphrase entropy |
-| `candy-forms-5-tc-l-1.ansi` | 172x35 | truecolor | 66 | twenty-eight-tile rainbow wizard board with pawn, die and traps |
-| `candy-forms-5-tc-l-2.ansi` | 160x34 | truecolor | 264 | dawn radio band with gradient beams, station cards and rainbow spectrum bars |
-| `candy-forms-5-tc-m-1.ansi` | 88x24 | truecolor | 47 | dusk rice paddy with gradient sky, sun disc and heron-silhouette cursor |
-| `candy-forms-5-tc-m-2.ansi` | 80x19 | truecolor | 17 | nine-mood checkbox lifecycle arrayed along a hue timeline |
-| `candy-forms-5-tc-s-2.ansi` | 64x10 | truecolor | 22 | ghost autocomplete caret fading into three lantern suggestion chips |
-| `candy-forms-6-16-l-1.ansi` | 150x30 | 16 | 7 | marionette workshop: puppet rig holding field banners on validator strings |
-| `candy-forms-6-16-s-2.ansi` | 58x11 | 16 | 7 | tailor's mask atelier: measuring-tape ruler with fitted ##/ZZZ patterns |
-| `candy-forms-6-256-l-1.ansi` | 150x28 | 256 | 21 | artist atelier: easel canvases as field layout, skylight, paint palette |
-| `candy-forms-6-256-l-2.ansi` | 130x36 | 256 | 20 | orrery of field states: orbits are tab order, planets touched/valid/fail/empty |
-| `candy-forms-6-256-m-1.ansi` | 86x22 | 256 | 18 | deep-sea submersible: portholes onto masked fields, depth gauge, lamp cone |
-| `candy-forms-6-256-m-2.ansi` | 84x18 | 256 | 15 | kaiten sushi select: option plates on belt, heat-lamp cursor row, order slip |
-| `candy-forms-6-256-s-1.ansi` | 54x9 | 256 | 10 | field hospital triage: input cots tagged RED/GREEN/AMBER by validator vitals |
-| `candy-forms-6-256-s-2.ansi` | 56x13 | 256 | 9 | clockmaker bench: meshing validator gears and pendulum escapement verdict |
-| `candy-forms-6-tc-l-1.ansi` | 160x34 | truecolor | 49 | aquarium select tanks: gradient water, labeled fish options, glowing cursor band |
-| `candy-forms-6-tc-l-2.ansi` | 150x36 | truecolor | 58 | abyssal anglerfish: lure as top suggestion, school of masked-dot fields |
-| `candy-forms-7-16-l-1.ansi` | 150x36 | 16 | 7 | grand intake hall: sorting wall, four bays, clerks |
-| `candy-forms-7-16-l-2.ansi` | 154x33 | 16 | 6 | customs hall: six lamp-lit lanes and stamp archive |
-| `candy-forms-7-16-m-1.ansi` | 80x22 | 16 | 7 | post office counter: sorting wall, scale, stamp jar |
-| `candy-forms-7-16-m-2.ansi` | 81x23 | 16 | 6 | customs checkpoint lanes with verdict stamps |
-| `candy-forms-7-16-s-1.ansi` | 60x13 | 16 | 6 | post office brass intake slot with queued forms |
-| `candy-forms-7-16-s-2.ansi` | 61x11 | 16 | 6 | customs booth inspecting a declaration form |
-| `candy-forms-7-256-l-1.ansi` | 160x28 | 256 | 6 | bank lobby: arched tellers, vault of sealed forms |
-| `candy-forms-7-256-l-2.ansi` | 140x28 | 256 | 9 | card catalog drawers, checkout card and due stamps |
-| `candy-forms-7-256-m-1.ansi` | 82x20 | 256 | 11 | bank teller row with split-flap LEDs and pipeline |
-| `candy-forms-7-256-m-2.ansi` | 83x19 | 256 | 11 | bakery master recipe as dual-fieldset form |
-| `candy-forms-7-256-s-1.ansi` | 51x10 | 256 | 8 | bank queue terminal with amber serving board |
-| `candy-forms-7-256-s-2.ansi` | 49x10 | 256 | 9 | recipe card rendered as validated form fields |
-| `candy-forms-7-tc-l-2.ansi` | 124x29 | truecolor | 404 | box office facade, marquee bulbs and seat form |
-| `candy-forms-7-tc-m-1.ansi` | 86x18 | truecolor | 111 | playhouse seat chart, three seats glowing |
-| `candy-forms-7-tc-s-1.ansi` | 51x8 | truecolor | 31 | theater marquee stub with seat B12 aglow |
-| `candy-forms-7-tc-s-2.ansi` | 46x11 | truecolor | 24 | greenhouse tag with water and light meters |
-| `candy-forms-8-16-l-1.ansi` | 144x28 | 16 | 7 | board-game store wall: shelves of boxed form widgets, clerk, register and cart |
-| `candy-forms-8-16-l-2.ansi` | 172x28 | 16 | 7 | model-train layout of field wiring: X-crossing, relays and fuse taps under the board |
-| `candy-forms-8-16-m-1.ansi` | 75x21 | 16 | 7 | bird feeder station: seed hopper and five finches numbered on queue perches |
-| `candy-forms-8-256-l-1.ansi` | 140x28 | 256 | 8 | freight yard: a gantry crane lifts an EMAIL container over stencilled stacks |
-| `candy-forms-8-256-l-2.ansi` | 137x29 | 256 | 10 | observatory dome beneath field-constellations, its plotted catalogue open beside it |
-| `candy-forms-8-256-m-1.ansi` | 77x20 | 256 | 10 | laundromat: four front-loaders cycling email/text/pwd loads above a token basket |
-| `candy-forms-8-256-m-2.ansi` | 75x19 | 256 | 8 | ice-fishing validation: two taut PASS lines, one slack null on the FAIL tally |
-| `candy-forms-8-256-s-1.ansi` | 52x14 | 256 | 9 | lighthouse beacon guiding a payload ship past REQ, NULL and REGEX rocks |
-| `candy-forms-8-256-s-2.ansi` | 64x13 | 256 | 8 | beehive comb of hexagonal checkboxes with a queen cell and capped records |
-| `candy-forms-8-tc-l-1.ansi` | 133x28 | truecolor | 11 | tall-ship rigging inspection: ratline rungs as bindings, bulwark manifest, signal flags |
-| `candy-forms-9-16-l-1.ansi` | 150x33 | 16 | 7 | seismograph station: 14 trace rows of keystroke tremors, magnitude scale, readings board |
-| `candy-forms-9-16-l-2.ansi` | 156x33 | 16 | 6 | confessional queue: penitent fields at the grille, absolution ledger, hail-keystroke rail |
-| `candy-forms-9-16-m-1.ansi` | 84x21 | 16 | 7 | keystroke toll plaza: four booths enforcing rules, barrier arms, coin-per-character receipts |
-| `candy-forms-9-16-m-2.ansi` | 80x23 | 16 | 6 | validation locksmith bench: pin-tumbler password cylinder, key-blank rack verdicts, pick guard |
-| `candy-forms-9-16-s-1.ansi` | 60x10 | 16 | 6 | loom of text: warp threads for email/agree fields, shuttle autocomplete, shed = tab order |
-| `candy-forms-9-16-s-2.ansi` | 58x14 | 16 | 7 | focus elevator shaft: floors F1-F5 as fields, car at name floor, TAB travel cable |
-| `candy-forms-9-256-l-1.ansi` | 160x28 | 256 | 12 | midnight toll gantry: five lit booths, LED message board, weigh station, runaway ramp |
-| `candy-forms-9-256-l-2.ansi` | 168x50 | 256 | 12 | the great shaft: nine-floor focus elevator tower with indicator board down to the model machine room |
-| `candy-forms-9-256-m-1.ansi` | 82x23 | 256 | 12 | payload ferry terminal: deck-loaded fields crossing the input stream, radio-post bollards |
-| `candy-forms-9-256-m-2.ansi` | 84x25 | 256 | 13 | field conditions weather station: spinner anemometer, typing rain gauge, predictor vane, logbook |
-| `candy-forms-9-256-s-1.ansi` | 66x16 | 256 | 26 | darkroom: textarea negatives on a clothesline, developer/stop/fixer trays, safelight rule |
-| `candy-forms-9-256-s-2.ansi` | 68x12 | 256 | 18 | salt pans: form brine evaporated into value crystals, graded beds, tide-gauge slider |
-<!-- END candy-forms SLOTS -->
+| `sugar-forms-1-16-l-1.ansi` | 158x29 | 16 | 12 | Full-page intake sheet: CANDY FORMS masthead, sections A/B, checkbox grid, signature |
+| `sugar-forms-1-16-l-2.ansi` | 142x28 | 16 | 11 | Wide field ledger: rainbow CANDY FORMS banner over a thirteen-row widget roll |
+| `sugar-forms-1-16-m-1.ansi` | 80x18 | 16 | 6 | Green-phosphor console: CANDY/FORMS block letters flank a live status panel |
+| `sugar-forms-1-16-m-2.ansi` | 77x19 | 16 | 11 | Overlapping CGA dialogs — select, input, confirm — tiled like a retro WM |
+| `sugar-forms-1-16-s-1.ansi` | 44x10 | 16 | 10 | Confirm gate dialog with radio choice under a night sky |
+| `sugar-forms-1-16-s-2.ansi` | 42x9 | 16 | 7 | Text input close-up with glowing block cursor and hint line |
+| `sugar-forms-1-16-s-3.ansi` | 43x9 | 16 | 10 | Password field, segmented strength meter, validator tick row |
+| `sugar-forms-1-256-l-1.ansi` | 169x30 | 256 | 31 | Three-pane FilePicker: folder tree, ☑ multi-select list, preview pane, scroll rail |
+| `sugar-forms-1-256-l-2.ansi` | 160x31 | 256 | 75 | Election-ballot scene: punch holes, candy referenda, half-block ballot edges |
+| `sugar-forms-1-256-m-1.ansi` | 71x19 | 256 | 29 | Open Select dropdown with fuzzy filter highlighting the matched prefix |
+| `sugar-forms-1-256-m-2.ansi` | 82x19 | 256 | 21 | Validator gauntlet: pass/fail verdicts, red squiggle, rejection stamp |
+| `sugar-forms-1-256-m-3.ansi` | 71x19 | 256 | 31 | TextArea editor: gutter line numbers, scrollbar rail, vim INSERT badge |
+| `sugar-forms-1-256-s-1.ansi` | 51x7 | 256 | 25 | Spinner holding screen: candy dots, gradient progress bar, field roll-call |
+| `sugar-forms-1-256-s-2.ansi` | 50x13 | 256 | 16 | Exploding required-asterisk starburst in hot magenta |
+| `sugar-forms-1-tc-l-1.ansi` | 192x30 | truecolor | 262 | Cathedral of questionnaires: rose-window spinner, arches, pews that are input fields |
+| `sugar-forms-1-tc-l-2.ansi` | 180x28 | truecolor | 605 | Garden scene: beds of input fields sprouting checkboxes, rain of keystrokes, signboard |
+| `sugar-forms-1-tc-m-1.ansi` | 88x22 | truecolor | 151 | Candy factory: forms hopper, gears and rollers, conveyor of candy-colored fields |
+| `sugar-forms-1-tc-m-2.ansi` | 87x20 | truecolor | 72 | Aurora night sky over an input box with a glowing fuzzy autocomplete dropdown |
+| `sugar-forms-1-tc-m-3.ansi` | 87x18 | truecolor | 59 | Split panel of vim INSERT vs NORMAL modes with text-object buffer diagram |
+| `sugar-forms-1-tc-s-1.ansi` | 48x9 | truecolor | 150 | Rainbow-bordered sign-in card with glowing cursor and candy button |
+| `sugar-forms-1-tc-s-2.ansi` | 47x6 | truecolor | 57 | Range slider with rainbow track and glowing knob at 73 percent |
+| `sugar-forms-10-16-l-1.ansi` | 131x28 | 16 | 7 | Election hall panorama: block CANDY FORMS banner over six lever booths, ballot box, tally |
+| `sugar-forms-10-16-l-2.ansi` | 122x28 | 16 | 7 | Chairlift line of committed fields over regex switchbacks with gate-arm validator row |
+| `sugar-forms-10-16-m-1.ansi` | 81x19 | 16 | 7 | Top-down field-focus maze: cursor threads name/email/passwd/city corridors to SUBMIT |
+| `sugar-forms-10-16-m-2.ansi` | 76x19 | 16 | 7 | Night-shift security desk: six CCTV field-feeds, two flagged, REC counter running |
+| `sugar-forms-10-16-s-1.ansi` | 69x9 | 16 | 7 | Voting booth trio with brass ballot levers, one mid-pull and counted |
+| `sugar-forms-10-16-s-2.ansi` | 58x9 | 16 | 7 | Ski-lift turnstile gate scanning a pass, green arm lifted for the skier |
+| `sugar-forms-10-256-l-1.ansi` | 132x28 | 256 | 26 | Café hall: espresso machine radio group, order wheel, menu board of every widget |
+| `sugar-forms-10-256-l-2.ansi` | 122x29 | 256 | 35 | Dawn ski panorama: gradient sky bands, chairlift of fields, LED pass/scanner gates |
+| `sugar-forms-10-256-m-1.ansi` | 87x18 | 256 | 25 | Apothecary counter: seven tincture bottles per field type, Rx ticket and brass scale |
+| `sugar-forms-10-256-m-2.ansi` | 84x18 | 256 | 23 | Validation quilt in an embroidery hoop: 8 stitched patches, needle follows tab order |
+| `sugar-forms-10-256-s-1.ansi` | 58x9 | 256 | 23 | Barista order ticket on the rail: size/milk/shots fields clipped under steam |
+| `sugar-forms-10-tc-l-1.ansi` | 169x28 | truecolor | 654 | Security ops room: 8-feed gradient video wall, ticker, desk and floor glow |
+| `sugar-forms-10-tc-l-2.ansi` | 149x28 | truecolor | 406 | Midnight apothecary: glowing bottle shelves under moon-window gradient, cat on ledgers |
+| `sugar-forms-10-tc-m-1.ansi` | 84x19 | truecolor | 569 | Ballot booth close-up: gradient curtain folds, brass lever mid-throw, one ☑ card |
+| `sugar-forms-10-tc-m-2.ansi` | 86x18 | truecolor | 238 | Latte-art autocomplete: foam-heart cup, ghost-text steam, suggestion chips |
+| `sugar-forms-10-tc-s-1.ansi` | 52x12 | truecolor | 245 | Locksmith key cabinet: five brass keyed fields, one turned key glows in its ward |
+| `sugar-forms-10-tc-s-2.ansi` | 69x10 | truecolor | 153 | CCTV tube close-up: phosphor scan of a validated email feed, REC dot lit |
+| `sugar-forms-2-16-l-1.ansi` | 120x37 | 16 | 7 | Widget zoo: CANDY FORMS banner over eight boxed primitive exhibits |
+| `sugar-forms-2-16-l-2.ansi` | 121x30 | 16 | 7 | Three-act validation drama from cascading red errors to a green curtain call |
+| `sugar-forms-2-16-m-1.ansi` | 74x18 | 16 | 7 | Sign-up gauntlet: inputs, radios, checkboxes, candy meter, submit |
+| `sugar-forms-2-16-m-2.ansi` | 82x18 | 16 | 5 | Open select dropdown: cursor row, underlined fuzzy match, scrollbar |
+| `sugar-forms-2-16-m-3.ansi` | 72x18 | 16 | 6 | Confirm cascade: five yes/no forks with default-letter grammar |
+| `sugar-forms-2-16-s-1.ansi` | 55x9 | 16 | 6 | Block CANDY FORMS wordmark above focused name and password inputs |
+| `sugar-forms-2-16-s-2.ansi` | 50x9 | 16 | 6 | Validator ticket strip with one bitter MaxLength failure |
+| `sugar-forms-2-256-l-1.ansi` | 135x28 | 256 | 23 | Theme console: sidebar navigation beside a Nocturne palette editor |
+| `sugar-forms-2-256-l-2.ansi` | 140x28 | 256 | 15 | Vim keybindings poster: mode ring diagram plus text-object grammar table |
+| `sugar-forms-2-256-m-1.ansi` | 87x18 | 256 | 12 | MultiSelect checklist with fuzzy filter, scrollbar and Smith-Waterman scores |
+| `sugar-forms-2-256-m-2.ansi` | 78x19 | 256 | 11 | FilePicker tree: type-colored files, cursor row, path bar |
+| `sugar-forms-2-256-s-1.ansi` | 52x5 | 256 | 19 | Masked password with 256-color strength ramp and validator line |
+| `sugar-forms-2-256-s-2.ansi` | 58x6 | 256 | 36 | Spinner frame parade: braille dots, moons, cadence meter, async wait |
+| `sugar-forms-2-tc-l-1.ansi` | 132x28 | truecolor | 404 | Giant CANDY FORMS gradient banner crowning a completed truecolor form |
+| `sugar-forms-2-tc-l-2.ansi` | 143x31 | truecolor | 352 | Keystroke-to-submit dataflow with per-character live validation trace |
+| `sugar-forms-2-tc-m-1.ansi` | 84x20 | truecolor | 179 | TextArea panel: gradient frame, line gutter, tinted rows, scrollbar |
+| `sugar-forms-2-tc-m-2.ansi` | 90x18 | truecolor | 43 | Async autocomplete: gradient prefix matches, live spinner, cancel note |
+| `sugar-forms-2-tc-s-1.ansi` | 54x5 | truecolor | 101 | Truecolor SugarForms wordmark over twin hue-swept gradient bars |
+| `sugar-forms-2-tc-s-2.ansi` | 67x5 | truecolor | 28 | Email field close-up: gradient glyphs, glowing @ sigil, green checks |
+| `sugar-forms-2-tc-s-3.ansi` | 47x5 | truecolor | 132 | Sweetness index: four truecolor gradient meters, tart to molten |
+| `sugar-forms-3-16-l-1.ansi` | 150x36 | 16 | 7 | full blueprint: field lifecycle + form orchestration + transition ledger table |
+| `sugar-forms-3-16-l-2.ansi` | 160x38 | 16 | 8 | tab-order panorama: CANDY FORMS block banner over numbered 9-field sheet |
+| `sugar-forms-3-16-m-1.ansi` | 84x22 | 16 | 7 | form state machine: idle→editing→validating→submit→done with error edge |
+| `sugar-forms-3-16-m-2.ansi` | 86x20 | 16 | 7 | key-to-focus travel map: keyboard left, field rail right, arrow glossary |
+| `sugar-forms-3-16-m-3.ansi` | 80x20 | 16 | 7 | submission timeline lanes: keystrokes/validators/focus/network beats |
+| `sugar-forms-3-16-s-1.ansi` | 56x14 | 16 | 7 | TAB focus-travel loop: six field chips ringed by forward/rewind arrows |
+| `sugar-forms-3-16-s-2.ansi` | 52x11 | 16 | 7 | error-correction arc: squiggle field, sine-hop to a green fixed card |
+| `sugar-forms-3-16-s-3.ansi` | 46x9 | 16 | 5 | compact three-field focus map with shift-tab rewind note |
+| `sugar-forms-3-256-l-1.ansi` | 200x38 | 256 | 19 | five-panel wizard panorama with gradient rail and per-step state ledger |
+| `sugar-forms-3-256-l-2.ansi` | 200x34 | 256 | 22 | autocomplete constellation: orbit rings, scored chips, rank bars |
+| `sugar-forms-3-256-m-1.ansi` | 88x20 | 256 | 19 | multiselect heat lattice: option scores beside sine-heated combo grid |
+| `sugar-forms-3-256-m-2.ansi` | 86x24 | 256 | 19 | error-correction arc panorama: attempt 1 fails, arc climbs to attempt 2 |
+| `sugar-forms-3-256-s-1.ansi` | 62x10 | 256 | 14 | password entropy dots: ramp196→46 across masked glyphs, bits readout |
+| `sugar-forms-3-256-s-2.ansi` | 68x8 | 256 | 6 | wizard step rail: five medallions, done/current/locked in 256 hues |
+| `sugar-forms-3-256-s-3.ansi` | 58x6 | 256 | 7 | validator tick strip chips with chain short-circuit note |
+| `sugar-forms-3-tc-l-1.ansi` | 180x30 | truecolor | 429 | CANDYFORMS block wordmark in pink→gold gradient over aurora + mini form |
+| `sugar-forms-3-tc-l-2.ansi` | 200x42 | truecolor | 1141 | form state machine painted over a truecolor aurora field with legend |
+| `sugar-forms-3-tc-m-1.ansi` | 88x22 | truecolor | 186 | password entropy art: per-glyph heat diamonds over a grain-noise field |
+| `sugar-forms-3-tc-m-2.ansi` | 88x24 | truecolor | 167 | wizard ribbon: sine-wave gradient band threading five step knots |
+| `sugar-forms-3-tc-m-3.ansi` | 88x22 | truecolor | 170 | textarea with gradient frame, fading cursor trail, resize corner |
+| `sugar-forms-3-tc-s-1.ansi` | 60x7 | truecolor | 121 | gradient SUBMIT pill with half-cell shine and melting shadow |
+| `sugar-forms-3-tc-s-2.ansi` | 66x10 | truecolor | 12 | half-cell focus glow: cyan ring bleeds through ▀▄ around focused input |
+| `sugar-forms-4-16-l-1.ansi` | 153x29 | 16 | 7 | Block CANDY FORMS wordmark over a sixteen-pen field-creature menagerie |
+| `sugar-forms-4-16-l-2.ansi` | 153x28 | 16 | 7 | Avalanche mural: a whole mountainside of fields sliding into the SUBMIT gate |
+| `sugar-forms-4-16-m-1.ansi` | 85x20 | 16 | 7 | Widget petting zoo: fenced pens of field-creatures (blink-cat, tick-toad...) |
+| `sugar-forms-4-16-m-2.ansi` | 83x18 | 16 | 7 | The Great Submit avalanche: a slope of fields tumbling into SUBMIT |
+| `sugar-forms-4-256-l-1.ansi` | 181x28 | 256 | 63 | 256-color block wordmark over a 24-enclosure petting zoo of field creatures |
+| `sugar-forms-4-256-l-2.ansi` | 179x28 | 256 | 12 | Border-control hall: six inspector lanes above a stamped arrivals ledger |
+| `sugar-forms-4-256-m-1.ansi` | 87x18 | 256 | 13 | Border-patrol checkpoint: inspector booths over a queue of stamped values |
+| `sugar-forms-4-256-m-2.ansi` | 85x18 | 256 | 15 | Password blacksmith at the forge: furnace, anvil, hammer, tempering ramp |
+| `sugar-forms-4-256-s-1.ansi` | 55x11 | 256 | 9 | Password blacksmith mini-forge: glowing bar on anvil, heat-strength meter |
+| `sugar-forms-4-tc-l-1.ansi` | 171x28 | truecolor | 239 | Truecolor forge epic: gradient wordmark over furnace, anvil, tempering ramp |
+| `sugar-forms-4-tc-l-2.ansi` | 171x28 | truecolor | 1431 | Dreamscape mural: sleeping cursor, moon, and empty-field islands on gradient clouds |
+| `sugar-forms-4-tc-m-1.ansi` | 89x18 | truecolor | 42 | Tab-key pinball playfield: ball of focus ricochets off glowing field bumpers |
+| `sugar-forms-4-tc-m-2.ansi` | 85x19 | truecolor | 247 | Placeholder dreamscape: empty fields adrift on a moonlit cloud of ghost text |
+| `sugar-forms-4-tc-s-1.ansi` | 59x10 | truecolor | 61 | Gradient SUBMIT rocket lifting off through a shower of sparks |
+| `sugar-forms-4-tc-s-2.ansi` | 44x8 | truecolor | 97 | CANDY FORMS wordmark woven from stacked truecolor field bars |
+| `sugar-forms-5-16-l-1.ansi` | 150x30 | 16 | 6 | form wizard as fifteen-tile serpentine board game with pawn and die |
+| `sugar-forms-5-16-l-2.ansi` | 132x29 | 16 | 5 | owl oracle at maze gate lighting the prefix corridor of suggestions |
+| `sugar-forms-5-16-m-1.ansi` | 82x21 | 16 | 7 | select dropdown revealed between folded playhouse curtains |
+| `sugar-forms-5-16-m-2.ansi` | 80x19 | 16 | 6 | password vault door with three digit dials and validator checklist |
+| `sugar-forms-5-16-s-1.ansi` | 56x11 | 16 | 5 | checkbox garden harvest rows with ripe crate meter |
+| `sugar-forms-5-16-s-2.ansi` | 58x13 | 16 | 6 | radio mast with waves and ON AIR card over a tuned band |
+| `sugar-forms-5-256-m-1.ansi` | 86x22 | 256 | 15 | textarea rice paddy with row gutter, scrollbar and cursor-heron |
+| `sugar-forms-5-256-m-2.ansi` | 84x21 | 256 | 22 | radio tower fading signal arcs with boxed chosen frequency |
+| `sugar-forms-5-256-s-1.ansi` | 62x13 | 256 | 17 | autocomplete oracle with ghost completion fading along the caret |
+| `sugar-forms-5-256-s-2.ansi` | 58x11 | 256 | 9 | brass vault dial trio with turns meter and passphrase entropy |
+| `sugar-forms-5-tc-l-1.ansi` | 172x35 | truecolor | 66 | twenty-eight-tile rainbow wizard board with pawn, die and traps |
+| `sugar-forms-5-tc-l-2.ansi` | 160x34 | truecolor | 264 | dawn radio band with gradient beams, station cards and rainbow spectrum bars |
+| `sugar-forms-5-tc-m-1.ansi` | 88x24 | truecolor | 47 | dusk rice paddy with gradient sky, sun disc and heron-silhouette cursor |
+| `sugar-forms-5-tc-m-2.ansi` | 80x19 | truecolor | 17 | nine-mood checkbox lifecycle arrayed along a hue timeline |
+| `sugar-forms-5-tc-s-2.ansi` | 64x10 | truecolor | 22 | ghost autocomplete caret fading into three lantern suggestion chips |
+| `sugar-forms-6-16-l-1.ansi` | 150x30 | 16 | 7 | marionette workshop: puppet rig holding field banners on validator strings |
+| `sugar-forms-6-16-s-2.ansi` | 58x11 | 16 | 7 | tailor's mask atelier: measuring-tape ruler with fitted ##/ZZZ patterns |
+| `sugar-forms-6-256-l-1.ansi` | 150x28 | 256 | 21 | artist atelier: easel canvases as field layout, skylight, paint palette |
+| `sugar-forms-6-256-l-2.ansi` | 130x36 | 256 | 20 | orrery of field states: orbits are tab order, planets touched/valid/fail/empty |
+| `sugar-forms-6-256-m-1.ansi` | 86x22 | 256 | 18 | deep-sea submersible: portholes onto masked fields, depth gauge, lamp cone |
+| `sugar-forms-6-256-m-2.ansi` | 84x18 | 256 | 15 | kaiten sushi select: option plates on belt, heat-lamp cursor row, order slip |
+| `sugar-forms-6-256-s-1.ansi` | 54x9 | 256 | 10 | field hospital triage: input cots tagged RED/GREEN/AMBER by validator vitals |
+| `sugar-forms-6-256-s-2.ansi` | 56x13 | 256 | 9 | clockmaker bench: meshing validator gears and pendulum escapement verdict |
+| `sugar-forms-6-tc-l-1.ansi` | 160x34 | truecolor | 49 | aquarium select tanks: gradient water, labeled fish options, glowing cursor band |
+| `sugar-forms-6-tc-l-2.ansi` | 150x36 | truecolor | 58 | abyssal anglerfish: lure as top suggestion, school of masked-dot fields |
+| `sugar-forms-7-16-l-1.ansi` | 150x36 | 16 | 7 | grand intake hall: sorting wall, four bays, clerks |
+| `sugar-forms-7-16-l-2.ansi` | 154x33 | 16 | 6 | customs hall: six lamp-lit lanes and stamp archive |
+| `sugar-forms-7-16-m-1.ansi` | 80x22 | 16 | 7 | post office counter: sorting wall, scale, stamp jar |
+| `sugar-forms-7-16-m-2.ansi` | 81x23 | 16 | 6 | customs checkpoint lanes with verdict stamps |
+| `sugar-forms-7-16-s-1.ansi` | 60x13 | 16 | 6 | post office brass intake slot with queued forms |
+| `sugar-forms-7-16-s-2.ansi` | 61x11 | 16 | 6 | customs booth inspecting a declaration form |
+| `sugar-forms-7-256-l-1.ansi` | 160x28 | 256 | 6 | bank lobby: arched tellers, vault of sealed forms |
+| `sugar-forms-7-256-l-2.ansi` | 140x28 | 256 | 9 | card catalog drawers, checkout card and due stamps |
+| `sugar-forms-7-256-m-1.ansi` | 82x20 | 256 | 11 | bank teller row with split-flap LEDs and pipeline |
+| `sugar-forms-7-256-m-2.ansi` | 83x19 | 256 | 11 | bakery master recipe as dual-fieldset form |
+| `sugar-forms-7-256-s-1.ansi` | 51x10 | 256 | 8 | bank queue terminal with amber serving board |
+| `sugar-forms-7-256-s-2.ansi` | 49x10 | 256 | 9 | recipe card rendered as validated form fields |
+| `sugar-forms-7-tc-l-2.ansi` | 124x29 | truecolor | 404 | box office facade, marquee bulbs and seat form |
+| `sugar-forms-7-tc-m-1.ansi` | 86x18 | truecolor | 111 | playhouse seat chart, three seats glowing |
+| `sugar-forms-7-tc-s-1.ansi` | 51x8 | truecolor | 31 | theater marquee stub with seat B12 aglow |
+| `sugar-forms-7-tc-s-2.ansi` | 46x11 | truecolor | 24 | greenhouse tag with water and light meters |
+| `sugar-forms-8-16-l-1.ansi` | 144x28 | 16 | 7 | board-game store wall: shelves of boxed form widgets, clerk, register and cart |
+| `sugar-forms-8-16-l-2.ansi` | 172x28 | 16 | 7 | model-train layout of field wiring: X-crossing, relays and fuse taps under the board |
+| `sugar-forms-8-16-m-1.ansi` | 75x21 | 16 | 7 | bird feeder station: seed hopper and five finches numbered on queue perches |
+| `sugar-forms-8-256-l-1.ansi` | 140x28 | 256 | 8 | freight yard: a gantry crane lifts an EMAIL container over stencilled stacks |
+| `sugar-forms-8-256-l-2.ansi` | 137x29 | 256 | 10 | observatory dome beneath field-constellations, its plotted catalogue open beside it |
+| `sugar-forms-8-256-m-1.ansi` | 77x20 | 256 | 10 | laundromat: four front-loaders cycling email/text/pwd loads above a token basket |
+| `sugar-forms-8-256-m-2.ansi` | 75x19 | 256 | 8 | ice-fishing validation: two taut PASS lines, one slack null on the FAIL tally |
+| `sugar-forms-8-256-s-1.ansi` | 52x14 | 256 | 9 | lighthouse beacon guiding a payload ship past REQ, NULL and REGEX rocks |
+| `sugar-forms-8-256-s-2.ansi` | 64x13 | 256 | 8 | beehive comb of hexagonal checkboxes with a queen cell and capped records |
+| `sugar-forms-8-tc-l-1.ansi` | 133x28 | truecolor | 11 | tall-ship rigging inspection: ratline rungs as bindings, bulwark manifest, signal flags |
+| `sugar-forms-9-16-l-1.ansi` | 150x33 | 16 | 7 | seismograph station: 14 trace rows of keystroke tremors, magnitude scale, readings board |
+| `sugar-forms-9-16-l-2.ansi` | 156x33 | 16 | 6 | confessional queue: penitent fields at the grille, absolution ledger, hail-keystroke rail |
+| `sugar-forms-9-16-m-1.ansi` | 84x21 | 16 | 7 | keystroke toll plaza: four booths enforcing rules, barrier arms, coin-per-character receipts |
+| `sugar-forms-9-16-m-2.ansi` | 80x23 | 16 | 6 | validation locksmith bench: pin-tumbler password cylinder, key-blank rack verdicts, pick guard |
+| `sugar-forms-9-16-s-1.ansi` | 60x10 | 16 | 6 | loom of text: warp threads for email/agree fields, shuttle autocomplete, shed = tab order |
+| `sugar-forms-9-16-s-2.ansi` | 58x14 | 16 | 7 | focus elevator shaft: floors F1-F5 as fields, car at name floor, TAB travel cable |
+| `sugar-forms-9-256-l-1.ansi` | 160x28 | 256 | 12 | midnight toll gantry: five lit booths, LED message board, weigh station, runaway ramp |
+| `sugar-forms-9-256-l-2.ansi` | 168x50 | 256 | 12 | the great shaft: nine-floor focus elevator tower with indicator board down to the model machine room |
+| `sugar-forms-9-256-m-1.ansi` | 82x23 | 256 | 12 | payload ferry terminal: deck-loaded fields crossing the input stream, radio-post bollards |
+| `sugar-forms-9-256-m-2.ansi` | 84x25 | 256 | 13 | field conditions weather station: spinner anemometer, typing rain gauge, predictor vane, logbook |
+| `sugar-forms-9-256-s-1.ansi` | 66x16 | 256 | 26 | darkroom: textarea negatives on a clothesline, developer/stop/fixer trays, safelight rule |
+| `sugar-forms-9-256-s-2.ansi` | 68x12 | 256 | 18 | salt pans: form brine evaporated into value crystals, graded beds, tide-gauge slider |
+<!-- END sugar-forms SLOTS -->
 
 <!-- BEGIN candy-layout SLOTS -->
 ### candy-layout — slot series

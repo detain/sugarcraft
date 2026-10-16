@@ -20,7 +20,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 | Merge `candy-files/src/AsyncOps` into `candy-async/src/AsyncOps` | Both implement the same `Deferred` + `futureTick` pattern; file operations could reuse async utilities | `ref:repeated_logic.md` Finding #5 |
 | Document `::new()` factory as required pattern | 3,042 call sites = de facto standard; CALIBER_LEARNINGS.md should explicitly require it for all new classes | `ref:repeated_logic.md` Finding #6 |
 | Keep Model interface, i18n, Width, Ansi as-is | Already well-centralized with 92/41/736/700+ lines of well-tested code; no duplication detected | `ref:repeated_logic.md` Findings #2, #3, #7, #10 |
-| Keep Validator interface in candy-forms | Already well-structured and re-exported from candy-forms; only low duplication outside forms context | `ref:repeated_logic.md` Finding #8 |
+| Keep Validator interface in sugar-forms | Already well-structured and re-exported from sugar-forms; only low duplication outside forms context | `ref:repeated_logic.md` Finding #8 |
 
 ---
 
@@ -30,7 +30,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 
 **What:** Create `candy-core/src/Util/Clamp.php` with a reusable clamping utility.
 
-**Why:** Four different clamp implementations exist across candy-git, candy-palette, sugar-widgets, and candy-forms. A centralized utility ensures consistency and reduces maintenance burden.
+**Why:** Four different clamp implementations exist across candy-git, candy-palette, sugar-widgets, and sugar-forms. A centralized utility ensures consistency and reduces maintenance burden.
 
 **Severity:** Medium
 
@@ -39,7 +39,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 - `candy-git/src/App.php:L515` — `private function clamp(int $i, int $size): int`
 - `candy-palette/src/Color.php:L67` — `private static function clamp(int $v): int` (0-255 range)
 - `sugar-widgets/src/Tree/Tree.php:L317` — `private function clamp(): self`
-- `candy-forms/src/Viewport/Viewport.php:L462` — `private function clamp(): self`
+- `sugar-forms/src/Viewport/Viewport.php:L462` — `private function clamp(): self`
 
 **Implementation:**
 
@@ -110,7 +110,7 @@ final class Clamp
 
 **Source locations:**
 
-- `candy-forms/src/Viewport/Viewport.php:L57` — `throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'))`
+- `sugar-forms/src/Viewport/Viewport.php:L57` — `throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'))`
 - `sugar-charts/src/Heatmap/Heatmap.php:L55` — `throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'))`
 - `sugar-widgets/src/Table/Table.php:L66` — `throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'))`
 - `candy-minesweeper/src/Board.php:L36` — `throw new \InvalidArgumentException(Lang::t('board.too_small'))`
@@ -254,11 +254,11 @@ Add to `CALIBER_LEARNINGS.md`:
 **Source locations:**
 
 - Canonical trait: `candy-core/src/Concerns/Mutable.php:L27-L39`
-- 35 local implementations found via grep across: `sugar-overlay/Veil.php`, `candy-forms/Field/Input.php`, `candy-forms/Field/Select.php`, `candy-buffer/Style.php`, `candy-git/App.php`, etc.
+- 35 local implementations found via grep across: `sugar-overlay/Veil.php`, `sugar-forms/Field/Input.php`, `sugar-forms/Field/Select.php`, `candy-buffer/Style.php`, `candy-git/App.php`, etc.
 
 **Known reasons for local implementation:**
 
-1. **Sentinel-bool pattern (Style, Select, Input, TextArea):** Classes with nullable fields that need `bool $XSet` sentinels cannot use the simple `array $changes` pattern. Example from `candy-forms/src/Field/Input.php:L550`:
+1. **Sentinel-bool pattern (Style, Select, Input, TextArea):** Classes with nullable fields that need `bool $XSet` sentinels cannot use the simple `array $changes` pattern. Example from `sugar-forms/src/Field/Input.php:L550`:
    ```php
    private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null, bool $errorSet = false): self
    ```
@@ -350,7 +350,7 @@ Update the entry to explicitly list when local override IS required:
 
 ### 5.1 Evaluate Validator Interface for Broader Adoption [PENDING]
 
-**What:** Assess whether the `Validator` interface in `candy-forms` should be promoted to `candy-core` for broader monorepo use.
+**What:** Assess whether the `Validator` interface in `sugar-forms` should be promoted to `candy-core` for broader monorepo use.
 
 **Why:** The Validator interface is well-designed but only used within forms/prompt contexts. It could potentially serve input validation needs across the broader monorepo.
 
@@ -358,18 +358,18 @@ Update the entry to explicitly list when local override IS required:
 
 **Source locations:**
 
-- Interface: `candy-forms/src/Validator/Validator.php:L12-L17`
+- Interface: `sugar-forms/src/Validator/Validator.php:L12-L17`
 - Implementations: `Required.php`, `Email.php`, `Pattern.php`, `MinLength.php`, `MaxLength.php`
 
 **Implementation:**
 
 If evaluation recommends promotion:
 1. Move `Validator` interface + implementations to `candy-core/src/Validator/`
-2. Update `candy-forms/composer.json` to depend on `candy-core`
-3. Update re-export in `candy-forms`
+2. Update `sugar-forms/composer.json` to depend on `candy-core`
+3. Update re-export in `sugar-forms`
 
 If evaluation recommends keeping as-is:
-- Document in CALIBER_LEARNINGS.md that Validator lives in candy-forms and is the standard for input validation
+- Document in CALIBER_LEARNINGS.md that Validator lives in sugar-forms and is the standard for input validation
 
 **Verification:**
 
@@ -383,13 +383,13 @@ If evaluation recommends keeping as-is:
 | Priority | Item | Action | Files Affected |
 |----------|------|--------|----------------|
 | High | 3.1 Mutable trait gap audit | Delegation to researcher | All 35 implementation files |
-| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, candy-palette, sugar-widgets, candy-forms |
+| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, candy-palette, sugar-widgets, sugar-forms |
 | Medium | 1.2 Validation utilities | Create new utility + migrate callers | candy-core, + 5-10 calling libs |
 | Medium | 2.1 AsyncOps audit | Delegation/investigation | candy-async, candy-files |
 | Medium | 4.1 Mutable trait guidance | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 1.3 ::new() factory contract | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 4.2 AsyncOps ADR | Create ADR document | docs/adr/001-asyncops-consolidation.md |
-| Low | 5.1 Validator evaluation | Investigate and decide | candy-core, candy-forms, candy-forms |
+| Low | 5.1 Validator evaluation | Investigate and decide | candy-core, sugar-forms, sugar-forms |
 
 ---
 

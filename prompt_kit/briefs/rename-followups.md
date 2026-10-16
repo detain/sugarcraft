@@ -113,3 +113,10 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   `~/.cache/sugar-dashboard/` (WeatherModule cache — stale-tolerant, worst case one refetch) and <!-- @rename-keep -->
   `~/.config/sugar-dash/plugins` → `~/.config/sugar-dashboard/plugins` (Plugin/Discovery — users with external <!-- @rename-keep -->
   plugins under the old dir need to move them; owner triage if a shim is desired).
+
+## C10 candy-forms→sugar-forms (2026-10-16, lane rename/c10) <!-- @rename-keep -->
+- ansi/sugar-forms/*.ansi (158 files) + ansi/sugar-forms/50-sugar-forms.ansi still render old <!-- @rename-keep -->**CandyForms** / <!-- @rename-keep -->**CANDYFORMS** / <!-- @rename-keep -->**CANDY FORMS** wordmarks — pixel-art content excluded from rename tooling by design (C.3); needs hand-art re-roll. <!-- @rename-keep -->
+- ansi/ansi.json desc "Truecolor SugarForms wordmark over twin hue-swept gradient bars" now leads the art (rewrite R2 on desc only); sibling desc "…CANDYFORMS block wordmark…" remains byte-true. <!-- @rename-keep -->
+- media/icons/sugar-forms.png + docs/img/icons/sugar-forms.png: bytes unchanged (old-brand artwork at new path).
+- .vhs/*.tape render rules kept filenames; recorded GIFs still show old brand until CI re-render. <!-- @rename-keep -->
+- ansi/sugarcraft/sugarcraft-{2-16-l-1,2-256-l-1,3-16-l-2,5-256-l-1}.ansi banner art embeds old candy-forms slug in <!-- @rename-keep -->pixel content. <!-- @rename-keep -->

@@ -558,7 +558,7 @@ Build MCP server exposing sugar-dashboard components as tools for AI agents to g
 
 Charts and dashboards naturally compose — ensure seamless integration.
 
-### 3. Integration with candy-forms
+### 3. Integration with sugar-forms
 
 Form inputs (Textarea, Select, etc.) should integrate with dashboard layouts.
 

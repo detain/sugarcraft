@@ -301,20 +301,20 @@ func (m *Model[T]) filteredAndPagedChoices() ([]*Choice[T], int) {
 
 | PromptKit Feature | SugarCraft Library | Notes |
 |-----------------|---------------------|-------|
-| Selection prompt (`Selection[T]`) | `candy-forms` | Core selection TUI component, maps to `SugarCraft\Forms\Selection` |
-| Multi-selection prompt (`MultiSelection[T]`) | `candy-forms` | Multi-select variant |
-| TextInput prompt (`TextInput`) | `candy-forms` | Text input component |
-| TextArea prompt (`TextArea`) | `candy-forms` | Multi-line text area |
-| Confirmation prompt (`Confirmation`) | `candy-forms` | Yes/no prompt |
-| Template-based rendering | `candy-forms` | Uses template system similar to SugarCraft's view templates |
-| KeyMap/keybindings | `candy-forms` | Key binding configuration |
+| Selection prompt (`Selection[T]`) | `sugar-forms` | Core selection TUI component, maps to `SugarCraft\Forms\Selection` |
+| Multi-selection prompt (`MultiSelection[T]`) | `sugar-forms` | Multi-select variant |
+| TextInput prompt (`TextInput`) | `sugar-forms` | Text input component |
+| TextArea prompt (`TextArea`) | `sugar-forms` | Multi-line text area |
+| Confirmation prompt (`Confirmation`) | `sugar-forms` | Yes/no prompt |
+| Template-based rendering | `sugar-forms` | Uses template system similar to SugarCraft's view templates |
+| KeyMap/keybindings | `sugar-forms` | Key binding configuration |
 | Lipgloss styling | `candy-shine` | Style system for terminal colors/formatting |
 | BubbleTea Model pattern | `candy-core` | MVC pattern implementation |
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text wrapping utilities |
 
 **Mapping Notes:**
 
-- **candy-forms** would be the primary target — this library is essentially a prompt/question framework
+- **sugar-forms** would be the primary target — this library is essentially a prompt/question framework
 - The generic `Selection[T]` / `MultiSelection[T]` pattern could inform SugarCraft's type-safe component design
 - Template-based rendering is similar to how SugarCraft uses PHP templates for rendering
 - The Bubbletea `Model` interface pattern (Init/Update/View) mirrors the `Model` contract mentioned in AGENTS.md for TUI widgets
@@ -327,4 +327,4 @@ The architecture follows a clean MVC pattern where each prompt type has a `*Prom
 
 The library excels in customization depth: every aspect from key bindings to color profiles to text wrapping behavior is configurable. The built-in filtering, pagination, and auto-completion features are well-implemented, with pagination even auto-adjusting based on terminal height. Notable implementation details include the clever `commonPrefix` algorithm using sorted array endpoints, the auto-pagination binary search, and the choice type string representation priority chain.
 
-For SugarCraft, this library would map most directly to `candy-forms` — a prompt/question TUI component. The generic `Selection[T]` pattern is particularly interesting as it demonstrates how to achieve compile-time type safety with Go generics in a TUI context. The template-based rendering approach could inform SugarCraft's view system, and the clean separation between configuration and model objects could serve as a reference for the immutable `with*()` pattern mentioned in the codebase conventions.
+For SugarCraft, this library would map most directly to `sugar-forms` — a prompt/question TUI component. The generic `Selection[T]` pattern is particularly interesting as it demonstrates how to achieve compile-time type safety with Go generics in a TUI context. The template-based rendering approach could inform SugarCraft's view system, and the clean separation between configuration and model objects could serve as a reference for the immutable `with*()` pattern mentioned in the codebase conventions.

@@ -189,7 +189,7 @@ final class ChatTest extends TestCase
 
     /**
      * `$inputBuf` is DERIVED from the draft's editor (crush_code.md Phase 3
-     * item 1 replaced the hand-rolled string with `candy-forms`' TextArea), so
+     * item 1 replaced the hand-rolled string with `sugar-forms`' TextArea), so
      * the two can never be allowed to disagree about what is in the box. Every
      * write route is exercised here: the widget's own editing, the "replace
      * the whole draft" string key, and a mutation that touches neither.

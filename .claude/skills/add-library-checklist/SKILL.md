@@ -140,8 +140,8 @@ Then ship-as-you-go on branch `ai/<slug>-scaffold`: commit → push → `unset G
 **User says:** "Port charmbracelet/gum as a new sugar- lib called sugar-gum"
 
 **Actions taken:**
-1. Identity: slug `sugar-gum`, Sub `Gum`, namespace `SugarCraft\Gum\`, class `SugarGum`, upstream `charmbracelet/gum`, deps `candy-core` + `candy-forms`. `grep sugar-gum PROJECT_NAMES.md docs/MATCHUPS.md` → unclaimed.
-2–4. Create `sugar-gum/composer.json` (require + path-repos for candy-core, candy-forms + their closure copied from a lib that already uses both), `sugar-gum/phpunit.xml` (testsuite name `sugar-gum`), `sugar-gum/src/SugarGum.php` (`final`, `::new()`, `mutate()`), `sugar-gum/tests/SugarGumTest.php`. `cd sugar-gum && composer install && vendor/bin/phpunit` → green.
+1. Identity: slug `sugar-gum`, Sub `Gum`, namespace `SugarCraft\Gum\`, class `SugarGum`, upstream `charmbracelet/gum`, deps `candy-core` + `sugar-forms`. `grep sugar-gum PROJECT_NAMES.md docs/MATCHUPS.md` → unclaimed.
+2–4. Create `sugar-gum/composer.json` (require + path-repos for candy-core, sugar-forms + their closure copied from a lib that already uses both), `sugar-gum/phpunit.xml` (testsuite name `sugar-gum`), `sugar-gum/src/SugarGum.php` (`final`, `::new()`, `mutate()`), `sugar-gum/tests/SugarGumTest.php`. `cd sugar-gum && composer install && vendor/bin/phpunit` → green.
 5–14. README + CALIBER_LEARNINGS + root composer.json + MATCHUPS row (🟡) + PROJECT_NAMES + root README row + `docs/_data/sugar-gum.json` + `docs/_data/sugar-gum.body.html` → `php tools/gen-docs.php` + docs/index.html card+strip + media/icons/sugar-gum.png + vhs.yml `all=(...)` array + codecov flag+component.
 15. All verify gates green → ship on `ai/sugar-gum-scaffold`.
 

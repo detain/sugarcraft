@@ -277,8 +277,8 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `Content`, `Text`, `Span`, `Style` | `candy-shine/` | Rich text rendering |
 | `markdown`, `MarkdownViewer` widgets | `candy-shine/` | Markdown rendering |
 | `Tree`, `DirectoryTree` widgets | `sugar-treelist/` | Tree listing component |
-| `Select`, `OptionList`, `SelectionList` | `candy-forms/` | Selection widgets |
-| `Input`, `TextArea`, `MaskedInput` | `candy-forms/` | Form input components |
+| `Select`, `OptionList`, `SelectionList` | `sugar-forms/` | Selection widgets |
+| `Input`, `TextArea`, `MaskedInput` | `sugar-forms/` | Form input components |
 | `DataTable` | `sugar-table/` | Tabular data display |
 | `sparkline`, `ProgressBar` | `sugar-charts/` | Chart widgets |
 | `Tabs`, `TabbedContent`, `TabPane` | `sugar-flexbox/` | Tab container widgets |

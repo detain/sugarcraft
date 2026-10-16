@@ -20,7 +20,7 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs, 
 - **ConfirmationPrompt** — yes/no with customizable labels, decoupled select-vs-submit
 - **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap
 - **Pure renderer** — every method returns a new immutable instance; `view()` returns ANSI strings, `value()` returns the data
-- **Vim keybindings** — vi-mode (Insert/Normal/Visual/VisualLine) handled by the shared `candy-forms` `VimKeyHandler` — the same handler backing `candy-forms` and `sugar-widgets`; new bindings in `VimAction` enum benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends
+- **Vim keybindings** — vi-mode (Insert/Normal/Visual/VisualLine) handled by the shared `sugar-forms` `VimKeyHandler` — the same handler backing `sugar-forms` and `sugar-widgets`; new bindings in `VimAction` enum benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends
 
 ## Install
 
@@ -162,10 +162,10 @@ its own state survives the prompt's immutable cloning.
   flag.
 - **`ViMode`** is a modal state machine (insert → Escape → normal → `v` →
   visual, plus pending motions like `dd`/`yy`/`cc`). It does not hardcode vi
-  bindings: normal/visual keys are mapped through candy-forms'
+  bindings: normal/visual keys are mapped through sugar-forms'
   `VimKeyHandler`, which returns a `VimAction` enum case that ViMode then
   executes as TextPrompt operations. New vi bindings therefore belong in
-  candy-forms (`VimAction` + `VimKeyHandler`), not in ViMode's branching.
+  sugar-forms (`VimAction` + `VimKeyHandler`), not in ViMode's branching.
   In normal mode the cursor rests ON the last character (vi semantics), so
   `$` and Escape-at-end land on — not after — the final char.
 
@@ -175,7 +175,7 @@ its own state survives the prompt's immutable cloning.
   `{` `}` `B`, `<` `>`), or `w` for the word under the cursor. So `ci"`
   retypes a quoted string, `da{` deletes braces and contents, `diw`/`daw`
   delete a word (aw takes the trailing space), `yi(` moves the cursor to
-  the start of the parenthesized text. Resolution lives in candy-forms
+  the start of the parenthesized text. Resolution lives in sugar-forms
   (`TextObject::resolve()` via `VimKeyHandler::handleTextObject()`):
   innermost bracket pair wins, cursor-on-delimiter counts as inside,
   quotes pair up left-to-right (a cursor before a quoted region jumps

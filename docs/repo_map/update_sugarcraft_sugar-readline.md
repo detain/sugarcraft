@@ -1,6 +1,6 @@
 # Overview
 
-`sugar-readline` is a pure-PHP interactive line-editing prompt library that ports the Go `erikgeiser/promptkit` ecosystem. It provides five prompt types (Text, Confirmation, Selection, MultiSelect, Textarea) driven by a clean state-machine model where every input handler returns a new immutable instance. As a 🟢 v1-ready package with zero external dependencies, it is the lightweight alternative to the full form framework `candy-forms`/`candy-forms`.
+`sugar-readline` is a pure-PHP interactive line-editing prompt library that ports the Go `erikgeiser/promptkit` ecosystem. It provides five prompt types (Text, Confirmation, Selection, MultiSelect, Textarea) driven by a clean state-machine model where every input handler returns a new immutable instance. As a 🟢 v1-ready package with zero external dependencies, it is the lightweight alternative to the full form framework `sugar-forms`/`sugar-forms`.
 
 **Biggest opportunity areas:** Style system overhaul (replace hardcoded ANSI codes with proper Style objects), input driver integration (currently prompts have no way to read actual terminal input), cursor blink animation, mouse support, soft-wrap in Textarea, and a built-in Help component.
 
@@ -12,7 +12,7 @@
 
 ## Architecture
 
-`sugar-readline` implements prompts as **immutable value objects** — each `handleChar()`/`handleKey()` call returns a `clone` with modified state. This differs fundamentally from Bubble Tea's mutable TEA models and even from `candy-forms`'s `mutate()` helper approach.
+`sugar-readline` implements prompts as **immutable value objects** — each `handleChar()`/`handleKey()` call returns a `clone` with modified state. This differs fundamentally from Bubble Tea's mutable TEA models and even from `sugar-forms`'s `mutate()` helper approach.
 
 **Three-state machine:** `pending` → `submitted` or `aborted`. Every handler guards with:
 ```php
@@ -58,7 +58,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 4. **No mouse support** — Selection/MultiSelect don't respond to mouse clicks
 5. **Highlight is empty stub** — `Highlight::highlight()` returns single unstyled span; candy-mdview integration planned but not started
 6. **No soft-wrap in TextareaPrompt** — long lines stored as one array entry; no word-wrap at column width
-7. **Substring-only filter** — no fuzzy matching, no diacritic folding, no regex; compare to Smith-Waterman in `candy-forms`
+7. **Substring-only filter** — no fuzzy matching, no diacritic folding, no regex; compare to Smith-Waterman in `sugar-forms`
 8. **Vi visual mode is placeholder** — `handleVisualMode()` tracks no selection state
 9. **No built-in Help view** — no equivalent to bubbles' `Help` component showing keybindings
 10. **Confirmation submit feedback missing** — `MultiSelect::submit()` silently returns `$this` when `canSubmit()` is false
@@ -106,7 +106,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Implementation ideas:**
   1. Adopt `SugarCraft\Sprinkles\Style` from `candy-sprinkles` for styling
   2. Add per-prompt style properties (`labelStyle`, `cursorStyle`, `errorStyle`, etc.) that accept `Style` objects
-  3. Implement cursor blink via `candy-forms/Cursor` pattern (Timer/Cmd tick)
+  3. Implement cursor blink via `sugar-forms/Cursor` pattern (Timer/Cmd tick)
 - **Expected impact:** Unlocks theming, better visual rendering, cursor animation
 - **Estimated complexity:** Medium
 
@@ -118,7 +118,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Source:** `docs/repo_map/sugarcraft_sugar-readline.md` (weakness #3)
 - **Source repo:** `charmbracelet_bubbles.md` — `Cursor` component with `Blink()` method; `pr_charmbracelet_bubbles.md` — v2 real cursor support
 - **Implementation ideas:**
-  1. Use `candy-forms/Cursor` blink state machine as reference
+  1. Use `sugar-forms/Cursor` blink state machine as reference
   2. Sugar-readline's stateless design makes blink tricky — would need a rendering loop wrapper that toggles cursor visibility
   3. Consider a `PromptRenderer` class that wraps a prompt and animates cursor in a loop
 - **Expected impact:** Better perceived interactivity and polish
@@ -143,7 +143,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 ### 5. Textarea Soft-Wrap
 
 - **Title:** TextareaPrompt stores each line as a separate array entry with no word-wrap
-- **Description:** Long input lines are stored as one array entry. There is no soft-wrap at a given column width. Compare to `candy-forms/TextArea` which has `withDynamic(true)` for auto-growing height.
+- **Description:** Long input lines are stored as one array entry. There is no soft-wrap at a given column width. Compare to `sugar-forms/TextArea` which has `withDynamic(true)` for auto-growing height.
 - **Why it matters:** Multi-line text input without wrapping is unusable for real text editing
 - **Source:** `docs/repo_map/sugarcraft_sugar-readline.md` (weakness #6)
 - **Source repo:** `charmbracelet_bubbles.md` — TextArea soft-wrap with LineInfo tracking (Width, CharWidth, ColumnOffset, RowOffset); `pr_charmbracelet_bubbles.md` — issue #823 viewport refactor with 35% CPU improvement from caching
@@ -158,15 +158,15 @@ if ($this->submitted || $this->aborted) { return $this; }
 
 - **Title:** SelectionPrompt and MultiSelectPrompt use case-insensitive substring filter only
 - **Description:** Filter is `stripos($clone->choices[$i], $needle) !== false`. No fuzzy matching, no diacritic folding, no regex.
-- **Why it matters:** Users expect fuzzy finding (substr in any position, not just consecutive). `candy-forms` has Smith-Waterman fuzzy matching.
+- **Why it matters:** Users expect fuzzy finding (substr in any position, not just consecutive). `sugar-forms` has Smith-Waterman fuzzy matching.
 - **Source:** `docs/repo_map/sugarcraft_sugar-readline.md` (weakness #7)
 - **Source repo:** `charmbracelet_bubbles.md` — List uses `sahilm/fuzzy` for real-time filtering with matched index reporting; `pr_charmbracelet_bubbles.md` — issue #810 list performance, fuzzy library is external dependency
 - **Implementation ideas:**
-  1. Adapt `candy-forms/Fuzzy/FuzzyMatcher.php` (Smith-Waterman local alignment) for readline
+  1. Adapt `sugar-forms/Fuzzy/FuzzyMatcher.php` (Smith-Waterman local alignment) for readline
   2. Or integrate `sahilm/fuzzy` equivalent: `php-cFuzzy` or custom PHP implementation
   3. Return matched character indices for filter highlighting
 - **Expected impact:** Significantly better UX for selection prompts with many options
-- **Estimated complexity:** Medium — fuzzy matching algorithm exists in candy-forms
+- **Estimated complexity:** Medium — fuzzy matching algorithm exists in sugar-forms
 
 ### 7. Built-in Help View
 
@@ -480,11 +480,11 @@ $prompt = TextPrompt::new('Enter code: ')
     ->withHighlight(new CandyMdviewHighlight('php'));
 ```
 
-## 2. candy-forms / candy-forms Bridge
+## 2. sugar-forms / sugar-forms Bridge
 
-sugar-readline prompts could serve as low-level inputs for `candy-forms` field types:
+sugar-readline prompts could serve as low-level inputs for `sugar-forms` field types:
 ```php
-// sugar-readline TextPrompt as candy-forms Input field source
+// sugar-readline TextPrompt as sugar-forms Input field source
 class ReadlineInputField implements Field {
     private TextPrompt $prompt;
     // ... implements Field interface using TextPrompt
@@ -580,10 +580,10 @@ $prompt = TextPrompt::new('Search: ')
 ## Medium-Term (0.2.x - 0.3.x)
 
 5. **Style system integration** — adopt `candy-sprinkles/Style` objects instead of ANSI strings
-6. **Cursor blink** — use candy-forms Cursor pattern or timer-based blink
+6. **Cursor blink** — use sugar-forms Cursor pattern or timer-based blink
 7. **Input driver** — create `TtyInputDriver` or integrate with `candy-vt`
 8. **Mouse support** — click to position cursor, click to select items
-9. **Fuzzy filtering** — adapt Smith-Waterman from `candy-forms` for SelectionPrompt
+9. **Fuzzy filtering** — adapt Smith-Waterman from `sugar-forms` for SelectionPrompt
 
 ## Major Architectural (0.4.x - 0.5.x)
 
@@ -621,7 +621,7 @@ $prompt = TextPrompt::new('Search: ')
 
 # Final Strategic Assessment
 
-`sugar-readline` occupies a valuable niche in the SugarCraft ecosystem as the **lightweight, single-shot prompt library** — complementary to, not competitive with, the full form framework `candy-forms`/`candy-forms`. Its pure-PHP, dependency-free design is a significant engineering achievement that makes it trivially embeddable.
+`sugar-readline` occupies a valuable niche in the SugarCraft ecosystem as the **lightweight, single-shot prompt library** — complementary to, not competitive with, the full form framework `sugar-forms`/`sugar-forms`. Its pure-PHP, dependency-free design is a significant engineering achievement that makes it trivially embeddable.
 
 The most critical gap is **input handling** — the library cannot read actual terminal input today. This is the single blocker preventing real-world usage. Fixing this requires either creating a new `candy-readline` input driver package or clearly documenting how to wire `candy-vt` into these prompts.
 

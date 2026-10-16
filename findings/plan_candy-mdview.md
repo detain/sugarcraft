@@ -76,7 +76,7 @@ Should be split into:
 - The `buildCombinedPattern()` method at lines 40-62 builds the combined regex
 - `orderedTypes` array defines all token types with their regex patterns
 - The keyword pattern is the longest at 70+ words
-- Viewport key bindings confirmed in `candy-forms/src/Viewport/Viewport.php:98-128` - supports Up/k, Down/j, Left/h, Right/l, PageUp/b, PageDown/space/f, Ctrl+U, Ctrl+D, Home/g, End/G
+- Viewport key bindings confirmed in `sugar-forms/src/Viewport/Viewport.php:98-128` - supports Up/k, Down/j, Left/h, Right/l, PageUp/b, PageDown/space/f, Ctrl+U, Ctrl+D, Home/g, End/G
 
 ---
 
@@ -233,7 +233,7 @@ Add test coverage for all Viewport key bindings not currently tested:
 - Mouse wheel scrolling
 
 **Why:**
-`MdViewModelTest.php` only tests q, Esc, Ctrl+C, and Down. The Viewport class (`candy-forms/src/Viewport/Viewport.php:98-128`) implements many more key bindings that are never exercised in tests.
+`MdViewModelTest.php` only tests q, Esc, Ctrl+C, and Down. The Viewport class (`sugar-forms/src/Viewport/Viewport.php:98-128`) implements many more key bindings that are never exercised in tests.
 
 **Severity:** LOW
 
@@ -306,8 +306,8 @@ public function testAtBottomWhenContentFits(): void
 
 - `candy-mdview/tests/MdViewModelTest.php` (existing tests, 66 lines)
 - `candy-mdview/src/MdViewModel.php` (MdViewModel implementation)
-- `candy-forms/src/Viewport/Viewport.php:98-128` (Viewport key bindings)
-- `sugar-widgets/src/Viewport/Viewport.php:8` (alias to candy-forms)
+- `sugar-forms/src/Viewport/Viewport.php:98-128` (Viewport key bindings)
+- `sugar-widgets/src/Viewport/Viewport.php:8` (alias to sugar-forms)
 
 ---
 

@@ -13,15 +13,15 @@
 | [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-widgets |
 | [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-widgets, candy-core |
 | [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | candy-mosaic |
-| [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, candy-kit, candy-forms |
-| [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-widgets, candy-forms |
+| [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, candy-kit, sugar-forms |
+| [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-widgets, sugar-forms |
 | [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-widgets, candy-scriptui |
 | [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | candy-core |
-| [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, candy-forms |
+| [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, sugar-forms |
 | [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, candy-sprinkles, candy-core |
 | [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, candy-palette |
 | [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | honey-bounce, sugar-charts |
-| [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, candy-forms, candy-shine |
+| [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, sugar-forms, candy-shine |
 | [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | candy-kit |
 | [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
 | [charmbracelet/freeze](#charmbraceletfreeze) | Go | 4583 | candy-shine, candy-codeshot |
@@ -29,11 +29,11 @@
 | [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | candy-mdview, sugar-widgets, candy-shine |
 | [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-widgets |
 | [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | honey-bounce |
-| [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | candy-forms, sugar-widgets, candy-shine |
+| [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | sugar-forms, sugar-widgets, candy-shine |
 | [charmbracelet/lipgloss](#charmbraceletlipgloss) | Go | ~3500 | candy-sprinkles |
 | [charmbracelet/log](#charmbraceletlog) | Go | ~700 | candy-log |
 | [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-scriptui |
-| [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, candy-forms |
+| [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, sugar-forms |
 | [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | candy-mail, candy-scriptui, candy-shine |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
 | [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, candy-ansi-inspect |
@@ -47,7 +47,7 @@
 | [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, candy-pty, candy-core |
 | [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-widgets, candy-shine |
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
-| [KevM/bubbleo](#kevmbubbleo) | Go | 69 | candy-forms, sugar-widgets, candy-scriptui |
+| [KevM/bubbleo](#kevmbubbleo) | Go | 69 | sugar-forms, sugar-widgets, candy-scriptui |
 | [kojiflowers/php-tui-chart](#kojiflowersphp-tui-chart) | PHP | ~niche | sugar-charts (data parsing only) |
 | [lrstanley/bubblezone](#lrstanleybubblezone) | Go | 880 | candy-mouse |
 | [p-gen/smenu](#p-gensmenu) | C | ~900 | candy-scriptui |
@@ -63,7 +63,7 @@
 | [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | candy-pty, candy-core |
 | [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-widgets, sugar-table |
 | [daltonsw/bubbleup](#daltonswbubbleup) | Go | ~50 | sugar-toast |
-| [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | candy-forms |
+| [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | sugar-forms |
 | [EthanEFung/bubble-datepicker](#ethanefungbubble-datepicker) | Go | ~40 | sugar-datepicker |
 | [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-widgets |
 | [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-widgets |
@@ -158,7 +158,7 @@
 **SugarCraft Mapping:**
 - `candy-scriptui` → Command application framework
 - `candy-kit` → CLI options
-- `candy-forms` → Prompter, Chooser
+- `sugar-forms` → Prompter, Chooser
 
 **Strengths:** Mature (11yr), Levenshtein correction, completion generation, event system.
 **Weaknesses:** No PHP 8.x features (no return types), singleton anti-pattern, 945-line CommandBase god object, no Windows TTY support.
@@ -179,7 +179,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-widgets` → Primary target (all components)
-- `candy-forms` → TextInput, TextArea
+- `sugar-forms` → TextInput, TextArea
 - `sugar-table` → Table
 - `sugar-datepicker` → Timer/Stopwatch
 
@@ -324,7 +324,7 @@
 
 **SugarCraft Mapping:**
 - `candy-scriptui` → CLI patterns
-- `candy-forms` → Bubble Tea components
+- `sugar-forms` → Bubble Tea components
 
 **Note:** Sunset March 2026, archived in favor of this project.
 
@@ -480,11 +480,11 @@
 **Features:** Form → Groups → Fields hierarchy, *Func dynamic reactivity, Bubble Tea integration, vim-style keyboard nav, accessibility mode.
 
 **SugarCraft Mapping:**
-- `candy-forms` → Primary port
+- `sugar-forms` → Primary port
 - `sugar-widgets` → Individual fields
 - `candy-shine` → Theming (Lipgloss equivalent)
 
-**Note:** Port exists as `candy-forms` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `sugar-forms` (🟢 in MATCHUPS.md).
 
 ---
 
@@ -557,7 +557,7 @@
 
 **SugarCraft Mapping:**
 - `candy-scriptui` → TUI framework
-- `candy-forms` → Interactive forms
+- `sugar-forms` → Interactive forms
 
 **Note:** Sunset March 2026, archived in favor of Crush.
 
@@ -577,7 +577,7 @@
 
 **SugarCraft Mapping:**
 - `candy-mail` → Primary port
-- `candy-forms` → TUI form navigation
+- `sugar-forms` → TUI form navigation
 - `candy-shine` → Markdown rendering
 
 **Note:** Port exists as `candy-mail` (🟢 in MATCHUPS.md).
@@ -1097,7 +1097,7 @@
 **Features:** Generic Selection/MultiSelection, TextInput/TextArea, Confirmation, template rendering, full customization.
 
 **SugarCraft Mapping:**
-- `candy-forms` → Primary target
+- `sugar-forms` → Primary target
 - `sugar-widgets` → Individual prompt types
 
 ---
@@ -1149,7 +1149,7 @@
 **Features:** navstack, menu, breadcrumb, shell, window; tea.Model interface; Closable interface; tea.Sequence for ordered commands.
 
 **SugarCraft Mapping:**
-- `candy-forms` → Navigation
+- `sugar-forms` → Navigation
 - `sugar-widgets` → Menu/list widgets
 - `candy-scriptui` → Shell composition
 

@@ -22,14 +22,14 @@ use SugarCraft\Crush\Session\SessionStore;
  * `Chat::$inputBuf` used to be an append-only string with no cursor at all:
  * there was no `KeyType::Left` or `KeyType::Right` arm anywhere in `Chat`, so
  * a typo three characters back could only be fixed by backspacing over
- * everything after it. The draft now lives in `candy-forms`'
+ * everything after it. The draft now lives in `sugar-forms`'
  * {@see \SugarCraft\Forms\TextArea\TextArea}, and `$inputBuf` is that widget's
  * `value()` re-derived on every clone.
  *
  * Everything here is driven through `Chat::update()` with real `KeyMsg`s —
  * never by calling the widget directly — because the delegation and its
  * ORDER against `Chat`'s own arms is the part that can break. The widget's own
- * editing is already tested in `candy-forms`.
+ * editing is already tested in `sugar-forms`.
  *
  * @see Chat::inputCursorOffset()
  * @see Chat::delegateToInput()

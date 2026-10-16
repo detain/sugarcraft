@@ -81,7 +81,7 @@ parsed as a zone. Any new rendered glyph must stay outside U+E000–U+F8FF.
   developer's clipboard.
 - **Terminals and `tmux paste-buffer` deliver a pasted newline as `\r`.** A CR
   left in the draft is painted raw and the rest of the row restarts at column
-  0 — over the sidebar. candy-forms `TextArea::insertString()` now folds
+  0 — over the sidebar. sugar-forms `TextArea::insertString()` now folds
   CR/CRLF into LF (Bubbles' `ReplaceNewlines`). Reproduce pastes live with
   `tmux set-buffer` + `tmux paste-buffer -p`, which does the same conversion.
 

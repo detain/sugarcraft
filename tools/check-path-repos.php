@@ -18,7 +18,7 @@ declare(strict_types=1);
  *   > consuming lib's repositories[].
  *
  * Historically this checker only validated a lib's DIRECT requires, so a
- * gap two hops deep (e.g. candy-mdview → sugar-widgets → candy-forms) slipped
+ * gap two hops deep (e.g. candy-mdview → sugar-widgets → sugar-forms) slipped
  * through and broke fresh installs. It now resolves the transitive set and
  * reports the dependency path that introduced each missing entry.
  *
@@ -64,7 +64,7 @@ $help = false;
 // Default behaviour only flags a gap when the dep is ALSO unresolvable via
 // Packagist, which models how Composer actually resolves today and keeps the
 // signal focused on genuinely-broken fresh installs (e.g. an unpublished lib
-// like a freshly-extracted candy-forms). --no-network forces offline mode:
+// like a freshly-extracted sugar-forms). --no-network forces offline mode:
 // when a dep's Packagist status can't be determined it is assumed published
 // (no false positives), unless --strict-closure is also given.
 $strictClosure = false;
@@ -399,7 +399,7 @@ foreach ($libs as $manifestPath) {
  * is never installed transitively.
  *
  * Returns depSlug => path-string, where the path records the first chain that
- * introduced the dep (e.g. "sugar-widgets -> candy-forms", a root test edge is
+ * introduced the dep (e.g. "sugar-widgets -> sugar-forms", a root test edge is
  * marked "[require-dev]") for actionable reporting. Cycles (candy-core ⇄
  * candy-pty) are handled via the visited set.
  *

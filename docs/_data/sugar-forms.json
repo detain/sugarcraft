@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyForms",
+    "description": "CandyForms: Form library (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.",
+    "ogTitle": "SugarCraft — CandyForms",
+    "ogDescription": "Form engine (port of charmbracelet/huh) plus the raw component implementations that sugar-widgets re-exports — Groups, themes, validators, fuzzy / async suggestions.",
+    "emoji": "🍬",
+    "displayName": "SugarForms",
+    "tagline": "Interactive forms + foundation form primitives",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/huh\" style=\"color: inherit;\">charmbracelet/huh</a></span>\n          <span class=\"tag-chip\">foundation</span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">inputs</span>\n          <span class=\"tag-chip\">wizards</span>\n          <span class=\"tag-chip\">validation</span>"
+}

@@ -70,7 +70,7 @@ use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
  * `q` quits.
  *
  * Query editor:
- *   - The Query pane is backed by a candy-forms {@see TextArea} — it owns
+ *   - The Query pane is backed by a sugar-forms {@see TextArea} — it owns
  *     the cursor, UTF-8 editing, and Up/Down line movement.
  *   - Ctrl+R / Ctrl+E run the query; Ctrl+F favorites it; Ctrl+Shift+F
  *     unfavorites. Executed queries are recorded in {@see QueryState::$history}.

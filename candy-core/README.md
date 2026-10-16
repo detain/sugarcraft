@@ -545,7 +545,7 @@ echo $program->lastFrameDuration();  // 0.0 before first render, >0 after
 
 ## ProgressReporter
 
-The `ProgressReporter` interface reports ongoing operation progress — consumed by `candy-mail` and `candy-forms` in later steps:
+The `ProgressReporter` interface reports ongoing operation progress — consumed by `candy-mail` and `sugar-forms` in later steps:
 
 ```php
 use SugarCraft\Core\ProgressReporter;

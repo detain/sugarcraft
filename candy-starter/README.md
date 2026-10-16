@@ -62,7 +62,7 @@ The shape follows the MVC-style Model–Update–View architecture. State lives 
 | Show a spinner while loading         | `sugarcraft/sugar-widgets` — `Spinner`          |
 | Render Markdown help text            | `sugarcraft/candy-shine` — `Renderer`        |
 | Tail a log into a scrollable pane    | `sugarcraft/sugar-widgets` — `Viewport`         |
-| Build a multi-page wizard            | `sugarcraft/candy-forms` — `Group`          |
+| Build a multi-page wizard            | `sugarcraft/sugar-forms` — `Group`          |
 | Plot a sparkline                     | `sugarcraft/sugar-charts` — `Sparkline`      |
 | Make it `ssh`-accessible             | `sugarcraft/candy-wish`                      |
 

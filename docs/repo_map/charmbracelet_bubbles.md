@@ -153,14 +153,14 @@
 
 ## SugarCraft Mapping
 
-### sugar-widgets / candy-forms
+### sugar-widgets / sugar-forms
 
 `charmbracelet/bubbles` maps directly to `SugarCraft\Widgets` → `SugarCraft\Forms` (per MATCHUPS.md row 33)
 
 | Bubbles Component | SugarCraft Component | Status |
 |---|---|---|
-| spinner | `SugarCraft\Forms\Spinner\Spinner` | 🟢 aliased from candy-forms |
-| textinput | `SugarCraft\Forms\TextInput\TextInput` | 🟢 aliased from candy-forms |
+| spinner | `SugarCraft\Forms\Spinner\Spinner` | 🟢 aliased from sugar-forms |
+| textinput | `SugarCraft\Forms\TextInput\TextInput` | 🟢 aliased from sugar-forms |
 | textarea | `SugarCraft\Forms\TextArea\TextArea` | 🟡 in progress |
 | table | `SugarCraft\Table\Table` | 🟢 separate sugar-table repo |
 | progress | `SugarCraft\Forms\Progress\Progress` | 🟢 |
@@ -174,11 +174,11 @@
 | key | `SugarCraft\Forms\Key\Key` | 🟢 |
 | cursor | `SugarCraft\Forms\Cursor\Cursor` | 🟢 |
 
-### candy-forms (charmbracelet/huh)
+### sugar-forms (charmbracelet/huh)
 
-Note: `charmbracelet/huh` is a separate form library that builds on bubbles. SugarCraft maps `huh` → `candy-forms` (MATCHUPS.md row 34). Bubbles components (TextInput, TextArea, List, etc.) provide the primitive widgets that huh combines into a form framework.
+Note: `charmbracelet/huh` is a separate form library that builds on bubbles. SugarCraft maps `huh` → `sugar-forms` (MATCHUPS.md row 34). Bubbles components (TextInput, TextArea, List, etc.) provide the primitive widgets that huh combines into a form framework.
 
-### candy-forms extraction
+### sugar-forms extraction
 
 Per MATCHUPS.md row 45: "Foundation: form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) — extraction in progress"
 
@@ -186,7 +186,7 @@ Per MATCHUPS.md row 45: "Foundation: form primitives (TextInput, TextArea, ItemL
 
 **charmbracelet/bubbles** is the definitive reference implementation for composable TUI primitives in the Bubble Tea ecosystem. It provides 14 components spanning input widgets (TextInput, TextArea, FilePicker), display widgets (Table, Progress, Viewport, List), utility widgets (Help, Paginator, Spinner), timing widgets (Timer, Stopwatch), and infrastructure (Key, Cursor). The design philosophy emphasizes the Elm architecture with pure `Update`/`View` functions, making components naturally composable and testable.
 
-Comparing to SugarCraft's current state: the PHP port in `candy-forms` has structural parity for most components but currently lags in several areas. The **fuzzy filtering** in List/ItemList doesn't yet match the `sahilm/fuzzy` quality — the Go library provides ranked matches with character indices, which is essential for highlighted filtering UI. The **TextArea soft-wrap line tracking** in bubbles maintains complex `LineInfo` structs with Width, Height, CharWidth, ColumnOffset, RowOffset, CharOffset — the PHP port needs equivalent accounting for double-width Unicode runes when computing cursor positions across wrapped lines. The **virtual cursor** system in TextInput/TextArea is sophisticated, supporting both inline virtual cursors and real cursor reporting via `tea.Cursor` — this enables proper terminal cursor positioning for accessibility tools but adds porting complexity.
+Comparing to SugarCraft's current state: the PHP port in `sugar-forms` has structural parity for most components but currently lags in several areas. The **fuzzy filtering** in List/ItemList doesn't yet match the `sahilm/fuzzy` quality — the Go library provides ranked matches with character indices, which is essential for highlighted filtering UI. The **TextArea soft-wrap line tracking** in bubbles maintains complex `LineInfo` structs with Width, Height, CharWidth, ColumnOffset, RowOffset, CharOffset — the PHP port needs equivalent accounting for double-width Unicode runes when computing cursor positions across wrapped lines. The **virtual cursor** system in TextInput/TextArea is sophisticated, supporting both inline virtual cursors and real cursor reporting via `tea.Cursor` — this enables proper terminal cursor positioning for accessibility tools but adds porting complexity.
 
 The **TextArea case transforms** (`alt+u/l/c` for uppercase/lowercase/capitalize word forward) and **character transpose** (`ctrl+t`) are minor features present in Go but not yet in PHP. The **progress bar's half-block color blending** using Unicode `▌` with separate foreground/background is elegant — it doubles the color resolution without requiring true color support, something worth carefully porting. The **Help component's KeyMap interface introspection** (calling `ShortHelp() / FullHelp()` on any implementation) is a clean polymorphic pattern that could improve the PHP port's flexibility.
 

@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic 5-phase solver ported from candy-sprinkles) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Foundation for candy-sprinkles, sugar-widgets, and candy-forms layout.</p>
+<p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic 5-phase solver ported from candy-sprinkles) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Foundation for candy-sprinkles, sugar-widgets, and sugar-forms layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-layout</code></pre>
@@ -47,7 +47,7 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Foundation for candy-sprinkles</strong> — candy-sprinkles consumes its solver.</li>
-      <li><strong>Foundation for sugar-widgets / candy-forms</strong> — extracted as the shared layout foundation.</li>
+      <li><strong>Foundation for sugar-widgets / sugar-forms</strong> — extracted as the shared layout foundation.</li>
       <li><strong>Swap solver without breaking call-sites</strong> — <code>LayoutSolver</code> (<code>solve()</code> alone; construction lives on the concrete classes) is the only public contract.</li>
     </ul>
 

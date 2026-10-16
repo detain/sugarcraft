@@ -90,7 +90,7 @@ melt is **not a TUI library** — it is a focused CLI cryptographic tool. It doe
 | BIP39 mnemonic encoding/decoding | `honey-bip39` (does not exist) | Math/crypto lib slot; no current honey-* lib covers mnemonic encoding |
 | Ed25519 key handling | `candy-crypto` (does not exist) | Foundation slot; no current candy-* lib covers crypto primitives |
 | Seed phrase ↔ key conversion | `honey-seed` (does not exist) | Potential future honey-* math lib |
-| Beautiful CLI output (lipgloss-style) | `sugar-widgets`, `candy-forms` | These are TUI renderers; melt's output is minimal styled text, not a TUI widget |
+| Beautiful CLI output (lipgloss-style) | `sugar-widgets`, `sugar-forms` | These are TUI renderers; melt's output is minimal styled text, not a TUI widget |
 
 **Conclusion**: No direct SugarCraft mapping exists. melt is a single-purpose CLI tool for a specific cryptographic task (SSH key backup via BIP39), while SugarCraft is a monorepo of TUI component library ports from the Charmbracelet ecosystem. The conceptual overlap is minimal — SugarCraft has no equivalent for cryptographic seed phrase utilities.
 

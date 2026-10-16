@@ -32,7 +32,7 @@ From the first-pass analysis (`repo_map/Genekkion_theHermit.md`):
 | Border rendering + styling | `candy-shine` | Lipgloss-based styling system |
 | Overlay rendering (centered) | `candy-scriptui` | Viewport/window management |
 | Background view preservation | `sugar-widgets` (renderer) | Concurrent view update pattern |
-| Keyboard navigation (up/down) | `candy-forms` | Input handling, cursor movement |
+| Keyboard navigation (up/down) | `sugar-forms` | Input handling, cursor movement |
 | tea.Model interface | `candy-core` | Core TUI component contract |
 
 **Key architectural insight**: The Hermit is a wrapper/overlay pattern that spans multiple libs — no single SugarCraft lib maps directly.

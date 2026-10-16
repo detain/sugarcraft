@@ -127,11 +127,11 @@ No high-comment open issues found. Repo is very quiet.
 
 ---
 
-## charmbracelet/huh → candy-forms
+## charmbracelet/huh → sugar-forms
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-forms | Notes |
+| Upstream | Title | Status in sugar-forms | Notes |
 |---|---|:--:|---|
 | [#749](https://github.com/charmbracelet/huh/pull/749) (2026-03-10) | fix(select): ensure cursor visibility when navigating multiline options | 🟡 | Select cursor visibility — verify PHP implementation |
 | [#746](https://github.com/charmbracelet/huh/pull/746) (2026-03-10) | fix: Prevent double paste in focused field | 🔴 | **Effort**: 1h **Benefit**: Fixes unexpected paste behavior **Downside**: Minimal |
@@ -389,7 +389,7 @@ No high-comment open issues.
 
 ### Smaller fixes worth bundling into a cleanup PR
 
-1. **huh double-paste fix** — 1h — confirm candy-forms doesn't have same issue
+1. **huh double-paste fix** — 1h — confirm sugar-forms doesn't have same issue
 2. **glamour Gruvbox theme** — 30min — easy theme addition
 3. **glamour frontmatter support** — 1-2h — small new feature
 4. **bubbletea garbage chars on early exit** — 1-2h — bug fix

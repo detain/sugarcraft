@@ -14,7 +14,7 @@ Address all 28 findings from the candy-scriptui audit across security issues, bu
 |----------|-----------|--------|
 | Use argv array approach for env-var fallback | Avoids string manipulation vulnerabilities in escapeshellarg chain | `findings/candy-scriptui.md` |
 | Add --sandbox-env allowlist flag for template mode | Prevents credential exfiltration when template source is untrusted | `findings/candy-scriptui.md` |
-| Space key routing verified correct | ItemList::updateFilter() handles KeyType::Space properly | `candy-forms/src/ItemList/ItemList.php:478-482` |
+| Space key routing verified correct | ItemList::updateFilter() handles KeyType::Space properly | `sugar-forms/src/ItemList/ItemList.php:478-482` |
 | Create dedicated parseHexColor() method | 3-digit hex expansion and clear error messages | `findings/candy-scriptui.md` |
 | Set $this->closed = true in terminate() | Prevent wait() on already-terminated process | `findings/candy-scriptui.md` |
 | Cache fuzzy results by filterText | Avoid O(n·m) SmithWaterman recomputation on every keystroke | `findings/candy-scriptui.md` |
@@ -88,7 +88,7 @@ The current implementation at lines 97-104 substitutes ANY environment variable 
 
 ## Phase 2: Bugs [CLOSED r86-v1]
 
-### 2.1 [x] ✅ MEDIUM: Space Key Routing in Filter Mode — `src/Model/FilterModel.php:59-67` — VERIFIED NON-ISSUE r86-v1: `FilterModel::update()` toggles only on Tab (comment: "Space is consumed by the inner filter buffer") and forwards every other key to `ItemList::update()`; in filter mode ItemList appends Space to the filter text (candy-forms/src/ItemList/ItemList.php:490 — plan's :478-482 drifted, gated by the `filtering` flag). Non-filter multi-mode Space-toggle pinned by `ChooseModelTest::testMultiModeSpaceTogglesSelection`; filter-mode Space prefill exercised in `FilterModel`'s own ctor loop. No fix required.
+### 2.1 [x] ✅ MEDIUM: Space Key Routing in Filter Mode — `src/Model/FilterModel.php:59-67` — VERIFIED NON-ISSUE r86-v1: `FilterModel::update()` toggles only on Tab (comment: "Space is consumed by the inner filter buffer") and forwards every other key to `ItemList::update()`; in filter mode ItemList appends Space to the filter text (sugar-forms/src/ItemList/ItemList.php:490 — plan's :478-482 drifted, gated by the `filtering` flag). Non-filter multi-mode Space-toggle pinned by `ChooseModelTest::testMultiModeSpaceTogglesSelection`; filter-mode Space prefill exercised in `FilterModel`'s own ctor loop. No fix required.
 
 **What is expected:**
 Verify and potentially fix how Space key is routed in filter mode for multi-select. The finding claims space may be consumed by multi-select toggle instead of filter buffer.
@@ -108,8 +108,8 @@ When in filter mode with multi-select enabled, pressing space should add to the 
 
 - `src/Model/FilterModel.php:139-143` — Tab handling for multi-select
 - `src/Model/FilterModel.php:145` — list->update() call
-- `candy-forms/src/ItemList/ItemList.php:451-485` — updateFilter() method
-- `candy-forms/src/ItemList/ItemList.php:478-482` — Space handling in updateFilter()
+- `sugar-forms/src/ItemList/ItemList.php:451-485` — updateFilter() method
+- `sugar-forms/src/ItemList/ItemList.php:478-482` — Space handling in updateFilter()
 
 **Investigation notes:**
 After investigation, `ItemList::updateFilter()` at lines 478-482 correctly handles Space:

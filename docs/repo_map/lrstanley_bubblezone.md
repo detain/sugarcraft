@@ -93,7 +93,7 @@
 |---|---|---|
 | `zone.Mark(id, v)` wrapping zone content | `sugar-widgets` (focus/mouse zone tracking) | sugar-widgets handles viewport/layout + focus management; mouse zones would be a sub-concern |
 | `zone.Get(id).InBounds(msg)` collision | `candy-core` (BubbleTea model port) | The `Model::update()` + `KeyMsg`/`MouseMsg` dispatch loop in `candy-core` provides the TEA message bus; zones would integrate there |
-| `zone.Scan()` stripping ANSI markers | `candy-forms` / lipgloss port (TBD) | If/when a lipgloss-style styling library is ported, zone scanning for marker stripping would live there |
+| `zone.Scan()` stripping ANSI markers | `sugar-forms` / lipgloss port (TBD) | If/when a lipgloss-style styling library is ported, zone scanning for marker stripping would live there |
 | `zone.NewPrefix()` unique ID generation | `candy-scriptui` (BubbleShell port) | Shell-level component ID generation for nested components would use prefix pattern |
 | Mouse tracking (`tea.MouseModeCellMotion`) | `sugar-widgets` + `candy-core` | `candy-core` would carry the mouse event constants (`MouseButtonLeft`, `MouseMotionMsg`, etc.) |
 | `ZoneInfo.Pos()` relative coordinates | `sugar-widgets` (cursor/selection tracking) | Relative mouse position within a focused region |

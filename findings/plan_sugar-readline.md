@@ -24,7 +24,7 @@ Address all 16 findings from the sugar-readline audit covering bugs, edge cases,
 | Add maxHistory enforcement to InMemoryHistory::push() | Prevent unbounded memory growth in long sessions | Finding 7 |
 | Explicitly chmod history file to 0600 | Default 0644 allows group read; sensitive commands may be in history | Finding 9 |
 | Incremental search is low-priority missing feature | Standard Emacs feature but complex to implement correctly | Finding 12 |
-| Vi text objects require significant VimKeyHandler extension | Must go through candy-forms VimKeyHandler per CALIBER_LEARNINGS | Finding 13 |
+| Vi text objects require significant VimKeyHandler extension | Must go through sugar-forms VimKeyHandler per CALIBER_LEARNINGS | Finding 13 |
 | Verify bracketed paste mode is wired through candy-input | Readline.php has onPaste handler; needs end-to-end verification | Finding 14 |
 | Defer sync history save to background tick | Blocking I/O on every Enter could cause input lag; needs ReactPHP integration | Finding 16 |
 
@@ -324,12 +324,12 @@ Address all 16 findings from the sugar-readline audit covering bugs, edge cases,
 **Severity:** MEDIUM  
 **Location:** `src/Mode/ViMode.php`
 
-**Resolution (2026-07-04):** Implemented candy-forms-first: `TextObject` resolver +
+**Resolution (2026-07-04):** Implemented sugar-forms-first: `TextObject` resolver +
 `VimOperator`/`TextObjectScope` enums + `VimAction::{ChangeLine,Change/Delete/YankTextObject}` +
-`VimKeyHandler::handleTextObject()` in candy-forms; ViMode consumes them through its
+`VimKeyHandler::handleTextObject()` in sugar-forms; ViMode consumes them through its
 pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `diw`/`daw`,
 `cc` and friends all work; unmatched/outside-pair sequences no-op like vim's beep.
-90 new candy-forms tests + 21 new sugar-readline end-to-end tests.
+90 new sugar-forms tests + 21 new sugar-readline end-to-end tests.
 
 **What is expected:**
 
@@ -350,13 +350,13 @@ pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `di
 **Related code locations:**
 
 - `src/Mode/ViMode.php` — handles vi keybindings via VimKeyHandler
-- `candy-forms/src/Vim/VimKeyHandler.php` — maps keys to VimAction
-- `candy-forms/src/Vim/VimAction.php` — available vim actions
+- `sugar-forms/src/Vim/VimKeyHandler.php` — maps keys to VimAction
+- `sugar-forms/src/Vim/VimAction.php` — available vim actions
 
 **Investigation notes:**
 
 - Per CALIBER_LEARNINGS (2026-05-31): "Do NOT add new vim keybindings to per-lib branching logic. Always add new bindings to VimAction enum + VimKeyHandler"
-- This means changes should go through candy-forms, not sugar-readline directly
+- This means changes should go through sugar-forms, not sugar-readline directly
 - VimAction enum would need new actions for text objects (InnerTextObject, AroundTextObject, etc.)
 
 ---
@@ -479,7 +479,7 @@ pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `di
 | 10. Security beyond perms | N/A | N/A | No concerns beyond permissions |
 | 11. Dual engine complexity | LOW | DOCS | Add architecture documentation |
 | 12. No incremental search (Emacs) | LOW | PENDING | Add Ctrl+S to EmacsMode |
-| 13. No Vi text objects | MEDIUM | PENDING | Extend VimAction in candy-forms |
+| 13. No Vi text objects | MEDIUM | PENDING | Extend VimAction in sugar-forms |
 | 14. No bracketed paste | LOW | VERIFY | Verify candy-input integration |
 | 15. PHP 8.3 compatibility | N/A | N/A | Fully compatible |
 | 16. Sync history save | MEDIUM | PENDING | Defer to background tick |

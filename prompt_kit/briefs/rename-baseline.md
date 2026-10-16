@@ -34,7 +34,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-files | 193 | 716 | 0 | 0 | 0 | 0 |  |
 | candy-flip | 196 | 903 | 0 | 0 | 0 | 0 |  |
 | candy-focus | 93 | 412 | 0 | 0 | 0 | 0 |  |
-| candy-forms | 2326 | 4529 | 0 | 0 | 0 | 0 |  |
+| candy-forms | 2326 | 4529 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-freeze | 350 | 752 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-fuzzy | 1006 | 35741 | 0 | 0 | 0 | 0 |  |
 | candy-hermit | 159 | 601 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
@@ -76,7 +76,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-glow | 122 | 313 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-mcp | 226 | 899 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-post | 203 | 361 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
-| candy-forms | 72 | 158 | 0 | 0 | 0 | 0 |  |
+| candy-forms | 72 | 158 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-readline | 336 | 1076 | 0 | 0 | 0 | 0 |  |
 | sugar-reel | 552 | 8489 | 0 | 0 | 0 | 0 |  |
 | sugar-skate | 212 | 466 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->

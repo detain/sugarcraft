@@ -236,7 +236,7 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 54 -> 62 live when the draft's own editing keyboard was declared. Those
      * eight rows describe keystrokes that had been LIVE and undocumented since
-     * the draft moved into `candy-forms`' TextArea: forward Delete, ←/→,
+     * the draft moved into `sugar-forms`' TextArea: forward Delete, ←/→,
      * Home/End, ↑/↓ on a multi-line draft, word motion, and the three ctrl
      * forms (Ctrl+Space, Ctrl+Backspace, Ctrl+Delete).
      *

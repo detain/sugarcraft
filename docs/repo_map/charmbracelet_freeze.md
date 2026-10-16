@@ -157,7 +157,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 | ANSI escape parsing | `candy-core` | Terminal ANSI code handling (colors, styles) |
 | Chroma syntax highlighting | `sugar-widgets` | Token-based rendering, syntax highlighting |
 | SVG output generation | `candy-shine` (potential) | Vector graphics rendering |
-| Interactive TUI forms | `candy-forms` / `huh` port | Form components, file picker |
+| Interactive TUI forms | `sugar-forms` / `huh` port | Form components, file picker |
 | Config/flag parsing | `candy-core` | Command-line argument handling |
 | Window decorations | `sugar-widgets` | Border rendering, rounded corners |
 | Shadow effects | `sugar-widgets` / `candy-shine` | Visual effects, filters |

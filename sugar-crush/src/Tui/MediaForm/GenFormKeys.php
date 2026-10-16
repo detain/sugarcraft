@@ -26,7 +26,7 @@ namespace SugarCraft\Crush\Tui\MediaForm;
  * genuinely new string is needed, add it to BOTH here and lang/en.php in the
  * same commit; never ship a lang key with no vocabulary row.
  *
- * Mirrors the shape of candy-forms FieldSpec labels: one key per visible
+ * Mirrors the shape of sugar-forms FieldSpec labels: one key per visible
  * affordance, placeholders carried as {tokens} for Lang::t($key, $params).
  */
 final class GenFormKeys

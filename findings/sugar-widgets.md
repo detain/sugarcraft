@@ -4,7 +4,7 @@
 
 Sugar-widgets is a PHP port of charmbracelet/bubbles — a TUI component library. It provides 15+ pre-built TUI components (text input, textarea, list, table, tree, viewport, file picker, progress, spinner, etc.) for the SugarCraft ecosystem.
 
-**Architecture observation:** A significant portion of sugar-widgets components (TextInput, TextArea, Viewport, ItemList, FilePicker, Spinner/Style, Scrollbar/ScrollbarState, Cursor/Mode) are simple `class_alias` deprecation wrappers that point to `SugarCraft\Forms\*`. The actual implementations live in candy-forms. This is a transitional architecture that may confuse consumers.
+**Architecture observation:** A significant portion of sugar-widgets components (TextInput, TextArea, Viewport, ItemList, FilePicker, Spinner/Style, Scrollbar/ScrollbarState, Cursor/Mode) are simple `class_alias` deprecation wrappers that point to `SugarCraft\Forms\*`. The actual implementations live in sugar-forms. This is a transitional architecture that may confuse consumers.
 
 ---
 
@@ -170,10 +170,10 @@ class_alias('SugarCraft\Forms\Viewport\Viewport', 'SugarCraft\Widgets\Viewport\V
 ```
 
 This means:
-- sugar-widgets doesn't actually implement these 8 components — candy-forms does
-- External consumers who `use SugarCraft\Widgets\TextInput\TextInput` are actually getting candy-forms' implementation
+- sugar-widgets doesn't actually implement these 8 components — sugar-forms does
+- External consumers who `use SugarCraft\Widgets\TextInput\TextInput` are actually getting sugar-forms' implementation
 - The sugar-widgets namespace is essentially a deprecated re-export surface
-- No tests exist in sugar-widgets for these components (they're tested in candy-forms)
+- No tests exist in sugar-widgets for these components (they're tested in sugar-forms)
 
 ### 10. `SortState` — Readonly Array Property Still Mutable Internally
 
@@ -286,12 +286,12 @@ Most components validate inputs in the constructor, but this validation is incon
 
 ### 19. Class Alias Deprecation Creates Confusing Consumer API
 
-Consumers importing from `SugarCraft\Widgets\*` get candy-forms implementations. This means:
+Consumers importing from `SugarCraft\Widgets\*` get sugar-forms implementations. This means:
 - sugar-widgets has no independent test coverage for 8 of its 15 components
-- The "sugar-widgets" version of TextInput etc. is always exactly the candy-forms version
-- If candy-forms changes, sugar-widgets changes — there is no independent versioning
+- The "sugar-widgets" version of TextInput etc. is always exactly the sugar-forms version
+- If sugar-forms changes, sugar-widgets changes — there is no independent versioning
 
-**Recommendation:** Document clearly that sugar-widgets is a transitional re-export layer, and that candy-forms is the canonical home for these components.
+**Recommendation:** Document clearly that sugar-widgets is a transitional re-export layer, and that sugar-forms is the canonical home for these components.
 
 ### 20. ReactPHP/Async Integration — `subscriptions()` Always Returns Null
 

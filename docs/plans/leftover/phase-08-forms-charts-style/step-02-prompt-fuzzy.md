@@ -1,6 +1,6 @@
-# Step 08.02 — candy-forms fuzzy autocomplete
+# Step 08.02 — sugar-forms fuzzy autocomplete
 
-**Source:** `leftover_updates_later.md` candy-forms §3.2 P2
+**Source:** `leftover_updates_later.md` sugar-forms §3.2 P2
 **Branch:** `ai/prompt-fuzzy`
 
 ## Deliverable
@@ -13,20 +13,20 @@ ranks by score; user picks via arrow keys.
 
 **Create:**
 
-- `candy-forms/src/Fuzzy/FuzzyMatcher.php`.
+- `sugar-forms/src/Fuzzy/FuzzyMatcher.php`.
 
 **Modify:**
 
-- `candy-forms/src/Select.php` and `candy-forms/src/TextInput.php` —
+- `sugar-forms/src/Select.php` and `sugar-forms/src/TextInput.php` —
   `withFuzzySuggestions()`.
 
 ## Tests
 
-- `candy-forms/tests/Fuzzy/FuzzyMatcherTest.php`.
+- `sugar-forms/tests/Fuzzy/FuzzyMatcherTest.php`.
 
 ## Acceptance
 
-- `cd candy-forms && vendor/bin/phpunit --filter Fuzzy` green.
+- `cd sugar-forms && vendor/bin/phpunit --filter Fuzzy` green.
 
 ---
 

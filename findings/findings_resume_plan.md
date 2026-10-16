@@ -16,7 +16,7 @@ Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
 "Future work (deferred pre-1.0)" sections: candy-git-server 6.1/6.2/7.5-7.9,
 candy-pty 8.1/8.3/8.4, candy-sql 3.1/3.3/3.4/5.1 (+1.8/0.25
 react-pg WONTFIX, react/mysql stable pin WONTFIX — no 0.7 tag),
-sugar-readline 3.2 (vi text objects, needs candy-forms VimAction).
+sugar-readline 3.2 (vi text objects, needs sugar-forms VimAction).
 ## ⚠️ CONCURRENCY RULES — READ BEFORE SPAWNING ANY AGENT
 
 These rules are **mandatory for every agent** in every batch. Violation = stop immediately and report.
@@ -239,12 +239,12 @@ For each phase:
 
 ---
 
-#### 0.19 🔴 candy-forms: Signal handlers use undefined $status (Item 1.1)
+#### 0.19 🔴 sugar-forms: Signal handlers use undefined $status (Item 1.1)
 
-**Plan:** `findings/plan_candy-forms-huh.md` — Item 1.1 (issue found during audit)
+**Plan:** `findings/plan_sugar-forms-huh.md` — Item 1.1 (issue found during audit)
 **Issue:** Signal handlers at lines 141, 154 reference `$status` but should reference `$waitStatus` (line 170)
 **Fix:** Replace `$status` with `$waitStatus` in both signal handler closures
-**Files:** `candy-forms/src/Spinner.php:141, 154`
+**Files:** `sugar-forms/src/Spinner.php:141, 154`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 0.20 🔴 sugar-toast: renderAlertToBuffer uses unclamped maxWidth (Item 1.2)
@@ -657,9 +657,9 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 #### 2.1 🟢 candy-core: Extract `Clamp.php` migration incomplete (Item 1.1)
 
 **Plan:** `findings/plan_repeated_logic.md` — Item 1.1
-**Status:** sugar-widgets and candy-forms still have local `clamp()` methods
-**Fix:** Replace `sugar-widgets/src/Tree/Tree.php:L317` and `candy-forms/src/Viewport/Viewport.php:L462` with `SugarCraft\Core\Util\Clamp::int()` or shared helper
-**Files:** `sugar-widgets/src/Tree/Tree.php`, `candy-forms/src/Viewport/Viewport.php`
+**Status:** sugar-widgets and sugar-forms still have local `clamp()` methods
+**Fix:** Replace `sugar-widgets/src/Tree/Tree.php:L317` and `sugar-forms/src/Viewport/Viewport.php:L462` with `SugarCraft\Core\Util\Clamp::int()` or shared helper
+**Files:** `sugar-widgets/src/Tree/Tree.php`, `sugar-forms/src/Viewport/Viewport.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 **Note:** sugar-widgets clamp() has different semantics (returns self, modifies cursor+offset) — may need custom solution
 
@@ -1305,7 +1305,7 @@ Same verification as previous phases.
 | `plan_sugar-dashboard.md` | M-1, M-2, M-3, M-4, L-1, L-3, F-2, F-4 | WeatherModule HOME fallback, FilesystemIterator, LegacyModuleAdapter msg filtering, Gauge double clamp, PluginSdk signals, EventDispatcherTest |
 | `plan_candy-mdview.md` | 2.2-2.3, 2.5 | GlamourTheme $throws, loadInput() docs, Pager empty stream |
 | `plan_candy-mail.md` | 3.1, 3.2, 4.1-4.7, 5.1, 6.1-6.2 | buildMimeMessage refactor, async transport, Resend API key, address deduplication, hasExtension parsing, CID validation, getenv consistency |
-| `plan_candy-forms-huh.md` | 2.2-2.4, 3.2-3.7, 4.1-4.5, 5.1-5.2, 6.1-6.3, 7.1-7.3 | SIGCHLD handler, @ suppression removal, signal handler restoration, Spinner timeout, AsyncSpinner, SequentialSpinner, deprecation triggers, mutate helper |
+| `plan_sugar-forms-huh.md` | 2.2-2.4, 3.2-3.7, 4.1-4.5, 5.1-5.2, 6.1-6.3, 7.1-7.3 | SIGCHLD handler, @ suppression removal, signal handler restoration, Spinner timeout, AsyncSpinner, SequentialSpinner, deprecation triggers, mutate helper |
 | `plan_sugar-reel.md` | 1.4, 2.4, 3.3-3.8, 4.1-4.9, 5.2-5.9, 6.2-6.9, 7.1-7.5, 8.1-8.6 | Exit code capture, mutate false/0, HalfBlock path, GifDecoder silent fallback, mode switch rebuild, renderPlaceholder memo, subtitle not found, skip limit, autoMode sentinel, decoderFactory, color packing, Windows NUL, tickMsg singleton, frame PTS |
 | `plan_candy-git.md` | 3.1-3.2, 5.1 | DiffViewer early return, HistoryManager spread syntax, async git driver |
 | `plan_sugar-table.md` | 2.2-2.4, 3.1-3.3, 4.1-4.3 | Navigation short-circuit, totalRows double-compute, widthSolveCache LRU, styleFunc doc, visibleColumnIndices helper |
