@@ -1,7 +1,7 @@
 https://sugarcraft.github.io/lib/candy-layout.html
 https://sugarcraft.github.io/lib/sugar-reel.html
 https://sugarcraft.github.io/lib/candy-flip.html
-https://sugarcraft.github.io/lib/sugar-boxer.html
+https://sugarcraft.github.io/lib/sugar-panels.html
 https://sugarcraft.github.io/lib/sugar-crumbs.html
 https://sugarcraft.github.io/lib/sugar-dash.html
 https://sugarcraft.github.io/lib/candy-hermit.html

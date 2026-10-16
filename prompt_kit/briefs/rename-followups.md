@@ -79,3 +79,8 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
   still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
   already-rewritten `.tape` files on the next tape run; do not hand-patch.
+
+## C1 sugar-boxer → sugar-panels (2026-10-16) <!-- @rename-keep -->
+- `sugar-panels/.vhs/{basic,borders,nested}.gif` — 3 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
+  still show the pre-rename `sugar-boxer` wordmark/paths. CI `.github/workflows/vhs.yml` re-renders from <!-- @rename-keep -->
+  the already-rewritten `.tape` files on the next tape run; do not hand-patch.

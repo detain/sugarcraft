@@ -12,7 +12,7 @@ use SugarCraft\Layout\Region;
 
 /**
  * Characterizes the opt-in min-share floor (GreedySolver::withMinShare) against
- * a faithful in-test replica of sugar-boxer's NON-flex distribute(), and pins
+ * a faithful in-test replica of sugar-panels's NON-flex distribute(), and pins
  * the flag plumbing + the tight-viewport invariant it exists for.
  *
  * The floor is the fourth quirk compat()'s three flags cannot express: a
@@ -35,8 +35,8 @@ final class GreedySolverMinShareTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // sugar-boxer distribute() replica — READ-ONLY reference for byte-parity.
-    // (SugarBoxer::distribute() ~lines 888-915; returns starting offsets.)
+    // sugar-panels distribute() replica — READ-ONLY reference for byte-parity.
+    // (SugarPanels::distribute() ~lines 888-915; returns starting offsets.)
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
@@ -68,7 +68,7 @@ final class GreedySolverMinShareTest extends TestCase
     }
 
     /**
-     * The rendered per-child sizes distribute() implies, exactly as SugarBoxer's
+     * The rendered per-child sizes distribute() implies, exactly as SugarPanels's
      * renderHorizontal() derives them: non-last = offset delta minus spacing;
      * last = full width minus border minus its offset. (available = w - 2b.)
      *
@@ -270,7 +270,7 @@ final class GreedySolverMinShareTest extends TestCase
                     foreach ($borders as $borderPad) {
                         $content = $available - $spacing * max(0, $n - 1);
                         if ($content < 0) {
-                            // sugar-boxer guards availableW <= 0 before distributing;
+                            // sugar-panels guards availableW <= 0 before distributing;
                             // a negative content span is out of contract.
                             continue;
                         }

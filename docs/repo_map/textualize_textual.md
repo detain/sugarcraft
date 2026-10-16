@@ -272,7 +272,7 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `Reactive`, `var()`, `watch_*()` | `candy-core/` + `sugar-bits/` | Reactive state — sugar-bits has reactive components (TextInput, etc.) |
 | Widget library (Button, Input, Tree, etc.) | `sugar-bits/` | Prebuilt UI components |
 | TCSS Stylesheet, CSS properties | `candy-sprinkles/` | Declarative styling + layout |
-| `Layout`, `VerticalLayout`, `HorizontalLayout`, `GridLayout` | `candy-sprinkles/` + `sugar-boxer/` | Layout algorithms |
+| `Layout`, `VerticalLayout`, `HorizontalLayout`, `GridLayout` | `candy-sprinkles/` + `sugar-panels/` | Layout algorithms |
 | `Color`, HSL/HSV/Lab color spaces | `candy-palette/` | Color manipulation |
 | `Content`, `Text`, `Span`, `Style` | `candy-shine/` | Rich text rendering |
 | `markdown`, `MarkdownViewer` widgets | `candy-shine/` | Markdown rendering |

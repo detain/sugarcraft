@@ -18,7 +18,7 @@
     {"batch":"B","kind":"rename","old":"candy-freeze","new":"candy-codeshot","ns_old":"Freeze","ns_new":"CodeShot","type":"app","bins":{"bin/candyfreeze":"bin/candy-codeshot"},"status":"packagist-done"},
     {"batch":"B","kind":"rename","old":"candy-mold","new":"candy-starter","ns_old":"App","ns_new":"App","type":"app","bins":{},"status":"packagist-done"},
 
-    {"batch":"C","kind":"rename","old":"sugar-boxer","new":"sugar-panels","ns_old":"Boxer","ns_new":"Panels","type":"lib","bins":{},"status":"pending"},
+    {"batch":"C","kind":"rename","old":"sugar-boxer","new":"sugar-panels","ns_old":"Boxer","ns_new":"Panels","type":"lib","bins":{},"status":"renamed"},
     {"batch":"C","kind":"rename","old":"sugar-stickers","new":"sugar-flexbox","ns_old":"Stickers","ns_new":"Flexbox","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"sugar-crumbs","new":"sugar-navstack","ns_old":"Crumbs","ns_new":"NavStack","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"sugar-veil","new":"sugar-overlay","ns_old":"Veil","ns_new":"Overlay","type":"lib","bins":{},"status":"pending"},

@@ -209,18 +209,18 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 10: sugar-boxer, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy
+### Group 10: sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| sugar-boxer | 35 ✓ | APPROVE | 0 | 2 | 2 | 0 |
+| sugar-panels | 35 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | sugar-readline | 139 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | candy-ssh-launcher | 70 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | honey-bounce | 121 ✓ | APPROVE | 0 | 3 | 2 | 0 |
 | candy-flappy | 31 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | super-candy | 187 ✓ | REQUEST_CHANGES | 0 | 4 | 5 | 0 |
 
-**sugar-boxer** — Box renderer. Issues: `Node::with()` uses `0 ?: $existing` pattern so `0` values can't be set; `maxWidth`/`maxHeight` stored but never used.
+**sugar-panels** — Box renderer. Issues: `Node::with()` uses `0 ?: $existing` pattern so `0` values can't be set; `maxWidth`/`maxHeight` stored but never used.
 
 **sugar-readline** — Prompt library. Issues: `Highlight` is a stub no-op (silently returns no styling); `AutoSuggest` class exists but is never instantiated in the flow; `EmacsMode::deleteWordBefore()` is O(n²) using repeated key simulation; `ViMode::isWordChar()` calls `preg_match()` per character.
 
@@ -256,7 +256,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Anti-Pattern | Affected Packages | Description |
 |--------------|-------------------|-------------|
-| **`with()` can't set `0`/`false`** | sugar-boxer, sugar-bits, candy-sprinkles | Uses `value ?: $existing` sentinel pattern; passing `0` is treated as "not passed" |
+| **`with()` can't set `0`/`false`** | sugar-panels, sugar-bits, candy-sprinkles | Uses `value ?: $existing` sentinel pattern; passing `0` is treated as "not passed" |
 | **33 cloned Lang.php files** | All 33 packages | Same ~31-line shape, only NAMESPACE/DIR differ; ~700 lines of boilerplate |
 | **God classes** | super-candy/Manager (915L), candy-git/App (1201L) | Single class handling too many responsibilities |
 | **Stub features wired silently** | sugar-readline/Highlight, sugar-toast/AnimationDuration | Feature exists in API but does nothing; no warning to consumers |
@@ -301,7 +301,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 4. **Standardize `with()` sentinel pattern**
    - Replace `value ?: $existing` with explicit `null` sentinel so `0`/`false` can be set
-   - Affects: sugar-boxer/Node, sugar-bits (some classes), any using the pattern
+   - Affects: sugar-panels/Node, sugar-bits (some classes), any using the pattern
 
 ### Medium Priority (Next Sprint)
 
@@ -379,7 +379,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-tetris | T-Spin Twist rule (beyond 3-corner) | LOW |
 | candy-minesweeper | Chord-click keyboard binding | LOW |
 | sugar-flip | GIF frame cap of 256 not configurable | LOW |
-| sugar-boxer | maxWidth/maxHeight enforcement | LOW |
+| sugar-panels | maxWidth/maxHeight enforcement | LOW |
 
 ---
 
@@ -436,7 +436,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 7. **[REFACTOR]** super-candy: Decompose 915-line Manager into ConfirmHandler, SearchHandler, TabManager
 8. **[REFACTOR]** candy-git: Decompose 1201-line App into smaller handlers
-9. **[REFACTOR]** sugar-boxer: Fix `with()` to use `null` sentinel so `0` values can be set
+9. **[REFACTOR]** sugar-panels: Fix `with()` to use `null` sentinel so `0` values can be set
 10. **[REFACTOR]** sugar-crumbs: Fix `NavStack::updateTop()` and `setItems()` to return clones
 11. **[REFACTOR]** sugar-readline: Make `Highlight::highlight()` throw unsupported exception instead of silently returning no styling
 12. **[CLEANUP]** candy-flappy: Fix `saveHighScore()` to return false on write failure
@@ -571,7 +571,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
 | 9 | candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
-| 10 | sugar-boxer, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
+| 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 
 ---

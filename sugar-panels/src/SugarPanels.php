@@ -1,0 +1,1095 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Panels;
+
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Layout\Constraint\Constraint;
+use SugarCraft\Layout\Direction;
+use SugarCraft\Layout\GreedySolver;
+use SugarCraft\Layout\Region as LayoutRegion;
+use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Sprinkles\VAlign;
+
+/**
+ * Box-drawing layout renderer.
+ *
+ * Builds a tree of {@see Node}s (leaf/horizontal/vertical/noborder) and
+ * renders it as ANSI box-drawing characters within a fixed viewport.
+ *
+ * Port of treilik/bubbleboxer.
+ *
+ * @see https://github.com/treilik/bubbleboxer
+ */
+final class SugarPanels
+{
+    /** Cap for combining character carry string to prevent memory exhaustion. */
+    private const MAX_CARRY = 100;
+
+    /**
+     * Per-Style SGR-prefix cache, keyed by the Style OBJECT via a WeakMap.
+     *
+     * A WeakMap ties each entry's lifetime to its Style: when a style is GC'd,
+     * its entry is evicted automatically. This replaces the previous
+     * spl_object_id keying, which had a latent correctness bug — PHP reuses an
+     * object id immediately after the object dies, so a later, DIFFERENT style
+     * allocated into that same id slot would alias the dead style's stale prefix
+     * and render with the wrong colour/attributes. The old int-keyed array also
+     * never evicted, growing unbounded on a long-lived instance. Keying by the
+     * object identity fixes both without changing a single rendered byte.
+     *
+     * @var \WeakMap<Style, string>
+     */
+    private \WeakMap $sgrPrefixCache;
+
+    /** @var Buffer|null Lazily-built previous frame buffer for diff-based emission */
+    private ?Buffer $previousFrame = null;
+
+    /** @var list<list<string>>|null Previous frame's cell grid, kept so the diff buffer can be built lazily on frame 2 */
+    private ?array $previousCells = null;
+
+    /** @var int|null Previous render width for resize detection */
+    private ?int $prevWidth = null;
+
+    /** @var int|null Previous render height for resize detection */
+    private ?int $prevHeight = null;
+
+    /**
+     * candy-layout's constraint solver in sugar-panels parity mode. The flex
+     * distribution (fixed siblings take their natural size, flex children share
+     * the leftover by weight) is exactly what candy-layout's GreedySolver models;
+     * {@see GreedySolver::compat()} flips its three divergent axes (round-split,
+     * remainder-to-last, non-truncating overflow) so it reproduces
+     * {@see distributeFlex()} byte-for-byte. Immutable + stateless → shared.
+     */
+    private readonly GreedySolver $flexSolver;
+
+    /**
+     * Create a new SugarPanels instance.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    public function __construct()
+    {
+        $this->sgrPrefixCache = new \WeakMap();
+        $this->flexSolver = GreedySolver::compat();
+    }
+
+    // -------------------------------------------------------------------------
+    // Node factory helpers (delegated to Node statics for ergonomics)
+    // -------------------------------------------------------------------------
+
+    public function leaf(string $content = ''): Node
+    {
+        return Node::leaf($content);
+    }
+
+    public function horizontal(Node ...$children): Node
+    {
+        return Node::horizontal(...$children);
+    }
+
+    public function vertical(Node ...$children): Node
+    {
+        return Node::vertical(...$children);
+    }
+
+    public function noBorder(Node $child): Node
+    {
+        return Node::noBorder($child);
+    }
+
+    // -------------------------------------------------------------------------
+    // Rendering
+    // -------------------------------------------------------------------------
+
+    /**
+     * Render a layout node tree into a string within the given viewport.
+     *
+     * On the first render (or after a resize), emits the full buffer.
+     * On subsequent renders with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
+     * @param Node $root   Layout node tree
+     * @param int  $width  Viewport width in cells (0 allowed → empty rows; negative rejected)
+     * @param int  $height Viewport height in lines (0 allowed → ''; negative rejected)
+     * @return string      Rendered layout with box-drawing characters
+     *
+     * @throws \InvalidArgumentException If either viewport dimension is negative.
+     */
+    public function render(Node $root, int $width, int $height): string
+    {
+        // Fail loud at the API boundary (audit #11): without this, a negative
+        // dimension leaks array_fill()'s raw ValueError from library internals.
+        if ($width < 0 || $height < 0) {
+            throw new \InvalidArgumentException(
+                "Viewport dimensions must not be negative, got {$width}x{$height}"
+            );
+        }
+
+        // 2D cell grid: each cell holds one logical character (any byte length).
+        // Storing as char-cells avoids byte/multibyte boundary corruption that
+        // happens when slicing strings containing UTF-8 box-drawing glyphs.
+        $cells = \array_fill(0, $height, \array_fill(0, $width, ' '));
+        $this->renderNode($root, 0, 0, $width, $height, $cells);
+
+        $out = [];
+        foreach ($cells as $row) {
+            $out[] = \implode('', $row);
+        }
+        $fullOutput = \implode("\n", $out);
+
+        // First frame (or after a resize): emit the full output and remember the
+        // cell GRID. Building the diff buffer here is pure waste for callers that
+        // use a fresh SugarPanels per render and never reach the diff path, so it
+        // is deferred to the first subsequent same-dimension render below. The
+        // grid — not the flattened string — is the retained state: re-splitting
+        // the flat string cannot recover cell boundaries once multi-byte glyphs
+        // and escape-prefixed cells have been concatenated (audit #5).
+        if ($this->previousCells === null || $this->prevWidth !== $width || $this->prevHeight !== $height) {
+            $this->previousCells = $cells;
+            $this->prevWidth = $width;
+            $this->prevHeight = $height;
+            $this->previousFrame = null;
+            return $fullOutput;
+        }
+
+        // Subsequent frames with same dimensions: materialise the previous buffer lazily
+        // (exactly ONCE — cached in $previousFrame), build the current buffer, diff and
+        // emit the delta. Reused callers thus build exactly one buffer per frame, same as
+        // before; fresh-instance callers build zero.
+        $prev = $this->previousFrame ??= $this->bufferFromGrid($this->previousCells, $width, $height);
+        $current = $this->bufferFromGrid($cells, $width, $height);
+        $ops = $current->diff($prev);
+        $this->previousFrame = $current;
+        $this->previousCells = $cells;
+
+        $encoder = new DiffEncoder();
+        return $encoder->encode($ops);
+    }
+
+    /**
+     * Render a node at the given viewport region.
+     *
+     * @param Node                            $node  Node to render
+     * @param int                             $x     Left offset
+     * @param int                             $y     Top offset
+     * @param int                             $w     Available width
+     * @param int                             $h     Available height
+     * @param array<int, array<int, string>>  $cells Mutable cell grid (modified in place)
+     */
+    private function renderNode(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    {
+        if ($w <= 0 || $h <= 0) return;
+
+        // Apply margin as outer inset (shifts the region inward)
+        [$mt, $mr, $mb, $ml] = $node->margin;
+        $x += $ml;
+        $y += $mt;
+        $w -= $ml + $mr;
+        $h -= $mt + $mb;
+        if ($w <= 0 || $h <= 0) return;
+
+        switch ($node->kind) {
+            case Node::LEAF:
+                $this->renderLeaf($node, $x, $y, $w, $h, $cells);
+                break;
+            case Node::HORIZONTAL:
+                $this->renderHorizontal($node, $x, $y, $w, $h, $cells);
+                break;
+            case Node::VERTICAL:
+                $this->renderVertical($node, $x, $y, $w, $h, $cells);
+                break;
+            case Node::NOBORDER:
+                $this->renderNoBorder($node, $x, $y, $w, $h, $cells);
+                break;
+        }
+    }
+
+    private function renderLeaf(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    {
+        $b = $node->border === true ? 1 : 0;
+        $p = $node->padding;
+
+        $cx = $x + $b;          // content left
+        $cy = $y + $b;          // content top
+        $cw = $w - $b * 2;      // content width
+        $ch = $h - $b * 2;      // content height
+
+        // Draw the frame BEFORE the content-region guards (audit #2): a bordered
+        // box whose region is exactly its border (h=2 or w=2) still has a valid
+        // frame to show — returning early here used to blank the whole box.
+        // drawBorder itself no-ops below 2x2, so this stays safe at 1-wide/tall.
+        if ($node->border === true) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
+        if ($cw <= 0 || $ch <= 0) return;
+
+        // Clamp padding when it would consume the entire content axis. Without
+        // this, a tiny viewport with non-zero padding zeroes out content area
+        // and the leaf disappears entirely.
+        $padH = ($p * 2 >= $cw) ? \max(0, \intdiv($cw - 1, 2)) : $p;
+        $padV = ($p * 2 >= $ch) ? \max(0, \intdiv($ch - 1, 2)) : $p;
+
+        $pcx = $cx + $padH;
+        $pcy = $cy + $padV;
+        $pcw = $cw - $padH * 2;
+        $pch = $ch - $padV * 2;
+
+        if ($pcw <= 0 || $pch <= 0) return;
+
+        // Apply maxWidth constraint: soft-clamp the content width to maxWidth
+        // and recompute horizontal padding to stay centered.
+        if ($node->maxWidth > 0 && $node->maxWidth < $pcw) {
+            $clampedW = $node->maxWidth;
+            $clampedPadH = ($p * 2 >= $clampedW) ? \max(0, \intdiv($clampedW - 1, 2)) : $p;
+            $pcx = $cx + $clampedPadH;
+            $pcw = $clampedW - $clampedPadH * 2;
+        }
+        // Apply maxHeight constraint: soft-clamp the content height to maxHeight
+        // and recompute vertical padding to stay centered.
+        if ($node->maxHeight > 0 && $node->maxHeight < $pch) {
+            $clampedH = $node->maxHeight;
+            $clampedPadV = ($p * 2 >= $clampedH) ? \max(0, \intdiv($clampedH - 1, 2)) : $p;
+            $pcy = $cy + $clampedPadV;
+            $pch = $clampedH - $clampedPadV * 2;
+        }
+
+        if ($pcw <= 0 || $pch <= 0) return;
+
+        $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV);
+    }
+
+    /**
+     * Render a horizontal (left-to-right) panel layout.
+     *
+     * Flex children: separators between children are ONLY drawn when
+     * spacing === 0 AND the layout has NO flex children. This is because
+     * the flex distribution algorithm resizes children dynamically, making
+     * a fixed separator position meaningless. Use spacing >= 1 to add
+     * visual gaps, or use bordered panels for explicit separation.
+     *
+     * @param Node                           $node  Node to render
+     * @param int                            $x     Left offset
+     * @param int                            $y     Top offset
+     * @param int                            $w     Available width
+     * @param int                            $h     Available height
+     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     */
+    private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    {
+        $children = $node->children;
+        $n = \count($children);
+        if ($n === 0) return;
+
+        $b  = $node->border ? 1 : 0;
+        $sp = $node->spacing;
+
+        $availableW = $w - $b * 2;
+        $availableH = $h - $b * 2;
+
+        // Draw outer border first (audit #2): before the collapse guard, so a
+        // panel whose children area shrinks to zero still shows its frame.
+        if ($node->border) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
+        if ($availableW <= 0 || $availableH <= 0) return;
+
+        // Flex children grow to fill the leftover after fixed siblings; without
+        // any flex child, fall back to distributing width by minWidth weights.
+        if ($this->hasFlex($children) === true) {
+            // Single-pass: build bases and flexes arrays together
+            $bases = [];
+            $flexes = [];
+            foreach ($children as $c) {
+                $bases[] = $c->totalWidth();
+                $flexes[] = $c->flex;
+            }
+            $offsets = $this->distributeFlex($availableW, $bases, $flexes, $sp, $b);
+        } else {
+            $weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children);
+            $totalWeight = \array_sum($weights);
+            $offsets = $this->distribute($availableW, $weights, $totalWeight, $sp, $b);
+        }
+
+        // Render each child. distribute() already bakes the border pad into
+        // offsets[0], so don't add $b again here or the children get pushed
+        // one cell deeper than the available space and the trailing child
+        // ends up with zero size.
+        for ($i = 0; $i < $n; $i++) {
+            $child = $children[$i];
+            $ox = $x + $offsets[$i];
+            $ow = $i === $n - 1
+                ? $w - $b - $offsets[$i]
+                : $offsets[$i + 1] - $offsets[$i] - $sp;
+            if ($child->maxWidth > 0) {
+                $ow = \min($ow, $child->maxWidth);
+            }
+
+            $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $cells);
+
+            // Draw vertical separator between children (inside the outer border)
+            if ($i < $n - 1 && $sp === 0) {
+                $this->drawVLine($node->borderStyle, $x + $offsets[$i + 1] - 1, $y + $b, $availableH, $cells);
+            }
+        }
+    }
+
+    /**
+     * Render a vertical (top-to-bottom) panel layout.
+     *
+     * Flex children: separators between children are ONLY drawn when
+     * spacing === 0 AND the layout has NO flex children. This is because
+     * the flex distribution algorithm resizes children dynamically, making
+     * a fixed separator position meaningless. Use spacing >= 1 to add
+     * visual gaps, or use bordered panels for explicit separation.
+     *
+     * @param Node                           $node  Node to render
+     * @param int                            $x     Left offset
+     * @param int                            $y     Top offset
+     * @param int                            $w     Available width
+     * @param int                            $h     Available height
+     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     */
+    private function renderVertical(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    {
+        $children = $node->children;
+        $n = \count($children);
+        if ($n === 0) return;
+
+        $b  = $node->border ? 1 : 0;
+        $sp = $node->spacing;
+
+        $availableW = $w - $b * 2;
+        $availableH = $h - $b * 2;
+
+        // Draw outer border first (audit #2): before the collapse guard, so a
+        // panel whose children area shrinks to zero still shows its frame.
+        if ($node->border) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
+        if ($availableW <= 0 || $availableH <= 0) return;
+
+        // Flex children grow to fill the leftover after fixed siblings; without
+        // any flex child, fall back to distributing height by minHeight weights
+        // (the historical 1/3-style split).
+        if ($this->hasFlex($children) === true) {
+            // Single-pass: build bases and flexes arrays together
+            $bases = [];
+            $flexes = [];
+            foreach ($children as $c) {
+                $bases[] = $c->totalHeight();
+                $flexes[] = $c->flex;
+            }
+            $offsets = $this->distributeFlex($availableH, $bases, $flexes, $sp, $b);
+        } else {
+            $weights = \array_map(fn(Node $c) => $c->minHeight > 0 ? $c->minHeight : 1, $children);
+            $totalWeight = \array_sum($weights);
+            $offsets = $this->distribute($availableH, $weights, $totalWeight, $sp, $b);
+        }
+
+        for ($i = 0; $i < $n; $i++) {
+            $child = $children[$i];
+            $oy = $y + $offsets[$i];
+            $oh = $i === $n - 1
+                ? $h - $b - $offsets[$i]
+                : $offsets[$i + 1] - $offsets[$i] - $sp;
+            if ($child->maxHeight > 0) {
+                $oh = \min($oh, $child->maxHeight);
+            }
+
+            $this->renderNode($child, $x + $b, $oy, $availableW, $oh, $cells);
+
+            if ($i < $n - 1 && $sp === 0) {
+                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $availableW, $cells);
+            }
+        }
+    }
+
+    private function renderNoBorder(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    {
+        if ($node->children === []) return;
+        $this->renderNode($node->children[0], $x, $y, $w, $h, $cells);
+    }
+
+    // -------------------------------------------------------------------------
+    // Content rendering
+    // -------------------------------------------------------------------------
+
+    /**
+     * Render text content within a content region with word-wrap.
+     *
+     * @param Style|null  $style   Optional SGR style prefix (fg/bg/attrs from candy-sprinkles)
+     * @param Align|null $alignH  Horizontal text alignment
+     * @param VAlign|null $alignV Vertical text alignment
+     */
+    private function renderContent(string $text, int $x, int $y, int $w, int $h, array &$cells, ?Style $style = null, ?Align $alignH = null, ?VAlign $alignV = null): void
+    {
+        if ($w <= 0 || $h <= 0) return;
+
+        $wrapped = $this->wordWrap($text, $w);
+        $linesToRender = \array_slice($wrapped, 0, $h);
+        $numLines = \count($linesToRender);
+
+        // Compute vertical alignment top pad
+        $topPad = 0;
+        if ($alignV === VAlign::Middle) {
+            $topPad = \intdiv($h - $numLines, 2);
+        } elseif ($alignV === VAlign::Bottom) {
+            $topPad = $h - $numLines;
+        }
+        $topPad = \max(0, $topPad);
+
+        // Pre-compute the SGR prefix from the style (render a single-char probe and strip trailing reset).
+        // Cache per Style OBJECT via the WeakMap (see $sgrPrefixCache) so repeated leaves and
+        // frames that reuse the same immutable Style skip the probe render, while a freed
+        // style's entry is evicted automatically and never aliases a later style.
+        $sgrPrefix = '';
+        if ($style !== null) {
+            $cached = $this->sgrPrefixCache[$style] ?? null;
+            if ($cached !== null) {
+                $sgrPrefix = $cached;
+            } else {
+                $probe = $style->render(' ');
+                // The render output is: SGR-open + ' ' + SGR-close
+                // Split on the sentinel byte (NUL) to isolate the opening SGR.
+                $parts = \explode("\x00", $probe, 2);
+                $sgrPrefix = $parts[0] ?? '';
+                $this->sgrPrefixCache[$style] = $sgrPrefix;
+            }
+        }
+
+        foreach ($linesToRender as $lineIdx => $line) {
+            $lineY = $y + $topPad + $lineIdx;
+            if ($lineY >= \count($cells)) break;
+
+            // Apply horizontal alignment: compute left pad and reduce effective width
+            $leftPad = 0;
+            $lw = $this->strWidth($line);
+            if ($alignH === Align::Center) {
+                $leftPad = \intdiv($w - $lw, 2);
+            } elseif ($alignH === Align::Right) {
+                $leftPad = $w - $lw;
+            }
+            $leftPad = \max(0, $leftPad);
+
+            // Prepend SGR prefix to styled lines.
+            // The pad bound passed to placeLine is the REMAINING width after the
+            // alignment shift: padding to the full $w from the shifted origin
+            // would write leftPad cells past the region's right edge and erase
+            // the already-drawn border (audit #1).
+            $lineToPlace = $sgrPrefix !== '' ? $sgrPrefix . $line : $line;
+            $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w - $leftPad, $cells);
+        }
+    }
+
+    /**
+     * Place one (already-wrapped) line into the cell grid, ANSI-aware.
+     *
+     * The line is split into visible cells — each carrying its leading escape
+     * sequences with the visible grapheme they style (escapes are zero-width, so
+     * they ride in the same grid cell and never consume a column). Placement and
+     * truncation are measured by VISIBLE columns (candy-core {@see Width}), so a
+     * styled span keeps its true width and its escapes survive in order; a wide
+     * (CJK/emoji) grapheme occupies its two columns with a blanked continuation
+     * cell.
+     *
+     * Reset safety: a colour/attribute left open — whether the source span was
+     * unbalanced or a reverse-video span got clipped by the width — is terminated
+     * with an SGR reset on the last placed cell, so style never bleeds past the
+     * content region into the border or the next row.
+     */
+    private function placeLine(string $line, int $x, int $y, int $w, array &$cells): void
+    {
+        ['cells' => $segments, 'trailing' => $trailing] = $this->visualCells($line);
+
+        $col       = 0;
+        $lastCol   = -1;
+        $carry     = '';      // zero-width graphemes awaiting a base cell
+        $styleOpen = false;
+        $truncated = false;
+
+        foreach ($segments as $seg) {
+            $gw = $this->strWidth($seg);
+
+            // Zero-width grapheme (combining mark / lone joiner): keep it attached
+            // to the previous cell, else carry it onto the next visible one.
+            if ($gw <= 0) {
+                if ($lastCol >= 0) {
+                    // Cap carry to prevent unbounded growth when attaching to a previous cell
+                    if (\strlen($carry) < self::MAX_CARRY) {
+                        $cells[$y][$x + $lastCol] .= $seg;
+                    }
+                } else {
+                    // Cap carry accumulation to prevent memory exhaustion
+                    if (\strlen($carry) < self::MAX_CARRY) {
+                        $carry .= $seg;
+                    }
+                }
+                $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
+                continue;
+            }
+
+            if ($col + $gw > $w) {
+                $truncated = true;
+                break;
+            }
+
+            $this->setChar($x + $col, $y, $carry . $seg, $cells);
+            $carry     = '';
+            $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
+            $lastCol   = $col;
+
+            // A wide grapheme spans a continuation cell — blank it so the row
+            // keeps exactly its visible width and no stale glyph shows through.
+            for ($k = 1; $k < $gw; $k++) {
+                $this->setChar($x + $col + $k, $y, '', $cells);
+            }
+            $col += $gw;
+        }
+
+        // The line's own trailing escapes (e.g. an SGR reset) ride on the last
+        // cell when the whole line fit; if we truncated mid-line they belonged to
+        // clipped cells and are dropped (reset safety below still closes the span).
+        if ($truncated === false && $trailing !== '' && $lastCol >= 0) {
+            $cells[$y][$x + $lastCol] .= $trailing;
+            $styleOpen = $this->sgrLeavesStyleOpen($trailing, $styleOpen);
+        }
+
+        if ($styleOpen && $lastCol >= 0) {
+            $cells[$y][$x + $lastCol] .= "\x1b[0m";
+        }
+
+        // Pad the remainder of the region with spaces (overwriting prior content).
+        for (; $col < $w; $col++) {
+            $this->setChar($x + $col, $y, ' ', $cells);
+        }
+    }
+
+    /**
+     * Split a line into per-cell segments for ANSI-aware placement.
+     *
+     * Each returned cell is "(zero or more leading escape sequences) + one
+     * visible grapheme". Escape sequences trailing the final grapheme (an SGR
+     * reset, say) are returned separately so the caller can re-attach them and
+     * avoid colour bleed.
+     *
+     * @return array{cells: list<string>, trailing: string}
+     */
+    private function visualCells(string $line): array
+    {
+        $cells   = [];
+        $pending = '';
+        $len     = \strlen($line);
+        $i       = 0;
+
+        while ($i < $len) {
+            $seq = $this->escapeAt($line, $i);
+            if ($seq !== null) {
+                $pending .= $seq;
+                $i += \strlen($seq);
+                continue;
+            }
+            $g = $this->nextGrapheme($line, $i);
+            if ($g === '') {
+                $i++; // defensive: never spin on a zero-length read
+                continue;
+            }
+            $cells[] = $pending . $g;
+            $pending = '';
+            $i += \strlen($g);
+        }
+
+        return ['cells' => $cells, 'trailing' => $pending];
+    }
+
+    /**
+     * If an ANSI escape sequence begins at byte $i, return it; else null.
+     * Recognises CSI (ESC [ … final 0x40-0x7e) and OSC (ESC ] … BEL/ST)
+     * sequences. For any other ESC, consumes the two-byte form ONLY when the
+     * second byte is ASCII (an ECMA-48 nF/Fe/Fs escape's final byte is always
+     * 0x20-0x7e) — so a stray ESC sitting before a multi-byte grapheme returns
+     * just the ESC and never splits that grapheme.
+     */
+    private function escapeAt(string $s, int $i): ?string
+    {
+        if (($s[$i] ?? '') !== "\x1b") {
+            return null;
+        }
+        $next = $s[$i + 1] ?? '';
+        $len  = \strlen($s);
+
+        if ($next === '[') {
+            $j = $i + 2;
+            while ($j < $len) {
+                $c = \ord($s[$j]);
+                $j++;
+                if ($c >= 0x40 && $c <= 0x7e) break;
+            }
+            return \substr($s, $i, $j - $i);
+        }
+        if ($next === ']') {
+            $j = $i + 2;
+            while ($j < $len) {
+                if ($s[$j] === "\x07") { $j++; break; }
+                if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                $j++;
+            }
+            return \substr($s, $i, $j - $i);
+        }
+
+        return ($next !== '' && \ord($next) < 0x80) ? \substr($s, $i, 2) : "\x1b";
+    }
+
+    /** Read one extended grapheme cluster starting at byte $i (intl, with a UTF-8 fallback). */
+    private function nextGrapheme(string $s, int $i): string
+    {
+        static $hasGrapheme = null;
+        if ($hasGrapheme === null) {
+            $hasGrapheme = \function_exists('grapheme_extract');
+        }
+        if ($hasGrapheme === true) {
+            $next    = 0;
+            $cluster = \grapheme_extract($s, 1, \GRAPHEME_EXTR_COUNT, $i, $next);
+            if (\is_string($cluster) && $cluster !== '') {
+                return $cluster;
+            }
+        }
+        $b     = \ord($s[$i]);
+        $bytes = match (true) {
+            ($b & 0x80) === 0    => 1,
+            ($b & 0xe0) === 0xc0 => 2,
+            ($b & 0xf0) === 0xe0 => 3,
+            ($b & 0xf8) === 0xf0 => 4,
+            default              => 1,
+        };
+        return \substr($s, $i, $bytes);
+    }
+
+    /**
+     * Track SGR open/closed state across the escape sequences in $s, returning
+     * whether a style is left open afterwards. ESC[0m / ESC[m close; any other
+     * attribute opens. The parameters of extended-colour selectors
+     * (38/48 ; 5 ; n and 38/48 ; 2 ; r ; g ; b) are skipped so a colour index of
+     * 0 isn't mistaken for a reset.
+     */
+    private function sgrLeavesStyleOpen(string $s, bool $open): bool
+    {
+        if (\strpos($s, "\x1b[") === false) {
+            return $open;
+        }
+        if (\preg_match_all('/\x1b\[([0-9;]*)m/', $s, $matches) === 0) {
+            return $open;
+        }
+        foreach ($matches[1] as $params) {
+            if ($params === '') {
+                $open = false; // ESC[m == reset
+                continue;
+            }
+            $codes = \explode(';', $params);
+            for ($k = 0, $n = \count($codes); $k < $n; $k++) {
+                $code = (int) $codes[$k];
+                if (($code === 38 || $code === 48) && isset($codes[$k + 1])) {
+                    $k += ((int) $codes[$k + 1]) === 2 ? 4 : 2;
+                    $open = true; // a colour is being set
+                    continue;
+                }
+                $open = $code !== 0;
+            }
+        }
+
+        return $open;
+    }
+
+    /**
+     * Word-wrap text to fit a given column width.
+     *
+     * @return list<string>
+     */
+    private function wordWrap(string $text, int $width): array
+    {
+        if ($width <= 0) return [''];
+
+        $result = [];
+        foreach (\explode("\n", $text) as $paragraphLine) {
+            // A non-empty line that already fits needs no wrapping — preserve it
+            // verbatim. Word-wrapping re-joins on single spaces, which collapses
+            // intentional runs of whitespace (column alignment in a table, padded
+            // key bindings in a hint), so only ever rewrap lines that overflow.
+            if ($paragraphLine !== '' && $this->strWidth($paragraphLine) <= $width) {
+                $result[] = $paragraphLine;
+                continue;
+            }
+            // Audit #12: single preg_split call (the old expression ran it twice).
+            $split = \preg_split('/\s+/', $paragraphLine);
+            $words = $split !== false ? $split : [];
+            $current = '';
+
+            foreach ($words as $word) {
+                $test = $current === '' ? $word : $current . ' ' . $word;
+                if ($this->strWidth($test) <= $width) {
+                    $current = $test;
+                } else {
+                    if ($current !== '') {
+                        $result[] = $current;
+                    }
+                    if ($this->strWidth($word) > $width) {
+                        // Split oversized word
+                        $result = \array_merge($result, $this->splitWord($word, $width));
+                    } else {
+                        $current = $word;
+                    }
+                }
+            }
+
+            if ($current !== '') {
+                $result[] = $current;
+            }
+        }
+
+        return \count($result) > 0 ? $result : [''];
+    }
+
+    /**
+     * Break an oversized word into width-sized chunks, ANSI-aware: escape
+     * sequences ride with their grapheme and never count toward the width, and
+     * each chunk is measured by visible columns (so wide graphemes and styled
+     * runs split on real cell boundaries rather than byte offsets).
+     *
+     * A single grapheme wider than $width (e.g. a 2-column CJK char in a
+     * 1-column region) is emitted as its own oversized chunk — a grapheme is
+     * atomic and cannot be split — and {@see placeLine} then clips it to the
+     * region. {@see wordWrap} is the sole caller and only reaches here with
+     * $width >= 1 and a word whose visible width exceeds $width.
+     *
+     * @return list<string>
+     */
+    private function splitWord(string $word, int $width): array
+    {
+        // Sole caller wordWrap() only reaches here with $width >= 1 and a word of
+        // visible width > $width, so the tokenization always yields ≥1 segment.
+        ['cells' => $segments, 'trailing' => $trailing] = $this->visualCells($word);
+
+        $chunks = [];
+        $buf    = '';
+        $col    = 0;
+        foreach ($segments as $seg) {
+            $gw = $this->strWidth($seg);
+            if ($buf !== '' && $gw > 0 && $col + $gw > $width) {
+                $chunks[] = $buf;
+                $buf      = '';
+                $col      = 0;
+            }
+            $buf .= $seg;
+            $col += $gw;
+        }
+        if ($trailing !== '') {
+            $buf .= $trailing;
+        }
+        if ($buf !== '') {
+            $chunks[] = $buf;
+        }
+
+        return \count($chunks) > 0 ? $chunks : [''];
+    }
+
+    // -------------------------------------------------------------------------
+    // Border drawing
+    // -------------------------------------------------------------------------
+
+    /**
+     * Draw a border using the characters from the given Border object.
+     * Uses Border::rounded() as default when $border is null.
+     */
+    private function drawBorder(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    {
+        if ($w < 2 || $h < 2) return;
+
+        $border = $node->borderStyle ?? Border::rounded();
+        $title  = $node->title;
+
+        // Corners
+        $this->setChar($x,           $y,           $border->topLeft,     $cells);
+        $this->setChar($x + $w - 1,  $y,           $border->topRight,    $cells);
+        $this->setChar($x,           $y + $h - 1,  $border->bottomLeft,  $cells);
+        $this->setChar($x + $w - 1,  $y + $h - 1,  $border->bottomRight, $cells);
+
+        // Top/bottom edges
+        for ($i = 1; $i < $w - 1; $i++) {
+            $this->setChar($x + $i, $y,           $border->top,    $cells);
+            $this->setChar($x + $i, $y + $h - 1,  $border->bottom, $cells);
+        }
+
+        // Left/right edges
+        for ($j = 1; $j < $h - 1; $j++) {
+            $this->setChar($x,           $y + $j, $border->left,  $cells);
+            $this->setChar($x + $w - 1,  $y + $j, $border->right, $cells);
+        }
+
+        // Title: overlay on top border row, clipped to available interior width.
+        // Only render when there is room for corners + at least 1 title cell ($w >= 4).
+        // Uses setChar per grapheme (visualCells/strWidth) to handle wide glyphs.
+        if ($title !== '' && $w >= 4) {
+            $maxTitleLen = $w - 2; // interior width (cols between corners)
+            ['cells' => $segments] = $this->visualCells($title);
+            $col = 0;
+            foreach ($segments as $seg) {
+                $gw = $this->strWidth($seg);
+                if ($col + $gw > $maxTitleLen) break;
+                $this->setChar($x + 1 + $col, $y, $seg, $cells);
+                // Blank continuation cells for wide graphemes
+                for ($k = 1; $k < $gw; $k++) {
+                    $this->setChar($x + 1 + $col + $k, $y, '', $cells);
+                }
+                $col += $gw;
+            }
+        }
+    }
+
+    private function drawVLine(?Border $border, int $x, int $y, int $h, array &$cells): void
+    {
+        $b = $border ?? Border::rounded();
+        for ($j = 0; $j < $h; $j++) {
+            $this->setChar($x, $y + $j, $b->left, $cells);
+        }
+    }
+
+    private function drawHLine(?Border $border, int $x, int $y, int $w, array &$cells): void
+    {
+        $b = $border ?? Border::rounded();
+        for ($i = 0; $i < $w; $i++) {
+            $this->setChar($x + $i, $y, $b->top, $cells);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Cell-level operations
+    // -------------------------------------------------------------------------
+
+    /**
+     * Set a single character at cell ($x, $y) in the grid. The grid is a 2D
+     * array where each slot holds one logical character regardless of UTF-8
+     * byte length, so writes are O(1) and never split a multibyte glyph.
+     */
+    private function setChar(int $x, int $y, string $char, array &$cells): void
+    {
+        if ($y < 0 || $y >= \count($cells)) return;
+        if ($x < 0 || $x >= \count($cells[$y])) return;
+        $cells[$y][$x] = $char;
+    }
+
+    // -------------------------------------------------------------------------
+    // Width distribution
+    // -------------------------------------------------------------------------
+
+    /**
+     * Distribute available space across children by weight (the non-flex
+     * fallback: children weighted by minWidth/minHeight, defaulting to 1).
+     *
+     * Delegates the size computation to candy-layout's
+     * {@see GreedySolver::withMinShare()} (plan_missing.md W12 / candy-layout
+     * #1386), completing the fork-b dedup begun in {@see distributeFlex()}.
+     * Each child maps to a {@see Constraint::fill()} weighted by its
+     * minWidth/minHeight; the min-share floor reproduces distribute()'s bespoke
+     * "reserve at least 1 column per not-yet-placed child" sequential clamp that
+     * keeps the trailing child from collapsing to 0 in a tight viewport — the
+     * fourth quirk the three compat() flags cannot express. The floor's
+     * reservation frame is seeded with `$borderPad` ({@see GreedySolver}'s
+     * `reserveLead`) and bumped by one `$spacing` per placed child (`reserveGap`),
+     * re-creating the old `$used` counter exactly. A 28 280-case offset sweep plus
+     * a 960-layout rendered-byte sweep confirmed 0 divergences (byte-identical).
+     *
+     * @param list<int> $weights
+     * @return list<int> Starting offsets for each child
+     */
+    private function distribute(int $available, array $weights, int $totalWeight, int $spacing, int $borderPad): array
+    {
+        $n = \count($weights);
+        $contentSpan = $available - $spacing * \max(0, $n - 1);
+
+        // All-zero weights → equal split (the old division-by-zero guard). The
+        // min-share floor applies the identical guard internally, but doing it
+        // here keeps the mapped Fill weights faithful to the pre-migration
+        // arithmetic; in practice weights are minWidth/minHeight-derived (>= 1).
+        if ($totalWeight === 0) {
+            $weights = \array_fill(0, $n, 1);
+        }
+
+        // minWidth/minHeight weight → Fill(weight); the floor's round(weight/total
+        // * span) proportional split matches distribute()'s per-child share.
+        $constraints = [];
+        foreach ($weights as $weight) {
+            $constraints[] = Constraint::fill($weight);
+        }
+
+        // Clamp the solved span to >= 0: when spacing/border exceed the available
+        // size the raw content span is negative, and Region rejects a negative
+        // width. In that regime the old distribute() clamped every non-last share
+        // to 0 (round(weight/total * negativeSpan) <= 0), yielding offsets of
+        // borderPad + i*spacing — a span of 0 reproduces exactly those all-zero
+        // shares, so the clamp is byte-identical (matches distributeFlex()).
+        $regions = GreedySolver::new()
+            ->withMinShare(1, $spacing, $borderPad)
+            ->solve(
+                new LayoutRegion(0, 0, \max(0, $contentSpan), 1),
+                Direction::Horizontal,
+                $constraints,
+            );
+
+        // Rebuild the starting-offset array the caller expects: offsets[0] is the
+        // border pad; each subsequent offset adds the previous child's solved
+        // width plus one inter-child gap. regions[i]->width for i < n-1 equals the
+        // old distribute()'s share_i; the final child's size is derived by the
+        // caller as the remainder, so its solved width is unused.
+        $offsets = [$borderPad];
+        for ($i = 0; $i < $n - 1; $i++) {
+            $offsets[] = $offsets[$i] + $regions[$i]->width + $spacing;
+        }
+
+        return $offsets;
+    }
+
+    /** @param list<Node> $children */
+    private function hasFlex(array $children): bool
+    {
+        foreach ($children as $c) {
+            if ($c->flex > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Distribute space when at least one child is flexible. Fixed (non-flex)
+     * children take their natural size ($bases, i.e. totalWidth/totalHeight);
+     * the leftover is shared among flex children in proportion to their weight,
+     * with the last flex child absorbing the rounding remainder so the children
+     * sum to exactly the available content span. Returns the same starting-offset
+     * shape as {@see distribute()} (the caller derives the final child's size as
+     * the remainder, which equals its computed size because the sizes sum exact).
+     *
+     * Delegates the actual size computation to candy-layout's
+     * {@see GreedySolver::compat()} (plan_missing.md W12 / candy-layout #1372): a
+     * fixed child maps to a Length reserving its natural size, a flex child to a
+     * Fill weighted by its flex weight. compat() mode makes candy-layout's greedy
+     * solver reproduce this hand-rolled distribution byte-for-byte — the three
+     * axes it flips (round-split, remainder-to-the-last Fill, and NON-truncating
+     * overflow so fixed children keep their full base and the layout runs off-grid
+     * rather than being shrunk) are precisely sugar-panels's flex semantics. A
+     * 3456-layout characterization sweep confirmed 0 offset divergences.
+     *
+     * @param list<int> $bases   natural size per child (ignored for flex children)
+     * @param list<int> $flexes  flex weight per child (0 = fixed)
+     * @return list<int>
+     */
+    private function distributeFlex(int $available, array $bases, array $flexes, int $spacing, int $borderPad): array
+    {
+        $n       = \count($flexes);
+        $gaps    = $spacing * \max(0, $n - 1);
+        $content = \max(0, $available - $gaps);
+
+        // Fixed → Length(base) (clamped ≥ 0: Length rejects negatives, matching the
+        // old max(0, $bases[$i])); flex → Fill(weight). The gaps are excluded from
+        // the solved span and re-inserted below, exactly as the old arithmetic did.
+        $constraints = [];
+        foreach ($flexes as $i => $f) {
+            $constraints[] = $f > 0
+                ? Constraint::fill($f)
+                : Constraint::length(\max(0, $bases[$i]));
+        }
+
+        $regions = $this->flexSolver->solve(
+            new LayoutRegion(0, 0, $content, 1),
+            Direction::Horizontal,
+            $constraints,
+        );
+
+        // Rebuild the starting-offset array the caller expects: offsets[0] is the
+        // border pad; each subsequent offset adds the previous child's solved width
+        // plus one inter-child gap. The final child's size is derived by the caller
+        // as the remainder (w - b - offsets[last]), so its solved width is unused.
+        $offsets = [$borderPad];
+        for ($i = 0; $i < $n - 1; $i++) {
+            $offsets[] = $offsets[$i] + $regions[$i]->width + $spacing;
+        }
+
+        return $offsets;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /** Visible width — delegates to candy-core's grapheme/width-aware util. */
+    private function strWidth(string $s): int
+    {
+        return Width::string($s);
+    }
+
+    /**
+     * Build a Buffer from a rendered cell grid.
+     *
+     * Each grid slot holds exactly one logical cell: the visible grapheme plus
+     * any escape sequences / zero-width carry riding on it (placeLine's write
+     * unit). The slot's display width is therefore its VISIBLE width — 2 for a
+     * wide glyph (whose continuation slot is the empty string → width 0, the
+     * pairing Buffer::diff() requires), 1 otherwise. All cells carry a null
+     * style: style changes still diff correctly because the raw escape bytes
+     * ride inside the rune and break cell equality.
+     *
+     * Re-splitting the flattened output string instead (the previous approach)
+     * mis-mapped every wide glyph and every escape-prefixed cell to width 1 at
+     * shifted columns, so deltas misplaced or silently dropped styled/wide
+     * content (audit #5).
+     *
+     * @param list<list<string>> $cells  Grid from render(): one string per cell
+     * @param int                $width  Buffer width in cells
+     * @param int                $height Buffer height in rows
+     */
+    private function bufferFromGrid(array $cells, int $width, int $height): Buffer
+    {
+        /** @var list<Cell> $grid */
+        $grid = [];
+        for ($row = 0; $row < $height; $row++) {
+            $line = $cells[$row] ?? [];
+            for ($col = 0; $col < $width; $col++) {
+                $char = $line[$col] ?? ' ';
+                // '' is a wide-glyph continuation (zero visible columns); every
+                // other slot shows at least one column.
+                $cellWidth = $char === '' ? 0 : \max(1, $this->strWidth($char));
+                $grid[$row * $width + $col] = Cell::new($char, null, null, $cellWidth);
+            }
+        }
+
+        return Buffer::fromGrid($width, $height, $grid);
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next render to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->previousFrame = null;
+        $this->previousCells = null;
+        $this->prevWidth = null;
+        $this->prevHeight = null;
+        // Drop the per-Style SGR-prefix cache too: a reset means "forget prior
+        // render state", so the prefix cache is rebuilt alongside the frame.
+        $this->sgrPrefixCache = new \WeakMap();
+    }
+}

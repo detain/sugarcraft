@@ -1,0 +1,49 @@
+{
+    "name": "sugarcraft/sugar-panels",
+    "description": "PHP port of treilik/bubbleboxer \u2014 box-drawing layout engine. Compose terminal content into H/V panels with box-drawing borders, padding, and dynamic dimension calculation.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "box",
+        "layout",
+        "panel",
+        "border",
+        "terminal",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-panels",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-panels/issues",
+        "source": "https://github.com/sugarcraft/sugar-panels"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-layout": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Panels\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Panels\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

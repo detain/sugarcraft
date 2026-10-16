@@ -15,7 +15,7 @@ use SugarCraft\Layout\Region;
  * expected splits, and pins the DEFAULT mode's divergent behaviour on the same
  * inputs so the two modes are provably distinct.
  *
- * Compat mode reproduces sugar-boxer's distribute()/distributeFlex():
+ * Compat mode reproduces sugar-panels's distribute()/distributeFlex():
  * round()-split + remainder-to-LAST + non-truncating overflow. See
  * {@see GreedySolver::compat()} and plan_missing.md W12.
  */
@@ -213,7 +213,7 @@ final class GreedySolverCompatTest extends TestCase
     {
         // [Length(60), Length(60)] in width 80: demand 120 > 80.
         // Compat keeps each region at its full base size (layout runs off-grid),
-        // matching sugar-boxer where fixed children never shrink.
+        // matching sugar-panels where fixed children never shrink.
         $rects = GreedySolver::compat()->solve(
             new Region(0, 0, 80, 5),
             Direction::Horizontal,

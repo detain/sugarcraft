@@ -193,8 +193,8 @@ review for step 03.08 · clean · PR#541
   carry-forward: step 03.17 Issue #1: 760+ hardcoded Color::hex() calls remain in Components/ (Modal/Notification, Alert, Toast, Card/*, Tree/*, Media/*, Feedback/*, Gauge, Bullet, etc.) — bulk hex→theme conversion needed as follow-up
   carry-forward: step 03.17 Issue #3 (minor): DrawableThemeTest.php naming (vs step-spec RenderUsesThemeTest.php per family) — acceptable as test covers same ground; no action needed
   carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix
-  step 04.01 · PR#564 · sugar-boxer: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
-  docs for step 04.01 · PR#565 · sugar-boxer: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-boxer.html quickstart + API table
+  step 04.01 · PR#564 · sugar-panels: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
+  docs for step 04.01 · PR#565 · sugar-panels: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-panels.html quickstart + API table
   step 04.02 · PR#566 · sugar-stickers: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
 review for step 04.02 · clean · PR#566
 docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-stickers.html
@@ -214,7 +214,7 @@ step 05.03 · PR#573 · sugar-toast: add i18n via Lang::t() (Lang.php facade + l
 review for step 05.03 · clean · PR#573
 tests-ci for step 05.03 · clean
 docs for step 05.03 · PR#574 · document i18n surface in README + CALIBER_LEARNINGS.md + docs/lib/sugar-toast.html
-step 05.04 · PR#575 · sugar-boxer: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no src/ strings to translate — purely computational library)
+step 05.04 · PR#575 · sugar-panels: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no src/ strings to translate — purely computational library)
 review for step 05.04 · clean · PR#575
 tests-ci for step 05.04 · clean
 docs for step 05.04 · clean
@@ -323,7 +323,7 @@ fix for step 11.01 · PR#651 · resolved 4 findings (locale count 17→16, bin/c
 tests-ci for step 11.01 · clean
 docs for step 11.01 · clean
 step 11.02 · PR#653 · plans: candy-git-server-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
-fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-boxer SugarBoxer; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
+fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-panels SugarPanels; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
 step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)
@@ -559,7 +559,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.20 · PR#787 · sugar-datepicker: date range select + keyboard nav + EventStore
     step 10.21 · PR#788 · sugar-crumbs: pushDirectory + view + filter
     step 10.22 · PR#789 · sugar-crumbs: Closable + URL derivation + escape + semantic HTML
-    step 10.23 · PR#790 · sugar-boxer: alignment + margin tests (methods already existed)
+    step 10.23 · PR#790 · sugar-panels: alignment + margin tests (methods already existed)
     step 10.24 · PR#791 · candy-mdview: syntax highlighting + streaming pager
     docs for step 10.26 · PR#795 · refresh docs/lib/candy-mdview.html (lede: eight→eleven themes; Theme picker feature lists all 11 options; note solarized/monokai/github JSON loading)
     step 10.27 · PR#796 · candy-ssh-launcher: proxy_jump + identity_files array + description rendering

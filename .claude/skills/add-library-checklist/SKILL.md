@@ -16,21 +16,21 @@ Scaffold a new port so it looks byte-identical to existing libs and passes every
 
 ## Critical
 
-- **Namespace derivation is mechanical.** Slug `sugar-boxer/` → composer `sugarcraft/sugar-boxer` → namespace `SugarCraft\Boxer\`. The Sub is the PascalCase of the part after the prefix. **Quirk:** `candy-core` → `SugarCraft\Core\` (not `SugarCraft\Candy\Core`). Prefix picks the family, NOT the namespace root — every lib is under `SugarCraft\`.
+- **Namespace derivation is mechanical.** Slug `sugar-panels/` → composer `sugarcraft/sugar-panels` → namespace `SugarCraft\Panels\`. The Sub is the PascalCase of the part after the prefix. **Quirk:** `candy-core` → `SugarCraft\Core\` (not `SugarCraft\Candy\Core`). Prefix picks the family, NOT the namespace root — every lib is under `SugarCraft\`.
 - **Prefix = role.** `candy-` = foundation/system, `sugar-` = components/data/apps, `honey-` = math/physics. Confirm with the user which family before naming; cross-check `PROJECT_NAMES.md`.
 - **Every `sugarcraft/*` require needs a path-repo for the FULL transitive closure**, not just direct deps. Copy the `repositories[]` block from a sibling that already depends on the same set (canonical: `sugar-charts/composer.json`). Verify with `php tools/check-path-repos.php` (add `--fix` to auto-insert).
 - **`composer validate --strict` is EXPECTED to fail** on `"@dev"` constraints — drop `--strict`.
-- **NEVER hand-edit the generated pages in `docs/lib/`** — they are produced by `tools/gen-docs.php` from the sources in `docs/_data/` (copy `docs/_data/sugar-boxer.json` + `docs/_data/sugar-boxer.body.html` and swap identity).
+- **NEVER hand-edit the generated pages in `docs/lib/`** — they are produced by `tools/gen-docs.php` from the sources in `docs/_data/` (copy `docs/_data/sugar-panels.json` + `docs/_data/sugar-panels.body.html` and swap identity).
 - **Run sub-agents ONE AT A TIME** — concurrent writes to `docs/MATCHUPS.md` / root `README.md` collide.
 - **Do NOT run `caliber`** on this machine and do NOT commit GIFs.
 
 ## Instructions
 
 ### Step 1 — Fix identity (do this first, everything derives from it)
-Record: `slug` (kebab dir), `Sub` (namespace segment), root class name (usually PascalCase of the full slug, e.g. `SugarBoxer`), upstream repo URL + Go name, one-line role, and the direct `sugarcraft/*` deps. **Verify** the slug is unique: `ls -d */ | grep <slug>` returns nothing, and `grep -n <slug> PROJECT_NAMES.md docs/MATCHUPS.md`. Proceed only if unclaimed.
+Record: `slug` (kebab dir), `Sub` (namespace segment), root class name (usually PascalCase of the full slug, e.g. `SugarPanels`), upstream repo URL + Go name, one-line role, and the direct `sugarcraft/*` deps. **Verify** the slug is unique: `ls -d */ | grep <slug>` returns nothing, and `grep -n <slug> PROJECT_NAMES.md docs/MATCHUPS.md`. Proceed only if unclaimed.
 
 ### Step 2 — Scaffold `<slug>/composer.json`
-Copy from a sibling with matching deps. Required shape (from `sugar-boxer/composer.json`):
+Copy from a sibling with matching deps. Required shape (from `sugar-panels/composer.json`):
 ```json
 {
     "name": "sugarcraft/<slug>",
@@ -53,7 +53,7 @@ Copy from a sibling with matching deps. Required shape (from `sugar-boxer/compos
 Add a `require` line AND a `repositories[]` path-repo for **each** sibling dep and its full transitive closure. **Verify:** `cd <slug> && composer install` then `php tools/check-path-repos.php` reports the closure clean before continuing.
 
 ### Step 3 — `<slug>/phpunit.xml`
-Exact copy, only the testsuite `name` changes (from `sugar-boxer/phpunit.xml`):
+Exact copy, only the testsuite `name` changes (from `sugar-panels/phpunit.xml`):
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -88,20 +88,20 @@ Status: 🔴 planning, 🟡 in progress, 🟢 v1 ready, 🚀 split repo. New sca
 Add the name to its category table so the naming rulebook stays authoritative.
 
 ### Step 9 — Root `README.md`
-Add a table row (see line for `sugar-boxer`):
+Add a table row (see line for `sugar-panels`):
 ```
 | <img src="media/icons/<slug>.png" width="48" alt=""> | **[<Class>](<slug>/)** | <role> Port of [<repo>](https://github.com/<owner>/<repo>) |
 ```
 
 ### Step 10 — add the `docs/_data/` sources, then generate
-Create both data files (copy `docs/_data/sugar-boxer.json` + `docs/_data/sugar-boxer.body.html` and swap identity). JSON keys: `title`, `description`, `ogTitle`, `ogDescription`, `emoji`, `displayName`, `tagline`, `phpVersion`, `detailMeta` (tag-chips incl. `port of <a href=...>`). body.html: `<p class="lede">` → Install `<pre>` → Quickstart `<pre>`. Then run:
+Create both data files (copy `docs/_data/sugar-panels.json` + `docs/_data/sugar-panels.body.html` and swap identity). JSON keys: `title`, `description`, `ogTitle`, `ogDescription`, `emoji`, `displayName`, `tagline`, `phpVersion`, `detailMeta` (tag-chips incl. `port of <a href=...>`). body.html: `<p class="lede">` → Install `<pre>` → Quickstart `<pre>`. Then run:
 ```sh
 php tools/gen-docs.php
 ```
 This regenerates the lib's page under `docs/lib/`. **Verify** the page appears; NEVER edit it by hand.
 
 ### Step 11 — `docs/index.html`
-Add the icon-strip `<a>` link AND the `lib-card` block (both reference `sugar-boxer` around lines 135 / 488 as the template). The card points at `.vhs/<demo>.gif` and `img/icons/<slug>.png`.
+Add the icon-strip `<a>` link AND the `lib-card` block (both reference `sugar-panels` around lines 135 / 488 as the template). The card points at `.vhs/<demo>.gif` and `img/icons/<slug>.png`.
 
 ### Step 12 — `media/icons/<slug>.png`
 Add a 48px icon. If none yet, copy a placeholder sibling icon so the README/docs img refs resolve.

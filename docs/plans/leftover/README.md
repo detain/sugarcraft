@@ -145,7 +145,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 1. `step-01-sugar-datepicker.md`
 2. `step-02-sugar-table.md`
 3. `step-03-sugar-toast.md`
-4. `step-04-sugar-boxer.md`
+4. `step-04-sugar-panels.md`
 5. `step-05-sugar-crumbs.md`
 6. `step-06-super-candy.md`
 7. `step-07-candy-git.md`

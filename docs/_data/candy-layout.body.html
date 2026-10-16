@@ -66,7 +66,7 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>LayoutSolver</td><td>solve(Region, Direction, list&lt;Constraint&gt;)</td><td>Solve constraints against a region in the given direction; returns list of sub-regions</td></tr>
-<tr><td>GreedySolver</td><td>new(): self / compat(): self</td><td>Default factory / sugar-boxer parity mode (round-split, remainder-to-last, non-truncating overflow)</td></tr>
+<tr><td>GreedySolver</td><td>new(): self / compat(): self</td><td>Default factory / sugar-panels parity mode (round-split, remainder-to-last, non-truncating overflow)</td></tr>
 <tr><td>GreedySolver</td><td>withRoundSplit() / withRemainderToLast() / withoutOverflowTruncation() / withMinShare(cells, reserveGap, reserveLead)</td><td>Immutable rounding and overflow options</td></tr>
 <tr><td>GreedySolver / CassowarySolver</td><td>static greedy() / static cassowary()</td><td>Concrete-class factories (no longer declared on the LayoutSolver interface)</td></tr>
 <tr><td>CassowarySolver</td><td>new(): self</td><td>Deprecated shim; solve() raises E_USER_DEPRECATED and delegates to GreedySolver</td></tr>

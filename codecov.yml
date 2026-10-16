@@ -167,8 +167,8 @@ flag_management:
     - name: candy-testing
       paths: ["candy-testing/src/**"]
       carryforward: true
-    - name: sugar-boxer
-      paths: ["sugar-boxer/src/**"]
+    - name: sugar-panels
+      paths: ["sugar-panels/src/**"]
       carryforward: true
     - name: sugar-datepicker
       paths: ["sugar-datepicker/src/**"]
@@ -487,12 +487,12 @@ component_management:
         - "candy-testing/src/**"
       flag_regexes:
         - "^candy-testing$"
-    - component_id: sugar-boxer
-      name: sugar-boxer
+    - component_id: sugar-panels
+      name: sugar-panels
       paths:
-        - "sugar-boxer/src/**"
+        - "sugar-panels/src/**"
       flag_regexes:
-        - "^sugar-boxer$"
+        - "^sugar-panels$"
     - component_id: sugar-datepicker
       name: sugar-datepicker
       paths:

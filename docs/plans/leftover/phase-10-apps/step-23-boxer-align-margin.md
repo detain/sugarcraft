@@ -1,20 +1,20 @@
-# Step 10.23 — sugar-boxer alignment + margin (post SSOT-02)
+# Step 10.23 — sugar-panels alignment + margin (post SSOT-02)
 
-**Source:** `leftover_updates_later.md` sugar-boxer
+**Source:** `leftover_updates_later.md` sugar-panels
 **Branch:** `ai/boxer-align-margin`
 **Bundle hint:** depends on step 04.01
 
 ## Deliverable
 
-After SSOT-02 made sugar-boxer compose candy-sprinkles, add the
-sugar-boxer-specific features that don't belong upstream:
+After SSOT-02 made sugar-panels compose candy-sprinkles, add the
+sugar-panels-specific features that don't belong upstream:
 
 - Text alignment Left / Center / Right within the box.
 - Outer margin (vs inner padding).
 
 ## Files
 
-**Modify:** `sugar-boxer/src/Boxer.php` — `withAlign(HAlign)`,
+**Modify:** `sugar-panels/src/Boxer.php` — `withAlign(HAlign)`,
 `withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0)`.
 
 ## Tests
@@ -23,7 +23,7 @@ sugar-boxer-specific features that don't belong upstream:
 
 ## Acceptance
 
-- `cd sugar-boxer && vendor/bin/phpunit` green.
+- `cd sugar-panels && vendor/bin/phpunit` green.
 
 ---
 

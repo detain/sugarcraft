@@ -1,13 +1,13 @@
-# Step 04.01 — sugar-boxer composes candy-sprinkles Border/Style
+# Step 04.01 — sugar-panels composes candy-sprinkles Border/Style
 
-**Source:** `leftover_updates_later.md` SSOT-02 + sugar-boxer research §3.1
+**Source:** `leftover_updates_later.md` SSOT-02 + sugar-panels research §3.1
 **Branch:** `ai/boxer-composes-sprinkles`
 
 ## Deliverable
 
-`sugar-boxer` plans `BoxStyle` enum (Single/Double/Round/Bold/Classic/
+`sugar-panels` plans `BoxStyle` enum (Single/Double/Round/Bold/Classic/
 Hidden/Block), text alignment, box titles, colors, margin — all already
-canonical in candy-sprinkles. Refactor sugar-boxer to compose
+canonical in candy-sprinkles. Refactor sugar-panels to compose
 `\SugarCraft\Sprinkles\Style` + `\SugarCraft\Sprinkles\Border\Border`
 instead of rolling its own.
 
@@ -15,25 +15,25 @@ instead of rolling its own.
 
 **Modify:**
 
-- `sugar-boxer/src/Boxer.php` — `withBorder(\SugarCraft\Sprinkles\Border\Border)`,
+- `sugar-panels/src/Boxer.php` — `withBorder(\SugarCraft\Sprinkles\Border\Border)`,
   `withStyle(\SugarCraft\Sprinkles\Style)`, `withTitle(string)`. Delete
-  any internal `Border*` / `BorderChars` / `BorderStyle` enums sugar-boxer
+  any internal `Border*` / `BorderChars` / `BorderStyle` enums sugar-panels
   may have ported.
-- `sugar-boxer/composer.json` — add `"sugarcraft/candy-sprinkles": "@dev"`
+- `sugar-panels/composer.json` — add `"sugarcraft/candy-sprinkles": "@dev"`
   + path-repo.
 
-**Add (sugar-boxer-specific):**
+**Add (sugar-panels-specific):**
 
 - `withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0)`
-  — outer spacing (vs padding which is inner). This stays in sugar-boxer
+  — outer spacing (vs padding which is inner). This stays in sugar-panels
   because candy-sprinkles doesn't ship margin as a first-class concept.
 - `withAlign(HAlign|VAlign)` — text alignment.
 
 ## Acceptance
 
-- `grep -rn "class BoxStyle\|class BorderChars" sugar-boxer/src` returns
+- `grep -rn "class BoxStyle\|class BorderChars" sugar-panels/src` returns
   nothing.
-- `cd sugar-boxer && vendor/bin/phpunit` green.
+- `cd sugar-panels && vendor/bin/phpunit` green.
 - `php tools/check-path-repos.php` green.
 
 ---

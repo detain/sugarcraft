@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Borderless + width-exact + ANSI reverse-video selection: the configuration a
  * table needs to compose cleanly inside another bordered shell (e.g. a
- * sugar-boxer content box) without a double border.
+ * sugar-panels content box) without a double border.
  */
 final class BorderlessTableTest extends TestCase
 {
@@ -159,7 +159,7 @@ final class BorderlessTableTest extends TestCase
         $this->assertSame(0, strpos($selected, "\e["), 'highlight starts at column 0');
         $this->assertStringContainsString('Short', Ansi::strip($selected));
         // The highlight is the full content width. (The trailing SGR reset is the
-        // host's job — sugar-boxer's ANSI-aware placement closes any open span so
+        // host's job — sugar-panels's ANSI-aware placement closes any open span so
         // colour never bleeds; a borderless table composes inside that shell.)
         $this->assertSame(40, Width::string($selected));
     }
