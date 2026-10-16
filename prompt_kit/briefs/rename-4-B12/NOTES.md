@@ -1,4 +1,4 @@
-# B12 candy-mold → candy-starter (app, ns UNCHANGED App\) — lane NOTES
+# B12 candy-mold → candy-starter (app, ns UNCHANGED App\) — lane NOTES <!-- @rename-keep -->
 
 <!-- @rename-keep: this file is the lane work-record; old-name mentions below are AS WRITTEN history. -->
 
@@ -6,23 +6,23 @@
 DONE (R1–R7 this lane; R8/R9 weld owed). Branch `rename/b12`, base `10f121d49`. Suite EXACT vs baseline **59T/217A** (brief's "~212T" was the B7 candy-kv figure — DISCLOSED, baseline row rename-baseline.md:48 says 59T/217A). tools/tests floor **426T/1484A** exact. Residue **0**. Pushed: rename/b12 ONLY (no master, no merge, no packagist).
 
 ## Step log
-- R0 tag-prep @75d72cc96: tagged CONTEXT.md ×5 lines + rename-baseline.md:48 + plan:78 ("recommend updating to CandyMold" historical).
+- R0 tag-prep @75d72cc96: tagged CONTEXT.md ×5 lines + rename-baseline.md:48 + plan:78 ("recommend updating to CandyMold" historical). <!-- @rename-keep -->
 - R1 dry-run: 39 files / 9 path renames / R2=23 / R3=207; R1 ns-rule correctly SKIPPED (ns_old==ns_new==`App`); eye-review clean (see App-ownership below). Re-run after refresh-deps completed (first attempt rc=2 from transient path-repo scratch dirt — B-notes law).
-- R2 `rename-remote.sh candy-mold candy-starter` rc=0: repo renamed, description/homepage set, topics synced (no stale `mold` topic present post-keyword-edit — verified via gh api).
+- R2 `rename-remote.sh candy-mold candy-starter` rc=0: repo renamed, description/homepage set, topics synced (no stale `mold` topic present post-keyword-edit — verified via gh api). <!-- @rename-keep -->
 - R3 tool rc=0 EXACT vs dry-run; lib dir moved; `php -l` sweep OK (earlier 2 "LINT FAIL" were awk false-positives on old-path side of R entries).
 - R3 follow (LANE-MANUAL, B7/B8 precedent): `git mv findings/plan_candy-mold.md findings/plan_candy-starter.md` — tool renames `<slug>.md` but not `plan_<slug>.md`.
 - R4 manual set: formerly-notice (candy-starter/README.md, B8 format, tagged); pun "Pour your model into the mold…" rewritten to "Start from this template…" ×4 sites (candy-starter/README.md, docs/_data/candy-starter.body.html, docs/js/search-index.json, docs/index.html — index.html tile summaries are HAND-MAINTAINED, gen-docs --check only verifies counts, so it needed the direct edit too); composer keywords drop `mold`; PROJECT_NAMES.md:141 rationale rewritten (candy + starter = the create-project skeleton you start from); bin/start:25 `candy-template:` → `candy-starter:` (Finding 5 / plan Phase-1.2 FIXED in-rename — plan checkbox left as-written, audit record not this lane's bookkeeping); CALIBER_LEARNINGS bare-`mold` shorthand ×7 rewritten + SugarCraft\Mold hypothetical → `SugarCraft\*` + Finding-5 clause truth-flipped + glued `plan_candy-mold.md` cites → `plan_candy-starter.md`; research doc :612 CAP-HYPHEN `Candy-mold` → `CandyStarter` (invisible to tool+residue, B5 law); update_sugarcraft_candy-starter.md:275 stale pointer → sugarcraft_candy-starter.md; docs/repo_map/sugarcraft_candy-starter.md:23 stale README-quote synced; crush ledger "mold half" → "starter half" ×2 (triage:187, hardening:20691).
-- R5: `composer update sugarcraft/candy-starter --no-install` (root lock: candy-mold removed, candy-starter locked); `refresh-deps --mode=linked --libs=candy-starter`; `gen-docs.php` + `--check` OK (13 stubs pre-R7); `gen-ansi-readme --check` OK.
-- R6 gates: residue `--old=candy-mold` → 0 findings (&&-chained before staging); candy-starter suite 59T/217A EXACT (cwd=candy-starter, plain pipe, watchdog); tools/tests 426T/1484A exact; sugar-crush `--filter RepoMap` 172T/1003A green (the only `namespace App;` fixtures tree-wide live there); path-repos guard rc=0 (refresh-deps output).
-- R7: renames.json entry (line 19) status pending→renamed via targeted one-line sed, JSON-validated, serial-verify re-read; gen-docs mints 14th redirect stub docs/lib/candy-mold.html.
+- R5: `composer update sugarcraft/candy-starter --no-install` (root lock: candy-mold removed, candy-starter locked); `refresh-deps --mode=linked --libs=candy-starter`; `gen-docs.php` + `--check` OK (13 stubs pre-R7); `gen-ansi-readme --check` OK. <!-- @rename-keep -->
+- R6 gates: residue `--old=candy-mold` → 0 findings (&&-chained before staging); candy-starter suite 59T/217A EXACT (cwd=candy-starter, plain pipe, watchdog); tools/tests 426T/1484A exact; sugar-crush `--filter RepoMap` 172T/1003A green (the only `namespace App;` fixtures tree-wide live there); path-repos guard rc=0 (refresh-deps output). <!-- @rename-keep -->
+- R7: renames.json entry (line 19) status pending→renamed via targeted one-line sed, JSON-validated, serial-verify re-read; gen-docs mints 14th redirect stub docs/lib/candy-mold.html. <!-- @rename-keep -->
 
 ## App-ownership audit (hazard 1) — NO TOOL DEFECT
-- `SugarCraft\App\` refs tree-wide: **ZERO** (recon grep). mold's autoload is package-root `App\`→src/ (class `App\Counter`), `App\Tests\`→tests/ — untouched (ns unchanged; pascal token `CandyMold` is slug-derived, never bare `App`).
+- `SugarCraft\App\` refs tree-wide: **ZERO** (recon grep). mold's autoload is package-root `App\`→src/ (class `App\Counter`), `App\Tests\`→tests/ — untouched (ns unchanged; pascal token `CandyMold` is slug-derived, never bare `App`). <!-- @rename-keep -->
 - Files with own `App`-shaped code that dry-run must NOT touch: `sugar-crush/tests/RepoMap/PhpSymbolExtractorTest.php:43,:120` (`namespace App;` heredoc fixtures) — untouched ✓, RepoMap filter green. sugar-crush `SugarCraft\Crush\App\App` (MediaForm docblocks) — untouched ✓.
-- 39-file dry-run set = candy-mold/** + root composer + docs/CI/findings/prompt-kit cites ONLY. No non-consumer App owner in the change set.
+- 39-file dry-run set = candy-mold/** + root composer + docs/CI/findings/prompt-kit cites ONLY. No non-consumer App owner in the change set. <!-- @rename-keep -->
 
 ## Consumers (hazard 3)
-- `sugarcraft/candy-mold` requires: root composer.json :61 + :240 only (tool-rewritten) + root composer.lock (R5). Zero lib manifests, zero PHP `use App\...` imports outside the lib. Docs/CI surfaces (codecov flag/component, vhs.yml all=+matrix, root README row, MATCHUPS row already under ## Apps, docs tiles/_data/search-index/sitemap, repo_map pair, research, findings pair, php74_branch table row, bootstrap-org-repos/set-org-default lists) — tool-rewritten, eye-reviewed.
+- `sugarcraft/candy-mold` requires: root composer.json :61 + :240 only (tool-rewritten) + root composer.lock (R5). Zero lib manifests, zero PHP `use App\...` imports outside the lib. Docs/CI surfaces (codecov flag/component, vhs.yml all=+matrix, root README row, MATCHUPS row already under ## Apps, docs tiles/_data/search-index/sitemap, repo_map pair, research, findings pair, php74_branch table row, bootstrap-org-repos/set-org-default lists) — tool-rewritten, eye-reviewed. <!-- @rename-keep -->
 
 ## Generic-word audit (hazard 2) — survivors are legit, KEPT
 - `sugar-crush/src/Tui/MediaForm/MediaForm.php:21` "in exactly the {SettingsEditor} mold" — English idiom, unrelated package.
