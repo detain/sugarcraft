@@ -50,5 +50,5 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 - Deviations: composer.json keywords dup 'sugarcraft' pre-existing → 'codetime'; none other.
 
 ## R9 fire (weld 2026-10-16)
-- create candy-codetime: HTTP 406 (sugarcraft/sugar-tick already exists — old reg holds URL). Recorded, no retry per batch-B law; end-of-campaign verification pass.
-- R8 note: gh repo already renamed (sugar-tick → candy-codetime 301s); split-sync legacy refs owed final ls-remote peek at campaign close.
+- create candy-codetime: HTTP 406 (sugarcraft/sugar-tick already exists — old reg holds URL). Recorded, no retry per batch-B law; end-of-campaign verification pass. <!-- @rename-keep -->
+- R8 note: gh repo already renamed (sugar-tick → candy-codetime 301s); split-sync legacy refs owed final ls-remote peek at campaign close. <!-- @rename-keep -->

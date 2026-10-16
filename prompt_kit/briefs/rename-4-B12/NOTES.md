@@ -45,5 +45,6 @@ DONE (R1–R7 this lane; R8/R9 weld owed). Branch `rename/b12`, base `10f121d49`
 - Gates: suite 59/217 EXACT · tools 426/1484 EXACT · RepoMap 172/1003 · residue 0 · gen-docs+ansi --check 0 · path-repos 0.
 
 ## R9 fire (weld 2026-10-16)
-- create candy-starter: HTTP 406 (sugarcraft/candy-mold already exists — old reg holds URL). Recorded, no retry per batch-B law; end-of-campaign verification pass.
-- R8 note: gh repo already renamed (candy-mold → candy-starter 301s); split-sync legacy refs owed final ls-remote peek at campaign close.
+- create candy-starter: HTTP 406 (sugarcraft/candy-mold already exists — old reg holds URL). Recorded, no retry per batch-B law; end-of-campaign verification pass. <!-- @rename-keep -->
+- R8 note: gh repo already renamed (candy-mold → candy-starter 301s); split-sync legacy refs owed final ls-remote peek at campaign close. <!-- @rename-keep -->
+- Split peek at close: candy-starter split repo has refs/heads/master=9c6bb5a83 but legacy/candy-mold + candy-mold-final NOT yet minted (sync lag tolerated per law — end-of-campaign pass). <!-- @rename-keep -->
