@@ -154,7 +154,7 @@ Since there are no issue comments or discussions, feature demand must be inferre
 ### Architecture Evolution:
 
 - **Original**: Single `main.go` using `ssh.Server` directly with a single endpoint
-- **Current**: Uses `wishlist` for multi-endpoint factory pattern with per-endpoint middleware chains
+- **Current**: Uses `wishlist` for multi-endpoint factory pattern with per-endpoint middleware chains <!-- @rename-keep -->
 - The evolution was from single-endpoint to multi-endpoint SSH server, driven by the need to expose both confetti and fireworks effects
 
 ### Key Architectural Pattern: Endpoint Factory
@@ -450,7 +450,7 @@ confettysh is an application, not a library — but it imports a library (maasla
 
 ### Lesson 2: Factory Pattern for Endpoint Creation
 
-The `wishlist.Factory` pattern creates distinct SSH server instances with different middleware chains from a shared configuration. This is a clean separation of "what kind of server" from "how to build the server."
+The `wishlist.Factory` pattern creates distinct SSH server instances with different middleware chains from a shared configuration. This is a clean separation of "what kind of server" from "how to build the server." <!-- @rename-keep -->
 
 **SugarCraft implication**: TUI effect factories should mirror this — a `Registry::create(effectName, config)` that returns a fully-configured `ParticleSystem`.
 

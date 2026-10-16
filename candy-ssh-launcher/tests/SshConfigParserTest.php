@@ -1,0 +1,417 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\SshLauncher\Tests;
+
+use SugarCraft\SshLauncher\SshConfigParser;
+use PHPUnit\Framework\TestCase;
+
+final class SshConfigParserTest extends TestCase
+{
+    private function parse(string $raw): array
+    {
+        return (new SshConfigParser())->parse($raw);
+    }
+
+    public function testParseEmptyConfig(): void
+    {
+        $this->assertSame([], $this->parse(''));
+    }
+
+    public function testParseSingleHost(): void
+    {
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    User ubuntu
+    Port 2222
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('example', $endpoints[0]->name);
+        $this->assertSame('example.com', $endpoints[0]->host);
+        $this->assertSame('ubuntu', $endpoints[0]->user);
+        $this->assertSame(2222, $endpoints[0]->port);
+    }
+
+    public function testGlobalIdentityFileInherited(): void
+    {
+        $raw = <<<CONF
+Host *
+    IdentityFile ~/.ssh/id_ed25519
+
+Host web
+    HostName web.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertNotEmpty($endpoints[0]->identityFiles);
+        $this->assertStringContainsString('id_ed25519', $endpoints[0]->identityFiles[0]);
+        $this->assertStringStartsWith('/', $endpoints[0]->identityFiles[0]);
+    }
+
+    public function testGlobalProxyJumpInherited(): void
+    {
+        $raw = <<<CONF
+Host *
+    ProxyJump bastion.example.com
+
+Host internal
+    HostName internal.local
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('bastion.example.com', $endpoints[0]->proxyJump);
+    }
+
+    public function testGlobalUserInherited(): void
+    {
+        $raw = <<<CONF
+Host *
+    User default
+
+Host server
+    HostName server.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('default', $endpoints[0]->user);
+    }
+
+    public function testGlobalPortInherited(): void
+    {
+        $raw = <<<CONF
+Host *
+    Port 22022
+
+Host backup
+    HostName backup.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame(22022, $endpoints[0]->port);
+    }
+
+    /**
+     * ssh_config.5: "For each parameter, the first obtained value will be
+     * used." A `Host *` written FIRST therefore beats every later specific
+     * block — the wildcard is not subordinate, it merely loses by the
+     * convention of being written last.
+     */
+    public function testWildcardFirstWinsUnderFirstObtainedSemantics(): void
+    {
+        $raw = <<<CONF
+Host *
+    User globaluser
+    Port 22022
+    IdentityFile ~/.ssh/global_key
+
+Host specific
+    HostName specific.example.com
+    User specificuser
+    Port 2222
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('globaluser', $endpoints[0]->user);
+        $this->assertSame(22022, $endpoints[0]->port);
+        $this->assertSame([getenv('HOME') . '/.ssh/global_key'], $endpoints[0]->identityFiles);
+        // HostName was never set by the wildcard — the specific block's
+        // value is the first obtained for that parameter.
+        $this->assertSame('specific.example.com', $endpoints[0]->host);
+    }
+
+    /**
+     * The mirror ordering: specific block first keeps its values and the
+     * trailing `Host *` only fills parameters the block never defined.
+     */
+    public function testSpecificBlockFirstWinsOverLaterWildcard(): void
+    {
+        $raw = <<<CONF
+Host specific
+    HostName specific.example.com
+    User specificuser
+    Port 2222
+
+Host *
+    User globaluser
+    Port 22022
+    IdentityFile ~/.ssh/global_key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('specificuser', $endpoints[0]->user);
+        $this->assertSame(2222, $endpoints[0]->port);
+        $this->assertSame([getenv('HOME') . '/.ssh/global_key'], $endpoints[0]->identityFiles);
+    }
+
+    public function testRepeatedScalarKeywordKeepsFirstValueWithinBlock(): void
+    {
+        $raw = <<<CONF
+Host dup
+    HostName first.example.com
+    HostName second.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('first.example.com', $endpoints[0]->host);
+    }
+
+    public function testMultipleHosts(): void
+    {
+        $raw = <<<CONF
+Host one
+    HostName one.example.com
+
+Host two
+    HostName two.example.com
+
+Host three
+    HostName three.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(3, $endpoints);
+        $this->assertSame('one', $endpoints[0]->name);
+        $this->assertSame('two', $endpoints[1]->name);
+        $this->assertSame('three', $endpoints[2]->name);
+    }
+
+    public function testHostPatternWithoutHostNameUsesPattern(): void
+    {
+        $raw = <<<CONF
+Host backup-server
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('backup-server', $endpoints[0]->name);
+        $this->assertSame('backup-server', $endpoints[0]->host);
+        $this->assertSame(22, $endpoints[0]->port);
+    }
+
+    public function testMultipleIdentityFiles(): void
+    {
+        $raw = <<<CONF
+Host multikey
+    HostName multikey.example.com
+    IdentityFile ~/.ssh/key1
+    IdentityFile ~/.ssh/key2
+    IdentityFile /etc/ssh/system_key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertCount(3, $endpoints[0]->identityFiles);
+        $this->assertStringContainsString('key1', $endpoints[0]->identityFiles[0]);
+        $this->assertStringContainsString('key2', $endpoints[0]->identityFiles[1]);
+        $this->assertSame('/etc/ssh/system_key', $endpoints[0]->identityFiles[2]);
+    }
+
+    public function testCommentsIgnored(): void
+    {
+        $raw = <<<CONF
+# Global comment
+Host *
+    IdentityFile ~/.ssh/default  # inline comment
+
+Host web  # web server
+    HostName web.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame([getenv('HOME') . '/.ssh/default'], $endpoints[0]->identityFiles);
+    }
+
+    public function testEmptyLinesIgnored(): void
+    {
+        $raw = <<<CONF
+Host a
+    HostName a.example.com
+
+Host b
+    HostName b.example.com
+
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(2, $endpoints);
+    }
+
+    public function testHostStarOnlyDoesNotCreateEndpoint(): void
+    {
+        $raw = <<<CONF
+Host *
+    IdentityFile ~/.ssh/default
+    User global
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertSame([], $endpoints);
+    }
+
+    public function testMultipleHostsWithGlobalAndSpecificIdentityFiles(): void
+    {
+        $raw = <<<CONF
+Host *
+    IdentityFile ~/.ssh/default
+
+Host prod
+    HostName prod.example.com
+    IdentityFile ~/.ssh/prod_key
+
+Host staging
+    HostName staging.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(2, $endpoints);
+        $prod = $endpoints[0]->name === 'prod' ? $endpoints[0] : $endpoints[1];
+        $staging = $endpoints[0]->name === 'staging' ? $endpoints[0] : $endpoints[1];
+
+        // IdentityFile is the documented first-obtained exception: values
+        // ACCUMULATE across matching blocks in file order (ssh tries them
+        // in order), so prod keeps the wildcard default ahead of its own.
+        $this->assertSame(
+            [getenv('HOME') . '/.ssh/default', getenv('HOME') . '/.ssh/prod_key'],
+            $prod->identityFiles
+        );
+        $this->assertSame([getenv('HOME') . '/.ssh/default'], $staging->identityFiles);
+    }
+
+    public function testProxyJumpWildcardFirstWins(): void
+    {
+        $raw = <<<CONF
+Host *
+    ProxyJump global-bastion
+
+Host specific
+    HostName specific.example.com
+    ProxyJump specific-bastion
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('global-bastion', $endpoints[0]->proxyJump);
+    }
+
+    public function testJunkPortInSshConfigIsRefused(): void
+    {
+        // The parser feeds config ports through Endpoint::parsePort — an
+        // ssh_config "Port notanumber" must fail loudly, not (int)-cast to 0.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('badhost');
+        $this->parse(<<<CONF
+Host badhost
+    HostName bad.example.com
+    Port notanumber
+CONF);
+    }
+
+    public function testProxyJumpSpecificFirstWinsOverLaterWildcard(): void
+    {
+        $raw = <<<CONF
+Host specific
+    HostName specific.example.com
+    ProxyJump specific-bastion
+
+Host *
+    ProxyJump global-bastion
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('specific-bastion', $endpoints[0]->proxyJump);
+    }
+
+    public function testOnlyHostNameOnHostLine(): void
+    {
+        $raw = <<<CONF
+Host myhost
+    HostName myhost.example.com
+    User myuser
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('myhost', $endpoints[0]->name);
+        $this->assertSame('myhost.example.com', $endpoints[0]->host);
+        $this->assertSame('myuser', $endpoints[0]->user);
+    }
+
+    public function testMultiPatternHostWithoutHostName(): void
+    {
+        // Host a b c with no HostName should create 3 endpoints where
+        // each name/host is the pattern itself.
+        $raw = <<<CONF
+Host a b c
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(3, $endpoints);
+        $this->assertSame('a', $endpoints[0]->name);
+        $this->assertSame('a', $endpoints[0]->host);
+        $this->assertSame('b', $endpoints[1]->name);
+        $this->assertSame('b', $endpoints[1]->host);
+        $this->assertSame('c', $endpoints[2]->name);
+        $this->assertSame('c', $endpoints[2]->host);
+    }
+
+    public function testMultiPatternHostWithSharedHostName(): void
+    {
+        // Host a b + HostName shared.com should create 2 endpoints
+        // both resolving to shared.com but named a and b.
+        $raw = <<<CONF
+Host a b
+    HostName shared.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(2, $endpoints);
+        $this->assertSame('a', $endpoints[0]->name);
+        $this->assertSame('shared.com', $endpoints[0]->host);
+        $this->assertSame('b', $endpoints[1]->name);
+        $this->assertSame('shared.com', $endpoints[1]->host);
+    }
+
+    public function testMixedHostStarAndPattern(): void
+    {
+        // Host * web — the * feeds global options (no endpoint),
+        // web should emit one endpoint.
+        $raw = <<<CONF
+Host *
+    IdentityFile ~/.ssh/default
+
+Host web
+    HostName web.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('web', $endpoints[0]->name);
+        $this->assertSame('web.example.com', $endpoints[0]->host);
+        $this->assertNotEmpty($endpoints[0]->identityFiles);
+    }
+
+    public function testExpandPathBareTilde(): void
+    {
+        // ~/.ssh/key should expand to $HOME/.ssh/key
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    IdentityFile ~/.ssh/key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $expectedHome = getenv('HOME') ?? '/root';
+        $this->assertSame($expectedHome . '/.ssh/key', $endpoints[0]->identityFiles[0]);
+    }
+
+    public function testExpandPathTildeUser(): void
+    {
+        // ~root/.ssh/key should resolve to root's home if posix is available,
+        // OR be left as literal ~root/.ssh/key if root user doesn't exist.
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    IdentityFile ~root/.ssh/key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $path = $endpoints[0]->identityFiles[0];
+        // Either root's home or the literal path — never a mangled path
+        $this->assertTrue(
+            $path === '/root/.ssh/key' || $path === '~root/.ssh/key',
+            "Expected /root/.ssh/key or ~root/.ssh/key, got: $path"
+        );
+    }
+}

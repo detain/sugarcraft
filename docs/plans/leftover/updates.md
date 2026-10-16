@@ -67,7 +67,7 @@ the step that surfaced it.)
 ## Cross-phase observations
 
 (Patterns or surprises that span phases — e.g. "every i18n step needs
-to add a path-repo entry for sugar-wishlist". Put one-liners here so
+to add a path-repo entry for candy-ssh-launcher". Put one-liners here so
 later steps don't rediscover.)
 
 - Posix\* classes are `final` per project convention — any plan that says "extend Posix\Foo" must use composition instead. Reviewed during step 01.06.
@@ -562,10 +562,10 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.23 · PR#790 · sugar-boxer: alignment + margin tests (methods already existed)
     step 10.24 · PR#791 · candy-mdview: syntax highlighting + streaming pager
     docs for step 10.26 · PR#795 · refresh docs/lib/candy-mdview.html (lede: eight→eleven themes; Theme picker feature lists all 11 options; note solarized/monokai/github JSON loading)
-    step 10.27 · PR#796 · sugar-wishlist: proxy_jump + identity_files array + description rendering
+    step 10.27 · PR#796 · candy-ssh-launcher: proxy_jump + identity_files array + description rendering
     review for step 10.27 · clean · PR#796
     docs for step 10.27 · PR#798 · README: add proxy_jump/proxyJump/proxyJump documentation; CALIBER_LEARNINGS: add [pattern:plural-identity-files]
-    step 10.28 · PR#797 · sugar-wishlist: SSH config import (SshConfigParser + importFromSshConfig + Host* global defaults)
+    step 10.28 · PR#797 · candy-ssh-launcher: SSH config import (SshConfigParser + importFromSshConfig + Host* global defaults)
     review for step 10.28 · clean · PR#797
     docs for step 10.28 · PR#798 · README: add import-from-ssh-config section + SSH config mapping table; CALIBER_LEARNINGS: add SSH config parsing patterns
     step 10.29 · PR#799 · sugar-crush: session persistence (Session.php + withCwd/withSelected/withFilter/withSort/withActivePane)

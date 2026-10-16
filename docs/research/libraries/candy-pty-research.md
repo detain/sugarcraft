@@ -593,7 +593,7 @@ pid_t waitpid(pid_t pid, int *status, int options);
 
 **Implementation:** Add `Pty::readAsync()` returning a Promise, wrapping the current `read()` with timeout in a coroutine.
 
-**Effort:** Medium. Depends on ReactPHP integration in sugar-wishlist or sugar-bits.
+**Effort:** Medium. Depends on ReactPHP integration in candy-ssh-launcher or sugar-bits.
 
 ---
 

@@ -175,7 +175,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyShine** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
 | **CandyHermit** | "Hermit" is an inherited name; doesn't say fuzzy-find | `TruffleFinder`, `MacaronFilter` |
 | **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
-| **SugarWishlist** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
+| **CandySshLauncher** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
 | **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
 
 > The names in the right column are sketches, not commitments — see the
@@ -204,7 +204,7 @@ matching package turns out to be.
 | **PieChart** | another charts library |
 | **CookieClick** | mouse-zone tracker (CandyMouse alternative) |
 | **BentoBox** | layout (SugarBoxer alternative) |
-| **BentoLauncher** | launcher / picker (SugarWishlist alternative) |
+| **BentoLauncher** | launcher / picker (CandySshLauncher alternative) |
 | **MarshmallowFilter** | fuzzy-finder (CandyHermit alternative) |
 | **HoneyTunnel** | SSH / tunnel (CandyWish alternative) |
 | **CaramelStore** | KV / cache (CandyKv alternative) |

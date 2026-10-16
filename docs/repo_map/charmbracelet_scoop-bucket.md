@@ -69,7 +69,7 @@ depends?      array?   — optional Scoop dependencies
 | `glow.json` | `sugar-bits` (markdown rendering) | Glow renders markdown in the terminal with ANSI styling — SugarCraft has no direct markdown renderer; `sugar-bits` component layer could host a Bubbletea-based markdown view |
 | `mods.json` | **none** | AI on the command line — SugarCraft has no AI/LLM integration lib; this would be a new leaf lib if ported |
 | `soft-serve.json` | **none** (server infrastructure) | Self-hostable Git server — out of scope for SugarCraft (TUI component library) | <!-- @rename-keep upstream charm bucket record -->
-| `wishlist.json` | **none** (SSH directory) | SSH directory management — out of SugarCraft's TUI scope |
+| `wishlist.json` | **none** (SSH directory) | SSH directory management — out of SugarCraft's TUI scope | <!-- @rename-keep -->
 | `freeze.json` | `candy-shine` (image generation) | Freeze generates images of code/terminal output — `candy-shine` could port the image composition layer |
 | `pop.json` | **none** (email sending) | Email from terminal — out of scope for TUI component library | <!-- @rename-keep -->
 | `crush.json` | **none** (AI assistant) | Terminal-based AI assistant — would need new `sugar-ai` leaf lib if ported |

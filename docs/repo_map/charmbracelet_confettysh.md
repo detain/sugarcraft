@@ -17,7 +17,7 @@
 - **TTY-over-SSH Rendering**: Uses Bubble Tea's `activeterm` middleware to render ANSI graphics through SSH sessions
 - **Alternative Screen Mode**: Uses `tea.WithAltScreen()` for clean, non-destructive terminal rendering
 - **Prometheus Metrics**: Exposes metrics on a separate port (default 9222) via `promwish`
-- **Endpoint Discovery**: Uses `wishlist` for managing multiple SSH endpoint configurations with middleware chains
+- **Endpoint Discovery**: Uses `wishlist` for managing multiple SSH endpoint configurations with middleware chains <!-- @rename-keep -->
 - **Automatic SSH Key Management**: Auto-generates/loads host keys per endpoint (`.ssh/<name>`)
 - **Graceful Degradation**: Bubble Tea model pattern supports fallback to default effect
 - **Docker Support**: Minimal scratch-based container image for easy deployment
@@ -79,7 +79,7 @@ This is a **wrapper application** (not a library), so it does not map directly t
 
 ## Analysis
 
-**charmbracelet/confettysh** is a delightfully minimal demonstration of the Charm ecosystem's capabilities. At its core, it's an SSH server wrapper that exposes two animated TUI effects (confetti and fireworks) over SSH connections. The architecture is elegant in its simplicity: a single 105-line `main.go` file that composes pre-built Charm libraries (`wish` for SSH, `bubbletea` for TUI rendering, `wishlist` for endpoint management) with the upstream `maaslalani/confetty` library to do the actual particle rendering.
+**charmbracelet/confettysh** is a delightfully minimal demonstration of the Charm ecosystem's capabilities. At its core, it's an SSH server wrapper that exposes two animated TUI effects (confetti and fireworks) over SSH connections. The architecture is elegant in its simplicity: a single 105-line `main.go` file that composes pre-built Charm libraries (`wish` for SSH, `bubbletea` for TUI rendering, `wishlist` for endpoint management) with the upstream `maaslalani/confetty` library to do the actual particle rendering. <!-- @rename-keep -->
 
 The project's design philosophy embodies the Unix philosophy of composition: instead of building a custom SSH daemon or TUI renderer from scratch, confettysh assembles existing, well-tested components. The `teaHandler` factory function demonstrates this perfectly — it takes an effect name and returns a closure that instantiates the appropriate Bubble Tea model, which is then wired into the SSH middleware chain via `bm.Middleware()`. This pattern allows the application to switch between different visual effects without any conditional logic in the rendering path.
 

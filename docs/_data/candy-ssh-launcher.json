@@ -1,0 +1,11 @@
+{
+    "title": "CandySshLauncher — SugarCraft",
+    "description": "CandySshLauncher: A launch menu of your SSH hosts — pick one and connect.",
+    "ogTitle": "CandySshLauncher — SugarCraft",
+    "ogDescription": "A launch menu of your SSH hosts — pick one and connect.",
+    "emoji": "🎫",
+    "displayName": "CandySshLauncher",
+    "tagline": "TUI directory of SSH endpoints",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/wishlist\" style=\"color: inherit;\">charmbracelet/wishlist</a></span>\n          <span class=\"tag-chip\">ssh</span>\n          <span class=\"tag-chip\">launcher</span>\n          <span class=\"tag-chip\">yaml-config</span>"
+}

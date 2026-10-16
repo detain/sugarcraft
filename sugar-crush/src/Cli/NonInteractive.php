@@ -189,7 +189,7 @@ final class NonInteractive
      * @return int Unix exit code: {@see self::EXIT_OK} on success,
      *   {@see self::EXIT_CONFIG} when no prompt was given or an explicitly
      *   selected provider is unusable, {@see self::EXIT_FAILURE} when the
-     *   backend threw — extending the existing `candy-mail`/`sugar-wishlist`
+     *   backend threw — extending the existing `candy-mail`/`candy-ssh-launcher`
      *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
      *   `bin/sugarcrush`'s own 2-means-usage-error.
      */

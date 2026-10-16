@@ -8,7 +8,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `SugarCraft\Core\I18n\T` with the library namespace baked in. Translation files
   live in `lang/<code>.php` (e.g. `lang/en.php`). The facade calls
   `T::register(namespace, __DIR__ . '/../lang')` on every invocation — this is
-  idempotent so no static bootstrap is needed. See `sugar-wishlist/src/Lang.php`
+  idempotent so no static bootstrap is needed. See `candy-ssh-launcher/src/Lang.php`
   and `sugar-datepicker/src/Lang.php` for the same pattern.
 
 - **[pattern:viewport-virtualization]** slicing visible row range + scrollY offset.

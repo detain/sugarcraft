@@ -209,13 +209,13 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 10: sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy
+### Group 10: sugar-boxer, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-boxer | 35 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | sugar-readline | 139 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
-| sugar-wishlist | 70 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
+| candy-ssh-launcher | 70 ✓ | REQUEST_CHANGES | 0 | 2 | 4 | 0 |
 | honey-bounce | 121 ✓ | APPROVE | 0 | 3 | 2 | 0 |
 | candy-flappy | 31 ✓ | APPROVE | 0 | 2 | 2 | 0 |
 | super-candy | 187 ✓ | REQUEST_CHANGES | 0 | 4 | 5 | 0 |
@@ -224,7 +224,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **sugar-readline** — Prompt library. Issues: `Highlight` is a stub no-op (silently returns no styling); `AutoSuggest` class exists but is never instantiated in the flow; `EmacsMode::deleteWordBefore()` is O(n²) using repeated key simulation; `ViMode::isWordChar()` calls `preg_match()` per character.
 
-**sugar-wishlist** — SSH launcher. Issues: `SshConfigParser::expandPath()` has broken POSIX logic (`posix_getpwuid() !== false` evaluates to `true` when it returns `false`, then accesses `['dir']` on false); YAML parser doesn't handle keys with hyphens or `@`; `Endpoint::toSshArgv()` only uses first identity file.
+**candy-ssh-launcher** — SSH launcher. Issues: `SshConfigParser::expandPath()` has broken POSIX logic (`posix_getpwuid() !== false` evaluates to `true` when it returns `false`, then accesses `['dir']` on false); YAML parser doesn't handle keys with hyphens or `@`; `Endpoint::toSshArgv()` only uses first identity file.
 
 **honey-bounce** — Physics library. Issues: `SpringChain::tick()` mutates internal array elements in-place; `CubicBezier::easeInOutCirc()` has duplicate control points (same as `easeInOutExpo` — copy-paste error from CSS spec); `SpringConfig` has public mutable properties.
 
@@ -265,7 +265,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
 | **Inconsistent mutability** | sugar-tick/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
-| **Path-repo closure gaps** | candy-mdview, sugar-stickers, sugar-wishlist | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
+| **Path-repo closure gaps** | candy-mdview, sugar-stickers, candy-ssh-launcher | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
 ### 🟡 Cross-Package Inconsistencies
 
@@ -430,7 +430,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 3. **[FIX]** honey-bounce: Fix `CubicBezier::easeInOutCirc()` duplicate (should be `(0.85, 0.00, 0.15, 1.00)` per CSS spec)
 4. **[FIX]** candy-tetris: Fix `Das::withKeyDown()` to actually use the `$state` parameter
 5. **[FIX]** sugar-lister: Fix `Model::addItem()` to return clone, not mutate `$this`
-6. **[FIX]** sugar-wishlist: Fix `expandPath()` POSIX logic bug
+6. **[FIX]** candy-ssh-launcher: Fix `expandPath()` POSIX logic bug
 
 ### Short Term (This Sprint)
 
@@ -571,7 +571,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
 | 9 | candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |
-| 10 | sugar-boxer, sugar-readline, sugar-wishlist, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
+| 10 | sugar-boxer, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 
 ---

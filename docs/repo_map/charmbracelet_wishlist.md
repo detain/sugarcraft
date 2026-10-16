@@ -46,9 +46,9 @@
 
 ## Key Classes and Methods
 
-### `wishlist` package (root)
+### `wishlist` package (root) <!-- @rename-keep -->
 
-- **`ListModel`** (`wishlist.go`): Main bubbletea `tea.Model` for the listing UI. Implements `Init()`, `Update()`, `View()`.
+- **`ListModel`** (`wishlist.go`): Main bubbletea `tea.Model` for the listing UI. Implements `Init()`, `Update()`, `View()`. <!-- @rename-keep -->
   - `NewListing()` — factory creating a `ListModel` with endpoints, SSH client, and renderer.
   - `SetItems()` — updates displayed endpoints and adjusts delegate height.
   - `selected()` — returns the currently selected `ItemWrapper`.
@@ -105,7 +105,7 @@
 
 - **`makeStyles()`** / **`styles`** (`styles.go`): Lipgloss styling for TUI elements (Logo, Err, Footer, NoContent, Doc).
 
-- **`FirstNonEmpty()`** (`wishlist.go`): Returns first non-empty string from variadic args.
+- **`FirstNonEmpty()`** (`wishlist.go`): Returns first non-empty string from variadic args. <!-- @rename-keep -->
 
 ### Sub-packages
 
@@ -114,7 +114,7 @@
 
 - **`blocking.Reader`** (`blocking/reader.go`): Wraps any `io.Reader`, retries on `io.EOF` every 10ms. Used to prevent premature EOF on the STDIN buffer during session handoff.
 
-- **`srv.Endpoints()`** (`srv/srv.go`): DNS SRV record lookup + TXT record parsing for `wishlist.name` override. Returns `[]*wishlist.Endpoint`.
+- **`srv.Endpoints()`** (`srv/srv.go`): DNS SRV record lookup + TXT record parsing for `wishlist.name` override. Returns `[]*wishlist.Endpoint`. <!-- @rename-keep -->
   - `fromRecords()` — maps `*net.SRV` + `[]string` TXT records to endpoints.
 
 - **`zeroconf.Endpoints()`** (`zeroconf/zeroconf.go`): Uses `grandcat/zeroconf` to browse `_ssh._tcp` services. Returns `[]*wishlist.Endpoint`.

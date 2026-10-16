@@ -87,7 +87,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-tick | 144 | 349 | 0 | 0 | 0 | 0 |  |
 | sugar-toast | 278 | 669 | 0 | 0 | 0 | 0 |  |
 | sugar-veil | 258 | 561 | 0 | 0 | 0 | 0 |  |
-| sugar-wishlist | 257 | 1160 | 0 | 0 | 0 | 0 |  |
+| sugar-wishlist | 257 | 1160 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 ### sugar-crush (sharded, CI-shape)
 
 Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E671)" from the repo root:

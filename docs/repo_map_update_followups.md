@@ -37,7 +37,7 @@ The 8 shared packages:
 |------|-------------|--------------------------|
 | Step 31 | candy-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
-| Step 33 | candy-kv, sugar-wishlist, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
+| Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
@@ -127,7 +127,7 @@ The 8 shared packages:
 
 ---
 
-### sugar-wishlist
+### candy-ssh-launcher
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -135,7 +135,7 @@ The 8 shared packages:
 | candy-fuzzy | Launcher.php/Picker.php filter app list — SmithWatermanMatcher would improve fuzzy search quality | S |
 | candy-mouse | Picker.php supports mouse selection — Zone-based hit-testing via candy-mouse would help | S |
 
-**Notes:** sugar-wishlist is an app launcher TUI. Fuzzy app search is a direct use case for candy-fuzzy. Mouse selection in a list view would benefit from candy-mouse zone tracking.
+**Notes:** candy-ssh-launcher is an app launcher TUI. Fuzzy app search is a direct use case for candy-fuzzy. Mouse selection in a list view would benefit from candy-mouse zone tracking.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---

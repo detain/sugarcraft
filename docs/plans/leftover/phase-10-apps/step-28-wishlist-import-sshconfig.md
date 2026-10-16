@@ -1,26 +1,26 @@
-# Step 10.28 — sugar-wishlist import from ~/.ssh/config
+# Step 10.28 — candy-ssh-launcher import from ~/.ssh/config
 
-**Source:** `leftover_updates_later.md` sugar-wishlist P2.1
+**Source:** `leftover_updates_later.md` candy-ssh-launcher P2.1
 **Branch:** `ai/wishlist-import-sshconfig`
 
 ## Deliverable
 
 Read `~/.ssh/config`; parse Host blocks; convert into `Endpoint`
-objects. Wired as a CLI subcommand `wishlist import-ssh`.
+objects. Wired as a CLI subcommand `candy-ssh-launcher import-ssh`.
 
 ## Files
 
-**Create:** `sugar-wishlist/src/Import/SshConfigParser.php`,
+**Create:** `candy-ssh-launcher/src/Import/SshConfigParser.php`,
 `Cli/ImportSshCommand.php`.
 
 ## Tests
 
-- `sugar-wishlist/tests/Import/SshConfigParserTest.php` — fixture
+- `candy-ssh-launcher/tests/Import/SshConfigParserTest.php` — fixture
   config; assert correct Endpoint set.
 
 ## Acceptance
 
-- `cd sugar-wishlist && vendor/bin/phpunit --filter Import` green.
+- `cd candy-ssh-launcher && vendor/bin/phpunit --filter Import` green.
 
 ---
 

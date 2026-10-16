@@ -41,7 +41,7 @@ trait Mutable
 ### Classes Using the Trait
 
 - `candy-flip/src/Player.php`
-- `sugar-wishlist/src/Endpoint.php`
+- `candy-ssh-launcher/src/Endpoint.php`
 - `candy-sql/src/App.php`
 - `candy-mail/src/Email.php`
 - `candy-mouse/src/ClickCounter.php`

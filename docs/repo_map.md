@@ -752,11 +752,11 @@
 **Features:** Dual-mode (CLI browsing + SSH-server TUI), ProxyJump tunneling, agent forwarding, OpenSSH config + YAML parsing.
 
 **SugarCraft Mapping:**
-- `sugar-wishlist` → Primary port
+- `candy-ssh-launcher` → Primary port
 - `candy-scriptui` → TUI framework
 - `candy-pty` → PTY wrappers
 
-**Note:** Port exists as `sugar-wishlist` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-ssh-launcher` (🟢 in MATCHUPS.md).
 
 ---
 

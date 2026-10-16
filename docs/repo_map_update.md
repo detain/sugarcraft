@@ -55,13 +55,13 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 ### Ecosystem-wide adoption sweep (Phase 6, steps 31–37)
 - step-31 candy-pty: adopted candy-input + candy-ansi (PR #910)
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + candy-mouse + candy-testing (PR #911)
-- step-33 candy-kv + sugar-wishlist + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
+- step-33 candy-kv + candy-ssh-launcher + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 sugar-tick + candy-mail + candy-git-server: adopted candy-async (PR #915)
 - step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, candy-mail, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, sugar-tick, candy-mail, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).
@@ -165,7 +165,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 8. **Persistent storage backend** — candy-git-server has zero persistence (in-memory only; upstream soft-serve uses SQLite/PostgreSQL). candy-metrics needs HTTP scrape endpoint.
 
-9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in sugar-wishlist.
+9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in candy-ssh-launcher.
 
 10. **Buffer diffing / dirty-region tracking** — sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
 
@@ -273,7 +273,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 1. **GitHub/GitLab README fetching** — candy-mdview HTTP integration with GitHub REST API v3 / GitLab API v4.
 
-2. **SSH server mode** — candy-git-server SSH mode and sugar-wishlist's #1 requested feature.
+2. **SSH server mode** — candy-git-server SSH mode and candy-ssh-launcher's #1 requested feature.
 
 3. **PNG CLI output** — candy-freeze `PngRenderer` exists (373 lines) but CLI only exposes SVG.
 
@@ -349,7 +349,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 4 | Implement fuzzy matching with scored indices | candy-scriptui, candy-forms, candy-forms, sugar-bits | High | Medium | Low | P0 |
 | 5 | Add `ProgramOptions::builder()` + ergonomic APIs | candy-core | High | Low | Low | P0 |
 | 6 | Extract `DatabaseInterface` in candy-sql | candy-sql | Critical | Low | Low | P0 |
-| 7 | Fix `toSshArgv()` to emit ALL identity files | sugar-wishlist | High | Low | Low | P0 |
+| 7 | Fix `toSshArgv()` to emit ALL identity files | candy-ssh-launcher | High | Low | Low | P0 |
 | 8 | Wire `Mosaic::auto()` + `diagnose()` | candy-mosaic | High | Low | Low | P0 |
 | 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-bits, sugar-boxer, sugar-dash | Critical | High | Medium | P1 |
 | 10 | Implement cell-based buffer model | candy-core, sugar-bits, candy-sprinkles | Critical | High | Medium | P1 |
@@ -362,7 +362,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 17 | Add `ContentGenerator` pattern | sugar-stickers | Medium | Low | Low | P1 |
 | 18 | Fix wide-character overflow handling | sugar-boxer | High | Low | Low | P1 |
 | 19 | Wire MarkLine into LineChart/BarChart | sugar-charts | Medium | Low | Low | P2 |
-| 20 | Implement SSH server mode | candy-git-server, sugar-wishlist | High | High | Medium | P2 |
+| 20 | Implement SSH server mode | candy-git-server, candy-ssh-launcher | High | High | Medium | P2 |
 
 ---
 
@@ -380,7 +380,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **Extract `DatabaseInterface` in candy-sql** — Stable 7-method interface; unblocks MySQL/Postgres driver.
 
-6. **Fix `toSshArgv()` in sugar-wishlist** — Single-method change + test; full SSH feature parity.
+6. **Fix `toSshArgv()` in candy-ssh-launcher** — Single-method change + test; full SSH feature parity.
 
 7. **Wire `Mosaic::auto()` + `diagnose()` in candy-mosaic** — Eliminate user-facing failures on Windows, SSH, old terminals.
 

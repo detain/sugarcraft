@@ -25,7 +25,7 @@ The audit categories:
    across libs. The PTY consolidation proved the model works; apply it
    to the rest of the foundation surface.
 2. **Cross-cutting: i18n via `Lang::t()`** — the canonical pattern from
-   `sugar-wishlist/src/Lang.php`. Several libs still miss it.
+   `candy-ssh-launcher/src/Lang.php`. Several libs still miss it.
 3. **Cross-cutting: ColorProfile + env detection** — should live in
    `candy-palette`, not be re-rolled in each lib.
 4. **Per-library leftover features** — verified gaps per research doc.
@@ -169,7 +169,7 @@ sugar-dash's `Module/Module.php` uses `array<string,mixed>` state. candy-core's 
 
 ## 2. i18n via `Lang::t()` (cross-cutting)
 
-Canonical pattern: `sugar-wishlist/src/Lang.php` wraps `\SugarCraft\Core\I18n\T` with a per-lib namespace; lookups go `exact-locale → base-language → en → raw-key`. Each lib has a `lang/en.php` (+ optional locale variants).
+Canonical pattern: `candy-ssh-launcher/src/Lang.php` wraps `\SugarCraft\Core\I18n\T` with a per-lib namespace; lookups go `exact-locale → base-language → en → raw-key`. Each lib has a `lang/en.php` (+ optional locale variants).
 
 **Libs verified missing `Lang.php` / `lang/`:**
 
@@ -185,7 +185,7 @@ Canonical pattern: `sugar-wishlist/src/Lang.php` wraps `\SugarCraft\Core\I18n\T`
 **Action template per lib (single PR each):**
 
 1. Add `lang/en.php` returning a flat assoc array of `key => string`.
-2. Add `src/Lang.php` matching `sugar-wishlist/src/Lang.php` shape.
+2. Add `src/Lang.php` matching `candy-ssh-launcher/src/Lang.php` shape.
 3. Replace inline English strings in `src/` with `Lang::t('key', ['param' => $v])`.
 4. Test: a `LangCoverageTest` verifies every key used in code exists in `lang/en.php`.
 
@@ -548,7 +548,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - CJK/emoji width handling via `mb_strwidth`/UnicodeString (P1).
 - Additional stock themes (P2) — Solarized, Monokai, GitHub.
 
-### sugar-wishlist
+### candy-ssh-launcher
 
 - `proxy_jump` field on `Endpoint` + `-J` flag (P1.1).
 - `identity_files` array with fallback (P1.3).

@@ -1,6 +1,6 @@
-# Step 10.27 — sugar-wishlist proxy_jump + identity_files + description rendering
+# Step 10.27 — candy-ssh-launcher proxy_jump + identity_files + description rendering
 
-**Source:** `leftover_updates_later.md` sugar-wishlist P1.1-3
+**Source:** `leftover_updates_later.md` candy-ssh-launcher P1.1-3
 **Branch:** `ai/wishlist-proxyjump-identityfiles`
 
 ## Deliverable
@@ -11,9 +11,9 @@
 
 ## Files
 
-**Modify:** `sugar-wishlist/src/Endpoint.php` — new fields.
-`sugar-wishlist/src/Launcher.php` — `-J` and `-i` flag wiring.
-`sugar-wishlist/src/Picker.php` — render description.
+**Modify:** `candy-ssh-launcher/src/Endpoint.php` — new fields.
+`candy-ssh-launcher/src/Launcher.php` — `-J` and `-i` flag wiring.
+`candy-ssh-launcher/src/Picker.php` — render description.
 
 ## Tests
 
@@ -21,7 +21,7 @@
 
 ## Acceptance
 
-- `cd sugar-wishlist && vendor/bin/phpunit` green.
+- `cd candy-ssh-launcher && vendor/bin/phpunit` green.
 
 ---
 

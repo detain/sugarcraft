@@ -49,7 +49,7 @@ hunk level (not line level):
 ## [pattern:candy-git-i18n] Per-library i18n facade
 
 When adding i18n to candy-git (a leaf app lib that shells out to `git`),
-follow the canonical pattern established by sugar-wishlist, sugar-datepicker,
+follow the canonical pattern established by candy-ssh-launcher, sugar-datepicker,
 and sugar-toast:
 
 1. **`lang/en.php`** — flat `array<string, string>` keyed by translation
@@ -59,7 +59,7 @@ and sugar-toast:
 
 2. **`src/Lang.php`** — `final class Lang` wrapping
    `SugarCraft\Core\I18n\T`. Bakes the library namespace (`'git'`) into
-   every key. Mirrors the sugar-wishlist/calendar/toast facade pattern.
+   every key. Mirrors the candy-ssh-launcher/calendar/toast facade pattern.
    Registers the namespace + lang dir on every call (safe; `T::register`
    is idempotent).
 

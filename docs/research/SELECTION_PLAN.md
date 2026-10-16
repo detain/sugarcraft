@@ -474,7 +474,7 @@ All 45 research documents available at:
 | sugar-tick | 19KB |
 | sugar-toast | 20KB |
 | sugar-veil | 21KB |
-| sugar-wishlist | 16KB |
+| candy-ssh-launcher | 16KB |
 | super-candy | 18KB |
 
 ---

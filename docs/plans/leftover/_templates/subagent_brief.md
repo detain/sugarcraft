@@ -100,7 +100,7 @@ git checkout master && git pull --ff-only
 - Don't comment WHAT — only WHY (constraints, invariants, links to
   upstream issues).
 - i18n: user-facing strings go through `Lang::t($key, $params)` per
-  `sugar-wishlist/src/Lang.php` canonical pattern. Never throw raw
+  `candy-ssh-launcher/src/Lang.php` canonical pattern. Never throw raw
   English strings.
 
 ## Path-repo closure

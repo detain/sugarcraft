@@ -409,7 +409,7 @@ final class Lang extends BaseLang
 }
 ```
 
-Follows the same facade pattern as `sugar-wishlist/src/Lang.php` and `sugar-table/src/Lang.php`.
+Follows the same facade pattern as `candy-ssh-launcher/src/Lang.php` and `sugar-table/src/Lang.php`.
 
 ### Translation Keys (`lang/en.php` — 34 lines)
 

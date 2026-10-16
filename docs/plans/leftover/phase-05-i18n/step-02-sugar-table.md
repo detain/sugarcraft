@@ -6,7 +6,7 @@
 ## Deliverable
 
 Add `Lang.php` + `lang/en.php` per the canonical pattern
-(`sugar-wishlist/src/Lang.php`). Replace inline English in sugar-table:
+(`candy-ssh-launcher/src/Lang.php`). Replace inline English in sugar-table:
 header / pagination / empty-state strings, error messages.
 
 ## Files
