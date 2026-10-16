@@ -156,7 +156,7 @@ Recommend Option A. Tracked separately because of size — gate the work on expl
 Same `preg_replace('/\x1b\[[0-9;]*m/', '', $str)` pattern (plus `mb_strwidth` or `mb_strlen`) appears in:
 - `sugar-dash/src/Components/Feedback/Alert.php`
 - `sugar-dash/src/Components/Nav/Scrollbar.php`
-- `sugar-veil/src/Animation/Slide.php`
+- `sugar-veil/src/Animation/Slide.php` <!-- @rename-keep historical provenance -->
 - `sugar-dash/src/Plot/Chart/OHLC.php`
 
 Replace each with `\SugarCraft\Core\Util\Ansi::strip()` followed by `\SugarCraft\Core\Util\Width::string()`. This is the lowest-risk batch in the entire audit.
@@ -173,7 +173,7 @@ Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 
 Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders.
 
-✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
+✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR). <!-- @rename-keep historical provenance -->
 
 ✅ Also fixed (PR #878): candy-ssh-launcher Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
 
@@ -298,7 +298,7 @@ Recorded here so future audits don't re-litigate:
 
 Each step is a self-contained PR ending with the local gate (phpunit + phpstan + cs-fixer) per affected lib, then the review cycle, docs updates, and ship-pr per the Execution protocol above.
 
-1. **Quick wins (1 PR, ~½ day):** Delete `candy-mdview/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`.
+1. **Quick wins (1 PR, ~½ day):** Delete `candy-mdview/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`. <!-- @rename-keep historical provenance -->
 2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + candy-mdview batch.
 3. **Lang.php consolidation (1 PR):** Add `SugarCraft\Core\I18n\LangFactory` + update `scaffold-library` skill + mechanically migrate 33 libs.
 4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-panels/SugarPanels`.

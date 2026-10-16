@@ -37,7 +37,7 @@ To implement an item:
 | **candy-forms** | [research/libraries/candy-forms-research.md](libraries/candy-forms-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
 | **sugar-table** | [research/libraries/sugar-table-research.md](libraries/sugar-table-research.md) | 1. StyleFunc, 2. Flex columns, 3. Viewport virtualization |
 | **sugar-charts** | [research/libraries/sugar-charts-research.md](libraries/sugar-charts-research.md) | 1. Nice ticks, 2. Streaming, 3. Area fill |
-| **sugar-veil** | [research/libraries/sugar-veil-research.md](libraries/sugar-veil-research.md) | 1. Backdrop, 2. Animation, 3. Border chrome |
+| **sugar-overlay** | [research/libraries/sugar-overlay-research.md](libraries/sugar-overlay-research.md) | 1. Backdrop, 2. Animation, 3. Border chrome |
 | **sugar-flexbox** | [research/libraries/sugar-flexbox-research.md](libraries/sugar-flexbox-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
 | **sugar-panels** | [research/libraries/sugar-panels-research.md](libraries/sugar-panels-research.md) | 1. Box styles enum, 2. Text alignment, 3. Box titles |
 | **sugar-navstack** | [research/libraries/sugar-navstack-research.md](libraries/sugar-navstack-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
@@ -132,7 +132,7 @@ To implement an item:
 ### Layout & Compositing
 
 - **sugar-dash**: Constraint layout, StatefulWidget separation
-- **sugar-veil**: Backdrop, animation, overlay stacking
+- **sugar-overlay**: Backdrop, animation, overlay stacking
 - **sugar-panels**: Multiple box styles, text alignment, titles
 - **sugar-flexbox**: Viewport component, sticky positioning
 

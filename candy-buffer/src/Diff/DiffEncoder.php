@@ -71,7 +71,7 @@ final class DiffEncoder
             $out .= "\x1b]8;;\x1b\\";
             $this->currentLink = null;
         }
-        // The reset half of that promise is load-bearing: sugar-veil and
+        // The reset half of that promise is load-bearing: sugar-overlay and
         // sugar-dash return encode() output verbatim to a live terminal, so
         // a frame ending on a styled cell would leave the terminal styled
         // and every following UNSTYLED write (a clear, a space, the next

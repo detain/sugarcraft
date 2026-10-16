@@ -15309,7 +15309,7 @@ final class Chat implements Model
      * latches a real instance on {@see $sessionPicker}; {@see update()}
      * routes every subsequent keystroke into it via
      * {@see handleSessionPickerKey()} and {@see Renderer::render()}
-     * composites it through the same {@see \SugarCraft\Veil\Veil} slot the
+     * composites it through the same {@see \SugarCraft\Overlay\Veil} slot the
      * Ctrl+P palette uses.
      *
      * The assistant line is deliberately a one-line hint rather than the

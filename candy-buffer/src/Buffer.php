@@ -133,7 +133,7 @@ final class Buffer implements \JsonSerializable
             // width table here without first tokenizing UTF-8 would relabel
             // the parse, not fix it. fromString() is a test-support factory by
             // contract (see its docblock; repo-wide callers are the
-            // candy-buffer and sugar-veil test suites only, zero production
+            // candy-buffer and sugar-overlay test suites only, zero production
             // call sites). The canonical display-width primitive is
             // SugarCraft\Core\Util\Width (candy-core — UAX isWide table,
             // ANSI-aware); it is not consulted here because byte-wise width
@@ -191,7 +191,7 @@ final class Buffer implements \JsonSerializable
      * Out-of-range colour operands are CLAMPED, not bit-masked: a truecolor
      * component of 300 saturates to 255 (a `& 0xFF` mask would wrap it to
      * 44 and paint an unrelated colour), and a 256-colour index above 255
-     * saturates to 255. This matches sugar-veil's penFromSgr(), which reads
+     * saturates to 255. This matches sugar-overlay's penFromSgr(), which reads
      * the same SGR stream. A truncated extended colour (`38;5`, `38;2;1`)
      * ends the parse rather than letting its operands be misread as
      * attribute codes.

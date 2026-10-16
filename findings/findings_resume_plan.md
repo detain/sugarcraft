@@ -1112,16 +1112,16 @@ Same verification as previous phases.
 
 #### 4.4 🟢 CALIBER_LEARNINGS: Scanner state docs (candy-veil Item 5)
 
-**Plan:** `findings/plan_sugar-veil.md` — Item 5
+**Plan:** `findings/plan_sugar-overlay.md` — Item 5
 **Fix:** Add docblock to `resetPreviousFrame()` explaining scanner state is NOT reset
-**Files:** `sugar-veil/src/Veil.php:720-723`
+**Files:** `sugar-overlay/src/Veil.php:720-723`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 4.5 🟢 CALIBER_LEARNINGS: RenderSession frame counter (candy-veil Item 4)
 
-**Plan:** `findings/plan_sugar-veil.md` — Item 4
+**Plan:** `findings/plan_sugar-overlay.md` — Item 4
 **Fix:** Either add frame counter with auto-reset, or add `release()` method and document usage
-**Files:** `sugar-veil/src/RenderSession.php`
+**Files:** `sugar-overlay/src/RenderSession.php`
 **Agent:** Same coder agent as 4.4 (grouped — same lib)
 
 #### 4.6 🟢 CALIBER_LEARNINGS: candy-git sync-only (Item 5.1)
@@ -1310,7 +1310,7 @@ Same verification as previous phases.
 | `plan_candy-git.md` | 3.1-3.2, 5.1 | DiffViewer early return, HistoryManager spread syntax, async git driver |
 | `plan_sugar-table.md` | 2.2-2.4, 3.1-3.3, 4.1-4.3 | Navigation short-circuit, totalRows double-compute, widthSolveCache LRU, styleFunc doc, visibleColumnIndices helper |
 | `plan_sugar-toast.md` | 3.1-3.3, 5.3, 6.3 | Null message handling, Finding 9 marker, Finding 10 marker ✅ COMPLETE d0f85418 |
-| `plan_sugar-veil.md` | 7 | VeilStack::compositeAll() misleading doc |
+| `plan_sugar-overlay.md` | 7 | VeilStack::compositeAll() misleading doc |
 | `plan_sugar-boxer.md` | 1.1, 2.1-2.5, 3.1, 3.3-3.7 | Division guard, MAX_CARRY, func_num_args, WeakMap cache, flex separator docs, empty() check, function_exists cache, static regex, sentinel class |
 | `plan_sugar-calendar.md` | 2.1-2.2, 3.1, 4.1, 5.1 | Viewport width config, month grid cache, week-boundary docs, ISO week column |
 | `plan_sugar-readline.md` | 1.1, 1.2, 2.1, 2.3-2.4, 3.1-3.3, 4.1, 5.1 | Ctrl+R search, Vi cursor off-by-one, history race, unbounded growth, chmod 0600, Emacs incremental search, Vi text objects, architecture docs |

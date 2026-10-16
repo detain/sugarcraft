@@ -6,13 +6,13 @@
 
 ## Goal
 
-Wire `Buffer::diff()` into six renderers that currently do full re-render every frame: `sugar-panels`, `sugar-dash`, `sugar-crush`, `sugar-veil`, `sugar-flexbox`, `candy-lister`. Each becomes capable of emitting only the delta — major SSH-bandwidth + flicker-reduction win.
+Wire `Buffer::diff()` into six renderers that currently do full re-render every frame: `sugar-panels`, `sugar-dash`, `sugar-crush`, `sugar-overlay`, `sugar-flexbox`, `candy-lister`. Each becomes capable of emitting only the delta — major SSH-bandwidth + flicker-reduction win.
 
 Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 
 ## Files expected to be modified
 
-- Each of the 6 lib's composer.json — add `sugarcraft/candy-buffer` if not already there (sugar-veil and friends already got it earlier).
+- Each of the 6 lib's composer.json — add `sugarcraft/candy-buffer` if not already there (sugar-overlay and friends already got it earlier).
 - Each lib's main renderer:
   - Maintain a `?Buffer $previousFrame` field.
   - On render: build current `Buffer`, compute `current->diff(previous)`, emit only the delta via `DiffEncoder::encode($ops)`, store current as previous.
@@ -50,7 +50,7 @@ Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 
 ## Ship brief
 
-- **PR title**: `sugar-panels + sugar-dash + sugar-crush + sugar-veil + sugar-flexbox + candy-lister: emit Buffer diffs`
+- **PR title**: `sugar-panels + sugar-dash + sugar-crush + sugar-overlay + sugar-flexbox + candy-lister: emit Buffer diffs`
 - **PR body**:
   ```
   ## Summary

@@ -2,7 +2,7 @@
 
 **candy-hermit** is a fuzzy finder / quick-fix overlay library for PHP TUI applications. It renders a filterable list overlay on top of a background view while the background continues to update — a "type-to-filter" pattern used in command palettes (VS Code Ctrl+P style), quick-fix navigation, and context-sensitive item selection.
 
-**Ecosystem positioning:** It occupies a distinct niche in the SugarCraft ecosystem as the only overlay-specific fuzzy filter (versus `sugar-bits` inline components, `candy-lister` inline lists, or `sugar-veil` general-purpose overlay compositor). It is a v1-ready library with solid fundamentals but significant enhancement opportunities.
+**Ecosystem positioning:** It occupies a distinct niche in the SugarCraft ecosystem as the only overlay-specific fuzzy filter (versus `sugar-bits` inline components, `candy-lister` inline lists, or `sugar-overlay` general-purpose overlay compositor). It is a v1-ready library with solid fundamentals but significant enhancement opportunities.
 
 **Biggest opportunity areas:**
 

@@ -1,6 +1,6 @@
-# Step 10.36 — sugar-veil backdrop dimming + animation system
+# Step 10.36 — sugar-overlay backdrop dimming + animation system
 
-**Source:** `leftover_updates_later.md` sugar-veil §4.1-2 High
+**Source:** `leftover_updates_later.md` sugar-overlay §4.1-2 High
 **Branch:** `ai/veil-backdrop-animation`
 
 ## Deliverable
@@ -11,10 +11,10 @@
 
 ## Files
 
-**Modify:** `sugar-veil/src/Veil.php` — `withBackdrop(int $opacity)`,
+**Modify:** `sugar-overlay/src/Veil.php` — `withBackdrop(int $opacity)`,
 `withAnimation(AnimationKind)`.
 
-**Create:** `sugar-veil/src/Animation/{Slide,Fade,Scale}.php`.
+**Create:** `sugar-overlay/src/Animation/{Slide,Fade,Scale}.php`.
 
 ## Tests
 
@@ -22,7 +22,7 @@
 
 ## Acceptance
 
-- `cd sugar-veil && vendor/bin/phpunit` green.
+- `cd sugar-overlay && vendor/bin/phpunit` green.
 
 ---
 

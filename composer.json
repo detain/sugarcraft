@@ -97,7 +97,7 @@
         "sugarcraft/sugar-table": "dev-master",
         "sugarcraft/candy-codetime": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
-        "sugarcraft/sugar-veil": "dev-master",
+        "sugarcraft/sugar-overlay": "dev-master",
         "sugarcraft/candy-ssh-launcher": "dev-master",
         "sugarcraft/candy-files": "dev-master"
     },
@@ -510,7 +510,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-veil",
+            "url": "sugar-overlay",
             "options": {
                 "symlink": true
             }

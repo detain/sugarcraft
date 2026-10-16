@@ -1,0 +1,50 @@
+{
+    "name": "sugarcraft/sugar-overlay",
+    "description": "PHP port of rmhubbert/bubbletea-overlay \u2014 modal/overlay compositing for terminal UIs. Composite foreground content over a background at any position (Top/Right/Bottom/Left/Center) with optional cell (column/row) offsets.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "overlay",
+        "modal",
+        "composite",
+        "terminal",
+        "sugarcraft",
+        "bubbletea-overlay"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-overlay",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-overlay/issues",
+        "source": "https://github.com/sugarcraft/sugar-overlay"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/honey-bounce": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Overlay\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Overlay\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

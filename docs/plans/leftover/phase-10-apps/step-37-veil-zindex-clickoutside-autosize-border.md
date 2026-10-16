@@ -1,6 +1,6 @@
-# Step 10.37 — sugar-veil z-index + click-outside-to-dismiss + auto-sizing + border chrome
+# Step 10.37 — sugar-overlay z-index + click-outside-to-dismiss + auto-sizing + border chrome
 
-**Source:** `leftover_updates_later.md` sugar-veil §4.3-6 Medium
+**Source:** `leftover_updates_later.md` sugar-overlay §4.3-6 Medium
 **Branch:** `ai/veil-zindex-clickoutside-autosize-border`
 
 ## Deliverable
@@ -12,11 +12,11 @@
 
 ## Files
 
-**Modify:** `sugar-veil/src/Veil.php` — `withZIndex(int)`,
+**Modify:** `sugar-overlay/src/Veil.php` — `withZIndex(int)`,
 `withClickOutsideDismiss(bool)`, `withAutoSize(bool)`,
 `withBorder(Border)`.
 
-**Modify:** `sugar-veil/composer.json` — add candy-mouse + candy-sprinkles.
+**Modify:** `sugar-overlay/composer.json` — add candy-mouse + candy-sprinkles.
 
 ## Tests
 
@@ -24,7 +24,7 @@
 
 ## Acceptance
 
-- `cd sugar-veil && vendor/bin/phpunit` green.
+- `cd sugar-overlay && vendor/bin/phpunit` green.
 
 ---
 

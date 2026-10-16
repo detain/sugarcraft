@@ -77,7 +77,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
     - Matcher\CharFold  x1
   src entry points: src/Renderer.php, src/Commands/CommandRegistry.php, src/Chat.php, src/Tui/SessionPicker.php, src/Tui/Settings/SettingsSearch.php
 
-=== sugar-veil (SugarCraft\Veil) ===
+=== sugar-veil (SugarCraft\Veil) === @rename-keep
   referencing files: 3  (src=3, tests=0, other=0)
   distinct symbols imported: 2
     - Position  x2

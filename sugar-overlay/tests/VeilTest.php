@@ -1,0 +1,1361 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Overlay\Tests;
+
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Overlay\{Position, Veil};
+use PHPUnit\Framework\TestCase;
+
+final class VeilTest extends TestCase
+{
+    private Veil $veil;
+
+    protected function setUp(): void
+    {
+        $this->veil = Veil::new();
+    }
+
+    public function testNew(): void
+    {
+        $v = Veil::new();
+        $this->assertInstanceOf(Veil::class, $v);
+    }
+
+    public function testSplitLines(): void
+    {
+        $lines = $this->veil->splitLines("a\nb\nc");
+        $this->assertCount(3, $lines);
+        $this->assertSame('a', $lines[0]);
+        $this->assertSame('b', $lines[1]);
+        $this->assertSame('c', $lines[2]);
+    }
+
+    public function testSplitLinesIgnoresTrailingNewline(): void
+    {
+        $lines = $this->veil->splitLines("a\nb\n");
+        $this->assertCount(2, $lines);
+    }
+
+    public function testMaxLineWidth(): void
+    {
+        $lines = ['short', 'medium text', 'tiny'];
+        $this->assertSame(11, $this->veil->maxLineWidth($lines));
+    }
+
+    public function testMaxLineWidthStripsAnsi(): void
+    {
+        $lines = ["\x1b[31mred\x1b[0m"];
+        $this->assertSame(3, $this->veil->maxLineWidth($lines));
+    }
+
+    public function testLineWidth(): void
+    {
+        $this->assertSame(5, $this->veil->lineWidth('hello'));
+    }
+
+    public function testLineWidthWithAnsi(): void
+    {
+        $this->assertSame(8, $this->veil->lineWidth("\x1b[1m\x1b[38;5;196mbold red\x1b[0m"));
+    }
+
+    public function testCompositeCentered(): void
+    {
+        $bg = "..........\n..........\n..........";
+        $fg = "XXX";
+
+        $result = $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
+
+        // FG should appear in the center line
+        $this->assertStringContainsString('XXX', $result);
+        $this->assertStringContainsString('.', $result); // background preserved
+    }
+
+    public function testCompositeTopLeft(): void
+    {
+        $bg = "..........\n..........";
+        $fg = "A";
+
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $this->veil->splitLines($result);
+
+        $this->assertStringStartsWith('A', $lines[0]);
+    }
+
+    public function testCompositeBottomRight(): void
+    {
+        $bg = "..........\n..........";
+        $fg = "B";
+
+        $result = $this->veil->composite($fg, $bg, Position::BOTTOM, Position::RIGHT);
+        $lines = $this->veil->splitLines($result);
+
+        // B should be in last column of last line
+        $lastLine = \end($lines);
+        $this->assertStringEndsWith('B', \trim($lastLine));
+    }
+
+    public function testCompositeWithOffset(): void
+    {
+        $bg = "..........\n..........";
+        $fg = "X";
+
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 3, yOffset: 1);
+        $lines = $this->veil->splitLines($result);
+
+        $this->assertStringStartsWith('...X', $lines[1]);
+    }
+
+    public function testCompositeClampStaysInBounds(): void
+    {
+        // Very large offset should be clamped to visible area
+        $bg = "..........\n..........";
+        $fg = "T";
+
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 9999, yOffset: 9999);
+        $lines = $this->veil->splitLines($result);
+
+        // Should not crash; should place T somewhere visible
+        $this->assertNotEmpty($lines);
+    }
+
+    public function testCompositePreservesBackgroundUnaffectedArea(): void
+    {
+        $bg = "aaaaaaaaaa\naaaaaaaaaa\naaaaaaaaaa";
+        $fg = "X";
+
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT);
+
+        // Top-left char replaced
+        $this->assertStringStartsWith('X', $result);
+        // Rest of background preserved
+        $this->assertStringContainsString('a', $result);
+    }
+
+    public function testCompositeMultiline(): void
+    {
+        $bg  = "..........\n..........\n..........\n..........";
+        $fg  = "AAA\nBBB";
+
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines  = $this->veil->splitLines($result);
+
+        $this->assertStringStartsWith('AAA', $lines[0]);
+        $this->assertStringStartsWith('BBB', $lines[1]);
+    }
+
+    public function testCompositeReplacesOnlyForegroundCells(): void
+    {
+        $bg = "abcdefghij";
+        $fg = "X";
+
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT);
+
+        // X replaces 'a', rest preserved
+        $lines = $this->veil->splitLines($result);
+        $this->assertSame('Xbcdefghij', $lines[0]);
+    }
+
+    public function testEmptyBackground(): void
+    {
+        // No canvas to clip against → the overlay is the frame (upstream:
+        // `if bg == "" { return fg }`), rather than silently vanishing.
+        $result = $this->veil->composite('X', '', Position::CENTER, Position::CENTER);
+        $this->assertSame('X', $result);
+    }
+
+    public function testZeroWidthBackgroundRowsYieldTheOverlay(): void
+    {
+        $result = Veil::new()->composite("AB\nCD\n", "\n\n\n", Position::CENTER, Position::CENTER);
+        $this->assertSame("AB\nCD", $result);
+    }
+
+    public function testEmptyBackgroundAndEmptyForegroundReturnTheBackground(): void
+    {
+        $this->assertSame('', Veil::new()->composite('', '', Position::CENTER, Position::CENTER));
+    }
+
+    public function testEmptyBackgroundOverlayAppliesAutoSizeBorder(): void
+    {
+        $v = Veil::new()->withAutoSize()->withBorder(Border::normal());
+        $this->assertSame($v->applyBorderChrome('X'), $v->composite('X', '', Position::CENTER, Position::CENTER));
+    }
+
+    public function testEmptyCanvasFrameResetsTheDiffSession(): void
+    {
+        // A session-reusing consumer: frame 1 full, frame 2 has no cells at
+        // all, frame 3 must be FULL — diffing it against frame 1 would emit a
+        // delta for a screen the terminal no longer shows.
+        $v = Veil::new();
+        $bg = "abc\nabc";
+        $v->composite('X', $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame('', $v->composite('', '', Position::CENTER, Position::CENTER));
+
+        $third = $v->composite('X', "abc\nabd", Position::CENTER, Position::CENTER);
+        $this->assertSame("aXc\nabd", $third);
+    }
+
+    public function testOverlayOnEmptyBackgroundIsRememberedByTheSession(): void
+    {
+        // The overlay-as-frame is what the terminal painted, so a same-sized
+        // composite afterwards diffs against IT (not against the stale frame
+        // from before): only the changed cell is re-sent.
+        $v = Veil::new();
+        $v->composite('X', "......\n......", Position::CENTER, Position::CENTER);
+        $this->assertSame("AB\nCD", $v->composite("AB\nCD", '', Position::CENTER, Position::CENTER));
+
+        $delta = $v->composite("AB\nCE", "..\n..", Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('E', $delta);
+        $this->assertStringNotContainsString('A', $delta);
+        $this->assertStringNotContainsString('.', $delta);
+    }
+
+    public function testTruecolorComponentsAreClampedInTheDiffPen(): void
+    {
+        // 300 must saturate to 255 like a terminal does — the old `& 0xFF`
+        // wrapped it to 44, so the delta repainted the cell in a colour the
+        // full frame never showed.
+        $v = Veil::new();
+        $bg = "....\n....";
+        $v->composite("\e[38;2;10;0;0mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+        $delta = $v->composite("\e[38;2;300;0;0mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('38;2;255;0;0', $delta);
+        $this->assertStringNotContainsString('38;2;44;0;0', $delta);
+    }
+
+    public function testXterm256IndexAboveThePaletteIsClampedInTheDiffPen(): void
+    {
+        // 38;5;300 saturates to index 255 (gray 238) — unclamped, the gray
+        // ramp computed 688 per channel, a pen above 0xFFFFFF that re-encoded
+        // as the unrelated 178;178;176.
+        $v = Veil::new();
+        $bg = "....\n....";
+        $v->composite("\e[38;5;10mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+        $delta = $v->composite("\e[38;5;300mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('38;2;238;238;238', $delta);
+        $this->assertStringNotContainsString('38;2;178;178;176', $delta);
+    }
+
+    public function testXterm256IndexBelowZeroIsClampedInTheDiffPen(): void
+    {
+        // A negative index saturates to 0 (black), not the white fallback
+        // the out-of-bounds palette lookup produced.
+        $v = Veil::new();
+        $bg = "....\n....";
+        $v->composite("\e[48;5;10mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+        $delta = $v->composite("\e[48;5;-3mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('48;2;0;0;0', $delta);
+        $this->assertStringNotContainsString('48;2;255;255;255', $delta);
+    }
+
+    /**
+     * @return iterable<string, array{string, int}>
+     */
+    public static function xterm256PenProvider(): iterable
+    {
+        yield 'index 255 is the top of the gray ramp' => ['38;5;255', 0xEEEEEE];
+        yield 'index 256 saturates to 255' => ['38;5;256', 0xEEEEEE];
+        yield 'index 300 saturates to 255' => ['38;5;300', 0xEEEEEE];
+        yield 'index 232 is the bottom of the gray ramp' => ['38;5;232', 0x080808];
+        yield 'index 196 is cube red' => ['38;5;196', 0xFF0000];
+        yield 'index 1 matches SGR 31' => ['38;5;1', 0xFF0000];
+        yield 'negative index saturates to 0' => ['38;5;-5', 0x000000];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('xterm256PenProvider')]
+    public function testXterm256PenStaysInsideRgbRange(string $sgr, int $expected): void
+    {
+        $pen = (new \ReflectionMethod(Veil::class, 'penFromSgr'))->invoke(null, $sgr, null);
+
+        $this->assertNotNull($pen);
+        $this->assertSame($expected, $pen->fg());
+        $this->assertLessThanOrEqual(0xFFFFFF, $pen->fg());
+    }
+
+    public function testEmptyForeground(): void
+    {
+        $bg = "..........";
+        $result = $this->veil->composite('', $bg, Position::TOP, Position::LEFT);
+        $this->assertSame($bg, $result);
+    }
+
+    // ─── backdrop ─────────────────────────────────────────────────────────────
+
+    public function testWithBackdrop(): void
+    {
+        $v = $this->veil->withBackdrop(50);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithBackdropClampsNegativeToZero(): void
+    {
+        // The constructor clamps: max(0, min(100, -10)) = 0
+        $v = $this->veil->withBackdrop(-10);
+        $bg = "..........\n..........";
+        $result = $v->composite('X', $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('X', $result);
+    }
+
+    public function testWithBackdropClampsOver100To100(): void
+    {
+        // The constructor clamps: max(0, min(100, 150)) = 100
+        $v = $this->veil->withBackdrop(150);
+        $bg = "..........\n..........";
+        $result = $v->composite('X', $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('X', $result);
+    }
+
+    public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
+    {
+        // A FULL-WIDTH styled foreground bar over a dotted background + backdrop.
+        $width = 20;
+        $fg = "\e[1m" . \str_repeat('M', $width) . "\e[0m"; // bold, 20 visible cells
+        $bg = \implode("\n", \array_fill(0, 4, \str_repeat('.', $width)));
+
+        $out = $this->veil->withBackdrop(60)->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = \explode("\n", $out);
+
+        // (i) the styled bar survives intact — its escapes are not split.
+        $this->assertStringContainsString("\e[1m" . \str_repeat('M', $width) . "\e[0m", $out);
+        // (ii) the foreground row carries the fg's own style and is NOT dim-wrapped in the foreground portion …
+        $this->assertStringContainsString("\e[1m", $lines[0]);
+        // … while a background-only row IS dimmed with truecolor gray.
+        $this->assertStringContainsString("38;2;102;102;102", $lines[1], 'the surrounding background is dimmed with truecolor');
+        // (iii) the frame keeps its line count.
+        $this->assertSame(4, \substr_count($out, "\n") + 1);
+    }
+
+    public function testCenteredStyledOverlayStaysBrightBetweenDimmedBackground(): void
+    {
+        // A narrow styled box centered over the background: the prefix/suffix
+        // background is dimmed, the overlay between them stays bright + intact.
+        $fg = "\e[1mAB\e[0m"; // 2 visible cells, styled
+        $bg = \implode("\n", \array_fill(0, 5, \str_repeat('.', 20)));
+
+        $out = $this->veil->withBackdrop(60)->composite($fg, $bg, Position::CENTER, Position::CENTER);
+        $lines = \explode("\n", $out);
+        $fgRow = $lines[2]; // CENTER of 5 rows for a 1-row fg
+
+        // (i) escapes preserved intact on the overlay row (not split char-by-char).
+        $this->assertStringContainsString("\e[1mAB\e[0m", $fgRow);
+        // (ii) the overlay is bright (dimLine wraps only plain prefix/suffix, not ANSI-
+        // prefixed content), so the overlay's own escapes appear intact in the row.
+        // Verify the overlay's own style escapes appear.
+        $this->assertStringContainsString("\e[1mAB\e[0m", $fgRow, 'overlay is bright and intact');
+        // (iii) the surrounding background on the same row IS dimmed with truecolor.
+        $this->assertStringContainsString("38;2;", $fgRow, 'prefix/suffix background is dimmed with truecolor');
+        // (iii) line count preserved.
+        $this->assertSame(5, \substr_count($out, "\n") + 1);
+    }
+
+    // ─── animation ─────────────────────────────────────────────────────────────
+
+    public function testWithAnimation(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::FADE);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithAnimationSlide(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SLIDE);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithAnimationScale(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SCALE);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testPositionYOffset(): void
+    {
+        $this->assertSame(0,                           Position::TOP->yOffset(5, 20));
+        $this->assertSame(15,                          Position::BOTTOM->yOffset(5, 20));
+        $this->assertSame(7,                           Position::CENTER->yOffset(6, 20));
+    }
+
+    public function testPositionXOffset(): void
+    {
+        $this->assertSame(0,       Position::LEFT->xOffset(10, 40));
+        $this->assertSame(30,      Position::RIGHT->xOffset(10, 40));
+        $this->assertSame(15,      Position::CENTER->xOffset(10, 40));
+    }
+
+    // ─── z-index ─────────────────────────────────────────────────────────────
+
+    public function testZIndexDefaultsToZero(): void
+    {
+        $this->assertSame(0, $this->veil->zIndex());
+    }
+
+    public function testWithZIndex(): void
+    {
+        $v = $this->veil->withZIndex(42);
+        $this->assertSame(42, $v->zIndex());
+    }
+
+    public function testZIndexIsImmutable(): void
+    {
+        $v1 = $this->veil->withZIndex(1);
+        $v2 = $v1->withZIndex(2);
+        $this->assertSame(1, $v1->zIndex());
+        $this->assertSame(2, $v2->zIndex());
+    }
+
+    public function testZIndexNegative(): void
+    {
+        $v = $this->veil->withZIndex(-10);
+        $this->assertSame(-10, $v->zIndex());
+    }
+
+    // ─── click-outside-dismiss ─────────────────────────────────────────────────
+
+    public function testClickOutsideDismissDefaultsToFalse(): void
+    {
+        $this->assertFalse($this->veil->clickOutsideDismiss());
+    }
+
+    public function testWithClickOutsideDismiss(): void
+    {
+        $v = $this->veil->withClickOutsideDismiss(true);
+        $this->assertTrue($v->clickOutsideDismiss());
+    }
+
+    public function testClickOutsideDismissImmutable(): void
+    {
+        $v1 = $this->veil->withClickOutsideDismiss(true);
+        $v2 = $v1->withClickOutsideDismiss(false);
+        $this->assertTrue($v1->clickOutsideDismiss());
+        $this->assertFalse($v2->clickOutsideDismiss());
+    }
+
+    public function testIsClickOutsideReturnsFalseWhenDismissDisabled(): void
+    {
+        // Mark content covering coordinate (1,1) and scan it so click at (1,1) is inside the zone
+        $marked = $this->veil->mark('test-zone', 'X');
+        $v = $this->veil->withClickOutsideDismiss(true)->scan($marked);
+        $mouse = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
+        $this->assertFalse($v->isClickOutside($mouse));
+    }
+
+    public function testIsClickOutsideThrowsWhenNotScanned(): void
+    {
+        $v = $this->veil->withClickOutsideDismiss(true);
+        $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
+        $this->expectException(\RuntimeException::class);
+        $v->isClickOutside($mouse);
+    }
+
+    // ─── auto-size ──────────────────────────────────────────────────────────
+
+    public function testAutoSizeDefaultsToFalse(): void
+    {
+        $this->assertFalse($this->veil->autoSize());
+    }
+
+    public function testWithAutoSize(): void
+    {
+        $v = $this->veil->withAutoSize(true);
+        $this->assertTrue($v->autoSize());
+    }
+
+    public function testAutoSizeImmutable(): void
+    {
+        $v1 = $this->veil->withAutoSize(true);
+        $v2 = $v1->withAutoSize(false);
+        $this->assertTrue($v1->autoSize());
+        $this->assertFalse($v2->autoSize());
+    }
+
+    // ─── border chrome ──────────────────────────────────────────────────────
+
+    public function testBorderDefaultsToNull(): void
+    {
+        $this->assertNull($this->veil->border());
+    }
+
+    public function testWithBorder(): void
+    {
+        $border = Border::normal();
+        $v = $this->veil->withBorder($border);
+        $this->assertNotNull($v->border());
+        $this->assertSame($border, $v->border());
+    }
+
+    public function testBorderImmutable(): void
+    {
+        $border1 = Border::normal();
+        $border2 = Border::thick();
+        $v1 = $this->veil->withBorder($border1);
+        $v2 = $v1->withBorder($border2);
+        $this->assertSame($border1, $v1->border());
+        $this->assertSame($border2, $v2->border());
+    }
+
+    public function testApplyBorderChromeReturnsContentUnchangedWhenNoBorder(): void
+    {
+        $content = "Hello\nWorld";
+        $result = $this->veil->applyBorderChrome($content);
+        $this->assertSame($content, $result);
+    }
+
+    public function testApplyBorderChromeWrapsContentWithBorder(): void
+    {
+        $v = $this->veil->withBorder(Border::normal());
+        $content = "Hi";
+        $result = $v->applyBorderChrome($content);
+        // Normal border adds box-drawing characters around content
+        $this->assertStringContainsString('┌', $result);
+        $this->assertStringContainsString('─', $result);
+        $this->assertStringContainsString('┐', $result);
+    }
+
+    public function testApplyBorderChromeWithThickBorder(): void
+    {
+        $v = $this->veil->withBorder(Border::thick());
+        $result = $v->applyBorderChrome("X");
+        $this->assertStringContainsString('━', $result);
+    }
+
+    // ─── autoSize behavior in composite ─────────────────────────────────────
+
+    public function testCompositeAutoSizeComputesDimensionsFromBorderedContent(): void
+    {
+        // When autoSize is true and border is set, dimensions should be computed
+        // from the border-chromed content, not the raw content.
+        $v = Veil::new()
+            ->withAutoSize(true)
+            ->withBorder(Border::normal());
+
+        $bg = "....................\n....................\n....................";
+        $fg = "Hi";
+
+        // With normal border around "Hi", the bordered content is ~5 chars wide
+        // (┌──┐ + Hi + ──┐ = more than just "Hi")
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $v->splitLines($result);
+
+        // The bordered content starts with box-drawing chars, not raw content
+        $this->assertStringStartsWith('┌', $lines[0]);
+        $this->assertStringContainsString('Hi', $result);
+    }
+
+    public function testCompositeAutoSizeWithoutBorderBehavesNormally(): void
+    {
+        // When autoSize is true but no border is set, dimensions come from raw content
+        $v = Veil::new()->withAutoSize(true);
+
+        $bg = "....................\n....................";
+        $fg = "Hi";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $v->splitLines($result);
+
+        // Should have "Hi" at the start, no border chars
+        $this->assertStringStartsWith('Hi', $lines[0]);
+    }
+
+    public function testCompositeAutoSizeFalseUsesRawContentDimensions(): void
+    {
+        // When autoSize is false, raw content dimensions are used regardless of border
+        $v = Veil::new()
+            ->withAutoSize(false)
+            ->withBorder(Border::normal());
+
+        $bg = "....................\n....................\n....................";
+        $fg = "Hi";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $v->splitLines($result);
+
+        // Without autoSize, border chrome is NOT applied during composite
+        // So raw "Hi" is placed, not the bordered version
+        $this->assertStringStartsWith('Hi', $lines[0]);
+        $this->assertStringNotContainsString('┌', $result);
+    }
+
+    // ─── combinations ─────────────────────────────────────────────────────────
+
+    public function testChainingAllNewMethods(): void
+    {
+        $border = Border::rounded();
+        $v = $this->veil
+            ->withZIndex(5)
+            ->withClickOutsideDismiss(true)
+            ->withAutoSize(true)
+            ->withBorder($border);
+
+        $this->assertSame(5, $v->zIndex());
+        $this->assertTrue($v->clickOutsideDismiss());
+        $this->assertTrue($v->autoSize());
+        $this->assertSame($border, $v->border());
+    }
+
+    public function testWithZIndexReturnsNewInstance(): void
+    {
+        $original = $this->veil;
+        $modified = $this->veil->withZIndex(10);
+        $this->assertNotSame($original, $modified);
+        $this->assertSame(0, $original->zIndex());
+        $this->assertSame(10, $modified->zIndex());
+    }
+
+    // ─── Scanner: scan() / hit() ──────────────────────────────────────────────
+
+    public function testMarkWrapsContentWithZoneMarkers(): void
+    {
+        $marked = $this->veil->mark('btn-1', 'Click me');
+        // Mark::wrap uses U+E000/U+E001 private-use sentinels
+        $this->assertStringContainsString('Click me', $marked);
+        // Should contain the open and close sentinels around the content
+        $this->assertStringContainsString("\u{E000}", $marked);
+        $this->assertStringContainsString("\u{E001}", $marked);
+    }
+
+    public function testScanHitDetectsZoneInside(): void
+    {
+        // Mark some content with a zone marker and scan it directly.
+        // This tests the scanner integration without going through composite()
+        // (which has a separate multi-byte UTF-8 encoding issue).
+        $marked = $this->veil->mark('overlay-zone', 'XYZ');
+        $rendered = $marked; // In real use, this would be the full terminal output
+
+        // scan() parses zone markers and returns a new Veil with updated scanner
+        $veiled = $this->veil->scan($rendered);
+
+        // hit() should find the overlay-zone at coordinates inside the marked content
+        $zone = $veiled->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('overlay-zone', $zone->id);
+    }
+
+    public function testScanHitReturnsNullOutsideZone(): void
+    {
+        $marked = $this->veil->mark('centered', 'ABC');
+        $rendered = $marked;
+
+        $veiled = $this->veil->scan($rendered);
+
+        // Coordinates far outside any content should return null
+        $zone = $veiled->hit(999, 999);
+        $this->assertNull($zone);
+    }
+
+    public function testScanReturnsNewInstanceForChaining(): void
+    {
+        $marked = $this->veil->mark('zone-a', 'A');
+        $rendered = $marked;
+
+        $result = $this->veil->scan($rendered);
+        // scan() returns a new instance (immutable via mutate)
+        $this->assertNotSame($this->veil, $result);
+    }
+
+    public function testScanUpdatesScannerAndLastRendered(): void
+    {
+        // scan() hands the clone a FRESH scanned Scanner (zone state must
+        // not leak across with*() clones); the constructor's ?? Scanner::new()
+        // fallback only serves uncannned instances.
+        $marked = $this->veil->mark('test-zone', 'B');
+        $rendered = $marked;
+
+        $veiled = $this->veil->scan($rendered);
+
+        // The new instance should have the scanned content
+        $zone = $veiled->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('test-zone', $zone->id);
+    }
+
+    public function testWithCallsAfterScanKeepTheScannedZones(): void
+    {
+        // A model update between the render and the click (new content, a
+        // z-index bump, …) must not wipe the hit-test state: the old mutate()
+        // dropped the scanner while carrying lastRendered, so every click
+        // read as outside and the unscanned guard never fired.
+        $scanned = $this->veil->withClickOutsideDismiss()->scan($this->veil->mark('modal', 'HELLO'));
+        $inside = new MouseMsg(2, 1, MouseButton::Left, MouseAction::Press);
+
+        $this->assertFalse($scanned->isClickOutside($inside));
+        foreach ([
+            $scanned->withZIndex(5),
+            $scanned->withContent('updated body'),
+            $scanned->withBackdrop(40),
+            $scanned->withAnimation(null),
+            $scanned->withPosition(Position::TOP, Position::LEFT),
+            $scanned->withoutSession(),
+        ] as $updated) {
+            $this->assertSame('modal', $updated->hit(2, 1)?->id);
+            $this->assertFalse($updated->isClickOutside($inside));
+        }
+    }
+
+    public function testRescanAfterWithReplacesTheZones(): void
+    {
+        $first = $this->veil->scan($this->veil->mark('old', 'XY'));
+        $second = $first->withZIndex(1)->scan($this->veil->mark('new', 'XY'));
+
+        $this->assertSame('new', $second->hit(1, 1)?->id);
+        $this->assertSame('old', $first->hit(1, 1)?->id, 'rescanning a clone must not retro-change the original');
+    }
+
+    public function testHitWithoutScanReturnsNull(): void
+    {
+        // Fresh veil with no scan() called
+        $zone = $this->veil->hit(1, 1);
+        $this->assertNull($zone);
+    }
+
+    public function testScanHitDetectsZoneById(): void
+    {
+        // Test that zone is correctly registered by scanning marked content.
+        // The internal scanner records zones during scan().
+        $marked = $this->veil->mark('my-btn', 'OK');
+        $veiled = $this->veil->scan($marked);
+
+        // After scan(), hit() should find zones by their position
+        $zone = $veiled->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('my-btn', $zone->id);
+    }
+
+    // ─── animate() ───────────────────────────────────────────────────────────
+
+    public function testAnimateWithoutAnimationSetReturnsCompositeResult(): void
+    {
+        $bg = "....................\n....................";
+        $fg = "X";
+
+        // Without animation set, animate() should behave like composite()
+        $result = $this->veil->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+
+        // Should composite the foreground onto the background
+        $this->assertStringContainsString('X', $result);
+        $this->assertStringContainsString('.', $result);
+    }
+
+    public function testAnimateWithSlideAnimationAtProgressZero(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SLIDE);
+        $bg = "....................\n....................";
+        $fg = "Test";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
+
+        // At progress 0, animation offsets are applied but content still appears
+        $this->assertIsString($result);
+    }
+
+    public function testAnimateWithSlideAnimationAtProgressOne(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SLIDE);
+        $bg = "....................\n....................";
+        $fg = "Test";
+
+        // At progress 1, offsets should be 0, essentially like composite()
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        $this->assertStringContainsString('Test', $result);
+    }
+
+    public function testAnimateWithFadeAnimation(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::FADE);
+        $bg = "....................\n....................";
+        $fg = "Fade";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+
+        // Fade animation returns foreground unchanged (terminal limitations)
+        $this->assertStringContainsString('Fade', $result);
+    }
+
+    public function testAnimateWithScaleAnimation(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SCALE);
+        $bg = "....................\n....................";
+        $fg = "A\nB\nC\nD\nE";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+
+        // At 50% progress, some lines may not appear due to scale animation
+        $this->assertIsString($result);
+    }
+
+    public function testAnimateWithScaleAnimationAtProgressOneReturnsFullContent(): void
+    {
+        // At progress 1.0, animation block is skipped (progress < 1.0 check)
+        // but animate() passes full foreground to composite
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SCALE);
+        $bg = "....................\n....................\n....................\n....................\n....................\n....................";
+        $fg = "A\nB\nC\nD\nE";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        $this->assertStringContainsString('A', $result);
+        $this->assertStringContainsString('E', $result);
+    }
+
+    public function testAnimateProgressOneSkipsAnimationBlock(): void
+    {
+        // At progress >= 1.0, animation is not applied
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SCALE);
+        $bg = "....................";
+        $fg = "X";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        // Should composite X at top-left, animation block skipped
+        $this->assertStringStartsWith('X', $result);
+    }
+
+    public function testAnimateProgressLessThanOneAppliesAnimation(): void
+    {
+        // At progress < 1.0, animation is applied
+        $v = $this->veil->withAnimation(\SugarCraft\Overlay\Animation\AnimationKind::SCALE);
+        $bg = "....................\n....................\n....................";
+        $fg = "A\nB\nC\nD\nE\nF";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.99);
+
+        // At near-full progress, most content visible but still via animation
+        $this->assertIsString($result);
+    }
+
+    /**
+     * Benchmark: diff-based composite emits fewer bytes than full re-render
+     * for small changes between consecutive frames.
+     *
+     * Frame 1: full composite output
+     * Frame 2: delta output (≤30 bytes for a small foreground change)
+     * Frame 3: delta output (≤30 bytes for another small foreground change)
+     * Total delta: ≤60 bytes for 2 delta frames (30×2)
+     */
+    public function testDiffEmissionByteBenchmark(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+        $fg1 = "overlay";
+        $fg2 = "overlay!";
+        $fg3 = "overlay!!";
+
+        // Frame 1: full composite
+        $out1 = $this->veil->composite($fg1, $bg, Position::CENTER, Position::CENTER);
+        $bytes1 = \strlen($out1);
+
+        // Frame 2: small foreground change
+        $out2 = $this->veil->composite($fg2, $bg, Position::CENTER, Position::CENTER);
+        $bytes2 = \strlen($out2);
+
+        // Frame 3: another small foreground change
+        $out3 = $this->veil->composite($fg3, $bg, Position::CENTER, Position::CENTER);
+        $bytes3 = \strlen($out3);
+
+        // First frame is full output (baseline)
+        $this->assertGreaterThan(50, $bytes1, 'Frame 1 should be full output');
+
+        // Subsequent frames should be delta (≤30 bytes per frame for small changes)
+        $this->assertLessThanOrEqual(30, $bytes2, 'Frame 2 delta should be ≤30 bytes');
+        $this->assertLessThanOrEqual(30, $bytes3, 'Frame 3 delta should be ≤30 bytes');
+
+        // Total delta bytes for 2 frames should be ≤60 (30×2)
+        $totalDelta = $bytes2 + $bytes3;
+        $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
+    }
+
+    /**
+     * Regression for the FIX-2 deferred-buffer change.
+     *
+     * The diff-buffer build is now deferred from frame 1 to the first subsequent
+     * same-dimension composite. Public behaviour must be IDENTICAL to before:
+     *  (a) a fresh Veil's first composite() returns the FULL output;
+     *  (b) a REUSED Veil's second same-dim composite() returns a DELTA (not the full
+     *      output) for a small change;
+     *  (c) a resize (changed dimensions) returns the FULL output again.
+     */
+    public function testDeferredBufferPreservesFullThenDeltaThenFullOnResize(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+
+        // (a) Fresh instance, first frame → full output.
+        $full = $this->veil->composite("overlay", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $full, 'Frame 1 should be the full composite output');
+        $this->assertGreaterThan(50, \strlen($full), 'Frame 1 should be full output, not a delta');
+
+        // (b) Reused instance, second frame, same dims, small change → delta.
+        $delta = $this->veil->composite("overlay!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringNotContainsString('background line', $delta, 'Frame 2 should be a delta, not the full frame');
+        $this->assertLessThanOrEqual(30, \strlen($delta), 'Frame 2 delta should be small');
+
+        // (c) Resize (taller background → changed dimensions) → full output again.
+        $biggerBg = str_repeat("background line\n", 14);
+        $fullAgain = $this->veil->composite("overlay!", $biggerBg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $fullAgain, 'A resize should re-emit the full output');
+        $this->assertGreaterThan(50, \strlen($fullAgain), 'Resize frame should be full output, not a delta');
+
+        // After the resize full frame, a subsequent same-dim composite is a delta again.
+        $deltaAfterResize = $this->veil->composite("overlay!!", $biggerBg, Position::CENTER, Position::CENTER);
+        $this->assertStringNotContainsString('background line', $deltaAfterResize, 'Post-resize frame 2 should be a delta');
+        $this->assertLessThanOrEqual(30, \strlen($deltaAfterResize), 'Post-resize delta should be small');
+    }
+
+    /**
+     * A FRESH Veil per composite() (exactly what CommandPalette does) must always
+     * return the full output and must never reach the diff/buffer path — that is the
+     * case FIX-2 makes cheap by deferring the buffer build.
+     */
+    public function testFreshInstancePerComposite_alwaysFullOutput(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+        foreach (["a", "ab", "abc"] as $fg) {
+            $out = Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER);
+            $this->assertStringContainsString('background line', $out, 'Fresh-instance composite must be full output');
+        }
+    }
+
+    /**
+     * resetPreviousFrame() must restart the first-frame path so the next composite()
+     * emits the full output again.
+     */
+    public function testResetPreviousFrameRestartsFullOutput(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+
+        $this->veil->composite("overlay", $bg, Position::CENTER, Position::CENTER);
+        $delta = $this->veil->composite("overlay!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringNotContainsString('background line', $delta, 'Second frame is a delta before reset');
+
+        $this->veil->resetPreviousFrame();
+
+        $full = $this->veil->composite("overlay!!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $full, 'After reset, composite re-emits full output');
+    }
+
+    /**
+     * The reused-instance diff path (bufferFromOutput -> diff -> DiffEncoder) must
+     * handle multibyte UTF-8 lines correctly. A box-drawing/UTF-8 overlay runs through
+     * bufferFromOutput where each multibyte rune occupies one byte-index but several
+     * bytes, exercising the byte-tail edge ($col < strlen($line) but past the rune
+     * count -> ''). An identical second frame must produce an EMPTY delta; a changed
+     * multibyte second frame must produce a non-empty delta without error.
+     */
+    public function testMultibyteLineThroughDiffBuffer(): void
+    {
+        $bg = str_repeat("background line padding here\n", 6);
+        $fg = "┌──────────┐\n│ café ☕ │\n└──────────┘";
+
+        // First frame: full output, remembered as the previous buffer source.
+        $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
+
+        // Identical second frame at same dims -> reused diff path -> empty delta.
+        $same = $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame('', $same, 'Identical multibyte frame yields an empty delta');
+
+        // Changed multibyte second frame -> non-empty delta, no errors, still UTF-8.
+        $fg2 = "┌──────────┐\n│ thé ☕ │\n└──────────┘";
+        $delta = $this->veil->composite($fg2, $bg, Position::CENTER, Position::CENTER);
+        $this->assertNotSame('', $delta, 'Changed multibyte frame yields a delta');
+        $this->assertStringNotContainsString('background line', $delta, 'Changed frame is a delta, not full output');
+    }
+
+    /**
+     * Byte-for-byte pins for the diff path over wide (CJK) and ASCII frames.
+     *
+     * These goldens were RE-DERIVED when bufferFromOutput() became width-
+     * faithful (audit fix, sugar-overlay): the pre-fix walk gave every grapheme
+     * one column, so a CJK frame diff sprayed a corrupted run of background
+     * text ("\e[4;14HXding here") to "repair" phantom tail cells. With wide
+     * heads + continuation cells, changing line 2's last full-width ト to X
+     * replaces the head at column 18 AND the continuation at column 19 — and
+     * nothing further right shifts, because "ing here" sits where the
+     * terminal actually paints it. ASCII (all width-1) is unchanged.
+     */
+    public function testBufferFromOutputDiffBytesAreStableAcrossMbRefactor(): void
+    {
+        $bg  = str_repeat("background line padding here\n", 6);
+
+        // Wide-CJK overlay: one-character change on line 2 between frames.
+        $cjk = Veil::new();
+        $cjk->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
+        $cjkDelta = $cjk->composite("日本語テスト\nコンポジッX", $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame(
+            "\e[4;19HXd",
+            $cjkDelta,
+            'Wide-CJK delta must repair only the changed head+continuation columns, not the shifted phantom tail',
+        );
+
+        // ASCII overlay: single-character change between frames.
+        $ascii = Veil::new();
+        $ascii->composite("overlay-one\noverlay-two", $bg, Position::CENTER, Position::CENTER);
+        $asciiDelta = $ascii->composite("overlay-one\noverlay-tXo", $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame(
+            "\e[4;18HX",
+            $asciiDelta,
+            'ASCII diff-path bytes must be byte-identical to the pre-refactor mb_substr() output',
+        );
+
+        // An identical CJK frame still yields an empty delta (no spurious churn).
+        $same = Veil::new();
+        $same->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame(
+            '',
+            $same->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER),
+            'An unchanged multibyte frame must produce an empty delta',
+        );
+    }
+
+    // ─── Step 3: per-veil position ──────────────────────────────────────────────
+
+    public function testWithPositionReturnsNewInstance(): void
+    {
+        $v = $this->veil->withPosition(Position::TOP, Position::RIGHT, x: 5, y: 3);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithPositionSetsPositionAccessors(): void
+    {
+        $v = $this->veil->withPosition(Position::TOP, Position::RIGHT, x: 5, y: 3);
+        $this->assertSame(Position::TOP, $v->vPosition());
+        $this->assertSame(Position::RIGHT, $v->hPosition());
+        $this->assertSame(5, $v->positionX());
+        $this->assertSame(3, $v->positionY());
+    }
+
+    public function testPositionDefaultsToNullsAndZeros(): void
+    {
+        $v = Veil::new();
+        $this->assertNull($v->vPosition());
+        $this->assertNull($v->hPosition());
+        $this->assertSame(0, $v->positionX());
+        $this->assertSame(0, $v->positionY());
+    }
+
+    public function testPositionIsImmutable(): void
+    {
+        $v1 = $this->veil->withPosition(Position::TOP, Position::LEFT, x: 1, y: 2);
+        $v2 = $v1->withPosition(Position::BOTTOM, Position::RIGHT, x: 10, y: 20);
+        // Original unchanged
+        $this->assertSame(Position::TOP, $v1->vPosition());
+        $this->assertSame(Position::LEFT, $v1->hPosition());
+        $this->assertSame(1, $v1->positionX());
+        $this->assertSame(2, $v1->positionY());
+        // New instance has new values
+        $this->assertSame(Position::BOTTOM, $v2->vPosition());
+        $this->assertSame(Position::RIGHT, $v2->hPosition());
+        $this->assertSame(10, $v2->positionX());
+        $this->assertSame(20, $v2->positionY());
+    }
+
+    // ─── Step 5: withoutSession ─────────────────────────────────────────────────
+
+    public function testWithoutSessionReturnsFreshSessionInstance(): void
+    {
+        // First composite to establish session state
+        $bg = str_repeat("background line\n", 10);
+        $this->veil->composite("overlay", $bg, Position::CENTER, Position::CENTER);
+
+        // withoutSession() creates a copy with fresh RenderSession
+        $fresh = $this->veil->withoutSession();
+        $this->assertNotSame($this->veil, $fresh);
+
+        // A composite on the fresh veil emits full output (no prior state)
+        $full = $fresh->composite("overlay!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $full, 'withoutSession veil should emit full frame');
+        $this->assertGreaterThan(50, \strlen($full));
+    }
+
+    public function testWithoutSessionPreservesOtherProperties(): void
+    {
+        $v = $this->veil
+            ->withBackdrop(60)
+            ->withZIndex(5)
+            ->withPosition(Position::TOP, Position::LEFT, x: 2, y: 1);
+
+        $fresh = $v->withoutSession();
+
+        // Other properties preserved (zIndex and position accessors)
+        $this->assertSame(5, $fresh->zIndex());
+        $this->assertSame(Position::TOP, $fresh->vPosition());
+        $this->assertSame(Position::LEFT, $fresh->hPosition());
+        $this->assertSame(2, $fresh->positionX());
+        $this->assertSame(1, $fresh->positionY());
+        // Backdrop is preserved through the chain (verify composite behavior)
+        $bg = str_repeat(" ", 20);
+        $result = $fresh->composite("X", $bg, Position::TOP, Position::LEFT);
+        $this->assertIsString($result); // Should composite with backdrop=60
+    }
+
+    // ─── Step 6: backdrop delta correctness ─────────────────────────────────────
+
+    /**
+     * With backdrop active and ANSI-aware cell mapping, a small foreground
+     * change on frame 2 should produce a small delta (not near-full-frame).
+     * This is the specific case the bufferFromOutput bug broke.
+     */
+    public function testBackdropDeltaIsSmallForMinorForegroundChange(): void
+    {
+        $bg = str_repeat(" ", 50) . "\n" . str_repeat(" ", 50);
+        $veil = Veil::new()->withBackdrop(50);
+
+        // Frame 1: full output
+        $frame1 = $veil->composite("X", $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('X', $frame1);
+        $this->assertGreaterThan(50, \strlen($frame1));
+
+        // Frame 2: only foreground changes "X" -> "Y"
+        $frame2 = $veil->composite("Y", $bg, Position::TOP, Position::LEFT);
+        $this->assertStringNotContainsString('background line', $frame2, 'Frame 2 should be delta, not full output');
+        // The delta should be small (much less than full frame)
+        $this->assertLessThanOrEqual(50, \strlen($frame2), 'Backdrop delta should be small for single-char change');
+    }
+
+    /**
+     * Verify that truecolor opacity blend produces visually distinct outputs
+     * at 25/50/75/100 backdrop opacity — no longer collapsed to ~2 states.
+     */
+    public function testDimOpacity25ProducesDistinctOutput(): void
+    {
+        $bg = str_repeat(" ", 20);
+        foreach ([25, 50, 75, 100] as $opacity) {
+            $v = Veil::new()->withBackdrop($opacity);
+            $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
+            $this->assertIsString($result);
+        }
+        // At minimum: all should produce some kind of dimming (not no-op)
+        // and they should all produce some SGR code
+        $v25 = Veil::new()->withBackdrop(25);
+        $v100 = Veil::new()->withBackdrop(100);
+        $r25 = $v25->composite("X", $bg, Position::TOP, Position::LEFT);
+        $r100 = $v100->composite("X", $bg, Position::TOP, Position::LEFT);
+        // 100% backdrop should produce distinct (near-black) output vs 25%
+        $this->assertNotSame(\trim($r25), \trim($r100), '25% and 100% opacity should produce visually distinct dim output');
+    }
+
+    // ─── dimLine ANSI preservation ─────────────────────────────────────────────
+
+    /**
+     * Test that dimLine preserves lines that start with ANSI escape sequences.
+     * Lines starting with \e[ are returned unchanged (old FAINT behavior).
+     */
+    public function testDimLinePreservesAnsiPrefixedLines(): void
+    {
+        $v = Veil::new()->withBackdrop(100);
+
+        // Line starting with ANSI bold escape
+        $ansiLine = "\e[1mBOLD TEXT\e[0m";
+        $bg = str_repeat($ansiLine . "\n", 3);
+
+        $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
+        $lines = $this->veil->splitLines($result);
+
+        // The ANSI line should survive intact in the background
+        // (not dimmed with truecolor)
+        $this->assertStringContainsString("\e[1mBOLD TEXT\e[0m", $result);
+        // Should NOT contain the dim code 38;2;0;0;0 on that line since ANSI lines are preserved
+        $this->assertStringNotContainsString("38;2;0;0;0", $lines[1]);
+    }
+
+    /**
+     * Test that dimLine applies truecolor dimming to plain lines.
+     */
+    public function testDimLineDimsPlainLines(): void
+    {
+        $v = Veil::new()->withBackdrop(100);
+        $bg = "..........";
+
+        $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
+        $lines = $this->veil->splitLines($result);
+
+        // The background line (not the foreground row) should be dimmed with truecolor
+        $this->assertStringContainsString("38;2;0;0;0", $lines[1] ?? $lines[0]);
+    }
+
+    // ─── Composite off-screen right ────────────────────────────────────────────
+
+    /**
+     * Test composite when foreground x position is beyond background width.
+     * The foreground is entirely off-screen right, background should be dimmed.
+     */
+    public function testCompositeOffScreenRightDimsBackground(): void
+    {
+        $bg = "..........";  // 10 chars wide
+        $fg = "X";
+
+        // Large xOffset puts foreground way off-screen to the right
+        // With backdrop enabled, the entire background row should be dimmed
+        $v = Veil::new()->withBackdrop(100);
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 999);
+
+        // Background should still be present (dimmed) but no foreground visible at its position
+        $this->assertStringContainsString('.', $result);
+        // The entire row should be dimmed since foreground is off-screen
+        $this->assertStringContainsString("38;2;", $result);
+    }
+
+    /**
+     * Test composite when foreground is partially off-screen right.
+     */
+    public function testCompositePartiallyOffScreenRight(): void
+    {
+        $bg = "....................";  // 20 chars
+        $fg = "XXXX";  // 4 chars
+
+        // xOffset of 18 puts the 4-char foreground starting at col 18, ending at col 21
+        // But background is only 20 wide, so last 2 chars of fg are off-screen
+        $v = Veil::new()->withBackdrop(50);
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 18);
+        $lines = $this->veil->splitLines($result);
+
+        // With backdrop, some part should be dimmed
+        $this->assertIsString($result);
+        $this->assertStringContainsString("38;2;", $result);
+    }
+
+    // ─── Position accessors via withPosition ─────────────────────────────────
+
+    /**
+     * Test withPosition threads every argument to its accessor.
+     */
+    public function testWithPositionSetsAllFourAccessors(): void
+    {
+        $v = Veil::new()->withPosition(Position::TOP, Position::LEFT, x: 1, y: 2);
+
+        // (The old positionSet flag was write-only dead state and is gone;
+        // VeilStack::compositeAll() keys per-veil positioning off the
+        // nullable accessors themselves, not a side-channel boolean.)
+        $this->assertSame(Position::TOP, $v->vPosition());
+        $this->assertSame(Position::LEFT, $v->hPosition());
+        $this->assertSame(1, $v->positionX());
+        $this->assertSame(2, $v->positionY());
+    }
+
+    /**
+     * Test position accessors return defaults when withPosition not called.
+     */
+    public function testPositionAccessorsDefaultWhenNoWithPosition(): void
+    {
+        $v = Veil::new();
+
+        // Without withPosition, all should be defaults
+        $this->assertNull($v->vPosition());
+        $this->assertNull($v->hPosition());
+        $this->assertSame(0, $v->positionX());
+        $this->assertSame(0, $v->positionY());
+    }
+
+    // ─── isClickOutside edge cases ────────────────────────────────────────────
+
+    /**
+     * Test isClickOutside returns false immediately when clickOutsideDismiss
+     * is false (default), without checking scan state.
+     */
+    public function testIsClickOutsideReturnsFalseWhenDismissNotEnabled(): void
+    {
+        // Without withClickOutsideDismiss, clickOutsideDismiss is false by default
+        $v = Veil::new();
+        $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
+
+        // Should return false immediately (doesn't check scan state when disabled)
+        $this->assertFalse($v->isClickOutside($mouse));
+    }
+
+    // ─── Empty foreground edge case in composite ──────────────────────────────
+
+    /**
+     * Test composite with empty foreground at various positions.
+     */
+    public function testCompositeEmptyForegroundDimsBackground(): void
+    {
+        $v = Veil::new()->withBackdrop(50);
+        $bg = "............";
+
+        $result = $v->composite("", $bg, Position::CENTER, Position::CENTER);
+
+        // With empty fg, composite returns bg unchanged but with dimming applied
+        // Since fg is empty (height=0), all rows are "not covered" and get dimmed
+        $this->assertStringContainsString("38;2;", $result);
+    }
+
+    // ─── Wide-glyph straddle at the overlay clip boundary (LL fix #1) ────────
+
+    /**
+     * @dataProvider straddleClipBoundaryCases
+     *
+     * Width::dropAnsi() drops a wide backdrop grapheme straddling the suffix
+     * cut whole, consuming one cell BEYOND the overlay footprint — pre-fix the
+     * remainder of the row slid left and the composite was a cell narrower than
+     * the backdrop. The clip path now blanks the straddled cell; these pins
+     * walk the cut across a wide cell (CJK + SMP emoji) and off it, asserting
+     * both the exact row string and the exact cell width at several offsets.
+     */
+    public function testWideGlyphStraddlingTheClipBoundaryBlanksOneCell(
+        string $fg,
+        string $bg,
+        int $xOffset,
+        string $expected,
+    ): void {
+        $row = explode("\n", Veil::new()->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: $xOffset))[0];
+
+        $this->assertSame($expected, $row);
+        $this->assertSame(Width::string($bg), Width::string($row), 'Composited row keeps the backdrop width exactly');
+    }
+
+    /**
+     * @return array<string, array{string, string, int, string}>
+     */
+    public static function straddleClipBoundaryCases(): array
+    {
+        return [
+            // 語 occupies cols 5-6; 'ZZZ' at x=3 covers its left half, so the
+            // right half at col 6 becomes a blank instead of shifting fgh left.
+            'cut on right half'     => ['ZZZ', 'abcde語fgh', 3, 'abcZZZ fgh'],
+            'cut on right half #2'  => ['ZZ', 'abcde語fgh', 4, 'abcdZZ fgh'],
+            // SMP emoji (2 cells) straddles the same way.
+            'emoji right half'      => ['Z', 'x😀yz', 1, 'xZ yz'],
+            // Clean cuts: right of the wide cell / exactly at its head — no blank.
+            'cut past wide cell'    => ['QQQQQ', 'abcde語fgh', 4, 'abcdQQQQQh'],
+            'cut at wide head'      => ['ZZZZ', 'abcde語fgh', 1, 'aZZZZ語fgh'],
+            'wide overlay inside'   => ['語', 'ab語cd', 3, 'ab 語d'],
+            // ASCII-only rows must not gain a stray space.
+            'no wide glyph'         => ['ZZ', 'abcdefghij', 2, 'abZZefghij'],
+        ];
+    }
+
+    // ─── Overlay taller than backdrop paints from the top (LL fix #2) ────────
+
+    /**
+     * The background is the canvas: a CENTER/BOTTOM anchor on an overlay
+     * taller than the backdrop used to resolve a negative baseY and silently
+     * drop the overlay's TOP rows (probe: 4-row fg over 2-row bg CENTER →
+     * rows showed T2/T3, T1 vanished). The anchor now clamps to >= 0, so the
+     * overlay paints from its own top and the overflow clips at the bottom;
+     * an explicit negative yOffset is NOT clamped — slide animations that
+     * park the overlay off-screen above the canvas stay legal.
+     */
+    public function testOverlayTallerThanBackdropPaintsFromTopAndClipsBottom(): void
+    {
+        $fg = "T1\nT2\nT3\nT4";
+        $bg = "ne1\nne2";
+
+        $center = explode("\n", Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER));
+        $this->assertSame(['T11', 'T22'], $center, 'CENTER anchor on an over-tall overlay keeps the top rows');
+
+        $bottom = explode("\n", Veil::new()->composite($fg, $bg, Position::BOTTOM, Position::CENTER));
+        $this->assertSame(['T11', 'T22'], $bottom, 'BOTTOM anchor likewise paints from the overlay top');
+
+        foreach ([$center, $bottom] as $frame) {
+            foreach ($frame as $row) {
+                $this->assertSame(3, Width::string($row), 'Canvas width stays exact');
+            }
+        }
+
+        $slid = explode("\n", Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER, yOffset: -1));
+        $this->assertSame(['T21', 'T32'], $slid, 'Explicit negative yOffset still scrolls rows off the top');
+    }
+}

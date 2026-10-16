@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Guards the PHP code samples on every generated lib page.
  *
  * WHY. `docs/_data/<slug>.body.html` holds the quickstart that `tools/gen-docs.php`
- * publishes verbatim, and nothing ever ran it or even parsed it. The sugar-veil
+ * publishes verbatim, and nothing ever ran it or even parsed it. The sugar-overlay
  * page shipped `new Veil()` followed by `$veil->push(...)` and
  * `$veil->render(...)`, which are methods `Veil` has never had. Four other samples
  * did not parse at all (`fn() => echo ...`, a `[...]` placeholder argument, a
@@ -407,7 +407,7 @@ final class DocsQuickstartTest extends TestCase
     /** @return iterable<string, array{string, string}> */
     public static function brokenSamples(): iterable
     {
-        yield 'fictional instance method (the old sugar-veil sample)' => [
+        yield 'fictional instance method (the old sugar-overlay sample)' => [
             "use SugarCraft\\Fixture\\Veil;\n\$veil = new Veil();\n\$veil = \$veil->push('m');\n",
             'Veil has no method push()',
         ];
@@ -467,7 +467,7 @@ final class DocsQuickstartTest extends TestCase
             "use SugarCraft\\Fixture\\Veil;\nVeil::new()->composite('a', 'b', 'c');\n",
             'is given 3 positional arguments but declares 2',
         ];
-        yield 'private constructor (the old sugar-veil `new Veil()`)' => [
+        yield 'private constructor (the old sugar-overlay `new Veil()`)' => [
             "use SugarCraft\\Fixture\\Sealed;\n\$s = new Sealed();\n",
             'Sealed::__construct() is not public',
         ];

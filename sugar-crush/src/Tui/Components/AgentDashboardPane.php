@@ -24,8 +24,8 @@ use SugarCraft\Crush\Tui\StallWarning;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
-use SugarCraft\Veil\Position;
-use SugarCraft\Veil\Veil;
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 
 /**
  * The full-pane agent dashboard — sugar-crush's answer to `claude agents`

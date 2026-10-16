@@ -589,10 +589,10 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.35 · PR#815 · candy-kv: import/export JSON/YAML + TTL/expiry + Levenshtein typo suggestions + STDIN input + atomic transactions
     fix for step 10.35 · PR#816 · resolved 1 major (atomic import cross-database routing bug) + added withManager() getter
     docs for step 10.35 · PR#817 · README: add TTL/import-export/atomic-transaction sections; CALIBER_LEARNINGS: new file
-    step 10.36 · PR#818 · sugar-veil: backdrop dimming (withBackdrop) + animation system (Slide/Fade/Scale consuming honey-bounce CubicBezier)
+    step 10.36 · PR#818 · sugar-veil: backdrop dimming (withBackdrop) + animation system (Slide/Fade/Scale consuming honey-bounce CubicBezier) <!-- @rename-keep historical provenance -->
     review for step 10.36 · clean · PR#818
     docs for step 10.36 · PR#819 · README: add Backdrop Dimming + Animations sections; CALIBER_LEARNINGS: new file
-    step 10.37 · PR#820 · sugar-veil: z-index stacking + VeilStack + click-outside-dismiss + auto-size + border chrome
+    step 10.37 · PR#820 · sugar-veil: z-index stacking + VeilStack + click-outside-dismiss + auto-size + border chrome <!-- @rename-keep historical provenance -->
     fix for step 10.37 · PR#821 · resolved 2 major (autoSize not consumed in composite + no withManager() setter) + 2 minor (missing tests)
     docs for step 10.37 · PR#822 · README: add Z-Index Stacking/VeilStack/Auto-Size/Border Chrome sections; CALIBER_LEARNINGS: new file
 

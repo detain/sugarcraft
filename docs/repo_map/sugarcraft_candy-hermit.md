@@ -149,7 +149,7 @@ For i in [0, len(line)):
 Pad if overlay extends beyond background line
 ```
 
-**Key insight:** This is a **character-level** replacement, not a line-level overlay like bubbletea-overlay or sugar-veil. It literally replaces individual characters in background lines at specific positions, which is exactly how theHermit upstream works.
+**Key insight:** This is a **character-level** replacement, not a line-level overlay like bubbletea-overlay or sugar-overlay. It literally replaces individual characters in background lines at specific positions, which is exactly how theHermit upstream works.
 
 ### Match Highlighting (`Hermit::highlightMatches()` at lines 516–544)
 
@@ -386,7 +386,7 @@ public function attachSigwinch(): bool
 bubble-overlay provides **general-purpose overlay compositing** with 5 position modes (Top/Right/Bottom/Left/Center) and ANSI-aware string operations. It is a pure compositor that merges foreground/background views.
 
 candy-hermit's overlay is **list-specific** (filterable items) and handles **character-level replacement** rather than line-level merging. The approaches are complementary:
-- `sugar-veil` (based on bubbletea-overlay): General-purpose overlay compositor with animation, z-index stacking, backdrop dimming
+- `sugar-overlay` (based on bubbletea-overlay): General-purpose overlay compositor with animation, z-index stacking, backdrop dimming
 - `candy-hermit`: List-specific fuzzy filter overlay with character-level compositing
 
 **Key difference:** bubbletea-overlay uses `lipgloss.Width()` for dimension measurement and `charmbracelet/x/ansi` for ANSI-aware truncation. candy-hermit uses `strlen()` for character-level positioning (simpler but less Unicode-correct).
@@ -432,7 +432,7 @@ candy-hermit is a **lighter-weight overlay** (not a full List replacement). It f
 candy-hermit fills a **specific niche** in the SugarCraft ecosystem: the quick-fix / type-to-filter overlay that composes over a background view without blocking it. This is distinct from:
 
 - `sugar-bits` / `candy-forms` — inline component rendering
-- `sugar-veil` — general-purpose overlay compositor
+- `sugar-overlay` — general-purpose overlay compositor
 - `candy-lister` — inline list with fuzzy filtering
 
 The overlay pattern is useful for:

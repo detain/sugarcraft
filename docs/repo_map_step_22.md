@@ -6,15 +6,15 @@
 
 ## Goal
 
-Migrate `sugar-veil`, `sugar-navstack`, and `candy-lister` from external candy-mouse `Manager` wiring to self-contained candy-mouse `Scanner` per consumer.
+Migrate `sugar-overlay`, `sugar-navstack`, and `candy-lister` from external candy-mouse `Manager` wiring to self-contained candy-mouse `Scanner` per consumer.
 
 Reference: §387.4 (mouse-tracking reinvention), §369.4 (consolidation).
 
 ## Files expected to be modified
 
-- `sugar-veil/composer.json` · `sugar-navstack/composer.json` · `candy-lister/composer.json` — add `sugarcraft/candy-mouse` via `path-repo-closure`. Keep the existing `sugarcraft/candy-mouse` dep — candy-mouse's other features (Manager for *other* purposes) may still be needed; only the mouse-tracking surface migrates.
-- `sugar-veil/src/Veil.php` — replace `Manager $manager` field with own `Scanner`. Update `withManager()` accordingly (keep the method, mark @deprecated, delegate internally).
-- `sugar-navstack/src/Breadcrumb.php` — same pattern as sugar-veil with `zoneManager` field.
+- `sugar-overlay/composer.json` · `sugar-navstack/composer.json` · `candy-lister/composer.json` — add `sugarcraft/candy-mouse` via `path-repo-closure`. Keep the existing `sugarcraft/candy-mouse` dep — candy-mouse's other features (Manager for *other* purposes) may still be needed; only the mouse-tracking surface migrates.
+- `sugar-overlay/src/Veil.php` — replace `Manager $manager` field with own `Scanner`. Update `withManager()` accordingly (keep the method, mark @deprecated, delegate internally).
+- `sugar-navstack/src/Breadcrumb.php` — same pattern as sugar-overlay with `zoneManager` field.
 - `candy-lister/src/` (wherever mouse-tracking happens, if at all) — same.
 
 ## Acceptance criteria
@@ -44,7 +44,7 @@ Reference: §387.4 (mouse-tracking reinvention), §369.4 (consolidation).
 
 ## Ship brief
 
-- **PR title**: `sugar-veil + sugar-navstack + candy-lister: self-contained mouse via candy-mouse`
+- **PR title**: `sugar-overlay + sugar-navstack + candy-lister: self-contained mouse via candy-mouse`
 - **PR body**:
   ```
   ## Summary
@@ -54,10 +54,10 @@ Reference: §387.4 (mouse-tracking reinvention), §369.4 (consolidation).
   - No external candy-mouse Manager required for mouse-only use cases.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in sugar-veil / sugar-navstack / candy-lister (≥95% each)
+  - [x] vendor/bin/phpunit in sugar-overlay / sugar-navstack / candy-lister (≥95% each)
   - [x] Back-compat: withManager() still callable
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_22.md, docs/repo_map_update.md §369.4, §387.4
   ```
-- Commit subject: `sugar-veil + sugar-navstack + candy-lister: adopt candy-mouse`.
+- Commit subject: `sugar-overlay + sugar-navstack + candy-lister: adopt candy-mouse`.

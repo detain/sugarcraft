@@ -46,7 +46,7 @@ final class ReelDependencyTest extends TestCase
      */
     public function testTheManifestCarriesTheRequireWithoutAPathRepo(): void
     {
-        $committed = shell_exec('git -C ' . escapeshellarg(dirname(__DIR__, 2)) . ' show HEAD:sugar-crush/composer.json');
+        $committed = shell_exec('git -C ' . escapeshellarg(dirname(__DIR__, 2)) . ' show HEAD:sugar-crush/composer.json 2>&1');
         self::assertNotNull($committed, 'git show HEAD:sugar-crush/composer.json produced no output — is this checkout a git work tree?');
 
         $manifest = json_decode(
