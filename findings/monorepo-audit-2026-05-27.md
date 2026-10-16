@@ -16,7 +16,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 1. **Broken path-repo symlinks** (candy-mail missing `I18n/Lang.php`) causing 2 test failures
 2. **Stub features wired silently** (sugar-readline Highlight no-op, sugar-toast animation deferred)
 3. **33 cloned `Lang.php` files** adding ~700 lines of boilerplate
-4. **`with()` methods that can't set `0` values** (candy-boxer, sugar-bits) due to `?: ` sentinel pattern
+4. **`with()` methods that can't set `0` values** (candy-boxer, sugar-bits) due to `?: ` sentinel pattern <!-- @rename-keep historical provenance -->
 5. **God classes** (super-candy/Manager at 915 lines, candy-git/App at 1201 lines)
 6. **Inverted dependency** (candy-scriptui → sugar-*) per prior improvements.md
 7. **Incomplete candy-forms extraction** leaving candy-forms as a facade with no implementation
@@ -130,16 +130,16 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 6: sugar-bits, sugar-charts, candy-kv, candy-git
+### Group 6: sugar-bits, sugar-charts, candy-kv, candy-git <!-- @rename-keep historical provenance -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| sugar-bits | 681 ✓ | APPROVE | 0 | 1 | 3 | 0 |
+| sugar-bits | 681 ✓ | APPROVE | 0 | 1 | 3 | 0 | <!-- @rename-keep historical provenance -->
 | sugar-charts | 327 ✓ | APPROVE | 0 | 2 | 3 | 0 |
 | candy-kv | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 2 | 0 |
 | candy-git | 116 ⚠️ | REQUEST_CHANGES | 0 | 3 | 5 | 0 |
 
-**sugar-bits** — TUI components. 681 tests. Issue: 19 `class_alias()` entries to `SugarCraft\Forms\*` create confusing architecture where the "real" code lives elsewhere (candy-forms).
+**sugar-bits** — TUI components. 681 tests. Issue: 19 `class_alias()` entries to `SugarCraft\Forms\*` create confusing architecture where the "real" code lives elsewhere (candy-forms). <!-- @rename-keep historical provenance -->
 
 **sugar-charts** — Charting library. Issues: `BarChart::copy()` and `barWidthCopy()` have nearly identical 69-line bodies (DRY violation); many features documented as 🟡 "pending" in README.
 
@@ -249,14 +249,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - Architectural concern: which package "owns" the implementation?
 
 3. **candy-scriptui dependency inversion** (documented in improvements.md §2.1, partially resolved)
-   - candy-scriptui (foundation) depends on sugar-bits, candy-forms (leaf)
+   - candy-scriptui (foundation) depends on sugar-bits, candy-forms (leaf) <!-- @rename-keep historical provenance -->
    - Resolved via candy-forms extraction but extraction still 🟡 in progress
 
 ### 🟠 Major Cross-Cutting Anti-Patterns
 
 | Anti-Pattern | Affected Packages | Description |
 |--------------|-------------------|-------------|
-| **`with()` can't set `0`/`false`** | sugar-boxer, sugar-bits, candy-sprinkles | Uses `value ?: $existing` sentinel pattern; passing `0` is treated as "not passed" |
+| **`with()` can't set `0`/`false`** | sugar-boxer, sugar-bits, candy-sprinkles | Uses `value ?: $existing` sentinel pattern; passing `0` is treated as "not passed" | <!-- @rename-keep historical provenance -->
 | **33 cloned Lang.php files** | All 33 packages | Same ~31-line shape, only NAMESPACE/DIR differ; ~700 lines of boilerplate |
 | **God classes** | super-candy/Manager (915L), candy-git/App (1201L) | Single class handling too many responsibilities |
 | **Stub features wired silently** | sugar-readline/Highlight, sugar-toast/AnimationDuration | Feature exists in API but does nothing; no warning to consumers |
@@ -301,7 +301,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 4. **Standardize `with()` sentinel pattern**
    - Replace `value ?: $existing` with explicit `null` sentinel so `0`/`false` can be set
-   - Affects: sugar-boxer/Node, sugar-bits (some classes), any using the pattern
+   - Affects: sugar-boxer/Node, sugar-bits (some classes), any using the pattern <!-- @rename-keep historical provenance -->
 
 ### Medium Priority (Next Sprint)
 
@@ -490,7 +490,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Long-Term Strategic Improvements
 
-1. **Publish candy-forms to Packagist** — complete the extraction from sugar-bits/candy-forms
+1. **Publish candy-forms to Packagist** — complete the extraction from sugar-bits/candy-forms <!-- @rename-keep historical provenance -->
 2. **Establish `sugarcraft/` Packagist namespace** — currently some packages use `sugarcore/`
 3. **PHP 8.4 adoption** — the codebase targets 8.3+ but hasn't used PHP 8.4 features
 4. **phpstan level 9** — only candy-core has phpstan configured
@@ -567,7 +567,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
-| 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
+| 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped | <!-- @rename-keep historical provenance -->
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
 | 9 | candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |

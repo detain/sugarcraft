@@ -411,7 +411,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   enum‑with‑methods).
 
 ### Phase 5 — Apps & top of the graph
-- **5.1** `sugar-bits`(49,high, many deps) → **5.1a** `Table` (5), **5.1b** `TextInput/Timer/
+- **5.1** `sugar-bits`(49,high, many deps) → **5.1a** `Table` (5), **5.1b** `TextInput/Timer/ <!-- @rename-keep historical provenance -->
   Progress` (12), **5.1c** `Spinner/Key/ItemList/FilePicker/Cursor` (≈15→a/b), **5.1d**
   `Viewport/Tree/TextArea/Tabs/Stopwatch/Scrollbar/Paginator/Help`+root (≈17→a/b).
 - **5.2** `sugar-boxer`(3,low), `sugar-datepicker`(6,low), `sugar-crumbs`(8,low),
@@ -487,7 +487,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-shine | high | 9 | attribute, ctor-promotion, enum, match, named-args, nullsafe; commonmark |
 | candy-vt | high | 40 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args |
 | honey-bounce | high | 12 | enum-with-methods, ctor-promotion, match, named-args, readonly |
-| sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init |
+| sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init | <!-- @rename-keep historical provenance -->
 | sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
 | sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) |
 | candy-mail | high | 7 | ctor-promotion, mixed, named-args, php8-strfn, readonly |

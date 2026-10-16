@@ -13,7 +13,7 @@ inactive_fg, plan §3 Overlays.php / sugar-veil precedent). Keep panels decouple
 PanelResult field (e.g. OpenMenuMsg / Overlay value object), never construct App state.
 
 Hard rules: NEVER git stash/checkout/reset/clean/commit/add (supervisor commits). Don't touch sugar-crush or
-candy-core. Only candy-top/ (and, for P-F2, sugar-bits only if a genuine lib gap — report it). Other agents may edit
+candy-core. Only candy-top/ (and, for P-F2, sugar-bits only if a genuine lib gap — report it). Other agents may edit <!-- @rename-keep historical provenance -->
 candy-top/themes/ and theme tests concurrently (P-G mellow theme) — don't touch those. User-visible strings via
 Lang::t in your own lang/en.php block `// ---- <name> (phase P-Fx) ----` before the closing `];`. Append your own
 CALIBER_LEARNINGS section. TEA purity: side effects (signals via posix_kill, config file writes, file reads) only

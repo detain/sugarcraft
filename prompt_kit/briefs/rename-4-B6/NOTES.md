@@ -21,7 +21,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
   findings/plan_sugar-spark.md (→ plan_candy-ansi-inspect.md), media+docs/img icon pngs, ansi/sugar-spark/ <!-- @rename-keep -->
   162 art files (→ ansi/candy-ansi-inspect/candy-ansi-inspect-*.ansi). <!-- @rename-keep -->
 - Composer REQUIRE consumers: root composer.json only (require + repositories). NO sibling lib requires it.
-  Docblock/example mentions auto-rewrote: candy-core/README.md, sugar-bits/examples/item-list.php, root
+  Docblock/example mentions auto-rewrote: candy-core/README.md, sugar-bits/examples/item-list.php, root <!-- @rename-keep historical provenance -->
   README.md:85, MATCHUPS :85/:206, candy-ansi/{README,CALIBER_LEARNINGS,src/Parser/Parser,src/Parser/SubparamsAwareHandler}.
 - Env: ZERO getenv/$_ENV/putenv reads in src+bin. `SUGARSPARK_BIN` existed ONLY in examples/inspect.sh <!-- @rename-keep -->
   (bash example, not PHP) → tool R5 rewrote it to CANDY_ANSI_INSPECT_BIN (6 R5 sites incl comment); NO LegacyEnv shim.
