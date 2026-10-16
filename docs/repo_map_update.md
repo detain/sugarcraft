@@ -131,7 +131,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 2. **Byte-level string operations break UTF-8/grapheme content** — candy-hermit's `highlightMatches()` uses byte indexing; candy-codeshot's 0.6 font aspect ratio fails on CJK/multi-byte content; candy-ansi-inspect's parser has C1 limitations due to PHP's native UTF-8 handling. The ecosystem re-implements byte-loop parsing instead of using a shared state machine.
 
-3. **No Cassowary constraint solver** — candy-sprinkles, candy-core, candy-forms, sugar-bits, sugar-panels, sugar-dash, candy-git, sugar-stickers all need constraint-based layout (column A = 30% but never less than 10). Currently each package implements greedy one-pass sizing manually.
+3. **No Cassowary constraint solver** — candy-sprinkles, candy-core, candy-forms, sugar-bits, sugar-panels, sugar-dash, candy-git, sugar-flexbox all need constraint-based layout (column A = 30% but never less than 10). Currently each package implements greedy one-pass sizing manually.
 
 4. **Greedy constraint solvers / no shared layout engine** — Every layout-sensitive package independently implements manual sizing logic. No shared layout engine exists at the foundation layer.
 
@@ -167,7 +167,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in candy-ssh-launcher.
 
-10. **Buffer diffing / dirty-region tracking** — sugar-panels, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
+10. **Buffer diffing / dirty-region tracking** — sugar-panels, sugar-dash, sugar-crush, sugar-veil, sugar-flexbox, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
 
 11. **Input driver / TTY integration** — sugar-readline cannot read actual terminal keypresses — only processes pre-decoded symbolic key names. No mechanism to decode terminal escape sequences (Kitty keyboard protocol, SGR mouse). Blocking real-world interactive usage.
 
@@ -205,7 +205,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **LRU cache sizing** — go-termimg has 100-entry LRU vs the current smaller cache; request coalescing in async pipeline.
 
-5. **ContentGenerator pattern** — sugar-stickers needs `Node::withContentGenerator(Closure(int $maxX, int $maxY): string)` for per-cell adaptive text truncation without pre-measuring.
+5. **ContentGenerator pattern** — sugar-flexbox needs `Node::withContentGenerator(Closure(int $maxX, int $maxY): string)` for per-cell adaptive text truncation without pre-measuring.
 
 6. **Adaptive framerate via `$lastFrameDuration`** — candy-core exposure of frame timing would enable animation efficiency gains.
 
@@ -353,13 +353,13 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 8 | Wire `Mosaic::auto()` + `diagnose()` | candy-mosaic | High | Low | Low | P0 |
 | 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-bits, sugar-panels, sugar-dash | Critical | High | Medium | P1 |
 | 10 | Implement cell-based buffer model | candy-core, sugar-bits, candy-sprinkles | Critical | High | Medium | P1 |
-| 11 | Implement buffer diffing / dirty-region tracking | sugar-panels, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister | High | Medium | Low | P1 |
+| 11 | Implement buffer diffing / dirty-region tracking | sugar-panels, sugar-dash, sugar-crush, sugar-veil, sugar-flexbox, candy-lister | High | Medium | Low | P1 |
 | 12 | Add input driver for terminal keypress decoding | sugar-readline | Critical | High | Medium | P1 |
 | 13 | Add `charmbracelet/x/ansi` state machine sharing | candy-ansi-inspect, candy-hermit, candy-codeshot, candy-vt | High | Medium | Low | P1 |
 | 14 | Implement GitHub/GitLab README fetching | candy-mdview | High | Medium | Low | P1 |
 | 15 | Add debug visualization mode | candy-mouse | High | Low | Low | P1 |
 | 16 | Add mouse event deduplication helpers | candy-mouse | High | Low | Low | P1 |
-| 17 | Add `ContentGenerator` pattern | sugar-stickers | Medium | Low | Low | P1 |
+| 17 | Add `ContentGenerator` pattern | sugar-flexbox | Medium | Low | Low | P1 |
 | 18 | Fix wide-character overflow handling | sugar-panels | High | Low | Low | P1 |
 | 19 | Wire MarkLine into LineChart/BarChart | sugar-charts | Medium | Low | Low | P2 |
 | 20 | Implement SSH server mode | candy-git-server, candy-ssh-launcher | High | High | Medium | P2 |

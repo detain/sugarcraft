@@ -187,19 +187,19 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 9: candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil
+### Group 9: candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-ansi-inspect | 147 ✓ | APPROVE | 0 | 0 | 1 | 0 |
-| sugar-stickers | 60 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
+| sugar-flexbox | 60 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
 | sugar-table | 129 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | candy-codetime | 106 ✓ | REQUEST_CHANGES | 0 | 3 | 3 | 0 |
 | sugar-veil | 97 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 
 **candy-ansi-inspect** — ANSI inspector. Clean, 147 tests.
 
-**sugar-stickers** — FlexBox/Table. Issues: No FlexBox test file; README documents incomplete feature ("deferred to step 10.12"); `FlexBox` has public mutable properties (violates immutability).
+**sugar-flexbox** — FlexBox/Table. Issues: No FlexBox test file; README documents incomplete feature ("deferred to step 10.12"); `FlexBox` has public mutable properties (violates immutability).
 
 **sugar-table** — Interactive table. Issues: `filteredSortedRows()` public method name suggests internal state; `pageSize` defaults to 0 (no pagination) but docs don't make this clear; missing README.
 
@@ -265,7 +265,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
 | **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, candy-lister/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes |
-| **Path-repo closure gaps** | candy-mdview, sugar-stickers, candy-ssh-launcher | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
+| **Path-repo closure gaps** | candy-mdview, sugar-flexbox, candy-ssh-launcher | Missing transitive dependencies in repositories[] arrays (documented in improvements.md §3.7, fixed) |
 
 ### 🟡 Cross-Package Inconsistencies
 
@@ -375,7 +375,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | sugar-toast | Animation duration (honey-bounce deferred) | MEDIUM |
 | candy-mdview | Complete glamour v2 property support | MEDIUM |
 | sugar-charts | OHLC multi-series, Scatter per-point styling | MEDIUM |
-| sugar-stickers | FlexBox tests, sticky header/footer | MEDIUM |
+| sugar-flexbox | FlexBox tests, sticky header/footer | MEDIUM |
 | candy-tetris | T-Spin Twist rule (beyond 3-corner) | LOW |
 | candy-minesweeper | Chord-click keyboard binding | LOW |
 | sugar-flip | GIF frame cap of 256 not configurable | LOW |
@@ -508,7 +508,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-forms + candy-forms | Consolidate into candy-forms | candy-forms is a facade; candy-forms is the implementation |
 | honey-bounce.SpringChain mutation | Refactor to return new instances | Consistency with immutable pattern |
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
-| sugar-stickers/Table vs sugar-table/Table | Rename sugar-stickers Table to SimpleTable | Two different packages, same class name, confuses |
+| sugar-flexbox/Table vs sugar-table/Table | Rename sugar-flexbox Table to SimpleTable | Two different packages, same class name, confuses |
 | candy-lister + candy-ansi-inspect | No consolidation needed | Different purposes |
 | candy-mdview/WidthHelper vs candy-core/Util/Width | Delete candy-mdview/WidthHelper | Already exists in candy-core |
 
@@ -570,7 +570,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
-| 9 | candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
+| 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 

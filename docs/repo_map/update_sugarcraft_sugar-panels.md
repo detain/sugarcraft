@@ -324,7 +324,7 @@ None — sugar-panels is a pure renderer, not a component framework. Extension w
 **Implementation ideas**:
 
 1. Consider adding `Grid` node type with explicit row/column span
-2. Or add to `sugar-stickers` as a separate component
+2. Or add to `sugar-flexbox` as a separate component
 
 **Estimated complexity**: High
 
@@ -506,7 +506,7 @@ $layout = SugarPanels::build(function($b) {
 
 - Using sugar-panels with `candy-core` TTY loop
 - Composing sugar-panels layouts inside sugar-bits Viewport
-- Combining sugar-panels with sugar-stickers FlexBox
+- Combining sugar-panels with sugar-flexbox FlexBox
 
 ## 3. Performance Tips
 
@@ -568,11 +568,11 @@ $node->withTitle('My Panel')
 
 # Ecosystem / Integration Opportunities
 
-## 1. Integration with sugar-stickers FlexBox
+## 1. Integration with sugar-flexbox FlexBox
 
-**Opportunity**: sugar-stickers FlexBox provides ratio-based layout; sugar-panels provides box-drawing. A `FlexBox::withBoxer()` could render FlexBox cells with box borders.
+**Opportunity**: sugar-flexbox FlexBox provides ratio-based layout; sugar-panels provides box-drawing. A `FlexBox::withBoxer()` could render FlexBox cells with box borders.
 
-**Source**: `sugarcraft_sugar-stickers.md` — "No HorizontalFlexBox: Upstream's HorizontalFlexBox (column-first layout) not implemented" and "No ContentGenerator: Upstream Go Cell.SetContentGenerator not ported"
+**Source**: `sugarcraft_sugar-flexbox.md` — "No HorizontalFlexBox: Upstream's HorizontalFlexBox (column-first layout) not implemented" and "No ContentGenerator: Upstream Go Cell.SetContentGenerator not ported"
 
 ## 2. Integration with sugar-bits Viewport
 

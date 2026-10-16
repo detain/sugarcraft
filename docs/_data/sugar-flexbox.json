@@ -1,0 +1,11 @@
+{
+    "title": "SugarFlexbox — SugarCraft",
+    "description": "SugarFlexbox: Flex-style box layout plus a sortable/filterable table for terminal grids.",
+    "ogTitle": "SugarFlexbox — SugarCraft",
+    "ogDescription": "Flex-style box layout plus a sortable/filterable table for terminal grids.",
+    "emoji": "",
+    "displayName": "SugarFlexbox",
+    "tagline": "FlexBox layout + simple sort/filter table",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/76creates/stickers\" style=\"color: inherit;\">76creates/stickers</a></span>\n          <span class=\"tag-chip\">flexbox</span><span class=\"tag-chip\">table</span><span class=\"tag-chip\">layout</span><span class=\"tag-chip\">grid</span>"
+}

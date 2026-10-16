@@ -113,7 +113,7 @@ paths:
    Type "q"
    ```
 
-4. `Grep -n "sugar-table"` against the VHS workflow → not in the bash array. Edit the array to insert `sugar-table` next to its alphabetical neighbours (`sugar-stickers sugar-table`).
+4. `Grep -n "sugar-table"` against the VHS workflow → not in the bash array. Edit the array to insert `sugar-table` next to its alphabetical neighbours (`sugar-flexbox sugar-table`).
 5. `Read sugar-table/README.md` head → no hero image. Add a hero image line directly under the badges block.
 
 **Result:** Three changes in one PR — the new tape, the workflow matrix entry, the README hero image. No rendered output committed; CI's commit job will push it on the next master merge.

@@ -185,8 +185,8 @@ flag_management:
     - name: candy-kv
       paths: ["candy-kv/src/**"]
       carryforward: true
-    - name: sugar-stickers
-      paths: ["sugar-stickers/src/**"]
+    - name: sugar-flexbox
+      paths: ["sugar-flexbox/src/**"]
       carryforward: true
     - name: sugar-table
       paths: ["sugar-table/src/**"]
@@ -523,12 +523,12 @@ component_management:
         - "candy-kv/src/**"
       flag_regexes:
         - "^candy-kv$"
-    - component_id: sugar-stickers
-      name: sugar-stickers
+    - component_id: sugar-flexbox
+      name: sugar-flexbox
       paths:
-        - "sugar-stickers/src/**"
+        - "sugar-flexbox/src/**"
       flag_regexes:
-        - "^sugar-stickers$"
+        - "^sugar-flexbox$"
     - component_id: sugar-table
       name: sugar-table
       paths:

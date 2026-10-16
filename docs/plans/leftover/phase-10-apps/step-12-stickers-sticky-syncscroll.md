@@ -1,12 +1,12 @@
-# Step 10.12 — sugar-stickers sticky positioning + scroll sync (post SSOT-03)
+# Step 10.12 — sugar-flexbox sticky positioning + scroll sync (post SSOT-03)
 
-**Source:** `leftover_updates_later.md` sugar-stickers Priority 2 + 4
+**Source:** `leftover_updates_later.md` sugar-flexbox Priority 2 + 4
 **Branch:** `ai/stickers-sticky-syncscroll`
 **Bundle hint:** depends on step 04.02 SSOT cleanup
 
 ## Deliverable
 
-After step 04.02 made sugar-stickers consume sugar-bits, add the
+After step 04.02 made sugar-flexbox consume sugar-bits, add the
 sticker-specific features:
 
 - Sticky positioning: header/footer regions stay visible as content
@@ -16,7 +16,7 @@ sticker-specific features:
 
 ## Files
 
-**Modify:** `sugar-stickers/src/Viewport.php` (extends sugar-bits).
+**Modify:** `sugar-flexbox/src/Viewport.php` (extends sugar-bits).
 Add `withStickyHeader(int $rows)`, `withStickyFooter(int $rows)`,
 `syncWith(Viewport)`.
 
@@ -26,7 +26,7 @@ Add `withStickyHeader(int $rows)`, `withStickyFooter(int $rows)`,
 
 ## Acceptance
 
-- `cd sugar-stickers && vendor/bin/phpunit` green.
+- `cd sugar-flexbox && vendor/bin/phpunit` green.
 
 ---
 

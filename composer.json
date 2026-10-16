@@ -93,7 +93,7 @@
         "sugarcraft/candy-kv": "dev-master",
         "sugarcraft/candy-ansi-inspect": "dev-master",
         "sugarcraft/candy-git": "dev-master",
-        "sugarcraft/sugar-stickers": "dev-master",
+        "sugarcraft/sugar-flexbox": "dev-master",
         "sugarcraft/sugar-table": "dev-master",
         "sugarcraft/candy-codetime": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
@@ -482,7 +482,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-stickers",
+            "url": "sugar-flexbox",
             "options": {
                 "symlink": true
             }
