@@ -119,7 +119,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
     - Detect  x1
   src entry points: src/Renderer.php, src/ToolResult.php, src/Tools/BuiltIn/Doctor.php, src/Message.php, src/Chat.php
 
-=== candy-mouse (SugarCraft\Mouse) ===
+=== candy-mouse (SugarCraft\Mouse) === @rename-keep
   referencing files: 32  (src=8, tests=24, other=0)
   distinct symbols imported: 8
     - Zone  x19

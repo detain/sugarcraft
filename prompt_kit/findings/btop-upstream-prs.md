@@ -367,7 +367,7 @@ It is set via config and the options menu only; there is no key.
 - Prev/next mouse controls sit in the GPU box title.
 - Title numbers stay stable when a middle box is removed, and boxes are ordered by slot.
 **Verdict: ADOPT-LATER (GPU box panel "P-H", together with #1881).**
-- Model each GPU box as `{slot, targetIndex}`. Add title `‹ ›` zones (candy-mouse) for cycling.
+- Model each GPU box as `{slot, targetIndex}`. Add title `‹ ›` zones (candy-mouse) for cycling. <!-- @rename-keep historical provenance -->
 - `shown_boxes` parse: accept `gpu\d+`, cap 6 shown.
 - Size M-L.
 - *Config:* the `shown_boxes` vocabulary widens from gpu0..gpu5 to gpuN. It is a superset, so btop strings

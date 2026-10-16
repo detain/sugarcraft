@@ -257,7 +257,7 @@ happen to share the numbers 1–4.
 - **Sessions** — auto-generated session titles via a background small-model
   call.
 - A follow-up guarded the **image-marker vs zone-sentinel collision**:
-  candy-core's image markers and candy-mouse's zone sentinels both live in
+  candy-core's image markers and candy-mouse's zone sentinels both live in <!-- @rename-keep historical provenance -->
   U+E000–U+F8FF, so `Renderer::maskImageMarkers()` masks that block out of the
   copy the mouse `Scanner` reads.
 

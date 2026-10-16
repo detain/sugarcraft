@@ -739,7 +739,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    time. Lane T never edits `Bootstrap.php`.
 2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`candy-forms`, #19
    wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil`
-   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work.
+   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work. <!-- @rename-keep historical provenance -->
    Add all three missing deps in **one prep commit** before U or W reach them.
 3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
    owns it exclusively; other lanes file requests rather than editing.
@@ -6283,7 +6283,7 @@ Local edits to those four never reached the root autoloader. Now 58 symlinks,
 every one dropping `repositories` entirely, since no lib had a non-sibling repo
 — and re-injects them at build time via `--fix --strict-closure` before every
 `composer install` (**9 sites** across `ci.yml`, `pty-matrix.yml`, `vhs.yml`).
-Verified both directions: `candy-mouse`/`sugar-veil` rsynced without vendor or
+Verified both directions: `candy-mouse`/`sugar-veil` rsynced without vendor or <!-- @rename-keep historical provenance -->
 lock install and pass from Packagist alone (121/269, 201/406); under injection
 their `vendor/sugarcraft/*` are symlinks to `../../../` and tests stay green.
 All 58 libs confirmed published (200 from `repo.packagist.org/p2/<name>.json`).
