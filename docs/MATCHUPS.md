@@ -60,7 +60,7 @@ called out in the table below.
 | **CandyLayout** (`candy-layout/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
 | **CandyTesting** (`candy-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | **CandyInput** (`candy-input/`) | 🟢 ready | Terminal escape sequence decoder — legacy keys, Kitty keyboard protocol (CSI ?u), SGR 1006 mouse, focus events, bracketed paste. Unblocks sugar-readline production use. |
-| **CandyLister** (`candy-lister/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
+| **CandyLister** (`sugar-treelist/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
 | **SugarPanels** (`sugar-panels/`) | 🟢 ready | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | **SugarOverlay** (`sugar-overlay/`) | 🟢 ready | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | **SugarNavstack** (`sugar-navstack/`) | 🟢 ready | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
@@ -163,7 +163,7 @@ reference projects supplied the ideas, not the code.
 | CandyInput (candy-input/) | none — first-party |
 | CandyKit (candy-kit/) | [fang](https://github.com/charmbracelet/fang) |
 | CandyLayout (candy-layout/) | [ratatui](https://github.com/ratatui/ratatui) |
-| CandyLister (candy-lister/) | [bubblelister](https://github.com/treilik/bubblelister) |
+| SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
 | CandyLog (candy-log/) | [log](https://github.com/charmbracelet/log) |
 | CandyMetrics (candy-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |

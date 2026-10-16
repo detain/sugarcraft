@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\TreeList\Tests;
+
+use SugarCraft\TreeList\FilterState;
+use PHPUnit\Framework\TestCase;
+
+final class FilterStateTest extends TestCase
+{
+    public function testUnfiltered(): void
+    {
+        $state = FilterState::unfiltered;
+        $this->assertSame('unfiltered', match ($state) {
+            FilterState::unfiltered => 'unfiltered',
+            FilterState::filtering => 'filtering',
+        });
+    }
+
+    public function testFiltering(): void
+    {
+        $state = FilterState::filtering;
+        $this->assertSame('filtering', match ($state) {
+            FilterState::unfiltered => 'unfiltered',
+            FilterState::filtering => 'filtering',
+        });
+    }
+
+    public function testAllCases(): void
+    {
+        $cases = FilterState::cases();
+        $this->assertCount(2, $cases);
+        $this->assertContainsOnly(FilterState::class, $cases);
+    }
+}

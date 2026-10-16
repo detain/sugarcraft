@@ -196,9 +196,9 @@ remains outside this library:
   `@deprecated` shim whose former hand-rolled DP core was removed; every score
   now delegates to `SmithWatermanMatcher` with the default `ScoringProfile`
   (bit-equivalent to the historical constants).
-- **`candy-lister`** — `SugarCraft\Lister\ScoringProfile` is a `class_alias` to
-  this library's `ScoringProfile`, and `SugarCraft\Lister\FuzzyMatch` is a thin
-  delegating shim over `SmithWatermanMatcher` (keeping candy-lister's own
+- **`sugar-treelist`** — `SugarCraft\TreeList\ScoringProfile` is a `class_alias` to
+  this library's `ScoringProfile`, and `SugarCraft\TreeList\FuzzyMatch` is a thin
+  delegating shim over `SmithWatermanMatcher` (keeping sugar-treelist's own
   `\Stringable`-item contract and input-order tiebreak).
 
 New code should depend on `SugarCraft\Fuzzy\*` directly.

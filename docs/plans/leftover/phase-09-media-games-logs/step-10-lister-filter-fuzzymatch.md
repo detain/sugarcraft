@@ -1,6 +1,6 @@
-# Step 09.10 — candy-lister filter interface + FuzzyMatch + filter states
+# Step 09.10 — sugar-treelist filter interface + FuzzyMatch + filter states
 
-**Source:** `leftover_updates_later.md` candy-lister Priorities 1-3
+**Source:** `leftover_updates_later.md` sugar-treelist Priorities 1-3
 **Branch:** `ai/lister-filter-fuzzy`
 
 ## Deliverable
@@ -13,14 +13,14 @@
 
 **Modify:**
 
-- `candy-lister/src/Lister.php` — `withFilterFn(callable)`.
+- `sugar-treelist/src/Lister.php` — `withFilterFn(callable)`.
 
 **Create:**
 
-- `candy-lister/src/FuzzyMatch.php` — share impl with candy-forms
+- `sugar-treelist/src/FuzzyMatch.php` — share impl with candy-forms
   fuzzy (step 08.02) where possible; consider lifting to candy-core
   if both consume it.
-- `candy-lister/src/FilterState.php` (enum).
+- `sugar-treelist/src/FilterState.php` (enum).
 
 ## Tests
 
@@ -28,7 +28,7 @@
 
 ## Acceptance
 
-- `cd candy-lister && vendor/bin/phpunit --filter "Filter|Fuzzy"` green.
+- `cd sugar-treelist && vendor/bin/phpunit --filter "Filter|Fuzzy"` green.
 
 ---
 

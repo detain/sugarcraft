@@ -12,7 +12,7 @@ Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes an
 
 ## Critical
 
-- **Never duplicate a façade suite.** If the class under test is re-exported via `class_alias` (e.g. `sugar-bits` → `SugarCraft\Forms\*`, `candy-lister`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`), do NOT copy the canonical lib's tests. Ship ONE `AliasesTest` asserting each alias symbol resolves to its canonical FQN (`self::assertSame('SugarCraft\\Forms\\Input', (new \ReflectionClass(\SugarCraft\Bits\Input::class))->getName())`), plus tests only for genuinely lib-local behaviour. (Refs #1275/#1312/#1314 deleted ~4300 LOC of this.)
+- **Never duplicate a façade suite.** If the class under test is re-exported via `class_alias` (e.g. `sugar-bits` → `SugarCraft\Forms\*`, `sugar-treelist`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`), do NOT copy the canonical lib's tests. Ship ONE `AliasesTest` asserting each alias symbol resolves to its canonical FQN (`self::assertSame('SugarCraft\\Forms\\Input', (new \ReflectionClass(\SugarCraft\Bits\Input::class))->getName())`), plus tests only for genuinely lib-local behaviour. (Refs #1275/#1312/#1314 deleted ~4300 LOC of this.)
 - **Side effects live in `Cmd`, never `view()`.** A behaviour test asserting on a side effect must assert on the returned `Cmd`, not on `view()`.
 - **`view()` output is byte-exact.** Snapshot tests assert the raw SGR string, including every `\x1b[...m`. Do not normalize or trim.
 - **First line of every test file: `declare(strict_types=1);`** then `namespace SugarCraft\<Sub>\Tests;` (quirk: `candy-core` → `SugarCraft\Core\Tests`). Class is `final`, extends `PHPUnit\Framework\TestCase`. Every public method under test gets ≥1 test.

@@ -1,0 +1,51 @@
+{
+    "name": "sugarcraft/sugar-treelist",
+    "description": "PHP port of treilik/bubblelister \u2014 tree-list view component with customisable prefix/suffix rendering, line wrapping, cursor navigation, and per-item styling hooks.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "list",
+        "tree",
+        "bubble",
+        "bubblelister",
+        "treelist",
+        "terminal",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-treelist",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-treelist/issues",
+        "source": "https://github.com/sugarcraft/sugar-treelist",
+        "docs": "https://sugarcraft.github.io/lib/sugar-treelist.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/candy-buffer": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\TreeList\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\TreeList\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

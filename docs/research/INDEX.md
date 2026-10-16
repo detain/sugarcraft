@@ -92,7 +92,7 @@ To implement an item:
 | **sugar-crush** | [research/libraries/sugar-crush-research.md](libraries/sugar-crush-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
 | **candy-mail** | [research/libraries/candy-mail-research.md](libraries/candy-mail-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
 | **candy-sql** | [research/libraries/candy-sql-research.md](libraries/candy-sql-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
-| **candy-lister** | [research/libraries/candy-lister-research.md](libraries/candy-lister-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
+| **sugar-treelist** | [research/libraries/sugar-treelist-research.md](libraries/sugar-treelist-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
 | **super-candy** | [research/libraries/super-candy-research.md](libraries/super-candy-research.md) | 1. Copy/move, 2. Bookmarks, 3. Preview |
 | **candy-git-server** | [research/libraries/candy-git-server-research.md](libraries/candy-git-server-research.md) | 1. Interactive TUI, 2. Repo browser, 3. HTTP server |
 | **candy-starter** | [research/libraries/candy-starter-research.md](libraries/candy-starter-research.md) | 1. editorconfig, 2. CI workflow, 3. configure.php |

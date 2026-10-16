@@ -1,6 +1,6 @@
 # Implementation Plan: candy-fuzzy Code Audit
 
-**Status:** complete/superseded 2026-10-06 — index/traceback rework, caps, requireFullQuery and §6.3/7.1/7.4/8.1 shipped (era commits 9c1f14e9c, 8545e74eb); §1.1's guard-deletion prescription was later REVERSED (guard now load-bearing). Deprecated `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` remain open deliberately pending candy-lister migration.
+**Status:** complete/superseded 2026-10-06 — index/traceback rework, caps, requireFullQuery and §6.3/7.1/7.4/8.1 shipped (era commits 9c1f14e9c, 8545e74eb); §1.1's guard-deletion prescription was later REVERSED (guard now load-bearing). Deprecated `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` remain open deliberately pending sugar-treelist migration.
 **Phase:** 1
 **Updated:** 2026-10-06
 

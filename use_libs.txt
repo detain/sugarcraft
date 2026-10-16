@@ -22,4 +22,4 @@ https://sugarcraft.github.io/lib/candy-kit.html
 https://sugarcraft.github.io/lib/candy-metrics.html
 https://sugarcraft.github.io/lib/candy-mosaic.html
 https://sugarcraft.github.io/lib/candy-pty.html
-https://sugarcraft.github.io/lib/candy-lister.html
+https://sugarcraft.github.io/lib/sugar-treelist.html

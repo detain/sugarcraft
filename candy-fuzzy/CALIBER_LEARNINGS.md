@@ -78,5 +78,5 @@ Do NOT drop the traceback walk — it is the reason this library exists.
   `SugarCraft\Fuzzy\SahilmScoring`, injected as the 2nd constructor arg.
 - `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` are deprecated
   forwarding aliases of `canonical()` / `named()` (banned factory spellings).
-  `default()` stays until candy-lister's `FuzzyMatch` migrates.
+  `default()` stays until sugar-treelist's `FuzzyMatch` migrates.
 

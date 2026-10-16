@@ -152,8 +152,8 @@ flag_management:
     - name: candy-input
       paths: ["candy-input/src/**"]
       carryforward: true
-    - name: candy-lister
-      paths: ["candy-lister/src/**"]
+    - name: sugar-treelist
+      paths: ["sugar-treelist/src/**"]
       carryforward: true
     - name: candy-log
       paths: ["candy-log/src/**"]
@@ -457,12 +457,12 @@ component_management:
         - "candy-input/src/**"
       flag_regexes:
         - "^candy-input$"
-    - component_id: candy-lister
-      name: candy-lister
+    - component_id: sugar-treelist
+      name: sugar-treelist
       paths:
-        - "candy-lister/src/**"
+        - "sugar-treelist/src/**"
       flag_regexes:
-        - "^candy-lister$"
+        - "^sugar-treelist$"
     - component_id: candy-log
       name: candy-log
       paths:

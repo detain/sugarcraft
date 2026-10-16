@@ -80,7 +80,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 1-A | 1.1–1.3 | candy-files (concurrency limiting, trash shutdown, syscall optimization) |
 | 1-B | 1.4–1.7 | sugar-quickpick (Highlighter cache, ANSI parser cache, StatusBar/HelpBar returns copy) |
 | 1-C | 1.8–1.9 | candy-kit (Section header rune formula, rule min-width) |
-| 1-D | 1.10–1.14 | candy-kit (Theme type guard), candy-lister (RuntimeException→Throwable, dead enum case, UTF-8 grapheme, ANSI injection) |
+| 1-D | 1.10–1.14 | candy-kit (Theme type guard), sugar-treelist (RuntimeException→Throwable, dead enum case, UTF-8 grapheme, ANSI injection) |
 | 1-E | 1.15–1.17 | candy-focus (next/previous DRY), candy-input (Shift+scroll tests, equals docblock) |
 | 1-F | 1.18 | candy-palette (DetectionChain creation + refactor — large, give extra time) |
 | 1-G | 1.19–1.23 | candy-palette (StandardColors cache), sugar-dash (EventDispatcher mutation, Chart render mutation, SystemModule mutation, array_search false) |
@@ -107,8 +107,8 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 3-A | 3.1–3.3 | candy-fuzzy (matchAllGenerator, FuzzyMatcherFactory, MatchResultSorter) |
 | 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable) |
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) |
-| 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), candy-lister (navigation methods, setLineOffset fluent, sort O(n) cursor) |
-| 3-E | 3.13–3.18 | candy-lister (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
+| 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), sugar-treelist (navigation methods, setLineOffset fluent, sort O(n) cursor) |
+| 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
 | 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), candy-palette (AsyncProbe), honey-bounce (reducedMotionOverride, Vector methods, EasingFunction interface) |
 | 3-G | 3.24–3.30 | candy-git-server (Async GitDaemon — deferred ⏭️), sugar-reel (Seeking callback — deferred ⏭️), candy-log (StreamHandler type, HookRegistry return, JsonFormatter coercion, RemoveHandler void, Styles return) |
 

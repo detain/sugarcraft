@@ -502,7 +502,7 @@ final class FlexboxTest extends TestCase
      * Benchmark: diff-based TableRenderer::render() emits fewer bytes than full re-render
      * for small changes between consecutive frames.
      *
-     * Mirrors sugar-panels, sugar-dash, sugar-crush, sugar-overlay, candy-lister.
+     * Mirrors sugar-panels, sugar-dash, sugar-crush, sugar-overlay, sugar-treelist.
      *
      * TableRenderer tracks diff state across frames. First render emits full output.
      * Subsequent renders with stable dimensions emit delta-encoded ops.
