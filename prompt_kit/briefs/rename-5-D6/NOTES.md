@@ -25,11 +25,16 @@ NEVER tag (path needs rename): honey-bounce/** (all), findings/honey-bounce.md, 
 
 ## Steps
 
-- (pending) tag-prep:
-- (pending) R1 dry-run:
-- (pending) R2 remote: SKIPPED per lane law (serial post-weld agent owns remotes).
-- (pending) R3 tool run:
-- (pending) R4 manual:
-- (pending) R5 wiring:
-- (pending) R6 gates:
-- (pending) R7 commits:
+- tag-prep `d4c9b9f61`: 24 lines / 10 files @rename-keep-tagged (ci.yml:347, docs/plans/leftover/updates.md ×3, findings/monorepo-audit-2026-05-27.md ×10, findings/resume_prompt.md ×3, php74_branch.md ×2, rename-3-A1/NOTES.md, rename-baseline.md, gen-ansi-readme.php, CheckPathReposTest:546, GenAnsiReadmeTest:164) + this NOTES created. CONTEXT.md 9/9 + crush_code_RESUME + improvements-2026-05 hits were already tagged — zero new tags needed.
+- R1 dry-run: 190 content files at base. <!-- @rename-keep -->
+- R2 remote: SKIPPED per lane law (serial post-weld agent owns remotes/packagist).
+- R3 tool run (rc=0): applied R1=112, R2=72, R3=1359, R4=1, R6=1 rule hits; 180 content files = 10 fewer than dry-run (my tag-prep skips — expected). Commit spans 365 files incl. path renames: dir move + 171 ansi art paths + glued-path docs/_data/repo_map/research/icons files all moved by tool.
+- R4 manual (same commit): Lang.php docblock `'bounce'`→`'spring'`; LangTest.php:31 assertSame flip; glued plan_honey-bounce.md content pointers ×10 → plan_sugar-spring.md; sugarcraft_honey-bounce.md pointers ×16 → sugarcraft_sugar-spring.md; CAP-HYPHEN research heading `# Honey-Bounce Library Research` → `# SugarSpring Library Research`; .vhs post-\n blindspot CONFIRMED LIVE — candy-scriptui/.vhs/filter.tape `\nHoneyBounce\n` → SugarSpring; R4.1 Formerly + Namespace-changed notices under sugar-spring/README.md H1 (both tagged). <!-- @rename-keep -->
+- R5 wiring: gen-docs run → redirect stub docs/lib/honey-bounce.html minted (generator self-tags its line) committed; gen-ansi-readme.php run rc0; stale-brand artifacts recorded in prompt_kit/briefs/rename-followups.md (ansi wordmark content ×171+15+3+2 files, icon png bytes, generate_icons.py prompt, .vhs gifs); consumers+lib relinked `refresh-deps --mode=linked`. <!-- @rename-keep -->
+- R6 gates @ tip `970d01a9e` (all plain-pipe, timeout-wrapped): residue `--old honey-bounce` = 0 findings; sugar-spring 210T/6088A EXACT vs base re-measure; candy-flappy 64T/172A EXACT; sugar-overlay 258T/561A EXACT; sugar-widgets 570T/1246A EXACT; sugar-crush `--filter Spring` = 0 tests (no surface), `--filter Bounce` = 11T/49A OK (crush's own preserved physics-verb tests); tools/tests 426T/1484A EXACT (ran with sugar-spring/vendor — fresh worktrees lack candy-core vendor); check-path-repos --no-lib-path-repos rc0 (61 libs); check-child-lifetimes rc0 (8 findings/8 accounted/0 problems); gen-docs --check rc0 (61 pages + 31 stubs); gen-ansi-readme --check rc0 (3595 pieces). <!-- @rename-keep -->
+- R7 commits: `d4c9b9f61` tag-prep → `970d01a9e` rename → this NOTES; push `rename/d6` branch only.
+
+## Blindspots/carry
+
+- filter.tape post-\n token (D1-catalog class) re-confirmed live this lane; gen-docs stub self-tag line confirmed; easeOutBounce/"Bounce Rate"/OverridesBounce false-positive family documented above — no new tool blindspot beyond D1 catalog.
+- crush `--filter Bounce` 11T stays green deliberately (physics-verb names, not brand refs); weld should see no crush-side bounce churn.
