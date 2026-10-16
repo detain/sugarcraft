@@ -393,7 +393,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `Tape/Msg/Migration/Matcher/Hook/Encode/Render` (≈24 → split), **3.9e** root files.
 - **3.10** `candy-wish`(35,med, core+pty) → **3.10a** `Middleware/*` (14), **3.10b** `Channel/*`
   (11), **3.10c** `Transport/*`+root (≈10).
-- **3.11** `candy-minesweeper`(9,high, buffer+core+mouse+sprinkles), `candy-flip`(9,med,
+- **3.11** `candy-minesweeper`(9,high, buffer+core+mouse+sprinkles), `candy-flip`(9,med, <!-- @rename-keep -->
   core+pty+sprinkles; **WeakMap→SplObjectStorage**).
 
 ### Phase 4 — Components
@@ -499,7 +499,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-veil | high | 7 | ctor-promotion, enum, enum-with-methods, match, named-args, readonly | <!-- @rename-keep historical provenance -->
 | candy-async | medium | 8 | ctor-promotion, mixed, named-args, readonly-class, union; react |
 | candy-buffer | medium | 17 | ctor-promotion, nullsafe, readonly, union |
-| candy-flip | medium | 9 | WeakMap, ctor-promotion, named-args, readonly |
+| candy-flip | medium | 9 | WeakMap, ctor-promotion, named-args, readonly | <!-- @rename-keep -->
 | sugar-forms | medium | 48 | backed-enum, ctor-promotion, match, non-capturing-catch, nullsafe |
 | sugar-quickpick | medium | 7 | ctor-promotion, first-class-callable, readonly-class |
 | candy-kit | medium | 7 | ctor-promotion, named-args, ??=, readonly, union |
