@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9c4ccaeaa31c6a05ce073734e28972b8",
+    "content-hash": "0e3fc40f16d203be2799784f968d8f9a",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4053,67 +4053,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-forms",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-forms",
-                "reference": "b9c528afaf2f45103175aa26c9067faf641efc4e"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-buffer": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-fuzzy": "dev-master",
-                "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Forms\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Forms\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits, with the interactive huh-style form engine folded in.",
-            "homepage": "https://github.com/sugarcraft/candy-forms",
-            "keywords": [
-                "forms",
-                "input",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-forms/issues",
-                "source": "https://github.com/sugarcraft/candy-forms",
-                "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-fuzzy",
             "version": "dev-master",
             "dist": {
@@ -5295,17 +5234,17 @@
             "dist": {
                 "type": "path",
                 "url": "candy-scriptui",
-                "reference": "9f1f414870e5ca22316b48c89bf21d93ab85d758"
+                "reference": "c9e43812b25d2e66f0e61833bc6467903c5cc85f"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-fuzzy": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-forms": "dev-master",
                 "symfony/console": "^6.4 || ^7.0"
             },
             "require-dev": {
@@ -5493,7 +5432,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sql",
-                "reference": "74266f49a84ab3967e8f40fa5719fb657282b653"
+                "reference": "1b8a3f69246912772f234d7a2ff1536cce04a1b5"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -5504,13 +5443,13 @@
                 "react/promise-timer": "^1.9",
                 "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-kit": "dev-master",
                 "sugarcraft/candy-layout": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-bits": "dev-master",
                 "sugarcraft/sugar-charts": "dev-master",
                 "sugarcraft/sugar-dash": "dev-master",
+                "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-table": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master",
                 "voryx/pgasync": "^2.2"
@@ -6156,15 +6095,15 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-bits",
-                "reference": "3566a7a1eb7ba8a57408a6513811df7760042948"
+                "reference": "c946950210d757c02d3a3839fca886c12e2c4f71"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-mouse": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/honey-bounce": "dev-master"
+                "sugarcraft/honey-bounce": "dev-master",
+                "sugarcraft/sugar-forms": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -6409,7 +6348,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "d61ae27b6c2dc76104b5c10ce73497c09cc123f3"
+                "reference": "abaf8b7447c1a1f0c3cb7e1c4d869051a174fd4a"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -6427,7 +6366,6 @@
                 "react/socket": "^1.16",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-focus": "@dev",
-                "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-fuzzy": "dev-master",
                 "sugarcraft/candy-kit": "@dev",
                 "sugarcraft/candy-layout": "dev-master",
@@ -6437,6 +6375,7 @@
                 "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
+                "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-mcp": "dev-master",
                 "sugarcraft/sugar-reel": "@dev",
                 "sugarcraft/sugar-toast": "dev-master",
@@ -6769,6 +6708,68 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-forms",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-forms",
+                "reference": "4b2256b36c81176235f421b5e90e6e6d75803fa8"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-buffer": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-fuzzy": "dev-master",
+                "sugarcraft/candy-layout": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Forms\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Forms\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits, with the interactive huh-style form engine folded in.",
+            "homepage": "https://github.com/sugarcraft/sugar-forms",
+            "keywords": [
+                "forms",
+                "huh",
+                "input",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-forms/issues",
+                "source": "https://github.com/sugarcraft/sugar-forms",
+                "docs": "https://github.com/sugarcraft/sugar-forms/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-gallery",
             "version": "dev-master",
             "dist": {
@@ -6892,12 +6893,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-readline",
-                "reference": "133740b8e4f275956cf14263d43804474a705595"
+                "reference": "bcc853ad0406b40b285094213935fa378a320dea"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-forms": "dev-master",
-                "sugarcraft/candy-input": "@dev"
+                "sugarcraft/candy-input": "@dev",
+                "sugarcraft/sugar-forms": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -8592,7 +8593,6 @@
         "sugarcraft/candy-flappy": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-focus": 20,
-        "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-fuzzy": 20,
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
@@ -8632,6 +8632,7 @@
         "sugarcraft/sugar-dash": 20,
         "sugarcraft/sugar-datepicker": 20,
         "sugarcraft/sugar-diff": 20,
+        "sugarcraft/sugar-forms": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-mcp": 20,
         "sugarcraft/sugar-readline": 20,

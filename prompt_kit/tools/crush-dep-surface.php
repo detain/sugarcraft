@@ -15,7 +15,7 @@ declare(strict_types=1);
 
 $libs = [
     'candy-core' => 'Core',
-    'candy-forms' => 'Forms',
+    'sugar-forms' => 'Forms',
     'candy-sprinkles' => 'Sprinkles',
     'candy-shine' => 'Shine',
     'candy-fuzzy' => 'Fuzzy',

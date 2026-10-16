@@ -16,7 +16,7 @@ use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
 
 /**
- * A {@see SettingDefinition} and its current value as the candy-forms field that
+ * A {@see SettingDefinition} and its current value as the sugar-forms field that
  * edits it (Appendix N §5.1), and that field's answer back as a settings value.
  *
  * Bool → {@see Confirm}; a key with choices ({@see OptionsProvider::for()}) →

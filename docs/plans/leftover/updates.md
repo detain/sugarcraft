@@ -355,18 +355,18 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   docs for step 07.21 · PR#681 · document withIdleTrim() in README/end-user HTML/dev HTML/admin HTML + ReplayCommand PHPDoc + CALIBER entry
   step 07.22 · PR#682 · candy-vcr: add FocusInMsg/FocusOutMsg to BuiltinSerializer + update candy-vt FocusInMsg/FocusOutMsg to implemenets Msg + path-repo; 29 tests green
   docs for step 07.22 · PR#683 · update BuiltinSerializer msg count 14→19 in README + end-user HTML; add @implements Msg to FocusInMsg/FocusOutMsg docblocks; note FocusInMsg/FocusOutMsg implements Msg in CALIBER_LEARNINGS
-  step 08.01 · PR#684 · candy-forms: add Validator interface + Required/Email/MinLength/MaxLength/Pattern classes; Input::withValidator() chains multiple validators (leftover-rollout step 08.01)
+  step 08.01 · PR#684 · sugar-forms: add Validator interface + Required/Email/MinLength/MaxLength/Pattern classes; Input::withValidator() chains multiple validators (leftover-rollout step 08.01)
   review for step 08.01 · clean · PR#684
   tests-ci for step 08.01 · clean
-  docs for step 08.01 · PR#685 · document Validator interface + 5 built-in subclasses in README (chaining quickstart + API table + custom impl example) + update docs/lib/candy-forms.html quickstart + feature grid
-  step 08.02 · PR#686 · candy-forms: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() in Input/Select (leftover-rollout step 08.02)
+  docs for step 08.01 · PR#685 · document Validator interface + 5 built-in subclasses in README (chaining quickstart + API table + custom impl example) + update docs/lib/sugar-forms.html quickstart + feature grid
+  step 08.02 · PR#686 · sugar-forms: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() in Input/Select (leftover-rollout step 08.02)
   review for step 08.02 · clean · PR#686
   tests-ci for step 08.02 · clean
   docs for step 08.02 · PR#687 · document FuzzyMatcher + withFuzzySuggestions() in README (fuzzy quickstart + field tables) + end-user HTML (quickstart/feature grid/API table) + new CALIBER_LEARNINGS.md [pattern:fuzzy-smith-waterman-two-row]
-  step 08.03 · PR#688 · candy-forms: add withAsyncSuggestions() to Input/Select (150ms debounce + SuggestionsReadyMsg + Deferred pattern; leftover-rollout step 08.03)
+  step 08.03 · PR#688 · sugar-forms: add withAsyncSuggestions() to Input/Select (150ms debounce + SuggestionsReadyMsg + Deferred pattern; leftover-rollout step 08.03)
   review for step 08.03 · clean · PR#688
   tests-ci for step 08.03 · clean
-  step 08.04 · PR#690 · candy-forms: MultiSelect vim keys (j/k nav + space toggle) + Form::validateAll() + Select::withEnum(\BackedEnum) + Theme::$errorSummary slot (leftover-rollout step 08.04)
+  step 08.04 · PR#690 · sugar-forms: MultiSelect vim keys (j/k nav + space toggle) + Form::validateAll() + Select::withEnum(\BackedEnum) + Theme::$errorSummary slot (leftover-rollout step 08.04)
   review for step 08.04 · clean · PR#690 (2 docs gaps: validateAll + withEnum not in README API tables)
   tests-ci for step 08.04 · clean
   docs for step 08.04 · PR#691 · document validateAll in Form chainables table + withEnum in Select knobs + MultiSelect vim keys + errorSummary in README/end-user HTML
@@ -439,13 +439,13 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 ### Phase 08 complete (all 14 steps shipped)
 
-- [x] candy-forms/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
-- [x] candy-forms/README.md: `Select::withEnum(\BackedEnum::class)` not documented in the Select field notable knobs column (line 47) — ✅ resolved PR#691
+- [x] sugar-forms/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
+- [x] sugar-forms/README.md: `Select::withEnum(\BackedEnum::class)` not documented in the Select field notable knobs column (line 47) — ✅ resolved PR#691
 
 ## Open review findings — 08.03
 
-- [x] candy-forms/README.md: `withAsyncSuggestions()` not documented in the Input field API table or Select field API table. — ✅ resolved PR#689
-- [x] candy-forms/CALIBER_LEARNINGS.md: no new pattern entry for the async debounce + `Loop::addTimer` + `Deferred` + `SuggestionsReadyMsg` dispatch pattern. — ✅ resolved PR#689
+- [x] sugar-forms/README.md: `withAsyncSuggestions()` not documented in the Input field API table or Select field API table. — ✅ resolved PR#689
+- [x] sugar-forms/CALIBER_LEARNINGS.md: no new pattern entry for the async debounce + `Loop::addTimer` + `Deferred` + `SuggestionsReadyMsg` dispatch pattern. — ✅ resolved PR#689
 
 ## Open review findings — 07.16
 

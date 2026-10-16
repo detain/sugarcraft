@@ -26,9 +26,9 @@ checkout. `vendor/` is gitignored.
 
 | File | Composition | Shows |
 | --- | --- | --- |
-| [`spinner-in-table.php`](./spinner-in-table.php) | candy-forms `Spinner` + sugar-table `Table` | A live spinner frame embedded in a `StyledCell`, used as a per-row job status. |
-| [`sparkline-in-table.php`](./sparkline-in-table.php) | sugar-charts `Sparkline` + sugar-table `Table` + candy-forms `Spinner` | One inline trend chart per table row, with a spinner as the panel's "refreshing" indicator. |
-| [`program-within-program.php`](./program-within-program.php) | candy-core `Model` + candy-forms `Spinner` | The MVC-style Model–Update–View "sub-program" pattern: a root model forwards messages to whichever child (a counter or a spinner) has focus. |
+| [`spinner-in-table.php`](./spinner-in-table.php) | sugar-forms `Spinner` + sugar-table `Table` | A live spinner frame embedded in a `StyledCell`, used as a per-row job status. |
+| [`sparkline-in-table.php`](./sparkline-in-table.php) | sugar-charts `Sparkline` + sugar-table `Table` + sugar-forms `Spinner` | One inline trend chart per table row, with a spinner as the panel's "refreshing" indicator. |
+| [`program-within-program.php`](./program-within-program.php) | candy-core `Model` + sugar-forms `Spinner` | The MVC-style Model–Update–View "sub-program" pattern: a root model forwards messages to whichever child (a counter or a spinner) has focus. |
 
 ## The recurring trick
 

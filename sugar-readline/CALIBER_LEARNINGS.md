@@ -11,8 +11,8 @@ Pattern: Accept an `InputDriver` in the constructor, defaulting to `StreamInputD
 Anti-pattern: Reaching for `STDIN` directly in the run loop — hard to test, couples to the global TTY.
 Source: step-21 ai/sugar-readline-input
 
-### 2026-05-31 — Vim keybindings via shared candy-forms VimKeyHandler
-Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic (ViMode or TextInput vimMode flags). Always add new bindings to `VimAction` enum + `VimKeyHandler` so candy-forms, candy-forms, sugar-bits, and sugar-readline all benefit at once.
+### 2026-05-31 — Vim keybindings via shared sugar-forms VimKeyHandler
+Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic (ViMode or TextInput vimMode flags). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-forms, sugar-forms, sugar-bits, and sugar-readline all benefit at once.
 Source: step-24 ai/vim-mode-shared
 
 ### 2026-06-29 — Emacs word-delete/transpose O(n) replay deferred
@@ -41,7 +41,7 @@ EmacsMode Ctrl+R/Ctrl+S start the shared TextPrompt search machine in reverse/fo
 ## Future work (deferred pre-1.0)
 
 ### ~~Vi text objects (Finding 13)~~ — DONE 2026-07-04
-Implemented candy-forms-first, per CALIBER_LEARNINGS 2026-05-31 ("Always add new bindings to VimAction enum + VimKeyHandler"): candy-forms grew `TextObject` (pure resolver: buffer + cursor + `TextObjectScope::Inner/Around` + target key → `?[start,end)` in mb character indices), `VimOperator` (c/d/y), new `VimAction` cases (`ChangeLine`, `Change/Delete/YankTextObject`) and `VimKeyHandler::handleTextObject()`. ViMode consumes them via its existing pending-motion machinery extended with a `pendingScope` stage (operator → i/a → target), executing ranges through key replay (`moveCursorTo` + Backspace), consistent with `deleteLine()`. `cc` (change line) came along for free. Documented simplifications: `a"` takes no trailing whitespace, no `quoteescape`, no yank register (matches `yy`).
+Implemented sugar-forms-first, per CALIBER_LEARNINGS 2026-05-31 ("Always add new bindings to VimAction enum + VimKeyHandler"): sugar-forms grew `TextObject` (pure resolver: buffer + cursor + `TextObjectScope::Inner/Around` + target key → `?[start,end)` in mb character indices), `VimOperator` (c/d/y), new `VimAction` cases (`ChangeLine`, `Change/Delete/YankTextObject`) and `VimKeyHandler::handleTextObject()`. ViMode consumes them via its existing pending-motion machinery extended with a `pendingScope` stage (operator → i/a → target), executing ranges through key replay (`moveCursorTo` + Backspace), consistent with `deleteLine()`. `cc` (change line) came along for free. Documented simplifications: `a"` takes no trailing whitespace, no `quoteescape`, no yank register (matches `yy`).
 
 ### Integration with Terminfo (Finding 16)
 Using terminfo for terminal capability queries would require FFI bindings to the curses terminfo database. This is a significant integration effort.

@@ -264,7 +264,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 | `bubblezone` | `candy-mouse` | Mouse zone tracking for clickable regions |
 | `bubbles` | `sugar-bits` | 14 prebuilt components (TextInput, List, Table, etc.) |
 | `ntcharts` | `sugar-charts` | Terminal charting library |
-| `huh` | `candy-forms` | Interactive form library |
+| `huh` | `sugar-forms` | Interactive form library |
 | `glamour` | `candy-shine` | Markdown rendering |
 | `colorprofile` | `candy-palette` | Terminal color detection |
 | `exec` (internal) | `candy-pty` | Process spawning (PTY) |

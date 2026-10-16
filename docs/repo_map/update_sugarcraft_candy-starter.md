@@ -254,7 +254,7 @@ final class Counter implements Model {
 
 **9. No sugar-bits Components Used**
 
-- **Description:** README's "common next steps" table mentions `sugar-bits` Spinner, `candy-forms` Group, etc., but scaffold uses only raw `Style` from `candy-sprinkles`.
+- **Description:** README's "common next steps" table mentions `sugar-bits` Spinner, `sugar-forms` Group, etc., but scaffold uses only raw `Style` from `candy-sprinkles`.
 
 - **Why it matters:** Developers might not realize how to integrate components from other packages.
 
@@ -446,7 +446,7 @@ final class Counter implements Model {
 
 2. **Demonstrate Cross-Library Composition** — Show `SugarCraft\Shine\Renderer` rendering Markdown help text alongside the counter.
 
-3. **Add candy-forms Example** — Demonstrate interactive prompts using candy-forms's `Group` component.
+3. **Add sugar-forms Example** — Demonstrate interactive prompts using sugar-forms's `Group` component.
 
 4. **Show sugar-charts Integration** — Add a variant that plots counter history as a sparkline using sugar-charts.
 

@@ -87,7 +87,7 @@ candy-scriptui/
 candy-scriptui
 ├── symfony/console ^6.4 || ^7.0    (CLI framework)
 ├── sugarcraft/candy-core              (TUI runtime: Program, Msg, Model)
-├── sugarcraft/candy-forms             (form components: TextInput, ItemList, etc.)
+├── sugarcraft/sugar-forms             (form components: TextInput, ItemList, etc.)
 ├── sugarcraft/candy-pty              (PosixProcess for spin command)
 ├── sugarcraft/candy-shine            (Theme, Renderer for format command)
 └── sugarcraft/candy-sprinkles        (Style, Border, Align for style command)
@@ -573,7 +573,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 ## 3. Component Usage Patterns
 
-### 3.1 How Commands Use candy-forms Components
+### 3.1 How Commands Use sugar-forms Components
 
 Every interactive command follows the same wiring pattern:
 
@@ -601,7 +601,7 @@ return Command::SUCCESS;
 
 ### 3.2 Component Mapping
 
-| candy-scriptui Command | candy-forms Component | Notes |
+| candy-scriptui Command | sugar-forms Component | Notes |
 |---|---|---|
 | choose | `ItemList` + `StringItem` | 1D list, not grid |
 | confirm | `Field\Confirm` | Binary choice field |
@@ -753,7 +753,7 @@ $completion = match ($shell) {
 |---|---|---|
 | CLI Framework | Kong | Symfony Console |
 | TUI Framework | Bubble Tea (goroutines) | Program (ReactPHP-like loop) |
-| Components | bubbles/lipgloss | candy-forms/candy-sprinkles |
+| Components | bubbles/lipgloss | sugar-forms/candy-sprinkles |
 | Style System | lipgloss fluent API | Sprinkles Style builders |
 | Filter Algorithm | sahilm/fuzzy (Go) | ItemList substring (PHP) |
 | Fuzzy Matching | Full fuzzy + exact | Substring only (--fuzzy is no-op) |
@@ -777,7 +777,7 @@ $completion = match ($shell) {
 
 **Stars:** ~2,800 | **Language:** Go
 
-Maps to `candy-forms` (not yet fully implemented in SugarCraft). huh provides:
+Maps to `sugar-forms` (not yet fully implemented in SugarCraft). huh provides:
 - Multi-field forms with pages (Groups)
 
 - Dynamic reactivity via `*Func()` methods with binding invalidation
@@ -792,10 +792,10 @@ Maps to `candy-forms` (not yet fully implemented in SugarCraft). huh provides:
 
 **Stars:** ~2,000 | **Language:** Go
 
-Maps to `sugar-bits` (and indirectly to `candy-forms`). Provides:
+Maps to `sugar-bits` (and indirectly to `sugar-forms`). Provides:
 - TextInput, TextArea, Viewport, Spinner, Table, List, Progress, Timer, etc.
 
-**candy-scriptui wraps:** These exact components — `candy-forms` is the PHP port of bubbles.
+**candy-scriptui wraps:** These exact components — `sugar-forms` is the PHP port of bubbles.
 
 ### 5.4 c9s/CLIFramework (PHP CLI Framework)
 
@@ -918,7 +918,7 @@ Bash, Zsh, and Fish completion scripts generated from the application introspect
 ```
 candy-scriptui
 ├── candy-core          TUI runtime: Program, Model, Msg, KeyType, Cmd, Subscriptions
-├── candy-forms         Components: TextInput, TextArea, ItemList, FilePicker, Viewport, Spinner, Confirm
+├── sugar-forms         Components: TextInput, TextArea, ItemList, FilePicker, Viewport, Spinner, Confirm
 ├── candy-pty           PosixProcess for spawning child processes
 ├── candy-shine         Renderer (markdown), Theme system
 ├── candy-sprinkles    Style, Border, Align, Table (layout + styling)
@@ -973,7 +973,7 @@ candy-scriptui
 
 - Complete 13-command implementation matching gum's surface area
 
-- Clean separation: Command (CLI layer) → Model (TEA layer) → Components (candy-forms)
+- Clean separation: Command (CLI layer) → Model (TEA layer) → Components (sugar-forms)
 
 - PHP 8.3+ type safety throughout
 

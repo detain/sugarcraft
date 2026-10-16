@@ -155,7 +155,7 @@ SugarCraft already has a direct port: **`sugar-table`**
 | `RowData` | `RowData` | Both use `map[string]any` / associative array |
 | `StyledCell` | `StyledCell` | Cell with explicit style override |
 | `Border` | `Border` (from `SugarCraft\Sprinkles\Border`) | Pre-built border families (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) |
-| `KeyMap` | (partially via KeyMap in candy-forms) | Keyboard bindings not fully ported |
+| `KeyMap` | (partially via KeyMap in sugar-forms) | Keyboard bindings not fully ported |
 | `FilterFunc` / `FilterFuncInput` | `Table::Filter()` | Per-column filter map; sugar-table filters by `stripos` |
 | `filterFuncContains` | Built into `filteredSortedRows()` | Case-insensitive contains |
 | `filterFuncFuzzy` | Not yet ported | Fuzzy subsequence matching |
@@ -177,7 +177,7 @@ SugarCraft already has a direct port: **`sugar-table`**
 
 ### Related SugarCraft Libraries:
 
-- **`candy-forms`:** Shares `KeyMap` concept and some input handling patterns
+- **`sugar-forms`:** Shares `KeyMap` concept and some input handling patterns
 - **`sugar-charts`:** For rendering data visualizations alongside tables
 - **`candy-core`:** Lower-level ANSI rendering primitives (`Ansi` utility class)
 

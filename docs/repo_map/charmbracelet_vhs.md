@@ -142,7 +142,7 @@
 | Frame capture / recording | `candy-scriptui` | Could provide terminal capture primitives |
 | Video encoding / FFmpeg | `sugar-charts` | Both produce output files, FFmpeg could be wrapped |
 | Theme system (base16) | `sugar-bits` | 16-color theme mapping aligns with Charm color systems |
-| Typing simulation | `candy-forms` | Input emulation concepts overlap |
+| Typing simulation | `sugar-forms` | Input emulation concepts overlap |
 | Window chrome (bars, borders) | `candy-shine` | Visual styling of terminal windows |
 | SSH server | N/A | PHP has no native SSH server lib in SugarCraft |
 | Recording mode | N/A | Would need PTY/terminal capture - platform-specific |

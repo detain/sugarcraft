@@ -23,7 +23,7 @@
 - The **FULL sugar-crush suite runs exactly ONCE at the END of each wave, by a SINGLE gate agent** — synchronous plain bash-tool pipe (NEVER tmux/setsid — `sugar-crush/tests/bootstrap.php` stdin-repair requires a non-tty, and a pty ctty false-reddens `TerminalSizeFallbackIsolationTest`), `cwd=sugar-crush`, `env -u LINES -u COLUMNS`, linked mode verified FIRST via `php scripts/refresh-deps.php --status` (a bare `composer update` swaps symlinked siblings for Packagist copies and voids every figure).
 - `sugar-crush/tests/Config/Support/suite-figure.json`, the README suite headline, and `scripts/parallel-tests-durations.tsv` are re-pinned **ONLY in the wave-gate commit** by the gate agent. Mid-wave the `ReadmeSuiteFigureDriftTest` staleness pair is the EXPECTED-only red; each lane reports its +T/+A delta to the gate.
 - Every NEW test file lands its `scripts/parallel-tests-durations.tsv` row in its own step commit (unlisted files run in ZERO shards).
-- Sibling-lib suites (candy-forms, candy-mosaic, sugar-reel, candy-core) gate their own wave steps the same targeted way from the lib dir, linked mode.
+- Sibling-lib suites (sugar-forms, candy-mosaic, sugar-reel, candy-core) gate their own wave steps the same targeted way from the lib dir, linked mode.
 - Assertion modes follow AGENTS.md tea-snapshot taxonomy: snapshot-byte / cell-grid / behaviour / coercion / golden. **candy-vt CANNOT verify graphics protocols** (its DA1 omits `;4`; DCS is a no-op) — assert sixel/kitty/iTerm2 output as raw bytes or fake detection via candy-mosaic `Detect::setProbeStdin()` (`candy-mosaic/src/Detect.php:105`, reset seam `:82`).
 
 ### Review law
@@ -54,7 +54,7 @@
 | 0 | Ground truth & contract lock | o1–o4 read-only probes, concurrent | none (no repo writes) |
 | 1 | Media core `src/Media/`, no UI | a=DTOs+Job · b=SdClient · c=Infotext · d=PNG · e=config authority · f=MediaStore | docs/* + LayeredSettings (e only) |
 | 2 | Console t2i end-to-end (pre-form) | a=GenerateImage · b=render-mode wiring · c=/generate cmd · d=live preview | Chat.php (c), src/Renderer.php (d), Bootstrap.php (b), README+docs (e) |
-| 3 | The popup form | u=candy-forms widgets (own lib) · a=MediaForm shell · b=sections · c=scripts+advanced · d=presets/ui-config · f=keys+lang+palette | Chat.php+App.php+Tui/Renderer.php (a), lang/en.php (f), docs (f+gate) |
+| 3 | The popup form | u=sugar-forms widgets (own lib) · a=MediaForm shell · b=sections · c=scripts+advanced · d=presets/ui-config · f=keys+lang+palette | Chat.php+App.php+Tui/Renderer.php (a), lang/en.php (f), docs (f+gate) |
 | 4 | img2img/inpaint + import | a=image ingress · b=mask · c=PNG round-trips · d=batch/grid · (s=sketch deferred) | Chat.php (a→c sequenced), ImageSection.php (a→b sequenced), GenerateImage.php (d) |
 | 5 | Video | a=require+job client+tool · b=player screen · c=form tab · d=audio probe | Chat.php (a), check-child-lifetimes roster (b), README/docs+composer (a) |
 | 6 | Server/web parity | P1=PHP events · P2=PHP methods · W1=regen+reducer · W2=MediaCard/ToolCard · W3=fetch route · W4=ask-relay form | EventType/EventSchemas (P1), reducer.ts (W1), sugar-crush/composer.json (none — W5 owns it) |
@@ -119,7 +119,7 @@ No repo writes. Four read-only investigator lanes, concurrent. Output = evidence
 **Build steps (micro):**
 1. Serial: `cd sugar-crush && env -u LINES -u COLUMNS vendor/bin/phpunit` via plain bash-tool pipe → keep log + junit xml. Era figure at authoring time ~21,196T/406,402A/1S (2026-10-07 pin, memory) — RE-MEASURE, cite `git rev-parse HEAD` alongside.
 2. `wc -l scripts/parallel-tests-durations.tsv`.
-3. Siblings from their dirs: candy-forms, candy-mosaic, sugar-reel, candy-core full runs (they are each their own gate; ~30–40 s each expected).
+3. Siblings from their dirs: sugar-forms, candy-mosaic, sugar-reel, candy-core full runs (they are each their own gate; ~30–40 s each expected).
 4. `php tools/check-path-repos.php --no-lib-path-repos` and `php tools/check-child-lifetimes.php` exit codes.
 5. `baseline.md`: all figures + HEAD shas + dirt inventory.
 **Tests (ship in-step):** none (measurement step).
@@ -391,11 +391,11 @@ Goal: a console user (or the model) produces a painted image from text via tool 
 
 # Wave 3 — The popup form
 
-Goal: the A1111-grade popup. **Shape A per crush_media §7.4 (recommended v1): full-band App-owned modal following `Tui/Settings/SettingsEditor.php` exactly** — state slot, key gate, wheel routing, zone-click routing, render branch — NOT a Veil popup (Shape B stays for later quick-settings; mystage §4.3's composite order `clipRowsToCols → liftZonesUnderOverlay → padForOverlay → Veil composite → restoreZones → mark-AFTER` applies only if Shape B is ever chosen; recorded here so the task's mandated order isn't lost). Lanes: **u** = candy-forms widgets (own lib, fully concurrent with crush lanes), **a** = MediaForm shell (owns App.php/Chat.php/Tui/Renderer.php), **b** = field sections, **c** = dynamic scripts + advanced editor, **d** = presets + ui-config, **f** = keys/lang/palette (owns lang/en.php + docs rows).
+Goal: the A1111-grade popup. **Shape A per crush_media §7.4 (recommended v1): full-band App-owned modal following `Tui/Settings/SettingsEditor.php` exactly** — state slot, key gate, wheel routing, zone-click routing, render branch — NOT a Veil popup (Shape B stays for later quick-settings; mystage §4.3's composite order `clipRowsToCols → liftZonesUnderOverlay → padForOverlay → Veil composite → restoreZones → mark-AFTER` applies only if Shape B is ever chosen; recorded here so the task's mandated order isn't lost). Lanes: **u** = sugar-forms widgets (own lib, fully concurrent with crush lanes), **a** = MediaForm shell (owns App.php/Chat.php/Tui/Renderer.php), **b** = field sections, **c** = dynamic scripts + advanced editor, **d** = presets + ui-config, **f** = keys/lang/palette (owns lang/en.php + docs rows).
 
 ## W3.1 — `MediaForm` modal shell (state slot, key gate, render arm) — ✅ landed @da7dba95c
 **Goal:** App-level hosting: `?MediaForm` slot, open door, keys routed to it while up (SettingsEditor-identical exceptions), wheel scroll routing, zone prefixes, full-band render branch, and the **action-object return** idiom (DirectoryPickerAction precedent — "modal returns an action enum, host executes I/O", crush_media §10.2-6 canonical at `Chat.php:17603-17628`).
-**Probe first:** W0.2 §7.4-table anchors (slot `App.php:327`, key gate `:2942` with its Ctrl+C/F10 exception list — READ, don't invent; wheel `:2344` (wheel→Up/Down into modal); zone click `:2796` `Mark::zone` hit-test; render branch `Tui/Renderer.php:566` + `renderSettingsEditor :847`; zone trio `SettingsEditor.php:75-77`); `SettingsFieldFactory` (how SettingsEditor builds candy-forms fields and drives them directly — crush_media §4.3 note "Field objects driven directly, Forms\Form used nowhere in crush" → WE are the first Form-in-crush consumer; decision: drive fields directly like SettingsEditor, use `Form::groups` ONLY if group-navigation earns its keep — probe SettingsEditor's navigation first, record verdict in code comment); `PaletteState.php:28` immutability shape; `KeyBindingRegistry` `CONTEXT_*` `:62-86` + `live():118` modal-context rule (§7.6).
+**Probe first:** W0.2 §7.4-table anchors (slot `App.php:327`, key gate `:2942` with its Ctrl+C/F10 exception list — READ, don't invent; wheel `:2344` (wheel→Up/Down into modal); zone click `:2796` `Mark::zone` hit-test; render branch `Tui/Renderer.php:566` + `renderSettingsEditor :847`; zone trio `SettingsEditor.php:75-77`); `SettingsFieldFactory` (how SettingsEditor builds sugar-forms fields and drives them directly — crush_media §4.3 note "Field objects driven directly, Forms\Form used nowhere in crush" → WE are the first Form-in-crush consumer; decision: drive fields directly like SettingsEditor, use `Form::groups` ONLY if group-navigation earns its keep — probe SettingsEditor's navigation first, record verdict in code comment); `PaletteState.php:28` immutability shape; `KeyBindingRegistry` `CONTEXT_*` `:62-86` + `live():118` modal-context rule (§7.6).
 **Files likely touched:**
 - `sugar-crush/src/Tui/MediaForm/MediaForm.php` (new) — TEA model (`init()/update(Msg):[self,?Closure|Cmd]/view()/subscriptions()` per §10.2-2); holds field list (FieldSpec registry from W3.4 will plug in — define the `Section` interface + a Params placeholder section today), draft `MediaRequest`, zone prefixes `media:tab:` / `media:row:` / `media:help:` (SettingsEditor trio analog).
 - `sugar-crush/src/Tui/MediaForm/MediaFormAction.php` (new) — `enum { case Cancel; case Generate; case SavePreset; case ImportPng; }` + payload carrier object (action + final request) — I/O-free.
@@ -414,26 +414,26 @@ Goal: the A1111-grade popup. **Shape A per crush_media §7.4 (recommended v1): f
 **Definition of done:** modal opens/closes/steals-keys correctly and reaches the real tool; the four App seams mirror SettingsEditor line-for-line.
 **Review brief:** (1) full-band-vs-overlay audit: confirm nothing in the Veil chain (`Renderer.php:2004-2020` painted==routed law) was touched and KeyHelpTest untouched; (2) mutation: drop the update() short-circuit → chat-key-leak pin reds; (3) zone marks are U+E000/E001 sentinel pairs (candy-mouse) — check marks emitted AFTER any future composite (N/A now but flag in code where W-shape-B would matter); (4) `tests/NoRawAnsiInTranscript`-family derived censuses: view-side painting only, no echo/emitters in Chat arms.
 
-## W3.2 — candy-forms: mouse-drag Slider (lane u, own lib) — ✅ landed @510fcb85d
+## W3.2 — sugar-forms: mouse-drag Slider (lane u, own lib) — ✅ landed @510fcb85d
 **Goal:** close widget gap #1 (crush_media §7.5 mystage §4.2.1): `Field\Slider::update()` never inspects MouseMsg. Recipe (mystage verbatim): mark the track as a zone; on Press/`ZoneDragMoveMsg` map `pos(msg)[0]/zone.width() → min + ratio*(max-min) → withValue()` (normalise already clamps+snaps).
 **Probe first:** candy-forms live lines (`Field/Slider.php:111` new(), `:221` view()/normalise clamp+lattice-snap — READ its exact snap semantics; drag MUST call withValue() and let normalise own snapping, no second math); `ZoneDragMoveMsg` + `Zone\DragTracker` live locations (candy-zone emits drag msgs — mystage layer map; is `candy-zone`/`candy-mouse` in candy-forms' composer require? W0.2 checked — if absent: forms→mouse interface dep OR host-side plumbing; RULING: keep Slider dependency-free — add a PUBLIC method `handleZoneMouse(MouseMsg $m, int $zoneLeft, int $zoneWidth): ?self` that the HOST (crush) calls after its own zone hit-test; crush already runs candy-mouse; avoids a new forms dep entirely — record this as the Shape-A-vs-B of widget mouse support in the docblock); sugar-bits Tabs is the alternative drag-emitter but adds 2 requires (mystage §4.1 row) — rejected for this step. <!-- @rename-keep historical provenance -->
 **Files likely touched:**
-- `candy-forms/src/Field/Slider.php` (edit) — `handleZoneMouse()` + MouseMsg branch in `update()` (harmless if no host marks zones).
-- `candy-forms/tests/Field/SliderMouseTest.php` (new).
-- `candy-forms/CALIBER_LEARNINGS.md` (edit — entry per lib convention).
+- `sugar-forms/src/Field/Slider.php` (edit) — `handleZoneMouse()` + MouseMsg branch in `update()` (harmless if no host marks zones).
+- `sugar-forms/tests/Field/SliderMouseTest.php` (new).
+- `sugar-forms/CALIBER_LEARNINGS.md` (edit — entry per lib convention).
 **Lane:** u ; **Depends on:** W0.2 ; **Shared-file risk:** none inside sugar-crush
 **Build steps (micro):**
 1. ratio = clamp(($x - $zoneLeft) / max(1, $zoneWidth - 1), 0, 1) — endpoint-inclusive convention documented; value = min + ratio*(max-min) → `withValue()` (normalise owns snap/clamp — reuse, never duplicate).
 2. Handle Press + DragMove + Release identically (no press-threshold subtlety in v1); ignore wheel here (Viewport routes it as Up/Down today — record divergence).
 3. Keyboard path byte-identical (existing Slider tests untouched).
-**Tests (ship in-step):** coercion (ratio edges x<0→min, ≥width→max, midpoints snap to the lattice — reuse normalise's step math as the oracle), behaviour (DragMove sequence updates monotonically; immutability: returns new instance). `cd candy-forms && vendor/bin/phpunit --filter 'Field\\SliderMouseTest'`; consumer regression at wave gate: `cd sugar-bits && vendor/bin/phpunit` + `cd candy-forms && vendor/bin/phpunit` targeted runs + crush `--filter 'Form|Input|Select|Cursor'` stay green (façade law: NO copied crush/bits tests for forms behaviour — ship only lib-local tests, campaign memory #1275/#1312/#1314).
+**Tests (ship in-step):** coercion (ratio edges x<0→min, ≥width→max, midpoints snap to the lattice — reuse normalise's step math as the oracle), behaviour (DragMove sequence updates monotonically; immutability: returns new instance). `cd sugar-forms && vendor/bin/phpunit --filter 'Field\\SliderMouseTest'`; consumer regression at wave gate: `cd sugar-bits && vendor/bin/phpunit` + `cd sugar-forms && vendor/bin/phpunit` targeted runs + crush `--filter 'Form|Input|Select|Cursor'` stay green (façade law: NO copied crush/bits tests for forms behaviour — ship only lib-local tests, campaign memory #1275/#1312/#1314).
 **Definition of done:** crush can drag any param slider via the host hit-test.
 **Review brief:** mutation: invert ratio (left=max) → drag pin reds; mutation: duplicate snap-math inside handler instead of delegating → lattice-consistency pin (keyboard-set vs drag-set same value) reds; check no new composer dep slipped in (path-repos guard + rationale docblock).
 
-## W3.3 — candy-forms: bounded `NumberField` (+ droppable pill radio) — ✅ landed @8ebb26011
+## W3.3 — sugar-forms: bounded `NumberField` (+ droppable pill radio) — ✅ landed @8ebb26011
 **Goal:** gap #2 (mystage §4.2.2): a bounded numeric box — SEED is int64 where a Slider is structurally wrong; A1111's seed widget is a Number precision-0 with 🎲/♻ buttons (§2.1). Optional same-lane: gap #4 horizontal radio-pill row (A1111 mask-mode radios) — **droppable**: sanctioned stand-in is `Select withHeight(3)` (crush_media §7.5 G-2 ruling).
 **Probe first:** `Forms\TextInput\TextInput` live path (mystage: NumberField composes TextInput + Slider's normalisation); Slider normalise reuse surface from W3.2; Confirm/Select mechanics if pills ship; AGENTS.md coercion-test convention (clamp edge cases are the spec).
-**Files likely touched:** `candy-forms/src/Field/NumberField.php` (new), `candy-forms/src/Field/RadioPills.php` (new, droppable), `candy-forms/tests/Field/NumberFieldTest.php` (+`RadioPillsTest.php`) (new), `candy-forms/CALIBER_LEARNINGS.md` (edit).
+**Files likely touched:** `sugar-forms/src/Field/NumberField.php` (new), `sugar-forms/src/Field/RadioPills.php` (new, droppable), `sugar-forms/tests/Field/NumberFieldTest.php` (+`RadioPillsTest.php`) (new), `sugar-forms/CALIBER_LEARNINGS.md` (edit).
 **Lane:** u ; **Depends on:** W3.2 ; **Shared-file risk:** none
 **Build steps (micro):**
 1. Model: draft string + committed value; `↑/↓ ±step`, `PgUp/PgDn ±10·step`, `Home/End → min/max`; commit on Enter/blur; invalid draft shows error state, value unchanged (XSet sentinel on "never set"); empty ≠ 0.
@@ -465,7 +465,7 @@ Goal: the A1111-grade popup. **Shape A per crush_media §7.4 (recommended v1): f
 
 ## W3.5 — Seed disclosure + Hires accordion + Refiner + narrow fit — ✅ landed @587121021
 **Goal:** conditional groups: "Extra" disclosure (Variation seed/strength 0–1/.01 def 0, seed-resize-from 0–2048/8, §2.1+§2.3 slerp semantics in tooltips/docblocks), Hires accordion (all §2.1/§2.3 rows: upscaler dropdown (6 latent modes §2.8 verbatim + runtime `/upscalers`), hires steps 0–150 def 0, denoising 0–1/.01 **UI-def 0.7 (the context-dependent default: img2img 0.75 vs hires 0.7 — §2.2 non-conflict note)**, upscale-by 1–4/.05 def 2, resize-to W/H 0–2048/8 def 0, hidden-by-default reveal rows: alt checkpoint/sampler/scheduler + hires prompt/neg), Refiner accordion (checkpoint dropdown + switch-at 0.01–1/.01 def 0.8); PLUS the narrow-viewport fit pass (60×24 golden + clipping).
-**Probe first:** `isHidden(values)` conditional-field mechanics live (crush_media §7.2 lists it as the exact mechanism for "Extra disclosure, hires sub-controls, inpaint-only" — verify candy-forms Form/Field supports conditional visibility TODAY; if partial, MediaForm implements visibility in its collect/render loop and the gap goes to candy-forms as a follow-up note); `Note.php:24` for the `txtimg_hr_finalres` computed row ("from WxH to WxH" preview analog — computed live via W3.6-owned HiresMath… careful: HiresMath lands HERE in b's section work, W3.6=scripts is lane c — HiresMath is a b-file); §2.4 two-pass math steps 2–4 for emission-order sanity; upscaler six latent-mode strings verbatim from §2.8.
+**Probe first:** `isHidden(values)` conditional-field mechanics live (crush_media §7.2 lists it as the exact mechanism for "Extra disclosure, hires sub-controls, inpaint-only" — verify sugar-forms Form/Field supports conditional visibility TODAY; if partial, MediaForm implements visibility in its collect/render loop and the gap goes to sugar-forms as a follow-up note); `Note.php:24` for the `txtimg_hr_finalres` computed row ("from WxH to WxH" preview analog — computed live via W3.6-owned HiresMath… careful: HiresMath lands HERE in b's section work, W3.6=scripts is lane c — HiresMath is a b-file); §2.4 two-pass math steps 2–4 for emission-order sanity; upscaler six latent-mode strings verbatim from §2.8.
 **Files likely touched:** `sugar-crush/src/Tui/MediaForm/Sections/SeedSection.php`, `HiresSection.php`, `RefinerSection.php`, `sugar-crush/src/Tui/MediaForm/HiresMath.php` (all new), `MediaForm.php` (edit, registration rows), `tests/Tui/MediaForm/SectionsTest.php`, `tests/Tui/MediaForm/HiresMathTest.php`, `MediaFormNarrowTest.php` (new) + durations rows.
 **Lane:** b ; **Depends on:** W3.4 ; **Shared-file risk:** MediaForm.php (b self-sequenced)
 **Build steps (micro):**
@@ -925,7 +925,7 @@ Goal: knob-parity truth, docs completeness, demo, security/perf hygiene, final f
 **Review brief:** methodology check (warm-up excluded? GC noise noted?); no wall-clock assertions committed to CI.
 
 ## W7.6 — Final full suite + figure re-pin (project closeout gate) — ✅ landed @6116c499d (W7 gate 2026-10-11: serial 22,323T/421,357A/0F/2S exit0; K=8 conservation PASS; tools rc=0; siblings exact — forms 2326/bits 570/prompt 72/core 1246/reel 552/mosaic 661; web gates all green incl. dist byte-parity; this ledger commit is the closeout tip)
-**Goal:** the definitive green: full serial run, `suite-figure.json` + README headline + durations.tsv refresh, K=8 shard conservation check, drift family sweep, `tools/check-path-repos.php --no-lib-path-repos` + `tools/check-child-lifetimes.php` rc=0, sibling suites re-run (candy-forms/mosaic/reel/core), `php tools/gen-*-doc --check`-style idempotence, and the plan's own completion ledger updated (every step ✅/DESCOPED).
+**Goal:** the definitive green: full serial run, `suite-figure.json` + README headline + durations.tsv refresh, K=8 shard conservation check, drift family sweep, `tools/check-path-repos.php --no-lib-path-repos` + `tools/check-child-lifetimes.php` rc=0, sibling suites re-run (sugar-forms/mosaic/reel/core), `php tools/gen-*-doc --check`-style idempotence, and the plan's own completion ledger updated (every step ✅/DESCOPED).
 **Probe first:** W0.4 baseline file (the delta ledger's base); refresh procedure precedent: `scripts/refresh-suite-figure.php` refuses non-green logs — cadence: run green → refresh → bump README assertion figure → confirm-run (campaign memory ka-lane note); `--filter Config` window green (lane-cf base-red history noted — if it reappears, it's NEW, triage it).
 **Files likely touched:** `sugar-crush/tests/Config/Support/suite-figure.json`, `sugar-crush/README.md` (headline), `scripts/parallel-tests-durations.tsv` (+ all new rows if any lane forgot), this plan (status ledger).
 **Lane:** gate ; **Depends on:** W7.5 ; **Shared-file risk:** figure files (gate only, final)
@@ -1112,7 +1112,7 @@ From `/tmp/opencode/plan-crush-media/w0/drift/REPORT.md` (146 anchors: 140 OK, 2
 - **⚠2 Test bootstrap shape:** `sugar-crush/tests/bootstrap.php` pins `Loop::set(new StreamSelectLoop())` at :80 — **no LoopPin call exists to copy**; stdin repair `!stream_isatty` guard :613-619 (fd-0→/dev/null); `SuiteSkipRoster::install()` :44 runs first. Media tests inherit this shape; serial plain-pipe law unchanged.
 - **⚠3 SSRF law location:** the LAN/loopback blocklist lives at `src/Tools/BuiltIn/WebFetch.php:21-49` + `BLOCKED_HOSTNAMES` :98 — `Permissions/FetchTarget.php` is only the permission-rule parser. SD-server clients must NEVER reuse the WebFetch dialer (mystage (c) holds, at the corrected file).
 - **⚠4 Settings/positions:** definitions live in `src/Config/Settings/Definitions/` (13 siblings; W1.8 extends these — `src/Providers/Definitions/` does NOT exist); `SettingCategory` enum `src/Config/Settings/SettingCategory.php:22`; provider wire schemas at `ProviderFactory::TYPE_SCHEMAS` :89; `READ_ONLY_COMMANDS` const at `Chat.php:11525` (not CommandRegistry); LayeredSettings generated block live at **:474-587** (not :474-504). Tool positions re-verified: occupied 1-22,30,31,32 → **33/34 FREE** for GenerateImage/GenerateVideo.
-- **Baseline floor (W0.4, `/tmp/opencode/plan-crush-media/w0/baseline/baseline.md`):** sugar-crush serial **21,198T/406,469A/0F/0E/1S exit0** @ HEAD `fdd4b40cc` (clean tree; linked 22/22; pipe-shaped keystone green); `scripts/parallel-tests-durations.tsv` 1,184 rows; siblings candy-forms 2,272T / candy-mosaic 661T / sugar-reel 552T / candy-core 1,246T all exit0; `check-path-repos` + `check-child-lifetimes` rc=0; `sugar-crush-web` is a **monorepo subdir** (same git repo, no nested `.git`, node_modules absent).
+- **Baseline floor (W0.4, `/tmp/opencode/plan-crush-media/w0/baseline/baseline.md`):** sugar-crush serial **21,198T/406,469A/0F/0E/1S exit0** @ HEAD `fdd4b40cc` (clean tree; linked 22/22; pipe-shaped keystone green); `scripts/parallel-tests-durations.tsv` 1,184 rows; siblings sugar-forms 2,272T / candy-mosaic 661T / sugar-reel 552T / candy-core 1,246T all exit0; `check-path-repos` + `check-child-lifetimes` rc=0; `sugar-crush-web` is a **monorepo subdir** (same git repo, no nested `.git`, node_modules absent).
 
 # Appendix D — Source-report paths (backing detail; cite, never copy wholesale)
 
@@ -1187,7 +1187,7 @@ Add **image & video generation** support to sugar-crush (console TUI, PHP monore
 
 - **A1111 surface is fully cataloged** (~90 generation-tab controls + ~25 sampler-params/settings tunables + ~30 REST endpoints), cloned at `/home/sites/sdg-assets/stable-diffusion-webui` @ `82a973c04` (2024-07-27, v1.10 line) [repo §header]. The wiki's named pages (Parameters, Settings, REST-API, …) no longer exist — content lives in **Features**, **Command-Line-Arguments-and-Settings**, **Developing-***, **Optimizations**, **Troubleshooting**, plus in-code tooltips, which the wiki crawl mined as the documentation of record [wiki §header, §1b].
 - **The server is dark at probe time:** port 30001 refuses TCP connections; the host is up with 30000 (SGLang chat server), 22, 80, 443 open. Nothing ComfyUI/A1111-shaped was reachable on the swept ports. Integration must therefore treat **config as the capability authority and live probe as an opportunistic override (fail-open)** — the exact `SglangServerInfo` design already in crush [arch §1a–§1c].
-- **There is no widget gap** for the requested form except a **tab bar** (G-1) and a **visible pill radio** (G-2): candy-forms already ships `Slider`, `Select` (incl. `withEnum()`), `MultiSelect`, `Confirm`, `Input`, `Text`, `FilePicker`, `Viewport`, and the whole `Form`/`Group`/`KeyMap` state machine — and candy-forms is already a production dependency of sugar-crush (`sugar-crush/composer.json:47`, re-verified 2026-10-07). Recommended hosting is **Shape A — a full-band App-owned modal view following `Tui/Settings/SettingsEditor.php` exactly** [forms §0, §2a].
+- **There is no widget gap** for the requested form except a **tab bar** (G-1) and a **visible pill radio** (G-2): sugar-forms already ships `Slider`, `Select` (incl. `withEnum()`), `MultiSelect`, `Confirm`, `Input`, `Text`, `FilePicker`, `Viewport`, and the whole `Form`/`Group`/`KeyMap` state machine — and sugar-forms is already a production dependency of sugar-crush (`sugar-crush/composer.json:47`, re-verified 2026-10-07). Recommended hosting is **Shape A — a full-band App-owned modal view following `Tui/Settings/SettingsEditor.php` exactly** [forms §0, §2a].
 - **Rendering is essentially solved in-tree:** candy-mosaic ports all seven requested display protocols (iTerm2, Kitty, Sixel, half-block, quarter-block, ASCII+256/truecolor, chafa) with probe-based detection, dithering, scaling, APNG/GIF animation, disk cache, and the `ImageOverlay` out-of-band paint channel that **sugar-crush already wires end-to-end for image-bearing tool results** (`ToolResult::$imageBytes/$imagePath/$imageProtocol` → `Renderer::renderView` → `ImageLayer::place` → `Program` paint). sugar-reel is a complete terminal video player but is **not yet a crush dependency**. Missing: a user-switchable `media.render_mode` setting (vocabulary already exists: `Mosaic::fromModeString`), a crush pane hosting the reel Player, image-upload request plumbing in Providers, and a PNG-encode helper [media §verdict, gaps 1–4].
 - **Backend plumbing has a clean precedent lane:** the `embeddings()` capability is the existing second-capability pattern (dedicated DTO pair + capability flag + opt-in lazy consumer); the provider factory schema table is where `mediaKinds: [image|video]` slots in; heavy HTTP must run in the **forked tool-child** channel (`EngineBackend` pcntl + socket-pair + `ToolEventPumpMsg` progress pipeline), never on the ReactPHP loop thread; and there is **no image/video endpoint anywhere in crush today** (tree grep `images/generations|txt2img|image_gen` = 0 hits) [arch §2.1, §2.2, Risk 1].
 - **Mirror A1111's architecture, not just its fields:** one declarative option registry projecting into form + config + CLI + API + PNG-info + paste (A1111's `OptionInfo` + `PydanticModelGenerator` + `infotext_to_setting_name_mapping`), section-placement + AlwaysVisible scripts for pluggable panel blocks, and a byte-compatible `parameters` PNG tEXt chunk for interop and re-generation round-trip [wiki §7.4, §12; repo §C.1, §E.6].
@@ -2080,11 +2080,11 @@ Ten-item form spec [wiki §12]: (1) one param registry rendering into form/confi
 
 ## 7. SugarCraft widget/component inventory for the form
 
-Source: [forms] — full inventory of sugar-crush + candy-forms widgetry with file:line, plus the gaps and the recommended panel architecture. Verified against the live tree 2026-10-07 (candy-forms is a crush dependency `sugar-crush/composer.json:47`; candy-mosaic `:55`).
+Source: [forms] — full inventory of sugar-crush + sugar-forms widgetry with file:line, plus the gaps and the recommended panel architecture. Verified against the live tree 2026-10-07 (sugar-forms is a crush dependency `sugar-crush/composer.json:47`; candy-mosaic `:55`).
 
 ### 7.1 Verdicts up front [forms §0]
 
-- **No widget gap** for the requested form except a **tab bar** and a **visible pill radio**: candy-forms already ships `Slider`, `Select` (incl. `withEnum()`), `MultiSelect`, `Confirm`, `Input`, `Text`, `FilePicker`, `Viewport`, and the whole `Form`/`Group`/`KeyMap` state machine, with focus/scroll/validation and immutable-fluent `with*` ergonomics.
+- **No widget gap** for the requested form except a **tab bar** and a **visible pill radio**: sugar-forms already ships `Slider`, `Select` (incl. `withEnum()`), `MultiSelect`, `Confirm`, `Input`, `Text`, `FilePicker`, `Viewport`, and the whole `Form`/`Group`/`KeyMap` state machine, with focus/scroll/validation and immutable-fluent `with*` ergonomics.
 - **Recommended hosting is Shape A — a full-band App-owned modal view following `Tui/Settings/SettingsEditor.php` exactly** (state slot, key gate, wheel routing, zone-click routing, render branch), not a Veil popup (Shape B) or a docked pane (Shape C) for v1.
 - Command + palette + i18n + drift-guard obligations are fully mapped (§7.6).
 
@@ -2092,19 +2092,19 @@ Source: [forms] — full inventory of sugar-crush + candy-forms widgetry with fi
 
 | Need | Component | Where | Notes |
 |---|---|---|---|
-| Text input (single line) | `Input` | `candy-forms/src/Field/Input.php:120` (`::new()` factory) | masked mode `withPasswordMask`, restriction, echo modes |
-| Textarea (multi-line) | `Text` | `candy-forms/src/Field/Text.php:25` | rows, wrap; prompt fields map here |
-| **Slider** | `Slider` | `candy-forms/src/Field/Slider.php:111` | renders `[███◆░░░]` bar (`view()` :221 normalise = clamp + lattice-snap; throws on `min >= max`); steps/labels — perfect for all A1111 sliders |
-| Dropdown | `Select` | `candy-forms/src/Field/Select.php:101` | `withEnum()` :233 binds a PHP enum (samplers/schedulers/upscalers as enums); searchable; `withHeight()` list window |
-| Multi-select dropdown | `MultiSelect` | `candy-forms/src/Field/MultiSelect.php:92` | options :78-110, `withEnum` :118 — styles/override-settings |
-| Checkbox | `Confirm` | `candy-forms/src/Field/Confirm.php:42` | yes/no toggle w/ labels — every A1111 checkbox |
-| Read-only text row | `Note` | `candy-forms/src/Field/Note.php:24` | computed readouts (`txtimg_hr_finalres` analog) |
-| File picker | `FilePicker` | `candy-forms/src/Field/FilePicker.php:37` | + crush's own `sugar-crush/src/Tui/DirectoryPicker/DirectoryPicker.php:43` (`open():70` consumes-as-action precedent) |
-| Color | `Color` | `candy-forms/src/Field/Color.php:86` | brush-color settings analog |
-| Date | `Date` | `candy-forms/src/Field/Date.php:87` | |
-| **Form state machine** | `Form` | `candy-forms/src/Form.php:40` | `::groups()` :91, `nextGroup()` :311-324, `update()` :337, `values()` :554, `hydrate()` :624, typed getters :759-857, `isSubmitted()` :870 |
-| Key routing map | `KeyMap` | `candy-forms/src/KeyMap.php:28` | Tab/Shift-Tab/Enter/Esc field navigation |
-| Scrollable viewport | `Viewport` | `candy-forms/src/Viewport.php` (586 L) | `pageUp/Down()` :375-408, `scrollPercent()` :435, `withMouseWheelEnabled()` :329 — tall forms |
+| Text input (single line) | `Input` | `sugar-forms/src/Field/Input.php:120` (`::new()` factory) | masked mode `withPasswordMask`, restriction, echo modes |
+| Textarea (multi-line) | `Text` | `sugar-forms/src/Field/Text.php:25` | rows, wrap; prompt fields map here |
+| **Slider** | `Slider` | `sugar-forms/src/Field/Slider.php:111` | renders `[███◆░░░]` bar (`view()` :221 normalise = clamp + lattice-snap; throws on `min >= max`); steps/labels — perfect for all A1111 sliders |
+| Dropdown | `Select` | `sugar-forms/src/Field/Select.php:101` | `withEnum()` :233 binds a PHP enum (samplers/schedulers/upscalers as enums); searchable; `withHeight()` list window |
+| Multi-select dropdown | `MultiSelect` | `sugar-forms/src/Field/MultiSelect.php:92` | options :78-110, `withEnum` :118 — styles/override-settings |
+| Checkbox | `Confirm` | `sugar-forms/src/Field/Confirm.php:42` | yes/no toggle w/ labels — every A1111 checkbox |
+| Read-only text row | `Note` | `sugar-forms/src/Field/Note.php:24` | computed readouts (`txtimg_hr_finalres` analog) |
+| File picker | `FilePicker` | `sugar-forms/src/Field/FilePicker.php:37` | + crush's own `sugar-crush/src/Tui/DirectoryPicker/DirectoryPicker.php:43` (`open():70` consumes-as-action precedent) |
+| Color | `Color` | `sugar-forms/src/Field/Color.php:86` | brush-color settings analog |
+| Date | `Date` | `sugar-forms/src/Field/Date.php:87` | |
+| **Form state machine** | `Form` | `sugar-forms/src/Form.php:40` | `::groups()` :91, `nextGroup()` :311-324, `update()` :337, `values()` :554, `hydrate()` :624, typed getters :759-857, `isSubmitted()` :870 |
+| Key routing map | `KeyMap` | `sugar-forms/src/KeyMap.php:28` | Tab/Shift-Tab/Enter/Esc field navigation |
+| Scrollable viewport | `Viewport` | `sugar-forms/src/Viewport.php` (586 L) | `pageUp/Down()` :375-408, `scrollPercent()` :435, `withMouseWheelEnabled()` :329 — tall forms |
 | Tab strip (settings) | `SettingsTabStrip` | `sugar-crush/src/Tui/Settings/SettingsTabStrip.php:19` | **static render, non-interactive**; canonical interactive `Tabs` lives in sugar-bits (candy-zone-based; divergence documented :12-16) | <!-- @rename-keep historical provenance -->
 | Styled borders | `Sprinkles` `Style`/`Border` | candy-sprinkles | panel chrome |
 | Poster/thumbnail grid | `PosterGrid`/`PosterCard` | sugar-gallery (`withImage:82`) | **not currently a crush dep** (G-4) |
@@ -2113,12 +2113,12 @@ Source: [forms] — full inventory of sugar-crush + candy-forms widgetry with fi
 | Veil overlay | `Veil` | painted `Renderer.php:2059-2065` | Shape B substrate |
 | Docked panes | `DockLayout` | `toArray :673/:712`; `App.php:44-45` PaneDragController | Shape C substrate |
 | i18n | `Lang` | `candy-pty/src/Lang.php:27` pattern; crush `lang/en.php` (~2,354 lines, `tui.<area>.<name>`) | every label a Lang key |
-| Setting schema/writer | `SettingsSchema::all :72` / `byKey :97` / `inCategory :115` / `layeredKeys :128`; `SettingsWriter` | sugar-crush/src/Config | `SettingsFieldFactory` builds candy-forms fields from schema; `SettingsWriter::refusal()` is the single validation authority |
+| Setting schema/writer | `SettingsSchema::all :72` / `byKey :97` / `inCategory :115` / `layeredKeys :128`; `SettingsWriter` | sugar-crush/src/Config | `SettingsFieldFactory` builds sugar-forms fields from schema; `SettingsWriter::refusal()` is the single validation authority |
 | Test harness | `ProgramSimulator :27`, `ScriptedInput :45`, `assertGoldenAnsi` (`UPDATE_GOLDENS=1`) | candy-testing | **NOT currently in crush require-dev** (G-7 decision) |
 
-**Façade law** [forms]: sugar-bits/candy-forms re-export forms classes via `class_alias` — code against the **canonical `SugarCraft\Forms\*`** namespace only (AGENTS.md #1275/#1312/#1314); canonical non-forms widgets (Tabs/Help/Paginator/Progress/Table/Tree) live in sugar-bits, which is not a crush dependency.
+**Façade law** [forms]: sugar-bits/sugar-forms re-export forms classes via `class_alias` — code against the **canonical `SugarCraft\Forms\*`** namespace only (AGENTS.md #1275/#1312/#1314); canonical non-forms widgets (Tabs/Help/Paginator/Progress/Table/Tree) live in sugar-bits, which is not a crush dependency.
 
-### 7.3 candy-forms deep notes [forms §3]
+### 7.3 sugar-forms deep notes [forms §3]
 
 - `Slider::update()` handles arrows + typing a numeric overlay; value normalisation (clamp to [min,max], snap to the step lattice) happens in `view()`'s `normalise()` — the widget self-enforces A1111 slider semantics (e.g. steps 1–150/1, cfg 1–30/0.5).
 - `Select::withEnum()` is the exact fit for sampler/scheduler/upscaler/resize-mode dropdowns whose choice sets are closed enumerations in our code.
@@ -2148,7 +2148,7 @@ Source: [forms] — full inventory of sugar-crush + candy-forms widgetry with fi
 | # | Gap | Recommendation |
 |---|---|---|
 | G-1 | **Tab bar** — SettingsTabStrip is static render; canonical interactive Tabs is in sugar-bits (not a dep) and candy-zone-based | Copy the SettingsTabStrip + App-mode switch pattern (simplest, in-tree), **or** port a candy-mouse-hittable Tabs into candy-forms (MATCHUPS bubbles/tabs note) | <!-- @rename-keep historical provenance -->
-| G-2 | **Visible pill radio** (A1111 Mask-mode/Masked-content radios) | Use `Select withHeight(3)` inline list now, **or** add a `Field\Radio` to candy-forms (small; the Confirm/Select mechanics cover it) |
+| G-2 | **Visible pill radio** (A1111 Mask-mode/Masked-content radios) | Use `Select withHeight(3)` inline list now, **or** add a `Field\Radio` to sugar-forms (small; the Confirm/Select mechanics cover it) |
 | G-3 | Segmented button group | `Confirm` covers booleans; multi-choice → Select |
 | G-4 | Thumbnail grid (gallery/extra-networks) | sugar-gallery `PosterGrid` + require bump **via path-repo-closure skill (require entry ONLY — never a per-lib repositories[] block)** |
 | G-5 | Progress meter | candy-async/`Spinner` exists; `progressToast` covers generation notices |
@@ -2351,7 +2351,7 @@ Source: [arch] Part 2 — every seam the media feature must plug into, with file
 | Layered (user→project→flag) trusted-key registry, generated block from `SettingsSchema`; contains `provider`, `models` (per-provider model choice, decision D9), `modelPrices`, `maxCostUsd`, `parallelToolDeadlineSeconds`, compaction/contextPruning namespaces … — new media keys (`media.baseUrl`, `media.presets`, `providers.<name>.mediaKinds`) are added to this roster + schema + docs in-step | `src/Config/LayeredSettings.php:474-504+` (`settings:layered-keys:begin` generated block); `src/Config/Settings/` |
 | Env-var roster + trust-key docs are drift-tested | `tests/Config/{EnvRosterDriftTest,TrustKeyDocumentationDriftTest,ConfigWriteProducerDocumentationDriftTest}.php` |
 | Provider base URL/key per type live in the factory schema table + `${ENV}` interpolation | `ProviderFactory.php:85-120,380-397` |
-| i18n user strings via `Lang::t` (widgets' door messages have no-Lang precedent — candy-forms mask) | `src/Lang.php` |
+| i18n user strings via `Lang::t` (widgets' door messages have no-Lang precedent — sugar-forms mask) | `src/Lang.php` |
 
 ### 9.7 Recommended `src/Media/` module layout [arch]
 
@@ -2410,10 +2410,10 @@ The `MediaRequest`/`MediaResponse` DTO pair mirrors the A1111 lesson of §4.1: *
 6. **No I/O in view-models** — actions return enums for the shell (`DirectoryPickerAction`, SettingsEditor CONFIRM_* constants; canonical "modal returns an action enum, host executes I/O" pattern at `Chat.php:17603-17628`); the shell (`App`) owns writer/executor (`confirmSettingsSave()` shape).
 7. Suite figures: any added test touches `suite-figure.json`, `parallel-tests-durations.tsv`, README headline (merge-time re-pin per AGENTS.md).
 8. Tests run: `cd sugar-crush && vendor/bin/phpunit` (linked mode; check `php scripts/refresh-deps.php --status`); suites that arm timers need `LoopPin::pinStableClock()` in bootstrap — crush's `tests/bootstrap.php` already handles its loop shape.
-9. candy-forms CALIBER_LEARNINGS: golden ANSI via `SugarCraft\Testing\Snapshot\Assertions` + `UPDATE_GOLDENS=1`; don't re-implement fuzzy (use `SugarCraft\Fuzzy\SmithWatermanMatcher`); VimKeyHandler is shared by 4 libs — extend `VimAction`+`VimKeyHandler` only.
-10. Façade law: depend on `candy-forms` canonical; sugar-bits/candy-forms are alias layers; ship ONE `AliasesTest` if you ever add façade coverage.
+9. sugar-forms CALIBER_LEARNINGS: golden ANSI via `SugarCraft\Testing\Snapshot\Assertions` + `UPDATE_GOLDENS=1`; don't re-implement fuzzy (use `SugarCraft\Fuzzy\SmithWatermanMatcher`); VimKeyHandler is shared by 4 libs — extend `VimAction`+`VimKeyHandler` only.
+10. Façade law: depend on `sugar-forms` canonical; sugar-bits/sugar-forms are alias layers; ship ONE `AliasesTest` if you ever add façade coverage.
 
-Plus the **async suggestion law** (candy-forms CALIBER_LEARNINGS via [forms]): store the `CancellationSource` on the model, `previous?->cancel()` before re-scheduling, accept the shared `LoopInterface`, never construct one; fetches go through candy-core `WorkerPool`. And `hydrate(array)` (`Form.php:624`) is the load-last-used-params entry point; `values()` (`:554`) the save entry point. Rendering-stack constraints (ffmpeg dep, WebP gd-build, headless probes behind `isInteractiveTty`) are itemized at §8.7-6.
+Plus the **async suggestion law** (sugar-forms CALIBER_LEARNINGS via [forms]): store the `CancellationSource` on the model, `previous?->cancel()` before re-scheduling, accept the shared `LoopInterface`, never construct one; fetches go through candy-core `WorkerPool`. And `hydrate(array)` (`Form.php:624`) is the load-last-used-params entry point; `values()` (`:554`) the save entry point. Rendering-stack constraints (ffmpeg dep, WebP gd-build, headless probes behind `isInteractiveTty`) are itemized at §8.7-6.
 
 ### 10.3 Test strategy [forms §4 G-7 + AGENTS.md tea-snapshot taxonomy]
 
@@ -2435,7 +2435,7 @@ Plus the **async suggestion law** (candy-forms CALIBER_LEARNINGS via [forms]): s
 | Q-1 | **What does port 30001 actually expose once back up?** SGLang-Diffusion OpenAI-shape (`/v1/images/generations`), ComfyUI (`/prompt`/`/history`/`/view`/`/object_info`), or an A1111-fork REST (`/sdapi/v1/*`)? Re-probe per §1.3 checklist before picking the primary `EndpointFamily`. | [arch §1a/§1c] |
 | Q-2 | **Progressive/live-preview equivalent** — A1111's per-N-step latent previews (§4.7) need a progress channel the wire can carry. Does the chosen backend emit interim frames (ComfyUI history previews / SGLang stream events), or do we synthesize progress-only (no interim image) in v1? | [repo §E.3] |
 | Q-3 | **Per-media pricing** — `modelPrices` is token-shaped; images bill per-image/per-second (Flux ~$0.003–0.055/img tiers, video per-sec). Extend `Usage`/price schema or keep media spend honest-null (§10.1-5)? | [arch] |
-| Q-4 | **LoRA stack + inpaint-model selection UX** — §6.1's repeatable list {model, strength, start/end} has no candy-forms widget; MultiSelect approximates; a bespoke repeatable sub-form (Form-of-groups) is new ground — build in GenForm or upstream into candy-forms? | [forms §1] |
+| Q-4 | **LoRA stack + inpaint-model selection UX** — §6.1's repeatable list {model, strength, start/end} has no sugar-forms widget; MultiSelect approximates; a bespoke repeatable sub-form (Form-of-groups) is new ground — build in GenForm or upstream into sugar-forms? | [forms §1] |
 | Q-5 | **Mask authoring** — inpaint (§2.7) needs a mask image. crush has FilePicker + clipboard-image ingress (`ClipboardImagePastedMsg`) but **no draw canvas**. Options: external-edit round-trip (document), minimal brush overlay (big new widget), or first-phase = mask-file-only. | [arch §2.4] [repo §A.2] |
 | Q-6 | **Read-tool image support** (§8.7-4) — wiring `ToolResult::withImage()` into `Tools/BuiltIn/Read.php` is a one-liner-ish that unlocks "show me the generated file" for free. In phase 1 scope? | [media] |
 | Q-7 | **`media.render_mode` setting vocabulary** — adopt `fromModeString`'s `halfblock|ansi|quarterblock|ascii|ansi256|truecolor|sixel|kitty|iterm2` verbatim plus `auto`? Env fallback `SUGARCRUSH_MEDIA_RENDER_MODE`? (EnvRoster + ReadmeRoster drift updates in-step.) | [media §8.7-1] |
@@ -2492,7 +2492,7 @@ Plus the **async suggestion law** (candy-forms CALIBER_LEARNINGS via [forms]): s
 ## 0. Executive summary
 
 - **Goal:** first-class image + video generation in sugar-crush when the configured backend supports it: a rich A1111-style popup form (sliders, dropdowns, radios, checkboxes, textareas for prompt/negative-prompt/etc.), text-to-image, image-to-image, inpaint, image-to-video, text-to-video; in-terminal display at the best available fidelity (Kitty / iTerm2 / Sixel / Chafa / half-block / quarter-block / ASCII-truecolor / ANSI256 / mono) with a user-switchable render mode; video playback in-terminal; console first, with the server/WebSocket mode shaped so sugar-crush-web can reuse everything in phase 2.
-- **The stack already exists.** `candy-mosaic` is a complete image→terminal renderer with a 7-backend ladder and a mode-string parser (`Mosaic::fromModeString()`); `sugar-reel` is a complete terminal video player (ffmpeg decode pipe, 8 render modes, live `m`-key mode cycling, audio, subtitles); `sugar-crush` **already renders `ToolResult::$imageBytes` through mosaic** (`Renderer::renderToolImage()`), and already depends on `candy-forms`, `sugar-veil`, `candy-mouse`, `candy-focus`, `candy-mosaic`, `sugar-toast`. phlix-console-client is a worked integration of exactly these libs and supplies the transferable glue patterns.
+- **The stack already exists.** `candy-mosaic` is a complete image→terminal renderer with a 7-backend ladder and a mode-string parser (`Mosaic::fromModeString()`); `sugar-reel` is a complete terminal video player (ffmpeg decode pipe, 8 render modes, live `m`-key mode cycling, audio, subtitles); `sugar-crush` **already renders `ToolResult::$imageBytes` through mosaic** (`Renderer::renderToolImage()`), and already depends on `sugar-forms`, `sugar-veil`, `candy-mouse`, `candy-focus`, `candy-mosaic`, `sugar-toast`. phlix-console-client is a worked integration of exactly these libs and supplies the transferable glue patterns.
 - **What must be written:** the A1111-compatible client (`SdClient`), the `GenerateImage`/`GenerateVideo` tools, the media popup form (mostly assembled from existing `Forms\Field\*` widgets), two genuinely-new widgets (mouse-draggable slider, bounded number field), a video player surface inside crush (sugar-reel's `Player` cannot paint inline into crush's line-diffed frame — it must go through `ImageLayer`), a render-mode setting, and phase-2 protocol fields so images cross the WebSocket wire (today `tool.finished` drops `imageBytes`).
 - **Backend reality check:** the user's server `http://skynet2.interserver.net:30001` (Flux.2 dev currently loaded; also Flux.1 dev, Qwen-Image, LTX-2.5, SD3.5-Large for images; LTX-Video and Wan 2.2 for video) exposes `/model_info` — **that is not a stock A1111 path** (A1111 serves `/sdapi/v1/*`), and stock A1111 does not run Flux/LTX/Wan at all. The client must therefore be dialect-tolerant: probe capability at connect time and speak A1111 where it exists, with a separate namespace for video jobs (§8). From this host the server refused connection (`connect to 173.225.108.102:30001 failed: Connection refused`, both `/model_info` and `/internal/ping`) — likely a firewall on the source IP or the service being down; the live endpoint contract could not be enumerated and must be re-probed from a permitted network before implementation.
 
@@ -2701,8 +2701,8 @@ Layer orientation:
 candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
  ├─ candy-sprinkles   Style/Border/Canvas (chrome)
  ├─ candy-layout      Cassowary constraint solver (Form::withConstraints)
- ├─ candy-forms   ★ canonical widgets + Field/Form engine  ← write against this
- │    └─ candy-forms  (pure class_alias façade — do NOT target)
+ ├─ sugar-forms   ★ canonical widgets + Field/Form engine  ← write against this
+ │    └─ sugar-forms  (pure class_alias façade — do NOT target)
  ├─ sugar-bits    Tabs/Help+Key/Progress/AnimatedProgress/Paginator/Timer/Tree/Table (canonical);
  │                TextInput/TextArea/ItemList/Viewport/FilePicker/Spinner/… are aliases → use Forms
  ├─ candy-mouse   Mark/Scanner/Zone/ZoneClickTracker (hit-test primitive; crush already runs it)
@@ -2720,7 +2720,7 @@ candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
 |---|---|---|---|
 | Text input | `Forms\Field\Input` / `Forms\TextInput\TextInput` | ✗ | validators, suggestions (async/fuzzy), password mode, history, vim |
 | Multiline textarea (prompt/negative) | `Forms\Field\Text` / `Forms\TextArea\TextArea` | ✗ | crush's draft box already is `TextArea` |
-| Slider (steps, CFG, denoise…) | `Forms\Field\Slider` (`candy-forms/src/Field/Slider.php`) | ✗ | `Slider::new($key,$min,$max,$step,$initial)`; ←→/h/l/Home/End; clamps, saturating; renders `[███◆░░░] 7.5`; **keyboard-only — drag needs new code (§4.2.1)** |
+| Slider (steps, CFG, denoise…) | `Forms\Field\Slider` (`sugar-forms/src/Field/Slider.php`) | ✗ | `Slider::new($key,$min,$max,$step,$initial)`; ←→/h/l/Home/End; clamps, saturating; renders `[███◆░░░] 7.5`; **keyboard-only — drag needs new code (§4.2.1)** |
 | Dropdown / radio | `Forms\Field\Select` (wraps `ItemList`) | ✔ via ItemList | `withOptions(...)`, `withEnum()`, fuzzy+async suggestions; single-choice list *is* the radio |
 | Multi-select (styles) | `Forms\Field\MultiSelect` | ✔ via ItemList | `[ ]/[x]`, Space toggles, min/max/limit |
 | Checkbox / yes-no | `Forms\Field\Confirm` (y/n pills) or one-option MultiSelect | partial | |
@@ -2753,7 +2753,7 @@ Form engine: `Forms\Form::new(field…)` / `::groups(group…)` (one Group = a p
 
 ### 4.3 How crush presents popups today (the pattern to match)
 
-Overlay = nullable readonly field on `Chat` (e.g. `?SessionPicker`, `?PaletteState`, `?DirectoryPicker`); while up it owns every key (routing short-circuits in `Chat::update()`); `Renderer` picks the first non-empty `renderX()` arm, then: `clipRowsToCols → liftZonesUnderOverlay → padForOverlay → Veil::new()->withBackdrop(50)->composite($overlay,$backdrop,CENTER,CENTER,$shift) → restoreLiftedZones → mark zones AFTER compositing` (Veil measures cells; sentinels would count). Modal chrome = `Style::new()->border(Border::rounded()->withTitle(…))->borderForeground($theme->border)->padding(1,2)->width($inner)->render(implode("\n",$lines))`. `candy-forms` **Field objects are driven directly** (SettingsEditor holds `?Field $editing`, focuses it, forwards keys, splices `view()`) — `Forms\Form` itself is used nowhere in crush. Pickers return **action objects** (`SessionListAction`) that Chat executes. The media form should follow exactly this idiom.
+Overlay = nullable readonly field on `Chat` (e.g. `?SessionPicker`, `?PaletteState`, `?DirectoryPicker`); while up it owns every key (routing short-circuits in `Chat::update()`); `Renderer` picks the first non-empty `renderX()` arm, then: `clipRowsToCols → liftZonesUnderOverlay → padForOverlay → Veil::new()->withBackdrop(50)->composite($overlay,$backdrop,CENTER,CENTER,$shift) → restoreLiftedZones → mark zones AFTER compositing` (Veil measures cells; sentinels would count). Modal chrome = `Style::new()->border(Border::rounded()->withTitle(…))->borderForeground($theme->border)->padding(1,2)->width($inner)->render(implode("\n",$lines))`. `sugar-forms` **Field objects are driven directly** (SettingsEditor holds `?Field $editing`, focuses it, forwards keys, splices `view()`) — `Forms\Form` itself is used nowhere in crush. Pickers return **action objects** (`SessionListAction`) that Chat executes. The media form should follow exactly this idiom.
 
 ---
 
@@ -2857,7 +2857,7 @@ Providers use Guzzle via `Providers/Concerns/HttpClientDefaults::guzzleClient()`
 | `GenerateImage` tool (position 33, Ask, `AcceptsHeartbeat`, `ParallelSafe`, `TruncatesOutput`; result `okWithImage`) | `src/Tools/BuiltIn/GenerateImage.php` | `Doctor` + `WebFetch` + `Bash` |
 | `GenerateVideo` tool (submit/poll/fetch; saves mp4; result path + `🎞` row; inline playback phase 1.5) | `src/Tools/BuiltIn/GenerateVideo.php` | same + §7 |
 | Media popup form `MediaForm` (accordion/tab pages: Prompt · Dimensions · Sampler · Seed · Hires · img2img/Inpaint · Advanced/override; tabs `Bits\Tabs`, fields `Forms\Field\*`, frame `Veil`, regions `FocusRing`, action objects out) | `src/Tui/MediaForm/…` | `Tui/SessionPicker.php` + `SettingsEditor` idiom |
-| New widgets: zone-draggable `Slider` (or `MediaSlider` decorator), `NumberField`, (later) radio-pill row, tooltip glue | `candy-forms` PRs (canonical home) or crush-local first | §4.2 |
+| New widgets: zone-draggable `Slider` (or `MediaSlider` decorator), `NumberField`, (later) radio-pill row, tooltip glue | `sugar-forms` PRs (canonical home) or crush-local first | §4.2 |
 | Render-mode setting + wiring | `InterfaceSettings`/`MediaSettings` + `ToolResult::probeMosaic()` → `fromModeString` | phlix `MosaicFactory` |
 | Video player surface (full-screen pushed screen with `graphicsChrome`, `Teardownable` stop on Esc+Ctrl-C, mode/cellSize propagation, `Scrubber`, key override-then-forward) | `src/Tui/VideoPlayerScreen.php` + require `sugarcraft/sugar-reel` | phlix `PlayerScreen` §5.3 |
 | `/generate` (+ `/generate video`, `/rendermode`, `/sendto`) commands, key binding, lang keys | `builtin-commands/40NN-*.php`, `lang/en.php` | `0300-model.php` |

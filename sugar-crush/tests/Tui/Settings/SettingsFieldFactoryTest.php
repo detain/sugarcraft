@@ -22,7 +22,7 @@ use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
 
 /**
- * Each editable setting becomes the candy-forms field that edits it, and the
+ * Each editable setting becomes the sugar-forms field that edits it, and the
  * field's answer comes back as a value of the key's type (N-P2).
  */
 final class SettingsFieldFactoryTest extends TestCase

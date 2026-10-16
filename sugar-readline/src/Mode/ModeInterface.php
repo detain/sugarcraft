@@ -21,7 +21,7 @@ use SugarCraft\Readline\TextPrompt;
  * - {@see EmacsMode} — stateless-ish readline bindings (Ctrl+A/E/B/F, Alt
  *   word motion, Ctrl+R/S search); its only state is the Alt/Escape prefix.
  * - {@see ViMode} — a modal state machine (insert/normal/visual + pending
- *   motions) that maps keys through candy-forms' VimKeyHandler/VimAction and
+ *   motions) that maps keys through sugar-forms' VimKeyHandler/VimAction and
  *   executes the resulting actions as TextPrompt operations.
  *
  * Modes are immutable like the prompt: any internal state change must clone

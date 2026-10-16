@@ -529,7 +529,7 @@ freeze has an interactive TUI for customization:
 freeze --interactive
 ```
 
-This could be built using `candy-forms` (the SugarCraft port of bubbletea).
+This could be built using `sugar-forms` (the SugarCraft port of bubbletea).
 
 ---
 
@@ -564,7 +564,7 @@ This could be built using `candy-forms` (the SugarCraft port of bubbletea).
 
 | Task | Effort | Files | Impact |
 |------|--------|-------|--------|
-| Interactive CLI TUI | 1w | `bin/candy-codeshot`, uses `candy-forms` | Medium |
+| Interactive CLI TUI | 1w | `bin/candy-codeshot`, uses `sugar-forms` | Medium |
 | Syntax-aware highlighting (integration layer) | 2w+ | External lib or FFI | High |
 
 ---

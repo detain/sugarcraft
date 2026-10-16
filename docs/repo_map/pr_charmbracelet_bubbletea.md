@@ -32,7 +32,7 @@ From the first-stage analysis, SugarCraft maps to Bubble Tea ecosystem as:
 | `harmonica` | `honey-bounce` | Spring animations |
 | `bubblezone` | `candy-mouse` | Mouse zone tracking |
 | `bubbles` | `sugar-bits` | 14 prebuilt components |
-| `huh` | `candy-forms` | Interactive forms |
+| `huh` | `sugar-forms` | Interactive forms |
 | `glamour` | `candy-shine` | Markdown rendering |
 | `colorprofile` | `candy-palette` | Color detection |
 

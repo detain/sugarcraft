@@ -463,7 +463,7 @@ final class KeyBindingRegistry
             // ── the draft's own editing keyboard ─────────────────────────
             //
             // Everything from here to `chat.space` is answered by the draft
-            // editor (`candy-forms`' TextArea, wired in crush_code.md Phase 3
+            // editor (`sugar-forms`' TextArea, wired in crush_code.md Phase 3
             // item 1). Every row here except `chat.backspace` and
             // `chat.word-delete` was declared in the round AFTER the keystroke
             // it describes went live, which is the gap

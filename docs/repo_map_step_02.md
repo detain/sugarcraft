@@ -85,7 +85,7 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
   - New foundation lib candy-buffer adds Buffer (Cell grid) + Cell value objects for terminal rendering.
   - Buffer::diff() declared but unimplemented — step-26 ships the delta-ANSI emitter (ECH/REP/ICH/DCH).
   - Wide-char (CJK/emoji) handled via Width::of from candy-core.
-  - Unblocks consumer migration in steps 14-18 (sugar-bits, candy-forms, candy-forms, sugar-charts, sugar-table).
+  - Unblocks consumer migration in steps 14-18 (sugar-bits, sugar-forms, sugar-forms, sugar-charts, sugar-table).
 
   ## Test plan
   - [x] vendor/bin/phpunit in candy-buffer (≥95% coverage)

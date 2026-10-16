@@ -26,12 +26,12 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 
 | gum command | SugarCraft lib | Status | Notes |
 |---|---|---|---|
-| `gum input` | `candy-forms` / `candy-forms` | 🟢 / 🟡 | Text input via TextInput field |
-| `gum write` | `candy-forms` / `candy-forms` | 🟢 / 🟡 | Multi-line textarea via TextArea field |
+| `gum input` | `sugar-forms` / `sugar-forms` | 🟢 / 🟡 | Text input via TextInput field |
+| `gum write` | `sugar-forms` / `sugar-forms` | 🟢 / 🟡 | Multi-line textarea via TextArea field |
 | `gum filter` | `sugar-filter` (planned) | 🔴 | Fuzzy list filter, same fuzzy algorithm (`sahilm/fuzzy`) |
 | `gum choose` | `sugar-choose` (planned) | 🔴 | Item selector grid with vim-style navigation |
-| `gum confirm` | `candy-forms` | 🟡 | Yes/no confirmation via Confirm field |
-| `gum file` | `candy-forms` (FilePicker) | 🟡 | File tree browser |
+| `gum confirm` | `sugar-forms` | 🟡 | Yes/no confirmation via Confirm field |
+| `gum file` | `sugar-forms` (FilePicker) | 🟡 | File tree browser |
 | `gum pager` | `sugar-pager` (planned) | 🔴 | Viewport scroll |
 | `gum spin` | `sugar-spin` (planned) | 🔴 | Spinner + PTY command execution |
 | `gum style` | `candy-shine` | 🟡 | Lipgloss wrapper for styling |
@@ -42,7 +42,7 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 | Bubbles dep | `candy-sprinkles` + `sugar-bits` | 🟢 / 🟡 | TUI component primitives |
 | Lipgloss dep | `candy-shine` / `sugar-shine` | 🟡 | Styling/rendering engine |
 
-**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `candy-forms`, `sugar-bits`) is what enables the shell commands.
+**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `sugar-forms`, `sugar-bits`) is what enables the shell commands.
 
 ---
 
@@ -342,7 +342,7 @@ From `repo_map/charmbracelet_gum.md`:
 **PR**: #598 (merged, then reverted, then re-merged)
 **Feature**: `gum choose` with `--label-delimiter` for key:value pairs
 **Status**: Working in v0.14+
-**Relevance**: 🟢 DONE — candy-forms/sugar-choose should support this
+**Relevance**: 🟢 DONE — sugar-forms/sugar-choose should support this
 
 ### I. Select All / Deselect All
 

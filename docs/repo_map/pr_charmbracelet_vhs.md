@@ -17,7 +17,7 @@
 | Frame capture / recording | `candy-scriptui` | Could provide terminal capture primitives |
 | Video encoding / FFmpeg | `sugar-charts` | Both produce output files, FFmpeg could be wrapped |
 | Theme system (base16) | `sugar-bits` | 16-color theme mapping aligns with Charm color systems |
-| Typing simulation | `candy-forms` | Input emulation concepts overlap |
+| Typing simulation | `sugar-forms` | Input emulation concepts overlap |
 | Window chrome (bars, borders) | `candy-shine` | Visual styling of terminal windows |
 | SSH server | N/A | PHP has no native SSH server lib in SugarCraft |
 | Recording mode | N/A | Would need PTY/terminal capture - platform-specific |
@@ -562,7 +562,7 @@ Show
 
 **Problem**: Knowing when a command finishes
 **VHS Solution**: OSC 133 shell integration
-**SugarCraft Implication**: `candy-forms` or `candy-scriptui` needs command completion detection
+**SugarCraft Implication**: `sugar-forms` or `candy-scriptui` needs command completion detection
 
 ### 2. Buffer Viewport Management
 
@@ -614,7 +614,7 @@ Show
 
 **Rationale**: VHS "WaitScreenSettled" for LLM/nondeterministic output
 **Use case**: AI application demos with variable output
-**SugarCraft path**: `candy-forms` stability check
+**SugarCraft path**: `sugar-forms` stability check
 
 ### 4. Library API for Testing
 

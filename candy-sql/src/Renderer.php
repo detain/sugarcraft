@@ -198,7 +198,7 @@ final class Renderer
         //           → available ≤ terminalRows - 18. Use max(3, terminalRows - 18).
         $available = max(3, $terminalRows - 18);
 
-        // candy-forms ItemList owns the cursor, selection styling and scroll
+        // sugar-forms ItemList owns the cursor, selection styling and scroll
         // window — no more hand-rolled centering/slice/`↑ N–M of T ↑` indicators.
         // Pre-style each name (gold+bold for the loaded table, muted otherwise);
         // the cursor row is rendered reverse-video by the widget.
@@ -298,7 +298,7 @@ final class Renderer
         // Using cols - 4 (the old value) overflowed the outer frame by 2 cells,
         // wrapping the query box and dropping its right border.
         $width = max(20, $terminalCols - 6);
-        // The candy-forms TextArea owns the cursor + placeholder; it renders the
+        // The sugar-forms TextArea owns the cursor + placeholder; it renders the
         // cursor only while focused (Query pane). Size it to the pane at render
         // time without mutating App state.
         $body = $a->editor()->withWidth($width)->view();

@@ -30,7 +30,7 @@ From the first-stage analysis (`repo_map/treilik_bubblelister.md`), SugarCraft's
 | Word wrapping / text formatting | `candy-core` (StringUtil/WordWrap) |
 | tea.Model interface compliance | `candy-core` (Model trait) |
 | Line number prefixes, tree prefixes | `sugar-bits` (Border/Frameless) |
-| Multi-line item support | `candy-forms` (TextArea) |
+| Multi-line item support | `sugar-forms` (TextArea) |
 | Item sorting, LessFunc/EqualsFunc | `sugar-bits` (ListModel) |
 | Current item styling (reverse video) | `sugar-bits` (CurrentItem) |
 | Prefix/Suffix interfaces | `candy-core` (Decorator pattern) |

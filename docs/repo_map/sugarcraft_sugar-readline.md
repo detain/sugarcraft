@@ -14,7 +14,7 @@
 
 **`sugar-readline`** is a pure-PHP interactive line-editing prompt library that ports the Go `erikgeiser/promptkit` ecosystem. It provides five prompt types (Text, Confirmation, Selection, MultiSelect, Textarea) driven by a clean state-machine model where every input handler returns a new immutable instance. No external readline library is required — the library handles all terminal input and ANSI rendering internally.
 
-This is a **companion/sibling to `candy-forms`** (which is a `charmbracelet/huh` port) rather than a replacement. Where `candy-forms` is a multi-page form framework with theming, `sugar-readline` is a focused, lightweight prompt toolkit for single-shot interactive inputs — ideal for CLI tools that need one-off prompts without the full form framework overhead.
+This is a **companion/sibling to `sugar-forms`** (which is a `charmbracelet/huh` port) rather than a replacement. Where `sugar-forms` is a multi-page form framework with theming, `sugar-readline` is a focused, lightweight prompt toolkit for single-shot interactive inputs — ideal for CLI tools that need one-off prompts without the full form framework overhead.
 
 ---
 
@@ -476,7 +476,7 @@ if ($this->isAltPrefix()) {
 
 ### charmbracelet/huh (form library)
 
-**Relationship**: `candy-forms` (🟢) ports `huh` as a multi-page form framework. `sugar-readline` ports `promptkit` as standalone prompts. They are complementary, not competing.
+**Relationship**: `sugar-forms` (🟢) ports `huh` as a multi-page form framework. `sugar-readline` ports `promptkit` as standalone prompts. They are complementary, not competing.
 
 | Feature | huh | sugar-readline |
 |---|---|---|
@@ -488,7 +488,7 @@ if ($this->isAltPrefix()) {
 | Validation | 🟢 | 🟢 (via `withValidator`) |
 | Single-shot prompts | 🟢 | 🟢 (lighter weight) |
 
-`sugar-readline` is ideal for single-shot prompts in CLI tools. `candy-forms`/`candy-forms` is better for multi-page forms with dynamic state.
+`sugar-readline` is ideal for single-shot prompts in CLI tools. `sugar-forms`/`sugar-forms` is better for multi-page forms with dynamic state.
 
 ### charmbracelet/bubbles (TextInput, TextArea)
 
@@ -550,7 +550,7 @@ Bubbles provides `TextInput` and `TextArea` as Bubble Tea models. sugar-readline
 
 2. **Hardcoded ANSI codes**: Styles are bare SGR strings (`'1;36'`, `'7'`, `'31'`) rather than a proper style system. Customization requires string manipulation. Compare to `candy-shine` which has a proper `Style` class with chainable methods.
 
-3. **No cursor blink**: Unlike `candy-forms` TextInput which has a `Cursor` blink state machine, sugar-readline's TextPrompt renders cursor as static reverse video with no blinking animation.
+3. **No cursor blink**: Unlike `sugar-forms` TextInput which has a `Cursor` blink state machine, sugar-readline's TextPrompt renders cursor as static reverse video with no blinking animation.
 
 4. **No mouse support**: Selection and MultiSelect don't respond to mouse clicks for positioning or selection. Upstream `promptkit` also lacks this.
 
@@ -558,7 +558,7 @@ Bubbles provides `TextInput` and `TextArea` as Bubble Tea models. sugar-readline
 
 6. **No soft-wrap in Textarea**: TextareaPrompt stores each line as a separate array entry. There is no soft-wrap (word-wrap at a given column width). If a user types a long line, it stays as one line in the array — no automatic wrapping.
 
-7. **Filter is case-insensitive substring only**: No fuzzy filtering, no regex, no diacritic folding. Compare to `candy-forms` ItemList which has Smith-Waterman fuzzy matching.
+7. **Filter is case-insensitive substring only**: No fuzzy filtering, no regex, no diacritic folding. Compare to `sugar-forms` ItemList which has Smith-Waterman fuzzy matching.
 
 8. **No vim visual mode selection**: ViMode has visual mode entry (`v` from normal) but doesn't expose the selected range — `handleVisualMode()` tracks no selection state. It's a placeholder for future completion.
 
@@ -621,13 +621,13 @@ The most distinctive architectural decision in `sugar-readline` is modeling prom
 3. **Natural testability**: Every behavior is a pure function from prompt + input → new prompt. No mock needed for `view()` — just assert on returned string.
 4. **Concurrency-safe**: Multiple prompts can be processed in parallel without shared mutable state.
 
-The tradeoff: more object allocations. For a CLI tool this is negligible. For a high-frequency interactive use case, `candy-forms` with its mutable `mutate()` helper might be more efficient.
+The tradeoff: more object allocations. For a CLI tool this is negligible. For a high-frequency interactive use case, `sugar-forms` with its mutable `mutate()` helper might be more efficient.
 
-### Relationship to candy-forms / candy-forms
+### Relationship to sugar-forms / sugar-forms
 
-`sugar-readline` and `candy-forms` address overlapping use cases (interactive prompts) but with different philosophies:
+`sugar-readline` and `sugar-forms` address overlapping use cases (interactive prompts) but with different philosophies:
 
-| Aspect | sugar-readline | candy-forms / candy-forms |
+| Aspect | sugar-readline | sugar-forms / sugar-forms |
 |---|---|---|
 | Model | Immutable value object | TEA Model (mutable with `mutate()`) |
 | Runtime | No event loop | Bubble Tea runtime with Msg/Cmd |
@@ -637,7 +637,7 @@ The tradeoff: more object allocations. For a CLI tool this is negligible. For a 
 | Per-field customization | Properties on each prompt | Fluent `with*()` methods |
 | Async | None | ReactPHP for async suggestions |
 
-`sugar-readline` is lighter weight and more portable (no Bubble Tea dependency), while `candy-forms` is more powerful for complex form flows.
+`sugar-readline` is lighter weight and more portable (no Bubble Tea dependency), while `sugar-forms` is more powerful for complex form flows.
 
 ### No-External-Dependency Design
 

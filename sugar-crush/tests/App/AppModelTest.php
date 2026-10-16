@@ -914,7 +914,7 @@ final class AppModelTest extends TestCase
      * The same, with the cursor parked in the middle of the draft.
      *
      * This used to pin the second half of the old synthetic clear: once the
-     * draft became a `candy-forms` TextArea ({@see Chat::$input}), backspaces
+     * draft became a `sugar-forms` TextArea ({@see Chat::$input}), backspaces
      * deleted only BEHIND the cursor, so the tail survived and the command was
      * typed into the gap — "half /sessionswritten". With no keystrokes typed
      * into the draft at all (audit 15b-05) the cursor case is the one that

@@ -73,7 +73,7 @@ full base sizes instead (the layout runs off-grid).
 
 ## Shared foundations
 
-`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface — `solve()` alone; construction lives on the concrete classes — is the only public contract (`Expression`, a leftover of the retired simplex, is `@internal`). Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
+`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`sugar-forms` (step-14/15). The `LayoutSolver` interface — `solve()` alone; construction lives on the concrete classes — is the only public contract (`Expression`, a leftover of the retired simplex, is `@internal`). Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
 
 `Region` here is deliberately distinct from `SugarCraft\Buffer\Region` in candy-buffer (a leaf-package name collision that keeps candy-layout dependency-free); candy-sprinkles' `RegionBridge` converts between them.
 

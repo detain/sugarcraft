@@ -504,7 +504,7 @@ final class ReadOnlyCommands
      * in scope (anything else — `$HOME`, `$1`, `$@` — is refused there), and:
      *
      * - a variable whose values are all KNOWN (`for d in candy-core
-     *   candy-forms`) is substituted, and the command is judged once per
+     *   sugar-forms`) is substituted, and the command is judged once per
      *   combination of values, exactly as each iteration will run it — up to
      *   {@see MAX_BINDINGS} combinations;
      * - a variable whose values are NOT known (a glob, `while read` input) is

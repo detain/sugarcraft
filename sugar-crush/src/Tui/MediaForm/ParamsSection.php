@@ -10,11 +10,11 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Input;
 
 /**
- * The W3.1 placeholder section: the prompt as a live candy-forms
+ * The W3.1 placeholder section: the prompt as a live sugar-forms
  * {@see Input}, and the draft's core knobs as read-only summary rows.
  *
  * DECISION RECORD (plan :398). The prior art was checked before inventing a
- * widget layer: `SettingsEditor` drives candy-forms `Field` objects directly
+ * widget layer: `SettingsEditor` drives sugar-forms `Field` objects directly
  * — `Forms\Form` and `Form::groups` appear nowhere in `sugar-crush/src`
  * (verified by census at W3.1 time) — so `MediaForm` does the same: each
  * section owns its Fields, the form drives them through the {@see Section}

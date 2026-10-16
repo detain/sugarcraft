@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 /**
- * COMPOSITION: candy-forms Spinner  +  sugar-table Table
+ * COMPOSITION: sugar-forms Spinner  +  sugar-table Table
  *
- * Demonstrates embedding a live candy-forms `Spinner` frame inside a
+ * Demonstrates embedding a live sugar-forms `Spinner` frame inside a
  * sugar-table cell. A table of "jobs" shows a per-row status column; rows
  * that are still running render the spinner's current frame (advanced via
  * its own `update()`/`TickMsg` contract) as a `StyledCell`, while finished
@@ -26,7 +26,7 @@ use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Forms\Spinner\TickMsg;
 use SugarCraft\Table\{Column, Row, RowData, StyledCell, Table};
 
-// A spinner is a normal candy-forms model: build it, then advance its frame
+// A spinner is a normal sugar-forms model: build it, then advance its frame
 // by feeding it the TickMsg its own update() expects. We step it a few times
 // so the rendered frame below is deterministic rather than always frame 0.
 $spinner = Spinner::new(SpinnerStyle::dot());

@@ -47,7 +47,7 @@ trait Mutable
 - `candy-mouse/src/ClickCounter.php`
 - `candy-shine/src/Style/StyleSheet.php`
 - `candy-sql/src/Admin/PerfSchema/*` (6 setup classes)
-- `candy-forms/src/TextArea/TextArea.php`
+- `sugar-forms/src/TextArea/TextArea.php`
 
 ### Classes With Local `mutate()` Implementations (Examples)
 
@@ -67,7 +67,7 @@ private function mutate(array $changes): static
 }
 ```
 
-**`candy-forms/src/Field/Input.php:L550`** (complex sentinel pattern)
+**`sugar-forms/src/Field/Input.php:L550`** (complex sentinel pattern)
 ```php
 private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null, bool $errorSet = false): self
 {
@@ -121,7 +121,7 @@ interface Model
 
 **candy-* libs (20+):**
 - `candy-files/src/Manager.php`
-- `candy-forms/src/Form.php`, `Viewport.php`, `TextInput.php`, `ItemList.php`, `TextArea.php`, `FilePicker.php`, `Cursor.php`, `Spinner.php`
+- `sugar-forms/src/Form.php`, `Viewport.php`, `TextInput.php`, `ItemList.php`, `TextArea.php`, `FilePicker.php`, `Cursor.php`, `Spinner.php`
 - `candy-flip/src/Player.php`
 - `candy-minesweeper/src/Game.php`
 - `candy-tetris/src/Game.php`, `VsGame.php`
@@ -245,7 +245,7 @@ Standardized validation errors using `throw new \InvalidArgumentException(Lang::
 
 **Dimension validation (repeated 50+ times):**
 ```php
-// candy-forms/src/Viewport/Viewport.php:L57
+// sugar-forms/src/Viewport/Viewport.php:L57
 throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'));
 
 // sugar-charts/src/Heatmap/Heatmap.php:L55
@@ -260,13 +260,13 @@ throw new \InvalidArgumentException(Lang::t('board.too_small'));
 
 **Pattern validation:**
 ```php
-// candy-forms/src/Validator/Pattern.php:L29
+// sugar-forms/src/Validator/Pattern.php:L29
 return $this->message ?? Lang::t('validator.pattern');
 
-// candy-forms/src/Validator/Email.php:L20
+// sugar-forms/src/Validator/Email.php:L20
 return Lang::t('validator.email');
 
-// candy-forms/src/Validator/Required.php:L17
+// sugar-forms/src/Validator/Required.php:L17
 return Lang::t('validator.required');
 ```
 
@@ -463,15 +463,15 @@ This utility is **well-centralized in candy-core** and handles complex Unicode/g
 
 ### Description
 
-`candy-forms` provides a `Validator` interface and concrete implementations for input validation.
+`sugar-forms` provides a `Validator` interface and concrete implementations for input validation.
 
 ### Location
 
-**`candy-forms/src/Validator/`**
+**`sugar-forms/src/Validator/`**
 
 ### Interface
 
-**`candy-forms/src/Validator/Validator.php:L12-L17`**
+**`sugar-forms/src/Validator/Validator.php:L12-L17`**
 
 ```php
 interface Validator
@@ -493,7 +493,7 @@ interface Validator
 
 ### Example
 
-**`candy-forms/src/Validator/Required.php:L12-L21`**
+**`sugar-forms/src/Validator/Required.php:L12-L21`**
 
 ```php
 final class Required implements Validator
@@ -510,7 +510,7 @@ final class Required implements Validator
 
 ### Key Insight
 
-The validator interface is **defined in candy-forms and re-exported from candy-forms** for backward compatibility. This is a clean pattern but only used within forms/prompt contexts, not across the broader monorepo.
+The validator interface is **defined in sugar-forms and re-exported from sugar-forms** for backward compatibility. This is a clean pattern but only used within forms/prompt contexts, not across the broader monorepo.
 
 ---
 
@@ -527,7 +527,7 @@ Various forms of value clamping to ensure values stay within valid ranges.
 
 ### Examples
 
-**`candy-forms/src/Viewport/Viewport.php:L462`** - Private method
+**`sugar-forms/src/Viewport/Viewport.php:L462`** - Private method
 ```php
 private function clamp(): self
 {
@@ -636,7 +636,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 
 ### Low Priority
 
-5. **Consider Validator extraction** - The `Validator` interface in `candy-forms` could potentially serve the broader monorepo for input validation needs.
+5. **Consider Validator extraction** - The `Validator` interface in `sugar-forms` could potentially serve the broader monorepo for input validation needs.
 
 ---
 
@@ -661,10 +661,10 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 
 - `candy-files/src/AsyncOps.php` - File-specific async operations (DUPLICATED)
 
-### candy-forms
+### sugar-forms
 
-- `candy-forms/src/Validator/Validator.php` - Validator interface
-- `candy-forms/src/Validator/Required.php`, `Email.php`, `Pattern.php`, `MinLength.php`, `MaxLength.php`
+- `sugar-forms/src/Validator/Validator.php` - Validator interface
+- `sugar-forms/src/Validator/Required.php`, `Email.php`, `Pattern.php`, `MinLength.php`, `MaxLength.php`
 
 ### sugar-bits
 

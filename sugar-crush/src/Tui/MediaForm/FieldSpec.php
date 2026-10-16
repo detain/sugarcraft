@@ -166,7 +166,7 @@ final readonly class FieldSpec
     }
 
     /**
-     * Build the candy-forms widget this row describes, already coerced onto
+     * Build the sugar-forms widget this row describes, already coerced onto
      * its lattice with the row's default. `$choices` overrides the feed for
      * option-bearing widgets (a runtime `/samplers` set); a select with no
      * option source fails fast — a silent empty dropdown would hide a wiring

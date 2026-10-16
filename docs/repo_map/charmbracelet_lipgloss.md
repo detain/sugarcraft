@@ -305,9 +305,9 @@ All setter methods on `Style` return `Style` (not `*Style`). Calling `s.Bold(tru
 | **CandyPalette** (`candy-palette/`) | `SugarCraft\Palette` | `charmbracelet/colorprofile` → terminal color detection (`HasDarkBackground`, `BackgroundColor`, `LightDark`, `Complete`) — but note SugarCraft's `candy-palette` maps directly to `colorprofile` itself |
 | **CandyShine** (`candy-shine/`) | `SugarCraft\Shine` | Adjacent: Lip Gloss handles ANSI styling; Glamour handles Markdown → these compose together in Charm apps |
 | **SugarCharts** (`sugar-charts/`) | `SugarCraft\Charts` | `Blend2D` / color gradient functions could power heatmap cell coloring |
-| **CandyForms** (`candy-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
+| **SugarForms** (`sugar-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
 
-**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-bits`, `candy-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
+**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-bits`, `sugar-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
 
 ---
 

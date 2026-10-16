@@ -32,7 +32,7 @@ From the first-stage analysis, glamour maps to:
 | `sugar-charts` | Table rendering | Reference — glamour's `TableElement` using Lip Gloss table.Builder is production-quality |
 | `candy-shine` | Styles/theme system | Reference — glamour's `StyleConfig` + `cascadeStyle()` is the canonical JSON stylesheet-in-JSON pattern |
 | `candy-core` | BaseElement, Element, Renderer pattern | Direct port — Entering/Exiting/Renderer/Finisher tuple pattern is portable |
-| `candy-forms` | Word wrapping, ANSI output | Direct port — `MarginWriter`/`lipgloss.Wrap` are directly reusable |
+| `sugar-forms` | Word wrapping, ANSI output | Direct port — `MarginWriter`/`lipgloss.Wrap` are directly reusable |
 | `candy-scriptui` | Link rendering (hyperlinks) | Reference — `LinkElement` with OSC 8 hyperlink generation via FNV hash for URL IDs |
 
 ---
@@ -1054,7 +1054,7 @@ Charm ecosystem (glamour, lipgloss, bubbletea, bubbles) demonstrates a mature pa
 - Component model (bubbletea)
 - Widgets (bubbles)
 
-**Match**: SugarCraft's planned architecture (candy-shine for styles, sugar-bits for rendering, candy-forms for components) mirrors this.
+**Match**: SugarCraft's planned architecture (candy-shine for styles, sugar-bits for rendering, sugar-forms for components) mirrors this.
 
 ---
 

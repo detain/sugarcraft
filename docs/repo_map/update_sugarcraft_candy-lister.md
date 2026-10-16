@@ -514,11 +514,11 @@ If implementing concurrent search, add tests for correctness (same results as se
 
 # Ecosystem / Integration Opportunities
 
-## 1. Integration with candy-forms
+## 1. Integration with sugar-forms
 
-Wire candy-lister as the completion list for candy-forms's fuzzy autocomplete. FuzzyMatch is already used in Prompt.
+Wire candy-lister as the completion list for sugar-forms's fuzzy autocomplete. FuzzyMatch is already used in Prompt.
 
-**Source:** `docs/repo_map/sugarcraft_candy-forms-huh.md` (FuzzyMatcher in the former Prompt façade), `docs/repo_map/charmbracelet_bubbles.md` (List with fuzzy filter)
+**Source:** `docs/repo_map/sugarcraft_sugar-forms-huh.md` (FuzzyMatcher in the former Prompt façade), `docs/repo_map/charmbracelet_bubbles.md` (List with fuzzy filter)
 
 ## 2. Integration with sugar-table
 
@@ -526,11 +526,11 @@ Use candy-lister for `Table::Filter()` row filtering. bubble-table uses `filterF
 
 **Source:** `docs/repo_map/Evertras_bubble-table.md` (FilterFunc with fuzzy filter)
 
-## 3. Integration with candy-forms
+## 3. Integration with sugar-forms
 
-Expose candy-lister as `ItemList` component in candy-forms (the form primitives base). Currently `sugar-bits` ItemList is 🟡 with fuzzy filtering gaps.
+Expose candy-lister as `ItemList` component in sugar-forms (the form primitives base). Currently `sugar-bits` ItemList is 🟡 with fuzzy filtering gaps.
 
-**Source:** `docs/repo_map/sugarcraft_candy-forms.md` (ItemList), `docs/repo_map/charmbracelet_bubbles.md` (List component)
+**Source:** `docs/repo_map/sugarcraft_sugar-forms.md` (ItemList), `docs/repo_map/charmbracelet_bubbles.md` (List component)
 
 ## 4. Integration with bubbleboxer Layout
 

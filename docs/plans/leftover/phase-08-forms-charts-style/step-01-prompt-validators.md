@@ -1,6 +1,6 @@
-# Step 08.01 — candy-forms built-in validators
+# Step 08.01 — sugar-forms built-in validators
 
-**Source:** `leftover_updates_later.md` candy-forms §3.1 P1
+**Source:** `leftover_updates_later.md` sugar-forms §3.1 P1
 **Branch:** `ai/prompt-validators`
 
 ## Deliverable
@@ -12,24 +12,24 @@ Built-in `Validator` subclasses: `Required`, `Email`, `MinLength`,
 
 **Create:**
 
-- `candy-forms/src/Validator/Required.php`
-- `candy-forms/src/Validator/Email.php`
-- `candy-forms/src/Validator/MinLength.php`
-- `candy-forms/src/Validator/MaxLength.php`
-- `candy-forms/src/Validator/Pattern.php`
+- `sugar-forms/src/Validator/Required.php`
+- `sugar-forms/src/Validator/Email.php`
+- `sugar-forms/src/Validator/MinLength.php`
+- `sugar-forms/src/Validator/MaxLength.php`
+- `sugar-forms/src/Validator/Pattern.php`
 
 **Modify:**
 
-- `candy-forms/src/TextInput.php` — `withValidator(Validator)` accepts
+- `sugar-forms/src/TextInput.php` — `withValidator(Validator)` accepts
   any of the above; multiple validators chain.
 
 ## Tests
 
-- `candy-forms/tests/Validator/<Each>Test.php` per validator.
+- `sugar-forms/tests/Validator/<Each>Test.php` per validator.
 
 ## Acceptance
 
-- `cd candy-forms && vendor/bin/phpunit --filter Validator` green.
+- `cd sugar-forms && vendor/bin/phpunit --filter Validator` green.
 
 ---
 

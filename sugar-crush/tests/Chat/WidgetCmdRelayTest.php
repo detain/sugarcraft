@@ -191,7 +191,7 @@ final class WidgetCmdRelayTest extends TestCase
     /**
      * A draft with the span (0,$anchorCol)→(0,$caretCol) selected — the shape
      * a shift-selection or a drag leaves behind (house idiom copied from
-     * candy-forms' own TextAreaClipboardTest).
+     * sugar-forms' own TextAreaClipboardTest).
      */
     private function chatWithSelection(string $value, int $anchorCol, int $caretCol): Chat
     {
@@ -200,7 +200,7 @@ final class WidgetCmdRelayTest extends TestCase
 
     /**
      * Focused editor holding `$value` with the span (0,$anchorCol)→(0,$caretCol)
-     * selected — house idiom from candy-forms' own TextAreaClipboardTest
+     * selected — house idiom from sugar-forms' own TextAreaClipboardTest
      * (focus() is the Model contract's [self, ?Cmd] pair).
      */
     private function selectedTextArea(string $value, int $anchorCol, int $caretCol): TextArea

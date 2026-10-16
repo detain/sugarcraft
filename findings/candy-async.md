@@ -386,11 +386,11 @@ The library correctly depends on:
 
 And several libs correctly depend on `candy-async`:
 - candy-core (i18n/Lang)
-- candy-forms (CancellationSource for async suggestions)
+- sugar-forms (CancellationSource for async suggestions)
 - candy-git-server (Subscription/Subscriptions for cleanup)
 - candy-mail (CancellationToken, AsyncOps for SMTP)
 - candy-codetime (CancellationSource, CancellationToken)
-- candy-forms, sugar-reel, sugar-query
+- sugar-forms, sugar-reel, sugar-query
 
 ---
 

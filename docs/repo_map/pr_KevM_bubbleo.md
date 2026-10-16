@@ -31,7 +31,7 @@ The mapping is specifically to `sugar-crumbs` for breadcrumb rendering. However,
 
 | bubbleo Component | SugarCraft Mapping | Notes |
 |---|---|---|
-| `navstack.Model` | `candy-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from CandyForms's form model |
+| `navstack.Model` | `sugar-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from SugarForms's form model |
 | `menu.Model` | `sugar-bits` (list widget) | Wraps bubbles/list for menu selection |
 | `breadcrumb.Model` | `sugar-crumbs` | Full mapping exists |
 | `shell.Model` | `candy-scriptui` | Composite nav + breadcrumb |
@@ -100,7 +100,7 @@ func (m *tea.Model) View() {
 
 - **Direct Risk to SugarCraft**: HIGH. If `sugar-crumbs` or related libs implement `Closable`-like cleanup, the same concern applies: cleanup commands cannot be properly sequenced in the current design.
 - **Feature Opportunity**: SugarCraft should implement disposal-as-command pattern (`Dispose() tea.Cmd`) rather than `Close() error`. This allows proper cleanup sequencing in the TEA model lifecycle.
-- **The async init pattern** (`onDataInit`/`onDataInited`) mirrors React's `componentDidMount` and is a common request for data-loading in TUI apps. CandyForms handles this differently (via its form fields), but a general-purpose async init lifecycle hook could be valuable across all SugarCraft models.
+- **The async init pattern** (`onDataInit`/`onDataInited`) mirrors React's `componentDidMount` and is a common request for data-loading in TUI apps. SugarForms handles this differently (via its form fields), but a general-purpose async init lifecycle hook could be valuable across all SugarCraft models.
 
 ---
 
@@ -397,7 +397,7 @@ Maintainer (KevM) has merged PR #6 (external contributor) but left PRs #2, #3, #
 | **Empty-stack quit behavior is rigid** | MEDIUM | sugar-crumbs/nav should allow configurable empty-stack behavior |
 | **Help state machine bugs** | MEDIUM | Help visibility toggle is error-prone. SugarCraft should test this explicitly. |
 | **Shell composition overrides child config** | MEDIUM | candy-scriptui must preserve child configuration (like the delimiter bug in PR #6) |
-| **No async data loading lifecycle** | MEDIUM | Issue #5's `onDataInit`/`onDataInited` pattern is a common need. candy-forms handles this for forms, but general models need a lifecycle hook. |
+| **No async data loading lifecycle** | MEDIUM | Issue #5's `onDataInit`/`onDataInited` pattern is a common need. sugar-forms handles this for forms, but general models need a lifecycle hook. |
 | **Functional options not used in v0.1.0 API** | LOW | Early API was designed before functional options adoption. PR #3 is retroactively fixing this. SugarCraft should use functional options from the start. |
 
 ---
@@ -445,7 +445,7 @@ interface Option {
 }
 ```
 
-**Libraries to update**: sugar-bits (many components), candy-forms, sugar-charts.
+**Libraries to update**: sugar-bits (many components), sugar-forms, sugar-charts.
 
 ### 4. Empty-Stack Behavior Configuration (Priority: MEDIUM)
 
@@ -521,7 +521,7 @@ PR #3 explicitly chose functional options because "it makes it much easier to ad
 
 ### Trend 1: Functional Options Adoption in Go TUI Ecosystem
 
-The adoption of functional options in PR #3 reflects a broader trend in the Go TUI ecosystem (and Go ecosystem generally) toward this pattern for API extensibility. Libraries like `charmbracelet/huh` (upstream of CandyForms) use functional options extensively.
+The adoption of functional options in PR #3 reflects a broader trend in the Go TUI ecosystem (and Go ecosystem generally) toward this pattern for API extensibility. Libraries like `charmbracelet/huh` (upstream of SugarForms) use functional options extensively.
 
 **SugarCraft alignment**: This is already the intended pattern per AGENTS.md guidelines.
 
@@ -529,7 +529,7 @@ The adoption of functional options in PR #3 reflects a broader trend in the Go T
 
 The request in Issue #5 for `onDataInit`/`onDataInited` hooks reflects a common need: TUI applications frequently need to load data asynchronously (HTTP, database, file I/O) and display loading states.
 
-**SugarCraft gap**: CandyForms handles this for form fields but there's no general-purpose async init lifecycle. This could be a SugarCraft-wide pattern.
+**SugarCraft gap**: SugarForms handles this for form fields but there's no general-purpose async init lifecycle. This could be a SugarCraft-wide pattern.
 
 ### Trend 3: Lifecycle Command Sequencing
 
@@ -549,7 +549,7 @@ The v0.1.5 push-symmetry change (closing on push AND pop) reflects a maturing un
 
 ### 1. First-Class Stack Navigation Library
 
-**Opportunity**: SugarCraft lacks a dedicated stack navigation primitive. `candy-forms` handles forms, `candy-scriptui` is a CLI shell, but neither provides the bubbleo-style `NavStack` with push/pop/close semantics.
+**Opportunity**: SugarCraft lacks a dedicated stack navigation primitive. `sugar-forms` handles forms, `candy-scriptui` is a CLI shell, but neither provides the bubbleo-style `NavStack` with push/pop/close semantics.
 
 **Recommendation**: Consider creating `sugar-nav` (or expanding `sugar-crumbs`) to provide:
 

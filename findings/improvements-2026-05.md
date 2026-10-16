@@ -10,7 +10,7 @@
 
 ## §1. Executive summary
 
-1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `candy-forms` (leaf libs). The dep graph points the wrong way.
+1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `sugar-forms` (leaf libs). The dep graph points the wrong way.
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
 3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
 4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`.
@@ -67,7 +67,7 @@ Every PR updates documentation that's affected by the change. For each touched l
 - `<slug>/CALIBER_LEARNINGS.md` — append any new pattern or anti-pattern learned.
 - `docs/lib/<slug>.html` — public webpage tile if user-facing surface changed.
 
-For cross-cut changes (e.g., `LangFactory` extraction, new `candy-forms` lib):
+For cross-cut changes (e.g., `LangFactory` extraction, new `sugar-forms` lib):
 - Root `README.md` — library table row(s).
 - Root `MATCHUPS.md` — status icon updates.
 - `docs/index.html` — homepage tile grid.
@@ -127,17 +127,17 @@ Never queue two phases concurrently against the same lib, and never start a new 
 
 ## §2. CRITICAL — architectural
 
-### 2.1 candy-scriptui depends on sugar-bits + candy-forms (inverted dependency)
+### 2.1 candy-scriptui depends on sugar-bits + sugar-forms (inverted dependency)
 
-✅ Resolved (PR #871): candy-scriptui now requires candy-forms; sugar-bits/candy-forms deps dropped. Spinner moved into candy-forms in PR #870.
+✅ Resolved (PR #871): candy-scriptui now requires sugar-forms; sugar-bits/sugar-forms deps dropped. Spinner moved into sugar-forms in PR #870.
 
-**Evidence:** `candy-scriptui/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/candy-forms` in `require`. Eight files under `candy-scriptui/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Forms\*`. `candy-scriptui/src/Command/SpinCommand.php` does the same.
+**Evidence:** `candy-scriptui/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/sugar-forms` in `require`. Eight files under `candy-scriptui/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Forms\*`. `candy-scriptui/src/Command/SpinCommand.php` does the same.
 
-**Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-scriptui` standalone post-1.0 and creates implicit cycles once sugar-bits or candy-forms grows a back-reference.
+**Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-scriptui` standalone post-1.0 and creates implicit cycles once sugar-bits or sugar-forms grows a back-reference.
 
 **Options:**
 
-- **Option A — preferred. Extract `candy-forms` foundation lib.** Move the reusable form/input primitives (`TextInput`, `TextArea`, `ItemList`, `Viewport`, `FilePicker` from sugar-bits; `Confirm` from candy-forms) into a new foundation lib `candy-forms`. Then candy-scriptui, sugar-bits, and candy-forms all depend on candy-forms. sugar-bits and candy-forms remain leaf libs that re-export or compose candy-forms primitives. Effort: medium (multi-PR phased) — touches 3 libs + every consuming composer.json. No public-API break if sugar-bits and candy-forms keep the same class names via aliasing during transition.
+- **Option A — preferred. Extract `sugar-forms` foundation lib.** Move the reusable form/input primitives (`TextInput`, `TextArea`, `ItemList`, `Viewport`, `FilePicker` from sugar-bits; `Confirm` from sugar-forms) into a new foundation lib `sugar-forms`. Then candy-scriptui, sugar-bits, and sugar-forms all depend on sugar-forms. sugar-bits and sugar-forms remain leaf libs that re-export or compose sugar-forms primitives. Effort: medium (multi-PR phased) — touches 3 libs + every consuming composer.json. No public-API break if sugar-bits and sugar-forms keep the same class names via aliasing during transition.
 
 - **Option B — minimal. Rename `candy-scriptui` → `sugar-shell`.** Reclassify as a leaf. Cheaper but loses the framing of "gum-port-as-foundation-CLI", and renames in this repo are non-trivial (root composer.json, MATCHUPS.md, PROJECT_NAMES.md, docs/, workflows, etc. — there's a CLAUDE.md note that renames go through a separate flow).
 
@@ -214,7 +214,7 @@ Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `ne
 
 ### 3.7 Path-repo closure gaps (found this session) — ✅ Resolved (PR #880)
 
-The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-forms`) added a new transitive `sugarcraft/candy-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `candy-mdview`, `sugar-stickers`, `candy-ssh-launcher` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `candy-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`candy-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-mouse`, `honey-bounce`, `candy-palette`, and for `candy-mdview` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
+The `sugar-forms` extraction (form primitives pulled out of `sugar-bits`/`sugar-forms`) added a new transitive `sugarcraft/sugar-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `candy-mdview`, `sugar-stickers`, `candy-ssh-launcher` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `sugar-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`sugar-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-mouse`, `honey-bounce`, `candy-palette`, and for `candy-mdview` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
 
 ---
 
@@ -222,10 +222,10 @@ The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-
 
 ### 4.1 Terminal raw-mode lives in the wrong places
 
-✅ Resolved (PR #873): candy-ssh-launcher raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib. (The stream_isatty cases in candy-forms/Spinner and candy-mdview/RenderCommand were already routed through TtyDetect in PR #866.)
+✅ Resolved (PR #873): candy-ssh-launcher raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib. (The stream_isatty cases in sugar-forms/Spinner and candy-mdview/RenderCommand were already routed through TtyDetect in PR #866.)
 
 - `candy-ssh-launcher/src/Picker.php` calls `shell_exec('stty -icanon -echo min 1 time 0')` and `shell_exec('stty sane')`.
-- `candy-forms/src/Spinner.php` calls `stream_isatty(STDERR)` directly.
+- `sugar-forms/src/Spinner.php` calls `stream_isatty(STDERR)` directly.
 - `candy-mdview/src/RenderCommand.php` calls `stream_isatty(STDIN)` directly.
 
 `candy-core/src/Util/TtyDetect.php` already exists. Inject it. For raw-mode toggling, candy-pty is the natural home, or introduce a new `candy-term` foundation lib that owns terminal-control concerns. Either way, `shell_exec('stty …')` belongs out of leaf libs.
@@ -238,7 +238,7 @@ The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-
 
 `ftell` → operation → `fseek` → `stream_get_contents` is documented in `candy-core/tests/RendererTest.php` and repeated across many test files. Extract `SugarCraft\Core\Tests\StreamHelper` trait + a base `SugarCraft\Core\Tests\TestCase` that the libs' test suites can inherit. Low-risk consolidation.
 
-### 4.4 candy-forms validator chaining is verbose
+### 4.4 sugar-forms validator chaining is verbose
 
 `Input::new('email')->withValidator(new Required())->withValidator(new Email())` could be `Input::new('email')->required()->email()`. Other field methods already follow the short-form pattern (`->placeholder('…')`, `->charLimit(100)`). Validators are the inconsistency.
 
@@ -260,10 +260,10 @@ Enables programmatic enumeration (e.g., for a `gum style --list-themes` style co
 
 ### 5.2 Composability cookbook
 
-✅ Resolved (PR #876): `docs/cookbook/` with 3 runnable cross-lib examples — `spinner-in-table.php` (candy-forms Spinner embedded in a sugar-table StyledCell), `sparkline-in-table.php` (sugar-charts Sparkline + sugar-table + candy-forms Spinner panel), `program-within-program.php` (candy-core Model nesting a candy-forms Spinner sub-program). Each builds the model(s), feeds scripted messages, renders one frame, and exits 0 (verified via `php docs/cookbook/<name>.php`). `docs/cookbook/composer.json` path-requires the libs; `docs/cookbook/README.md` indexes them; `docs/index.html` links the cookbook. The Toast+form candidate was dropped: sugar-toast's `View()` overlay truncates its own box borders (reproduces in `sugar-toast/examples/basic.php` too), so it would have shipped visibly broken (fixed in PR #877).
+✅ Resolved (PR #876): `docs/cookbook/` with 3 runnable cross-lib examples — `spinner-in-table.php` (sugar-forms Spinner embedded in a sugar-table StyledCell), `sparkline-in-table.php` (sugar-charts Sparkline + sugar-table + sugar-forms Spinner panel), `program-within-program.php` (candy-core Model nesting a sugar-forms Spinner sub-program). Each builds the model(s), feeds scripted messages, renders one frame, and exits 0 (verified via `php docs/cookbook/<name>.php`). `docs/cookbook/composer.json` path-requires the libs; `docs/cookbook/README.md` indexes them; `docs/index.html` links the cookbook. The Toast+form candidate was dropped: sugar-toast's `View()` overlay truncates its own box borders (reproduces in `sugar-toast/examples/basic.php` too), so it would have shipped visibly broken (fixed in PR #877).
 
 `docs/cookbook/` with 3–5 worked examples:
-- Embedding a `candy-forms` Form inside a `sugar-table` cell
+- Embedding a `sugar-forms` Form inside a `sugar-table` cell
 - Spinner overlay on top of a `sugar-charts` plot
 - Toast + form interleaving
 - Sub-program-in-a-sub-program (program-within-program)
@@ -302,8 +302,8 @@ Each step is a self-contained PR ending with the local gate (phpunit + phpstan +
 2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + candy-mdview batch.
 3. **Lang.php consolidation (1 PR):** Add `SugarCraft\Core\I18n\LangFactory` + update `scaffold-library` skill + mechanically migrate 33 libs.
 4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-boxer/SugarBoxer`.
-5. **`candy-forms` extraction (multi-PR phased, gated):** Extract `candy-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/candy-forms during transition. Largest item — needs explicit go-ahead.
-6. **Polish round (1 PR):** `catalog()` methods, candy-forms validator shortcuts, `TestCase` base, `StreamHelper` trait.
+5. **`sugar-forms` extraction (multi-PR phased, gated):** Extract `sugar-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/sugar-forms during transition. Largest item — needs explicit go-ahead.
+6. **Polish round (1 PR):** `catalog()` methods, sugar-forms validator shortcuts, `TestCase` base, `StreamHelper` trait.
 7. **Optional / opportunistic:** shared `phpunit.xml.dist`; `candy-term` foundation lib for raw-mode.
 
 ---

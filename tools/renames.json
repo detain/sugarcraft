@@ -27,7 +27,7 @@
     {"batch":"C","kind":"rename","old":"sugar-dash","new":"sugar-dashboard","ns_old":"Dash","ns_new":"Dashboard","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"sugar-mcp","new":"sugar-mcp-client","ns_old":"Mcp","ns_new":"McpClient","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"sugar-bits","new":"sugar-widgets","ns_old":"Bits","ns_new":"Widgets","type":"lib","bins":{},"status":"pending"},
-    {"batch":"C","kind":"rename","old":"candy-forms","new":"sugar-forms","ns_old":"Forms","ns_new":"Forms","type":"lib","bins":{},"status":"pending"},
+    {"batch":"C","kind":"rename","old":"candy-forms","new":"sugar-forms","ns_old":"Forms","ns_new":"Forms","type":"lib","bins":{},"status":"renamed"},
     {"batch":"C","kind":"rename","old":"candy-mouse","new":"sugar-mouse","ns_old":"Mouse","ns_new":"Mouse","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-focus","new":"sugar-focus","ns_old":"Focus","ns_new":"Focus","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"candy-fuzzy","new":"sugar-fuzzy","ns_old":"Fuzzy","ns_new":"Fuzzy","type":"lib","bins":{},"status":"pending"},
@@ -58,7 +58,7 @@
     {"batch":"F","kind":"rename","old":"sugar-crush-web","new":"candy-code-web","ns_old":"CrushWeb","ns_new":"CodeWeb","type":"lib","bins":{},"status":"pending"},
 
     {"batch":"1","kind":"merge","old":"candy-zone","new":"candy-mouse","ns_old":"Zone","ns_new":"Mouse\\Zones","type":"lib","bins":{},"github":"archive","status":"renamed"},
-    {"batch":"1","kind":"fold","old":"sugar-prompt","new":"candy-forms","ns_old":"Prompt","ns_new":"Forms","type":"lib","bins":{},"github":"archive","status":"renamed"},
+    {"batch":"1","kind":"fold","old":"sugar-prompt","new":"sugar-forms","ns_old":"Prompt","ns_new":"Forms","type":"lib","bins":{},"github":"archive","status":"renamed"},
     {"batch":"1","kind":"create","old":null,"new":"candy-gifview","ns_old":null,"ns_new":"GifView","type":"app","bins":{},"github":"create","status":"packagist-done"}
   ]
 }

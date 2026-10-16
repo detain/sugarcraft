@@ -52,7 +52,7 @@ CallbackAuthoredRefusalTest in-shard flake (~1-in-3; re-run before declaring); c
 
 ## 0-NOW-93. ROUND 89 WAVE-1 CLOSED — FOUR RE-CUTS ALL LANDED (E742/E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT); E736 OPEN WITH ONE NAMED ROW; WAVE-2 = E744 CRUSH-HOST LANE — SUPERSEDED by §0-NOW-94 (campaign closed)
 
-**The headline: r88's four phantom'd scopes came back as wave-1 lanes and every one landed review-clean.** y1 shipped the canonical 0..255 xterm palette (operator ruling m0519 = correct-to-xterm; frozen pins re-blessed; the disclosed render-dump VALUE flip covers exactly 12 theme rows — new baseline `6f9dc048b4cbc2e321a18698e1069b7c`); y2 folded `Progress::view()`'s triplicated geometry into one private `computeBarLayout()` with a two-way capture proof (485,509 B / 4,424 configs); y3 built the forms cluster-A (5.2 async validation, 5.3 focus, 5.4 key overrides, 5.9 hydrate/values round-trip, 5.10 readonly, 5.11 error-help, 5.12 number-jump, 5.15 load-more) taking forms **2,037→2,182T/3,945A** with the E741 carrier census widened in-step and a candy-forms `AsyncValidatable` re-export; y4 consumed the salvaged x7 patch and built shine 7.1+7.3 (Writer/StreamSink/SectionScanner/renderStream/StyleGuide split under the no-glow-require ruling; shine **352/704→573T/1,075A**; the rv-x7 promised pins now pay — its M1 mutation reddens 59 tests). The commit-EARLY law adopted at the r88 closeout is vindicated: zero phantoms this round, 20/20 picks clean, zero sugar-crush files.
+**The headline: r88's four phantom'd scopes came back as wave-1 lanes and every one landed review-clean.** y1 shipped the canonical 0..255 xterm palette (operator ruling m0519 = correct-to-xterm; frozen pins re-blessed; the disclosed render-dump VALUE flip covers exactly 12 theme rows — new baseline `6f9dc048b4cbc2e321a18698e1069b7c`); y2 folded `Progress::view()`'s triplicated geometry into one private `computeBarLayout()` with a two-way capture proof (485,509 B / 4,424 configs); y3 built the forms cluster-A (5.2 async validation, 5.3 focus, 5.4 key overrides, 5.9 hydrate/values round-trip, 5.10 readonly, 5.11 error-help, 5.12 number-jump, 5.15 load-more) taking forms **2,037→2,182T/3,945A** with the E741 carrier census widened in-step and a sugar-forms `AsyncValidatable` re-export; y4 consumed the salvaged x7 patch and built shine 7.1+7.3 (Writer/StreamSink/SectionScanner/renderStream/StyleGuide split under the no-glow-require ruling; shine **352/704→573T/1,075A**; the rv-x7 promised pins now pay — its M1 mutation reddens 59 tests). The commit-EARLY law adopted at the r88 closeout is vindicated: zero phantoms this round, 20/20 picks clean, zero sugar-crush files.
 
 ### 0. STATE TABLE
 
@@ -453,7 +453,7 @@ the 2026-09-12 adjudication.
 ### 3. 🔴 THE VENDOR CLOSURE WAS SILENTLY BROKEN, AND IT COST THIS SESSION A WHOLE SUITE RUN
 
 **MEASURED 2026-09-10, before any of the figures above were trusted.** `sugar-crush/vendor/sugarcraft/`
-held **14 entries where the manifest's closure needs 18**. `candy-forms`, `candy-focus` and
+held **14 entries where the manifest's closure needs 18**. `sugar-forms`, `candy-focus` and
 `candy-kit` — all three named directly in `sugar-crush/composer.json`'s `require` — were **absent
 from vendor entirely**, and four more (`candy-fuzzy`, `candy-mouse`, `honey-bounce`, `sugar-veil`)
 were real Packagist directories where the other ten were monorepo symlinks. `refresh-deps.php

@@ -224,7 +224,7 @@ final class SettingsEditor
     }
 
     /**
-     * Start editing the highlighted setting in its candy-forms field
+     * Start editing the highlighted setting in its sugar-forms field
      * ({@see SettingsFieldFactory}), pre-filled with its staged value, else the
      * value this launch resolved. A key with no inline field leaves the view
      * as it was and says why. `models` edits the entry for the provider this

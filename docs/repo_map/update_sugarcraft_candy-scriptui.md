@@ -1,6 +1,6 @@
 # Overview
 
-CandyScriptui is a PHP port of `charmbracelet/gum` (~8.7k stars, Go) — a composer-installable CLI providing 13 subcommands for interactive TUI primitives in shell scripts. The package sits at the **application framework tier** (`Candy-` prefix per naming conventions), wrapping foundation libs (`candy-core`, `candy-forms`, `candy-sprinkles`, `candy-shine`, `candy-pty`) with a Symfony Console surface. It provides ~85% functional parity with gum for typical shell script use cases.
+CandyScriptui is a PHP port of `charmbracelet/gum` (~8.7k stars, Go) — a composer-installable CLI providing 13 subcommands for interactive TUI primitives in shell scripts. The package sits at the **application framework tier** (`Candy-` prefix per naming conventions), wrapping foundation libs (`candy-core`, `sugar-forms`, `candy-sprinkles`, `candy-shine`, `candy-pty`) with a Symfony Console surface. It provides ~85% functional parity with gum for typical shell script use cases.
 
 **Biggest opportunity areas:**
 
@@ -31,7 +31,7 @@ The package separates **interactive** commands (choose, confirm, file, filter, i
 ```
 Command (Symfony Console layer)
   └── Model (TEA pattern: init/update/view/subscriptions)
-        └── Components (candy-forms: TextInput, ItemList, etc.)
+        └── Components (sugar-forms: TextInput, ItemList, etc.)
 ```
 
 ### Key Source Files
@@ -40,7 +40,7 @@ Command (Symfony Console layer)
 |---|---|---|
 | Application | `src/Application.php` | Auto-discovery, env var fallback, typo suggester |
 | Commands | `src/Command/` (13 files) | Symfony Command subclasses with `#[Command]` attributes |
-| Models | `src/Model/` (8 files) | TEA models wrapping candy-forms components |
+| Models | `src/Model/` (8 files) | TEA models wrapping sugar-forms components |
 | Attributes | `src/Attribute/` (5 files) | `#[Command]`, `#[Alias]`, `#[Example]`, `#[Flag]`, `#[ValueEnum]` |
 | Completion | `src/Completion/` (3 files) | Bash, Zsh, Fish completion generators |
 | Help | `src/Help/` (2 files) | HelpFormatter, TypoSuggester |
@@ -52,7 +52,7 @@ Command (Symfony Console layer)
 candy-scriptui
 ├── symfony/console ^6.4 || ^7.0     CLI framework
 ├── sugarcraft/candy-core             TEA runtime: Program, Model, Msg, KeyType, Cmd
-├── sugarcraft/candy-forms             Components: TextInput, ItemList, FilePicker, etc.
+├── sugarcraft/sugar-forms             Components: TextInput, ItemList, FilePicker, etc.
 ├── sugarcraft/candy-pty               PosixProcess for spin command
 ├── sugarcraft/candy-shine            Renderer (markdown), Theme
 └── sugarcraft/candy-sprinkles        Style, Border, Align, Table
@@ -149,7 +149,7 @@ candy-scriptui
 - **Source repo:** `charmbracelet/gum` (choose/choose.go + choose/model.go)
 - **Source PR/issue:** gum's use of `paginator.Model` and 2D navigation
 - **Implementation ideas:**
-  1. Create new `GridItemList` component in candy-forms
+  1. Create new `GridItemList` component in sugar-forms
   2. Extend `ItemList` with column count and 2D cursor movement
   3. Add left/right key handling in the TEA model
 - **Estimated complexity:** High — requires new component and model changes
@@ -544,7 +544,7 @@ Users coming from gum need a quick reference:
 
 ## 1. Integration with sugar-bits
 
-candy-scriptui currently uses candy-forms directly but could also expose sugar-bits components:
+candy-scriptui currently uses sugar-forms directly but could also expose sugar-bits components:
 
 - `TreeView` for hierarchical file picker
 - `SelectionList` with custom renderers
@@ -667,7 +667,7 @@ Could add `--theme` flag to more commands that respects terminal color profile d
 
 # Final Strategic Assessment
 
-candy-scriptui represents a well-executed port of charmbracelet/gum to PHP, achieving ~85% functional parity while introducing PHP-specific innovations (attributes, Levenshtein typo suggestion, env var global prefix). The architecture is clean — Symfony Console surface over TEA models over candy-forms components — and the codebase demonstrates good PHP 8.3+ practices throughout.
+candy-scriptui represents a well-executed port of charmbracelet/gum to PHP, achieving ~85% functional parity while introducing PHP-specific innovations (attributes, Levenshtein typo suggestion, env var global prefix). The architecture is clean — Symfony Console surface over TEA models over sugar-forms components — and the codebase demonstrates good PHP 8.3+ practices throughout.
 
 **Key differentiators vs upstream gum:**
 
@@ -684,7 +684,7 @@ candy-scriptui represents a well-executed port of charmbracelet/gum to PHP, achi
 - Subscriptions (requires Program loop enhancement)
 
 **Ecosystem positioning:**
-candy-scriptui sits at the application framework tier, serving as the **CLI entry point** for the SugarCraft TUI ecosystem. It depends on foundation libs (candy-core, candy-forms, candy-sprinkles, candy-shine, candy-pty) and provides no components itself — only command wrappers. This is the correct architecture: the foundation libs are reusable in custom TUI applications, while candy-scriptui provides the gum-compatible CLI surface for shell scripts.
+candy-scriptui sits at the application framework tier, serving as the **CLI entry point** for the SugarCraft TUI ecosystem. It depends on foundation libs (candy-core, sugar-forms, candy-sprinkles, candy-shine, candy-pty) and provides no components itself — only command wrappers. This is the correct architecture: the foundation libs are reusable in custom TUI applications, while candy-scriptui provides the gum-compatible CLI surface for shell scripts.
 
 **Comparison with other PHP CLI frameworks:**
 

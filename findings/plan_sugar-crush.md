@@ -193,7 +193,7 @@ Changing debounce settings mid-operation could cause stale timers to fire with o
 **Actual code location:**
 
 - `candy-async/src/AsyncOps.php:159-175` — `debounce()` creates timer closures
-- `candy-forms/src/Field/Input.php:248-449` — async suggestions with debounce
+- `sugar-forms/src/Field/Input.php:248-449` — async suggestions with debounce
 - `candy-core/src/Program.php` — uses `Loop::addTimer()`
 
 **Investigation notes:**

@@ -18,7 +18,7 @@ use SugarCraft\Forms\Field\Text;
  * The Prompt tab (crush-media W3.4, plan §2.1): prompt and negative prompt
  * as three-row text areas, styles as the multi-select.
  *
- * History caveat (probed at W3.4): candy-forms `Text`/`Input` carry no
+ * History caveat (probed at W3.4): sugar-forms `Text`/`Input` carry no
  * input-history machinery, and the plan promises none for v1 — the prompt
  * rows are plain areas, and prompt *recall* stays a W4 affordance. The
  * placeholders are the neutral C-2 pair ("Describe the image" / "What to

@@ -26,7 +26,7 @@ From `repo_map/p-gen_smenu.md`:
 | SugarCraft Lib | Relevant smenu Concept |
 |---|---|
 | **sugar-bits** | TST implementation, bitmap tracking for search highlighting, linked list |
-| **candy-forms / candy-shine** | Word/tag selection model, scrollable window rendering, search with real-time highlighting |
+| **sugar-forms / candy-shine** | Word/tag selection model, scrollable window rendering, search with real-time highlighting |
 | **honey-bounce** | Scrolling behavior and cursor movement timing |
 | **Overall** | **No direct port exists.** smenu is a standalone app, not a library. SugarCraft gap: no TST-based prefix/fuzzy filtering of large word lists. |
 
@@ -228,7 +228,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 
 **Discussion**: smenu can't accept input outside the provided list. This is by design for menu selection, but limits use as input prompt.
 
-**Signal**: Selection vs. input-prompt are different use cases. **SugarCraft lesson**: CandyForms's text input behavior should support "fallback to typed input when list is empty" pattern for dmenu compatibility.
+**Signal**: Selection vs. input-prompt are different use cases. **SugarCraft lesson**: SugarForms's text input behavior should support "fallback to typed input when list is empty" pattern for dmenu compatibility.
 
 ---
 
@@ -258,7 +258,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 
 **Resolution**: Tag mode (`-T`) with null-delimited output was implemented.
 
-**Signal**: Multi-select was a highly requested feature that took years to land. **SugarCraft**: MultiSelect field in CandyForms already implements this pattern.
+**Signal**: Multi-select was a highly requested feature that took years to land. **SugarCraft**: MultiSelect field in SugarForms already implements this pattern.
 
 ---
 
@@ -430,7 +430,7 @@ No plugin system exists. smenu is a single-purpose tool.
 | **Library API extraction** | Too much architectural work | SugarCraft should provide this as a new lib |
 | **Single-key selection** | Would require significant key binding logic | SugarCraft could implement as optional mode |
 | **Exit 1 on Ctrl-C** | Maintainer prefers signal handlers | SugarCraft could provide exit code constants |
-| **dmenu compatibility mode** | Different tool philosophy | SugarCraft could provide dmenu-compatible mode in CandyForms |
+| **dmenu compatibility mode** | Different tool philosophy | SugarCraft could provide dmenu-compatible mode in SugarForms |
 | **Windows native support** | Architectural (no termios equivalent) | Not worth the effort; WSL/MSYS2 acceptable |
 
 ---
@@ -439,10 +439,10 @@ No plugin system exists. smenu is a single-purpose tool.
 
 | Problem | SugarCraft Relevance |
 |---|---|
-| **Word length limits** | CandyForms text inputs have max length; should be configurable and generous |
-| **Terminal capability detection** | candy-forms and sugar-readline must handle TERM variations |
-| **Exit code semantics** | CandyForms/SugarCrush should document exit codes |
-| **Pre-filtered selection** | CandyForms's Select field could support initial filter state |
+| **Word length limits** | SugarForms text inputs have max length; should be configurable and generous |
+| **Terminal capability detection** | sugar-forms and sugar-readline must handle TERM variations |
+| **Exit code semantics** | SugarForms/SugarCrush should document exit codes |
+| **Pre-filtered selection** | SugarForms's Select field could support initial filter state |
 | **Multi-select UX** | MultiSelect field should visualize tagged state clearly |
 | **stdout/stderr separation** | All SugarCraft CLI tools must separate output types correctly |
 | **Integer overflow in size calculations** | SugarCraft should use safe arithmetic in any array/index calculations |
@@ -487,7 +487,7 @@ No plugin system exists. smenu is a single-purpose tool.
    - `.smenu.ini` parsing is a known friction point (#50)
    - SugarCraft could provide a standard config pattern
 
-8. **dmenu compatibility mode** in CandyForms
+8. **dmenu compatibility mode** in SugarForms
    - Allow typing arbitrary input when list is empty
    - Better migration path for dmenu users
 
@@ -566,7 +566,7 @@ No plugin system exists. smenu is a single-purpose tool.
 | Opportunity | Rationale |
 |---|---|
 | **Port TST-based filtering as standalone library** | smenu's core algorithm is excellent but locked in app; SugarCraft could provide reusable library |
-| **Implement single-key selection in candy-forms** | Clear demand, not implemented in smenu |
+| **Implement single-key selection in sugar-forms** | Clear demand, not implemented in smenu |
 | **Pre-filtered initial state for Select field** | Meta-search is a recognized pattern |
 | **Exit code constants package** | SugarCrush and other CLIs should share exit code conventions |
 | **Reference smenu's bitmap tracking** | Smart highlighting without re-scanning |
@@ -579,7 +579,7 @@ No plugin system exists. smenu is a single-purpose tool.
 | **Bit array utilities** | Already in smenu; useful for many purposes |
 | **Linked list implementation** | Doubly-linked list with sort/find/delete |
 
-### For candy-forms specifically
+### For sugar-forms specifically
 
 | Opportunity | Rationale |
 |---|---|
@@ -593,7 +593,7 @@ No plugin system exists. smenu is a single-purpose tool.
 
 | Pattern | smenu | gum (Charmbracelet) | SugarCraft |
 |---|---|---|---|
-| **Fuzzy filter** | ✅ (but not called fuzzy) | `gum filter` | CandyForms Select |
+| **Fuzzy filter** | ✅ (but not called fuzzy) | `gum filter` | SugarForms Select |
 | **Multi-select** | Tag mode (`-T`) | `--no-limit` | MultiSelect |
 | **Single-key select** | ❌ | ❌ | Opportunity |
 | **Library extraction** | ❌ | ❌ (app only) | Opportunity |
@@ -618,7 +618,7 @@ No plugin system exists. smenu is a single-purpose tool.
    - Search for `echo`, `print`, `printf` that might leak to stdout
    - Any informational output should go to stderr
 
-3. **Add single-key selection mode** to candy-forms Select field
+3. **Add single-key selection mode** to sugar-forms Select field
    - Based on #40 demand
    - Enable rapid menu navigation without ENTER
 
@@ -629,7 +629,7 @@ No plugin system exists. smenu is a single-purpose tool.
    - Reusable across SugarCraft components
    - Enables fuzzy/prefix/substring search for any list
 
-5. **Add pre-filtered initial state** to candy-forms Select
+5. **Add pre-filtered initial state** to sugar-forms Select
    - Based on #41 demand
    - `->withInitialFilter('prefix')` pattern
 

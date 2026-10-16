@@ -2075,9 +2075,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-1-16-l-1.ansi": {
-        "name": "candy-forms-1-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-l-1.ansi": {
+        "name": "sugar-forms-1-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "158x29",
         "width": 158,
         "height": 29,
@@ -2089,9 +2089,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-1-16-l-2.ansi": {
-        "name": "candy-forms-1-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-l-2.ansi": {
+        "name": "sugar-forms-1-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "142x28",
         "width": 142,
         "height": 28,
@@ -2101,9 +2101,9 @@
         "rating": 6,
         "tags": []
     },
-    "candy-forms/candy-forms-1-16-m-1.ansi": {
-        "name": "candy-forms-1-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-m-1.ansi": {
+        "name": "sugar-forms-1-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -2113,9 +2113,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-1-16-m-2.ansi": {
-        "name": "candy-forms-1-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-m-2.ansi": {
+        "name": "sugar-forms-1-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "77x19",
         "width": 77,
         "height": 19,
@@ -2125,9 +2125,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-1-16-s-1.ansi": {
-        "name": "candy-forms-1-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-s-1.ansi": {
+        "name": "sugar-forms-1-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "44x10",
         "width": 44,
         "height": 10,
@@ -2137,9 +2137,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-1-16-s-2.ansi": {
-        "name": "candy-forms-1-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-s-2.ansi": {
+        "name": "sugar-forms-1-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "42x9",
         "width": 42,
         "height": 9,
@@ -2149,9 +2149,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-1-16-s-3.ansi": {
-        "name": "candy-forms-1-16-s-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-16-s-3.ansi": {
+        "name": "sugar-forms-1-16-s-3.ansi",
+        "category": "sugar-forms",
         "resolution": "43x9",
         "width": 43,
         "height": 9,
@@ -2161,9 +2161,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-1-256-l-1.ansi": {
-        "name": "candy-forms-1-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-l-1.ansi": {
+        "name": "sugar-forms-1-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "169x30",
         "width": 169,
         "height": 30,
@@ -2175,9 +2175,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-1-256-l-2.ansi": {
-        "name": "candy-forms-1-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-l-2.ansi": {
+        "name": "sugar-forms-1-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "160x31",
         "width": 160,
         "height": 31,
@@ -2187,9 +2187,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-forms/candy-forms-1-256-m-1.ansi": {
-        "name": "candy-forms-1-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-m-1.ansi": {
+        "name": "sugar-forms-1-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "71x19",
         "width": 71,
         "height": 19,
@@ -2199,9 +2199,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-1-256-m-2.ansi": {
-        "name": "candy-forms-1-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-m-2.ansi": {
+        "name": "sugar-forms-1-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -2211,9 +2211,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-1-256-m-3.ansi": {
-        "name": "candy-forms-1-256-m-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-m-3.ansi": {
+        "name": "sugar-forms-1-256-m-3.ansi",
+        "category": "sugar-forms",
         "resolution": "71x19",
         "width": 71,
         "height": 19,
@@ -2223,9 +2223,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-1-256-s-1.ansi": {
-        "name": "candy-forms-1-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-s-1.ansi": {
+        "name": "sugar-forms-1-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "51x7",
         "width": 51,
         "height": 7,
@@ -2235,9 +2235,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-1-256-s-2.ansi": {
-        "name": "candy-forms-1-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-256-s-2.ansi": {
+        "name": "sugar-forms-1-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "50x13",
         "width": 50,
         "height": 13,
@@ -2247,9 +2247,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-1-tc-l-1.ansi": {
-        "name": "candy-forms-1-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-l-1.ansi": {
+        "name": "sugar-forms-1-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "192x30",
         "width": 192,
         "height": 30,
@@ -2261,9 +2261,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-1-tc-l-2.ansi": {
-        "name": "candy-forms-1-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-l-2.ansi": {
+        "name": "sugar-forms-1-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "180x28",
         "width": 180,
         "height": 28,
@@ -2273,9 +2273,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-1-tc-m-1.ansi": {
-        "name": "candy-forms-1-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-m-1.ansi": {
+        "name": "sugar-forms-1-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -2285,9 +2285,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-1-tc-m-2.ansi": {
-        "name": "candy-forms-1-tc-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-m-2.ansi": {
+        "name": "sugar-forms-1-tc-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "87x20",
         "width": 87,
         "height": 20,
@@ -2297,9 +2297,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-1-tc-m-3.ansi": {
-        "name": "candy-forms-1-tc-m-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-m-3.ansi": {
+        "name": "sugar-forms-1-tc-m-3.ansi",
+        "category": "sugar-forms",
         "resolution": "87x18",
         "width": 87,
         "height": 18,
@@ -2309,9 +2309,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-1-tc-s-1.ansi": {
-        "name": "candy-forms-1-tc-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-s-1.ansi": {
+        "name": "sugar-forms-1-tc-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "48x9",
         "width": 48,
         "height": 9,
@@ -2321,9 +2321,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-1-tc-s-2.ansi": {
-        "name": "candy-forms-1-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-1-tc-s-2.ansi": {
+        "name": "sugar-forms-1-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "47x6",
         "width": 47,
         "height": 6,
@@ -2333,9 +2333,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-l-1.ansi": {
-        "name": "candy-forms-2-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-l-1.ansi": {
+        "name": "sugar-forms-2-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "120x37",
         "width": 120,
         "height": 37,
@@ -2345,9 +2345,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-l-2.ansi": {
-        "name": "candy-forms-2-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-l-2.ansi": {
+        "name": "sugar-forms-2-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "121x30",
         "width": 121,
         "height": 30,
@@ -2357,9 +2357,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-m-1.ansi": {
-        "name": "candy-forms-2-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-m-1.ansi": {
+        "name": "sugar-forms-2-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "74x18",
         "width": 74,
         "height": 18,
@@ -2369,9 +2369,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-m-2.ansi": {
-        "name": "candy-forms-2-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-m-2.ansi": {
+        "name": "sugar-forms-2-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "82x18",
         "width": 82,
         "height": 18,
@@ -2381,9 +2381,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-m-3.ansi": {
-        "name": "candy-forms-2-16-m-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-m-3.ansi": {
+        "name": "sugar-forms-2-16-m-3.ansi",
+        "category": "sugar-forms",
         "resolution": "72x18",
         "width": 72,
         "height": 18,
@@ -2393,9 +2393,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-s-1.ansi": {
-        "name": "candy-forms-2-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-s-1.ansi": {
+        "name": "sugar-forms-2-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "55x9",
         "width": 55,
         "height": 9,
@@ -2405,9 +2405,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-16-s-2.ansi": {
-        "name": "candy-forms-2-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-16-s-2.ansi": {
+        "name": "sugar-forms-2-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "50x9",
         "width": 50,
         "height": 9,
@@ -2417,9 +2417,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-256-l-1.ansi": {
-        "name": "candy-forms-2-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-256-l-1.ansi": {
+        "name": "sugar-forms-2-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "135x28",
         "width": 135,
         "height": 28,
@@ -2429,9 +2429,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-256-l-2.ansi": {
-        "name": "candy-forms-2-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-256-l-2.ansi": {
+        "name": "sugar-forms-2-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "140x28",
         "width": 140,
         "height": 28,
@@ -2441,9 +2441,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-256-m-1.ansi": {
-        "name": "candy-forms-2-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-256-m-1.ansi": {
+        "name": "sugar-forms-2-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "87x18",
         "width": 87,
         "height": 18,
@@ -2453,9 +2453,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-256-m-2.ansi": {
-        "name": "candy-forms-2-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-256-m-2.ansi": {
+        "name": "sugar-forms-2-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "78x19",
         "width": 78,
         "height": 19,
@@ -2465,9 +2465,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-256-s-1.ansi": {
-        "name": "candy-forms-2-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-256-s-1.ansi": {
+        "name": "sugar-forms-2-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "52x5",
         "width": 52,
         "height": 5,
@@ -2477,9 +2477,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-256-s-2.ansi": {
-        "name": "candy-forms-2-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-256-s-2.ansi": {
+        "name": "sugar-forms-2-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "58x6",
         "width": 58,
         "height": 6,
@@ -2489,9 +2489,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-2-tc-l-1.ansi": {
-        "name": "candy-forms-2-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-l-1.ansi": {
+        "name": "sugar-forms-2-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "132x28",
         "width": 132,
         "height": 28,
@@ -2503,9 +2503,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-2-tc-l-2.ansi": {
-        "name": "candy-forms-2-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-l-2.ansi": {
+        "name": "sugar-forms-2-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "143x31",
         "width": 143,
         "height": 31,
@@ -2517,9 +2517,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-2-tc-m-1.ansi": {
-        "name": "candy-forms-2-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-m-1.ansi": {
+        "name": "sugar-forms-2-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -2529,9 +2529,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-tc-m-2.ansi": {
-        "name": "candy-forms-2-tc-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-m-2.ansi": {
+        "name": "sugar-forms-2-tc-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "90x18",
         "width": 90,
         "height": 18,
@@ -2541,21 +2541,21 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-tc-s-1.ansi": {
-        "name": "candy-forms-2-tc-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-s-1.ansi": {
+        "name": "sugar-forms-2-tc-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "54x5",
         "width": 54,
         "height": 5,
         "depth": "truecolor",
         "colors": 101,
-        "description": "Truecolor CandyForms wordmark over twin hue-swept gradient bars",
+        "description": "Truecolor SugarForms wordmark over twin hue-swept gradient bars",
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-tc-s-2.ansi": {
-        "name": "candy-forms-2-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-s-2.ansi": {
+        "name": "sugar-forms-2-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "67x5",
         "width": 67,
         "height": 5,
@@ -2565,9 +2565,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-2-tc-s-3.ansi": {
-        "name": "candy-forms-2-tc-s-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-2-tc-s-3.ansi": {
+        "name": "sugar-forms-2-tc-s-3.ansi",
+        "category": "sugar-forms",
         "resolution": "47x5",
         "width": 47,
         "height": 5,
@@ -2577,9 +2577,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-l-1.ansi": {
-        "name": "candy-forms-3-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-l-1.ansi": {
+        "name": "sugar-forms-3-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -2589,9 +2589,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-l-2.ansi": {
-        "name": "candy-forms-3-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-l-2.ansi": {
+        "name": "sugar-forms-3-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "160x38",
         "width": 160,
         "height": 38,
@@ -2601,9 +2601,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-m-1.ansi": {
-        "name": "candy-forms-3-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-m-1.ansi": {
+        "name": "sugar-forms-3-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -2613,9 +2613,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-m-2.ansi": {
-        "name": "candy-forms-3-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-m-2.ansi": {
+        "name": "sugar-forms-3-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -2625,9 +2625,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-m-3.ansi": {
-        "name": "candy-forms-3-16-m-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-m-3.ansi": {
+        "name": "sugar-forms-3-16-m-3.ansi",
+        "category": "sugar-forms",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -2637,9 +2637,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-s-1.ansi": {
-        "name": "candy-forms-3-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-s-1.ansi": {
+        "name": "sugar-forms-3-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "56x14",
         "width": 56,
         "height": 14,
@@ -2649,9 +2649,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-s-2.ansi": {
-        "name": "candy-forms-3-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-s-2.ansi": {
+        "name": "sugar-forms-3-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "52x11",
         "width": 52,
         "height": 11,
@@ -2661,9 +2661,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-16-s-3.ansi": {
-        "name": "candy-forms-3-16-s-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-16-s-3.ansi": {
+        "name": "sugar-forms-3-16-s-3.ansi",
+        "category": "sugar-forms",
         "resolution": "46x9",
         "width": 46,
         "height": 9,
@@ -2673,9 +2673,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-l-1.ansi": {
-        "name": "candy-forms-3-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-l-1.ansi": {
+        "name": "sugar-forms-3-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "200x38",
         "width": 200,
         "height": 38,
@@ -2685,9 +2685,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-l-2.ansi": {
-        "name": "candy-forms-3-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-l-2.ansi": {
+        "name": "sugar-forms-3-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "200x34",
         "width": 200,
         "height": 34,
@@ -2697,9 +2697,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-m-1.ansi": {
-        "name": "candy-forms-3-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-m-1.ansi": {
+        "name": "sugar-forms-3-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "88x20",
         "width": 88,
         "height": 20,
@@ -2709,9 +2709,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-m-2.ansi": {
-        "name": "candy-forms-3-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-m-2.ansi": {
+        "name": "sugar-forms-3-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -2721,9 +2721,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-s-1.ansi": {
-        "name": "candy-forms-3-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-s-1.ansi": {
+        "name": "sugar-forms-3-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "62x10",
         "width": 62,
         "height": 10,
@@ -2733,9 +2733,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-s-2.ansi": {
-        "name": "candy-forms-3-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-s-2.ansi": {
+        "name": "sugar-forms-3-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "68x8",
         "width": 68,
         "height": 8,
@@ -2745,9 +2745,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-256-s-3.ansi": {
-        "name": "candy-forms-3-256-s-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-256-s-3.ansi": {
+        "name": "sugar-forms-3-256-s-3.ansi",
+        "category": "sugar-forms",
         "resolution": "58x6",
         "width": 58,
         "height": 6,
@@ -2757,9 +2757,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-l-1.ansi": {
-        "name": "candy-forms-3-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-l-1.ansi": {
+        "name": "sugar-forms-3-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "180x30",
         "width": 180,
         "height": 30,
@@ -2769,9 +2769,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-l-2.ansi": {
-        "name": "candy-forms-3-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-l-2.ansi": {
+        "name": "sugar-forms-3-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "200x42",
         "width": 200,
         "height": 42,
@@ -2781,9 +2781,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-m-1.ansi": {
-        "name": "candy-forms-3-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-m-1.ansi": {
+        "name": "sugar-forms-3-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -2793,9 +2793,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-m-2.ansi": {
-        "name": "candy-forms-3-tc-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-m-2.ansi": {
+        "name": "sugar-forms-3-tc-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -2805,9 +2805,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-m-3.ansi": {
-        "name": "candy-forms-3-tc-m-3.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-m-3.ansi": {
+        "name": "sugar-forms-3-tc-m-3.ansi",
+        "category": "sugar-forms",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -2817,9 +2817,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-s-1.ansi": {
-        "name": "candy-forms-3-tc-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-s-1.ansi": {
+        "name": "sugar-forms-3-tc-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "60x7",
         "width": 60,
         "height": 7,
@@ -2829,9 +2829,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-3-tc-s-2.ansi": {
-        "name": "candy-forms-3-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-3-tc-s-2.ansi": {
+        "name": "sugar-forms-3-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "66x10",
         "width": 66,
         "height": 10,
@@ -2841,9 +2841,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-16-l-1.ansi": {
-        "name": "candy-forms-4-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-16-l-1.ansi": {
+        "name": "sugar-forms-4-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "153x29",
         "width": 153,
         "height": 29,
@@ -2853,9 +2853,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-4-16-l-2.ansi": {
-        "name": "candy-forms-4-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-16-l-2.ansi": {
+        "name": "sugar-forms-4-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "153x28",
         "width": 153,
         "height": 28,
@@ -2865,9 +2865,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-16-m-1.ansi": {
-        "name": "candy-forms-4-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-16-m-1.ansi": {
+        "name": "sugar-forms-4-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -2877,9 +2877,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-16-m-2.ansi": {
-        "name": "candy-forms-4-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-16-m-2.ansi": {
+        "name": "sugar-forms-4-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "83x18",
         "width": 83,
         "height": 18,
@@ -2889,9 +2889,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-256-l-1.ansi": {
-        "name": "candy-forms-4-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-256-l-1.ansi": {
+        "name": "sugar-forms-4-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "181x28",
         "width": 181,
         "height": 28,
@@ -2901,9 +2901,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-256-l-2.ansi": {
-        "name": "candy-forms-4-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-256-l-2.ansi": {
+        "name": "sugar-forms-4-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "179x28",
         "width": 179,
         "height": 28,
@@ -2913,9 +2913,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-256-m-1.ansi": {
-        "name": "candy-forms-4-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-256-m-1.ansi": {
+        "name": "sugar-forms-4-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "87x18",
         "width": 87,
         "height": 18,
@@ -2925,9 +2925,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-256-m-2.ansi": {
-        "name": "candy-forms-4-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-256-m-2.ansi": {
+        "name": "sugar-forms-4-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "85x18",
         "width": 85,
         "height": 18,
@@ -2937,9 +2937,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-256-s-1.ansi": {
-        "name": "candy-forms-4-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-256-s-1.ansi": {
+        "name": "sugar-forms-4-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "55x11",
         "width": 55,
         "height": 11,
@@ -2949,9 +2949,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-tc-l-1.ansi": {
-        "name": "candy-forms-4-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-tc-l-1.ansi": {
+        "name": "sugar-forms-4-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "171x28",
         "width": 171,
         "height": 28,
@@ -2961,9 +2961,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-4-tc-l-2.ansi": {
-        "name": "candy-forms-4-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-tc-l-2.ansi": {
+        "name": "sugar-forms-4-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "171x28",
         "width": 171,
         "height": 28,
@@ -2973,9 +2973,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-tc-m-1.ansi": {
-        "name": "candy-forms-4-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-tc-m-1.ansi": {
+        "name": "sugar-forms-4-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "89x18",
         "width": 89,
         "height": 18,
@@ -2985,9 +2985,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-tc-m-2.ansi": {
-        "name": "candy-forms-4-tc-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-tc-m-2.ansi": {
+        "name": "sugar-forms-4-tc-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "85x19",
         "width": 85,
         "height": 19,
@@ -2997,9 +2997,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-tc-s-1.ansi": {
-        "name": "candy-forms-4-tc-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-tc-s-1.ansi": {
+        "name": "sugar-forms-4-tc-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "59x10",
         "width": 59,
         "height": 10,
@@ -3009,9 +3009,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-tc-s-2.ansi": {
-        "name": "candy-forms-4-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-4-tc-s-2.ansi": {
+        "name": "sugar-forms-4-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "44x8",
         "width": 44,
         "height": 8,
@@ -3021,9 +3021,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-5-16-l-1.ansi": {
-        "name": "candy-forms-5-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-16-l-1.ansi": {
+        "name": "sugar-forms-5-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -3033,9 +3033,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-16-l-2.ansi": {
-        "name": "candy-forms-5-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-16-l-2.ansi": {
+        "name": "sugar-forms-5-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "132x29",
         "width": 132,
         "height": 29,
@@ -3045,9 +3045,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-16-m-1.ansi": {
-        "name": "candy-forms-5-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-16-m-1.ansi": {
+        "name": "sugar-forms-5-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -3057,9 +3057,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-5-16-m-2.ansi": {
-        "name": "candy-forms-5-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-16-m-2.ansi": {
+        "name": "sugar-forms-5-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "80x19",
         "width": 80,
         "height": 19,
@@ -3069,9 +3069,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-16-s-1.ansi": {
-        "name": "candy-forms-5-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-16-s-1.ansi": {
+        "name": "sugar-forms-5-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "56x11",
         "width": 56,
         "height": 11,
@@ -3081,9 +3081,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-16-s-2.ansi": {
-        "name": "candy-forms-5-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-16-s-2.ansi": {
+        "name": "sugar-forms-5-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -3093,9 +3093,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-256-m-1.ansi": {
-        "name": "candy-forms-5-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-256-m-1.ansi": {
+        "name": "sugar-forms-5-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -3105,9 +3105,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-5-256-m-2.ansi": {
-        "name": "candy-forms-5-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-256-m-2.ansi": {
+        "name": "sugar-forms-5-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -3117,9 +3117,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-5-256-s-1.ansi": {
-        "name": "candy-forms-5-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-256-s-1.ansi": {
+        "name": "sugar-forms-5-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
@@ -3129,9 +3129,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-5-256-s-2.ansi": {
-        "name": "candy-forms-5-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-256-s-2.ansi": {
+        "name": "sugar-forms-5-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -3141,9 +3141,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-5-tc-l-1.ansi": {
-        "name": "candy-forms-5-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-tc-l-1.ansi": {
+        "name": "sugar-forms-5-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "172x35",
         "width": 172,
         "height": 35,
@@ -3153,9 +3153,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-tc-l-2.ansi": {
-        "name": "candy-forms-5-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-tc-l-2.ansi": {
+        "name": "sugar-forms-5-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -3165,9 +3165,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-5-tc-m-1.ansi": {
-        "name": "candy-forms-5-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-tc-m-1.ansi": {
+        "name": "sugar-forms-5-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -3177,9 +3177,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-tc-m-2.ansi": {
-        "name": "candy-forms-5-tc-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-tc-m-2.ansi": {
+        "name": "sugar-forms-5-tc-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "80x19",
         "width": 80,
         "height": 19,
@@ -3189,9 +3189,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-5-tc-s-2.ansi": {
-        "name": "candy-forms-5-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-5-tc-s-2.ansi": {
+        "name": "sugar-forms-5-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "64x10",
         "width": 64,
         "height": 10,
@@ -3201,9 +3201,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-6-16-l-1.ansi": {
-        "name": "candy-forms-6-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-16-l-1.ansi": {
+        "name": "sugar-forms-6-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -3213,9 +3213,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-6-16-s-2.ansi": {
-        "name": "candy-forms-6-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-16-s-2.ansi": {
+        "name": "sugar-forms-6-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "58x11",
         "width": 58,
         "height": 11,
@@ -3225,9 +3225,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-6-256-l-1.ansi": {
-        "name": "candy-forms-6-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-256-l-1.ansi": {
+        "name": "sugar-forms-6-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -3237,9 +3237,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-6-256-l-2.ansi": {
-        "name": "candy-forms-6-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-256-l-2.ansi": {
+        "name": "sugar-forms-6-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "130x36",
         "width": 130,
         "height": 36,
@@ -3249,9 +3249,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-6-256-m-1.ansi": {
-        "name": "candy-forms-6-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-256-m-1.ansi": {
+        "name": "sugar-forms-6-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -3261,9 +3261,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-6-256-m-2.ansi": {
-        "name": "candy-forms-6-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-256-m-2.ansi": {
+        "name": "sugar-forms-6-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -3273,9 +3273,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-6-256-s-1.ansi": {
-        "name": "candy-forms-6-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-256-s-1.ansi": {
+        "name": "sugar-forms-6-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "54x9",
         "width": 54,
         "height": 9,
@@ -3285,9 +3285,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-6-256-s-2.ansi": {
-        "name": "candy-forms-6-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-256-s-2.ansi": {
+        "name": "sugar-forms-6-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -3297,9 +3297,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-6-tc-l-1.ansi": {
-        "name": "candy-forms-6-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-tc-l-1.ansi": {
+        "name": "sugar-forms-6-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -3309,9 +3309,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-6-tc-l-2.ansi": {
-        "name": "candy-forms-6-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-6-tc-l-2.ansi": {
+        "name": "sugar-forms-6-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -3321,9 +3321,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-7-16-l-1.ansi": {
-        "name": "candy-forms-7-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-16-l-1.ansi": {
+        "name": "sugar-forms-7-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "150x36",
         "width": 150,
         "height": 36,
@@ -3333,9 +3333,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-16-l-2.ansi": {
-        "name": "candy-forms-7-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-16-l-2.ansi": {
+        "name": "sugar-forms-7-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "154x33",
         "width": 154,
         "height": 33,
@@ -3345,9 +3345,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-16-m-1.ansi": {
-        "name": "candy-forms-7-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-16-m-1.ansi": {
+        "name": "sugar-forms-7-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -3357,9 +3357,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-16-m-2.ansi": {
-        "name": "candy-forms-7-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-16-m-2.ansi": {
+        "name": "sugar-forms-7-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "81x23",
         "width": 81,
         "height": 23,
@@ -3369,9 +3369,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-16-s-1.ansi": {
-        "name": "candy-forms-7-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-16-s-1.ansi": {
+        "name": "sugar-forms-7-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -3381,9 +3381,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-7-16-s-2.ansi": {
-        "name": "candy-forms-7-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-16-s-2.ansi": {
+        "name": "sugar-forms-7-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "61x11",
         "width": 61,
         "height": 11,
@@ -3393,9 +3393,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-256-l-1.ansi": {
-        "name": "candy-forms-7-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-256-l-1.ansi": {
+        "name": "sugar-forms-7-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -3405,9 +3405,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-256-l-2.ansi": {
-        "name": "candy-forms-7-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-256-l-2.ansi": {
+        "name": "sugar-forms-7-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "140x28",
         "width": 140,
         "height": 28,
@@ -3417,9 +3417,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-256-m-1.ansi": {
-        "name": "candy-forms-7-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-256-m-1.ansi": {
+        "name": "sugar-forms-7-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -3429,9 +3429,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-256-m-2.ansi": {
-        "name": "candy-forms-7-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-256-m-2.ansi": {
+        "name": "sugar-forms-7-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "83x19",
         "width": 83,
         "height": 19,
@@ -3441,9 +3441,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-256-s-1.ansi": {
-        "name": "candy-forms-7-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-256-s-1.ansi": {
+        "name": "sugar-forms-7-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "51x10",
         "width": 51,
         "height": 10,
@@ -3453,9 +3453,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-256-s-2.ansi": {
-        "name": "candy-forms-7-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-256-s-2.ansi": {
+        "name": "sugar-forms-7-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "49x10",
         "width": 49,
         "height": 10,
@@ -3465,9 +3465,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-tc-l-2.ansi": {
-        "name": "candy-forms-7-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-tc-l-2.ansi": {
+        "name": "sugar-forms-7-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "124x29",
         "width": 124,
         "height": 29,
@@ -3477,9 +3477,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-tc-m-1.ansi": {
-        "name": "candy-forms-7-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-tc-m-1.ansi": {
+        "name": "sugar-forms-7-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -3489,9 +3489,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-7-tc-s-1.ansi": {
-        "name": "candy-forms-7-tc-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-tc-s-1.ansi": {
+        "name": "sugar-forms-7-tc-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "51x8",
         "width": 51,
         "height": 8,
@@ -3503,9 +3503,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-7-tc-s-2.ansi": {
-        "name": "candy-forms-7-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-7-tc-s-2.ansi": {
+        "name": "sugar-forms-7-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "46x11",
         "width": 46,
         "height": 11,
@@ -3517,9 +3517,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-8-16-l-1.ansi": {
-        "name": "candy-forms-8-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-16-l-1.ansi": {
+        "name": "sugar-forms-8-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "144x28",
         "width": 144,
         "height": 28,
@@ -3529,9 +3529,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-8-16-l-2.ansi": {
-        "name": "candy-forms-8-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-16-l-2.ansi": {
+        "name": "sugar-forms-8-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "172x28",
         "width": 172,
         "height": 28,
@@ -3541,9 +3541,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-8-16-m-1.ansi": {
-        "name": "candy-forms-8-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-16-m-1.ansi": {
+        "name": "sugar-forms-8-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "75x21",
         "width": 75,
         "height": 21,
@@ -3553,9 +3553,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-8-256-l-1.ansi": {
-        "name": "candy-forms-8-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-256-l-1.ansi": {
+        "name": "sugar-forms-8-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "140x28",
         "width": 140,
         "height": 28,
@@ -3565,9 +3565,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-8-256-l-2.ansi": {
-        "name": "candy-forms-8-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-256-l-2.ansi": {
+        "name": "sugar-forms-8-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "137x29",
         "width": 137,
         "height": 29,
@@ -3577,9 +3577,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-8-256-m-1.ansi": {
-        "name": "candy-forms-8-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-256-m-1.ansi": {
+        "name": "sugar-forms-8-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "77x20",
         "width": 77,
         "height": 20,
@@ -3589,9 +3589,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-8-256-m-2.ansi": {
-        "name": "candy-forms-8-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-256-m-2.ansi": {
+        "name": "sugar-forms-8-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "75x19",
         "width": 75,
         "height": 19,
@@ -3601,9 +3601,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-8-256-s-1.ansi": {
-        "name": "candy-forms-8-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-256-s-1.ansi": {
+        "name": "sugar-forms-8-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "52x14",
         "width": 52,
         "height": 14,
@@ -3613,9 +3613,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-8-256-s-2.ansi": {
-        "name": "candy-forms-8-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-256-s-2.ansi": {
+        "name": "sugar-forms-8-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -3625,9 +3625,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-8-tc-l-1.ansi": {
-        "name": "candy-forms-8-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-8-tc-l-1.ansi": {
+        "name": "sugar-forms-8-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "133x28",
         "width": 133,
         "height": 28,
@@ -3639,9 +3639,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-9-16-l-1.ansi": {
-        "name": "candy-forms-9-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-16-l-1.ansi": {
+        "name": "sugar-forms-9-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "150x33",
         "width": 150,
         "height": 33,
@@ -3651,9 +3651,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-9-16-l-2.ansi": {
-        "name": "candy-forms-9-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-16-l-2.ansi": {
+        "name": "sugar-forms-9-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "156x33",
         "width": 156,
         "height": 33,
@@ -3663,9 +3663,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-9-16-m-1.ansi": {
-        "name": "candy-forms-9-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-16-m-1.ansi": {
+        "name": "sugar-forms-9-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -3675,9 +3675,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-9-16-m-2.ansi": {
-        "name": "candy-forms-9-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-16-m-2.ansi": {
+        "name": "sugar-forms-9-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "80x23",
         "width": 80,
         "height": 23,
@@ -3687,9 +3687,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-9-16-s-1.ansi": {
-        "name": "candy-forms-9-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-16-s-1.ansi": {
+        "name": "sugar-forms-9-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "60x10",
         "width": 60,
         "height": 10,
@@ -3699,9 +3699,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-9-16-s-2.ansi": {
-        "name": "candy-forms-9-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-16-s-2.ansi": {
+        "name": "sugar-forms-9-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
@@ -3711,9 +3711,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-9-256-l-1.ansi": {
-        "name": "candy-forms-9-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-256-l-1.ansi": {
+        "name": "sugar-forms-9-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -3723,9 +3723,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-9-256-l-2.ansi": {
-        "name": "candy-forms-9-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-256-l-2.ansi": {
+        "name": "sugar-forms-9-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "168x50",
         "width": 168,
         "height": 50,
@@ -3735,9 +3735,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-9-256-m-1.ansi": {
-        "name": "candy-forms-9-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-256-m-1.ansi": {
+        "name": "sugar-forms-9-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "82x23",
         "width": 82,
         "height": 23,
@@ -3747,9 +3747,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-9-256-m-2.ansi": {
-        "name": "candy-forms-9-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-256-m-2.ansi": {
+        "name": "sugar-forms-9-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "84x25",
         "width": 84,
         "height": 25,
@@ -3759,9 +3759,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-9-256-s-1.ansi": {
-        "name": "candy-forms-9-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-256-s-1.ansi": {
+        "name": "sugar-forms-9-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "66x16",
         "width": 66,
         "height": 16,
@@ -3771,9 +3771,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-9-256-s-2.ansi": {
-        "name": "candy-forms-9-256-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-9-256-s-2.ansi": {
+        "name": "sugar-forms-9-256-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "68x12",
         "width": 68,
         "height": 12,
@@ -3783,9 +3783,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-10-16-l-1.ansi": {
-        "name": "candy-forms-10-16-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-16-l-1.ansi": {
+        "name": "sugar-forms-10-16-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "131x28",
         "width": 131,
         "height": 28,
@@ -3795,9 +3795,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-16-l-2.ansi": {
-        "name": "candy-forms-10-16-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-16-l-2.ansi": {
+        "name": "sugar-forms-10-16-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "122x28",
         "width": 122,
         "height": 28,
@@ -3807,9 +3807,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-16-m-1.ansi": {
-        "name": "candy-forms-10-16-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-16-m-1.ansi": {
+        "name": "sugar-forms-10-16-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "81x19",
         "width": 81,
         "height": 19,
@@ -3819,9 +3819,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-16-m-2.ansi": {
-        "name": "candy-forms-10-16-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-16-m-2.ansi": {
+        "name": "sugar-forms-10-16-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "76x19",
         "width": 76,
         "height": 19,
@@ -3831,9 +3831,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-16-s-1.ansi": {
-        "name": "candy-forms-10-16-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-16-s-1.ansi": {
+        "name": "sugar-forms-10-16-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "69x9",
         "width": 69,
         "height": 9,
@@ -3843,9 +3843,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-16-s-2.ansi": {
-        "name": "candy-forms-10-16-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-16-s-2.ansi": {
+        "name": "sugar-forms-10-16-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "58x9",
         "width": 58,
         "height": 9,
@@ -3855,9 +3855,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-256-l-1.ansi": {
-        "name": "candy-forms-10-256-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-256-l-1.ansi": {
+        "name": "sugar-forms-10-256-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "132x28",
         "width": 132,
         "height": 28,
@@ -3867,9 +3867,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-forms/candy-forms-10-256-l-2.ansi": {
-        "name": "candy-forms-10-256-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-256-l-2.ansi": {
+        "name": "sugar-forms-10-256-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "122x29",
         "width": 122,
         "height": 29,
@@ -3879,9 +3879,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-256-m-1.ansi": {
-        "name": "candy-forms-10-256-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-256-m-1.ansi": {
+        "name": "sugar-forms-10-256-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "87x18",
         "width": 87,
         "height": 18,
@@ -3891,9 +3891,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-256-m-2.ansi": {
-        "name": "candy-forms-10-256-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-256-m-2.ansi": {
+        "name": "sugar-forms-10-256-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -3905,9 +3905,9 @@
             "alignment-fix"
         ]
     },
-    "candy-forms/candy-forms-10-256-s-1.ansi": {
-        "name": "candy-forms-10-256-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-256-s-1.ansi": {
+        "name": "sugar-forms-10-256-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "58x9",
         "width": 58,
         "height": 9,
@@ -3917,9 +3917,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-tc-l-1.ansi": {
-        "name": "candy-forms-10-tc-l-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-tc-l-1.ansi": {
+        "name": "sugar-forms-10-tc-l-1.ansi",
+        "category": "sugar-forms",
         "resolution": "169x28",
         "width": 169,
         "height": 28,
@@ -3929,9 +3929,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-tc-l-2.ansi": {
-        "name": "candy-forms-10-tc-l-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-tc-l-2.ansi": {
+        "name": "sugar-forms-10-tc-l-2.ansi",
+        "category": "sugar-forms",
         "resolution": "149x28",
         "width": 149,
         "height": 28,
@@ -3941,9 +3941,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-tc-m-1.ansi": {
-        "name": "candy-forms-10-tc-m-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-tc-m-1.ansi": {
+        "name": "sugar-forms-10-tc-m-1.ansi",
+        "category": "sugar-forms",
         "resolution": "84x19",
         "width": 84,
         "height": 19,
@@ -3953,9 +3953,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-tc-m-2.ansi": {
-        "name": "candy-forms-10-tc-m-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-tc-m-2.ansi": {
+        "name": "sugar-forms-10-tc-m-2.ansi",
+        "category": "sugar-forms",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -3965,9 +3965,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-10-tc-s-1.ansi": {
-        "name": "candy-forms-10-tc-s-1.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-tc-s-1.ansi": {
+        "name": "sugar-forms-10-tc-s-1.ansi",
+        "category": "sugar-forms",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -3977,9 +3977,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-10-tc-s-2.ansi": {
-        "name": "candy-forms-10-tc-s-2.ansi",
-        "category": "candy-forms",
+    "sugar-forms/sugar-forms-10-tc-s-2.ansi": {
+        "name": "sugar-forms-10-tc-s-2.ansi",
+        "category": "sugar-forms",
         "resolution": "69x10",
         "width": 69,
         "height": 10,
@@ -27415,8 +27415,8 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/50-candy-forms.ansi": {
-        "name": "50-candy-forms.ansi",
+    "sugar-crush/50-sugar-forms.ansi": {
+        "name": "50-sugar-forms.ansi",
         "category": "sugar-crush",
         "resolution": "52x9",
         "width": 52,

@@ -398,9 +398,9 @@ $table->styleFunc(fn(int $row, int $col): Style => ...);
 $t->withStyleFunc(fn(mixed $value, string $key, Row $row): string => ...);
 ```
 
-### 2. candy-forms Integration
+### 2. sugar-forms Integration
 
-candy-forms has form primitives (TextInput, etc.) that could be composed with sugar-table for filter UI. The upstream bubble-table has a built-in text input for filtering triggered by `/`.
+sugar-forms has form primitives (TextInput, etc.) that could be composed with sugar-table for filter UI. The upstream bubble-table has a built-in text input for filtering triggered by `/`.
 
 **Opportunity:** Create `FilterInput` component that integrates with table's `Filter()` method
 

@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * COMPOSITION: sugar-charts Sparkline  +  sugar-table Table  +  candy-forms Spinner
+ * COMPOSITION: sugar-charts Sparkline  +  sugar-table Table  +  sugar-forms Spinner
  *
  * Demonstrates a "metrics dashboard" frame that composes three libraries:
  *   - each sugar-charts `Sparkline::view()` is dropped into a sugar-table
  *     cell (one inline trend chart per host metric),
- *   - a candy-forms `Spinner` frame is rendered beside the table as a
+ *   - a sugar-forms `Spinner` frame is rendered beside the table as a
  *     "live / refreshing" status line.
  *
  * The key composability point: a chart is just a component whose `view()`
@@ -62,7 +62,7 @@ $table = Table::fromColumns([
     Column::new('now',  'Current',     9),
 ])->withRows($rows)->withHeaderStyle('1;37');
 
-// candy-forms spinner used as the panel's "refreshing" indicator.
+// sugar-forms spinner used as the panel's "refreshing" indicator.
 $spinner = Spinner::new(SpinnerStyle::meter());
 for ($i = 0; $i < 2; $i++) {
     [$spinner, ] = $spinner->update(new TickMsg($spinner->id()));

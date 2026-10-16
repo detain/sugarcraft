@@ -1,7 +1,7 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
-Sources: candy-core, candy-scriptui, candy-forms, candy-sprinkles, sugar-bits,
-candy-forms, honey-bounce, candy-palette, candy-shine, candy-pty
+Sources: candy-core, candy-scriptui, sugar-forms, candy-sprinkles, sugar-bits,
+sugar-forms, honey-bounce, candy-palette, candy-shine, candy-pty
 
 ---
 
@@ -9,7 +9,7 @@ candy-forms, honey-bounce, candy-palette, candy-shine, candy-pty
 
 ### A. Fuzzy Matching Is Broken or Absent Across Multiple Packages
 
-**candy-scriptui**: `--fuzzy` flag maps to `--strict` (substring matching only); real fuzzy scoring via `sahilm/fuzzy` is absent. **candy-forms / candy-forms**: `FuzzyMatcher::match()` returns scored candidates but **not** matched character indices — filter highlighting UI is impossible. **sugar-bits** ItemList uses simple `str_contains()` with no ranking. All three packages independently cite the same upstream reference (`sahilm/fuzzy` via `charmbracelet/gum` filter) and the same gap: PHP has no production-grade fuzzy library.
+**candy-scriptui**: `--fuzzy` flag maps to `--strict` (substring matching only); real fuzzy scoring via `sahilm/fuzzy` is absent. **sugar-forms / sugar-forms**: `FuzzyMatcher::match()` returns scored candidates but **not** matched character indices — filter highlighting UI is impossible. **sugar-bits** ItemList uses simple `str_contains()` with no ranking. All three packages independently cite the same upstream reference (`sahilm/fuzzy` via `charmbracelet/gum` filter) and the same gap: PHP has no production-grade fuzzy library.
 
 **Impact**: Every interactive filter/select UI in the ecosystem is degraded. gum users expect ranked fuzzy results with highlighted matches.
 
@@ -19,7 +19,7 @@ All rendering passes through string-based diffing.紫外线 (ultraviolet) and ra
 
 **Impact**: Bandwidth optimization for SSH, cursor position diffing, and animation efficiency are all blocked. This is the single most impactful architectural gap vs. upstream ratatui/ultraviolet.
 
-### C. Cassowary Constraint Solver Absent or Incomplete (candy-core / candy-sprinkles / candy-forms / sugar-bits)
+### C. Cassowary Constraint Solver Absent or Incomplete (candy-core / candy-sprinkles / sugar-forms / sugar-bits)
 
 candy-sprinkles has a one-pass greedy layout solver — cannot express "column A is always at least 2× column B". candy-core has no layout system at all (models manually pad strings). ratatui and ultraviolet both use Cassowary (same algorithm as Apple Auto Layout). php-tui uses `php-tui/cassowary`. honey-bounce has spring physics but the Cassowary constraint solver that enables truly responsive layouts is missing from all layout-sensitive packages.
 
@@ -27,7 +27,7 @@ candy-sprinkles has a one-pass greedy layout solver — cannot express "column A
 
 ### D. Snapshot Tests for ANSI Render Output Are Almost Entirely Absent
 
-candy-forms, candy-forms, sugar-bits, candy-shine — none have golden file assertions on ANSI SGR bytes. Every `view()` method renders complex multi-line ANSI output; regressions in color codes, cursor positioning, or layout are silent. Upstream repos (bubbletea, huh, ratatui, pterm) all use golden/snapshot tests. pterm has 28,952 tests with exact byte assertions.
+sugar-forms, sugar-forms, sugar-bits, candy-shine — none have golden file assertions on ANSI SGR bytes. Every `view()` method renders complex multi-line ANSI output; regressions in color codes, cursor positioning, or layout are silent. Upstream repos (bubbletea, huh, ratatui, pterm) all use golden/snapshot tests. pterm has 28,952 tests with exact byte assertions.
 
 **Impact**: Without snapshot tests, any rendering regression is invisible until runtime. Confidence in refactoring is near-zero across all form and component libraries.
 
@@ -43,15 +43,15 @@ glamour maintains a `BlockStack` that computes available width dynamically as bl
 
 ### A. Greedy Constraint Solvers / No Layout Abstraction
 
-candy-sprinkles, candy-core, candy-forms, and sugar-bits all independently work around the absence of a Cassowary-style constraint solver. Each package computes positions manually. This is not a bug — it reflects that Cassowary is genuinely complex (~1000+ lines) and requires algorithmic expertise. **The weakness is structural**: no shared layout engine exists at the foundation layer, so every consumer re-implements manual sizing.
+candy-sprinkles, candy-core, sugar-forms, and sugar-bits all independently work around the absence of a Cassowary-style constraint solver. Each package computes positions manually. This is not a bug — it reflects that Cassowary is genuinely complex (~1000+ lines) and requires algorithmic expertise. **The weakness is structural**: no shared layout engine exists at the foundation layer, so every consumer re-implements manual sizing.
 
 ### B. Async Concurrency Is Inconsistent Across the Ecosystem
 
-candy-core has ReactPHP integration but `exec()` blocks during external command execution. candy-forms/candy-forms have ReactPHP async suggestions but no cancellation mechanism. candy-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
+candy-core has ReactPHP integration but `exec()` blocks during external command execution. sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation mechanism. candy-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
 
 ### C. No Consistent Buffer/Cell Abstraction for Rendering
 
-Packages that do rendering (candy-core renderer, candy-sprinkles Canvas, candy-shine Renderer, sugar-bits components, candy-forms primitives) each maintain their own string-composition approach. No package has a shared `Buffer`/`Cell` value object hierarchy. This means: (1) cell-level diffing cannot be shared across packages, (2) canvas layering and animation are all implemented independently, (3) a future cell-based renderer would need to be implemented per-package rather than centrally. **The weakness**: rendering infrastructure is not layered — every package reinventing terminal output.
+Packages that do rendering (candy-core renderer, candy-sprinkles Canvas, candy-shine Renderer, sugar-bits components, sugar-forms primitives) each maintain their own string-composition approach. No package has a shared `Buffer`/`Cell` value object hierarchy. This means: (1) cell-level diffing cannot be shared across packages, (2) canvas layering and animation are all implemented independently, (3) a future cell-based renderer would need to be implemented per-package rather than centrally. **The weakness**: rendering infrastructure is not layered — every package reinventing terminal output.
 
 ---
 
@@ -70,7 +70,7 @@ Rust TUI benchmark and its PHP port. Cited together for: Cassowary constraint so
 Primary CLI tool upstream for candy-scriptui. Cited for: 13-command surface with fuzzy filter (sahilm/fuzzy), 2D grid choose with paginator, external editor integration (charmbracelet/x/editor), per-element style flags (dotted form `--header.foreground=red`), shell completion generation, logfmt formatter. gum is also the reference for what candy-scriptui should achieve in shell script integration.
 
 ### 5. `charmbracelet/huh` / `charmbracelet/bubbles` — 5 citations each (HIGH)
-huh is the upstream for candy-forms/candy-forms Form/Field architecture. Cited for: `*Func()` dynamic labels with hash-based cache invalidation (Eval/Cache), per-field keymap override, generic type-safe Select, error summary rendering, multi-page wizard flow. bubbles is the upstream for sugar-bits/ candy-forms primitives (TextInput, TextArea, ItemList, FilePicker, Cursor, Spinner) and the reference for soft-wrap LineInfo tracking and fuzzy filtering quality.
+huh is the upstream for sugar-forms/sugar-forms Form/Field architecture. Cited for: `*Func()` dynamic labels with hash-based cache invalidation (Eval/Cache), per-field keymap override, generic type-safe Select, error summary rendering, multi-page wizard flow. bubbles is the upstream for sugar-bits/ sugar-forms primitives (TextInput, TextArea, ItemList, FilePicker, Cursor, Spinner) and the reference for soft-wrap LineInfo tracking and fuzzy filtering quality.
 
 ### Honorable Mention: `textualize/textual` — 5 citations (HIGH)
 Python state-of-the-art TUI framework (30k stars). Cited for: reactive state descriptors with auto-watcher injection, CSS-based layout (TCSS), spatial map for O(log n) mouse hit detection, message bubbling with handled/unhandled states, Pilot testing pattern (`app.run_test()`), Animator class with easing functions and transitions. textual is the aspirational target for reactive state and the reference for spatial indexing.
@@ -79,9 +79,9 @@ Python state-of-the-art TUI framework (30k stars). Cited for: reactive state des
 
 ## 4. Top 3 Immediate-Win Roadmap Items
 
-### A. Add Snapshot Tests to candy-forms and candy-forms (P0 — Days)
+### A. Add Snapshot Tests to sugar-forms and sugar-forms (P0 — Days)
 
-Both packages have zero ANSI byte assertions on `view()` output. This is the highest-confidence, lowest-risk improvement available: establish the golden file pattern once in candy-forms (which candy-forms re-exports), apply to all 8 primitives and 7 field types. Impact: enables confident refactoring, eliminates silent regressions, unlocks visual CI via VHS workflow. All upstream repos (bubbletea, huh, ratatui) have this. **Complexity: Low** — establishes pattern, applies existing testing knowledge.
+Both packages have zero ANSI byte assertions on `view()` output. This is the highest-confidence, lowest-risk improvement available: establish the golden file pattern once in sugar-forms (which sugar-forms re-exports), apply to all 8 primitives and 7 field types. Impact: enables confident refactoring, eliminates silent regressions, unlocks visual CI via VHS workflow. All upstream repos (bubbletea, huh, ratatui) have this. **Complexity: Low** — establishes pattern, applies existing testing knowledge.
 
 ### B. Fix Fuzzy Matching in candy-scriptui Filter (P0 — Days)
 
@@ -101,7 +101,7 @@ The `SubStyleParser` for per-element styles already exists in candy-scriptui —
 - **Theme catalog**: 10 named themes vs lipgloss's fewer presets
 - **Note**: lipgloss wins on word-wrap integration, CIELAB blending quality, StyleRunes, and grapheme-aware border measurement
 
-### candy-forms / candy-forms > huh (Partial Superiority)
+### sugar-forms / sugar-forms > huh (Partial Superiority)
 - **ReactPHP async integration**: async suggestions using `Loop::addTimer()` debounce + `Deferred` promises — **not present in upstream Go huh at all**
 - **Vim mode** for TextInput — **not in upstream**
 - **Smooth scroll** for Viewport with lerp animation — **not in upstream**

@@ -1,0 +1,52 @@
+{
+    "name": "sugarcraft/sugar-forms",
+    "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits, with the interactive huh-style form engine folded in.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "huh",
+        "tui",
+        "terminal",
+        "forms",
+        "input"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-forms",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-forms/issues",
+        "source": "https://github.com/sugarcraft/sugar-forms",
+        "docs": "https://github.com/sugarcraft/sugar-forms/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/candy-buffer": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
+        "sugarcraft/candy-layout": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Forms\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Forms\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

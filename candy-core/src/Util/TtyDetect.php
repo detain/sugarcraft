@@ -11,7 +11,7 @@ namespace SugarCraft\Core\Util;
  * TTY?" without taking a direct candy-pty dependency.
  *
  * WHAT THE CONSUMER LIST USED TO SAY, AND WHY IT CHANGED.  It read
- * "(candy-mosaic, sugar-bits, candy-forms, candy-log, …) all route
+ * "(candy-mosaic, sugar-bits, sugar-forms, candy-log, …) all route
  * through here, so the answer is defined in exactly one place".  Both
  * halves are wrong.  The list had been carried forward from an older
  * revision without being re-measured, while the sentence around it was
@@ -20,7 +20,7 @@ namespace SugarCraft\Core\Util;
  * MEASURED by grepping this class name across every lib's `src/`: the
  * consumers outside candy-core are candy-mosaic
  * ({@see \SugarCraft\Mosaic\Detect::isInteractiveTty()}), candy-mdview
- * ({@see \SugarCraft\MdView\RenderCommand::loadInput()}) and candy-forms
+ * ({@see \SugarCraft\MdView\RenderCommand::loadInput()}) and sugar-forms
  * ({@see \SugarCraft\Forms\ActionSpinner::run()}).  `sugar-bits` and
  * `candy-log` do not reference this class at all, and candy-mdview — a
  * real consumer — was missing from the list entirely.  Re-derive that

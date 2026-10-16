@@ -17,8 +17,8 @@ Per `repo_map/charmbracelet_bubbles.md`:
 
 | Bubbles Component | SugarCraft Component | Status |
 |---|---|---|
-| spinner | `SugarCraft\Forms\Spinner\Spinner` | 🟢 aliased from candy-forms |
-| textinput | `SugarCraft\Forms\TextInput\TextInput` | 🟢 aliased from candy-forms |
+| spinner | `SugarCraft\Forms\Spinner\Spinner` | 🟢 aliased from sugar-forms |
+| textinput | `SugarCraft\Forms\TextInput\TextInput` | 🟢 aliased from sugar-forms |
 | textarea | `SugarCraft\Forms\TextArea\TextArea` | 🟡 in progress |
 | table | `SugarCraft\Table\Table` | 🟢 separate sugar-table repo |
 | progress | `SugarCraft\Forms\Progress\Progress` | 🟢 |
@@ -32,7 +32,7 @@ Per `repo_map/charmbracelet_bubbles.md`:
 | key | `SugarCraft\Forms\Key\Key` | 🟢 |
 | cursor | `SugarCraft\Forms\Cursor\Cursor` | 🟢 |
 
-**Note**: `charmbracelet/huh` (form framework built on bubbles) maps to `candy-forms` (MATCHUPS.md row 34).
+**Note**: `charmbracelet/huh` (form framework built on bubbles) maps to `sugar-forms` (MATCHUPS.md row 34).
 
 ---
 
@@ -883,11 +883,11 @@ $truncated = mb_strimwidth($plain, 0, $maxWidth, '...');
 - Performance is critical - every ms matters over SSH
 - SugarCraft should prioritize performance optimization
 
-### 3. Form Framework Layer (huh→candy-forms)
+### 3. Form Framework Layer (huh→sugar-forms)
 
 - Users want high-level forms, not just primitives
-- candy-forms (huh port) addresses this
-- Consider higher-level abstractions on top of candy-forms
+- sugar-forms (huh port) addresses this
+- Consider higher-level abstractions on top of sugar-forms
 
 ### 4. Real Cursor + Virtual Cursor
 

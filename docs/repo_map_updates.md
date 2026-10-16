@@ -24,8 +24,8 @@ Files using ReactPHP (excluding vendor/):
 - `candy-core/src/Program.php`: `Loop`, `LoopInterface` — **candy-async should NOT interfere** (core runtime, owns the shared loop)
 - `candy-core/src/WorkerPool.php`: `LoopInterface`, `TimerInterface`, `Deferred`, `PromiseInterface` — **Would benefit from candy-async** (could use CancellationToken for worker cancellation)
 - `candy-core/src/ProgramOptions.php`: `LoopInterface` — **candy-async should NOT interfere** (just a config object)
-- `candy-forms/src/Field/Input.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (debounce via Loop::addTimer, could use AsyncOps::debounce)
-- `candy-forms/src/Field/Select.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (same debounce pattern as Input)
+- `sugar-forms/src/Field/Input.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (debounce via Loop::addTimer, could use AsyncOps::debounce)
+- `sugar-forms/src/Field/Select.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (same debounce pattern as Input)
 - `candy-mosaic/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface)
 - `candy-mosaic/src/SyncAsyncRenderer.php`: Not read yet — likely PromiseInterface
 - `candy-mosaic/src/AdaptiveImage.php`: Not read yet — likely Loop/Promise
@@ -41,18 +41,18 @@ Existing ReactPHP versions pinned:
 - `react/promise: ^3.3` (candy-core, candy-mosaic, sugar-crush, super-candy)
 - `react/promise-timer: ^1.9` (candy-wish)
 
-Roadmap for step-23 (candy-forms/candy-forms/candy-core migrate to candy-async):
+Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async):
 - Replace `Loop::addTimer` debounce with `AsyncOps::debounce()` in Input.php, Select.php
 - Replace manual 30s timeout in AsyncMiddleware.php with `AsyncOps::withTimeout()`
 - WorkerPool.php cancellation via CancellationToken
 
 ## Active Items
 
-_All items in this section have been resolved by the completion of steps 20–40 (PRs #899–#920 merged). Step-15 (candy-forms) was confirmed complete (PRs #870, #895) — all 7 namespace imports map to candy-* packages; 709 tests pass; no sugar-* dependencies remain. Step-37 catch-all confirmed no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, candy-mouse, candy-starter). See the Resolved Items section below for the full archive._
+_All items in this section have been resolved by the completion of steps 20–40 (PRs #899–#920 merged). Step-15 (sugar-forms) was confirmed complete (PRs #870, #895) — all 7 namespace imports map to candy-* packages; 709 tests pass; no sugar-* dependencies remain. Step-37 catch-all confirmed no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, candy-mouse, candy-starter). See the Resolved Items section below for the full archive._
 
 ## Resolved Items
 
-- [RESOLVED | 2026-06-01 | step-41 | scribe] All Active Items drained — steps 20–40 complete (PRs #899–#920 merged). Step-15 (candy-forms) confirmed complete — PRs #870, #895 wired candy-forms onto shared foundations; step-37 verified no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, candy-mouse, candy-starter).
+- [RESOLVED | 2026-06-01 | step-41 | scribe] All Active Items drained — steps 20–40 complete (PRs #899–#920 merged). Step-15 (sugar-forms) confirmed complete — PRs #870, #895 wired sugar-forms onto shared foundations; step-37 verified no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, candy-mouse, candy-starter).
 
 - [RESOLVED | 2026-06-01 | step-35 | coder] candy-codetime + candy-mail + candy-git-server: adopt candy-async — MERGED PR #915:
   - candy-codetime: added CancellationToken support to Store::append()

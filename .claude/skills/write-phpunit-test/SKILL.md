@@ -154,13 +154,13 @@ paths:
 **User**: "cover the new `Spinner::tick()` behaviour I just added"
 
 **Actions**:
-1. Read `candy-forms/src/Spinner.php` to confirm `tick()` is a behaviour method (returns `[Spinner, ?Cmd]`).
-2. Open `candy-forms/tests/SpinnerTest.php`, add behaviour-style tests destructuring the tuple.
+1. Read `sugar-forms/src/Spinner.php` to confirm `tick()` is a behaviour method (returns `[Spinner, ?Cmd]`).
+2. Open `sugar-forms/tests/SpinnerTest.php`, add behaviour-style tests destructuring the tuple.
 3. Drive `tick()` with the appropriate `Msg`, assert frame index advances and `Cmd` reschedules (`assertInstanceOf(\Closure::class, $cmd)`).
 4. Run:
 
    ```sh
-   cd candy-forms && vendor/bin/phpunit --filter SpinnerTest
+   cd sugar-forms && vendor/bin/phpunit --filter SpinnerTest
    ```
 
 **Result**: New `testTickAdvancesFrameIndex` + `testTickReschedulesItself` methods in the existing class.

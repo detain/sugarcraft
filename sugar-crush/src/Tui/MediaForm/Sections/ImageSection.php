@@ -26,14 +26,14 @@ use SugarCraft\Forms\Field\Slider;
  * While {@see Wave4Gate::img2img()} is closed — pinned per-test via the
  * `$enabled` override — the section is a single note row with zero widgets
  * and a collect that is the identity. Open, it leads with the §2.6 source
- * rows: an attach row whose widget is candy-forms' {@see FilePicker} (Enter
+ * rows: an attach row whose widget is sugar-forms' {@see FilePicker} (Enter
  * browses, Enter again commits the selection), one inert note row per
  * attached image, and a clear press-row. Attached bytes fold into the draft
  * as raw-base64 `init_images` entries in pick order (§4.3's multi-image
  * batch); a refused file never occupies a slot — its message lands on the
  * attach row's value cell instead.
  *
- * The picker browses the filesystem inside its own widget, as candy-forms
+ * The picker browses the filesystem inside its own widget, as sugar-forms
  * designed it (W4.1 deviation from the plan's host-modal sketch, disclosed
  * in the lane report: crush has no App-hosted file modal and building one
  * dwarfs "minimal host edits"; the SSRF ruling is enforced at

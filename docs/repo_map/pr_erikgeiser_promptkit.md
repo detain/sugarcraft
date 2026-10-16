@@ -27,13 +27,13 @@ From `repo_map/erikgeiser_promptkit.md`:
 
 | PromptKit Feature | SugarCraft Library | Status |
 |-----------------|---------------------|--------|
-| Selection prompt (`Selection[T]`) | `candy-forms` | Core component |
-| Multi-selection prompt (`MultiSelection[T]`) | `candy-forms` | Recently added |
-| TextInput prompt (`TextInput`) | `candy-forms` | Core component |
-| TextArea prompt (`TextArea`) | `candy-forms` | Recently added |
-| Confirmation prompt (`Confirmation`) | `candy-forms` | Core component |
-| Template-based rendering | `candy-forms` | View system |
-| KeyMap/keybindings | `candy-forms` | Key binding config |
+| Selection prompt (`Selection[T]`) | `sugar-forms` | Core component |
+| Multi-selection prompt (`MultiSelection[T]`) | `sugar-forms` | Recently added |
+| TextInput prompt (`TextInput`) | `sugar-forms` | Core component |
+| TextArea prompt (`TextArea`) | `sugar-forms` | Recently added |
+| Confirmation prompt (`Confirmation`) | `sugar-forms` | Core component |
+| Template-based rendering | `sugar-forms` | View system |
+| KeyMap/keybindings | `sugar-forms` | Key binding config |
 | Lipgloss styling | `candy-shine` | Style system |
 | BubbleTea Model pattern | `candy-core` | MVC pattern |
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-bits` | Text utilities |
@@ -82,7 +82,7 @@ filterInput.BackgroundStyle undefined (type textinput.Model has no field or meth
 - **Root Cause:** Upstream bubbletea/bubbles PR #341 removed a field that promptkit relied on
 - **Resolution:** Required maintainer to adapt promptkit code to upstream API change
 - **Pattern:** Direct dependency on internal bubbletea implementation details
-- **Direct Risk to SugarCraft: HIGH** — If candy-forms depends on bubbletea-equivalent internals, upstream changes can break our public API
+- **Direct Risk to SugarCraft: HIGH** — If sugar-forms depends on bubbletea-equivalent internals, upstream changes can break our public API
 
 **Issue #31: Compatibility with charmbracelet/bubbles v0.21.0** (4 comments)
 - **Problem:** Placeholder text with multi-byte characters (emojis like `💚💚`, Chinese `你好`) only displayed first grapheme cluster

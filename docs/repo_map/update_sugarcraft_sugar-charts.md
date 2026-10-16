@@ -545,9 +545,9 @@ $grid->addItem(
 
 **Proposed**: Allow `Table` cells to contain inline sparklines for compact data display.
 
-## 3. candy-forms Integration
+## 3. sugar-forms Integration
 
-**Proposed**: Add `selectChart()` or `pickChartType()` helper in candy-forms for interactive chart type selection.
+**Proposed**: Add `selectChart()` or `pickChartType()` helper in sugar-forms for interactive chart type selection.
 
 ## 4. Export to HTML (for reports)
 

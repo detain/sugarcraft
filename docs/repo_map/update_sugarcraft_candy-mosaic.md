@@ -459,7 +459,7 @@ public function renderAsJpeg(ImageSource $image, int $width, ?int $height = null
 
 3. **sugar-charts integration:** Use `Mosaic` to render chart output (heatmaps, etc.)
 
-4. **candy-forms integration:** Render images inline in prompt sessions
+4. **sugar-forms integration:** Render images inline in prompt sessions
 
 5. **VHS demo tape support:** Add `candy-mosaic` to `.vhs/` examples for documentation
 

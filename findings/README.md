@@ -73,7 +73,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-shine | BlockStack/StyleSheet state not reset in copy() | Renderer.php:276 | withTheme() shares block stack with original renderer |
 | candy-tetris | AI rotation bug — loop runs when rotDelta=0 | Game.php:309 | Unwanted 90° rotation when AI needs no rotation |
 | candy-tetris | Garbage overflow off-by-one | Game.php:482 | Row $count displaced into visible area not validated |
-| candy-forms | No validation for negative viewport | Forms.php | Silent empty output for negative dimensions |
+| sugar-forms | No validation for negative viewport | Forms.php | Silent empty output for negative dimensions |
 | candy-ansi-inspect | Empty data set produces invalid output | Sparkline.php:42 | No guard for empty $data |
 | sugar-toast | Viewport overflow not handled | Toast.php | Toast wider than terminal width overflows |
 | sugar-toast | Auto-dismiss timer not cancellable | Toast.php | Cannot extend or cancel dismiss timer |
@@ -99,7 +99,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-shine | 1 HIGH, 6 MED, 9 LOW | BlockStack state, string concat in loops, missing Write() parity |
 | sugar-boxer | 1 HIGH, 4 MED, 9 LOW | Division by zero, multibyte sanitization, flex separator gap |
 | sugar-gallery | 3 HIGH, 6 MED, 2 LOW | Path traversal, FFI memory, no format fallback |
-| candy-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
+| sugar-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
 | candy-starter | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |
 | candy-flappy | 2 HIGH, 3 MED, 5 LOW | Collision off-by-one, non-atomic file I/O |
 | sugar-stickers | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |

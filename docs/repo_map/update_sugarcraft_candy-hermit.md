@@ -503,7 +503,7 @@ Create `SugarCraft\Core\Util\Width` class with static methods:
 
 - `ansiStrip(string $s): string` — remove ANSI codes for width calculation
 
-This could be used by `candy-hermit`, `sugar-bits`, `candy-forms`, and other rendering components.
+This could be used by `candy-hermit`, `sugar-bits`, `sugar-forms`, and other rendering components.
 
 ## 2. Extract Grapheme Aware String Utils
 

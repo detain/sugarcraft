@@ -456,7 +456,7 @@
 
 2. **Editor Integration:** Add keybinding (`e`) to open files in `$EDITOR` for editing, similar to how gum's write command opens vim.
 
-3. **Integration with candy-forms:** Use candy-forms for inline text collection instead of the gated input pattern, for a more flexible input experience.
+3. **Integration with sugar-forms:** Use sugar-forms for inline text collection instead of the gated input pattern, for a more flexible input experience.
 
 4. **Candy-vcr Recording:** Use `candy-vcr` to record git operations for playback in tests, enabling integration tests without fixture git repos.
 

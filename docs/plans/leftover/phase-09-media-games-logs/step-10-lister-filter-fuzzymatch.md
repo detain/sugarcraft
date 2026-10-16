@@ -17,7 +17,7 @@
 
 **Create:**
 
-- `candy-lister/src/FuzzyMatch.php` — share impl with candy-forms
+- `candy-lister/src/FuzzyMatch.php` — share impl with sugar-forms
   fuzzy (step 08.02) where possible; consider lifting to candy-core
   if both consume it.
 - `candy-lister/src/FilterState.php` (enum).

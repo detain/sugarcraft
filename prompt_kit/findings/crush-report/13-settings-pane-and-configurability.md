@@ -6,7 +6,7 @@ Feeds steps: none open — every N-* step has landed.
 - making the hard-coded behaviours below into settings;
 - building the editor from existing SugarCraft libraries.
 
-Paths are relative to `sugar-crush/` unless they start with `/` or with a sibling lib's directory (`candy-forms/…`).
+Paths are relative to `sugar-crush/` unless they start with `/` or with a sibling lib's directory (`sugar-forms/…`).
 
 **Labels:**
 - **[V]** — verified in source by this author;

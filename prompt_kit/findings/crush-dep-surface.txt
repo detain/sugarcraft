@@ -37,7 +37,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
   src entry points: src/RuntimeNoticePumpMsg.php, src/SideQuestionAnsweredMsg.php, src/BackgroundSessionSpawnedMsg.php, src/TranscriptFlushMsg.php, src/CancelAgentRunMsg.php, src/BackgroundSessionStoppedMsg.php, src/SessionTitledMsg.php, src/Renderer.php +101 more
   other: examples/echo-chat.php, examples/agent-dashboard.php, examples/permission-prompt.php, examples/edit-diff.php
 
-=== candy-forms (SugarCraft\Forms) ===
+=== sugar-forms (SugarCraft\Forms) ===
   referencing files: 11  (src=5, tests=6, other=0)
   distinct symbols imported: 9
     - ItemList\LoadMoreMsg  x4
