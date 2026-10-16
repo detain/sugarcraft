@@ -417,7 +417,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **5.2** `sugar-boxer`(3,low), `sugar-datepicker`(6,low), `sugar-crumbs`(8,low),
   `candy-kv`(8,med), `candy-ansi-inspect`(8,med), `sugar-stickers`(7,med), `candy-ssh-launcher`(6,med),
   `candy-mail`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
-  `sugar-veil`(7,high) — one step each (all small), in dependency order.
+  `sugar-veil`(7,high) — one step each (all small), in dependency order. <!-- @rename-keep historical provenance -->
 - **5.3** `candy-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
 - **5.4** `candy-mdview`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →
@@ -496,7 +496,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-table | high | 8 | enum, match, mixed, named-args, nullsafe, php8-strfn, readonly |
 | candy-codetime | high | 16 | ctor-promotion, first-class-callable, intdiv, named-args, new-in-init |
 | sugar-toast | high | 9 | backed-enum, enum, enum-with-methods, ctor-promotion, match, readonly |
-| sugar-veil | high | 7 | ctor-promotion, enum, enum-with-methods, match, named-args, readonly |
+| sugar-veil | high | 7 | ctor-promotion, enum, enum-with-methods, match, named-args, readonly | <!-- @rename-keep historical provenance -->
 | candy-async | medium | 8 | ctor-promotion, mixed, named-args, readonly-class, union; react |
 | candy-buffer | medium | 17 | ctor-promotion, nullsafe, readonly, union |
 | candy-flip | medium | 9 | WeakMap, ctor-promotion, named-args, readonly |

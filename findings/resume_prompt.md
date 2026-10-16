@@ -13,7 +13,7 @@ Resume the SugarCraft audit-fixing workflow from where it left off. This documen
 
 ## What Was Done
 
-The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce.
+The first wave of audit work landed ~25+ commits to `master` covering Phase 0 critical security fixes and Phase 1 high-priority functional fixes for: candy-mosaic, sugar-table, sugar-toast, candy-shine, candy-fuzzy, candy-hermit, candy-focus, candy-forms, candy-git, candy-mail, candy-codeshot, candy-testing, candy-log, candy-sprinkles, candy-buffer, candy-mouse, candy-input, candy-async, sugar-charts, sugar-veil, honey-bounce. <!-- @rename-keep historical provenance -->
 
 **The plan files themselves were NOT marked ✅ — the fixes landed but bookkeeping was not done.**
 
@@ -117,7 +117,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 4-A | 4.1–4.3 | CALIBER_LEARNINGS (new-factory-required, mutable trait, AsyncOps ADR) |
-| 4-B | 4.4–4.6 | sugar-veil (scanner state docs, RenderSession frame counter), candy-git (sync-only docs) |
+| 4-B | 4.4–4.6 | sugar-veil (scanner state docs, RenderSession frame counter), candy-git (sync-only docs) | <!-- @rename-keep historical provenance -->
 | 4-C | 4.7–4.9 | candy-mouse (async gap, spatial index, memoization) |
 | 4-D | 4.10–4.12 | candy-palette (async gap), sugar-bits (transitional architecture, ReactPHP/async note) |
 

@@ -86,7 +86,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-table | 510 | 1237 | 0 | 0 | 0 | 0 |  |
 | sugar-tick | 144 | 349 | 0 | 0 | 0 | 0 | <!-- @rename-keep --> |
 | sugar-toast | 278 | 669 | 0 | 0 | 0 | 0 |  |
-| sugar-veil | 258 | 561 | 0 | 0 | 0 | 0 |  |
+| sugar-veil | 258 | 561 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | sugar-wishlist | 257 | 1160 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 ### sugar-crush (sharded, CI-shape)
 

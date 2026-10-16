@@ -187,7 +187,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 9: candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil
+### Group 9: candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil <!-- @rename-keep historical provenance -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
@@ -195,7 +195,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | sugar-stickers | 60 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
 | sugar-table | 129 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | candy-codetime | 106 ✓ | REQUEST_CHANGES | 0 | 3 | 3 | 0 |
-| sugar-veil | 97 ✓ | APPROVE | 0 | 0 | 4 | 0 |
+| sugar-veil | 97 ✓ | APPROVE | 0 | 0 | 4 | 0 | <!-- @rename-keep historical provenance -->
 
 **candy-ansi-inspect** — ANSI inspector. Clean, 147 tests.
 
@@ -205,7 +205,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-codetime** — Time tracker. Issues: `SqliteBackend` has no `close()` method (resource leak); `ExporterInterface` API mismatch (interface defines `headers()`/`rows()` but actual exporters have `export()`); `Milestone` uses mutable properties while `Heartbeat` uses readonly (inconsistency); `saveHighScore()` returns `true` even when `file_put_contents()` fails.
 
-**sugar-veil** — Overlay compositor. Issues: `Scale::apply()` uses `max(1, ...)` so progress 0 always shows 1 line; `getManager()` deprecated but still present; `VeilStack::compositeAll()` ignores per-veil position (always uses TOP/LEFT).
+**sugar-veil** — Overlay compositor. Issues: `Scale::apply()` uses `max(1, ...)` so progress 0 always shows 1 line; `getManager()` deprecated but still present; `VeilStack::compositeAll()` ignores per-veil position (always uses TOP/LEFT). <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -570,7 +570,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
-| 9 | candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
+| 9 | candy-ansi-inspect, sugar-stickers, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues | <!-- @rename-keep historical provenance -->
 | 10 | sugar-boxer, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 
