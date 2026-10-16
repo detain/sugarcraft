@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c87326992b70299b62b9226ef6d78ad2",
+    "content-hash": "9c4ccaeaa31c6a05ce073734e28972b8",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3609,6 +3609,134 @@
             }
         },
         {
+            "name": "sugarcraft/candy-codeshot",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-codeshot",
+                "reference": "c8ac257ecc88b7af2dcee9821a85ee3428971848"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "suggest": {
+                "ext-gd": "Required for PNG output in PngRenderer"
+            },
+            "bin": [
+                "bin/candy-codeshot"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\CodeShot\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\CodeShot\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/freeze — render code or terminal output to SVG screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
+            "homepage": "https://github.com/sugarcraft/candy-codeshot",
+            "keywords": [
+                "ansi",
+                "code",
+                "freeze",
+                "screenshot",
+                "sugarcraft",
+                "svg",
+                "terminal"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-codeshot/issues",
+                "source": "https://github.com/sugarcraft/candy-codeshot",
+                "docs": "https://sugarcraft.github.io/lib/candy-codeshot.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-codetime",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-codetime",
+                "reference": "087fb50599c560c6797a493578fca5d5860843ee"
+            },
+            "require": {
+                "ext-sqlite3": "*",
+                "php": ">=8.3",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-charts": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "bin": [
+                "bin/candy-codetime"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\CodeTime\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\CodeTime\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Privacy-first coding-time tracker — port of Rtarun3606k/TakaTime on the SugarCraft stack.",
+            "homepage": "https://sugarcraft.github.io/lib/candy-codetime.html",
+            "keywords": [
+                "cli",
+                "codetime",
+                "sugarcraft",
+                "takatime",
+                "time-tracking",
+                "tui",
+                "wakatime"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-codetime/issues",
+                "source": "https://github.com/sugarcraft/candy-codetime",
+                "docs": "https://sugarcraft.github.io/lib/candy-codetime.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-core",
             "version": "dev-master",
             "dist": {
@@ -3979,70 +4107,6 @@
                 "issues": "https://github.com/sugarcraft/candy-forms/issues",
                 "source": "https://github.com/sugarcraft/candy-forms",
                 "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-freeze",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-freeze",
-                "reference": "255157d59afa759f3cdf331b590b7fb39d3e9eb1"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "suggest": {
-                "ext-gd": "Required for PNG output in PngRenderer"
-            },
-            "bin": [
-                "bin/candyfreeze"
-            ],
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Freeze\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Freeze\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/freeze — render code or terminal output to SVG screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
-            "homepage": "https://github.com/sugarcraft/candy-freeze",
-            "keywords": [
-                "ansi",
-                "code",
-                "freeze",
-                "screenshot",
-                "sugarcraft",
-                "svg",
-                "terminal"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-freeze/issues",
-                "source": "https://github.com/sugarcraft/candy-freeze",
-                "docs": "https://sugarcraft.github.io/lib/candy-freeze.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -4969,68 +5033,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-mold",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-mold",
-                "reference": "d4089260ccaa0c637e40e1f44e0cacb9f4c5d2bb"
-            },
-            "require": {
-                "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0"
-            },
-            "bin": [
-                "bin/start"
-            ],
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "App\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "App\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Skeleton repo for bootstrapping a SugarCraft TUI app — `composer create-project sugarcraft/candy-mold my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
-            "homepage": "https://github.com/sugarcraft/candy-mold",
-            "keywords": [
-                "bootstrap",
-                "create-project",
-                "mold",
-                "skeleton",
-                "starter",
-                "sugarcraft",
-                "template",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-mold/issues",
-                "source": "https://github.com/sugarcraft/candy-mold",
-                "docs": "https://sugarcraft.github.io/lib/candy-mold.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-mosaic",
             "version": "dev-master",
             "dist": {
@@ -5619,6 +5621,67 @@
                 "issues": "https://github.com/sugarcraft/candy-ssh-launcher/issues",
                 "source": "https://github.com/sugarcraft/candy-ssh-launcher",
                 "docs": "https://sugarcraft.github.io/lib/candy-ssh-launcher.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-starter",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-starter",
+                "reference": "116be8cd550ed90090d33a2996a5d12d2650e4e7"
+            },
+            "require": {
+                "php": ">=8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "bin": [
+                "bin/start"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "App\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "App\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Skeleton repo for bootstrapping a SugarCraft TUI app — `composer create-project sugarcraft/candy-starter my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
+            "homepage": "https://github.com/sugarcraft/candy-starter",
+            "keywords": [
+                "bootstrap",
+                "create-project",
+                "skeleton",
+                "starter",
+                "sugarcraft",
+                "template",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-starter/issues",
+                "source": "https://github.com/sugarcraft/candy-starter",
+                "docs": "https://sugarcraft.github.io/lib/candy-starter.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -7060,70 +7123,6 @@
                 "issues": "https://github.com/sugarcraft/sugar-table/issues",
                 "source": "https://github.com/sugarcraft/sugar-table",
                 "docs": "https://sugarcraft.github.io/lib/sugar-table.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/sugar-tick",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-tick",
-                "reference": "07d53702a8a114721d83a408523784664072d2bd"
-            },
-            "require": {
-                "ext-sqlite3": "*",
-                "php": ">=8.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-charts": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0"
-            },
-            "bin": [
-                "bin/sugar-tick"
-            ],
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Tick\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Tick\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Privacy-first coding-time tracker — port of Rtarun3606k/TakaTime on the SugarCraft stack.",
-            "homepage": "https://sugarcraft.github.io/lib/sugar-tick.html",
-            "keywords": [
-                "cli",
-                "sugarcraft",
-                "sugarcraft",
-                "takatime",
-                "time-tracking",
-                "tui",
-                "wakatime"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-tick/issues",
-                "source": "https://github.com/sugarcraft/sugar-tick",
-                "docs": "https://sugarcraft.github.io/lib/sugar-tick.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8586,13 +8585,14 @@
         "sugarcraft/candy-ansi-inspect": 20,
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
+        "sugarcraft/candy-codeshot": 20,
+        "sugarcraft/candy-codetime": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flappy": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
-        "sugarcraft/candy-freeze": 20,
         "sugarcraft/candy-fuzzy": 20,
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
@@ -8606,7 +8606,6 @@
         "sugarcraft/candy-mdview": 20,
         "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
-        "sugarcraft/candy-mold": 20,
         "sugarcraft/candy-mosaic": 20,
         "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
@@ -8616,6 +8615,7 @@
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,
         "sugarcraft/candy-ssh-launcher": 20,
+        "sugarcraft/candy-starter": 20,
         "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-top": 20,
@@ -8638,7 +8638,6 @@
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-stickers": 20,
         "sugarcraft/sugar-table": 20,
-        "sugarcraft/sugar-tick": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-veil": 20
     },
