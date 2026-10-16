@@ -1,7 +1,7 @@
 # Stage 5 Ecosystem Synthesis — repo_map_update_stage5
 
 Sourced from 11 update docs: candy-kit, candy-flip, candy-mail, candy-sql,
-candy-minesweeper, candy-tetris, candy-mold, candy-flappy, super-candy, sugar-tick.
+candy-minesweeper, candy-tetris, candy-starter, candy-flappy, super-candy, sugar-tick.
 
 ---
 
@@ -12,7 +12,7 @@ Every package independently identifies the same hole: no `Simulator` class,
 no `Program::withInput()/withOutput()`, no snapshot testing utilities. This is
 not a per-package gap — it is an ecosystem gap. bubble-tea issue #1654 (6+
 years old) confirms the Go world never solved this. SugarCraft can lead here.
-Affected: candy-mold (critical), candy-sql, candy-minesweeper, candy-tetris,
+Affected: candy-starter (critical), candy-sql, candy-minesweeper, candy-tetris,
 super-candy, sugar-tick.
 
 ### B. Concurrent Write Safety — Data Corruption Risk

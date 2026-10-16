@@ -19,7 +19,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 | sugar-dash Phase 1 runs in Group A | Parse error in `Stack.php:78` (missing space before `&&`) blocks compilation of the largest sugar-* lib | `ref:sugar-dash-audit` |
 | sugar-reel runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-reel-audit` |
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
-| honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-mold | `ref:honey-bounce-audit` |
+| honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:honey-bounce-audit` |
 | candy-git path-repo closure check deferred | candy-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
 | sugar-tick plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:sugar-tick-audit` |
 
@@ -42,7 +42,7 @@ sugar-reel (Phase 1: AudioPlayer SIGSTOP/PTY, mutate() ?? bug)
     └── Independent
 
 honey-bounce (Phase 1: Spring tick mutates in place)
-    └── candy-mold (uses SpringChain)
+    └── candy-starter (uses SpringChain)
 
 sugar-charts (Phase 1: Extract ChartExtras trait — DRY)
     └── Independent

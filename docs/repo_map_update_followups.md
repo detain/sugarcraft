@@ -11,7 +11,7 @@ _Items deferred from step-37 catch-all (PR #917). These libs were audited but no
 | **candy-metrics** | AsyncCounter/AsyncGauge use synchronous \Closure callbacks at observe() time — no manual Deferred to replace. Backend is pull-based with synchronous writers (InMemory, Prometheus, StatsD, JSON) with no string-rendering loop for Buffer. No minimal adoption found; revisit if async metric collection patterns are introduced. |
 | **candy-log** | Async hook dispatch (M effort) requires redesigning Hook interface to return futures and wrapping all backends. Buffer adoption touches all formatters. Both are larger than "minimal"; revisit in dedicated async-logging refactor. |
 | **candy-mouse** | Uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting candy-mouse for hit-testing is not a drop-in (incompatible Zone abstractions, different MouseMsg types). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored. |
-| **candy-mold** | TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project. |
+| **candy-starter** | TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project. |
 
 _4 items total. All other 19 audited libs from step-30 were successfully migrated in steps 31–36._
 
@@ -41,7 +41,7 @@ The 8 shared packages:
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
-| Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
+| Step 37 | candy-metrics, candy-log, candy-mouse, candy-starter | candy-async, candy-mouse, candy-buffer, candy-testing |
 
 ---
 
@@ -281,16 +281,16 @@ The 8 shared packages:
 
 ---
 
-### candy-mold
+### candy-starter
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-async | Counter.php uses in-memory increments — AsyncCounter wrapper via candy-async would provide async increment API | S |
 | candy-buffer | Counter.php renders via string — Buffer would give formatted output with diff | S |
 
-**Notes:** candy-mold is a minimal counter utility. Very small surface area — low-effort adoption candidate for both candy-async and candy-buffer.
+**Notes:** candy-starter is a minimal counter utility. Very small surface area — low-effort adoption candidate for both candy-async and candy-buffer.
 
-**Step 37 status:** ⚠️ DEFERRED — candy-mold is a TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project.
+**Step 37 status:** ⚠️ DEFERRED — candy-starter is a TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-starter, candy-flip (buffer+async), candy-flappy (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---

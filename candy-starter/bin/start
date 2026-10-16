@@ -22,7 +22,7 @@ declare(strict_types=1);
             return;
         }
     }
-    fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `composer install`?\n");
+    fwrite(STDERR, "candy-starter: cannot find composer autoload.php — did you `composer install`?\n");
     exit(1);
 })();
 

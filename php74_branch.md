@@ -525,7 +525,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly |
 | candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |
 | candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void |
-| candy-mold | low | 1 | ctor-promotion, match, readonly |
+| candy-starter | low | 1 | ctor-promotion, match, readonly |
 | candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly | <!-- @rename-keep historical provenance -->
 | candy-flappy | low | 6 | ctor-promotion, named-args, readonly |
 | sugar-boxer | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |

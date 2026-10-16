@@ -138,7 +138,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
 | **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the `sugar-` family placement. |
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |
-| **CandyMold** | candy + mold = the project skeleton you pour into. ✓✓ |
+| **CandyStarter** | candy + starter = the create-project skeleton you start from. ✓✓ |
 | **CandyMosaic** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |
 | **CandyVt**     | candy + vt = virtual terminal emulator. "vt" is the established term. |
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. "vcr" carries the cassette / playback metaphor for free. |

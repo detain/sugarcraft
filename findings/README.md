@@ -21,7 +21,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **35+ mutate() re-implementations** — every with*() builder duplicates the same 4-line pattern
 - **AsyncOps duplication** — candy-async's AsyncOps reproduced in candy-buffer, sugar-dash, others
 - **Clamping logic** — min/max clamping copied across 10+ projects with no shared utility
-- **Style object allocation** — hot-render loops creating Style chains per-frame (candy-mold, candy-flappy)
+- **Style object allocation** — hot-render loops creating Style chains per-frame (candy-starter, candy-flappy)
 - **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-scriptui)
 - **array_map over children** — double/triple iteration over same child array (sugar-boxer, sugar-table)
 - **WeakMap/registry patterns** — per-project implementations instead of shared candy-core utility
@@ -68,8 +68,8 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 | Project | Finding | Location | Description |
 |---------|---------|----------|-------------|
-| candy-mold | Style chain rebuilt per render frame | Counter.php:68 | 3 intermediate Style objects per 60fps render tick |
-| candy-mold | Quit doesn't fire for uppercase Q | Counter.php:51 | strtolower not used — CapsLock breaks quit |
+| candy-starter | Style chain rebuilt per render frame | Counter.php:68 | 3 intermediate Style objects per 60fps render tick |
+| candy-starter | Quit doesn't fire for uppercase Q | Counter.php:51 | strtolower not used — CapsLock breaks quit |
 | candy-shine | BlockStack/StyleSheet state not reset in copy() | Renderer.php:276 | withTheme() shares block stack with original renderer |
 | candy-tetris | AI rotation bug — loop runs when rotDelta=0 | Game.php:309 | Unwanted 90° rotation when AI needs no rotation |
 | candy-tetris | Garbage overflow off-by-one | Game.php:482 | Row $count displaced into visible area not validated |
@@ -100,7 +100,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-boxer | 1 HIGH, 4 MED, 9 LOW | Division by zero, multibyte sanitization, flex separator gap |
 | sugar-gallery | 3 HIGH, 6 MED, 2 LOW | Path traversal, FFI memory, no format fallback |
 | candy-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
-| candy-mold | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |
+| candy-starter | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |
 | candy-flappy | 2 HIGH, 3 MED, 5 LOW | Collision off-by-one, non-atomic file I/O |
 | sugar-stickers | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |
 | sugar-crush | 2 HIGH, 3 MED, 2 LOW | EOF buffer drain, mouse coordinate off-by-one |
@@ -139,7 +139,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 ### 3. Performance Optimization
 
-- Cache Style objects in hot render loops (candy-mold, candy-flappy, candy-shine)
+- Cache Style objects in hot render loops (candy-starter, candy-flappy, candy-shine)
 - Pre-compute visible column indices before row iteration (sugar-stickers, sugar-table)
 - Add caching to SmithWatermanMatcher in fuzzy filter (candy-scriptui, sugar-crush)
 - Use array rewind + single-pass iteration instead of multiple array_map passes

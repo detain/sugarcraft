@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "528d98615c5f7b67cb075b31b72b9382",
+    "content-hash": "27e237c1d24a905841afb66d21de2c76",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4969,68 +4969,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-mold",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-mold",
-                "reference": "d4089260ccaa0c637e40e1f44e0cacb9f4c5d2bb"
-            },
-            "require": {
-                "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0"
-            },
-            "bin": [
-                "bin/start"
-            ],
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "App\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "App\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Skeleton repo for bootstrapping a SugarCraft TUI app — `composer create-project sugarcraft/candy-mold my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
-            "homepage": "https://github.com/sugarcraft/candy-mold",
-            "keywords": [
-                "bootstrap",
-                "create-project",
-                "mold",
-                "skeleton",
-                "starter",
-                "sugarcraft",
-                "template",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-mold/issues",
-                "source": "https://github.com/sugarcraft/candy-mold",
-                "docs": "https://sugarcraft.github.io/lib/candy-mold.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-mosaic",
             "version": "dev-master",
             "dist": {
@@ -5556,6 +5494,67 @@
                 "issues": "https://github.com/sugarcraft/candy-sql/issues",
                 "source": "https://github.com/sugarcraft/candy-sql",
                 "docs": "https://sugarcraft.github.io/lib/candy-sql.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-starter",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-starter",
+                "reference": "116be8cd550ed90090d33a2996a5d12d2650e4e7"
+            },
+            "require": {
+                "php": ">=8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "bin": [
+                "bin/start"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "App\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "App\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Skeleton repo for bootstrapping a SugarCraft TUI app — `composer create-project sugarcraft/candy-starter my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
+            "homepage": "https://github.com/sugarcraft/candy-starter",
+            "keywords": [
+                "bootstrap",
+                "create-project",
+                "skeleton",
+                "starter",
+                "sugarcraft",
+                "template",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-starter/issues",
+                "source": "https://github.com/sugarcraft/candy-starter",
+                "docs": "https://sugarcraft.github.io/lib/candy-starter.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8606,7 +8605,6 @@
         "sugarcraft/candy-mdview": 20,
         "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
-        "sugarcraft/candy-mold": 20,
         "sugarcraft/candy-mosaic": 20,
         "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
@@ -8615,6 +8613,7 @@
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,
+        "sugarcraft/candy-starter": 20,
         "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-top": 20,

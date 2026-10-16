@@ -24,7 +24,7 @@ Each row shows the package's subdir; the Composer name is always
 `sugarcraft/<subdir>` and the namespace follows the naming rulebook
 (`candy-sprinkles/` → `sugarcraft/candy-sprinkles` → `SugarCraft\Sprinkles\`).
 Two namespaces intentionally don't read off their slug — `candy-core/`
-ships as `SugarCraft\Core\`, and `candy-mold/` ships as `App\` — both are
+ships as `SugarCraft\Core\`, and `candy-starter/` ships as `App\` — both are
 called out in the table below.
 
 ---
@@ -78,7 +78,7 @@ called out in the table below.
 
 | App | Status | Notes |
 |---|:---:|---|
-| **CandyMold** (`candy-mold/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
+| **CandyStarter** (`candy-starter/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
 | **CandyScriptui** (`candy-scriptui/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
 | **CandyFreeze** (`candy-freeze/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
@@ -167,7 +167,7 @@ reference projects supplied the ideas, not the code.
 | CandyLog (candy-log/) | [log](https://github.com/charmbracelet/log) |
 | CandyMetrics (candy-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
-| CandyMold (candy-mold/) | none — first-party |
+| CandyStarter (candy-starter/) | none — first-party |
 | CandyMouse (candy-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | CandyMosaic (candy-mosaic/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
 | CandyPalette (candy-palette/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
