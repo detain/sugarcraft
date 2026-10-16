@@ -75,4 +75,4 @@ Fix all actionable findings in `candy-mold` (a SugarCraft skeleton template) and
 - **2026-06-30:** Plan created based on `findings/candy-mold.md` audit performed same date.
 - **INFORMATIONAL findings** (6, 13-16, 18) are addressed in Phase 3 (documentation/examples).
 - **N/A findings** (7-9, 11-12, 17) require no action.
-- The `phpunit.xml` testsuite name is `"CandyTemplate"` — recommend updating to `"CandyMold"` as a minor consistency fix.
+- The `phpunit.xml` testsuite name is `"CandyTemplate"` — recommend updating to `"CandyMold"` as a minor consistency fix. <!-- @rename-keep historical provenance -->
