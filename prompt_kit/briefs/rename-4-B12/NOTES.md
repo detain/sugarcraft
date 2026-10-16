@@ -43,3 +43,7 @@ DONE (R1–R7 this lane; R8/R9 weld owed). Branch `rename/b12`, base `10f121d49`
 ## Figures
 - R1: skipped (ns unchanged) / R2: 23 / R3: 207 / files: 39→(41 after manual set incl. renames.json+NOTES) / diff: 41 files 261+/261− (main commit).
 - Gates: suite 59/217 EXACT · tools 426/1484 EXACT · RepoMap 172/1003 · residue 0 · gen-docs+ansi --check 0 · path-repos 0.
+
+## R9 fire (weld 2026-10-16)
+- create candy-starter: HTTP 406 (sugarcraft/candy-mold already exists — old reg holds URL). Recorded, no retry per batch-B law; end-of-campaign verification pass.
+- R8 note: gh repo already renamed (candy-mold → candy-starter 301s); split-sync legacy refs owed final ls-remote peek at campaign close.
