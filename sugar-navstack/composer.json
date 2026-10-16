@@ -1,0 +1,46 @@
+{
+    "name": "sugarcraft/sugar-navstack",
+    "description": "PHP port of KevM/bubbleo \u2014 NavStack and Breadcrumb components. Push/pop navigation stack with hierarchical breadcrumb rendering for terminal UIs.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "navigation",
+        "breadcrumbs",
+        "navstack",
+        "bubbleo",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-navstack",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-navstack/issues",
+        "source": "https://github.com/sugarcraft/sugar-navstack"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\NavStack\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\NavStack\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -79,3 +79,12 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `candy-codeshot/.vhs/{ansi-input,screenshot}.gif` — 2 demo GIFs renamed with the dir by R3; their frames <!-- @rename-keep -->
   still show the pre-rename `candyfreeze` wordmark. CI `.github/workflows/vhs.yml` re-renders from the <!-- @rename-keep -->
   already-rewritten `.tape` files on the next tape run; do not hand-patch.
+
+## C3 sugar-crumbs → sugar-navstack (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-2-16-l-1.ansi`, `ansi/sugarcraft/sugarcraft-2-256-l-1.ansi`, <!-- @rename-keep -->
+  `ansi/sugarcraft/sugarcraft-3-16-l-2.ansi` — each carries 1 `sugar-crumbs` tile in the pre-rendered <!-- @rename-keep -->
+  monorepo logo-wall art. `.ansi` content is rename-excluded (tools and residue); re-render owed by <!-- @rename-keep -->
+  whoever next touches the ansi corpus (`php tools/gen-ansi-readme.php` after any redraw). <!-- @rename-keep -->
+- `media/icons/sugar-navstack.png` — renamed path, unchanged bytes (cookie-crumb motif predates the <!-- @rename-keep -->
+  NavStack naming; generate_icons.py prompt text "golden cookie crumbs" kept truthful for existing art, <!-- @rename-keep -->
+  B12 precedent). Redraw optional at owner triage.

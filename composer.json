@@ -79,7 +79,7 @@
         "sugarcraft/sugar-boxer": "dev-master",
         "sugarcraft/sugar-datepicker": "dev-master",
         "sugarcraft/sugar-charts": "dev-master",
-        "sugarcraft/sugar-crumbs": "dev-master",
+        "sugarcraft/sugar-navstack": "dev-master",
         "sugarcraft/sugar-crush": "dev-master",
         "sugarcraft/sugar-crush-web": "dev-master",
         "sugarcraft/sugar-dash": "dev-master",
@@ -384,7 +384,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-crumbs",
+            "url": "sugar-navstack",
             "options": {
                 "symlink": true
             }

@@ -25,15 +25,15 @@ From `MATCHUPS.md`:
 
 | Upstream | SugarCraft Port | Subdir | Status |
 |---|---|---|---|
-| KevM/bubbleo | **SugarCrumbs** | `sugar-crumbs/` | 🟢 |
+| KevM/bubbleo | **SugarNavstack** | `sugar-navstack/` | 🟢 |
 
-The mapping is specifically to `sugar-crumbs` for breadcrumb rendering. However, the upstream `bubbleo` library encompasses multiple components:
+The mapping is specifically to `sugar-navstack` for breadcrumb rendering. However, the upstream `bubbleo` library encompasses multiple components:
 
 | bubbleo Component | SugarCraft Mapping | Notes |
 |---|---|---|
 | `navstack.Model` | `candy-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from CandyForms's form model |
 | `menu.Model` | `sugar-bits` (list widget) | Wraps bubbles/list for menu selection |
-| `breadcrumb.Model` | `sugar-crumbs` | Full mapping exists |
+| `breadcrumb.Model` | `sugar-navstack` | Full mapping exists |
 | `shell.Model` | `candy-scriptui` | Composite nav + breadcrumb |
 | `window.Model` | `candy-core` | Offset-based dimension management |
 | `Closable` interface | Not directly mapped | Resource cleanup pattern |
@@ -98,7 +98,7 @@ func (m *tea.Model) View() {
 
 **Strategic Interpretation**:
 
-- **Direct Risk to SugarCraft**: HIGH. If `sugar-crumbs` or related libs implement `Closable`-like cleanup, the same concern applies: cleanup commands cannot be properly sequenced in the current design.
+- **Direct Risk to SugarCraft**: HIGH. If `sugar-navstack` or related libs implement `Closable`-like cleanup, the same concern applies: cleanup commands cannot be properly sequenced in the current design.
 - **Feature Opportunity**: SugarCraft should implement disposal-as-command pattern (`Dispose() tea.Cmd`) rather than `Close() error`. This allows proper cleanup sequencing in the TEA model lifecycle.
 - **The async init pattern** (`onDataInit`/`onDataInited`) mirrors React's `componentDidMount` and is a common request for data-loading in TUI apps. CandyForms handles this differently (via its form fields), but a general-purpose async init lifecycle hook could be valuable across all SugarCraft models.
 
@@ -394,7 +394,7 @@ Maintainer (KevM) has merged PR #6 (external contributor) but left PRs #2, #3, #
 | Problem | Direct Risk | Severity |
 |---|---|---|
 | **Disposal not integrated with command system** | HIGH | `Closable.Close() error` is fire-and-forget. If SugarCraft uses similar disposal, cleanup actions can't be sequenced properly. |
-| **Empty-stack quit behavior is rigid** | MEDIUM | sugar-crumbs/nav should allow configurable empty-stack behavior |
+| **Empty-stack quit behavior is rigid** | MEDIUM | sugar-navstack/nav should allow configurable empty-stack behavior |
 | **Help state machine bugs** | MEDIUM | Help visibility toggle is error-prone. SugarCraft should test this explicitly. |
 | **Shell composition overrides child config** | MEDIUM | candy-scriptui must preserve child configuration (like the delimiter bug in PR #6) |
 | **No async data loading lifecycle** | MEDIUM | Issue #5's `onDataInit`/`onDataInited` pattern is a common need. candy-forms handles this for forms, but general models need a lifecycle hook. |
@@ -551,7 +551,7 @@ The v0.1.5 push-symmetry change (closing on push AND pop) reflects a maturing un
 
 **Opportunity**: SugarCraft lacks a dedicated stack navigation primitive. `candy-forms` handles forms, `candy-scriptui` is a CLI shell, but neither provides the bubbleo-style `NavStack` with push/pop/close semantics.
 
-**Recommendation**: Consider creating `sugar-nav` (or expanding `sugar-crumbs`) to provide:
+**Recommendation**: Consider creating `sugar-nav` (or expanding `sugar-navstack`) to provide:
 
 - `NavigationStack` model with configurable empty behavior
 - `NavigationItem` with `Disposable` disposal
@@ -618,7 +618,7 @@ trait AsyncInitializable {
 
 ### Priority 1: Fix Disposal Pattern (HIGH ROI)
 
-**Action**: Create `Disposable` interface in `candy-core` that returns `?Command`. Update `sugar-crumbs` and any navigation model to use it.
+**Action**: Create `Disposable` interface in `candy-core` that returns `?Command`. Update `sugar-navstack` and any navigation model to use it.
 
 **Why**: The current `Closable.Close() error` pattern cannot integrate with the command system. This is a foundational pattern used everywhere — fixing it early prevents cascading rework.
 

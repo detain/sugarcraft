@@ -1,0 +1,104 @@
+<img src=".assets/icon.png" alt="sugar-navstack" width="160" align="right">
+
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-navstack)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-navstack)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-navstack?label=packagist)](https://packagist.org/packages/sugarcore/sugar-navstack)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+# SugarNavstack
+
+> Formerly published as `sugarcraft/sugar-crumbs` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Crumbs\` → `SugarCraft\NavStack\`. <!-- @rename-keep -->
+
+sugar-navstack — NavStack (navigation stack) and Breadcrumb components for terminal UIs, for PHP 8.3+.
+
+## Features
+
+- **NavStack** — hierarchical navigation state with push/pop/peek operations
+- **Breadcrumb renderer** — renders the current navigation path as a clickable-looking breadcrumb string
+- **Shell** — combines NavStack + Breadcrumb into a single component
+- **Pure renderer** — breadcrumb output is just strings; works with any TUI framework
+- **No external dependencies** — pure PHP 8.3+
+
+## Install
+
+```bash
+composer require sugarcraft/sugar-navstack
+```
+
+## NavStack Quick Start
+
+```php
+use SugarCraft\NavStack\NavStack;
+
+$stack = new NavStack();
+
+// Push navigation items (each has a title + optional data)
+$stack->push('Home');
+$stack->push('Settings');
+$stack->push('Display');
+
+// Current item
+echo $stack->current()->title;   // "Display"
+echo $stack->depth();            // 3
+
+// Pop back
+$popped = $stack->pop();
+echo $popped->title;             // "Display"
+echo $stack->current()->title;   // "Settings"
+```
+
+## Breadcrumb Rendering
+
+```php
+use SugarCraft\NavStack\Breadcrumb;
+
+$bc = new Breadcrumb();
+$bc->setSeparator(' › ');        // default " › "
+$bc->setMaxWidth(60);            // truncate if needed
+
+// Render from NavStack
+$stack = new NavStack();
+$stack->push('Home');
+$stack->push('Settings');
+$stack->push('Display');
+
+echo $bc->render($stack);  // "Home › Settings › Display"
+```
+
+### Click-Region Tracking
+
+Attach a self-contained `Scanner` from `sugarcraft/candy-mouse` for mouse-click zone routing:
+
+```php
+use SugarCraft\NavStack\Breadcrumb;
+use SugarCraft\Mouse\Scanner;
+
+$bc = (new Breadcrumb())->withScanner(Scanner::new());
+
+$output = $bc->render($stack);
+// Each crumb is wrapped in a named zone marker: "crumb-0", "crumb-1", …
+
+$bc->scan($output);
+$zone = $bc->hit($col, $row); // returns Zone for clicked crumb-N or null
+
+if ($zone !== null && \preg_match('/crumb-(\d+)/', $zone->id, $m)) {
+    $index = (int) $m[1];
+    // route click on crumb-$index to the appropriate handler
+}
+```
+
+## Shared foundations
+
+Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.
+
+## License
+
+[MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [KevM/bubbleo](https://github.com/KevM/bubbleo); SugarCraft is developed as a native PHP project.

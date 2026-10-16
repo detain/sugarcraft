@@ -130,7 +130,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarTable** | sugar + table = data table. literal. |
 | **SugarDatepicker** | sugar + datepicker = date picker. literal. |
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
-| **SugarCrumbs** | crumbs = breadcrumbs nav IS the function. delightful. |
+| **SugarNavstack** | nav stack = push/pop navigation stack + breadcrumb trail IS the function. delightful. (renamed from SugarCrumbs 2026-10). <!-- @rename-keep --> |
 | **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
 | **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
 | **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->

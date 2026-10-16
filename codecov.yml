@@ -173,8 +173,8 @@ flag_management:
     - name: sugar-datepicker
       paths: ["sugar-datepicker/src/**"]
       carryforward: true
-    - name: sugar-crumbs
-      paths: ["sugar-crumbs/src/**"]
+    - name: sugar-navstack
+      paths: ["sugar-navstack/src/**"]
       carryforward: true
     - name: candy-mail
       paths: ["candy-mail/src/**"]
@@ -499,12 +499,12 @@ component_management:
         - "sugar-datepicker/src/**"
       flag_regexes:
         - "^sugar-datepicker$"
-    - component_id: sugar-crumbs
-      name: sugar-crumbs
+    - component_id: sugar-navstack
+      name: sugar-navstack
       paths:
-        - "sugar-crumbs/src/**"
+        - "sugar-navstack/src/**"
       flag_regexes:
-        - "^sugar-crumbs$"
+        - "^sugar-navstack$"
     - component_id: candy-mail
       name: candy-mail
       paths:
