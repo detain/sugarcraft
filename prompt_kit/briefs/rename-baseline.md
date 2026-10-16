@@ -82,7 +82,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-skate | 212 | 466 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-spark | 278 | 1412 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-stash | 326 | 4638 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
-| sugar-stickers | 221 | 476 | 0 | 0 | 0 | 0 |  |
+| sugar-stickers | 221 | 476 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
 | sugar-table | 510 | 1237 | 0 | 0 | 0 | 0 |  |
 | sugar-tick | 144 | 349 | 0 | 0 | 0 | 0 | <!-- @rename-keep --> |
 | sugar-toast | 278 | 669 | 0 | 0 | 0 | 0 |  |
