@@ -58,3 +58,11 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   but its content audits `src/Sparkline.php` = the sugar-charts Sparkline port, not this app (likely spark↔sparkline
   name-confusion at audit time, 2026-06-30). Its 3 old-slug lines were tagged @rename-keep pre-R3 so the rename
   would not mint false claims about candy-ansi-inspect. Retitle/merge into the sugar-charts records when triaged.
+- `candy-kv/.vhs/*.gif` — 5 demo GIFs (basic, binary, glob, multidb, reverse-order) renamed with the dir by R3; their frames
+  still show the pre-rename wordmark. CI `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.
+- PRE-EXISTING MISLABEL for human triage: `docs/plans/leftover/phase-12-deferred/step-09-expect-expansion.md:10` names
+  `candy-skate` (a lib that never existed) as a task-automation consumer of Expect — verified present already at 6b64cab86,
+  NOT a rename artifact; may have meant sugar-skate/candy-kv <!-- @rename-keep --> but a key/value store is not a
+  scripted-dialog consumer, so do not auto-rewrite to candy-kv (would mint a false claim). Retitle/reword when triaged.
+- `docs/plans/leftover/phase-10-apps/step-35-skate-import-typo-ttl-stdin-tx.md` filename + branch cite `ai/skate-import-typo-...`
+  carry the bare word skate <!-- @rename-keep --> — historical plan/branch names, intentionally left (slug never appears; benign).

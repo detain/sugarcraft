@@ -56,3 +56,8 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 - Continuity: refs/heads/legacy/sugar-skate + refs/tags/sugar-skate-final both at `cab4bd4d0`. <!-- @rename-keep -->
 - Abandon checklist line appended (house format, @rename-keep, old pkg stays installable; UI abandon deferred Phase 10). renames.json -> packagist-done.
 - Credentials exported via split-vars + unset after each invocation; never echoed.
+
+## Followups + tracker — LANDED
+- rename-followups.md ×3 lines: 5 stale .vhs GIFs (CI re-renders), PRE-EXISTING `candy-skate` mislabel in leftover step-09
+  (verified present at pre-lane tip — not a rename artifact; do not auto-rewrite), step-35 bare-word filename benign.
+- plan_rename.md tracker: B7 line appended after B6 (before **Done when: batch B**) with full chain SHAs + gates.
