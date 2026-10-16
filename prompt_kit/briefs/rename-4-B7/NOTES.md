@@ -27,7 +27,7 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 ## Steps
 
 - (pre-R1) tag-prep: `@rename-keep` on prompt_kit/CONTEXT.md :876/:910 historical lines + rename-baseline.md:82 row.
-- R1 dry-run:
+- R1 dry-run: 93 files / 11 paths (R1=74 R2=31 R3=235 R5=1 R7=46 + R6=1). Eye-review PASS: no generic-vocab files in plan (ansi `skateboarder`, candy-shine emoji keys untouched); R6 auto-rewrites Lang NAMESPACE; root composer.json auto (require+repositories), composer.lock excluded -> R5 update; leftover/phase-10-apps/step-35-skate-*.md path keeps bare word (not a rule token) and its sugar-skate content refs rewrite; no .sh examples -> bash-fn-name law N/A; oc.7z preflight-forced /tmp hold (413MB, /tmp/oc.7z.b7-hold).
 - R2 remote rename:
 - R3 tool run:
 - R4 followups:
