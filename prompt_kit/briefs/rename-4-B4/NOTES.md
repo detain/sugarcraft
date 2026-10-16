@@ -90,8 +90,13 @@ refresh-deps --mode=linked candy-scriptui OK; committed-tree path-repo guard rc=
 ## R9 — packagist (done)
 - CI-sync landed split master=afa6a66f0 (~90s after remote-done push). create → HTTP 202 clean (NO 406 — B3 sync-gate law honored: created only post-sync).
 - dev-master ABSENT across 5+5 polls → forced `scripts/packagist.sh update candy-scriptui` (BARE slug only — the script's validator rejects `vendor/name`: "not a valid package slug") → job 2254f0f99 → next check: dev-master present, source.reference afa6a66f01a38b3d0d62f5d5a5441433edb14d61 == split master EXACT.
-- Continuity peek: refs/heads/legacy/candy-shell + tag candy-shell-final at 9500e0aa (pre-rename split tip) — CI sync mints the pair on rename-syncs even though the monorepo push fast-forwarded (candy-query correction re-confirmed; B2 "FF mints none" law applies only to the monorepo push itself, not the split).
+- Continuity peek: refs/heads/legacy/candy-shell + tag candy-shell-final at 9500e0aa (pre-rename split tip) — CI sync mints the pair on rename-syncs even though the monorepo push fast-forwarded (candy-query correction re-confirmed; B2 "FF mints none" law applies only to the monorepo push itself, not the split). <!-- @rename-keep -->
 - Abandon-checklist line appended (tagged); renames.json → packagist-done.
 
 ## Tracker (done)
 - Entry status line inserted after B3's at plan_rename.md:963; cites TRUE post-rebase chain (40b41b7dd/69e90ac30/112012411/e62fbf508/5a37d3d00). Phase-4 row stays ☐ (4/12 entries done). Embedded renames listing (:315) un-maintained per precedent.
+
+## Close
+- Residue re-run after tracker commit caught the late-written continuity line :93 (same law as the 10-finding R7 round: gate residue immediately before staging, not after). Tagged; residue now 0.
+- oc.7z (foreign 413MB) restored to root; final tree clean. Master == origin == tracker tip. B4 CLOSED 4/12 of batch B; next entry per order line: `sugar-glow`.
+- Laws re-carried: (1) fresh-create packagist needs forced `update <bare-slug>` for first crawl (create 202 alone can leave dev-master ABSENT indefinitely — 10 wasted polls before applying B1 lesson here); (2) plan_rename.md is residue-excluded — its embedded status list ([:315]) is NOT maintained, only "Entry status" lines are appended; (3) CI-sync mints legacy-ref+final-tag pair on the SPLIT even when the monorepo push fast-forwards.
