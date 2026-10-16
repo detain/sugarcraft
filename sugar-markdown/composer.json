@@ -1,0 +1,52 @@
+{
+    "name": "sugarcraft/sugar-markdown",
+    "description": "PHP port of charmbracelet/glamour \u2014 Markdown \u2192 ANSI renderer with word-wrap, OSC 8 hyperlinks, syntax highlighting, and 8 stock themes (ansi/plain/dark/light/notty/dracula/tokyo-night/pink).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "markdown",
+        "renderer",
+        "ansi",
+        "tui",
+        "terminal",
+        "glamour",
+        "commonmark",
+        "syntax-highlighting",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-markdown",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-markdown/issues",
+        "source": "https://github.com/sugarcraft/sugar-markdown",
+        "docs": "https://sugarcraft.github.io/lib/sugar-markdown.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "league/commonmark": "^2.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Markdown\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Markdown\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

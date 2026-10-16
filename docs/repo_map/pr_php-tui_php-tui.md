@@ -25,7 +25,7 @@ From `repo_map/php-tui_php-tui.md`:
 | `sugar-widgets` | ParagraphWidget, ParagraphRenderer |
 | `sugar-charts` | ChartWidget, BarChartWidget, SparklineWidget, TableWidget |
 | `sugar-forms` | ListWidget, TabsWidget, ScrollbarWidget |
-| `candy-shine` | GaugeWidget, CanvasWidget, image rendering |
+| `sugar-markdown` | GaugeWidget, CanvasWidget, image rendering |
 
 ---
 

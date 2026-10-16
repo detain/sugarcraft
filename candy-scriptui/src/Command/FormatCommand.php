@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
-use SugarCraft\Shine\Renderer;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -16,7 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Render a Markdown file (or stdin) as styled ANSI text using
- * {@see \SugarCraft\Shine\Renderer}. Non-interactive — produces output
+ * {@see \SugarCraft\Markdown\Renderer}. Non-interactive — produces output
  * straight to stdout so it pipelines naturally:
  *
  *   $ candy-scriptui format README.md
@@ -76,7 +76,7 @@ final class FormatCommand extends Command
     public static function pickTheme(string $name): Theme
     {
         // Lean on Theme::byName() (case-insensitive, hyphen/underscore-tolerant)
-        // so callers stay aligned with CandyShine's full theme set.
+        // so callers stay aligned with SugarMarkdown's full theme set.
         $theme = Theme::byName($name);
         if ($theme === null) {
             throw new \InvalidArgumentException(Lang::t('format.unknown_theme', ['name' => $name]));

@@ -8355,7 +8355,7 @@ wrapping (`src/Renderer.php:1236-1245` names both).
 `max(20, $chat->cols() - self::SHELL_CHROME_COLS)`, chrome being 1 border + 1 padding each side —
 and `renderHistory()` forwards it to `renderToolResults()` and `renderDiff()`. But it builds the
 markdown renderer as `new Markdown($theme->markdown)` (`:1713`), and `Markdown` is
-`SugarCraft\Shine\Renderer` (aliased at `:20`) whose **word wrap is opt-in and defaults to OFF**
+`SugarCraft\Markdown\Renderer` (aliased at `:20`) whose **word wrap is opt-in and defaults to OFF**
 (`candy-shine/src/Renderer.php:105`). Measured against the local candy-shine: <!-- @rename-keep historical provenance -->
 
     wrap=off   rows=1  widths=[198]         max=198

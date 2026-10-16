@@ -94,8 +94,8 @@ candy-git-server  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     ├── candy-sprinkles  Style          (border, fg, bg, padding)
     ├── sugar-panels      SugarPanels     (titled boxes / split panes)
     ├── sugar-flexbox   Viewport       (scrolling lists, scrollbar)
-    ├── candy-shine      Renderer       (markdown → ANSI for README)
-    ├── candy-shine      SyntaxHighlighter (file viewer colourisation)
+    ├── sugar-markdown      Renderer       (markdown → ANSI for README)
+    ├── sugar-markdown      SyntaxHighlighter (file viewer colourisation)
     ├── candy-git      Git            (`log`, `show`, `cat-file`, `ls-tree`)
     ├── candy-core       Cmd::setClipboard()   (OSC 52 emitter, phase 5)
     └── candy-vt         (terminal-state model used by candy-core writer)
@@ -172,7 +172,7 @@ in place; the TUI just composes them.
   file tree, commit log) and `Scrollbar` to render the indicator.
 - **candy-sprinkles** — `Style` for inline runs (highlight selected
   row, dim metadata text, brand colour for branch names).
-- **candy-shine** — `Renderer` for README markdown, `SyntaxHighlighter`
+- **sugar-markdown** — `Renderer` for README markdown, `SyntaxHighlighter`
   for file blob view.
 
 ### 2.5 Theming
@@ -256,7 +256,7 @@ goes back; `?` opens help.
 │  │   …                       │  │ …                     │  │              │  │
 │  └───────────────────────────┘  └───────────────────────┘  └──────────────┘  │
 │                                                                              │
-│  README (rendered, via candy-shine)                                          │
+│  README (rendered, via sugar-markdown)                                          │
 │  ─────────────────────────────────────────────                               │
 │  # SugarCraft                                                                │
 │  PHP monorepo of 45+ TUI library ports …                                    │
@@ -268,7 +268,7 @@ goes back; `?` opens help.
 - Top metadata block is static text.
 - Three side-by-side panes for branches / tags / collaborators (use
   sugar-flexbox `FlexBox` to lay them out).
-- README rendered through `candy-shine\Renderer`.
+- README rendered through `sugar-markdown\Renderer`.
 - `tab` cycles focus between the three list panes.
 - `f` jumps to file browser, `l` jumps to commit log.
 
@@ -321,7 +321,7 @@ goes back; `?` opens help.
 - Lines wrapped to viewport width (no horizontal scroll in v1; line
   too long → soft wrap with continuation indicator).
 - Line numbers gutter (4-char right-aligned).
-- Body coloured via `candy-shine\SyntaxHighlighter`, language detected
+- Body coloured via `sugar-markdown\SyntaxHighlighter`, language detected
   by extension.
 
 ### 4.5 Commit log (phase 4)
@@ -386,7 +386,7 @@ and the repo-list screen.
 - `candy-git-server/composer.json` — add `sugarcraft/candy-wish`,
   `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`,
   `sugarcraft/candy-git`, `sugarcraft/sugar-panels`,
-  `sugarcraft/sugar-flexbox`, `sugarcraft/candy-shine` as `@dev` plus
+  `sugarcraft/sugar-flexbox`, `sugarcraft/sugar-markdown` as `@dev` plus
   matching path-repo entries (closure via `tools/check-path-repos.php
   --fix`).
 - `candy-git-server/bin/candy-git-server` — add `tui` subcommand.
@@ -412,7 +412,7 @@ and the repo-list screen.
 - `git clone ssh://user@host:23231/<repo>` still works (existing
   path).
 - `vendor/bin/phpunit` green in candy-git-server + all four consuming libs
-  (candy-wish, candy-core, candy-git, candy-shine).
+  (candy-wish, candy-core, candy-git, sugar-markdown).
 - `cd candy-git-server && composer validate` clean (drop `--strict`).
 
 ### Phase 2 — Repo detail view (≈ 1.5 weeks)
@@ -459,14 +459,14 @@ The chunkiest phase — two new screens plus syntax highlighting.
 - `candy-git-server/src/Tui/RefSelectorModal.php` — small overlay listing
   branches + tags, returned-on-pick.
 - `candy-git-server/src/Tui/LanguageDetector.php` — map extension → language
-  string consumed by candy-shine `SyntaxHighlighter`.
+  string consumed by sugar-markdown `SyntaxHighlighter`.
 
 **Dependencies (hard preconditions — see §6.1):**
 
 - candy-git `Git::lsTree($ref, $path)` — **NOT YET SHIPPED**.
 - candy-git `Git::catFile($ref, $path)` — **NOT YET SHIPPED**.
   Phase 3 cannot open until **both** candy-git patches have merged.
-- candy-shine `SyntaxHighlighter::highlight($source, $lang)` — already
+- sugar-markdown `SyntaxHighlighter::highlight($source, $lang)` — already
   shipped; verify per-language fallback (returns plain text if `$lang`
   unknown).
 
@@ -519,7 +519,7 @@ diff with file-level colourisation.
 
 **Includes:**
 
-- README markdown rendering on `RepoDetailView` via candy-shine
+- README markdown rendering on `RepoDetailView` via sugar-markdown
   `Renderer` (the `README` block in the §4.2 mock-up).
 - OSC 52 clipboard for the `c` keybind on both `RepoListView` and
   `RepoDetailView` — consume candy-core's existing
@@ -556,8 +556,8 @@ Pre-conditions that **must** be true before phase-1 ships:
 | candy-core ScreenStack | ✅ landed step 06.02 (PR #583) | `candy-core/src/ScreenStack.php` | TUI nav stack |
 | candy-core Component lifecycle | ✅ landed step 06.03 (PR #587) | `candy-core/src/Component.php` | onMount / onUnmount for modals |
 | candy-core OSC 52 emitter | ✅ shipped | `candy-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) | clipboard for `c` keybind (phase 5) |
-| candy-shine Renderer | ✅ shipped | `candy-shine/src/Renderer.php` | README block |
-| candy-shine SyntaxHighlighter | ✅ shipped | `candy-shine/src/SyntaxHighlighter.php` | file viewer |
+| sugar-markdown Renderer | ✅ shipped | `sugar-markdown/src/Renderer.php` | README block |
+| sugar-markdown SyntaxHighlighter | ✅ shipped | `sugar-markdown/src/SyntaxHighlighter.php` | file viewer |
 | sugar-flexbox Viewport | ✅ shipped | `sugar-flexbox/src/Viewport.php` | scrollable lists |
 | sugar-flexbox FlexBox | ✅ shipped | `sugar-flexbox/src/Flex/FlexBox.php` | 3-pane layout on RepoDetailView |
 | sugar-panels SugarPanels | ✅ shipped | `sugar-panels/src/SugarPanels.php` | bordered panes |
@@ -649,7 +649,7 @@ A phase is "done" when:
    16 locale files (placeholder English fallback is fine; real
    translations are a separate i18n carry-forward).
 6. `vendor/bin/phpunit` in **every** consumer lib that candy-git-server
-   pulls in (candy-wish, candy-core, candy-git, candy-shine,
+   pulls in (candy-wish, candy-core, candy-git, sugar-markdown,
    candy-sprinkles, sugar-panels, sugar-flexbox) still green.
 7. `php tools/check-path-repos.php` reports closure clean.
 
@@ -797,8 +797,8 @@ the wire-protocol port — the marquee TUI feature has not been built.
 - `sugar-panels/src/SugarPanels.php` — bordered titled boxes.
 - `sugar-flexbox/src/Viewport.php` + `sugar-flexbox/src/Scrollbar.php`
   + `sugar-flexbox/src/Flex/FlexBox.php` — scrolling lists + layout.
-- `candy-shine/src/Renderer.php` — README markdown.
-- `candy-shine/src/SyntaxHighlighter.php` — file viewer colouring.
+- `sugar-markdown/src/Renderer.php` — README markdown.
+- `sugar-markdown/src/SyntaxHighlighter.php` — file viewer colouring.
 - `candy-git/src/Git.php` (`GitDriver` impl) — git shell-out.
 
 ### This plan's own step file

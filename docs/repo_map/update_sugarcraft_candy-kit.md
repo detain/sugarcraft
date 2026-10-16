@@ -548,7 +548,7 @@ Fang's help can render markdown-formatted descriptions. HelpText currently only 
 
 **Source:** `docs/repo_map/charmbracelet_gum.md` — `gum format` uses glamour for markdown
 
-**Implementation:** Add `HelpText::renderMarkdown()` that integrates `candy-shine` for markdown descriptions.
+**Implementation:** Add `HelpText::renderMarkdown()` that integrates `sugar-markdown` for markdown descriptions.
 
 ## 2. Section Right-Side Labels
 
@@ -738,7 +738,7 @@ PHP-based completion generation with ZshGenerator/BashGenerator emitting `compde
 
 8. **Shell completion generator** — Create `candy-complete` or `sugar-complete` library
 
-9. **HelpText markdown rendering** — Integrate candy-shine for markdown descriptions
+9. **HelpText markdown rendering** — Integrate sugar-markdown for markdown descriptions
 10. **Option pattern for HelpText** — Add Options bag for fine-grained control
 11. **Command palette system** — Design and implement fuzzy command palette
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\MdView\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Theme;
 
 final class ThemeLoadTest extends TestCase
 {

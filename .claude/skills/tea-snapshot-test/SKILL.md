@@ -21,7 +21,7 @@ Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes an
 ## Instructions
 
 ### 1. Locate the lib and confirm it is not a façade
-Map slug→namespace: `candy-shine/` → `SugarCraft\Shine\`. Grep the target `src/` for `class_alias(`. If present for the class you were asked to test → STOP, write an `AliasesTest` per Critical, done. Otherwise continue. **Verify: you know the FQN of the class under test and it is NOT a pure alias before proceeding.**
+Map slug→namespace: `sugar-markdown/` → `SugarCraft\Markdown\`. Grep the target `src/` for `class_alias(`. If present for the class you were asked to test → STOP, write an `AliasesTest` per Critical, done. Otherwise continue. **Verify: you know the FQN of the class under test and it is NOT a pure alias before proceeding.**
 
 ### 2. Pick the mode(s) — cover every relevant one
 - **Snapshot byte** — the class has a `view()` (or `render()`) returning SGR bytes → Step 3.

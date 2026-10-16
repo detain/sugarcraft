@@ -12,9 +12,9 @@ namespace SugarCraft\Core\Syntax;
  * language set is intentionally small — PHP, JS, TS, JSON, Python, Go, Bash,
  * SQL — so the combined regex stays maintainable and linear (O(n)).
  *
- * This is the pure tokenisation half extracted from candy-shine's
+ * This is the pure tokenisation half extracted from sugar-markdown's
  * SyntaxHighlighter: it carries no colour/ANSI/theme dependency, so any
- * consumer (candy-shine's Markdown renderer, candy-codeshot, ...) can map the
+ * consumer (sugar-markdown's Markdown renderer, candy-codeshot, ...) can map the
  * span classes onto its own presentation while sharing one lexer.
  */
 final class RegexHighlighter implements Highlighter

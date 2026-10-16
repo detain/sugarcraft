@@ -45,7 +45,7 @@ trait Mutable
 - `candy-sql/src/App.php`
 - `candy-mail/src/Email.php`
 - `sugar-mouse/src/ClickCounter.php`
-- `candy-shine/src/Style/StyleSheet.php`
+- `sugar-markdown/src/Style/StyleSheet.php`
 - `candy-sql/src/Admin/PerfSchema/*` (6 setup classes)
 - `sugar-forms/src/TextArea/TextArea.php`
 

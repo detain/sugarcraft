@@ -192,11 +192,11 @@
 | huh Feature | SugarCraft Lib | Notes |
 |-------------|----------------|-------|
 | Form + Groups + Fields | `sugar-forms` (hypothetical) | Core form infrastructure; Group = page, Field = input widget |
-| Input / Text fields | `sugar-input` (extends `candy-shine`) | Single-line and multi-line text with validation |
+| Input / Text fields | `sugar-input` (extends `sugar-markdown`) | Single-line and multi-line text with validation |
 | Select / MultiSelect | `sugar-select` / `sugar-chips` | Option selection with filterable lists |
 | Confirm | `sugar-confirm` | Yes/No prompt, could merge into sugar-input |
 | FilePicker | `sugar-file-picker` | File/folder browser |
-| Theming | `candy-shine` | Lip Gloss analog for ANSI styling |
+| Theming | `sugar-markdown` | Lip Gloss analog for ANSI styling |
 | Spinner | `sugar-spin` | Loading indicator |
 | Bubble Tea integration | `candy-scriptui` | TUI framework foundation |
 | KeyMap / Keyboard | `candy-core` | Keyboard handling utilities |
@@ -215,7 +215,7 @@
 - `huh/field_confirm.go` → `sugar-confirm`
 - `huh/field_filepicker.go` → `sugar-file-picker`
 - `huh/field_note.go` → `sugar-note` (display only)
-- `huh/theme.go` → `candy-shine`
+- `huh/theme.go` → `sugar-markdown`
 - `huh/keymap.go` → `candy-core` (keyboard handling)
 - `huh/spinner/spinner.go` → `sugar-spin`
 - `huh/field_filepicker.go` + `examples/filepicker/` → `sugar-file-picker`

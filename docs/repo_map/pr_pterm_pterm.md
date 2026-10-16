@@ -31,7 +31,7 @@ From `repo_map/pterm_pterm.md`, pterm maps almost entirely to `sugar-widgets`:
 |---|---|
 | Color, Style, RGB, RGBStyle | `candy-core` |
 | Print/Sprint family, SetDefaultOutput | `candy-core` |
-| ThemeDefault | `candy-shine` |
+| ThemeDefault | `sugar-markdown` |
 | ProgressbarPrinter, SpinnerPrinter, AreaPrinter | `sugar-widgets` |
 | Logger + SlogHandler | `sugar-widgets` |
 | TablePrinter, BoxPrinter, PanelPrinter, BarChartPrinter | `sugar-widgets` |
@@ -40,7 +40,7 @@ From `repo_map/pterm_pterm.md`, pterm maps almost entirely to `sugar-widgets`:
 | InteractiveConfirmPrinter, InteractiveContinuePrinter | `sugar-widgets` |
 | InteractiveTextInputPrinter, PrefixPrinter | `sugar-widgets` |
 | MapRangeToRange() | `honey-bounce` |
-| RGB.Fade() multi-stop color interpolation | `candy-shine` or `honey-bounce` |
+| RGB.Fade() multi-stop color interpolation | `sugar-markdown` or `honey-bounce` |
 
 ---
 
@@ -339,7 +339,7 @@ This decouples the render timing from the individual printers.
 
 The `Theme` struct has grown over time, adding fields like `HeatmapStyle`, `HeatmapHeaderStyle`, `HeatmapSeparatorStyle`. Each field has a corresponding `With*()` method for immutable theme customization.
 
-**SugarCraft Implication**: SugarCraft's `candy-shine` theme should be designed with extensibility in mind, using immutable `with*()` methods.
+**SugarCraft Implication**: SugarCraft's `sugar-markdown` theme should be designed with extensibility in mind, using immutable `with*()` methods.
 
 ---
 
@@ -597,7 +597,7 @@ Some operations need an extra confirmation step. SugarCraft should support this 
 ### 19.6 Named Theme Factories
 
 **Priority**: HIGH
-SugarCraft's `candy-shine` should provide named theme factories like `Theme::TokyoNight()`, `Theme::Dracula()` following pterm's bare-named factory convention.
+SugarCraft's `sugar-markdown` should provide named theme factories like `Theme::TokyoNight()`, `Theme::Dracula()` following pterm's bare-named factory convention.
 
 ---
 
@@ -694,7 +694,7 @@ While pterm has no plugin system, SugarCraft could provide lifecycle hooks or a 
 
 ### 23.4 First-Class Theme System
 
-SugarCraft's `candy-shine` could provide named themes as first-class citizens with factory methods, making it easy for users to switch between visual styles.
+SugarCraft's `sugar-markdown` could provide named themes as first-class citizens with factory methods, making it easy for users to switch between visual styles.
 
 ### 23.5 Accessibility Baseline
 
@@ -736,7 +736,7 @@ textual's widget system and CSS-based styling show where terminal UI is heading.
 **Effort**: LOW — add mutex to each live printer's state
 **Priority**: CRITICAL
 
-### 25.3 Shortly: Implement Named Theme Factories in candy-shine
+### 25.3 Shortly: Implement Named Theme Factories in sugar-markdown
 
 **Impact**: Makes theme customization first-class
 **Effort**: LOW — add factory methods to theme class

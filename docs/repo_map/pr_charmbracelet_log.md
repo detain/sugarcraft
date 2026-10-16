@@ -18,9 +18,9 @@ Based on the first-stage analysis, charmbracelet/log maps to:
 | charmbracelet/log Feature | SugarCraft Library | Status |
 |---------------------------|--------------------|--------|
 | Structured logging with levels | `sugar-widgets` | Existing |
-| Text formatting with ANSI colors | `candy-shine` | Existing |
+| Text formatting with ANSI colors | `sugar-markdown` | Existing |
 | JSON/Logfmt formatters | `sugar-widgets` | Existing |
-| Color/profile detection | `candy-shine` | Existing |
+| Color/profile detection | `sugar-markdown` | Existing |
 | Context propagation | `candy-core` | Existing |
 | slog.Handler interface | `sugar-widgets` | Partial |
 | Sub-loggers with fields | `sugar-widgets` | Existing |

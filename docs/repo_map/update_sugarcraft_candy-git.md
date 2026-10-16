@@ -229,7 +229,7 @@
 **Implementation ideas:**
 
 - Parse diff output into structured `DiffLine` objects with change type (+/-/context)
-- Add syntax highlighting for common file types using candy-shine
+- Add syntax highlighting for common file types using sugar-markdown
 - Implement side-by-side layout mode via `Layout::joinHorizontal()`
 - Add `|` toggle between unified/side-by-side views  
 
@@ -313,7 +313,7 @@
 
 **Title:** Language-aware diff coloring  
 **Description:** Highlight code syntax in diff viewer  
-**Estimated complexity:** Low — integrate candy-shine  
+**Estimated complexity:** Low — integrate sugar-markdown  
 **Expected impact:** Low — nice to have
 
 ---

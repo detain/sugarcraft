@@ -19,19 +19,19 @@ use SugarCraft\Core\Util\Width;
  * body's own {@see \SugarCraft\Crush\Renderer::styleDiffLine()} bytes stay
  * byte-identical to what they were before a gutter existed.
  *
- * The formatting convention is candy-shine's
- * ({@see \SugarCraft\Shine\SyntaxHighlighter::highlight()} with `lineNumbers:
+ * The formatting convention is sugar-markdown's
+ * ({@see \SugarCraft\Markdown\SyntaxHighlighter::highlight()} with `lineNumbers:
  * true`): right-aligned, padded to the widest number in the block, painted in
  * the muted/comment slot. The one deliberate divergence is the separator —
- * candy-shine uses a literal tab, which this frame cannot afford: the
+ * sugar-markdown uses a literal tab, which this frame cannot afford: the
  * transcript is hard-truncated to the viewport with {@see \SugarCraft\Core\Util\Width},
  * and a tab has no fixed display width, so one tab would break the
  * one-logical-line-per-row invariant renderDiff() exists to protect.
  *
- * That divergence is also why candy-shine's own gutter stays OFF for markdown
+ * That divergence is also why sugar-markdown's own gutter stays OFF for markdown
  * code fences, and it is not a loose end to tidy up later. {@see
- * \SugarCraft\Shine\Renderer} is constructed here without `lineNumbers: true`
- * deliberately: {@see \SugarCraft\Shine\SyntaxHighlighter::highlight()} joins
+ * \SugarCraft\Markdown\Renderer} is constructed here without `lineNumbers: true`
+ * deliberately: {@see \SugarCraft\Markdown\SyntaxHighlighter::highlight()} joins
  * its number column to the code with a literal `"\t"`, and the two halves of the
  * frame never agree about it: `Width::string("\t")` measures a fixed 4 while
  * candy-sprinkles' `Style::render()` paints it as `tabWidth` spaces — so
@@ -39,7 +39,7 @@ use SugarCraft\Core\Util\Width;
  * line of every assistant reply and put the frame back into the PR #1403
  * over-wide-row failure. renderDiff() expands tabs before measuring for exactly
  * this reason; the markdown path has no such pass. Do not "finish the item" by
- * turning the flag on without giving candy-shine a measurable separator first.
+ * turning the flag on without giving sugar-markdown a measurable separator first.
  */
 final class DiffGutter
 {

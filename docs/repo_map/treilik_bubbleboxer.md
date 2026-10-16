@@ -175,12 +175,12 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 | treilik/bubbleboxer | SugarCraft Equivalent | Notes |
 |---------------------|----------------------|-------|
 | `Boxer` struct + `LayoutTree` | `candy-core` viewport/layout primitives | Both provide TUI layout composition; bubbleboxer is tree-based, SugarCraft uses termbox-cell approach |
-| `Node.VerticalStacked` | `candy-shine` table layout | Vertical/horizontal stacking maps to row/column orientation |
+| `Node.VerticalStacked` | `sugar-markdown` table layout | Vertical/horizontal stacking maps to row/column orientation |
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` indirection | Both use address/key lookup pattern separating reference from data |
 | `SizeFunc` custom allocation | `honey-bounce` layout weights | Custom size distribution similar to flex-weight or grid-template sizing |
 | `EditLeaf()` safe edit pattern | Immutable `with*()` builders | Both provide safe mutation patterns; bubbleboxer uses functional edit, SugarCraft uses copy-on-write |
 | `View()` string rendering | `sugar-widgets` view rendering | Both produce final string output for terminal display |
-| `renderHorizontal()` / `renderVertical()` | Table rendering in `candy-shine` | Horizontal join with separator parallels table cell rendering |
+| `renderHorizontal()` / `renderVertical()` | Table rendering in `sugar-markdown` | Horizontal join with separator parallels table cell rendering |
 | `UpdateSize()` propagation | `candy-core` resize handling | Both propagate size constraints down a hierarchy |
 | `tea.Model` interface compliance | SugarCraft `Model` contract | Both implement Charmbracelet-style Model pattern for TEA architecture |
 
@@ -188,7 +188,7 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 
 - `candy-core` (viewport management, term dimensions)
 
-- `candy-shine` (table/grid layout with separators)
+- `sugar-markdown` (table/grid layout with separators)
 
 - `sugar-widgets` (view rendering pipeline)
 
@@ -204,4 +204,4 @@ The most distinctive feature is the `SizeFunc` - a user-provided function that r
 
 The library's size is small (~455 lines in boxer.go) making it highly auditable. The use of `ansi.PrintableRuneWidth` for width calculations shows careful attention to ANSI escape code handling, which is a common pitfall in TUI work. The error messages are descriptive with context about which child failed and in what layout orientation.
 
-For SugarCraft, bubbleboxer represents a complementary approach rather than a direct equivalent. Where SugarCraft uses a shared termbox-cell buffer and direct coordinate-based drawing, bubbleboxer uses a string-composition model. The tree-based layout concept maps well to `candy-shine`'s table layout, while the model separation pattern is analogous to SugarCraft's immutable builder pattern. If SugarCraft were to add a bubble-based component library, bubbleboxer would be the natural layout engine.
+For SugarCraft, bubbleboxer represents a complementary approach rather than a direct equivalent. Where SugarCraft uses a shared termbox-cell buffer and direct coordinate-based drawing, bubbleboxer uses a string-composition model. The tree-based layout concept maps well to `sugar-markdown`'s table layout, while the model separation pattern is analogous to SugarCraft's immutable builder pattern. If SugarCraft were to add a bubble-based component library, bubbleboxer would be the natural layout engine.

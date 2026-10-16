@@ -29,16 +29,16 @@ From `charmbracelet_sequin.md` (first-pass analysis):
 | Sequin Feature | SugarCraft Library | Mapping Rationale |
 |----------------|-------------------|-------------------|
 | ANSI sequence parsing (SGR, CSI, OSC) | `candy-core` | Core TUI rendering foundation |
-| 24-bit color, ANSI256, basic colors | `candy-shine` | Color handling and rendering |
-| Text styling (bold, italic, underline) | `candy-shine` | Text attribute rendering |
+| 24-bit color, ANSI256, basic colors | `sugar-markdown` | Color handling and rendering |
+| Text styling (bold, italic, underline) | `sugar-markdown` | Text attribute rendering |
 | Cursor movement/positioning | `candy-core` | Cursor management |
 | Screen erase/scroll operations | `candy-core` | Screen buffer management |
 | Terminal mode handling (mouse, bracketed paste) | `candy-core` | Terminal capability negotiation |
-| Theme support (dark/light) | `candy-shine` | Theme system |
+| Theme support (dark/light) | `sugar-markdown` | Theme system |
 | Golden file comparison for ANSI output | `sugar-widgets` | Snapshot testing patterns |
 | PTY execution for command output capture | `candy-pty` | PTY/sudo process handling |
 
-**Primary Mapping**: `candy-core` for ANSI parsing/rendering primitives, `candy-shine` for visual styling/color handling
+**Primary Mapping**: `candy-core` for ANSI parsing/rendering primitives, `sugar-markdown` for visual styling/color handling
 
 **Indirect Mapping**: Sequin is a debugging/development tool that *consumes* sequences SugarCraft generates. SugarCraft's equivalent is the internal ANSI rendering pipeline within `candy-core`.
 

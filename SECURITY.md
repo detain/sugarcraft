@@ -7,7 +7,7 @@ If you discover a security vulnerability in any SugarCraft library,
 <!-- codacy ignore Agentlinter_security_no-pii-exposure -->
 **`[REPLACE_WITH_EMAIL]`** (intentionally public for security vulnerability reports) with:
 
-- The library affected (e.g. `candy-scriptui`, `candy-shine`).
+- The library affected (e.g. `candy-scriptui`, `sugar-markdown`).
 - A description of the vulnerability and its impact.
 - Steps to reproduce — minimum working example preferred.
 - Your name / handle for the credit (optional).
@@ -37,7 +37,7 @@ surfaces:
 - **Input parsing** (`SugarCraft\Core\Util\Parser`,
   `SugarCraft\Core\InputReader`) — malformed terminal input shouldn't
   crash a program or smuggle escape sequences past the parser.
-- **Markdown rendering** (`SugarCraft\Shine\Renderer`) — input is
+- **Markdown rendering** (`SugarCraft\Markdown\Renderer`) — input is
   user-supplied; the renderer must not let markdown payloads emit raw
   ANSI sequences they didn't author.
 - **Shell-out paths** (`SugarCraft\ScriptUi\Process\RealProcess`,

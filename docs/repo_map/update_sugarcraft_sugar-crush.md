@@ -1,6 +1,6 @@
 # Overview
 
-**sugar-crush** is SugarCraft's port of `charmbracelet/crush` — a chat-shell TUI for AI coding assistants with pluggable backends, markdown rendering via CandyShine, scrollback viewport, and session persistence. It is 🟢 v1 ready with 158 tests / 444 assertions.
+**sugar-crush** is SugarCraft's port of `charmbracelet/crush` — a chat-shell TUI for AI coding assistants with pluggable backends, markdown rendering via SugarMarkdown, scrollback viewport, and session persistence. It is 🟢 v1 ready with 158 tests / 444 assertions.
 
 **Biggest opportunity areas:**
 
@@ -29,7 +29,7 @@ sugar-crush/src/
 ├── Chat.php                     # Main TUI Model (implements Model interface)
 ├── Message.php                  # Immutable conversation turn (role/content/toolCalls)
 ├── Role.php                     # Enum: System | User | Assistant
-├── Renderer.php                 # Pure view function (CandyShine markdown + borders)
+├── Renderer.php                 # Pure view function (SugarMarkdown markdown + borders)
 ├── AssistantMsg.php             # Internal Msg for backend completion delivery
 ├── Session.php                  # Persists UI state to ~/.config/sugarcraft-crush/
 ├── ToolCall.php                 # VO: name, arguments, optional id
@@ -66,7 +66,7 @@ sugar-crush/src/
 | Generator-based directory listing | ✅ Full |
 | MCP client (stdio, Claude Code only) | ✅ Full |
 | Session persistence (UI state only) | ✅ Full |
-| Markdown rendering via CandyShine | ✅ Full |
+| Markdown rendering via SugarMarkdown | ✅ Full |
 | ReactPHP async support | ✅ Full |
 | 158 tests / 444 assertions | ✅ Full |
 
@@ -99,9 +99,9 @@ final class ToolResult {
 
 ## Rendering Systems
 
-- **Renderer.php** — Pure view function using CandyShine for markdown + candy-sprinkles for borders/styling
+- **Renderer.php** — Pure view function using SugarMarkdown for markdown + candy-sprinkles for borders/styling
 - User messages: raw text with cyan `user>` prefix
-- Assistant messages: rendered via CandyShine with magenta `assistant` prefix
+- Assistant messages: rendered via SugarMarkdown with magenta `assistant` prefix
 - Input: `> ` prompt with cursor block `█` when not in-flight
 
 ## Extension Systems
@@ -371,7 +371,7 @@ final class ToolResult {
 **Implementation ideas:**
 
 - Integrate `candy-highlight` (if exists) or syntax highlighting library
-- Configure via CandyShine options
+- Configure via SugarMarkdown options
 - Support common languages
 
 **Estimated complexity:** Medium (4-5h)
@@ -418,7 +418,7 @@ final class ToolResult {
 **Implementation ideas:**
 
 - Add theme enum with common themes
-- Pass theme to CandyShine renderer
+- Pass theme to SugarMarkdown renderer
 - Support custom JSON stylesheets
 
 **Estimated complexity:** Small (2-3h)

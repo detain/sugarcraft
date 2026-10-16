@@ -65,8 +65,8 @@ flag_management:
     - name: candy-scriptui
       paths: ["candy-scriptui/src/**"]
       carryforward: true
-    - name: candy-shine
-      paths: ["candy-shine/src/**"]
+    - name: sugar-markdown
+      paths: ["sugar-markdown/src/**"]
       carryforward: true
     - name: candy-kit
       paths: ["candy-kit/src/**"]
@@ -283,12 +283,12 @@ component_management:
         - "candy-scriptui/src/**"
       flag_regexes:
         - "^candy-scriptui$"
-    - component_id: candy-shine
-      name: candy-shine
+    - component_id: sugar-markdown
+      name: sugar-markdown
       paths:
-        - "candy-shine/src/**"
+        - "sugar-markdown/src/**"
       flag_regexes:
-        - "^candy-shine$"
+        - "^sugar-markdown$"
     - component_id: candy-kit
       name: candy-kit
       paths:

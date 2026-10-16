@@ -12,7 +12,7 @@ declare(strict_types=1);
  *   --mode=published (DEFAULT). Plain `composer update` per lib. Every
  *     `sugarcraft/*` sibling resolves from PACKAGIST at `dev-master`. This is
  *     exactly what an outside user gets when they `composer require
- *     sugarcraft/candy-shine`, and these libs ARE meant to be installed
+ *     sugarcraft/sugar-markdown`, and these libs ARE meant to be installed
  *     standalone by people who will never clone the monorepo. Running the
  *     suites in this state verifies the PUBLISHED ARTIFACT — that the split
  *     repo's manifest resolves, that the closure is satisfiable from Packagist
@@ -23,7 +23,7 @@ declare(strict_types=1);
  *     scratch manifests, leaving `vendor/sugarcraft/*` as symlinks into the
  *     monorepo. This is the DEVELOPMENT state and what CI does before every
  *     install: it is the only way an edit to `candy-core/src/Util/Width.php`
- *     shows up in `candy-shine`'s test run, and the only reason a PR that
+ *     shows up in `sugar-markdown`'s test run, and the only reason a PR that
  *     breaks a sibling fails the dependent lib's job. Before injecting, it
  *     purges stale non-symlink `vendor/sugarcraft/*` copies of the targets
  *     (see `$purgeStaleSiblings`) — composer will not relink them on its own.

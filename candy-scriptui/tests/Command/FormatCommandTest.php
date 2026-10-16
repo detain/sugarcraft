@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Command;
 
 use SugarCraft\ScriptUi\Command\FormatCommand;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Theme;
 use PHPUnit\Framework\TestCase;
 
 final class FormatCommandTest extends TestCase

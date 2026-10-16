@@ -2,7 +2,7 @@
 
 ## Overview
 
-`candy-mdview` is a PHP port of `charmbracelet/glow`, a Markdown CLI viewer that composes candy-shine (ANSI rendering) and sugar-widgets Viewport (scrolling). It provides dual-mode output: direct stdout rendering and a fullscreen pager via `MdViewModel` + `Viewport`. The package is 🟢 v1 ready with 15 locales, 11 themes, streaming pager, and file watching via mtime polling.
+`candy-mdview` is a PHP port of `charmbracelet/glow`, a Markdown CLI viewer that composes sugar-markdown (ANSI rendering) and sugar-widgets Viewport (scrolling). It provides dual-mode output: direct stdout rendering and a fullscreen pager via `MdViewModel` + `Viewport`. The package is 🟢 v1 ready with 15 locales, 11 themes, streaming pager, and file watching via mtime polling.
 
 **Biggest opportunity areas:** GitHub/GitLab README fetching (glow's signature feature), file stash browser with fuzzy filtering, proper Chroma-style lexer for syntax highlighting, native file watching (fsnotify-equivalent), and clipboard integration.
 
@@ -19,7 +19,7 @@ RenderCommand::loadInput()
     ↓ (file path or stdin)
 Renderer::render($markdown)
     ├── League\CommonMark\MarkdownRenderer (from sugar-widgets)
-    └── Renderer (from candy-shine)
+    └── Renderer (from sugar-markdown)
         ├── ->withWordWrap($width)
         └── ->withHyperlinks($enabled)
     ↓ (ANSI-escaped string)
@@ -31,7 +31,7 @@ Renderer::render($markdown)
 | Feature | Implementation |
 |---|---|
 | Markdown parsing | League\CommonMark via `sugar-widgets` |
-| ANSI styling | `SugarCraft\Shine\Renderer` with 11 built-in themes |
+| ANSI styling | `SugarCraft\Markdown\Renderer` with 11 built-in themes |
 | Pager mode | `MdViewModel` + `Viewport` (ReactPHP-based) |
 | Word wrap | `Renderer::withWordWrap()` |
 | OSC 8 hyperlinks | `Renderer::withHyperlinks()` |
@@ -49,7 +49,7 @@ Renderer::render($markdown)
 ### Rendering Systems
 
 - **League\CommonMark** parses markdown to AST
-- **candy-shine Renderer** applies ANSI styles and word-wrap
+- **sugar-markdown Renderer** applies ANSI styles and word-wrap
 - **MdViewModel** provides Bubble Tea-style state machine for pager mode
 
 ### Strengths
@@ -366,7 +366,7 @@ OS-native watchers register with the kernel and receive push notifications. mtim
 
 `charmbracelet/glamour` uses a block stack during AST traversal to compute dynamic indentation and margin without global state. Each block pushes on enter and pops on exit. This is referenced in `docs/repo_map/charmbracelet_glamour.md` and `pr_charmbracelet_glamour.md`.
 
-Candy-mdview currently delegates to `candy-shine` for rendering but lacks the element-level control glamour provides.
+Candy-mdview currently delegates to `sugar-markdown` for rendering but lacks the element-level control glamour provides.
 
 ### 2. Two-Phase Rendering (Entering/Exiting)
 
@@ -731,7 +731,7 @@ The **regex-based highlighter** is a proof-of-concept that needs replacement. Fo
 
 The **file watching approach** (mtime polling) works cross-platform but has fundamental limitations. A native file watching abstraction with platform-specific backends (inotify on Linux, kqueue on BSD/macOS) would provide better performance and responsiveness.
 
-Architecture-wise, the rendering pipeline correctly separates markdown parsing (League\CommonMark) from styling (candy-shine), mirroring the upstream `goldmark` + `glamour` + `lipgloss` composition. The Elm-style `MdViewModel` with `update()` / `view()` and immutable state is correctly implemented.
+Architecture-wise, the rendering pipeline correctly separates markdown parsing (League\CommonMark) from styling (sugar-markdown), mirroring the upstream `goldmark` + `glamour` + `lipgloss` composition. The Elm-style `MdViewModel` with `update()` / `view()` and immutable state is correctly implemented.
 
 The **Block Stack pattern** and **Two-Phase rendering** from glamour (`docs/repo_map/charmbracelet_glamour.md`) are not yet implemented. These are essential for proper nested element rendering and will become critical when implementing table rendering with footer links.
 
@@ -741,6 +741,6 @@ For the PHP ecosystem, candy-mdview fills an important niche as the only product
 2. Adding the missing TUI pager features (line numbers, clipboard, help overlay)
 3. Implementing configuration persistence
 
-The package's position in the SugarCraft ecosystem is as a **leaf library** consuming core infrastructure (candy-core, candy-shine, sugar-widgets). This means enhancements to core libraries automatically benefit candy-mdview, but candy-mdview-specific features (like GitHub fetching) require independent implementation.
+The package's position in the SugarCraft ecosystem is as a **leaf library** consuming core infrastructure (candy-core, sugar-markdown, sugar-widgets). This means enhancements to core libraries automatically benefit candy-mdview, but candy-mdview-specific features (like GitHub fetching) require independent implementation.
 
 **Overall verdict:** Candy-mdview is production-ready for its current feature set (single-file markdown rendering/paging) but requires significant investment to close the gap with upstream glow. The highest-ROI next step is adding GitHub/GitLab integration.

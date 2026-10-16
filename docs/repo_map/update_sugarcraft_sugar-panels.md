@@ -16,7 +16,7 @@
 
 sugar-panels is a **pure layout renderer** — a recursive tree-based box-drawing layout engine that takes a tree of immutable `Node` objects and produces an ANSI string for a fixed viewport. It ports [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) from Go, adapting it from a `tea.Model` wrapper into a standalone PHP layout engine.
 
-**Ecosystem Positioning**: sugar-panels is a foundational layout primitive at the same level as `candy-shine`'s table rendering — both are output producers that render to strings. It sits between the low-level cell-grid foundation (candy-core) and the full widget layer (sugar-widgets). Unlike the upstream bubbleboxer (which wraps tea.Model instances), sugar-panels is a pure string renderer focused purely on H/V panel composition with box-drawing borders.
+**Ecosystem Positioning**: sugar-panels is a foundational layout primitive at the same level as `sugar-markdown`'s table rendering — both are output producers that render to strings. It sits between the low-level cell-grid foundation (candy-core) and the full widget layer (sugar-widgets). Unlike the upstream bubbleboxer (which wraps tea.Model instances), sugar-panels is a pure string renderer focused purely on H/V panel composition with box-drawing borders.
 
 **Biggest Opportunity Areas**:
 

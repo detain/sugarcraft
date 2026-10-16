@@ -24,7 +24,7 @@ From the first-pass analysis (`repo_map/charmbracelet_crush.md`), SugarCraft map
 | `internal/shell` | `candy-scriptui` | Exists |
 | `internal/lsp` | `candy-core` (future) | Not implemented |
 | `internal/agent/tools` | `sugar-widgets`, `sugar-forms` | Partial |
-| `internal/ui` | `candy-shine`, `sugar-charts` | Partial |
+| `internal/ui` | `sugar-markdown`, `sugar-charts` | Partial |
 | `internal/skills` | (none yet) | Not implemented |
 | `internal/hooks` | (none yet) | Not implemented |
 | `internal/config` | `SugarCraft\Core` | Pattern only |
@@ -130,7 +130,7 @@ These gaps represent the fundamental architectural delta between a TUI component
 
 **Status:** Fixed pre-archival (PR #1561).
 
-**Direct Risk to SugarCraft:** The TUI focus management pattern—blocking input to hidden components during modal states—is a common Bubble Tea pitfall. SugarCraft's candy-shine should handle this explicitly.
+**Direct Risk to SugarCraft:** The TUI focus management pattern—blocking input to hidden components during modal states—is a common Bubble Tea pitfall. SugarCraft's sugar-markdown should handle this explicitly.
 
 ---
 
@@ -412,7 +412,7 @@ This was the most significant architectural change in Crush's lifetime. It refac
 
 Complete reimplementation of the Bubble Tea UI behind `CRUSH_NEW_UI` feature flag. Key goal: simplify frontend architecture and make it sustainable long-term.
 
-**Strategic lesson:** The original TUI architecture required significant rework. SugarCraft's candy-shine should invest in clean component boundaries from day one.
+**Strategic lesson:** The original TUI architecture required significant rework. SugarCraft's sugar-markdown should invest in clean component boundaries from day one.
 
 ---
 

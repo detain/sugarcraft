@@ -23,8 +23,8 @@ use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\MatchResult;
-use SugarCraft\Shine\Render\SectionStream;
-use SugarCraft\Shine\Renderer as Markdown;
+use SugarCraft\Markdown\Render\SectionStream;
+use SugarCraft\Markdown\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Overlay\Position;
@@ -59,7 +59,7 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * note below); the dependency runs one way only.
  *
  * Lays out the conversation scrollback (with each turn rendered through
- * CandyShine) above a fixed input area at the bottom, plus — when the
+ * SugarMarkdown) above a fixed input area at the bottom, plus — when the
  * matching {@see Chat} state is present — a session tab strip and an agent
  * status/view section.
  *
@@ -81,9 +81,9 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  *   │ ● reviewer [working]  Reviews code… │                     AgentManager
  *   └──────────────────────────────────────┘                    with active agents
  *
- * The CandyShine renderer is constructed once per call (cheap;
+ * The SugarMarkdown renderer is constructed once per call (cheap;
  * just holds a theme reference). Only the assistant's Markdown gets
- * rendered through CandyShine; the raw user/system turns and the
+ * rendered through SugarMarkdown; the raw user/system turns and the
  * in-progress input are run through {@see Sanitize::untrustedForDisplay()}
  * (escape/control strip plus CR → LF) first (see the render methods and
  * {@see untrusted()} for why).
@@ -457,7 +457,7 @@ final class Renderer
     private const MARKDOWN_MEMO_MAX = 4096;
 
     /**
-     * Rendered CandyShine bodies of settled assistant turns, keyed by wrap
+     * Rendered SugarMarkdown bodies of settled assistant turns, keyed by wrap
      * width and a hash of the source text, least recently used first
      * (audit 15b-10).
      *
@@ -465,7 +465,7 @@ final class Renderer
      * tick, and {@see renderHistory()} used to re-parse every assistant reply
      * on every one of those frames: 0.7 s per keystroke at 200 exchanges. A
      * settled reply does not change, and its body is a pure function of
-     * (source, width, markdown theme): CandyShine reads no clock, environment
+     * (source, width, markdown theme): SugarMarkdown reads no clock, environment
      * or terminal state while rendering, and one renderer instance renders a
      * given source to the same bytes however many documents it rendered
      * before. Everything with per-frame side effects (the thought row's
@@ -481,14 +481,14 @@ final class Renderer
      */
     private static array $markdownMemo = [];
 
-    /** @var \WeakReference<\SugarCraft\Shine\Theme>|null the theme {@see $markdownMemo} was filled with */
+    /** @var \WeakReference<\SugarCraft\Markdown\Theme>|null the theme {@see $markdownMemo} was filled with */
     private static ?\WeakReference $markdownMemoTheme = null;
 
     /**
      * The streaming partial's incremental render state (audit 15b-10).
      *
      * A streaming reply only grows, and re-parsing all of it on every token
-     * batch cost 2.1 s per frame at 200 KB. CandyShine's
+     * batch cost 2.1 s per frame at 200 KB. SugarMarkdown's
      * {@see SectionStream} splits Markdown at top-level boundaries the parser
      * confirms, where rendering the pieces separately gives the same bytes as
      * rendering the whole (the law {@see Markdown::stream()} is pinned to),
@@ -510,13 +510,13 @@ final class Renderer
      * 34 ms per idle frame at a 32 KB open code fence, on top of a
      * quadratically growing preview. An unchanged partial replays from the
      * cache; a grown one recomputes it. (The growth frames themselves stay
-     * whole-tail renders on purpose: CandyShine pads every fenced line to the
+     * whole-tail renders on purpose: SugarMarkdown pads every fenced line to the
      * block's widest line, so a later line REWRITES earlier rows' bytes and no
      * incremental splice can be byte-identical - the append-stability probes
-     * behind cl-4 FIX-B. Making growth frames incremental is a CandyShine
+     * behind cl-4 FIX-B. Making growth frames incremental is a SugarMarkdown
      * seam, not a Renderer one.)
      *
-     * @var array{theme: \WeakReference<\SugarCraft\Shine\Theme>, width: int, consumed: string, stream: SectionStream, bodies: string, preview: array{src: string, out: string}|null}|null
+     * @var array{theme: \WeakReference<\SugarCraft\Markdown\Theme>, width: int, consumed: string, stream: SectionStream, bodies: string, preview: array{src: string, out: string}|null}|null
      */
     private static ?array $streamMemo = null;
 
@@ -1559,7 +1559,7 @@ final class Renderer
      * The frame the terminal receives does not need the same treatment. A bare
      * Private-Use codepoint there is just a glyph: since audit 15b-17
      * `ImageOverlay::resolve()` paints only a cell preceded by the escape
-     * `ImageOverlay::marker()` emits — which {@see untrusted()} and CandyShine
+     * `ImageOverlay::marker()` emits — which {@see untrusted()} and SugarMarkdown
      * both strip from model and tool text — and leaves every other cell in the
      * block, Powerline and Nerd Font icons included, as it found it.
      *
@@ -3577,10 +3577,10 @@ final class Renderer
      * ones that overflow.
      *
      * This is the invariant half of the width fix, and it exists because
-     * threading the width into CandyShine is NOT sufficient. `withWordWrap()`
+     * threading the width into SugarMarkdown is NOT sufficient. `withWordWrap()`
      * wraps paragraphs, blockquotes and list items and deliberately leaves
      * code blocks and tables alone ("they have their own width semantics" —
-     * `SugarCraft\Shine\Renderer::withWordWrap()`), and a fenced code block
+     * `SugarCraft\Markdown\Renderer::withWordWrap()`), and a fenced code block
      * carrying a 150-column line is ordinary output for a coding agent. So the
      * pane width has to be enforced over the finished bytes as well as
      * requested of the producer.
@@ -3596,7 +3596,7 @@ final class Renderer
      * truncates for `width()`, it does not wrap), so the reply is silently cut
      * off mid-sentence — the reported symptom.
      *
-     * WRAP, not truncate. {@see Width::wrapAnsi()} is what CandyShine itself
+     * WRAP, not truncate. {@see Width::wrapAnsi()} is what SugarMarkdown itself
      * wraps with, it is ANSI-aware, and it preserves the content. Truncating
      * the body of a reply deletes the thing the user is trying to read;
      * {@see renderDiff()} and {@see toolCallSuffix()} truncate because a
@@ -3676,11 +3676,11 @@ final class Renderer
         }
 
         // Over the WHOLE block, not per over-wide row, and this is a fix for a
-        // regression the width thread-through introduced: now that CandyShine
-        // wraps, most wrapping happens inside CandyShine and its rows arrive
+        // regression the width thread-through introduced: now that SugarMarkdown
+        // wraps, most wrapping happens inside SugarMarkdown and its rows arrive
         // here already fitting, so they take the fast path above and used to
-        // reach the terminal exactly as CandyShine left them — unbalanced.
-        // Measured at cols=60, a bold clause spanning a CandyShine wrap opened
+        // reach the terminal exactly as SugarMarkdown left them — unbalanced.
+        // Measured at cols=60, a bold clause spanning a SugarMarkdown wrap opened
         // `ESC[1m` on its first row and closed it nowhere: the border glyph
         // inherited the bold and the continuation row rendered plain. Carrying
         // one SgrState across every row of the block is what fixes both that
@@ -3899,7 +3899,7 @@ final class Renderer
      *
      * {@see Width::wrapAnsi()} preserves escapes but not their balance: it
      * documents that "a colour set on line N stays active on line N+1 (no SGR
-     * reset is auto-emitted)", and CandyShine's own paragraph wrap leaves the
+     * reset is auto-emitted)", and SugarMarkdown's own paragraph wrap leaves the
      * same thing behind. That is fine for a stream written top to bottom and
      * wrong for this renderer, because candy-core repaints only the rows that
      * CHANGED — a middle line of a wrapped block, repainted alone, would
@@ -3913,7 +3913,7 @@ final class Renderer
      * resumes partial repaints with — so "balanced" here means the same thing
      * it means there.
      *
-     * OSC 8 hyperlinks ride the same boundary: CandyShine renders a
+     * OSC 8 hyperlinks ride the same boundary: SugarMarkdown renders a
      * markdown link as OSC 8, so once the label became wrappable (which
      * the width thread-through is what made happen) a row could open a
      * link and end without closing it — measured at cols=60, row 3
@@ -4086,8 +4086,8 @@ final class Renderer
         }
         // The one argument this call used to omit, and the whole reason a
         // 200-column reply rendered as a 200-column ROW in a 100-column
-        // terminal: CandyShine's word wrap is opt-in and off by default
-        // (`SugarCraft\Shine\Renderer::__construct()` nulls a non-positive
+        // terminal: SugarMarkdown's word wrap is opt-in and off by default
+        // (`SugarCraft\Markdown\Renderer::__construct()` nulls a non-positive
         // width), so with no width every paragraph came out on one line.
         $md = new Markdown($theme->markdown, wrapWidth: $width);
         // Built once per frame, not once per turn: the labels depend only on
@@ -4144,7 +4144,7 @@ final class Renderer
             // system FAINT wrapper); NUL/BEL/DEL garble or beep the terminal.
             // These turns are plain text with no legitimate SGR, so untrusted()
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
-            // stays raw because CandyShine emits legitimate, already-processed SGR.
+            // stays raw because SugarMarkdown emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
                 $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $agents, $ledger);
 
@@ -4290,7 +4290,7 @@ final class Renderer
      */
     private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, int $width, string $label, array $expanded = []): string
     {
-        // Sentinels stripped BEFORE CandyShine, not after: the rendered output
+        // Sentinels stripped BEFORE SugarMarkdown, not after: the rendered output
         // is legitimate SGR that untrusted() would destroy, but the model's
         // raw text can still smuggle U+E000/U+E001 into the frame.
         $body = self::settledMarkdown($md, $theme, $width, Sanitize::stripZoneSentinels($msg->content));
@@ -4317,7 +4317,7 @@ final class Renderer
      * exception here would take down the whole TUI mid-answer, so a partial
      * that cannot be parsed yet is shown as plain (sanitized) text until the
      * next chunk completes the construct. Untrusted-stripped in that fallback
-     * because CandyShine is what normally neutralises raw model output.
+     * because SugarMarkdown is what normally neutralises raw model output.
      *
      * @param int $width pane columns the partial is word-wrapped to. Threaded in
      *                   rather than defaulted for the same reason the settled
@@ -4484,7 +4484,7 @@ final class Renderer
      * truncate the row rather than wrap it - a wrapped head would split the
      * one-line zone.
      *
-     * Reasoning is raw model output that never passes through CandyShine, so
+     * Reasoning is raw model output that never passes through SugarMarkdown, so
      * every line is {@see untrusted()}-scrubbed before display.
      *
      * @param array<string, bool> $expanded {@see Chat::expanded()}

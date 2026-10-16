@@ -31,12 +31,12 @@ From `repo_map/treilik_bubbleboxer.md`, the following mappings were identified:
 | bubbleboxer | SugarCraft Equivalent | Notes |
 |-------------|----------------------|-------|
 | `Boxer` struct + `LayoutTree` | `candy-core` viewport/layout | Tree-based vs termbox-cell |
-| `Node.VerticalStacked` | `candy-shine` table layout | Row/column orientation |
+| `Node.VerticalStacked` | `sugar-markdown` table layout | Row/column orientation |
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` | Address/key lookup indirection |
 | `SizeFunc` | `honey-bounce` layout weights | Flex-weight/grid-template sizing |
 | `EditLeaf()` safe edit | Immutable `with*()` builders | Functional edit vs copy-on-write |
 | `View()` rendering | `sugar-widgets` view pipeline | String output for terminal |
-| `renderHorizontal/Vertical` | `candy-shine` table rendering | Separator-based cell rendering |
+| `renderHorizontal/Vertical` | `sugar-markdown` table rendering | Separator-based cell rendering |
 | `UpdateSize()` propagation | `candy-core` resize handling | Size constraint hierarchy |
 | `tea.Model` interface | SugarCraft `Model` contract | Charmbracelet TEA pattern |
 
@@ -709,7 +709,7 @@ $layout = $rootLayout->withChildren(
 
 **Effort**: Medium — new API surface
 **Impact**: High — significantly improves DX
-**Action**: Add fluent builder for tree construction in `candy-shine`
+**Action**: Add fluent builder for tree construction in `sugar-markdown`
 
 ---
 

@@ -37,7 +37,7 @@ For each lib `<slug>` from Step 1:
 cd <slug> && composer install --quiet && composer test
 ```
 
-Also run reverse-dependents if a foundation lib (`candy-core`, `candy-sprinkles`, `candy-scriptui`) changed — at minimum re-run `sugar-widgets`, `sugar-charts`, `candy-shine`.
+Also run reverse-dependents if a foundation lib (`candy-core`, `candy-sprinkles`, `candy-scriptui`) changed — at minimum re-run `sugar-widgets`, `sugar-charts`, `sugar-markdown`.
 
 Verify: every suite ends with `OK (...)`. If ANY suite fails or shows warnings (PHPUnit configs use `failOnWarning="true"`), STOP. Do not proceed to commit.
 
@@ -185,7 +185,7 @@ User says: "ship the candy-core Width util fix"
 Actions taken:
 
 1. `git status` shows changes under `candy-core/src/` + tests. Touches foundation → reverse-dep test required.
-2. `composer test` in `candy-core`, `sugar-widgets`, `sugar-charts`, `candy-shine` → all green ✓
+2. `composer test` in `candy-core`, `sugar-widgets`, `sugar-charts`, `sugar-markdown` → all green ✓
 3. Branch `ai/candy-core-width-emoji`, commit `candy-core: fix Width on multi-codepoint emoji`, body lists all 4 suites in `## Test plan`.
 4. Steps 8–11 proceed normally. Result: PR #422 merged.
 

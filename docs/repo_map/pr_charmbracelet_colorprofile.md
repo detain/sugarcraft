@@ -31,7 +31,7 @@ From the first-stage analysis, `colorprofile` maps indirectly to:
 
 - **`candy-core`**: Terminal capability detection and color management would be foundational in the core TUI rendering layer
 - **`sugar-widgets`**: Utility service available to components
-- **`candy-shine`**: Complementary - `shine` produces styled ANSI output, `colorprofile` detects capabilities
+- **`sugar-markdown`**: Complementary - `shine` produces styled ANSI output, `colorprofile` detects capabilities
 
 **Architecture**: A SugarCraft port would likely be a `SugarCraft\Core\Terminal\ColorProfile` service class rather than a component library.
 
@@ -768,7 +768,7 @@ func Convert(c color.Color) color.Color {
 
 `charmbracelet/lipgloss` uses colorprofile for rendering. The dependency relationship shows how color detection integrates with styling libraries.
 
-**SugarCraft Parallel**: `candy-shine` would depend on terminal detection service.
+**SugarCraft Parallel**: `sugar-markdown` would depend on terminal detection service.
 
 ### 24.2 Bubble Tea (Go)
 

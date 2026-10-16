@@ -22,9 +22,9 @@ From `repo_map/charmbracelet_pop.md` (first pass):
 |---|---|---|
 | TUI sequential field navigation | `sugar-forms` | Multi-step keybinding flow closest structural match |
 | Bubble Tea `Model` with `State` enum | `sugar-widgets` / `candy-core` | Mirrors `Model::init/update/view` contract |
-| Lipgloss styling | `sugar-shine` | Terminal color/style wrapping |
+| Lipgloss styling | `sugar-markdown` | Terminal color/style wrapping |
 | File picker for attachments | `sugar-widgets` | `List`/`Delegate` patterns |
-| Markdown → ANSI rendering | `sugar-widgets` via `candy-shine` | Snapshot-testing SGR bytes approach |
+| Markdown → ANSI rendering | `sugar-widgets` via `sugar-markdown` | Snapshot-testing SGR bytes approach |
 | Keymap struct with `key.Binding` fields | `sugar-forms` / `candy-core` | Direct pattern reuse |
 | CLI flag parsing (Cobra) | N/A | App-level only |
 | Email sending (SMTP/Resend) | N/A | Would require net-new `sugar-mail` |

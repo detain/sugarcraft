@@ -209,7 +209,7 @@
 - Hooks system (HookManager + built-ins ProtectFilesHook/BashEscapeDenyHook/ConfirmRemoveHook/AuditHook)
 - Provider abstraction (6 providers)
 - Plan/Build mode
-- Syntax highlighting via candy-shine
+- Syntax highlighting via sugar-markdown
 - Custom themes
 - Subagents
 - LSP integration

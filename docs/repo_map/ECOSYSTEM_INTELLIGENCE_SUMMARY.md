@@ -24,14 +24,14 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos affected:** lipgloss, bubbles, ultraviolet, php-tui, phpschool/cli-menu, sequin, go-termimg, pterm
 - **Problem:** Using `mb_strlen` instead of `mb_strwidth` causes CJK/emoji to corrupt layouts
-- **SugarCraft risk:** HIGH — directly affects `candy-shine`, `candy-sprinkles`, `sugar-widgets`
+- **SugarCraft risk:** HIGH — directly affects `sugar-markdown`, `candy-sprinkles`, `sugar-widgets`
 - **Fix required:** Use `mb_strwidth()` or grapheme cluster counting everywhere
 
 ### 2. Escape Sequence Termination (🔴 CRITICAL - Appears in 6+ repos)
 
 - **Repos affected:** ultraviolet, sequin, go-termimg, bubblezone, phpschool/cli-menu
 - **Problem:** Missing OSC/DCS terminator (`\x1b\\`) causes sequence corruption on some terminals
-- **SugarCraft risk:** HIGH — affects `candy-core` input parsing, `candy-shine` rendering
+- **SugarCraft risk:** HIGH — affects `candy-core` input parsing, `sugar-markdown` rendering
 - **Fix required:** Always terminate OSC/DCS sequences with `\x1b\\` or `\x9c`
 
 ### 3. Terminal Capability Query Races (🔴 CRITICAL - Appears in 7+ repos)
@@ -70,7 +70,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos:** lipgloss (#1 request), huh (layout interface), bubbleboxer, bubblelister, stickers, Evertras/bubble-table, textualize, ratatui, php-tui, dashbrew, bubbleup
 - **What users want:** Flexbox/grid layout, constraint-based sizing, responsive to terminal resize
-- **SugarCraft opportunity:** Implement `candy-shine` Layout with constraint solver (port from ratatui's Cassowary)
+- **SugarCraft opportunity:** Implement `sugar-markdown` Layout with constraint solver (port from ratatui's Cassowary)
 - **Priority:** IMMEDIATE
 
 ### 2. Dynamic/Async Content (🔥 HIGH DEMAND - 10+ repos)
@@ -105,7 +105,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos:** lipgloss, glamour, bubbles (TextArea), php-tui
 - **What users want:** Wrap that preserves ANSI styles across line breaks
-- **SugarCraft risk:** `candy-shine` has this gap
+- **SugarCraft risk:** `sugar-markdown` has this gap
 - **Priority:** SHORT-TERM
 
 ---
@@ -442,7 +442,7 @@ These patterns appear across Go, Rust, Python, and PHP TUI ecosystems:
 |---|---|---|---|---|---|
 | Elm Architecture | bubbletea | — | textual | candy-core | ✅ implemented |
 | Cell-based buffer | ultraviolet | ratatui | textual | candy-core (planned) | 🔲 planned |
-| Constraint layout | bubbleboxer | ratatui | textual | candy-shine (planned) | 🔲 planned |
+| Constraint layout | bubbleboxer | ratatui | textual | sugar-markdown (planned) | 🔲 planned |
 | Fuzzy filtering | bubbles | — | textual | sugar-widgets (gaps) | 🔲 gaps |
 | CSS styling | lipgloss | ratatui | textual (TCSS) | candy-sprinkles | ✅ implemented |
 | Widget trait | — | ratatui | textual | — | 🔲 not planned |

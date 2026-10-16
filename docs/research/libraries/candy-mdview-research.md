@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Candy-mdview's rendering stack (candy-shine + league/commonmark) is functional but has significant gaps compared to modern implementations:
+Candy-mdview's rendering stack (sugar-markdown + league/commonmark) is functional but has significant gaps compared to modern implementations:
 - **Syntax highlighting** is regex-based and limited to 7 languages
 - **Streaming rendering** is not supported
 - **Theme system** uses PHP constructor properties vs. JSON configuration
@@ -20,7 +20,7 @@ This document details findings from Go, Rust, Python, and JavaScript ecosystems 
 
 ## 1. Current Implementation (candy-mdview)
 
-**Source:** `/home/sites/sugarcraft/candy-mdview/src/` + `/home/sites/sugarcraft/candy-shine/src/`
+**Source:** `/home/sites/sugarcraft/candy-mdview/src/` + `/home/sites/sugarcraft/sugar-markdown/src/`
 
 ### Architecture
 
@@ -339,7 +339,7 @@ var options = {
 | mdansi (Rust) | comrak → custom walker | TOML |
 | marked-terminal (JS) | chalk functions | JS object |
 | mistune (Python) | pluggable renderer | Python class |
-| **candy-shine (PHP)** | league/commonmark → custom walker | PHP constructor + JSON |
+| **sugar-markdown (PHP)** | league/commonmark → custom walker | PHP constructor + JSON |
 
 ### Syntax Highlighting
 
@@ -350,7 +350,7 @@ var options = {
 | marked-highlight | highlight.js | 190+ |
 | marked-terminal | cli-highlight | 100+ |
 | mistune + Pygments | Pygments | 500+ |
-| **candy-shine (PHP)** | Regex (custom) | **7** |
+| **sugar-markdown (PHP)** | Regex (custom) | **7** |
 
 ### Theme Configuration
 
@@ -358,7 +358,7 @@ var options = {
 |---------|----------|
 | glamour | `block_prefix/suffix`, `indent_token`, `margin`, `chroma` block for syntax |
 | mdansi | TOML with `heading`, `strong`, `emph`, `inlineCode`, `blockCode`, `link`, etc. |
-| **candy-shine (PHP)** | Style objects, limited nesting, no `chroma`-style token coloring |
+| **sugar-markdown (PHP)** | Style objects, limited nesting, no `chroma`-style token coloring |
 
 ### Paging Behavior
 
@@ -375,7 +375,7 @@ var options = {
 |---------|-------|----------|
 | glamour | ✅ | `text (url)` suffix |
 | mdansi | ✅ | `text (url)` suffix |
-| **candy-shine** | ✅ | `text (url)` suffix |
+| **sugar-markdown** | ✅ | `text (url)` suffix |
 | Bun (Zig) | ✅ | Only for non-data URIs (security) |
 
 ---

@@ -390,7 +390,7 @@ Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), 
 | Prefixer/Suffixer | `sugar-treelist` itself | Core extension hooks |
 | Fuzzy matching | `sugar-widgets` (existing FuzzyMatcher) | FuzzyMatch pattern already in Prompt |
 | Filter state machine | `sugar-treelist` itself | FilterState enum + withFilterFn |
-| Box-drawing chars | `candy-shine` (border primitives) | Unicode box chars |
+| Box-drawing chars | `sugar-markdown` (border primitives) | Unicode box chars |
 
 ---
 

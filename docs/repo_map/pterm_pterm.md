@@ -173,7 +173,7 @@ SugarCraft is a PHP TUI library monorepo (40+ libs, PHP 8.3+). pterm maps to Sug
 | `Color`, `Style`, `RGB`, `RGBStyle`, `DisableColor`/`EnableColor`, `DisableStyling`/`EnableStyling` | `candy-core` | Core color system, ANSI SGR rendering, RGB TrueColor support |
 | `Print`/`Sprint` family, `Fprint`/`Printo`, `SetDefaultOutput` | `candy-core` | Output functions, line clearing, raw output mode |
 | `GetTerminalWidth()`/`GetTerminalHeight()`/`GetTerminalSize()` | `candy-core` | Terminal dimension detection via `golang.org/x/term` (FFI in PHP) |
-| `ThemeDefault` | `candy-shine` | Default styling constants and theme preset system |
+| `ThemeDefault` | `sugar-markdown` | Default styling constants and theme preset system |
 | `ProgressbarPrinter` | `sugar-widgets` | Progress bar display with title/percentage/elapsed time |
 | `SpinnerPrinter` | `sugar-widgets` | Loading spinner with timer and Info/Success/Fail states |
 | `AreaPrinter` | `sugar-widgets` or `honey-bounce` | Dynamic content region; `honey-bounce` if animation/tweening is added |
@@ -195,12 +195,12 @@ SugarCraft is a PHP TUI library monorepo (40+ libs, PHP 8.3+). pterm maps to Sug
 | `InteractiveTextInputPrinter` | `sugar-widgets` | Line-based text entry |
 | `PrefixPrinter` (`Info`/`Success`/`Warning`/`Error`/`Debug`/`Fatal`) | `sugar-widgets` | Styled prefix logging (`Info.Println("msg")` style) |
 | `MapRangeToRange()` algorithm | `honey-bounce` (math) | Linear interpolation used for bar chart scaling and progress color fades |
-| `RGB.Fade()` multi-stop color interpolation | `candy-shine` or `honey-bounce` | Gradient generation; potential standalone color utility lib |
+| `RGB.Fade()` multi-stop color interpolation | `sugar-markdown` or `honey-bounce` | Gradient generation; potential standalone color utility lib |
 | `putils.LettersFromString*` utilities | `sugar-widgets` | Per-character styled letter creation for `BigTextPrinter` |
 | `putils.TableDataFromCSV/StructSlice/etc` | `sugar-widgets` | Data import utilities for tables |
 | `putils.DownloadWithProgressbar`, `putils.RunWithSpinner` | `sugar-widgets` | Composed utility functions combining multiple printers |
 
-**Key insight**: pterm's entire feature surface maps almost 1:1 onto `sugar-widgets` (the primary SugarCraft component/data lib). The color foundation (`Color`, `Style`, `RGB`, `ThemeDefault`) maps to `candy-core` and `candy-shine`. Math utilities (`MapRangeToRange`, `Fade`) could live in `honey-bounce`. The `BigTextPrinter` font map is a unique artifact — no direct SugarCraft equivalent; would need to be re-implemented in PHP with ASCII art letter definitions.
+**Key insight**: pterm's entire feature surface maps almost 1:1 onto `sugar-widgets` (the primary SugarCraft component/data lib). The color foundation (`Color`, `Style`, `RGB`, `ThemeDefault`) maps to `candy-core` and `sugar-markdown`. Math utilities (`MapRangeToRange`, `Fade`) could live in `honey-bounce`. The `BigTextPrinter` font map is a unique artifact — no direct SugarCraft equivalent; would need to be re-implemented in PHP with ASCII art letter definitions.
 
 ## Analysis
 

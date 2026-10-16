@@ -48,7 +48,7 @@ git status && git branch -a && git log --oneline -5
 
 Before spawning new agents, mark the plan file items that were already completed. From the completed commits, these plan files have items done:
 - `findings/plan_candy-mosaic.md` — ✅ marked (resource leaks, SSRF hardening)
-- `findings/plan_candy-shine.md` — ✅ marked (lazy-init blockStack/styleSheet)
+- `findings/plan_candy-shine.md` — ✅ marked <!-- @rename-keep historical provenance --> (lazy-init blockStack/styleSheet)
 - `findings/plan_candy-git.md` — ✅ marked (Phase 1 infrastructure)
 
 All other plan files need their items marked based on the ~25 merged commits. Mark them now before starting new groups.
@@ -96,7 +96,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), sugar-quickpick (computeWidth redundant)  <!-- @rename-keep historical provenance --> |
 | 2-C | 2.7–2.9 | sugar-quickpick (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) | <!-- @rename-keep historical provenance -->
 | 2-D | 2.10–2.12 | sugar-bits (AnimatedProgress spring cache), candy-buffer (DiffOptimiser array_merge, DiffEncoder state reset) | <!-- @rename-keep historical provenance -->
-| 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), candy-shine (string concat loops, Theme::fromJson issues) |
+| 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), sugar-markdown (string concat loops, Theme::fromJson issues) |
 | 2-F | 2.16–2.18 | candy-codeshot (LayoutCalculator extraction, match expression), candy-testing (O(n) array_shift) |
 | 2-G | 2.19–2.20 | candy-testing (escapeVhsRune addcslashes, KeyType coverage) |
 

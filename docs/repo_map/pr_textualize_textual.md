@@ -41,8 +41,8 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | TCSS Stylesheet, CSS properties | `candy-sprinkles/` | ✅ Mapped |
 | Layout, VerticalLayout, HorizontalLayout, GridLayout | `candy-sprinkles/` + `sugar-panels/` | ✅ Mapped |
 | Color, HSL/HSV/Lab color spaces | `candy-palette/` | ✅ Mapped |
-| Content, Text, Span, Style | `candy-shine/` | ✅ Mapped |
-| markdown, MarkdownViewer | `candy-shine/` | ✅ Mapped |
+| Content, Text, Span, Style | `sugar-markdown/` | ✅ Mapped |
+| markdown, MarkdownViewer | `sugar-markdown/` | ✅ Mapped |
 | Tree, DirectoryTree | `sugar-treelist/` | ✅ Mapped |
 | Select, OptionList, SelectionList | `sugar-forms/` | ✅ Mapped |
 | Input, TextArea, MaskedInput | `sugar-forms/` | ✅ Mapped |
@@ -770,7 +770,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 ### G. Content Immutable Caching
 
 - Content class is immutable, enabling aggressive caching
-- **Opportunity**: SugarCraft's `candy-shine` text rendering could use similar pattern
+- **Opportunity**: SugarCraft's `sugar-markdown` text rendering could use similar pattern
 - **Benefit**: Layout results can be cached until content changes
 
 ### H. Lazy Language Loading

@@ -29,7 +29,7 @@ From the first-pass analysis (`repo_map/Genekkion_theHermit.md`):
 |------------------|-------------------|-------|
 | List overlay/quick fix popup | `sugar-list` | Needs overlay/wrapper pattern |
 | Item interface (`Title()`) | `sugar-widgets` | Mirrors component/item protocol |
-| Border rendering + styling | `candy-shine` | Lipgloss-based styling system |
+| Border rendering + styling | `sugar-markdown` | Lipgloss-based styling system |
 | Overlay rendering (centered) | `candy-scriptui` | Viewport/window management |
 | Background view preservation | `sugar-widgets` (renderer) | Concurrent view update pattern |
 | Keyboard navigation (up/down) | `sugar-forms` | Input handling, cursor movement |
@@ -84,7 +84,7 @@ Since there are no issues, recurring pain points cannot be empirically determine
 - **Original approach**: ANSI escape code handling repeated in view rendering (`list/views.go`)
 - **Revamp approach**: New `utils/width.go` with centralized `SplitColumns()` function
 - **Evidence**: The revamp branch shows commit messages like "measure width" and explicit width utility extraction
-- **Strategic lesson**: SugarCraft's `candy-shine` should provide first-class ANSI-aware width utilities
+- **Strategic lesson**: SugarCraft's `sugar-markdown` should provide first-class ANSI-aware width utilities
 
 ### Pain Point 3: No Caching Strategy
 
@@ -353,7 +353,7 @@ The only insight is from the **original README's TODO list**:
 
 **theHermit solution**: `lipgloss.Width()` instead of `utf8.RuneCountInString()`, plus regex-based ANSI code detection in `utils/width.go`.
 
-**SugarCraft relevance**: `candy-shine` (styling) should provide ANSI-aware width utilities.
+**SugarCraft relevance**: `sugar-markdown` (styling) should provide ANSI-aware width utilities.
 
 **Direct risk**: HIGH — Any text rendering in SugarCraft that doesn't handle ANSI codes correctly will produce visual glitches.
 
@@ -385,7 +385,7 @@ The only insight is from the **original README's TODO list**:
 
 **Priority**: HIGH
 
-SugarCraft's `candy-shine` should provide:
+SugarCraft's `sugar-markdown` should provide:
 - `ansiWidth(string): int` — visual width accounting for ANSI codes
 - `splitColumns(string): []string` — character-level splitting that skips ANSI codes
 - `isAnsiCode(index int, ansiRanges): bool` — check if position is within escape sequence
@@ -539,7 +539,7 @@ The Hermit's `utils/width.go` contains portable ANSI-aware string manipulation f
 
 **SugarCraft could**:
 
-1. Extract these into `candy-shine` as terminal utilities
+1. Extract these into `sugar-markdown` as terminal utilities
 2. Make them available to all SugarCraft components
 3. Document them as the canonical way to handle ANSI-aware text operations
 
@@ -564,7 +564,7 @@ The `ViewCache` pattern in the revamp is a generic optimization applicable to an
 | Pattern | theHermit Implementation | SugarCraft Equivalent |
 |---------|------------------------|----------------------|
 | **Overlay rendering** | `modal.View()` with parent/child split | `candy-scriptui` viewport |
-| **ANSI width** | `utils.Width()` using lipgloss | `candy-shine` styling |
+| **ANSI width** | `utils.Width()` using lipgloss | `sugar-markdown` styling |
 | **Cursor clamping** | `max(min(cursor, ...), 0)` | Immutability guards |
 | **View caching** | `ViewCache` with maphash | Not yet implemented |
 | **Functional options** | `Option func(*Config)` | Builder pattern |
@@ -574,9 +574,9 @@ The `ViewCache` pattern in the revamp is a generic optimization applicable to an
 
 ## High ROI Recommendations
 
-### 1. Implement ANSI-Aware Width Utilities in candy-shine (HIGH PRIORITY)
+### 1. Implement ANSI-Aware Width Utilities in sugar-markdown (HIGH PRIORITY)
 
-**What**: Extract `ansiWidth()`, `splitColumns()`, and ANSI detection into `candy-shine` terminal utilities.
+**What**: Extract `ansiWidth()`, `splitColumns()`, and ANSI detection into `sugar-markdown` terminal utilities.
 
 **Why**: Foundation work that fixes potential width calculation bugs across all SugarCraft rendering. The Hermit proves this is a common pain point.
 

@@ -191,7 +191,7 @@ pub struct Buffer {
 | `ratatui-core` (Widget/StatefulWidget traits, Buffer, Layout, Style, Text, Symbols) | `candy-core` | Core TUI framework - models, buffer, rendering primitives |
 | `ratatui-widgets` (Block, Paragraph, List, Table, Chart, Gauge, etc.) | `sugar-widgets` | Component library - all the visual widgets |
 | `ratatui-crossterm` backend | `candy-scriptui` | Terminal I/O and backend abstraction |
-| `Layout` + Cassowary constraints | `candy-shine` | Layout system for positioning |
+| `Layout` + Cassowary constraints | `sugar-markdown` | Layout system for positioning |
 | `Stylize` trait | `sugar-forms` | Text styling helpers (Stylize trait mirrors styled() pattern) |
 | `ratatui-macros` | `sugar-widgets` (likely) | Declarative macros for boilerplate |
 | `Terminal::draw` + `Frame` pattern | `candy-core` (Model) | The terminal draw loop mirrors the Model::view() pattern |

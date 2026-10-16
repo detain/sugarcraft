@@ -48,13 +48,13 @@ use SugarCraft\Sprinkles\Theme as SprinklesTheme;
  * way it covers every file the frame reaches and every theme added later.
  *
  * ONE EXCLUSION, deliberate and measured. The transcript's assistant turns are
- * rendered by CandyShine from `Theme::$markdown` — a {@see \SugarCraft\Shine\Theme},
+ * rendered by SugarMarkdown from `Theme::$markdown` — a {@see \SugarCraft\Markdown\Theme},
  * a second colour system with its own tokens that W3 did not touch — so the
  * history driven here is user/system only. Running the same assertion WITH an
  * assistant turn present fails, and legitimately: on a white terminal
  * `dracula`'s markdown body paints #f8f8f2 (1.07:1) and `tokyoNight`'s #a9b1d6
  * (2.11:1). That is the same class of bug one layer down and it needs
- * candy-shine's palette put under the same guard; it is NOT covered here, and
+ * sugar-markdown's palette put under the same guard; it is NOT covered here, and
  * saying so beats a test that quietly skips it.
  */
 final class ShellContrastTest extends TestCase
@@ -356,7 +356,7 @@ final class ShellContrastTest extends TestCase
      * because the fix is in the renderer (a token that has already been chosen
      * for legibility must not then be dimmed) and not in the measurement, and
      * because "half-way" is a terminal-by-terminal guess this suite would then
-     * be pinning as fact. Recorded as a known gap, the same way the CandyShine
+     * be pinning as fact. Recorded as a known gap, the same way the SugarMarkdown
      * markdown palette is. SGR 7 (inverse) genuinely does not occur: 0
      * occurrences in a 120x40 frame in any palette.
      *

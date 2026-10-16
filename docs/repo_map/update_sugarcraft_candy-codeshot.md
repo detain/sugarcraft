@@ -212,7 +212,7 @@ None currently. Theme loading could be formalized as a `ThemeLoaderInterface` fo
 
 - Create `SyntaxHighlighterInterface` with adapters for available highlighters (Geshi, highlight.js via FFI, Python bridge to pygments)
 
-- Reuse `candy-shine`'s regex tokeniser pattern (extends `SyntaxHighlighter`) for PHP/JS/HTML/SQL
+- Reuse `sugar-markdown`'s regex tokeniser pattern (extends `SyntaxHighlighter`) for PHP/JS/HTML/SQL
 
 - Focus on 5-10 most-used languages (PHP, JS, Python, Go, Bash, SQL, JSON)
 **Estimated complexity**: High — lexer design is non-trivial

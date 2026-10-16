@@ -55,7 +55,7 @@ SugarCraft ports. Use this to prioritize the next port wave.
 
 | Upstream | Title | Applicability | Recommendation |
 |---|---|---|---|
-| [#220](https://github.com/charmbracelet/lipglose/issues/220) (15c) | OSC 8 (hyperlink) support | 🟡 | candy-shine 已经处理 OSC 8; 检查是否有遗漏 |
+| [#220](https://github.com/charmbracelet/lipglose/issues/220) (15c) | OSC 8 (hyperlink) support | 🟡 | sugar-markdown 已经处理 OSC 8; 检查是否有遗漏 |
 | [#166](https://github.com/charmbracelet/lipgloss/issues/166) (6c) | feat: flexbox | 🔴 | **Effort**: 4-6h **Benefit**: CSS-like flex layout for TUIs **Downside**: Significant API addition |
 | [#40](https://github.com/charmbracelet/lipgloss/issues/40) (16c) | Rendering Issues with zh_CN.UTF-8 | 🟡 | 可能影响任何使用 Unicode 的组件 |
 | [#81](https://github.com/charmbracelet/lipgloss/issues/81) (6c) | New API: fast colors | 🔴 | **Effort**: 1-2h **Benefit**: Faster color rendering for high-frequency updates **Downside**: Minimal |
@@ -148,11 +148,11 @@ No high-comment open issues found. Repo is very quiet.
 
 ---
 
-## charmbracelet/glamour → candy-shine
+## charmbracelet/glamour → sugar-markdown
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-shine | Notes |
+| Upstream | Title | Status in sugar-markdown | Notes |
 |---|---|:--:|---|
 | [#499](https://github.com/charmbracelet/glamour/pull/499) (2026-01-23) | fix(ansi): handle multi-byte UTF-8 in margin writers | 🟡 | UTF-8 处理 — 确认 PHP 实现正确 |
 | [#496](https://github.com/charmbracelet/glamour/pull/496) (2026-01-23) | fix: hide mailto: prefix in rendered email links | 🟡 | 可能需要添加到 Markdown 渲染 |
@@ -375,7 +375,7 @@ No high-comment open issues.
    - **Effort**: 3-4h **Benefit**: High — Progress is a missing component in sugar-widgets
    - **Downside**: New API surface, snapshot tests needed
 
-3. **glamour wikilinks support** → candy-shine
+3. **glamour wikilinks support** → sugar-markdown
    - **Effort**: 2-3h **Benefit**: Medium — common markdown extension
    - **Downside**: Parse tree modification
 

@@ -1,7 +1,7 @@
 """
 Markdown renderer for the SugarCrush TUI.
 
-Ports src/Shine/Renderer.php (candy-shine) — renders Markdown to ANSI-styled text.
+Ports src/Shine/Renderer.php (sugar-markdown) — renders Markdown to ANSI-styled text.
 Supports headings, bold, italic, code, links, lists, and blockquotes.
 """
 
@@ -27,7 +27,7 @@ class MarkdownRenderer:
     """
     Renders Markdown text to ANSI-styled terminal output.
 
-    Mimics candy-shine's Renderer, which uses a syntax highlighter under the hood.
+    Mimics sugar-markdown's Renderer, which uses a syntax highlighter under the hood.
     """
 
     def __init__(self, theme: Optional[dict] = None):

@@ -181,7 +181,7 @@
 | charmbracelet/glow | SugarCraft Library | Relationship |
 |--------------------|---------------------|--------------|
 | `glamour` markdown rendering | `sugar-widgets` | Glamour is the upstream for SugarCraft's markdown rendering components. Glow's `utils.GlamourStyle()` maps directly to how SugarCraft would configure glamour. |
-| `lipgloss` styling system | `candy-shine` (styling), `sugar-widgets` (output) | Lipgloss is the Charm styling engine; SugarCraft ports lipgloss for ANSI text styling, colors, and layout. |
+| `lipgloss` styling system | `sugar-markdown` (styling), `sugar-widgets` (output) | Lipgloss is the Charm styling engine; SugarCraft ports lipgloss for ANSI text styling, colors, and layout. |
 | `bubbletea` TUI framework | `sugar-widgets` (TUI components) | Bubble Tea is the TUI framework; SugarCraft's TUI patterns (Model/Update/View) mirror Bubble Tea's architecture. |
 | File browsing & discovery | `sugar-forms` or `sugar-charts` | The stash/file-browser UI could inspire SugarCraft's file picker or tree-view components. |
 | `viewport` for scrolling | `candy-core` (scroll buffer) | The Bubble Tea viewport model for paginated content. |
@@ -194,9 +194,9 @@
 ### Specific SugarCraft Equivalents
 
 - **Markdown Rendering:** `sugar-widgets` would provide `MarkdownRenderer` using glamour under the hood
-- **TUI Components:** `sugar-widgets` / `candy-shine` would provide `ListModel`, `PagerModel`, `SpinningModel`, `TextInputModel` following Bubble Tea patterns
+- **TUI Components:** `sugar-widgets` / `sugar-markdown` would provide `ListModel`, `PagerModel`, `SpinningModel`, `TextInputModel` following Bubble Tea patterns
 - **File Browser:** `sugar-widgets` could provide `FileStashModel` for directory browsing with fuzzy filter
-- **Styling:** `candy-shine` provides `Lipgloss`-equivalent adaptive colors and styles
+- **Styling:** `sugar-markdown` provides `Lipgloss`-equivalent adaptive colors and styles
 - **Viewport:** `candy-core` provides scrollable viewport with status bar
 
 ## Analysis

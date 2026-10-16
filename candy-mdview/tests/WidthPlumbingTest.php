@@ -7,8 +7,8 @@ namespace SugarCraft\MdView\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\MdView\MdViewModel;
-use SugarCraft\Shine\Renderer;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
 
 /**
  * E735 step 10.25 — width half of the original leftover spec.
@@ -18,7 +18,7 @@ use SugarCraft\Shine\Theme;
  * af5c4aefc once {@see Width} became the canonical single source. This
  * suite is the contract pin that the replacement actually holds
  * end-to-end through the viewer's live render path — wide glyphs cost 2 cells
- * in the Core measurer, the Shine word-wrap never lets a physical row
+ * in the Core measurer, the sugar-markdown word-wrap never lets a physical row
  * exceed the column budget, and the pager model's view respects its
  * width. Re-adding an mdview-local helper would be the drift this pins out.
  */

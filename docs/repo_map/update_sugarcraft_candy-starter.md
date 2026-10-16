@@ -444,7 +444,7 @@ final class Counter implements Model {
 
 1. **Embed sugar-widgets Components** — Demonstrate Spinner, TextInput, ProgressBar from sugar-widgets within Counter or sibling models.
 
-2. **Demonstrate Cross-Library Composition** — Show `SugarCraft\Shine\Renderer` rendering Markdown help text alongside the counter.
+2. **Demonstrate Cross-Library Composition** — Show `SugarCraft\Markdown\Renderer` rendering Markdown help text alongside the counter.
 
 3. **Add sugar-forms Example** — Demonstrate interactive prompts using sugar-forms's `Group` component.
 

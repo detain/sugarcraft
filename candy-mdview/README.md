@@ -16,7 +16,7 @@
 
 ![demo](.vhs/render.gif)
 
-candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **CandyShine** (rendering) and **SugarWidgets Viewport** (scrolling).
+candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdown** (rendering) and **SugarWidgets Viewport** (scrolling).
 
 ```sh
 composer require sugarcraft/candy-mdview
@@ -35,13 +35,13 @@ candy-mdview --theme-config ./my-theme.json README.md
 
 Flags:
 - `--theme {ansi|plain|dark|light|notty|dracula|tokyo-night|pink|solarized|monokai|github}`
-  — picks a CandyShine preset. `solarized`, `monokai`, and `github` load
+  — picks a SugarMarkdown preset. `solarized`, `monokai`, and `github` load
   JSON theme files from `themes/`.
 - `--style` / `-s` — alias for `--theme` (glamour-compat).
 - `--theme-config <path>` — load a custom JSON theme. Two shapes are
   detected automatically: a **glamour** config (top-level `"document"`
   block with nested element/chroma maps) is mapped by `GlamourTheme` onto
-  a CandyShine `Theme`; the historic flat colour map goes through
+  a SugarMarkdown `Theme`; the historic flat colour map goes through
   `Theme::fromJson`. Overrides `--theme`.
 - `--width` / `-w <N>` — word-wrap paragraphs / blockquotes / list bodies.
   0 = no wrap.
@@ -113,7 +113,7 @@ $changed = FileWatcher::pollTuple($path, ...$base);  // new tuple or null
 
 `GlamourTheme` parses charmbracelet/glamour style JSON (a `"document"`
 block, per-element `StylePrimitive` maps, and a `chroma` token map) and
-projects it onto CandyShine's `Theme`: document block affixes, indent and
+projects it onto SugarMarkdown's `Theme`: document block affixes, indent and
 margin, heading/paragraph/inline element styles, and the Keyword /
 LiteralString / LiteralNumber / Comment chroma families. Unmappable fields
 are exposed verbatim through `element()` / `chroma()` for integrations

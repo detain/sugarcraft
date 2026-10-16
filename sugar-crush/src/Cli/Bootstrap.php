@@ -2412,7 +2412,7 @@ final class Bootstrap
         // gap: Agent::systemPrompt()'s own last-resort
         // EnvironmentBlock::capture(getcwd()) is documented as the fallback for
         // callers holding no session snapshot, and this caller holds one. A
-        // `--root candy-shine` run now orients its sub-agents at candy-shine
+        // `--root sugar-markdown` run now orients its sub-agents at sugar-markdown
         // rather than at wherever the binary was invoked from.
         //
         // Captured PER AGENT, at that agent's own model. The block renders a

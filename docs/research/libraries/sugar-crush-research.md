@@ -16,7 +16,7 @@ Sugar-crush is a well-architected PHP port of charmbracelet/crush with a clean M
 - **Message Handling:** sugar-crush uses immutable `Message` objects with role-based structure (System/User/Assistant) - similar to Go crush
 - **Stream Rendering:** Basic token accumulation via `onToken` callback; no live incremental rendering
 - **Context Management:** History passed to backends but no automatic compaction or session persistence
-- **Code Highlighting:** Relies on CandyShine (league/commonmark) without syntax highlighting in code blocks
+- **Code Highlighting:** Relies on SugarMarkdown (league/commonmark) without syntax highlighting in code blocks
 
 ---
 
@@ -74,7 +74,7 @@ interface Backend {
 
 **Renderer (Renderer.php:34-77):**
 
-- Uses `SugarCraft\Shine\Renderer` (CandyShine) for markdown
+- Uses `SugarCraft\Markdown\Renderer` (SugarMarkdown) for markdown
 - User turns rendered raw, assistant turns rendered as markdown
 - Simple box layout with border using CandySprinkles
 
@@ -191,7 +191,7 @@ interface Backend {
 |---------|-------------|-------|--------|-----------|
 | Language | PHP | Go | Rust | Rust |
 | TUI Framework | SugarWidgets | Bubble Tea | Ratatui | Ratatui |
-| Markdown | CandyShine | Glamour | Custom | Custom |
+| Markdown | SugarMarkdown | Glamour | Custom | Custom |
 | Syntax Highlight | ❌ | ✅ | ✅ | ✅ (syntect) |
 | Streaming | Basic | Real-time | Real-time | Real-time |
 | Tool System | Plugin | Built-in | MCP | MCP |
@@ -274,7 +274,7 @@ interface Backend {
 
 **sugar-crush Current:**
 
-- Uses CandyShine (league/commonmark) for markdown
+- Uses SugarMarkdown (league/commonmark) for markdown
 - No syntax highlighting in code blocks
 - Raw markdown code fences rendered as plain text
 
@@ -403,7 +403,7 @@ interface Backend {
 
 ### 8.4 PHP Libraries Used
 
-- **CandyShine:** Markdown rendering (league/commonmark wrapper)
+- **SugarMarkdown:** Markdown rendering (league/commonmark wrapper)
 - **CandySprinkles:** Terminal styling (borders, padding)
 - **SugarWidgets:** TUI components
 - **ReactPHP:** Async promise handling

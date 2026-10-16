@@ -16,7 +16,7 @@ Scaffold a new immutable+fluent class that looks byte-identical to the rest of t
 - **Accessors are bare** — `elapsed()`, not `getElapsed()`.
 - **Nullable fields that a `with*()` can set need a paired `bool $XSet` sentinel** — `mutate()` cannot tell a passed `null` from an omitted arg. See `sugar-widgets/src/TextInput/TextInput.php`.
 - **Side effects go in a `Cmd` (a `Closure(): ?Msg`), never in `view()`.** `view()` is pure.
-- **Namespace = slug mapped**: `candy-shine/` → `SugarCraft\Shine\`; quirk: `candy-core/` → `SugarCraft\Core\`. Subdir classes nest, e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php` → `SugarCraft\Widgets\Stopwatch\`.
+- **Namespace = slug mapped**: `sugar-markdown/` → `SugarCraft\Markdown\`; quirk: `candy-core/` → `SugarCraft\Core\`. Subdir classes nest, e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php` → `SugarCraft\Widgets\Stopwatch\`.
 - **Doc-comment cites upstream**: `Mirrors charmbracelet/<repo>.<Method>` or `Mirror of {@see X}`. Comment WHY, not WHAT.
 - **Validation throws** `\InvalidArgumentException` (with `Lang::t('<key>')`), never returns `null` for bad input.
 

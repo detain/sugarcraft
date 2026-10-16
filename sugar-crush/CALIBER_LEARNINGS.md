@@ -42,14 +42,14 @@ directly. Accept both encodings; test both.
 
 ## Raw ANSI inside markdown-rendered text surfaces as literal `[33m`
 
-Assistant text goes through CandyShine's Markdown renderer before it reaches
+Assistant text goes through SugarMarkdown's Markdown renderer before it reaches
 the buffer. Raw ANSI embedded in that text — e.g. a CLI-shaped slash command
 that `echo`s escapes, captured with `ob_start()` and stored as
 `Message::assistant()` — gets partially consumed: the `\x1b` is eaten and the
 parameter bytes show up on screen as the literal string `[33m`.
 
 Fix it at the source, not with a blanket strip on the way in: a strip hides the
-*next* offender instead of surfacing it. Emit **markdown** and let CandyShine
+*next* offender instead of surfacing it. Emit **markdown** and let SugarMarkdown
 do the colouring (inline code for a literal command, emphasis for a
 `<placeholder>`). A test asserting no source file emits raw escapes keeps the
 next one failing in CI rather than in someone's terminal.

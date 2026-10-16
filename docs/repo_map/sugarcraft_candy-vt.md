@@ -733,7 +733,7 @@ public string $combining = '';
 
    - VCR assertions for mode/cursor verification
 
-2. **candy-shine integration** — Could use candy-vt to parse ANSI and feed into markdown rendering pipeline.
+2. **sugar-markdown integration** — Could use candy-vt to parse ANSI and feed into markdown rendering pipeline.
 
 3. **candy-scriptui integration** — Could use candy-vt to parse PTY output for logging/replay.
 

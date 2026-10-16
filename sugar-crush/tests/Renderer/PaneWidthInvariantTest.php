@@ -9,7 +9,7 @@ use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mosaic\ImageLayer;
 use SugarCraft\Mosaic\Mosaic;
-use SugarCraft\Shine\Renderer as Markdown;
+use SugarCraft\Markdown\Renderer as Markdown;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Palette\PaletteState;
@@ -26,7 +26,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * `Chat::cols()`. `Renderer::renderView()` computed the pane width correctly
  * and handed it to `renderHistory()`, `renderToolResults()` and
  * `renderDiff()` — and then built the Markdown renderer with no width at all.
- * CandyShine's word wrap is opt-in and off by default, so a 200-column reply
+ * SugarMarkdown's word wrap is opt-in and off by default, so a 200-column reply
  * came out as a 200-column ROW.
  *
  * Why that is corruption rather than an ugly line, in both directions:
@@ -127,9 +127,9 @@ final class PaneWidthInvariantTest extends TestCase
      * One content class per entry, each chosen because it reaches the renderer
      * by a different route:
      *
-     * - `prose` / `long word` go through CandyShine's paragraph wrap, which the
+     * - `prose` / `long word` go through SugarMarkdown's paragraph wrap, which the
      *   width now switches on.
-     * - `fenced code` / `wide table` are the ones CandyShine deliberately does
+     * - `fenced code` / `wide table` are the ones SugarMarkdown deliberately does
      *   NOT wrap ("they have their own width semantics"), so they are what
      *   proves threading the width in is not on its own the fix.
      * - `cjk` / `emoji` are double-width cells, where a byte- or
@@ -156,23 +156,23 @@ final class PaneWidthInvariantTest extends TestCase
                 . str_repeat('SELECT alpha FROM widgets WHERE id = 1; ', 5) . "';\n```",
             // Double-width cells inside a fence, sized so a CHARACTER count reads
             // as fitting a 194-column pane (120 chars) while the CELLS do not
-            // (240). CandyShine never wraps a fence, so this is the fixture that
+            // (240). SugarMarkdown never wraps a fence, so this is the fixture that
             // proves the fitter measures cells rather than characters.
             'cjk in a fence' => "```\n" . str_repeat('日本語', 40) . "\n```",
-            // A long list item, which is the case that distinguishes CandyShine's
+            // A long list item, which is the case that distinguishes SugarMarkdown's
             // block-aware wrap from a flat row fitter: the continuation has to
             // hang under the bullet's TEXT, not under the bullet.
             'long list item' => "- first bullet item that is deliberately long enough to need "
                 . "wrapping at eighty columns and then some more words\n- short one",
             // The PROSE twin of 'one long styled run': a single emphasised clause
-            // wide enough that CandyShine's own paragraph wrap splits it, which
+            // wide enough that SugarMarkdown's own paragraph wrap splits it, which
             // is the case the fenced fixture cannot reach now that prose is
             // wrapped upstream of the fitter. See
             // testAWrappedBoldClauseInProseKeepsItsBoldOnEveryContinuationRow().
             'one long bold prose clause' => 'Note: **this whole emphasised clause is long enough '
                 . 'that it has to be broken across two rows of a sixty column pane** and then it '
                 . 'ends with a few more words of ordinary prose after it.',
-            // A markdown link, which CandyShine renders as an OSC 8 hyperlink -
+            // A markdown link, which SugarMarkdown renders as an OSC 8 hyperlink -
             // an escape class `SgrState` does not track at all. Only wrappable
             // now that the width is threaded in.
             'one long linked label' => 'See [this documentation link label which is long enough '
@@ -217,7 +217,7 @@ final class PaneWidthInvariantTest extends TestCase
      * Lesson from an earlier round: a reproduction fixture that fails to
      * reproduce makes the test that uses it pass against the broken code. Every
      * fixture above is therefore checked to produce an over-wide row when
-     * rendered the way the defect rendered it — through CandyShine with NO wrap
+     * rendered the way the defect rendered it — through SugarMarkdown with NO wrap
      * width — before any of them is trusted as evidence.
      *
      * 100 columns, because that is the terminal the bug was reported and
@@ -426,8 +426,8 @@ final class PaneWidthInvariantTest extends TestCase
 
     /**
      * The half of the fix that {@see Renderer::fitToPane()} does NOT subsume,
-     * and the reason threading the width into CandyShine is not merely belt and
-     * braces: CandyShine wraps a list item with a HANGING INDENT, aligning the
+     * and the reason threading the width into SugarMarkdown is not merely belt and
+     * braces: SugarMarkdown wraps a list item with a HANGING INDENT, aligning the
      * continuation under the item's text. A flat row fitter cannot — it has no
      * idea the row is a list item — so with the width dropped from either
      * Markdown site the continuation slides back two columns.
@@ -683,7 +683,7 @@ final class PaneWidthInvariantTest extends TestCase
     /**
      * The same rule for PROSE, and this is the case the fenced-code test above
      * does NOT reach — which matters because the width thread-through made
-     * prose the COMMON case: CandyShine now does the wrapping itself, so a
+     * prose the COMMON case: SugarMarkdown now does the wrapping itself, so a
      * wrapped paragraph arrives at {@see Renderer::fitToPane()} already fitting
      * and takes its fast path. Measured before the fix, at cols=60:
      *
@@ -740,7 +740,7 @@ final class PaneWidthInvariantTest extends TestCase
      * the link — in iTerm2, WezTerm, VTE and Kitty alike.
      *
      * Also pinned: SGR 58 (underline colour) is likewise untracked by
-     * `SgrState`. Nothing in this renderer or in CandyShine emits it, so it is
+     * `SgrState`. Nothing in this renderer or in SugarMarkdown emits it, so it is
      * named in {@see Renderer::balanceSgr()} and deliberately not chased.
      */
     public function testEveryRowOfAWrappedHyperlinkOpensAndClosesItsOwnLink(): void
@@ -1146,7 +1146,7 @@ final class PaneWidthInvariantTest extends TestCase
      *
      * "Cannot wrap early" is what makes an equality assertion legitimate here:
      * a 180-character unbreakable identifier and a run of double-width CJK in a
-     * fence have no word boundaries for CandyShine (or for `wrapAnsi()`) to
+     * fence have no word boundaries for SugarMarkdown (or for `wrapAnsi()`) to
      * prefer, so every row but the last is filled to the cell. Ordinary prose
      * cannot be pinned that tightly — its last word lands where it lands — so
      * it is bounded from below instead, at both the settled and the streaming
@@ -1334,7 +1334,7 @@ final class PaneWidthInvariantTest extends TestCase
      * measured rather than assumed: NO path into this renderer delivers such a
      * row today. An assistant reply, a fenced block, inline code, a user message
      * and a diff body were each rendered carrying twelve ESC-backslash pairs and the
-     * finished frame contained zero of them — CandyShine and the untrusted
+     * finished frame contained zero of them — SugarMarkdown and the untrusted
      * scrubbers between them take the escape out. The branch is kept for the
      * reason {@see testTheHardFitBackstopHoldsTheBoundWhereTruncateAnsiAloneDoesNot()}
      * keeps the backstop: a pass-through that is one only because every upstream

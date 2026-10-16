@@ -20,7 +20,7 @@ Candy-serve is a solid foundation port of soft-serve with SSH Git protocol handl
 | Tool | Language | SSH TUI | HTTP Git | Git Daemon | LFS | Access Control | Markdown Rendering | Complexity |
 |------|----------|---------|----------|------------|-----|----------------|-------------------|------------|
 | **soft-serve** | Go | ✅ Full | ✅ | ✅ | ✅ | SSH keys + per-repo | ✅ BubbleTea | Medium |
-| **candy-git-server** | PHP | ❌ **Missing** | ❌ | ❌ | ✅ Basic | ✅ SSH keys | ❌ (CandyShine exists) | Low |
+| **candy-git-server** | PHP | ❌ **Missing** | ❌ | ❌ | ✅ Basic | ✅ SSH keys | ❌ (SugarMarkdown exists) | Low |
 | **gitea** | Go | ✅ Web UI | ✅ | ❌ | ✅ | Web UI + SSH | ✅ | High |
 | **gitolite** | Perl | ❌ CLI only | ❌ | ❌ | ❌ | SSH-based | ❌ | Medium |
 | **cgit** | C | ❌ Web only | ❌ | ❌ | ❌ | None | ✅ | Low |
@@ -118,13 +118,13 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 
 **Candy-serve current state:**
 
-- CandyShine (markdown → ANSI) exists in monorepo: `candy-shine/`
+- SugarMarkdown (markdown → ANSI) exists in monorepo: `sugar-markdown/`
 - `Repo::readme()` returns raw content
 - No integration with TUI (TUI doesn't exist)
 
 **Gap:** Markdown rendering not integrated into any browsing UI
 
-**Recommendation:** Integrate CandyShine for README rendering when TUI is built
+**Recommendation:** Integrate SugarMarkdown for README rendering when TUI is built
 
 ### 2.5 Clipboard (OSC 52)
 
@@ -140,7 +140,7 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 
 **Gap:** OSC 52 clipboard copy support
 
-**Implementation approach:** Use `CandyShine` or raw ANSI sequences to send OSC 52
+**Implementation approach:** Use `SugarMarkdown` or raw ANSI sequences to send OSC 52
 
 ---
 
@@ -165,14 +165,14 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
                                     ↓
                             Repo/File/Commit Views
                                     ↓
-                            ANSI Renderer (CandyShine)
+                            ANSI Renderer (SugarMarkdown)
 ```
 
 **Dependencies:**
 
 - `candy-core` (BubbleTea port) ✅ exists
 - `candy-sprinkles` (styling) ✅ exists  
-- `candy-shine` (markdown rendering) ✅ exists
+- `sugar-markdown` (markdown rendering) ✅ exists
 
 **Implementation effort:** High (several thousand lines)
 
@@ -229,7 +229,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 | 1 | **SSH TUI Session Manager** | High | Critical | Route SSH to TUI instead of git commands |
 | 2 | **Repo List View** | High | Critical | Main entry point of TUI |
 | 3 | **File/Tree Viewer** | High | High | Navigate repo contents |
-| 4 | **Syntax Highlighting** | Medium | High | Integrate CandyShine |
+| 4 | **Syntax Highlighting** | Medium | High | Integrate SugarMarkdown |
 | 5 | **Commit Log View** | Medium | Medium | Browse commit history |
 
 ### Phase 2: Protocol Servers (2-3 weeks)
@@ -265,7 +265,7 @@ The TUI should be a separate entry point callable via SSH forced command:
 
 - `candy-core` — BubbleTea runtime port
 - `candy-sprinkles` — styling system
-- `candy-shine` — markdown/syntax rendering
+- `sugar-markdown` — markdown/syntax rendering
 
 ### 5.2 SSH → TUI Routing
 
@@ -350,7 +350,7 @@ src/
 
 - `candy-core/` — BubbleTea TUI runtime
 - `candy-sprinkles/` — Lipgloss styling port
-- `candy-shine/` — Markdown/syntax rendering
+- `sugar-markdown/` — Markdown/syntax rendering
 
 ---
 

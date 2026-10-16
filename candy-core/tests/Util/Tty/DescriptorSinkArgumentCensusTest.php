@@ -567,7 +567,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT, and an E368 carve-out: the resource, no cast.',
         ],
-        'candy-shine/src/Theme.php::posix_isatty(STDOUT)' => [
+        'sugar-markdown/src/Theme.php::posix_isatty(STDOUT)' => [
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT, and an E368 carve-out: the resource, no cast.',
         ],
@@ -1475,7 +1475,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      * WHAT IS TRUE NOW: two sites in one file CAN share a spelling, and the
      * plain assignment collapsed them. MEASURED (round-53 mutation R4b): a
      * second, entirely unjudged `posix_isatty(STDOUT)` added to
-     * candy-shine/src/Theme.php, whose one rostered site is spelled
+     * sugar-markdown/src/Theme.php, whose one rostered site is spelled
      * identically, left this census green -- 4 tests, 22 assertions, rc 0.
      * The class doc-block's "a NEW site fails because it is unjudged" was
      * false for that shape. Worse, because the later hit won, two same-spelled

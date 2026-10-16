@@ -82,7 +82,7 @@ Style composition, adaptive color (light/dark theme detection via `HasDarkBackgr
 measurement. Referenced more than any other styling library.
 
 **Why:** Provides the styling primitives (colors, borders, layout) that SugarCraft's
-candy-shine partially covers but doesn't fully replicate.
+sugar-markdown partially covers but doesn't fully replicate.
 
 ---
 

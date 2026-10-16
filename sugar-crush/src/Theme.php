@@ -6,18 +6,18 @@ namespace SugarCraft\Crush;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Crush\Tui\TerminalBackground;
-use SugarCraft\Shine\Theme as ShineTheme;
+use SugarCraft\Markdown\Theme as MarkdownTheme;
 use SugarCraft\Sprinkles\Theme as SprinklesTheme;
 
 /**
  * A named color theme for {@see Renderer}'s chrome (borders, user/assistant/
  * system labels), the whole `src/Tui/` shell (menu bar and its dropdown, pane
- * boxes, sidebars, status colours) and CandyShine's markdown rendering,
+ * boxes, sidebars, status colours) and SugarMarkdown's markdown rendering,
  * resolved from the two theme classes that already exist elsewhere in the
  * monorepo rather than inventing a third color system:
  *
  *   - {@see SprinklesTheme} supplies the chrome colors (border/labels/`shell*`).
- *   - {@see ShineTheme} supplies the markdown-rendering theme.
+ *   - {@see MarkdownTheme} supplies the markdown-rendering theme.
  *
  * The `shell*` tokens exist because `src/Tui/` used to be theme-blind: 14 files
  * hardcoded 100 hex literals, 15 distinct values, and none of them consulted a
@@ -37,7 +37,7 @@ use SugarCraft\Sprinkles\Theme as SprinklesTheme;
  * The offered name list ({@see names()}) is deliberately restricted to the
  * intersection of presets both classes support by the same name
  * (`dark`/`light`/`dracula`/`tokyoNight`/`ansi`) - SprinklesTheme also has
- * `oneDark`/`githubDark`/`solarizedDark`/`solarizedLight` and ShineTheme also
+ * `oneDark`/`githubDark`/`solarizedDark`/`solarizedLight` and MarkdownTheme also
  * has `pink`/`plain`/`notty`/`ascii`, but offering a name only one side
  * recognizes would silently mismatch chrome and markdown colors, so those
  * extras are left out of the picker for now.
@@ -120,7 +120,7 @@ final class Theme
 
     public function __construct(
         public readonly string $name,
-        public readonly ShineTheme $markdown,
+        public readonly MarkdownTheme $markdown,
         public readonly Color $border,
         public readonly Color $userLabel,
         public readonly Color $assistantLabel,
@@ -176,7 +176,7 @@ final class Theme
             'ansi' => SprinklesTheme::ansi(),
         };
 
-        return self::pair($canonical, $sprinkles, ShineTheme::byName($canonical) ?? ShineTheme::ansi());
+        return self::pair($canonical, $sprinkles, MarkdownTheme::byName($canonical) ?? MarkdownTheme::ansi());
     }
 
     /**
@@ -210,8 +210,8 @@ final class Theme
     public static function adaptive(): self
     {
         return TerminalBackground::isDark()
-            ? self::pair('adaptive', SprinklesTheme::dark(), ShineTheme::dark())
-            : self::pair('adaptive', SprinklesTheme::light(), ShineTheme::light());
+            ? self::pair('adaptive', SprinklesTheme::dark(), MarkdownTheme::dark())
+            : self::pair('adaptive', SprinklesTheme::light(), MarkdownTheme::light());
     }
 
     /**
@@ -234,7 +234,7 @@ final class Theme
      * One threshold for every token, not a text/chrome split — see
      * {@see CONTRAST_MIN} for the measurement that ruled the split out.
      */
-    private static function pair(string $name, SprinklesTheme $sprinkles, ShineTheme $markdown): self
+    private static function pair(string $name, SprinklesTheme $sprinkles, MarkdownTheme $markdown): self
     {
         // Every token is measured against BOTH surfaces it can be seen on: the
         // bare terminal background and the row-highlight fill. Neither one
@@ -263,9 +263,9 @@ final class Theme
         // `byName('dracula')` — up to 11 tokens x 21 nudge steps x 2 contrast()
         // each — so ~8.6 ms of a frame that has 16 ms to make 60fps, against
         // 0.165 ms on a hit. The 0.165 is NOT this memo: it is
-        // `ShineTheme::byName()` building the markdown half, which sits upstream
+        // `MarkdownTheme::byName()` building the markdown half, which sits upstream
         // of here (`SprinklesTheme::dracula()` alone is 0.009 ms). Memoising
-        // that too belongs in candy-shine.
+        // that too belongs in sugar-markdown.
         //
         // The key is every input the result depends on: the palette by its own
         // source colours (which is what makes `adaptive` safe — one name, two

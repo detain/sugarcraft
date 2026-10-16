@@ -417,7 +417,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 2. **`Renderer::fromEnvironment()` usage in sugar-widgets** — Each sugar-widgets component independently calls `ColorProfile::detect()`. Should use `Renderer::fromEnvironment()` for consistency.
 
-3. **candy-shine (Glamour) integration** — Markdown/code syntax highlighting not yet connected to candy-sprinkles rendering pipeline.
+3. **sugar-markdown (Glamour) integration** — Markdown/code syntax highlighting not yet connected to candy-sprinkles rendering pipeline.
 
 4. **candy-core `Width` utility sharing** — Both candy-sprinkles and sugar-widgets import from `SugarCraft\Core\Util\Width`. Ensure API consistency.
 

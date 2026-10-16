@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\MdView;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Theme;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -23,8 +23,8 @@ use SugarCraft\Sprinkles\Style;
  * `GlamourTheme` (ad4de43a4) parsed a FLAT one-level shape nothing upstream
  * emitted, was never wired into the live CLI path, and was deleted as dead
  * by audit W11 (d729c789d). This rewrite keeps the parsed primitives
- * addressable, converts them to a candy-shine {@see Theme} via
- * {@see toShineTheme()}, and IS consumed: {@see RenderCommand::loadThemeConfig()}
+ * addressable, converts them to a sugar-markdown {@see Theme} via
+ * {@see toMarkdownTheme()}, and IS consumed: {@see RenderCommand::loadThemeConfig()}
  * sniffs the `document` signature and routes glamour-shaped
  * `--theme-config` files through here, so the adapter can never rot unused
  * again.
@@ -32,14 +32,14 @@ use SugarCraft\Sprinkles\Style;
  * WHAT THE ADAPTER CARRIES: colours and attribute flags, the document's
  * `block_prefix` / `block_suffix` / `indent` / `margin` (into Theme's
  * glamour-parity slots), `paragraph` block affixes (into
- * paragraphPrefix/Suffix, which candy-shine prepends per paragraph), and
+ * paragraphPrefix/Suffix, which sugar-markdown prepends per paragraph), and
  * the chroma families Keyword / LiteralString* / LiteralNumber* / Comment*
  * (into Theme's four syntax-token slots).
  *
  * WHAT IT DELIBERATELY DROPS, and why: line-control `block_prefix` /
  * `block_suffix` values on NON-document elements (glamour uses "\n" there
- * purely for vertical spacing candy-shine manages itself), per-heading-level
- * prefixes (candy-shine exposes one global headingPrefix whose semantics
+ * purely for vertical spacing sugar-markdown manages itself), per-heading-level
+ * prefixes (sugar-markdown exposes one global headingPrefix whose semantics
  * are a visible glyph, not a newline), and chroma families beyond the four
  * slots (no target field exists). Nothing is silently mis-mapped: dropped
  * keys stay readable on this object via {@see element()} / {@see chroma()},
@@ -67,7 +67,7 @@ final class GlamourTheme
 
     /**
      * True when a decoded JSON document carries the glamour signature — a
-     * top-level `document` OBJECT. The flat per-element colour map candy-shine's
+     * top-level `document` OBJECT. The flat per-element colour map sugar-markdown's
      * {@see Theme::fromJsonString()} consumes has no `document` key, so the
      * two schemas never collide.
      *
@@ -178,11 +178,11 @@ final class GlamourTheme
     }
 
     /**
-     * Convert to the candy-shine stylesheet the live renderer consumes.
+     * Convert to the sugar-markdown stylesheet the live renderer consumes.
      * Missing elements fall through to the plain {@see Style} — the same
      * default {@see Theme::fromJsonString()} gives its flat schema.
      */
-    public function toShineTheme(): Theme
+    public function toMarkdownTheme(): Theme
     {
         $paragraph = $this->elements['paragraph'] ?? [];
 

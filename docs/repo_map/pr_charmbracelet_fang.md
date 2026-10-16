@@ -42,7 +42,7 @@ From the first-stage analysis, SugarCraft's direct equivalent is **candy-kit** (
 | SugarCraft Lib | Relationship | Fang Equivalent |
 |---|---|---|
 | **CandyKit** | Direct port | `fang` — CLI presentation helpers |
-| **CandyShine** | Thematic cousin | Terminal styling via Glamour port |
+| **SugarMarkdown** | Thematic cousin | Terminal styling via Glamour port |
 | **CandyLog** | Indirect complement | Styled terminal output |
 | **CandyPalette** | Dependency | Terminal color detection |
 | **CandySprinkles** | Thematic relation | Lipgloss-based styling |

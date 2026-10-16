@@ -270,7 +270,7 @@ candy-sql/src/
 ## Layout Caching
 
 - **Current**: `ResultTable::computeColWidths()` runs a full pass over all rows at construction time. Renderer recomputes on every view() call.
-- **External approach**: ratatui layout caching (PR #22) showed 7.5x speedup via reference-based constraints + fast hashing. candy-shine should cache layout.
+- **External approach**: ratatui layout caching (PR #22) showed 7.5x speedup via reference-based constraints + fast hashing. sugar-markdown should cache layout.
 - **Why external is better**: Column width computation is O(rows × cols) at construction — acceptable but not memoized across re-renders.
 - **Tradeoffs**: Width cache invalidation needed when rows change.
 - **Applicability**: Low-Medium — widths computed once at construction, not re-computed per render.
@@ -456,7 +456,7 @@ The `sahilm/fuzzy` library provides `Find()` returning ranked matches with chara
 
 ## ratatui #1855: Layout Constraint Solver Hanging
 
-Cassowary constraint solver hangs with 100% CPU on certain constraint combinations. Root cause: non-deterministic `HashMap` behavior. Fix: `HashMap<Symbol, Row, BuildHasherDefault<SimpleStateHasher>>` for deterministic hashing. **Lesson**: If candy-shine uses any constraint solver, use deterministic hashing.
+Cassowary constraint solver hangs with 100% CPU on certain constraint combinations. Root cause: non-deterministic `HashMap` behavior. Fix: `HashMap<Symbol, Row, BuildHasherDefault<SimpleStateHasher>>` for deterministic hashing. **Lesson**: If sugar-markdown uses any constraint solver, use deterministic hashing.
 
 ---
 

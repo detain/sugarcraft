@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\MdView\Tests;
 
 use SugarCraft\MdView\MdViewModel;
-use SugarCraft\Shine\Renderer;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
 use SugarCraft\Testing\Snapshot\Assertions;
 use PHPUnit\Framework\TestCase;
 

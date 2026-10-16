@@ -139,7 +139,7 @@ SugarCraft maps to the Charmbracelet ecosystem for PHP TUI libraries. Crush is a
 | `internal/shell` | `candy-scriptui` | Shell command execution foundation |
 | `internal/lsp` | `candy-core` (future) | LSP integration pattern |
 | `internal/agent/tools` | `sugar-widgets`, `sugar-forms` | Built-in tool patterns for TUI interaction |
-| `internal/ui` | `candy-shine`, `sugar-charts` | TUI rendering with Bubble Tea |
+| `internal/ui` | `sugar-markdown`, `sugar-charts` | TUI rendering with Bubble Tea |
 | `internal/skills` | (none yet) | Agent skills - potential `sugar-agent` |
 | `internal/hooks` | (none yet) | Hook system for extensibility |
 | `internal/config` | `SugarCraft\Core` | Service-based configuration pattern |

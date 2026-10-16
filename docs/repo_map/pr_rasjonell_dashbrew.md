@@ -27,7 +27,7 @@ From the first-pass analysis (`rasjonell_dashbrew.md`), SugarCraft maps to Dashb
 | Dashbrew Concept | SugarCraft Lib(s) | Status |
 |---|---|---|
 | Dashboard model (layout tree, flex routing) | `candy-core` | Not yet built |
-| Terminal rendering (lipgloss borders, styles) | `candy-core` + `candy-shine` | Partial |
+| Terminal rendering (lipgloss borders, styles) | `candy-core` + `sugar-markdown` | Partial |
 | Text/scrollable viewport | `sugar-widgets` | Partial |
 | Line/area ASCII chart | `sugar-charts` | Partial |
 | Histogram/bar chart | `sugar-charts` | Partial |
@@ -35,7 +35,7 @@ From the first-pass analysis (`rasjonell_dashbrew.md`), SugarCraft maps to Dashb
 | Todo list (persistent, keyboard-driven) | `sugar-widgets` or new `sugar-todo` | Not yet built |
 | Action system (shell dispatch, timeout, sticky state) | `candy-core` | Not yet built |
 | Bounding-box navigation (focus ring, neighbor finding) | `candy-core` | Partial |
-| Theme system (named palettes, auto detection) | `candy-shine` | Partial |
+| Theme system (named palettes, auto detection) | `sugar-markdown` | Partial |
 | Key bindings / action palette | `candy-sprinkles` | Partial |
 | HTTP data fetching (API source, JSONPath) | `sugar-widgets` | Partial |
 | Layout containers (row/column flex) | `candy-core` | Not yet built |
@@ -323,7 +323,7 @@ SugarCraft has opportunities that Dashbrew missed:
 | Pattern | Dashbrew Implementation | SugarCraft Implication |
 |---|---|---|
 | **Bubble Tea component model** | Dashbrew uses TEA with `Component` interface + `baseComponent` embedding | SugarCraft's Model pattern should mirror this |
-| **Lipgloss for styling** | All styling via lipgloss borders, colors, properties | SugarCraft's `candy-shine` should fully map lipgloss |
+| **Lipgloss for styling** | All styling via lipgloss borders, colors, properties | SugarCraft's `sugar-markdown` should fully map lipgloss |
 | **bubbles for common widgets** | Uses `bubbletea/bubbles` spinner, viewport, list, table | SugarCraft should port all bubbles |
 | **ASCII chart rendering** | Uses `guptarohit/asciigraph` | SugarCraft needs ASCII chart generation |
 | **JSONPath extraction** | Uses `oliveagle/jsonpath` for API data extraction | SugarCraft needs similar JSONPath/JSONPath extraction |
@@ -354,7 +354,7 @@ Based on this analysis, prioritized by impact:
 
 4. **Create the 4-level theme merge system**
    - default theme → named theme → explicit palette → legacy border
-   - Foundation for theming in `candy-shine`
+   - Foundation for theming in `sugar-markdown`
 
 ### Tier 2: Medium Impact, Moderate Effort
 

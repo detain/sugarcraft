@@ -11,8 +11,8 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Palette\Probe\Capability;
 use SugarCraft\Palette\Probe\TerminalProbe;
-use SugarCraft\Shine\Renderer;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -33,7 +33,7 @@ final class RenderCommand extends Command
      * Hard cap on `--theme-config` bytes read before the JSON decode. A
      * theme config is a few KB in practice; this ceiling stops a malicious
      * or runaway file (or an attacker-controlled path) from being slurped
-     * whole into memory. Mirrors candy-shine's MAX_HIGHLIGHT_BYTES.
+     * whole into memory. Mirrors sugar-markdown's MAX_HIGHLIGHT_BYTES.
      */
     private const MAX_THEME_CONFIG_BYTES = 1_000_000;
 
@@ -196,7 +196,7 @@ final class RenderCommand extends Command
      *
      * Two JSON schemas are accepted (E735 step 10.25): a top-level
      * `document` OBJECT marks a glamour style file and routes through
-     * {@see GlamourTheme::toShineTheme()} via the sniff below; anything else
+     * {@see GlamourTheme::toMarkdownTheme()} via the sniff below; anything else
      * keeps the historic flat per-element shape. The signatures cannot
      * collide — the flat schema has no `document` key.
      */
@@ -215,7 +215,7 @@ final class RenderCommand extends Command
 
         $decoded = json_decode($raw, associative: true);
         if (is_array($decoded) && GlamourTheme::isGlamourSchema($decoded)) {
-            return GlamourTheme::fromDecoded($decoded)->toShineTheme();
+            return GlamourTheme::fromDecoded($decoded)->toMarkdownTheme();
         }
 
         return Theme::fromJsonString($raw);

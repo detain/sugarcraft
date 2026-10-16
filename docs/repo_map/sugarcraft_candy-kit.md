@@ -306,7 +306,7 @@ This is distinguishable from a progress bar (which would use `sugar-widgets` pro
 - Optional description paragraph
 - Sectioned flag/command tables with two-column alignment
 
-This is distinct from `candy-shine` (markdown rendering) and `candy-log` (time-stamped log entries). HelpText is specifically for the `--help` output of a CLI command.
+This is distinct from `sugar-markdown` (markdown rendering) and `candy-log` (time-stamped log entries). HelpText is specifically for the `--help` output of a CLI command.
 
 ---
 
@@ -475,7 +475,7 @@ Sections are rendered in the order supplied in the `$sections` associative array
 |---------|-----|----------|-----|
 | `gum style` (colors/borders/padding) | ✅ | ❌ (use candy-sprinkles) | Different abstraction level |
 | `gum log` (structured logging) | ✅ | ❌ (use candy-log) | Different abstraction level |
-| `gum format` (markdown/code) | ✅ | ❌ (use candy-shine) | Different abstraction level |
+| `gum format` (markdown/code) | ✅ | ❌ (use sugar-markdown) | Different abstraction level |
 | `gum join` (layout composition) | ✅ | ❌ (use candy-sprinkles Layout) | Different abstraction level |
 | `gum spin` (spinner + command) | ✅ | ❌ | Different abstraction level |
 | `gum confirm` / `gum choose` | ✅ | ❌ | Interactive TUI, not presentation |
@@ -565,7 +565,7 @@ Gum generates shell completions via a hidden `completion` command. While candy-k
 
 6. **Add shell completion generator** — Extract completion generation from any CLI framework as a standalone utility in a new `candy-complete` or `sugar-complete` library.
 
-7. **Add `HelpText::renderMarkdown()`** — Integrate `candy-shine` for rendering markdown-formatted descriptions in help output (currently only plain text description is supported).
+7. **Add `HelpText::renderMarkdown()`** — Integrate `sugar-markdown` for rendering markdown-formatted descriptions in help output (currently only plain text description is supported).
 
 ---
 

@@ -100,7 +100,7 @@ SUBJECTS: dict[str, str] = {
     "candy-sprinkles": "a small joyful pile of glossy rainbow candy sprinkles",
     "sugar-mouse":      "a glossy pink-and-white concentric target dartboard made of candy with three small gumball orbs floating around it",
     "candy-scriptui":     "a glossy pink-and-white seashell holding a single iridescent pearl",
-    "candy-shine":     "a glossy faceted candy gemstone radiating soft sparkle rays",
+    "sugar-markdown":     "a glossy faceted candy gemstone radiating soft sparkle rays",
     "candy-starter":      "a pink silicone candy mold tray with two small gummy bears nestled inside",
     "candy-kit":       "a small glossy candy toolbox open with a few candy tools peeking out",
     "candy-metrics":   "a chubby glossy candy gauge dial with a sweep needle pointing up",

@@ -6,12 +6,12 @@ namespace SugarCraft\MdView\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\MdView\GlamourTheme;
-use SugarCraft\Shine\Theme;
+use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * E735 step 10.25 — glamour STYLE JSON parsing + the candy-shine adapter,
+ * E735 step 10.25 — glamour STYLE JSON parsing + the sugar-markdown adapter,
  * including the live `--theme-config` route that keeps the adapter from
  * rotting into dead code again (audit W11 deleted the first, unwired
  * incarnation for exactly that reason).
@@ -57,7 +57,7 @@ final class GlamourThemeTest extends TestCase
         $glamour = json_decode($this->stockGlamourJson(), associative: true);
         self::assertTrue(GlamourTheme::isGlamourSchema($glamour));
 
-        // The flat per-element colour map (candy-shine's own schema) has no
+        // The flat per-element colour map (sugar-markdown's own schema) has no
         // document OBJECT — a same-named scalar must not false-positive.
         self::assertFalse(GlamourTheme::isGlamourSchema(['paragraph' => ['foreground' => '#fff']]));
         self::assertFalse(GlamourTheme::isGlamourSchema(['document' => 'not-a-block']));
@@ -97,9 +97,9 @@ final class GlamourThemeTest extends TestCase
         self::assertSame('', $theme->indentToken('hr'));
     }
 
-    public function testShineThemeCarriesDocumentAffixesIndentAndMargin(): void
+    public function testMarkdownThemeCarriesDocumentAffixesIndentAndMargin(): void
     {
-        $shine = GlamourTheme::fromJsonString($this->stockGlamourJson())->toShineTheme();
+        $shine = GlamourTheme::fromJsonString($this->stockGlamourJson())->toMarkdownTheme();
 
         self::assertSame("\n", $shine->documentBlockPrefix);
         self::assertSame("\n", $shine->documentBlockSuffix);
@@ -107,9 +107,9 @@ final class GlamourThemeTest extends TestCase
         self::assertSame(2, $shine->documentMargin);
     }
 
-    public function testShineThemeHeadingsAndParagraphStyles(): void
+    public function testMarkdownThemeHeadingsAndParagraphStyles(): void
     {
-        $shine = GlamourTheme::fromJsonString($this->stockGlamourJson())->toShineTheme();
+        $shine = GlamourTheme::fromJsonString($this->stockGlamourJson())->toMarkdownTheme();
 
         // h1 defines its own colour 228…
         self::assertStringContainsString('38;5;228', $shine->heading1->render('x'));
@@ -123,9 +123,9 @@ final class GlamourThemeTest extends TestCase
         self::assertStringContainsString("\x1b[4m", $link); // underline
     }
 
-    public function testShineThemeChromaFamilies(): void
+    public function testMarkdownThemeChromaFamilies(): void
     {
-        $shine = GlamourTheme::fromJsonString($this->stockGlamourJson())->toShineTheme();
+        $shine = GlamourTheme::fromJsonString($this->stockGlamourJson())->toMarkdownTheme();
 
         // EXACT base token wins over the first subtype: Keyword (205) is
         // picked although KeywordType (141) also prefix-matches.
@@ -149,34 +149,34 @@ final class GlamourThemeTest extends TestCase
         $flipped = GlamourTheme::fromJsonString((string) json_encode([
             'document' => [],
             'chroma'   => ['KeywordType' => ['color' => '141'], 'Keyword' => ['color' => '205']],
-        ], JSON_THROW_ON_ERROR))->toShineTheme();
+        ], JSON_THROW_ON_ERROR))->toMarkdownTheme();
         $flippedKeyword = $flipped->keyword?->render('x') ?? '';
         self::assertStringContainsString('38;5;205', $flippedKeyword);
         self::assertStringNotContainsString('38;5;141', $flippedKeyword);
     }
 
-    public function testShineThemeChromaFamilyPrefixOnlyStillResolves(): void
+    public function testMarkdownThemeChromaFamilyPrefixOnlyStillResolves(): void
     {
         $json = json_encode([
             'document' => ['margin' => 0],
             'chroma'   => ['KeywordReserved' => ['color' => '197'], 'CommentMultiline' => ['color' => '240']],
         ], JSON_THROW_ON_ERROR);
 
-        $shine = GlamourTheme::fromJsonString($json)->toShineTheme();
+        $shine = GlamourTheme::fromJsonString($json)->toMarkdownTheme();
 
         self::assertStringContainsString('38;5;197', $shine->keyword?->render('x') ?? '');
         self::assertStringContainsString('38;5;240', $shine->comment?->render('x') ?? '');
         self::assertNull($shine->string);
     }
 
-    public function testParagraphBlockAffixesRouteToShinePrefixSuffix(): void
+    public function testParagraphBlockAffixesRouteToMarkdownPrefixSuffix(): void
     {
         $json = json_encode([
             'document'  => [],
             'paragraph' => ['block_prefix' => '> ', 'block_suffix' => ' <'],
         ], JSON_THROW_ON_ERROR);
 
-        $shine = GlamourTheme::fromJsonString($json)->toShineTheme();
+        $shine = GlamourTheme::fromJsonString($json)->toMarkdownTheme();
 
         self::assertSame('> ', $shine->paragraphPrefix);
         self::assertSame(' <', $shine->paragraphSuffix);
@@ -192,7 +192,7 @@ final class GlamourThemeTest extends TestCase
             'h4'        => ['color' => '999'],   // 3-digit out-of-range index → ignored
             'paragraph' => ['color' => '7'],
         ], JSON_THROW_ON_ERROR);
-        $shine = GlamourTheme::fromJsonString($json)->toShineTheme();
+        $shine = GlamourTheme::fromJsonString($json)->toMarkdownTheme();
 
         self::assertStringContainsString('38;2;255;0;0', $shine->heading1->render('x'));
         // No foreground on `auto` / out-of-range colours: no 38;… SGR at all.
@@ -210,7 +210,7 @@ final class GlamourThemeTest extends TestCase
         $json = json_encode(['document' => [], 'h1' => ['color' => '#gg']], JSON_THROW_ON_ERROR);
 
         $this->expectException(\InvalidArgumentException::class);
-        GlamourTheme::fromJsonString($json)->toShineTheme();
+        GlamourTheme::fromJsonString($json)->toMarkdownTheme();
     }
 
     public function testBrokenJsonThrowsWithGlamourWording(): void
@@ -238,7 +238,7 @@ final class GlamourThemeTest extends TestCase
         try {
             $fromFile = GlamourTheme::fromFile($path);
             self::assertSame(2, $fromFile->documentMargin);
-            self::assertSame($fromFile->toShineTheme()->heading1->render('x'), GlamourTheme::fromJsonString($this->stockGlamourJson())->toShineTheme()->heading1->render('x'));
+            self::assertSame($fromFile->toMarkdownTheme()->heading1->render('x'), GlamourTheme::fromJsonString($this->stockGlamourJson())->toMarkdownTheme()->heading1->render('x'));
         } finally {
             unlink($path);
         }

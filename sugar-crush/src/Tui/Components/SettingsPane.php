@@ -77,7 +77,7 @@ final class SettingsPane
         $chat = $a->chat;
 
         // App::$root is the configured root (`--root`), so a
-        // `sugarcrush --root candy-shine` run shows the library it is jailed
+        // `sugarcrush --root sugar-markdown` run shows the library it is jailed
         // to rather than the directory the binary was started from. It stayed
         // getcwd() here only because App carried no root to read back — the
         // same gap that let the model be told the wrong repository

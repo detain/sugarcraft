@@ -11,7 +11,7 @@ use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\Syntax\TokenSpan;
 
 /**
- * Tests for the pure regex tokeniser extracted from candy-shine.
+ * Tests for the pure regex tokeniser extracted from sugar-markdown.
  *
  * These assert the {@see TokenSpan} sequence (kind + text), never ANSI —
  * styling is the consumer's concern. The load-bearing invariant is that the

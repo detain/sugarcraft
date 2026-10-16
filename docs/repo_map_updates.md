@@ -139,7 +139,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of candy-palette). Clean (55 libs scanned).
   - Branch: ai/probe-consumers
   - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
-  - TerminalProbe already in candy-mdview dependency tree (via candy-shine -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
+  - TerminalProbe already in candy-mdview dependency tree (via sugar-markdown -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
 
 - [2026-05-31 | step-33 | coder] candy-kv + candy-ssh-launcher + candy-git: adopt sugar-fuzzy:
   - Added `sugarcraft/sugar-fuzzy: dev-master` + path-repo to all three libs' composer.json

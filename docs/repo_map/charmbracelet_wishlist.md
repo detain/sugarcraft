@@ -208,11 +208,11 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 | PTY / TTY handling + raw terminal mode | `candy-pty` | The local client raw terminal setup (`makeRaw`, `term.IsTerminal`, `RequestPty`) maps directly to `candy-pty`. |
 | Terminal reset序列 (`resetPty`) | `candy-pty` | ANSI escape sequences for terminal reset would be part of `candy-pty`. |
 | Bubbletea TUI framework | `sugar-widgets` | `charmbracelet/bubbletea` → `sugar-widgets`. The `ListModel` is a `tea.Model` using `bubbles/list`. |
-| Lipgloss styling | `candy-shine` | `charmbracelet/lipgloss` → `candy-shine`. The `styles` struct with `lipgloss.AdaptiveColor` maps to `candy-shine`'s theme system. |
+| Lipgloss styling | `sugar-markdown` | `charmbracelet/lipgloss` → `sugar-markdown`. The `styles` struct with `lipgloss.AdaptiveColor` maps to `sugar-markdown`'s theme system. |
 | Key bindings (`key.NewBinding`) | `sugar-widgets` | `charmbracelet/bubbles/key` → `sugar-widgets`. The `copyIPAddr` and `enter` bindings are standard bubble key patterns. |
 | Logging (`charmbracelet/log`) | `candy-core` | `charmbracelet/log` → `candy-core` (the `Log` facade). Wishlist uses structured logging extensively. |
 | `ssh/crypto` (ProxyJump, session handling) | `candy-scriptui` | `golang.org/x/crypto/ssh` is used throughout wishlist for the actual SSH protocol. SugarCraft's `candy-scriptui` wraps the `charmbracelet/ssh` which itself wraps `crypto/ssh`. |
-| `Termenv` (clipboard, ANSI sequences) | `candy-shine` | `muesli/termenv` (used for `termenv.Copy` and `termenv.CSI` sequences) → `candy-shine`. |
+| `Termenv` (clipboard, ANSI sequences) | `sugar-markdown` | `muesli/termenv` (used for `termenv.Copy` and `termenv.CSI` sequences) → `sugar-markdown`. |
 | Multiplex STDIN fork | (no direct mapping) | The `multiplex.Reader()` pattern is wishlist-specific; not a direct port candidate. |
 | Blocking EOF-suppressing reader | (no direct mapping) | The `blocking.Reader` is wishlist-specific; no SugarCraft equivalent. |
 | `broadcast` relay for endpoint updates | `candy-core` (event bus) | `teivah/broadcast` is a generic pub/sub relay; could map to an event bus in `candy-core`. |
@@ -224,7 +224,7 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 
 - `sugar-widgets` — ports `charmbracelet/bubbletea`, `charmbracelet/bubbles` (including `list`, `key`, `spinner`)
 - `candy-scriptui` — ports `charmbracelet/ssh`, `charmbracelet/wish`
-- `candy-shine` — ports `charmbracelet/lipgloss`, `muesli/termenv`
+- `sugar-markdown` — ports `charmbracelet/lipgloss`, `muesli/termenv`
 - `candy-pty` — ports TTY/PTY raw mode and terminal control utilities
 - `candy-core` — ports `charmbracelet/log`
 
@@ -240,4 +240,4 @@ The **endpoint discovery layer** (Zeroconf, DNS SRV, Tailscale) is a strong diff
 
 From a security standpoint, the **auto-accept host keys** behavior is the most significant concern. It bypasses SSH's host key verification, which is the primary defense against man-in-the-middle attacks. The README even notes the `UserKnownHostsFile=/dev/null` workaround, but this should be opt-in rather than the default behavior. The server mode correctly refuses password authentication and supports only public-key auth with an authorized-users allowlist.
 
-For the **SugarCraft ecosystem**, wishlist would primarily be a *consumer* of existing ports (`sugar-widgets`, `candy-scriptui`, `candy-shine`) rather than a direct port target, since it is a full application rather than a reusable library. However, its `sshconfig` parser and discovery sub-packages (`srv`, `zeroconf`, `tailscale`) are strong candidates for leaf libraries that could stand alone. The `sshconfig` parser in particular is a non-trivial piece of infrastructure — handling glob patterns, `Include` directives with relative path resolution, and SSH config precedence rules — that would be valuable as a standalone `candy-sshconfig` package.
+For the **SugarCraft ecosystem**, wishlist would primarily be a *consumer* of existing ports (`sugar-widgets`, `candy-scriptui`, `sugar-markdown`) rather than a direct port target, since it is a full application rather than a reusable library. However, its `sshconfig` parser and discovery sub-packages (`srv`, `zeroconf`, `tailscale`) are strong candidates for leaf libraries that could stand alone. The `sshconfig` parser in particular is a non-trivial piece of infrastructure — handling glob patterns, `Include` directives with relative path resolution, and SSH config precedence rules — that would be valuable as a standalone `candy-sshconfig` package.

@@ -230,7 +230,7 @@ builds on it. From the same monorepo:
 - **SugarForms** — multi-page form library.
 - **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
 - **CandyScriptui** — composer-installable CLI of 13 subcommands.
-- **CandyShine** — Markdown → ANSI renderer.
+- **SugarMarkdown** — Markdown → ANSI renderer.
 - **SugarMouse** — mouse-zone tracker.
 - **HoneyBounce** — spring physics + Newtonian projectile sim.
 - **CandyKit** — opinionated CLI presentation helpers.
