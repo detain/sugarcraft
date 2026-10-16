@@ -90,11 +90,11 @@ _All items in this section have been resolved by the completion of steps 20–40
 
 - [2026-05-28 | step-01 | fixer] CsiHandlerImpl.php created as self-contained no-op stub — terminal delegation deferred to step-12. (was: BLOCKING entry about missing CsiHandlerImpl.php)
 
-- [2026-05-31 | step-22 | fixer] sugar-veil + candy-lister coverage gap fix:
+- [2026-05-31 | step-22 | fixer] sugar-overlay + candy-lister coverage gap fix:
   - **candy-lister**: 95.12% overall lines (234/246) — ✅ ABOVE 95% TARGET
     - Item: 100% lines (3/3), StringItem: 100% lines (2/2), DefaultPrefixer: 100%, DefaultSuffixer: 100%, FuzzyMatch: 100%, Model: 92.64% (151/163)
     - Added: `candy-lister/tests/ItemTest.php` (5 tests covering Item::string(), id, value property), `DefaultPrefixerTest.php` (10 tests covering initPrefixer, prefix, ansiWidth, various prefixer modes), expanded ModelTest.php with 13 new tests covering cursor edge cases, style setters, sort/filter edge cases, multi-line items, private method exercise via public API (splitOverWidth, hardWrap, renderItem wrap logic), 75 total tests, 122 assertions, ALL PASS
-  - **sugar-veil**: 88.37% overall lines (266/301) — BELOW 95% TARGET
+  - **sugar-overlay**: 88.37% overall lines (266/301) — BELOW 95% TARGET
     - Fade: 100% lines ✅, Scale: 94.44% (17/18 — 1 line in private easing() method), Slide: 88.89% (32/36 — 4 lines in private helper methods isTopAnchor/isBottomAnchor/isLeftAnchor/isRightAnchor), Position: 100% ✅, Veil: 86.13% (149/173), VeilStack: 86.05% (37/43)
     - Added: `FadeTest.php::testOpacity*` (7 tests covering opacity() method at progress 0/0.5/1.0, custom easing, monotonicity), `VeilStackTest.php::testCompositeAll*` (2 tests for empty stack), `VeilStackTest.php::testCountMethod` (1 test for Countable interface), `VeilTest.php::testAnimate*` (5 tests for animate() without animation, with slide/fade/scale animation at various progress values), `VeilTest.php::testGetManager*` (2 tests for deprecated getManager()), `VeilTest.php::testWithBackdrop*` (3 tests for backdrop clamping at negative/positive/over100), `VeilTest.php::testWithAnimation*` (3 tests for animation kind setters), 129 total tests, 200 assertions, ALL PASS
     - **Uncovered gaps** (architectural — cannot be directly tested):

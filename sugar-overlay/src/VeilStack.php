@@ -1,0 +1,219 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Overlay;
+
+/**
+ * Ordered collection of Veil instances rendered by z-index.
+ *
+ * Sorts veils by z-index ascending and composites them in order so
+ * higher z-index veils appear on top of lower ones.
+ */
+final class VeilStack implements \Countable
+{
+    /** @var list<Veil> */
+    private array $veils = [];
+
+    /** @var list<Veil>|null Cached sorted result, invalidated by mutators */
+    private ?array $sortedCache = null;
+
+    /**
+     * Create a new empty VeilStack.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    /**
+     * Add a veil to the stack.
+     */
+    public function add(Veil $veil): self
+    {
+        $next = clone $this;
+        $next->veils[] = $veil;
+        $next->sortedCache = null;
+        return $next;
+    }
+
+    /**
+     * Remove all veils from the stack.
+     */
+    public function clear(): self
+    {
+        $next = clone $this;
+        $next->veils = [];
+        $next->sortedCache = null;
+        return $next;
+    }
+
+    /**
+     * Remove veils matching the given predicate.
+     *
+     * @param \Closure(Veil): bool $predicate
+     */
+    public function removeWhere(\Closure $predicate): self
+    {
+        $next = clone $this;
+        $next->veils = array_values(array_filter($next->veils, static fn(Veil $v): bool => !$predicate($v)));
+        $next->sortedCache = null;
+        return $next;
+    }
+
+    /**
+     * Composite all veils onto the background in z-index order (lowest first).
+     *
+     * Each veil paints its own {@see Veil::content()} (attach one with
+     * {@see Veil::withContent()}; a content-less veil is a backdrop-only dim
+     * layer) ONTO THE ACCUMULATED canvas, so veils with higher z-index end
+     * up on top — each layer sees everything beneath it, including dims
+     * applied by earlier layers.
+     *
+     * @param string $background The base content
+     * @param Position $vertical Vertical position anchor
+     * @param Position $horizontal Horizontal position anchor
+     * @param int $xOffset Additional columns rightward (+) / leftward (-)
+     * @param int $yOffset Additional lines downward (+) / upward (-)
+     * @return string The composited output
+     */
+    public function composite(
+        string $background,
+        Position $vertical,
+        Position $horizontal,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): string {
+        // Sort by z-index ascending so lowest renders first
+        $sorted = $this->sorted();
+        $result = $background;
+        foreach ($sorted as $veil) {
+            // Use withoutSession() so inner compositing always emits full frame
+            // output, not a delta that would corrupt the chaining computation.
+            // The veil's OWN content rides over the ACCUMULATED $result — using
+            // the accumulated canvas as the foreground instead would cover every
+            // row and make the whole pass a silent no-op.
+            $result = $veil->withoutSession()->composite($veil->content(), $result, $vertical, $horizontal, $xOffset, $yOffset);
+        }
+        return $result;
+    }
+
+    /**
+     * Composite all veils at their individual positions.
+     *
+     * Each veil is composited onto the ACCUMULATED result at its own
+     * vPosition()/hPosition() anchor (CENTER when unset) with
+     * positionX()/positionY() offsets, painting its own
+     * {@see Veil::content()}, so higher z-index veils appear on top of
+     * lower ones.
+     *
+     * @param string $background The base content
+     * @return string The composited output
+     */
+    public function compositeAll(string $background): string
+    {
+        $sorted = $this->sorted();
+        $result = $background;
+        foreach ($sorted as $veil) {
+            // Use withoutSession() so inner compositing always emits full frame
+            // output, not a delta that would corrupt the chaining computation.
+            // $result (not $background) is the backdrop: later layers must see
+            // everything earlier layers painted.
+            $result = $veil->withoutSession()->composite(
+                $veil->content(),
+                $result,
+                $veil->vPosition() ?? Position::CENTER,
+                $veil->hPosition() ?? Position::CENTER,
+                $veil->positionX(),
+                $veil->positionY(),
+            );
+        }
+        return $result;
+    }
+
+    /**
+     * Return veils sorted by z-index ascending.
+     *
+     * @return list<Veil>
+     */
+    public function sorted(): array
+    {
+        if ($this->sortedCache !== null) {
+            return $this->sortedCache;
+        }
+        $veils = $this->veils;
+        \usort($veils, static fn(Veil $a, Veil $b): int => $a->zIndex() <=> $b->zIndex());
+        $this->sortedCache = $veils;
+        return $veils;
+    }
+
+    /**
+     * @return list<Veil>
+     */
+    public function all(): array
+    {
+        return $this->veils;
+    }
+
+    public function isEmpty(): bool
+    {
+        return $this->veils === [];
+    }
+
+    public function count(): int
+    {
+        return \count($this->veils);
+    }
+
+    /**
+     * Filter veils by a predicate.
+     *
+     * @param \Closure(Veil): bool $predicate
+     */
+    public function filter(\Closure $predicate): self
+    {
+        $next = clone $this;
+        $next->veils = array_values(array_filter($next->veils, $predicate));
+        $next->sortedCache = null;
+        return $next;
+    }
+
+    /**
+     * Get the highest z-index in the stack, or null when the stack is empty.
+     *
+     * Null rather than 0 because 0 is a real z-index — the default of every
+     * Veil::new() — so "empty" and "one default veil" must stay distinguishable.
+     */
+    public function maxZIndex(): ?int
+    {
+        if ($this->veils === []) {
+            return null;
+        }
+        $max = $this->veils[0]->zIndex();
+        foreach ($this->veils as $veil) {
+            if ($veil->zIndex() > $max) {
+                $max = $veil->zIndex();
+            }
+        }
+        return $max;
+    }
+
+    /**
+     * Get the lowest z-index in the stack, or null when the stack is empty.
+     *
+     * @see maxZIndex() for why empty is null, not 0
+     */
+    public function minZIndex(): ?int
+    {
+        if ($this->veils === []) {
+            return null;
+        }
+        $min = $this->veils[0]->zIndex();
+        foreach ($this->veils as $veil) {
+            if ($veil->zIndex() < $min) {
+                $min = $veil->zIndex();
+            }
+        }
+        return $min;
+    }
+}

@@ -3,7 +3,7 @@
 ## 1. Top 3 Critical Gaps
 
 ### 1.1 Buffer Diffing / Dirty-Region Tracking
-**Affects:** sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister
+**Affects:** sugar-boxer, sugar-dash, sugar-crush, sugar-overlay, sugar-stickers, candy-lister
 All do full re-render every frame. External repos (ultraviolet, ratatui, php-tui) track touched lines and emit only delta ANSI sequences via ECH/REP/ICH/DCH escape sequences. Critical for SSH connections and live dashboards.
 
 **Why critical:** Without diffing, every render sends the full viewport — wastefully for unchanged regions, causes flicker on some terminals, and prevents smooth animations.
@@ -30,7 +30,7 @@ Components across sugar-dash, sugar-crush, sugar-readline, candy-lister mix stat
 **Pattern needed:** `ListState` / `TableState` / `TabsState` as external state objects passed to constructors, rather than internal mutable state.
 
 ### 2.2 No Consistent Mouse Hit-Testing Infrastructure
-Mouse support is missing or incomplete across most packages. When implemented, it relies on external candy-mouse Manager wiring (sugar-veil, sugar-crumbs) rather than self-contained Mark/Scan/Get pattern (bubblezone's zero-width ANSI markers). No consistent coordinate translation or zone tracking across the ecosystem.
+Mouse support is missing or incomplete across most packages. When implemented, it relies on external candy-mouse Manager wiring (sugar-overlay, sugar-crumbs) rather than self-contained Mark/Scan/Get pattern (bubblezone's zero-width ANSI markers). No consistent coordinate translation or zone tracking across the ecosystem.
 
 **Pattern needed:** bubblezone-style Mark/Scan/Get for self-contained hit-testing without external dependencies.
 
@@ -40,17 +40,17 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 
 ### 3.1 ratatui/ratatui (cited 7+ times)
 **Purpose:** Full TUI framework reference for constraint-based layout, buffer diffing, StatefulWidget pattern, and immediate-mode rendering.
-**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dash), buffer diffing algorithm (sugar-crush, sugar-veil), Widget/StatefulWidget traits (sugar-dash, candy-git).
+**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dash), buffer diffing algorithm (sugar-crush, sugar-overlay), Widget/StatefulWidget traits (sugar-dash, candy-git).
 **Key citation:** "The layout system uses the Cassowary constraint solver algorithm to resolve conflicting layout constraints"
 
 ### 3.2 charmbracelet/bubbletea (cited 6+ times)
 **Purpose:** Elm architecture pattern, input handling, mouse events, synchronized output (ANSI 2026), Cmd/Batch command pattern.
-**Why cited:** TEA model pattern for MVU architecture (sugar-crush, candy-git), mouse event handling (sugar-readline, sugar-veil), key decoding (sugar-readline).
+**Why cited:** TEA model pattern for MVU architecture (sugar-crush, candy-git), mouse event handling (sugar-readline, sugar-overlay), key decoding (sugar-readline).
 **Key citation:** "Elm architecture: Model/Update/View — every update returns new model + optional command"
 
 ### 3.3 charmbracelet/lipgloss (cited 5+ times)
 **Purpose:** Pure-value Style type, CSS-like API, CIELAB color blending, borders, layer compositing, Canvas cell buffer.
-**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-stickers, sugar-veil), border system (candy-git), width measurement (candy-lister).
+**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-stickers, sugar-overlay), border system (candy-git), width measurement (candy-lister).
 **Key citation:** "Style system with bitmask properties, per-side borders, CIELAB color blending, layer compositing"
 
 ---
@@ -77,7 +77,7 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 - Pure string renderer decoupled from tea runtime vs upstream's Bubbletea dependency
 - PHP-native implementation vs Go interop complexity
 
-### 5.2 sugar-veil > rmhubbert/bubbletea-overlay
+### 5.2 sugar-overlay > rmhubbert/bubbletea-overlay
 - 9-position anchor system (vs upstream's 5)
 - Multi-overlay z-index stacking with VeilStack
 - Animation infrastructure (Slide/Fade/Scale via CubicBezier)

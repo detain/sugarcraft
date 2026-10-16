@@ -167,7 +167,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in candy-ssh-launcher.
 
-10. **Buffer diffing / dirty-region tracking** — sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
+10. **Buffer diffing / dirty-region tracking** — sugar-boxer, sugar-dash, sugar-crush, sugar-overlay, sugar-stickers, candy-lister all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
 
 11. **Input driver / TTY integration** — sugar-readline cannot read actual terminal keypresses — only processes pre-decoded symbolic key names. No mechanism to decode terminal escape sequences (Kitty keyboard protocol, SGR mouse). Blocking real-world interactive usage.
 
@@ -353,7 +353,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 8 | Wire `Mosaic::auto()` + `diagnose()` | candy-mosaic | High | Low | Low | P0 |
 | 9 | Implement Cassowary constraint solver | candy-sprinkles, candy-core, sugar-bits, sugar-boxer, sugar-dash | Critical | High | Medium | P1 |
 | 10 | Implement cell-based buffer model | candy-core, sugar-bits, candy-sprinkles | Critical | High | Medium | P1 |
-| 11 | Implement buffer diffing / dirty-region tracking | sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister | High | Medium | Low | P1 |
+| 11 | Implement buffer diffing / dirty-region tracking | sugar-boxer, sugar-dash, sugar-crush, sugar-overlay, sugar-stickers, candy-lister | High | Medium | Low | P1 |
 | 12 | Add input driver for terminal keypress decoding | sugar-readline | Critical | High | Medium | P1 |
 | 13 | Add `charmbracelet/x/ansi` state machine sharing | candy-ansi-inspect, candy-hermit, candy-codeshot, candy-vt | High | Medium | Low | P1 |
 | 14 | Implement GitHub/GitLab README fetching | candy-mdview | High | Medium | Low | P1 |
@@ -446,7 +446,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **`SugarCraft/Ansi`** — Shared `charmbracelet/x/ansi` state machine port. Consumed by candy-ansi-inspect, candy-hermit, candy-codeshot, candy-vt.
 
-6. **`SugarCraft/Mouse`** — Shared Mark/Scan/Get pattern for self-contained zone hit-testing. Consumed by candy-mouse, sugar-veil, sugar-crumbs, and all zone-aware packages.
+6. **`SugarCraft/Mouse`** — Shared Mark/Scan/Get pattern for self-contained zone hit-testing. Consumed by candy-mouse, sugar-overlay, sugar-crumbs, and all zone-aware packages.
 
 7. **`SugarCraft/Input`** — New package with terminal escape sequence decoder (Kitty keyboard protocol, SGR mouse), enabling sugar-readline real-world usage.
 
@@ -502,7 +502,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 3. **String-based layout** — Every layout-sensitive package manually pads strings; none use constraint specification.
 
-4. **Manual mouse coordinate tracking** — sugar-veil, sugar-crumbs, candy-lister each wire candy-mouse Manager independently rather than using self-contained Mark/Scan/Get.
+4. **Manual mouse coordinate tracking** — sugar-overlay, sugar-crumbs, candy-lister each wire candy-mouse Manager independently rather than using self-contained Mark/Scan/Get.
 
 5. **ReactPHP async** — candy-forms/candy-forms have async suggestions; candy-core has exec() that blocks; inconsistent async models across ecosystem.
 
@@ -542,7 +542,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 10. **sugar-boxer > treilik/bubbleboxer** — Immutable Node pattern, 9 border styles via candy-sprinkles, pure string renderer decoupled from tea runtime.
 
-11. **sugar-veil > rmhubbert/bubbletea-overlay** — 9-position anchor (vs upstream 5), multi-overlay z-index stacking, animation infrastructure, backdrop dimming, auto-size, click-outside dismissal, UTF-8 column tracking.
+11. **sugar-overlay > rmhubbert/bubbletea-overlay** — 9-position anchor (vs upstream 5), multi-overlay z-index stacking, animation infrastructure, backdrop dimming, auto-size, click-outside dismissal, UTF-8 column tracking.
 
 12. **sugar-crumbs > KevM/bubbleo** — Type-ahead filtering, path parsing via `Shell::pushDirectory()`, HTML with ARIA semantics, 678-line test suite, i18n.
 

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarOverlay — SugarCraft</title>
+<meta name="description" content="SugarOverlay: Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.">
+<meta property="og:title" content="SugarOverlay — SugarCraft">
+<meta property="og:description" content="Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-overlay.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-overlay.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-overlay.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-overlay.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-overlay.png" alt="SugarOverlay">
+      <div>
+        <h2>SugarOverlay</h2>
+        <p class="detail-sub">Terminal overlay compositor</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">inspired by <a href="https://github.com/rmhubbert/bubbletea-overlay" style="color: inherit;">rmhubbert/bubbletea-overlay</a></span>
+          <span class="tag-chip">overlay</span><span class="tag-chip">compositing</span><span class="tag-chip">ui</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-overlay"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-overlay" alt="SugarOverlay code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">Composite overlay views (modals, tooltips, toasts) on top of a base TUI frame. Render your models first, then let the compositor handle positioning, backdrop dimming, z-ordering, animated transitions and click-outside hit-testing.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-overlay</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Overlay\{Position, Veil, VeilStack};
+
+$veil = Veil::new()-&gt;withBackdrop(40);   // dim the background to 40%
+
+// Composite a foreground string centered over a background string
+echo $veil-&gt;composite($modalView, $baseView, Position::CENTER, Position::CENTER);
+
+// Layer several overlays by z-index
+$stack = VeilStack::new()
+    -&gt;add(Veil::new()-&gt;withContent($modalView)-&gt;withZIndex(1))
+    -&gt;add(Veil::new()-&gt;withContent($tooltip)-&gt;withZIndex(2)
+        -&gt;withPosition(Position::TOP, Position::RIGHT));
+echo $stack-&gt;compositeAll($baseView);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Positioning</strong><span>Nine anchors — Top, Right, Bottom, Left, Center and the four corners — plus X/Y offsets in cells (columns/rows).</span></div>
+      <div class="feature"><strong>Backdrop dimming</strong><span>Truecolor opacity blend (0–100) applied to plain background lines during assembly.</span></div>
+      <div class="feature"><strong>Animated transitions</strong><span><code>withAnimation()</code> + <code>animate(…, $progress)</code>: SLIDE enters from the anchored edge, SCALE reveals lines from the center outward, and FADE brightens the overlay in from black through a truecolor gray pen (terminals cannot alpha-blend), returning the original bytes at full opacity.</span></div>
+      <div class="feature"><strong>VeilStack</strong><span>Ordered collection of veils rendered by ascending z-index; <code>maxZIndex()</code> / <code>minZIndex()</code> return <code>null</code> for an empty stack, since 0 is a real z-index.</span></div>
+      <div class="feature"><strong>Click-outside dismiss</strong><span><code>withClickOutsideDismiss()</code> + <code>scan()</code> / <code>isClickOutside()</code> via candy-mouse zones. The scanned zones travel with the veil across later <code>with*()</code> calls, so a click is judged against the frame that was on screen.</span></div>
+      <div class="feature"><strong>Buffer diffing</strong><span><code>composite()</code> diffs against the previous frame and emits only changed cells. An empty background returns the overlay itself as the frame, and colours are clamped when the diff pen is built: truecolor SGR components to 0–255, and 256-colour indices to 0–255, so <code>38;5;300</code> cannot widen a cell and a negative index no longer falls back to white.</span></div>
+      <div class="feature"><strong>Border chrome &amp; auto-size</strong><span><code>withBorder()</code> wraps veil content in a terminal border; <code>withAutoSize()</code> sizes the veil from its content.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-overlay">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-overlay/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-overlay/tree/master/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/rmhubbert/bubbletea-overlay">rmhubbert/bubbletea-overlay</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Veil</td><td>new()</td><td>Create a new veil</td></tr>
+<tr><td>Veil</td><td>composite(foreground, background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0)</td><td>Composite one string over another; offsets are cells</td></tr>
+<tr><td>Veil</td><td>animate(foreground, background, $vertical, $horizontal, float $progress, $xOffset = 0, $yOffset = 0)</td><td>Composite with the configured animation applied at progress 0..1</td></tr>
+<tr><td>Veil</td><td>withBackdrop(int) / withAnimation(?AnimationKind) / withZIndex(int) / withPosition(?Position, ?Position, x, y) / withContent(string) / withBorder(?Border) / withAutoSize() / withClickOutsideDismiss()</td><td>Immutable configuration; scanned zones survive every with*()</td></tr>
+<tr><td>Veil</td><td>scan(rendered) / hit(col, row) / isClickOutside(MouseMsg)</td><td>Zone hit-testing; isClickOutside() throws when dismissal is on but scan() has not run</td></tr>
+<tr><td>VeilStack</td><td>new() / add(Veil) / removeWhere(\Closure) / filter(\Closure) / clear()</td><td>Immutable stack of veils</td></tr>
+<tr><td>VeilStack</td><td>composite(background, $vertical, $horizontal, $xOffset = 0, $yOffset = 0) / compositeAll(background)</td><td>Render every veil by ascending z-index, at a shared position or each at its own</td></tr>
+<tr><td>VeilStack</td><td>maxZIndex(): ?int / minZIndex(): ?int</td><td>Highest / lowest z-index, null for an empty stack</td></tr>
+<tr><td>VeilStack</td><td>sorted() / all() / isEmpty() / count()</td><td>Queries (count() via Countable)</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-overlay/.vhs/basic.gif" alt="Modal overlay">
+                <h3>Modal overlay</h3>
+                <span class="demo-caption">Modal pinned over a background frame.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-overlay/.vhs/multiple.gif" alt="Multiple overlays">
+                <h3>Multiple overlays</h3>
+                <span class="demo-caption">Stacked overlays composited in z-order.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-overlay">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-overlay/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

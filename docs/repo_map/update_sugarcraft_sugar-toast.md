@@ -419,7 +419,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 1. **Animation cookbook**: Document how to wire honey-bounce for fade animations
 2. **Queue management guide**: Explain overflow strategies with visual examples
-3. **Integration patterns**: Show how to integrate with candy-core, sugar-veil for complex overlays
+3. **Integration patterns**: Show how to integrate with candy-core, sugar-overlay for complex overlays
 4. **i18n guide**: How to add new locales beyond English
 5. **Keyboard handling reference**: How to wire action buttons in a Bubble Tea program
 
@@ -447,7 +447,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 # Ecosystem / Integration Opportunities
 
-1. **sugar-veil integration**: SugarToast toasts could render via sugar-veil's overlay compositor for complex layouts
+1. **sugar-overlay integration**: SugarToast toasts could render via sugar-overlay's overlay compositor for complex layouts
 2. **sugar-charts integration**: Progress toasts could display sparkline charts instead of simple bars
 3. **candy-scriptui integration**: Toast notifications for shell command completion
 4. **candy-metrics integration**: Performance metric notifications
@@ -580,4 +580,4 @@ SugarToast represents a **significant enhancement** over its upstream bubbleup, 
 
 **Competitive Threat**: bubbleup (Go) remains more feature-complete with real fade animation and custom type registration. SugarCraft's PHP advantage is Unicode correctness and framework-agnostic pure renderer simplicity.
 
-**Long-term Vision**: SugarToast should become the notification layer for the entire SugarCraft ecosystem, with integrations into sugar-veil (overlay compositor), sugar-charts (progress charts), and candy-scriptui (shell notifications). The animation system connecting to honey-bounce is the critical path to making this vision compelling.
+**Long-term Vision**: SugarToast should become the notification layer for the entire SugarCraft ecosystem, with integrations into sugar-overlay (overlay compositor), sugar-charts (progress charts), and candy-scriptui (shell notifications). The animation system connecting to honey-bounce is the critical path to making this vision compelling.

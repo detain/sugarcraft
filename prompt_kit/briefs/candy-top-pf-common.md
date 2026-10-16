@@ -9,7 +9,7 @@ Plan: plan_top.md §4 P-F row + Wave U (#1476, #1411, #1791b, #1849). PR notes: 
 
 P-F is the phase that OWNS App.php changes: an App-owned overlay/menu stack sits ABOVE the modal tier in input
 precedence (ctrl+c still first) and paints over the whole frame (btop overlay law: background dimmed — SGR-strip +
-inactive_fg, plan §3 Overlays.php / sugar-veil precedent). Keep panels decoupled: panels REQUEST overlays via a Msg or
+inactive_fg, plan §3 Overlays.php / sugar-overlay precedent). Keep panels decoupled: panels REQUEST overlays via a Msg or
 PanelResult field (e.g. OpenMenuMsg / Overlay value object), never construct App state.
 
 Hard rules: NEVER git stash/checkout/reset/clean/commit/add (supervisor commits). Don't touch sugar-crush or

@@ -369,25 +369,25 @@
 - **Effort**: Low
 - **Research**: `libraries/sugar-charts-research.md`
 
-### sugar-veil
+### sugar-overlay
 
 ### [ ] Backdrop/Dimming
 
 - **Priority**: P1 - High
 - **Effort**: 2-3 days
-- **Research**: `libraries/sugar-veil-research.md`
+- **Research**: `libraries/sugar-overlay-research.md`
 
 ### [ ] Animation System (slide-in, easing)
 
 - **Priority**: P1 - High
 - **Effort**: 3-4 days
-- **Research**: `libraries/sugar-veil-research.md`
+- **Research**: `libraries/sugar-overlay-research.md`
 
 ### [ ] Border Chrome/Frame wrapper
 
 - **Priority**: P1 - High
 - **Effort**: 1-2 days
-- **Research**: `libraries/sugar-veil-research.md`
+- **Research**: `libraries/sugar-overlay-research.md`
 
 ---
 
@@ -473,7 +473,7 @@ All 45 research documents available at:
 | sugar-table | 19KB |
 | candy-codetime | 19KB |
 | sugar-toast | 20KB |
-| sugar-veil | 21KB |
+| sugar-overlay | 21KB |
 | candy-ssh-launcher | 16KB |
 | super-candy | 18KB |
 

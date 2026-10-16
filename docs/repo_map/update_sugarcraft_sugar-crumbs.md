@@ -431,7 +431,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Style-aware Breadcrumb renderer
    - Support custom separators with box-drawing characters
 
-4. **sugar-crumbs → sugar-veil (overlay) integration**
+4. **sugar-crumbs → sugar-overlay (overlay) integration**
    - Modal dialogs that overlay the current navigation view
    - Use overlay compositing for confirmations
 

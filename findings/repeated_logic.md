@@ -51,7 +51,7 @@ trait Mutable
 
 ### Classes With Local `mutate()` Implementations (Examples)
 
-**`sugar-veil/src/Veil.php:L628`**
+**`sugar-overlay/src/Veil.php:L628`**
 ```php
 private function mutate(array $changes): self
 {

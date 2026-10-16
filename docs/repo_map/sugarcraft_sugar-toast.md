@@ -251,7 +251,7 @@ The `charmbracelet/bubbles` library provides a `Progress` component used as a re
 | Library | Relationship |
 |---------|-------------|
 | `candy-core` | Provides `SugarCraft\Core\Util\Width` (display-cell measurement) and `SugarCraft\Core\Util\Ansi` (SGR helpers) — both used heavily |
-| `sugar-veil` | General-purpose floating overlay compositor; sugar-toast uses similar overlay pattern |
+| `sugar-overlay` | General-purpose floating overlay compositor; sugar-toast uses similar overlay pattern |
 | `honey-bounce` | Animation easing library; referenced in CALIBER_LEARNINGS.md for future CubicBezier fade animation |
 
 ---

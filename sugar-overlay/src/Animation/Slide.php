@@ -1,0 +1,141 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Overlay\Animation;
+
+use SugarCraft\Bounce\Easing\CubicBezier;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Overlay\Lines;
+use SugarCraft\Overlay\Position;
+
+/**
+ * Slide animation — foreground enters from the anchor direction.
+ *
+ * At progress 0, the foreground sits fully OFF-SCREEN on the anchor side
+ * (a LEFT anchor starts at columns −fgWidth, a TOP anchor starts at rows
+ * −fgHeight, …) and travels toward its final position as progress grows;
+ * at progress 1 the offsets are zero. Negative-x/y placement is clipped
+ * away by Veil::composite(), so progress 0 shows nothing rather than a
+ * sliver.
+ *
+ * A CENTER (or axis-centred) anchor has no edge to enter from, so SLIDE
+ * is a deliberate no-op there — both offsets stay 0 at every progress.
+ * Anchor at an edge (TOP/LEFT/RIGHT/BOTTOM or a corner) to get a slide.
+ *
+ * The offset is applied via the returned vertical/horizontal offsets
+ * which should be added to the composite() call's xOffset/yOffset.
+ */
+final class Slide
+{
+    public function __construct(
+        private readonly ?CubicBezier $easing = null,
+    ) {
+    }
+
+    /**
+     * Get the easing function, falling back to easeOut if not set.
+     */
+    private function easing(): CubicBezier
+    {
+        return $this->easing ?? CubicBezier::easeOut();
+    }
+
+    /**
+     * Apply slide animation to the foreground at the given progress.
+     *
+     * @param string   $foreground  The overlay content
+     * @param float    $progress    Animation progress 0.0–1.0
+     * @param Position $vertical    Vertical anchor
+     * @param Position $horizontal  Horizontal anchor
+     * @return array{foreground: string, verticalOffset: int, horizontalOffset: int}
+     */
+    public function apply(
+        string $foreground,
+        float $progress,
+        Position $vertical,
+        Position $horizontal,
+    ): array {
+        $eased = $this->easing()->evaluate($progress);
+
+        // Measure exactly as Veil::composite() does, so a trailing "\n"
+        // does not add a phantom row to the travel distance.
+        $lines = Lines::split($foreground);
+        $fgHeight = \count($lines);
+        $fgWidth = $this->maxWidth($lines);
+
+        $factor = 1.0 - $eased;
+
+        $vOffset = 0;
+        $hOffset = 0;
+
+        // A LEFT-anchored overlay's final column is the left edge, so it must
+        // START left of there (negative = off-screen left) and travel right.
+        // A RIGHT anchor mirrors it. TOP/BOTTOM do the same on the row axis.
+        if ($this->isLeftAnchor($vertical, $horizontal) === TRUE) {
+            $hOffset = -(int) \round($factor * $fgWidth);
+        } elseif ($this->isRightAnchor($vertical, $horizontal) === TRUE) {
+            $hOffset = (int) \round($factor * $fgWidth);
+        }
+
+        if ($this->isTopAnchor($vertical, $horizontal) === TRUE) {
+            $vOffset = -(int) \round($factor * $fgHeight);
+        } elseif ($this->isBottomAnchor($vertical, $horizontal) === TRUE) {
+            $vOffset = (int) \round($factor * $fgHeight);
+        }
+
+        return [
+            'foreground' => $foreground,
+            'verticalOffset' => $vOffset,
+            'horizontalOffset' => $hOffset,
+        ];
+    }
+
+    private function isTopAnchor(Position $v, Position $h): bool
+    {
+        return match ($v) {
+            Position::TOP, Position::TOP_LEFT, Position::TOP_RIGHT => true,
+            default => false,
+        };
+    }
+
+    private function isBottomAnchor(Position $v, Position $h): bool
+    {
+        return match ($v) {
+            Position::BOTTOM, Position::BOTTOM_LEFT, Position::BOTTOM_RIGHT => true,
+            default => false,
+        };
+    }
+
+    private function isLeftAnchor(Position $v, Position $h): bool
+    {
+        return match ($h) {
+            Position::LEFT, Position::TOP_LEFT, Position::BOTTOM_LEFT => true,
+            default => false,
+        };
+    }
+
+    private function isRightAnchor(Position $v, Position $h): bool
+    {
+        return match ($h) {
+            Position::RIGHT, Position::TOP_RIGHT, Position::BOTTOM_RIGHT => true,
+            default => false,
+        };
+    }
+
+    /** @param list<string> $lines */
+    private function maxWidth(array $lines): int
+    {
+        $max = 0;
+        foreach ($lines as $line) {
+            $w = $this->strWidth($line);
+            if ($w > $max) $max = $w;
+        }
+        return $max;
+    }
+
+    private function strWidth(string $str): int
+    {
+        return Width::string($str);
+    }
+}

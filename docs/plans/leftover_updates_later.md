@@ -297,7 +297,7 @@ because research adds three items the PTY plan did not call out:)
 - STDIN value input (P5).
 - Atomic `Database::transaction(callable)` wrapping SQLite tx (P6).
 
-### sugar-veil
+### sugar-overlay
 
 - Backdrop/dimming effect (§4.1).
 - Animation system slide/fade/scale (§4.2).
