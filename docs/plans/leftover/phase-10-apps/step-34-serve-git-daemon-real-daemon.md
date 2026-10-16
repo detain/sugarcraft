@@ -1,6 +1,6 @@
-# Step 10.34 — candy-serve git:// daemon + real daemon mode
+# Step 10.34 — candy-git-server git:// daemon + real daemon mode
 
-**Source:** `leftover_updates_later.md` candy-serve §3.3 + §3.4
+**Source:** `leftover_updates_later.md` candy-git-server §3.3 + §3.4
 **Branch:** `ai/serve-git-daemon-real-daemon`
 
 ## Deliverable
@@ -11,7 +11,7 @@
 
 ## Files
 
-**Create:** `candy-serve/src/GitDaemon/Server.php`,
+**Create:** `candy-git-server/src/GitDaemon/Server.php`,
 `Daemon/Daemonize.php`.
 
 ## Tests
@@ -20,13 +20,13 @@
 
 ## Acceptance
 
-- `cd candy-serve && vendor/bin/phpunit` green.
+- `cd candy-git-server && vendor/bin/phpunit` green.
 
 ## Notes
 
 - The **Interactive SSH TUI** (research §3.1) is the marquee soft-serve
   feature and gets its own milestone plan via step 11.02
-  (`plans/candy-serve-tui.md`). It is NOT in scope here.
+  (`plans/candy-git-server-tui.md`). It is NOT in scope here.
 
 ---
 

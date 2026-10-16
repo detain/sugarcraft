@@ -322,7 +322,7 @@ step 11.01 · PR#649 · plans: sugar-post-identity decision memo (Option A/B/C; 
 fix for step 11.01 · PR#651 · resolved 4 findings (locale count 17→16, bin/pop LOC 50→221, §2 "misread"→"pivot" framing, Email.php cite L17–L32→L21–L32)
 tests-ci for step 11.01 · clean
 docs for step 11.01 · clean
-step 11.02 · PR#653 · plans: candy-serve-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
+step 11.02 · PR#653 · plans: candy-git-server-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
 fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-boxer SugarBoxer; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
@@ -580,10 +580,10 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.32 · PR#806 · sugar-crush: MCP client (McpClient + McpMessage JSON-RPC 2.0 + tools/list + tools/call + stdio transport)
     fix for step 10.32 · PR#807 · resolved 1 critical (proc_get_status pipes not accessible on Linux) + 1 minor (unused constructor param)
     docs for step 10.32 · PR#808 · README: add McpMessage/McpClient to architecture table; CALIBER_LEARNINGS: add MCP client patterns
-    step 10.33 · PR#809 · candy-serve: OSC 52 clipboard (Osc52.php) + HTTP smart protocol server (HttpSmartProtocol/Server.php)
+    step 10.33 · PR#809 · candy-git-server: OSC 52 clipboard (Osc52.php) + HTTP smart protocol server (HttpSmartProtocol/Server.php)
     fix for step 10.33 · PR#810 · resolved 2 minor (receive-pack info/refs auth + hex2bin failure handling)
     docs for step 10.33 · PR#811 · README: add Clipboard/Osc52.php and HttpSmartProtocol/Server.php; CALIBER_LEARNINGS: new file with OSC 52/HTTP smart protocol/clipboard event patterns
-    step 10.34 · PR#812 · candy-serve: git-daemon real daemon mode (GitDaemon.php + --daemon/--pid-file + socket connections + signal handling)
+    step 10.34 · PR#812 · candy-git-server: git-daemon real daemon mode (GitDaemon.php + --daemon/--pid-file + socket connections + signal handling)
     fix for step 10.34 · PR#813 · resolved 5 issues (pkt-line format + signal handlers + daemon fork + unused variables + misleading variable naming)
     docs for step 10.34 · PR#814 · README: add GitDaemon to architecture + "Git Protocol (Daemon Mode)" section; CALIBER_LEARNINGS: add 4 new patterns
     step 10.35 · PR#815 · sugar-skate: import/export JSON/YAML + TTL/expiry + Levenshtein typo suggestions + STDIN input + atomic transactions

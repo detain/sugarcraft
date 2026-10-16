@@ -51,7 +51,7 @@ var, a public class, a flag), every doc page above gets an update.
 
 Audience: someone deploying the lib in production (SSH servers,
 dashboards, recording pipelines, etc.). Only relevant for libs that
-run as services: candy-serve, candy-wish, candy-vcr, sugar-dash,
+run as services: candy-git-server, candy-wish, candy-vcr, sugar-dash,
 sugar-crush, candy-metrics.
 
 Headings:

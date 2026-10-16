@@ -29,7 +29,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Package-by-Package Findings
 
-### Group 1: candy-core, candy-shell, candy-sprinkles, candy-shine, candy-serve
+### Group 1: candy-core, candy-shell, candy-sprinkles, candy-shine, candy-git-server
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
@@ -37,7 +37,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-shell | 230 ✓ | APPROVE | 0 | 0 | 3 | 0 |
 | candy-sprinkles | 522 ✓ | APPROVE | 0 | 0 | 4 | 0 |
 | candy-shine | 158 ✓ | APPROVE | 0 | 1 | 3 | 0 |
-| candy-serve | 140 ✓ | APPROVE | 0 | 2 | 4 | 0 |
+| candy-git-server | 140 ✓ | APPROVE | 0 | 2 | 4 | 0 |
 
 **candy-core** — Foundation TUI runtime (Elm architecture). Well-architected with 588 passing tests. Issues: `Ansi::sgr()` called with 4 args where 3 expected (ghost rendering); `Subscription::startSubscription()` returns `mixed` instead of typed return.
 
@@ -47,7 +47,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-shine** — Markdown renderer (glamour port). 158 tests. Issues: `Theme::fromJsonString()` doesn't support all glamour v2 properties; incomplete emoji map.
 
-**candy-serve** — Git HTTP server. 140 tests. Issues: `Repo::branches()` uses unescaped path; `git` binary not verified at startup.
+**candy-git-server** — Git HTTP server. 140 tests. Issues: `Repo::branches()` uses unescaped path; `git` binary not verified at startup.
 
 ---
 
@@ -562,7 +562,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Group | Packages | Tests | Status |
 |-------|----------|-------|--------|
-| 1 | candy-core, candy-shell, candy-sprinkles, candy-shine, candy-serve | 1,638 | ✅ All pass |
+| 1 | candy-core, candy-shell, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
 | 2 | candy-sql, candy-mold, candy-kit, candy-freeze | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |

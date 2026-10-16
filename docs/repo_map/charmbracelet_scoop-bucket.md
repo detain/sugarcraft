@@ -13,7 +13,7 @@
 - **Multi-architecture distribution**: Package manifests support `32bit`, `64bit`, and `arm64` architectures, downloading architecture-specific zip archives from GitHub Releases
 - **SHA-256 hash verification**: Each manifest includes a `hash` field for integrity verification of downloaded binaries
 - **Binary bin mapping**: Manifests specify the exact path inside the zip to the executable, enabling Scoop to shim correctly (e.g., `gum_0.17.0_Windows_x86_64/gum.exe`)
-- **Dependency declaration**: Optional `depends` array declares external Scoop dependencies (e.g., `soft-serve.json` declares `git`)
+- **Dependency declaration**: Optional `depends` array declares external Scoop dependencies (e.g., `soft-serve.json` declares `git`) <!-- @rename-keep upstream charm bucket record -->
 - **Homepage and license metadata**: Every manifest carries `homepage`, `license`, `description`, and `version` fields
 - **Scoop bucket registration**: Users add the bucket via `scoop bucket add charm https://github.com/charmbracelet/scoop-bucket.git` then install any package with `scoop install charm/<package>`
 
@@ -68,7 +68,7 @@ depends?      array?   — optional Scoop dependencies
 | `vhs.json` | `sugar-bits` + `candy-shine` | VHS records terminal sessions as GIFs — maps to `sugar-bits` view rendering + `candy-shine` (animation/frame composition) |
 | `glow.json` | `sugar-bits` (markdown rendering) | Glow renders markdown in the terminal with ANSI styling — SugarCraft has no direct markdown renderer; `sugar-bits` component layer could host a Bubbletea-based markdown view |
 | `mods.json` | **none** | AI on the command line — SugarCraft has no AI/LLM integration lib; this would be a new leaf lib if ported |
-| `soft-serve.json` | **none** (server infrastructure) | Self-hostable Git server — out of scope for SugarCraft (TUI component library) |
+| `soft-serve.json` | **none** (server infrastructure) | Self-hostable Git server — out of scope for SugarCraft (TUI component library) | <!-- @rename-keep upstream charm bucket record -->
 | `wishlist.json` | **none** (SSH directory) | SSH directory management — out of SugarCraft's TUI scope |
 | `freeze.json` | `candy-shine` (image generation) | Freeze generates images of code/terminal output — `candy-shine` could port the image composition layer |
 | `pop.json` | **none** (email sending) | Email from terminal — out of scope for TUI component library |

@@ -61,7 +61,7 @@ use function React\Promise\resolve;
  *
  * {@see \SugarCraft\Core\WorkerPool} bounds *subprocess* concurrency for
  * CPU-bound work (`proc_open` children fed over pipes); this bounds in-process
- * promise concurrency. The one-shot batch mapper in the candy-serve layer maps a
+ * promise concurrency. The one-shot batch mapper in the candy-git-server layer maps a
  * single batch with a cap and cannot be shared between call sites. This class is
  * the reusable primitive: give one pool to every component that touches the same
  * scarce resource and the cap actually holds.

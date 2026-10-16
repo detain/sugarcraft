@@ -176,7 +176,7 @@ if ($errors !== []) {
 - `SugarCraft\Async\Subscription` — RxJS-style disposal handle with `unsubscribe()`/`isActive()`
 - `SugarCraft\Core\Subscription` — Elm-style subscription value object with `id`/`kind`/`params`/`produce`
 
-Libraries that use both namespaces (like `candy-serve` using `SugarCraft\Async\Subscription`) have import conflicts.
+Libraries that use both namespaces (like `candy-git-server` using `SugarCraft\Async\Subscription`) have import conflicts.
 
 **Severity:** HIGH
 
@@ -193,7 +193,7 @@ Libraries that use both namespaces (like `candy-serve` using `SugarCraft\Async\S
 - `candy-async/src/Subscriptions.php:16` — implements `Subscription`
 - `candy-async/src/Subscriptions.php:42` — `add(Subscription $subscription)`
 - `candy-async/tests/SubscriptionsTest.php:8,23,137` — test usages
-- `candy-serve/src/Git/GitDaemon.php:7-8` — consumer usage
+- `candy-git-server/src/Git/GitDaemon.php:7-8` — consumer usage
 
 **Investigation notes:**
 Also need to rename `Subscriptions` to `SubscriptionGroup` (see 2.2).
@@ -221,7 +221,7 @@ Also need to rename `Subscriptions` to `SubscriptionGroup` (see 2.2).
 
 - `candy-async/src/Subscriptions.php` — file to rename (and class inside)
 - `candy-async/tests/SubscriptionsTest.php:9,21` — test usages
-- `candy-serve/src/Git/GitDaemon.php:8` — consumer usage
+- `candy-git-server/src/Git/GitDaemon.php:8` — consumer usage
 
 ---
 

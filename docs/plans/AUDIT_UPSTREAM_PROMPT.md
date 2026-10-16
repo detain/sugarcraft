@@ -180,7 +180,7 @@ that are tiny but together justify a PR.
 - charmbracelet/wishlist → sugar-wishlist
 - charmbracelet/skate → sugar-skate
 - charmbracelet/pop → sugar-post
-- charmbracelet/soft-serve → candy-serve
+- charmbracelet/soft-serve → candy-git-server
 - charmbracelet/crush → sugar-crush
 - Broderick-Westrope/tetrigo → candy-tetris
 - yorukot/superfile → super-candy

@@ -47,7 +47,7 @@ From the first-stage analysis:
 
 **Signal**: Host key directory not created before key generation. Bug causes key to change on every restart, breaking known_hosts entries.
 
-**Direct Risk to SugarCraft**: If `candy-ssh` wraps similar behavior, SSH key persistence issues would affect `candy-serve`.
+**Direct Risk to SugarCraft**: If `candy-ssh` wraps similar behavior, SSH key persistence issues would affect `candy-git-server`.
 
 ### 3. Config could support anon_access and allow_keyless settings (Issue #758)
 
@@ -469,7 +469,7 @@ ssh -i ~/.ssh/admin_key -o IdentitiesOnly=yes git.server.com
 
 ### 5. Mirror Job Synchronization
 
-**Direct Risk**: If `candy-serve` implements mirrors, overlapping cron jobs could cause corruption.
+**Direct Risk**: If `candy-git-server` implements mirrors, overlapping cron jobs could cause corruption.
 
 **Lesson**: Implement job locking/mutex before starting sync.
 
@@ -735,7 +735,7 @@ S3/LFS support would differentiate from soft-serve's filesystem-only approach.
 
 charmbracelet/soft-serve provides an excellent reference for building a command-line-first Git server. Its security journey (from multiple critical vulnerabilities to systematic hardening via community audit) demonstrates both the challenges of secure git hosting and the value of external security research.
 
-SugarCraft's `candy-serve` port can learn from:
+SugarCraft's `candy-git-server` port can learn from:
 - Security middleware ordering lessons
 - SSRF protection consistency
 - Mirror job coordination

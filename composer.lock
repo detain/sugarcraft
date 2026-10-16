@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "013ec3c179a5224b93b51ee5294c90b3",
+    "content-hash": "3725f85918102cb435c153d56584a416",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4171,6 +4171,80 @@
             }
         },
         {
+            "name": "sugarcraft/candy-git-server",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-git-server",
+                "reference": "6197c6b244fea2fdd6efd36309dc4bc26addccbf"
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-openssl": "*",
+                "ext-ssh2": "*",
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "symfony/yaml": "^6.4 || ^7.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "bin": [
+                "bin/candy-git-server"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\GitServer\\": "src/",
+                    "SugarCraft\\GitServer\\SSH\\": "src/SSH/",
+                    "SugarCraft\\GitServer\\Git\\": "src/Git/",
+                    "SugarCraft\\GitServer\\LFS\\": "src/LFS/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\GitServer\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "serve": [
+                    "php bin/candy-git-server serve"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Self-hostable Git server over SSH, Git daemon, and HTTP. Supports user management via SSH public keys, repo access control (public/private), collaborators, on-demand repo creation, Git LFS, and an SSH-accessible TUI for browsing repos/files/commits. Modeled on the charmbracelet/soft-serve Go project.",
+            "homepage": "https://github.com/sugarcraft/candy-git-server",
+            "keywords": [
+                "git",
+                "git-server",
+                "lfs",
+                "self-hosted",
+                "soft-serve",
+                "ssh",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-git-server/issues",
+                "source": "https://github.com/sugarcraft/candy-git-server"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-hermit",
             "version": "dev-master",
             "dist": {
@@ -4959,79 +5033,6 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty",
                 "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-serve",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-serve",
-                "reference": "670bb3202eafe4c340a190676c0517b5a516d3cc"
-            },
-            "require": {
-                "ext-json": "*",
-                "ext-openssl": "*",
-                "ext-ssh2": "*",
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "symfony/yaml": "^6.4 || ^7.0"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "bin": [
-                "bin/soft-serve"
-            ],
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Serve\\": "src/",
-                    "SugarCraft\\Serve\\SSH\\": "src/SSH/",
-                    "SugarCraft\\Serve\\Git\\": "src/Git/",
-                    "SugarCraft\\Serve\\LFS\\": "src/LFS/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Serve\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "serve": [
-                    "php bin/soft-serve serve"
-                ]
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/soft-serve — self-hostable Git server over SSH, Git daemon, and HTTP. Supports user management via SSH public keys, repo access control (public/private), collaborators, on-demand repo creation, Git LFS, and an SSH-accessible TUI for browsing repos/files/commits.",
-            "homepage": "https://github.com/sugarcraft/candy-serve",
-            "keywords": [
-                "git",
-                "git-server",
-                "lfs",
-                "self-hosted",
-                "ssh",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-serve/issues",
-                "source": "https://github.com/sugarcraft/candy-serve"
             },
             "transport-options": {
                 "symlink": true,
@@ -8594,6 +8595,7 @@
         "sugarcraft/candy-fuzzy": 20,
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
+        "sugarcraft/candy-git-server": 20,
         "sugarcraft/candy-hermit": 20,
         "sugarcraft/candy-kit": 20,
         "sugarcraft/candy-lister": 20,
@@ -8605,7 +8607,6 @@
         "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
-        "sugarcraft/candy-serve": 20,
         "sugarcraft/candy-shell": 20,
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,

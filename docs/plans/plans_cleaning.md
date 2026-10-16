@@ -30,7 +30,7 @@
 
 ### ❌ NOT DONE
 
-- W10: candy-serve lacks candy-wish dep
+- W10: candy-git-server lacks candy-wish dep
 - W13: immutability violations not comprehensively verified
 
 ### ❓ UNCLEAR / NOT VERIFIED
@@ -67,7 +67,7 @@
 - candy-kit: Stage microtime
 - sugar-wishlist: Config non-scalar cast
 - candy-mouse: Scan duplicate zone
-- candy-serve: SEC issues
+- candy-git-server: SEC issues
 - candy-sql: SQL logging
 - sugar-post: STARTTLS
 - (and many others)

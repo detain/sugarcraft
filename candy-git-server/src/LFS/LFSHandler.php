@@ -1,0 +1,324 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\GitServer\LFS;
+
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
+use SugarCraft\GitServer\Support\PromisePool;
+use SugarCraft\GitServer\{AccessControl, Repo, Stats, User};
+
+use function React\Promise\resolve;
+
+/**
+ * Git LFS batch API handler.
+ *
+ * Handles LFS batch requests: upload and download of large files.
+ *
+ * Port of charmbracelet/soft-serve LFSHandler.
+ *
+ * @see https://github.com/charmbracelet/soft-serve
+ */
+final class LFSHandler
+{
+    private Repo $repo;
+    private ?User $user;
+    private ?LFSStorageBackendInterface $storageBackend;
+    private string $lfsPath;
+    private int $concurrentTransfers;
+    private ?Stats $stats;
+
+    public const MEDIA_TYPE = 'application/vnd.git-lfs+json';
+
+    public function __construct(
+        Repo $repo,
+        ?User $user,
+        string $lfsPath,
+        ?LFSStorageBackendInterface $storageBackend = null,
+        int $concurrentTransfers = 4,
+        ?Stats $stats = null,
+    ) {
+        $this->repo = $repo;
+        $this->user = $user;
+        $this->lfsPath = $lfsPath;
+        $this->storageBackend = $storageBackend ?? new LocalStorageBackend($lfsPath);
+        $this->concurrentTransfers = $concurrentTransfers;
+        $this->stats = $stats;
+    }
+
+    /**
+     * Create with a custom storage backend.
+     */
+    public function withStorageBackend(LFSStorageBackendInterface $backend): self
+    {
+        return new self(
+            repo: $this->repo,
+            user: $this->user,
+            lfsPath: $this->lfsPath,
+            storageBackend: $backend,
+            concurrentTransfers: $this->concurrentTransfers,
+            stats: $this->stats,
+        );
+    }
+
+    /**
+     * Create with concurrent transfer limit.
+     */
+    public function withConcurrentTransfers(int $count): self
+    {
+        return new self(
+            repo: $this->repo,
+            user: $this->user,
+            lfsPath: $this->lfsPath,
+            storageBackend: $this->storageBackend,
+            concurrentTransfers: $count,
+            stats: $this->stats,
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Batch API
+    // -------------------------------------------------------------------------
+
+    /**
+     * Handle an LFS batch request.
+     *
+     * POST https://server/repos/{name}.git/info/lfs/objects/batch
+     *
+     * Request body:
+     * {
+     *   "operation": "download" | "upload",
+     *   "transfers": ["basic"],
+     *   "objects": [{ "oid": "<sha256>", "size": <bytes> }, ...]
+     * }
+     *
+     * Response body:
+     * {
+     *   "transfer": "basic",
+     *   "objects": [
+     *     {
+     *       "oid": "...",
+     *       "size": ...,
+     *       "actions": {
+     *         "download": { "href": "https://..." },
+     *         "upload":  { "href": "https://...", "header": { "Authorization": "..." } }
+     *       },
+     *       "error": { "code": 404, "message": "..." }
+     *     }
+     *   ]
+     * }
+     */
+    public function handleBatch(array $request): array
+    {
+        ($this->stats ?? Stats::getInstance())->recordLfsBatch();
+
+        $ac = AccessControl::getInstance();
+
+        if (!$ac->canRead($this->user, $this->repo)) {
+            return ['error' => ['code' => 403, 'message' => 'Access denied']];
+        }
+
+        $operation = $request['operation'] ?? 'download';
+        $objects   = $request['objects']   ?? [];
+
+        // Process objects concurrently if multiple
+        $results = $this->processObjectsConcurrently($operation, $objects);
+
+        return [
+            'transfer' => 'basic',
+            'objects'  => $results,
+        ];
+    }
+
+    /**
+     * Handle an LFS batch request on a ReactPHP event loop with bounded
+     * concurrency — the opt-in async counterpart to {@see handleBatch()}
+     * (plan item 6.2, findings/plan_candy-git-server.md). At most
+     * `$concurrentTransfers` objects are in flight at once (via
+     * {@see PromisePool}), and the resolved payload is byte-identical to
+     * what the sequential path returns, including per-object error
+     * entries (404 for missing objects). A storage-backend exception on
+     * one object never sinks the batch: it is captured as that object's
+     * `error` entry (code 500) and the remaining objects still resolve.
+     *
+     * What is and is not concurrent: per-object storage work
+     * (`exists()`/`size()`) is synchronous file I/O that executes inside
+     * its scheduled loop tick — the file I/O itself is NOT async. What
+     * the loop buys is scheduling: a large batch is spread across ticks
+     * in bounded waves instead of monopolising the caller until every
+     * object is inspected, and timers/sockets on the same loop keep
+     * firing between objects. A promise-returning storage backend could
+     * plug into the same pool for true I/O concurrency later.
+     *
+     * @param array $request Same shape as handleBatch()
+     * @param LoopInterface|null $loop Event loop (defaults to the global loop)
+     * @return PromiseInterface<array> resolves with the handleBatch() response shape
+     */
+    public function handleBatchAsync(array $request, ?LoopInterface $loop = null): PromiseInterface
+    {
+        ($this->stats ?? Stats::getInstance())->recordLfsBatch();
+
+        $ac = AccessControl::getInstance();
+
+        if (!$ac->canRead($this->user, $this->repo)) {
+            return resolve(['error' => ['code' => 403, 'message' => 'Access denied']]);
+        }
+
+        $operation = $request['operation'] ?? 'download';
+        $objects   = \array_values($request['objects'] ?? []);
+        $loop      ??= Loop::get();
+
+        return PromisePool::map(
+            $loop,
+            $objects,
+            function (array $obj) use ($operation): array {
+                $oid  = (string) ($obj['oid'] ?? '');
+                $size = (int) ($obj['size'] ?? 0);
+
+                try {
+                    return $this->handleObject($operation, $oid, $size);
+                } catch (\Throwable $e) {
+                    // Per-object failure isolation: report the error in the
+                    // batch response instead of rejecting the whole batch.
+                    return [
+                        'oid'   => $oid,
+                        'size'  => $size,
+                        'error' => ['code' => 500, 'message' => $e->getMessage()],
+                    ];
+                }
+            },
+            \max(1, $this->concurrentTransfers),
+        )->then(static fn (array $results): array => [
+            'transfer' => 'basic',
+            'objects'  => $results,
+        ]);
+    }
+
+    /**
+     * Process multiple LFS objects with concurrency control.
+     *
+     * @param list<array{oid:string,size:int}> $objects
+     * @return list<array>
+     */
+    private function processObjectsConcurrently(string $operation, array $objects): array
+    {
+        if (\count($objects) <= 1 || $this->concurrentTransfers <= 1) {
+            // Sequential processing for single objects or when concurrency is disabled
+            return $this->processObjectsSequentially($operation, $objects);
+        }
+
+        // Process in batches with concurrency control
+        $results = [];
+        $batches = \array_chunk($objects, $this->concurrentTransfers);
+
+        foreach ($batches as $batch) {
+            $batchResults = $this->processBatch($operation, $batch);
+            $results = \array_merge($results, $batchResults);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Process a batch of objects (sequential fallback path).
+     *
+     * @param list<array{oid:string,size:int}> $batch
+     * @return list<array>
+     */
+    private function processBatch(string $operation, array $batch): array
+    {
+        // Synchronous fallback when no event loop is available/running.
+        // Loop-driven bounded-concurrency lives in handleBatchAsync().
+        return $this->processObjectsSequentially($operation, $batch);
+    }
+
+    /**
+     * Process objects sequentially.
+     *
+     * @param list<array{oid:string,size:int}> $objects
+     * @return list<array>
+     */
+    private function processObjectsSequentially(string $operation, array $objects): array
+    {
+        $results = [];
+        foreach ($objects as $obj) {
+            $oid  = $obj['oid']  ?? '';
+            $size = $obj['size'] ?? 0;
+            $result = $this->handleObject($operation, $oid, (int) $size);
+            $results[] = $result;
+        }
+        return $results;
+    }
+
+    /**
+     * Handle a single LFS object in a batch.
+     */
+    private function handleObject(string $operation, string $oid, int $size): array
+    {
+        $backend = $this->storageBackend;
+
+        if ($operation === 'download') {
+            if (!$backend->exists($oid)) {
+                return [
+                    'oid'   => $oid,
+                    'size'  => $size,
+                    'error' => ['code' => 404, 'message' => 'Object not found'],
+                ];
+            }
+
+            return [
+                'oid'   => $oid,
+                'size'  => $backend->size($oid),
+                'actions' => [
+                    'download' => [
+                        'href'   => $this->objectUrl($oid),
+                    ],
+                ],
+            ];
+        }
+
+        // Upload operation - prepare upload + post-upload verify endpoints
+        return [
+            'oid'   => $oid,
+            'size'  => $size,
+            'actions' => [
+                'upload' => [
+                    'href'   => $this->objectUrl($oid),
+                ],
+                'verify' => [
+                    'href'   => $this->objectUrl($oid) . '/verify',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Get the URL for an LFS object.
+     *
+     * Matches the routes the smart-HTTP server actually dispatches
+     * (plan item 7.9): `/{repo}/info/lfs/objects/{oid}` — previously
+     * this advertised a `/repos/…` prefix nothing served.
+     */
+    private function objectUrl(string $oid): string
+    {
+        return '/' . $this->repo->name . '/info/lfs/objects/' . $oid;
+    }
+
+    /**
+     * Get the storage backend being used.
+     */
+    public function storageBackend(): LFSStorageBackendInterface
+    {
+        return $this->storageBackend;
+    }
+
+    /**
+     * Get the concurrent transfer limit.
+     */
+    public function concurrentTransfers(): int
+    {
+        return $this->concurrentTransfers;
+    }
+}

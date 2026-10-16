@@ -1,22 +1,22 @@
 # SugarCraft Stage 3 Update Analysis
 
 Cross-cutting analysis of 9 update documents covering sugar-spark, candy-freeze,
-sugar-datepicker, candy-metrics, sugar-toast, sugar-skate, candy-serve, sugar-wishlist,
+sugar-datepicker, candy-metrics, sugar-toast, sugar-skate, candy-git-server, sugar-wishlist,
 candy-hermit.
 
 ---
 
 ## 1. Top 3 Critical Gaps
 
-### A. No Persistent Storage Backend (candy-serve, candy-metrics)
-candy-serve has zero persistence — user/repo data exists only in-memory during server run.
+### A. No Persistent Storage Backend (candy-git-server, candy-metrics)
+candy-git-server has zero persistence — user/repo data exists only in-memory during server run.
 Upstream soft-serve uses SQLite/PostgreSQL. candy-metrics has no HTTP scrape endpoint,
 requiring external components for metric collection. The Go promwish exposes `/metrics` directly.
 
 **Pattern:** Multiple packages need storage/server backends that are absent.
 
-### B. TUI Implementation Missing or Incomplete (candy-serve, sugar-wishlist)
-candy-serve has zero TUI — the defining feature that made soft-serve special. SSH-server
+### B. TUI Implementation Missing or Incomplete (candy-git-server, sugar-wishlist)
+candy-git-server has zero TUI — the defining feature that made soft-serve special. SSH-server
 mode is the #1 requested feature in sugar-wishlist. These are architectural voids, not
 incremental gaps.
 
@@ -60,7 +60,7 @@ without detection.
 
 ### 1. charmbracelet/bubbletea (cited in 8 of 9 documents)
 The canonical TUI framework reference. Every package either:
-- Uses it as a direct port target (candy-serve TUI)
+- Uses it as a direct port target (candy-git-server TUI)
 - References its component patterns (List, TextArea, Spinner)
 - Copies its Elm architecture (Model/Update/View, Cmd pattern)
 - Learns from its issues (textarea performance, mouse race conditions)

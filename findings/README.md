@@ -22,7 +22,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **AsyncOps duplication** — candy-async's AsyncOps reproduced in candy-buffer, sugar-dash, others
 - **Clamping logic** — min/max clamping copied across 10+ projects with no shared utility
 - **Style object allocation** — hot-render loops creating Style chains per-frame (candy-mold, candy-flappy)
-- **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-serve, candy-shell)
+- **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-shell)
 - **array_map over children** — double/triple iteration over same child array (sugar-boxer, sugar-table)
 - **WeakMap/registry patterns** — per-project implementations instead of shared candy-core utility
 - **i18n wrapper inconsistency** — Lang::t() vs SugarCraft\Core\I18n\T scattered across libs
@@ -37,10 +37,10 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 | Project | Finding | Location | Description |
 |---------|---------|----------|-------------|
-| candy-serve | Shell injection in git ref names | GitDaemon.php:473 | Ref name not validated against git naming rules; shell meta-chars could inject |
-| candy-serve | Empty password authentication bypass | Server.php:566 | Users with password=null can authenticate with any password |
-| candy-serve | Repo init runs git in wrong directory | Repo.php:145 | git init --bare runs in CWD, not $this->path |
-| candy-serve | Temp file leak on exception | GitDaemon.php:309 | Temp files not deleted if handleUploadPack throws |
+| candy-git-server | Shell injection in git ref names | GitDaemon.php:473 | Ref name not validated against git naming rules; shell meta-chars could inject |
+| candy-git-server | Empty password authentication bypass | Server.php:566 | Users with password=null can authenticate with any password |
+| candy-git-server | Repo init runs git in wrong directory | Repo.php:145 | git init --bare runs in CWD, not $this->path |
+| candy-git-server | Temp file leak on exception | GitDaemon.php:309 | Temp files not deleted if handleUploadPack throws |
 | candy-shell | Shell injection in env-var fallback | Application.php:137 | escapeshellarg→stripslashes→trim chain not safe |
 | candy-shell | Env var exfiltration via template mode | FormatCommand.php:99 | getenv() accessible in templates — cred leak risk |
 | candy-vcr | Undefined $cassette variable | TapeToGif.php:70 | Variable used before assignment — runtime fatal |
@@ -50,15 +50,15 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-stickers | UTF-8 multibyte corruption in sanitize | Column.php:112, FlexBox.php:302 | Bytes 0x80-0x9F stripped — corrupts CJK text |
 | sugar-boxer | Division by zero in distribute() | SugarBoxer.php:792 | 0/0 = NaN when all weights are zero |
 | candy-flappy | Collision/scoring frame mismatch | Game.php:273, Pipe.php:33 | Score increments one frame before collision fires |
-| candy-serve | Hardcoded LFS bearer token | LFSHandler.php:200 | "lfs-token" placeholder in all LFS responses |
-| candy-serve | Path traversal in SSH repo lookup | SSHServer.php:97 | Regex allows .. in repo path |
+| candy-git-server | Hardcoded LFS bearer token | LFSHandler.php:200 | "lfs-token" placeholder in all LFS responses |
+| candy-git-server | Path traversal in SSH repo lookup | SSHServer.php:97 | Regex allows .. in repo path |
 
 ### P1 — Security / Data Integrity
 
 | Project | Finding | Location | Description |
 |---------|---------|----------|-------------|
-| candy-serve | HTTP server buffers entire packfile in memory | Server.php:261 | 256 MiB packfiles buffered — unsustainable for large repos |
-| candy-serve | LFS "concurrency" is fully sequential | LFSHandler.php:153 | concurrentTransfers parameter has zero effect |
+| candy-git-server | HTTP server buffers entire packfile in memory | Server.php:261 | 256 MiB packfiles buffered — unsustainable for large repos |
+| candy-git-server | LFS "concurrency" is fully sequential | LFSHandler.php:153 | concurrentTransfers parameter has zero effect |
 | candy-vcr | ImagickRasterizer cache sharing between clones | ImagickRasterizer.php:58 | withTheme() shares tileCache — clears tiles other instance needs |
 | sugar-gallery | Directory traversal in path navigation | Gallery.php:95 | chdir() with no sandboxing |
 | sugar-readline | History file uses 0644 permissions | History.php | Group-readable history could leak sensitive commands |
@@ -93,7 +93,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 | Project | Severity Profile | Key Theme |
 |---------|-----------------|-----------|
-| candy-serve | 7 HIGH, 12 MED, 9 LOW | Git daemon security/injection issues |
+| candy-git-server | 7 HIGH, 12 MED, 9 LOW | Git daemon security/injection issues |
 | candy-shell | 2 HIGH, 7 MED, 6 LOW | Shell injection, env var exposure, async blocking |
 | candy-vcr | 2 HIGH, 9 MED, 8 LOW | Undefined variable, Imagick cache sharing, blocking I/O |
 | candy-shine | 1 HIGH, 6 MED, 9 LOW | BlockStack state, string concat in loops, missing Write() parity |

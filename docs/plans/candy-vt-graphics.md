@@ -773,7 +773,7 @@ the following must hold:
 - The work is **not** unblocked by any sugar-* or honey-* milestone.
 - The work is **not** unblocked by 1.0 release readiness; 1.0 ships
   fine without it.
-- Phase-11 strategic plans 11.01 (sugar-post) and 11.02 (candy-serve
+- Phase-11 strategic plans 11.01 (sugar-post) and 11.02 (candy-git-server
   TUI) target user-visible value. **This plan targets internal
   capability completeness only.** If product time is constrained,
   defer this in favour of the other two.
@@ -858,7 +858,7 @@ prepare".
   graphics + Sixel decode (P3) — strategic, see §6".
 - `plans/leftover/phase-11-strategic-plans/step-03-candy-vt-graphics.md`
   — step file driving this memo.
-- `plans/candy-serve-tui.md` — structural template (multi-phase
+- `plans/candy-git-server-tui.md` — structural template (multi-phase
   deferred plan format) referenced for shape.
 - Kitty graphics protocol spec — https://sw.kovidgoyal.net/kitty/graphics-protocol/
 - iTerm2 inline images proposal — https://iterm2.com/documentation-images.html

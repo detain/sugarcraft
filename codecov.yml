@@ -161,8 +161,8 @@ flag_management:
     - name: candy-palette
       paths: ["candy-palette/src/**"]
       carryforward: true
-    - name: candy-serve
-      paths: ["candy-serve/src/**"]
+    - name: candy-git-server
+      paths: ["candy-git-server/src/**"]
       carryforward: true
     - name: candy-testing
       paths: ["candy-testing/src/**"]
@@ -475,12 +475,12 @@ component_management:
         - "candy-palette/src/**"
       flag_regexes:
         - "^candy-palette$"
-    - component_id: candy-serve
-      name: candy-serve
+    - component_id: candy-git-server
+      name: candy-git-server
       paths:
-        - "candy-serve/src/**"
+        - "candy-git-server/src/**"
       flag_regexes:
-        - "^candy-serve$"
+        - "^candy-git-server$"
     - component_id: candy-testing
       name: candy-testing
       paths:

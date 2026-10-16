@@ -39,7 +39,7 @@ The 8 shared packages:
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
 | Step 33 | sugar-skate, sugar-wishlist, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
-| Step 35 | sugar-tick, sugar-post, candy-serve | candy-buffer, candy-async, candy-testing |
+| Step 35 | sugar-tick, sugar-post, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, candy-mouse, candy-mold | candy-async, candy-mouse, candy-buffer, candy-testing |
 
@@ -198,7 +198,7 @@ The 8 shared packages:
 
 ---
 
-### candy-serve
+### candy-git-server
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -206,7 +206,7 @@ The 8 shared packages:
 | candy-buffer | Repo.php renders git serve status via string — Buffer would give diff-friendly status display | S |
 | candy-testing | Repo.php/AccessControl.php lack integration tests — candy-testing fixture harness | S |
 
-**Notes:** candy-serve is a git network serve tool. HTTP protocol handling currently uses blocking I/O. Async adoption would improve concurrency. Buffer would make status rendering diff-friendly.
+**Notes:** candy-git-server is a git network serve tool. HTTP protocol handling currently uses blocking I/O. Async adoption would improve concurrency. Buffer would make status rendering diff-friendly.
 
 ---
 
@@ -299,7 +299,7 @@ The 8 shared packages:
 | Effort | libs |
 |--------|------|
 | **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-serve, honey-bounce, candy-metrics, candy-log |
+| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---
 

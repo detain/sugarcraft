@@ -330,11 +330,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/soft-serve → candy-serve
+## charmbracelet/soft-serve → candy-git-server
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-serve | Notes |
+| Upstream | Title | Status in candy-git-server | Notes |
 |---|---|:--:|---|
 | [#791](https://github.com/charmbracelet/soft-serve/pull/791) (2026-03-06) | fix(ssrf): pin resolved IP in dial to prevent DNS rebinding | 🟡 | Security fix — may need review in SSH handling |
 | [#884](https://github.com/charmbracelet/soft-serve/pull/884) (2026-05-04) | chore(deps): | ⚪ | Dep only |

@@ -199,7 +199,7 @@ This guard prevents a `Subscriptions` instance from being added to itself, avoid
 
 ### 5.1 GitDaemon preg_match could potentially be bypassed (HIGH - in consuming lib, not core)
 
-**File:** `candy-serve/src/Git/GitDaemon.php:245`
+**File:** `candy-git-server/src/Git/GitDaemon.php:245`
 
 ```php
 if (\preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/[^\s\n]+)\s*\n/', $client['buffer'], $matches)) {
@@ -207,7 +207,7 @@ if (\preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/[^\s\n]+)\s*\n/', $cl
 
 This regex is used to parse the git protocol. While it looks correct for valid input, improper handling of malformed input could potentially cause issues in the git command construction at line 412 where `$repoPath` is passed to `escapeshellarg`.
 
-**Status:** The escaping appears correct at line 411-412. This is in the consuming library `candy-serve`, not in `candy-async` itself.
+**Status:** The escaping appears correct at line 411-412. This is in the consuming library `candy-git-server`, not in `candy-async` itself.
 
 ### 5.2 CancellationToken callback exceptions propagate unpredictably (MEDIUM)
 
@@ -357,7 +357,7 @@ These are simple array operations, but they could use SPL counting interfaces fo
 
 Both `SugarCraft\Async\Subscription` (RxJS-style disposal handle) and `SugarCraft\Core\Subscription` (Elm-style event subscription value object) have the same class name but completely different semantics. This causes confusion when importing both namespaces.
 
-**Status:** Libraries that use both (like `candy-serve` using `SugarCraft\Async\Subscription`) could have import conflicts.
+**Status:** Libraries that use both (like `candy-git-server` using `SugarCraft\Async\Subscription`) could have import conflicts.
 
 **Recommendation:** Consider renaming:
 - `SugarCraft\Async\Subscription` → `SugarCraft\Async\SubscriptionHandle`
@@ -387,7 +387,7 @@ The library correctly depends on:
 And several libs correctly depend on `candy-async`:
 - candy-core (i18n/Lang)
 - candy-forms (CancellationSource for async suggestions)
-- candy-serve (Subscription/Subscriptions for cleanup)
+- candy-git-server (Subscription/Subscriptions for cleanup)
 - sugar-post (CancellationToken, AsyncOps for SMTP)
 - sugar-tick (CancellationSource, CancellationToken)
 - candy-forms, sugar-reel, sugar-query

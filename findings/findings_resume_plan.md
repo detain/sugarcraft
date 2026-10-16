@@ -6,14 +6,14 @@ All phases 0–6 are closed. Phase 0–5 items landed as the commit series
 through `b9c63b74`; the Phase 6 leftovers were re-verified against
 current source on 2026-07-04 and closed by: `a160cefd` (test
 skips/flake), `5f33c4b7` (candy-mouse contains, candy-wish StreamHelper
-+ pid()), `1920988f`/`09546125` (candy-serve auth verification,
++ pid()), `1920988f`/`09546125` (candy-git-server auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-shell), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
 candy-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
 (candy-pty). candy-sprinkles plan items were all verified
 misreferenced/N-A (see plan_candy-sprinkles.md annotations).
 Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
-"Future work (deferred pre-1.0)" sections: candy-serve 6.1/6.2/7.5-7.9,
+"Future work (deferred pre-1.0)" sections: candy-git-server 6.1/6.2/7.5-7.9,
 candy-pty 8.1/8.3/8.4, candy-sql 3.1/3.3/3.4/5.1 (+1.8/0.25
 react-pg WONTFIX, react/mysql stable pin WONTFIX — no 0.7 tag),
 sugar-readline 3.2 (vi text objects, needs candy-forms VimAction).
@@ -95,64 +95,64 @@ For each phase:
 **Files:** `candy-files/src/Manager.php:727-732`
 **Agent:** Same coder agent as 0.1 (grouped — same lib)
 
-#### 0.3 🔴 candy-serve: Git ref names shell injection (Item 1.1)
+#### 0.3 🔴 candy-git-server: Git ref names shell injection (Item 1.1)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 1.1
+**Plan:** `findings/plan_candy-git-server.md` — Item 1.1
 **Issue:** `GitDaemon.php:472-473` — shell injection in Git ref names (escapeshellarg but no validation)
 **Fix:** Validate Git ref names against safe pattern before passing to shell commands
-**Files:** `candy-serve/src/GitDaemon.php:472-473`
+**Files:** `candy-git-server/src/GitDaemon.php:472-473`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 0.4 🔴 candy-serve: SSHServer path traversal (Item 1.2)
+#### 0.4 🔴 candy-git-server: SSHServer path traversal (Item 1.2)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 1.2
+**Plan:** `findings/plan_candy-git-server.md` — Item 1.2
 **Issue:** `SSHServer.php:104` — path traversal via `..` after basename()
 **Fix:** Validate resolved path stays within allowed directory
-**Files:** `candy-serve/src/SSHServer.php:104`
+**Files:** `candy-git-server/src/SSHServer.php:104`
 **Agent:** Same coder agent as 0.3 (grouped — same lib)
 
-#### 0.5 🔴 candy-serve: LFSHandler hardcoded bearer token (Item 1.3)
+#### 0.5 🔴 candy-git-server: LFSHandler hardcoded bearer token (Item 1.3)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 1.3
+**Plan:** `findings/plan_candy-git-server.md` — Item 1.3
 **Issue:** `LFSHandler.php:200,213` — hardcoded `'Bearer lfs-token'`
 **Fix:** Remove hardcoded token; use proper credential handling
-**Files:** `candy-serve/src/LFSHandler.php:200,213`
+**Files:** `candy-git-server/src/LFSHandler.php:200,213`
 **Agent:** Same coder agent as 0.3 (grouped — same lib)
 
-#### 0.6 🔴 candy-serve: Empty password auth bypass (Item 1.4)
+#### 0.6 🔴 candy-git-server: Empty password auth bypass (Item 1.4)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 1.4
+**Plan:** `findings/plan_candy-git-server.md` — Item 1.4
 **Issue:** `Server.php:566` — empty password auth bypass (`null` password allows any password)
 **Fix:** Reject null/empty passwords explicitly
-**Files:** `candy-serve/src/Server.php:566`
+**Files:** `candy-git-server/src/Server.php:566`
 **Agent:** Same coder agent as 0.3 (grouped — same lib)
 
 ---
 
-#### 0.7 🔴 candy-serve: git init wrong directory (Item 2.1)
+#### 0.7 🔴 candy-git-server: git init wrong directory (Item 2.1)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 2.1
+**Plan:** `findings/plan_candy-git-server.md` — Item 2.1
 **Issue:** `Repo.php:145` — git init runs in wrong directory (no `-C $path`)
 **Fix:** Use `git -C $path init` to ensure init runs in correct directory
-**Files:** `candy-serve/src/Repo.php:145`
+**Files:** `candy-git-server/src/Repo.php:145`
 **Agent:** Same coder agent as 0.3 (grouped — same lib)
 
-#### 0.8 🔴 candy-serve: GitDaemon array modification during iteration (Item 2.2)
+#### 0.8 🔴 candy-git-server: GitDaemon array modification during iteration (Item 2.2)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 2.2
+**Plan:** `findings/plan_candy-git-server.md` — Item 2.2
 **Issue:** `GitDaemon.php:213-223` — array modification during iteration
 **Fix:** Collect keys to remove first, then remove after iteration
-**Files:** `candy-serve/src/GitDaemon.php:213-223`
+**Files:** `candy-git-server/src/GitDaemon.php:213-223`
 **Agent:** Same coder agent as 0.3 (grouped — same lib)
 
-#### 0.9 🔴 candy-serve: GitDaemon temp file leak (Item 2.3)
+#### 0.9 🔴 candy-git-server: GitDaemon temp file leak (Item 2.3)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 2.3
+**Plan:** `findings/plan_candy-git-server.md` — Item 2.3
 **Issue:** `GitDaemon.php:309-320` — temp file leak on exception
 **Fix:** Use try/finally to ensure `$stdinFile` is deleted even if exception thrown
-**Files:** `candy-serve/src/GitDaemon.php:309-320`
+**Files:** `candy-git-server/src/GitDaemon.php:309-320`
 **Agent:** Same coder agent as 0.3 (grouped — same lib)
 
 ---
@@ -360,7 +360,7 @@ If any branches exist other than master, merge/clean per Branch Cleanup Protocol
 Run tests for every modified lib:
 ```bash
 cd candy-files && composer install --quiet && vendor/bin/phpunit 2>&1 | tail -5
-cd ../candy-serve && composer install --quiet && vendor/bin/phpunit 2>&1 | tail -5
+cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | tail -5
 # ... repeat for each lib modified in Phase 0
 
 ```
@@ -1022,9 +1022,9 @@ Same branch/PR check as Phase 0/1.
 **Files:** `honey-bounce/src/Easing/EasingFunction.php` (new)
 **Agent:** Same coder agent as 3.21 (grouped — same lib)
 
-#### 3.24 🟢 candy-serve: Async GitDaemon (Item 6.1)
+#### 3.24 🟢 candy-git-server: Async GitDaemon (Item 6.1)
 
-**Plan:** `findings/plan_candy-serve.md` — Item 6.1
+**Plan:** `findings/plan_candy-git-server.md` — Item 6.1
 **Fix:** (Deferred — marked as future work in plan)
 **Agent:** ⏭️ SKIP — deferred, not blocking
 
@@ -1288,7 +1288,7 @@ Same verification as previous phases.
 | `plan_candy-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
 | `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
 | `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
-| `plan_candy-serve.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
+| `plan_candy-git-server.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
 | `plan_candy-shell.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |
 | `plan_candy-shine.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |

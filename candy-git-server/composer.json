@@ -1,0 +1,62 @@
+{
+    "name": "sugarcraft/candy-git-server",
+    "description": "Self-hostable Git server over SSH, Git daemon, and HTTP. Supports user management via SSH public keys, repo access control (public/private), collaborators, on-demand repo creation, Git LFS, and an SSH-accessible TUI for browsing repos/files/commits. Modeled on the charmbracelet/soft-serve Go project.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "git",
+        "git-server",
+        "soft-serve",
+        "self-hosted",
+        "ssh",
+        "lfs",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-git-server",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-git-server/issues",
+        "source": "https://github.com/sugarcraft/candy-git-server"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "react/event-loop": "^1.6",
+        "react/promise": "^3.3",
+        "symfony/yaml": "^6.4 || ^7.0",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "ext-ssh2": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\GitServer\\": "src/",
+            "SugarCraft\\GitServer\\SSH\\": "src/SSH/",
+            "SugarCraft\\GitServer\\Git\\": "src/Git/",
+            "SugarCraft\\GitServer\\LFS\\": "src/LFS/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\GitServer\\Tests\\": "tests/"
+        }
+    },
+    "bin": [
+        "bin/candy-git-server"
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "serve": "php bin/candy-git-server serve"
+    }
+}

@@ -381,7 +381,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.3** `candy-palette`(8,med), `candy-kit`(7,med), `candy-lister`(10,med) — deps core(+sprinkles).
 - **3.4** `candy-testing`(8,med) — deps core+buffer; **Fiber** + attributes + first‑class‑callable
   + intersection. *(High‑touch; extra review per §4.11.)*
-- **3.5** `candy-serve`(14,med, deps core+async), `candy-sql`(14,high, core+sprinkles),
+- **3.5** `candy-git-server`(14,med, deps core+async), `candy-sql`(14,high, core+sprinkles),
   `candy-log`(16,high, core+palette+sprinkles; psr/log→^1.1 + drop param types).
 - **3.6** `candy-mosaic`(25,high, core+palette+sprinkles) → **3.6a** `Renderer/` (7), **3.6b**
   root (≈10), **3.6c** remainder; ext‑gd/mbstring.
@@ -506,7 +506,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-lister | medium | 10 | enum, match, nullsafe, php8-strfn, readonly |
 | candy-mouse | medium | 9 | backed-enum, ctor-promotion, match, nullsafe, php8-strfn |
 | candy-palette | medium | 8 | ctor-promotion, enum-with-methods, match, named-args, new-in-init |
-| candy-serve | medium | 14 | ctor-promotion, first-class-callable, match, named-args; ssh2/openssl |
+| candy-git-server | medium | 14 | ctor-promotion, first-class-callable, match, named-args; ssh2/openssl |
 | candy-shell | medium | 41 | attribute, backed-enum, ctor-promotion, enum-with-methods, match, mixed; symfony console |
 | candy-sprinkles | medium | 43 | backed-enum, enum, ctor-promotion, match, mixed, nullsafe |
 | candy-testing | medium | 8 | **fiber**, attribute, ctor-promotion, enum-in-const-expr, first-class-callable, intersection |

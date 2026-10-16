@@ -133,7 +133,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarCrumbs** | crumbs = breadcrumbs nav IS the function. delightful. |
 | **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
 | **CandyShell** | candy + shell = CLI. Scriptable one-shot prompts and layouts. |
-| **CandyServe** | candy + serve = self-hostable Git server. |
+| **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
 | **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the `sugar-` family placement. |
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |

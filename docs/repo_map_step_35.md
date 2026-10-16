@@ -1,4 +1,4 @@
-# Step 35 — sugar-tick + sugar-post + candy-serve adopt candy-async
+# Step 35 — sugar-tick + sugar-post + candy-git-server adopt candy-async
 
 **Branch:** `ai/async-adopters`
 **Depends on:** step-08 (candy-async), step-30 (audit)
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Three I/O-heavy libs adopt candy-async: sugar-tick (JSONL append loop), sugar-post (message posting), candy-serve (server). Each gains cancellation, retry, and timeout semantics for free.
+Three I/O-heavy libs adopt candy-async: sugar-tick (JSONL append loop), sugar-post (message posting), candy-git-server (server). Each gains cancellation, retry, and timeout semantics for free.
 
 Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of this plan's scope (deferred follow-up); we don't touch it here. We only add async-side improvements.
 
@@ -15,7 +15,7 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 - 3 composer.json — add `sugarcraft/candy-async` via `path-repo-closure`.
 - sugar-tick async writer (if any) → CancellationToken + retry.
 - sugar-post send queue → AsyncOps::withTimeout.
-- candy-serve request handlers → Subscriptions for graceful shutdown.
+- candy-git-server request handlers → Subscriptions for graceful shutdown.
 
 ## Acceptance criteria
 
@@ -30,7 +30,7 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 2. **path-repo closure**.
 3. sugar-tick: wrap any background work in CancellationToken.
 4. sugar-post: AsyncOps::withTimeout on send.
-5. candy-serve: Subscriptions for connection cleanup.
+5. candy-git-server: Subscriptions for connection cleanup.
 6. Run phpunit + check-path-repos.
 
 ## Tester brief
@@ -44,7 +44,7 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 
 ## Ship brief
 
-- **PR title**: `sugar-tick + sugar-post + candy-serve: adopt candy-async`
+- **PR title**: `sugar-tick + sugar-post + candy-git-server: adopt candy-async`
 - **PR body**:
   ```
   ## Summary
@@ -59,4 +59,4 @@ Reference: step-30 audit. Note: sugar-tick's `flock()` issue (§157) is OUT of t
 
   Refs: docs/repo_map_step_35.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `sugar-tick + sugar-post + candy-serve: adopt candy-async`.
+- Commit subject: `sugar-tick + sugar-post + candy-git-server: adopt candy-async`.

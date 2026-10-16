@@ -63,7 +63,7 @@
         "sugarcraft/candy-palette": "dev-master",
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/candy-sql": "dev-master",
-        "sugarcraft/candy-serve": "dev-master",
+        "sugarcraft/candy-git-server": "dev-master",
         "sugarcraft/candy-testing": "dev-master",
         "sugarcraft/candy-shell": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
@@ -272,7 +272,7 @@
         },
         {
             "type": "path",
-            "url": "candy-serve",
+            "url": "candy-git-server",
             "options": {
                 "symlink": true
             }

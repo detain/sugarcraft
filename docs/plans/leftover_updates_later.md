@@ -32,7 +32,7 @@ The audit categories:
 5. **Sugar-dash detailed plan** — finish the Phase-0 reorg, fix the
    broken `ExternalModule`, wire a real interactive dashboard, kill the
    chart duplication.
-6. **Strategic-decision items** — sugar-post (email vs social), candy-serve
+6. **Strategic-decision items** — sugar-post (email vs social), candy-git-server
    TUI scope, candy-vt P3 graphics protocols.
 7. **Sequencing recommendation** — order of operations so SSoT cleanup
    does not collide with feature work.
@@ -270,9 +270,9 @@ because research adds three items the PTY plan did not call out:)
 - WezTerm detection bug — currently classified as both Kitty *and* iTerm2 candidate; restrict.
 - Animation/GIF support (P2 #8) — overlap with candy-flip; pick one home (see SSOT note below).
 
-### candy-serve
+### candy-git-server
 
-- **Interactive SSH TUI** (research §3.1, HIGH) — soft-serve's marquee feature, untouched. May need its own milestone plan (`plans/candy-serve-tui.md`).
+- **Interactive SSH TUI** (research §3.1, HIGH) — soft-serve's marquee feature, untouched. May need its own milestone plan (`plans/candy-git-server-tui.md`).
 - HTTP smart protocol server (§3.2).
 - `git://` daemon (§3.3).
 - Real daemon mode (§3.4).
@@ -884,9 +884,9 @@ until a real profiler trace flags the cost.
   chosen: sugar-post stays an email tool, finishes the upstream Pop TUI
   surface. See `plans/sugar-post-identity.md`. Social-media pivot ideas
   are shelved; a future microblog TUI would be a separate library.
-- **candy-serve TUI scope** — soft-serve's marquee feature is the
+- **candy-git-server TUI scope** — soft-serve's marquee feature is the
   interactive SSH-served repo browser. That is a substantial TUI app on
-  its own; merits a `plans/candy-serve-tui.md` milestone doc.
+  its own; merits a `plans/candy-git-server-tui.md` milestone doc.
 - **candy-vt P3 graphics protocols** — Kitty image, Sixel decode. Each
   is months of work. Defer post-1.0 unless a specific app needs it.
 - **candy-flip vs candy-mosaic image-output split** — animation rendering
@@ -936,7 +936,7 @@ inline strings. Approx 8 PRs.
 
 Do not ship until product call:
 - sugar-post identity
-- candy-serve TUI scope plan
+- candy-git-server TUI scope plan
 - candy-vt P3 graphics
 
 ---

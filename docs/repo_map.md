@@ -39,7 +39,7 @@
 | [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, sugar-spark |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-shell |
 | [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | sugar-skate |
-| [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-serve |
+| [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-git-server |
 | [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-bits |
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, candy-shine |
 | charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
@@ -673,9 +673,9 @@
 **Features:** SSH + HTTP + Git daemon protocols, Bubble Tea TUI, Git LFS server, per-repo access control, TLS hot-reload.
 
 **SugarCraft Mapping:**
-- `candy-serve` → Primary port
+- `candy-git-server` → Primary port
 
-**Note:** Port exists as `candy-serve` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-git-server` (🟢 in MATCHUPS.md).
 
 ---
 

@@ -1,0 +1,402 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * CandyGitServer — Self-hostable Git Server
+ *
+ * Usage:
+ *   candy-git-server serve [--config path]        Start the server
+ *   candy-git-server init                          Initialize a new data directory
+ *   candy-git-server user add <username>           Add a user
+ *   candy-git-server user key <username> <keyfile> Add an SSH key
+ *   candy-git-server repo list                     List repos
+ *   candy-git-server repo create <name>            Create a repo
+ *   candy-git-server help                          Show this help
+ *
+ * Drop-in PHP port of the charmbracelet/soft-serve Go project; the binary was
+ * named `soft-serve` before the 2026-10 rename to candy-git-server. // @rename-keep
+ */
+
+namespace SugarCraft\GitServer\Bin;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use SugarCraft\GitServer\{AccessControl, Config, Git\GitDaemon, Lang, Repo, SSH\SSHServer, User};
+
+// Pre-rename env compatibility (plan_rename.md R4.5): CANDY_SERVE_DATA_PATH was // @rename-keep
+// this app's data-dir var before the 2026-10 rename. Import any old-prefix
+// exports under the new name (new name always wins), then warn once per var.
+foreach (\SugarCraft\Core\Util\LegacyEnv::import([
+    'CANDY_SERVE_' => 'CANDY_GIT_SERVER_', // @rename-keep
+]) as $legacyVar) {
+    fwrite(STDERR, "candy-git-server: {$legacyVar} is deprecated; set CANDY_GIT_SERVER_DATA_PATH instead.\n"); // @rename-keep
+}
+
+const VERSION = '0.1.0';
+
+function main(array $argv): int
+{
+    array_shift($argv);  // drop script name
+    $command = $argv[0] ?? 'help';
+    $args    = \array_slice($argv, 1);
+
+    return match ($command) {
+        'serve'  => cmdServe($args),
+        'init'   => cmdInit($args),
+        'user'   => cmdUser($args),
+        'repo'   => cmdRepo($args),
+        'help', '--help', '-h' => cmdHelp(),
+        'version', '--version', '-v' => cmdVersion(),
+        default  => cmdUnknown($command),
+    };
+}
+
+// -------------------------------------------------------------------------
+// Commands
+// -------------------------------------------------------------------------
+
+function cmdServe(array $args): int
+{
+    $configPath = null;
+    $daemonMode = false;
+    $pidFile = '';
+
+    for ($i = 0; $i < \count($args); $i++) {
+        $arg = $args[$i];
+        if ($arg === '--config' && isset($args[$i + 1])) {
+            $configPath = $args[++$i];
+        } elseif ($arg === '--daemon') {
+            $daemonMode = true;
+        } elseif ($arg === '--pid-file' && isset($args[$i + 1])) {
+            $pidFile = $args[++$i];
+        }
+    }
+
+    $config = $configPath !== null
+        ? Config::load($configPath)
+        : Config::fromDefaults();
+
+    $ac = AccessControl::getInstance();
+
+    echo Lang::t('cli.banner', ['version' => VERSION]) . "\n";
+    echo Lang::t('cli.config_summary', [
+        'data_path' => $config->dataPath,
+        'ssh_addr'  => $config->sshListenAddr,
+        'http_addr' => $config->httpListenAddr,
+        'git_addr'  => $config->gitListenAddr,
+    ]) . "\n";
+
+    if (!$daemonMode) {
+        echo "\n" . Lang::t('cli.starting_servers') . "\n";
+        echo Lang::t('cli.note_ssh2_required') . "\n";
+        echo Lang::t('cli.note_run_init') . "\n\n";
+
+        // List registered repos
+        $dataPath = $config->dataPath;
+        $reposPath = $dataPath . '/repositories';
+
+        echo Lang::t('cli.repos_header') . "\n";
+        if (\is_dir($reposPath)) {
+            foreach (\scandir($reposPath) as $entry) {
+                if ($entry === '.' || $entry === '..') continue;
+                $repoPath = $reposPath . '/' . $entry;
+                if (\is_dir($repoPath . '/.git')) {
+                    echo Lang::t('cli.repo_listing_entry', ['name' => $entry]) . "\n";
+                }
+            }
+        }
+
+        echo "\n" . Lang::t('cli.note_not_a_daemon') . "\n";
+        echo Lang::t('cli.note_http_help') . "\n";
+        echo Lang::t('cli.note_ssh_help') . "\n";
+
+        return 0;
+    }
+
+    // Daemon mode: fork and run the git daemon in child process
+    if (\function_exists('pcntl_fork')) {
+        $pid = \pcntl_fork();
+        if ($pid === -1) {
+            \fwrite(\STDERR, "Failed to fork daemon process\n");
+            return 1;
+        }
+        if ($pid !== 0) {
+            // Parent exits, child continues
+            return 0;
+        }
+        // Child: become session leader
+        if (\function_exists('posix_setsid')) {
+            \posix_setsid();
+        }
+    }
+
+    $gitDaemon = new GitDaemon($config);
+
+    // Register repos from filesystem
+    $reposPath = $config->reposPath();
+    if (\is_dir($reposPath)) {
+        foreach (\scandir($reposPath) as $entry) {
+            if ($entry === '.' || $entry === '..') continue;
+            $repoPath = $reposPath . '/' . $entry;
+            if (\is_dir($repoPath . '/.git')) {
+                $repo = Repo::new($entry, $repoPath);
+                $gitDaemon->registerRepo($repo);
+            }
+        }
+    }
+
+    // Use default PID file location if not specified
+    if ($pidFile === '') {
+        $pidFile = $config->dataPath . '/git-daemon.pid';
+    }
+
+    return $gitDaemon->serve($pidFile);
+}
+
+function cmdInit(array $args): int
+{
+    $dataPath = $args[0] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
+
+    if (\is_dir($dataPath) && \is_file($dataPath . '/config.yaml')) {
+        echo Lang::t('cli.already_initialized', ['path' => $dataPath]) . "\n";
+        return 0;
+    }
+
+    echo Lang::t('cli.initializing', ['path' => $dataPath]) . "\n";
+
+    // Create directories
+    foreach (['repositories', 'ssh', 'hooks', 'tmp'] as $dir) {
+        $path = "{$dataPath}/{$dir}";
+        if (!\is_dir($path)) {
+            \mkdir($path, 0755, true);
+        }
+    }
+
+    // Create config
+    $config = Config::fromDefaults();
+    $configYaml = <<<YAML
+name: "CandyGitServer"
+ssh:
+  listen_addr: ":23231"
+  public_url: "ssh://localhost:23231"
+  key_path: "ssh/soft_serve_host"
+git:
+  listen_addr: ":9418"
+http:
+  listen_addr: ":23232"
+  public_url: "http://localhost:23232"
+db:
+  driver: "sqlite"
+  data_source: "candy-git-server.db"
+lfs:
+  enabled: true
+YAML;
+
+    \file_put_contents("{$dataPath}/config.yaml", $configYaml);
+
+    echo Lang::t('cli.done') . "\n";
+    echo Lang::t('cli.next_steps') . "\n";
+    echo Lang::t('cli.next_step_1', ['path' => $dataPath]) . "\n";
+    echo Lang::t('cli.next_step_2', ['path' => $dataPath]) . "\n";
+    echo Lang::t('cli.next_step_3') . "\n";
+    echo Lang::t('cli.next_step_4', ['path' => $dataPath]) . "\n";
+
+    return 0;
+}
+
+function cmdUser(array $args): int
+{
+    $subcommand = $args[0] ?? 'help';
+    $subargs    = \array_slice($args, 1);
+
+    return match ($subcommand) {
+        'add'    => cmdUserAdd($subargs),
+        'key'    => cmdUserKey($subargs),
+        'list'   => cmdUserList($subargs),
+        'help'   => say(Lang::t('cli.usage_user_root')),
+        default  => cmdUnknown("user {$subcommand}"),
+    };
+}
+
+function cmdUserAdd(array $args): int
+{
+    if (!isset($args[0])) {
+        return error(Lang::t('cli.usage_user_add') . "\n");
+    }
+
+    $username = $args[0];
+    $user = User::new($username)->withAdmin(true);
+
+    echo Lang::t('cli.user_created', ['username' => $username]) . "\n";
+    echo Lang::t('cli.user_key_hint', ['username' => $username]) . "\n";
+
+    return 0;
+}
+
+function cmdUserKey(array $args): int
+{
+    if (!isset($args[0]) || !isset($args[1])) {
+        return error(Lang::t('cli.usage_user_key') . "\n");
+    }
+
+    [$username, $keyFile] = $args;
+    $key = $keyFile === '-' ? \stream_get_contents(\STDIN) : \file_get_contents($keyFile);
+
+    if ($key === false || $key === '') {
+        return error(Lang::t('cli.user_key_read_failed', ['file' => $keyFile]) . "\n");
+    }
+
+    $user = User::new($username)->addAuthorizedKey(\trim($key));
+    echo Lang::t('cli.user_key_added', ['username' => $username]) . "\n";
+    echo Lang::t('cli.user_keys_header') . "\n";
+    foreach ($user->authorizedKeysList() as $k) {
+        echo Lang::t('cli.user_key_entry', ['prefix' => \substr($k, 0, 60)]) . "\n";
+    }
+
+    return 0;
+}
+
+function cmdUserList(array $args): int
+{
+    echo Lang::t('cli.user_list_empty') . "\n";
+    return 0;
+}
+
+function cmdRepo(array $args): int
+{
+    $subcommand = $args[0] ?? 'help';
+    $subargs    = \array_slice($args, 1);
+
+    return match ($subcommand) {
+        'list'   => cmdRepoList($subargs),
+        'create' => cmdRepoCreate($subargs),
+        'info'   => cmdRepoInfo($subargs),
+        'help'   => say(Lang::t('cli.usage_repo_root')),
+        default  => cmdUnknown("repo {$subcommand}"),
+    };
+}
+
+function cmdRepoList(array $args): int
+{
+    $dataPath = $args[0] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
+    $reposPath = $dataPath . '/repositories';
+
+    if (!\is_dir($reposPath)) {
+        echo Lang::t('cli.no_repos') . "\n";
+        return 0;
+    }
+
+    echo Lang::t('cli.repos_header') . "\n";
+    $found = false;
+
+    foreach (\scandir($reposPath) as $entry) {
+        if ($entry === '.' || $entry === '..') continue;
+        $repoPath = $reposPath . '/' . $entry;
+        if (!\is_dir($repoPath . '/.git')) continue;
+
+        $found = true;
+        echo Lang::t('cli.repo_listing_plain', ['name' => $entry]) . "\n";
+    }
+
+    if (!$found) {
+        echo Lang::t('cli.repo_listing_none') . "\n";
+    }
+
+    return 0;
+}
+
+function cmdRepoCreate(array $args): int
+{
+    if (!isset($args[0])) {
+        return error(Lang::t('cli.usage_repo_create') . "\n");
+    }
+
+    $dataPath = $args[1] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
+    $name     = $args[0];
+
+    if (!\preg_match('/^[a-zA-Z0-9._-]+$/', $name)) {
+        return error(Lang::t('cli.repo_invalid_name', ['name' => $name]) . "\n");
+    }
+
+    $path = "{$dataPath}/repositories/{$name}";
+    $repo = Repo::new($name, $path)->withPublic(true)->init();
+
+    echo Lang::t('cli.repo_created', ['name' => $name, 'path' => $path]) . "\n";
+    echo Lang::t('cli.repo_clone_url', ['name' => $name]) . "\n";
+
+    return 0;
+}
+
+function cmdRepoInfo(array $args): int
+{
+    if (!isset($args[0])) {
+        return error(Lang::t('cli.usage_repo_info') . "\n");
+    }
+
+    $dataPath = $args[1] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
+    $name     = $args[0];
+    $path     = "{$dataPath}/repositories/{$name}";
+
+    if (!\is_dir($path . '/.git')) {
+        return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
+    }
+
+    $repo = Repo::new($name, $path);
+
+    $yes = Lang::t('cli.bool_yes');
+    $no  = Lang::t('cli.bool_no');
+
+    echo Lang::t('cli.repo_info', [
+        'name'        => $repo->name,
+        'description' => $repo->description !== '' ? $repo->description : Lang::t('cli.none_value'),
+        'is_public'   => $repo->isPublic ? $yes : $no,
+        'is_private'  => $repo->isPrivate() ? $yes : $no,
+        'allow_push'  => $repo->allowPush ? $yes : $no,
+        'path'        => $repo->path(),
+        'branches'    => \implode(', ', $repo->branches()),
+        'tags'        => \implode(', ', $repo->tags()),
+    ]) . "\n";
+
+    return 0;
+}
+
+function cmdHelp(): int
+{
+    echo Lang::t('cli.help') . "\n";
+    return 0;
+}
+
+function cmdVersion(): int
+{
+    echo Lang::t('cli.banner', ['version' => VERSION]) . "\n";
+    return 0;
+}
+
+// -------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------
+
+function error(string $msg): int
+{
+    \fwrite(\STDERR, $msg);
+    return 1;
+}
+
+function say(string $msg): int
+{
+    echo $msg . "\n";
+    return 0;
+}
+
+function cmdUnknown(string $cmd): int
+{
+    return error(Lang::t('cli.unknown_command', ['cmd' => $cmd]) . "\n");
+}
+
+// -------------------------------------------------------------------------
+// Bootstrap
+// -------------------------------------------------------------------------
+
+exit(main($argv));
