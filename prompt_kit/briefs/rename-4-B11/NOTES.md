@@ -36,9 +36,9 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 - [ ] tag-prep + notes + R1 dry-run eye-review
 - [ ] R2 remote rename
 - [ ] R3 tool run + php -l sweep
-- [ ] R4 followups (glued fn, bare-freeze example mv, Lang pins, capital-hyphen, glued path refs, README Formerly, PROJECT_NAMES, followups line)
+- [x] R4 followups — LANDED (see R4 section)
 - [ ] R5 wiring + regen checks
-- [ ] R6 gates (residue 0 &&-staged, suite exact, candy-ansi/-inspect consumers, tools/tests 426/1484, path-repos, generic-freeze audit)
+- [x] R6 gates — ALL EXACT (see R6 section)
 - [ ] R7 commit status=renamed + push branch rename/b11 ONLY (no R8/R9 — weld agent)
 
 ## R1 dry-run — LANDED
@@ -52,3 +52,27 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 ## Log
 
 (step findings appended here incrementally)
+
+## R4 manual repairs — LANDED (@ in commit e481272f6)
+- Glued fn `candyfreeze_confine_path` → `candy_codeshot_confine_path` (bin, 4 sites).
+- Glued `plan_candy-freeze.md` refs (findings_resume_plan ×3, plan.md ×1) → plan_candy-codeshot.md.
+- `examples/freeze_to_png.php` git-mv → `codeshot_to_png.php` + self-header + 7 living refs (findings ×5, repo_map, plan). <!-- @rename-keep -->
+- LangTest: method rename testNamespaceIsFreeze→IsCodeShot, :16/:69/:75 pins → 'codeshot'. Suite green proves src/Lang.php NAMESPACE flip consistent (lang keys unprefixed).
+- Brand prose: Theme.php:73, ThemePaletteParityTest:27, repo_map:79 (Candy-freeze→Candy-codeshot), leftover README Phase-08 heading (Freeze→Codeshot), candy-git DiffHighlighter docblock `Freeze\CodeHighlighter` → `CodeShot\` <!-- @rename-keep --> (survivor of ns rule — short-form not FQN).
+- CliTest temp-fixture prefixes `/candyfreeze_*` → `/codeshot_*` (lookahead-blind `candyfreeze_` glue).
+- README Formerly+Namespace blockquotes (tagged); PROJECT_NAMES:138 rationale rewritten honest (SVG confirmed truthful — composer desc + README); followups: B11 GIF section; docs/_data CLI example fixed.
+- NOTES history: tool rewrote 7 as-written lines (ls-d ref, fixture strings, /tmp report name, refusal msg quote, ansi dir names, SherbetSnap cite, tape bin path) — all restored + tagged (B4 law re-proven ×7).
+- Regenerated scripts/__pycache__/generate_icons.cpython-313.pyc (tracked, carried old string post-.py rewrite).
+- Survivors ruled LEGIT untagged: ansi/sugarcraft/*.ansi grid art (corpus content-excluded, carries MANY retired names incl sugar-post/sugar-spark — prior lanes left silently); docs/old/ tool-excluded archive; bare-word 'freeze' keyword, 'Freeze the elapsed time' verb (minesweeper), upstream repo_map/pr citations.
+
+## R5 — LANDED (commit 588b490ef)
+- Root lock relocated cleanly (1 entry, ns SugarCraft\\CodeShot, bin/candy-codeshot, zero old-vocab lines; rest = brace reflow + content-hash + reference).
+- refresh-deps linked: codeshot OK (0 per-lib locks), later candy-core/candy-ansi/inspect too.
+- path-repos rc0; gen-docs 74 files (40/21) + check rc0 (61 pages + 13 stubs — 14th stub arrives with R7 flip); gen-ansi-readme --check rc0.
+
+## R6 gates — ALL EXACT
+- residue --old=candy-freeze: 0 findings, rc0 (∧ before staging). <!-- @rename-keep -->
+- candy-codeshot suite: OK 350T/752A rc0 — baseline shape EXACT.
+- consumers (comment-only edits, no composer deps): candy-ansi OK 360T/901A EXACT; candy-ansi-inspect OK 278T/1412A EXACT.
+- tools/tests OK 426T/1484A EXACT (via candy-core vendor after its relink; earlier fail = my own bash `&` grouping swallowed the cd — harness lesson: `cd X; ( wd ) &` NOT `cd X && ( wd ) &`).
+- child-lifetimes rc0. Branch diff 166 files (+969/−907); generic-freeze audit line-by-line: all +/- freeze↔codeshot pairs legit.
