@@ -913,6 +913,15 @@ LegacyPaths migration minted — stats persist ONLY where the env var points (ze
 grep-verified — see rename-3-A2/NOTES.md). Split continuity verified: `refs/heads/master` +
 `refs/heads/legacy/candy-mines` + tag `candy-mines-final` live.
 
+`sugar-calendar` → `sugar-datepicker` ✅ **R1–R9 complete** — tag-prep 00e6cbd37, R7 c646c6322 (235 files),
+remote-done 826ef8797, R9 packagist-done 2026-10-16 commit ffa58e55e (create HTTP 202 clean — the old
+registration had already re-crawled the 301'd repo serving the renamed manifest, so no A2-style 406; one forced
+`update sugar-datepicker` (job 8b0863ba) triggered first crawl → dev-master = split SHA
+38780923ed82bc876b0979604738fa8859a87908). Suite 149T/382A exact baseline, zero consumers beyond root
+manifest (no LegacyEnv — zero CALENDAR* env reads; no LegacyPaths — pure component). 114/147 ansi art files
+still paint the `Calendar` wordmark — recorded in rename-followups.md per Part C.3. Split continuity verified:
+`refs/heads/master` + `refs/heads/legacy/sugar-calendar` + tag `sugar-calendar-final` live.
+
 Run Procedure R for each of the three. Extra checks for this pilot batch, because it's validating the tooling:
 - After the first entry (`honey-flap` → `candy-flappy`), read the full `git show --stat` and spot-check 10 changed files by eye. Confirm the
   multi-prefix sync produced a continuous history (R8). If anything is off, fix the TOOL (with a test) before continuing — don't hand-patch around it.
