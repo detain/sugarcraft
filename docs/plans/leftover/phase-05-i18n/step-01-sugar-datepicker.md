@@ -6,7 +6,7 @@
 ## Deliverable
 
 `sugar-datepicker` lacks `Lang.php` / `lang/`. Add the canonical i18n
-pattern from `sugar-wishlist/src/Lang.php`, replace inline English
+pattern from `candy-ssh-launcher/src/Lang.php`, replace inline English
 strings with `Lang::t($key, $params)`.
 
 ## Files

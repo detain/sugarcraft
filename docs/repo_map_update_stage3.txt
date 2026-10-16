@@ -1,7 +1,7 @@
 # SugarCraft Stage 3 Update Analysis
 
 Cross-cutting analysis of 9 update documents covering candy-ansi-inspect, candy-freeze,
-sugar-datepicker, candy-metrics, sugar-toast, candy-kv, candy-git-server, sugar-wishlist,
+sugar-datepicker, candy-metrics, sugar-toast, candy-kv, candy-git-server, candy-ssh-launcher,
 candy-hermit.
 
 ---
@@ -15,9 +15,9 @@ requiring external components for metric collection. The Go promwish exposes `/m
 
 **Pattern:** Multiple packages need storage/server backends that are absent.
 
-### B. TUI Implementation Missing or Incomplete (candy-git-server, sugar-wishlist)
+### B. TUI Implementation Missing or Incomplete (candy-git-server, candy-ssh-launcher)
 candy-git-server has zero TUI — the defining feature that made soft-serve special. SSH-server
-mode is the #1 requested feature in sugar-wishlist. These are architectural voids, not
+mode is the #1 requested feature in candy-ssh-launcher. These are architectural voids, not
 incremental gaps.
 
 **Pattern:** Ported packages deliver CLI/library features but defer the interactive TUI
@@ -76,7 +76,7 @@ parsing layer for the entire ANSI-inspection and terminal emulation stack.
 **Why:** It's the upstream source for both candy-ansi-inspect's parser AND candy-vt's VT500
 implementation. Sharing it would eliminate duplicate state-machine ports.
 
-### 3. charmbracelet/lipgloss (cited in candy-ansi-inspect, sugar-toast, sugar-wishlist, candy-hermit)
+### 3. charmbracelet/lipgloss (cited in candy-ansi-inspect, sugar-toast, candy-ssh-launcher, candy-hermit)
 Style composition, adaptive color (light/dark theme detection via `HasDarkBackground`),
 `StyleRunes()` for matched/unmatched highlighting, and `Width()` for ANSI/Unicode-aware
 measurement. Referenced more than any other styling library.
@@ -88,8 +88,8 @@ candy-shine partially covers but doesn't fully replicate.
 
 ## 4. Top 2 Immediate-Win Roadmap Items
 
-### A. Fix sugar-wishlist `toSshArgv()` to Emit ALL Identity Files
-sugar-wishlist's `Endpoint` model stores `list<string> $identityFiles`, but
+### A. Fix candy-ssh-launcher `toSshArgv()` to Emit ALL Identity Files
+candy-ssh-launcher's `Endpoint` model stores `list<string> $identityFiles`, but
 `toSshArgv()` only emits `$identityFiles[0]`. SSH natively supports multiple `-i` flags.
 This is a single-method change with real workflow impact. Upstream has this feature.
 

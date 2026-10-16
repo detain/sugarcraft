@@ -62,7 +62,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-vcr | ImagickRasterizer cache sharing between clones | ImagickRasterizer.php:58 | withTheme() shares tileCache — clears tiles other instance needs |
 | sugar-gallery | Directory traversal in path navigation | Gallery.php:95 | chdir() with no sandboxing |
 | sugar-readline | History file uses 0644 permissions | History.php | Group-readable history could leak sensitive commands |
-| sugar-wishlist | Index bounds not validated | Wishlist.php | Negative/out-of-bounds indices cause undefined behavior |
+| candy-ssh-launcher | Index bounds not validated | Wishlist.php | Negative/out-of-bounds indices cause undefined behavior |
 
 ### P2 — Significant Bugs / Edge Cases
 
@@ -177,7 +177,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
 - `candy-ansi.md` through `candy-mouse.md` — 34 candy-* project audits
 - `honey-bounce.md`, `candy-flappy.md` — 2 honey-* project audits
-- `sugar-bits.md` through `sugar-wishlist.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
+- `sugar-bits.md` through `candy-ssh-launcher.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
 - `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08
 
 **Total: 63 findings files covering 58 projects** — the 58 project audits (2026-06-30 pass plus `candy-kv.md` and later per-lib arrivals), `repeated_logic.md`, this `README.md`, and the 3 relocated work records. The `plan.md` index, per-lib `plan_<slug>.md` remediation plans, and `findings_resume_plan.md` / `resume_prompt.md` are tracked separately.

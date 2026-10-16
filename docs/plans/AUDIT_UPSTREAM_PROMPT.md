@@ -177,7 +177,7 @@ that are tiny but together justify a PR.
 - charmbracelet/freeze → candy-freeze
 - charmbracelet/glow → candy-mdview
 - charmbracelet/sequin → candy-ansi-inspect
-- charmbracelet/wishlist → sugar-wishlist
+- charmbracelet/wishlist → candy-ssh-launcher
 - charmbracelet/skate → candy-kv
 - charmbracelet/pop → candy-mail
 - charmbracelet/soft-serve → candy-git-server

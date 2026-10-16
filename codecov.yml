@@ -83,8 +83,8 @@ flag_management:
     - name: candy-wish
       paths: ["candy-wish/src/**"]
       carryforward: true
-    - name: sugar-wishlist
-      paths: ["sugar-wishlist/src/**"]
+    - name: candy-ssh-launcher
+      paths: ["candy-ssh-launcher/src/**"]
       carryforward: true
     - name: candy-metrics
       paths: ["candy-metrics/src/**"]
@@ -319,12 +319,12 @@ component_management:
         - "candy-wish/src/**"
       flag_regexes:
         - "^candy-wish$"
-    - component_id: sugar-wishlist
-      name: sugar-wishlist
+    - component_id: candy-ssh-launcher
+      name: candy-ssh-launcher
       paths:
-        - "sugar-wishlist/src/**"
+        - "candy-ssh-launcher/src/**"
       flag_regexes:
-        - "^sugar-wishlist$"
+        - "^candy-ssh-launcher$"
     - component_id: candy-metrics
       name: candy-metrics
       paths:

@@ -452,7 +452,7 @@ Promwish exposes SSH session metrics (created/finished/duration) to Prometheus. 
 
 ### vs. charmbracelet/wishlist (SSH Directory)
 
-Wishlist is a consumer of `charmbracelet/wish` — it serves a TUI over SSH that lists configured endpoints. The SugarCraft equivalent of wishlist would use `candy-wish` for the SSH serving layer and `sugar-bits` for the TUI listing. The `sshconfig` parser (`wishlist/sshconfig/parse.go`) is a candidate for a future `candy-sshconfig` leaf lib.
+Wishlist is a consumer of `charmbracelet/wish` — it serves a TUI over SSH that lists configured endpoints. The SugarCraft equivalent of wishlist would use `candy-wish` for the SSH serving layer and `sugar-bits` for the TUI listing. The `sshconfig` parser (`wishlist/sshconfig/parse.go`) is a candidate for a future `candy-sshconfig` leaf lib. <!-- @rename-keep -->
 
 ---
 

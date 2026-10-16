@@ -98,7 +98,7 @@
         "sugarcraft/sugar-tick": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
         "sugarcraft/sugar-veil": "dev-master",
-        "sugarcraft/sugar-wishlist": "dev-master",
+        "sugarcraft/candy-ssh-launcher": "dev-master",
         "sugarcraft/candy-files": "dev-master"
     },
     "repositories": [
@@ -517,7 +517,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-wishlist",
+            "url": "candy-ssh-launcher",
             "options": {
                 "symlink": true
             }

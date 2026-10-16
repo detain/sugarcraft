@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "528d98615c5f7b67cb075b31b72b9382",
+    "content-hash": "c87326992b70299b62b9226ef6d78ad2",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -5563,6 +5563,69 @@
             }
         },
         {
+            "name": "sugarcraft/candy-ssh-launcher",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-ssh-launcher",
+                "reference": "745d30485f94b60b5aef6bcc9b61502043b7dd29"
+            },
+            "require": {
+                "ext-pcntl": "*",
+                "php": ">=8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-fuzzy": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "bin": [
+                "bin/candy-ssh-launcher"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\SshLauncher\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\SshLauncher\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "SSH endpoint launcher — a TUI directory of `ssh user@host` shortcuts. Port of charmbracelet/wishlist. Loads endpoints from YAML/JSON, renders an interactive picker, then `exec`s into the chosen ssh client (with full host-key prompt / agent forwarding fidelity).",
+            "homepage": "https://github.com/sugarcraft/candy-ssh-launcher",
+            "keywords": [
+                "charm",
+                "directory",
+                "launcher",
+                "picker",
+                "ssh",
+                "sugarcraft",
+                "tui",
+                "wishlist"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-ssh-launcher/issues",
+                "source": "https://github.com/sugarcraft/candy-ssh-launcher",
+                "docs": "https://sugarcraft.github.io/lib/candy-ssh-launcher.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-testing",
             "version": "dev-master",
             "dist": {
@@ -7186,69 +7249,6 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-wishlist",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-wishlist",
-                "reference": "1cff0ec76fde413e89ee14e724eb4d49f0b6b444"
-            },
-            "require": {
-                "ext-pcntl": "*",
-                "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-fuzzy": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0"
-            },
-            "bin": [
-                "bin/wishlist"
-            ],
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Wishlist\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Wishlist\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "SSH endpoint launcher — a TUI directory of `ssh user@host` shortcuts. Port of charmbracelet/wishlist. Loads endpoints from YAML/JSON, renders an interactive picker, then `exec`s into the chosen ssh client (with full host-key prompt / agent forwarding fidelity).",
-            "homepage": "https://github.com/sugarcraft/sugar-wishlist",
-            "keywords": [
-                "charm",
-                "directory",
-                "launcher",
-                "picker",
-                "ssh",
-                "sugarcraft",
-                "tui",
-                "wishlist"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-wishlist/issues",
-                "source": "https://github.com/sugarcraft/sugar-wishlist",
-                "docs": "https://sugarcraft.github.io/lib/sugar-wishlist.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "symfony/console",
             "version": "v7.4.19",
             "source": {
@@ -8615,6 +8615,7 @@
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,
+        "sugarcraft/candy-ssh-launcher": 20,
         "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-top": 20,
@@ -8639,8 +8640,7 @@
         "sugarcraft/sugar-table": 20,
         "sugarcraft/sugar-tick": 20,
         "sugarcraft/sugar-toast": 20,
-        "sugarcraft/sugar-veil": 20,
-        "sugarcraft/sugar-wishlist": 20
+        "sugarcraft/sugar-veil": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

@@ -175,7 +175,7 @@ Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `
 
 ✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
 
-✅ Also fixed (PR #878): sugar-wishlist Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
+✅ Also fixed (PR #878): candy-ssh-launcher Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
 
 ✅ Also cleaned (PR #879): SGR wrap-helpers in sugar-table (StyledCell/Column/Table), sugar-stickers (Table/FlexBox), sugar-datepicker (DatePicker), candy-lister (Model) routed through Ansi::CSI/Ansi::reset().
 
@@ -214,7 +214,7 @@ Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `ne
 
 ### 3.7 Path-repo closure gaps (found this session) — ✅ Resolved (PR #880)
 
-The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-forms`) added a new transitive `sugarcraft/candy-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `candy-mdview`, `sugar-stickers`, `sugar-wishlist` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `candy-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`candy-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-mouse`, `honey-bounce`, `candy-palette`, and for `candy-mdview` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
+The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-forms`) added a new transitive `sugarcraft/candy-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `candy-mdview`, `sugar-stickers`, `candy-ssh-launcher` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `candy-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`candy-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-mouse`, `honey-bounce`, `candy-palette`, and for `candy-mdview` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
 
 ---
 
@@ -222,9 +222,9 @@ The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`candy-
 
 ### 4.1 Terminal raw-mode lives in the wrong places
 
-✅ Resolved (PR #873): sugar-wishlist raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib. (The stream_isatty cases in candy-forms/Spinner and candy-mdview/RenderCommand were already routed through TtyDetect in PR #866.)
+✅ Resolved (PR #873): candy-ssh-launcher raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib. (The stream_isatty cases in candy-forms/Spinner and candy-mdview/RenderCommand were already routed through TtyDetect in PR #866.)
 
-- `sugar-wishlist/src/Picker.php` calls `shell_exec('stty -icanon -echo min 1 time 0')` and `shell_exec('stty sane')`.
+- `candy-ssh-launcher/src/Picker.php` calls `shell_exec('stty -icanon -echo min 1 time 0')` and `shell_exec('stty sane')`.
 - `candy-forms/src/Spinner.php` calls `stream_isatty(STDERR)` directly.
 - `candy-mdview/src/RenderCommand.php` calls `stream_isatty(STDIN)` directly.
 

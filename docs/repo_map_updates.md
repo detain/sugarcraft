@@ -141,12 +141,12 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
   - TerminalProbe already in candy-mdview dependency tree (via candy-shine -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
 
-- [2026-05-31 | step-33 | coder] candy-kv + sugar-wishlist + candy-git: adopt candy-fuzzy:
+- [2026-05-31 | step-33 | coder] candy-kv + candy-ssh-launcher + candy-git: adopt candy-fuzzy:
   - Added `sugarcraft/candy-fuzzy: dev-master` + path-repo to all three libs' composer.json
-  - sugar-wishlist: replaced `Picker::filterMatches()` `str_contains`-style filter with `SmithWatermanMatcher::matchAll()` — scored ranking + match-highlight indices wired into renderer via `highlightLine()` (ANSI bold+cyan on matched grapheme clusters)
+  - candy-ssh-launcher: replaced `Picker::filterMatches()` `str_contains`-style filter with `SmithWatermanMatcher::matchAll()` — scored ranking + match-highlight indices wired into renderer via `highlightLine()` (ANSI bold+cyan on matched grapheme clusters)
   - candy-kv: no interactive filter UI present — only glob-to-SQLLIKE pattern filtering in `Database::buildGlobQuery()`. Added candy-fuzzy dependency as infrastructure for future fuzzy key search (Levenshtein `suggestSimilar()` remains typo-suggestion only).
   - candy-git: no interactive filter UI present — StashManager has cursor navigation but no type-to-search. Added candy-fuzzy dependency as infrastructure for future fuzzy stash search.
-  - Tests: sugar-wishlist 70 pass (180 assertions), candy-kv 66 pass (122 assertions), candy-git 116 pass (333 assertions, 2 skipped)
+  - Tests: candy-ssh-launcher 70 pass (180 assertions), candy-kv 66 pass (122 assertions), candy-git 116 pass (333 assertions, 2 skipped)
   - Path-repo closure: clean (55 libs scanned)
   - Branch: ai/filter-consumers
   - Note: `highlightLine()` re-matches displayLine against filter needle to get indices aligned with the rendered text; applies ANSI bold+cyan (sgr 1,36) on matched grapheme clusters

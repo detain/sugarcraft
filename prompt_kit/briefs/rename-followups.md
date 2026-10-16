@@ -70,3 +70,7 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   render the pre-rename `SUGARPOST` wordmark. Content is rename-excluded (.ansi); re-generate via the ansi toolchain when triaged.
 - `candy-mail/.vhs/showcase.gif` — demo GIF renamed with the dir; its frames still show the pre-rename wordmark. CI
   `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.
+- `candy-ssh-launcher/.vhs/picker.gif` — demo GIF renamed with the dir by R3; its frames still show the pre-rename
+  `wishlist` wordmark. <!-- @rename-keep --> CI `.github/workflows/vhs.yml` re-renders on the next tape run; do not hand-patch.
+- `media/icons/candy-ssh-launcher.png` — icon carries copied pre-rename art bytes (regenerated via renamed dict key,
+  prompt text unchanged); redraw optional at owner triage.
