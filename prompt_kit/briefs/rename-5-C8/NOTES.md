@@ -41,3 +41,4 @@ CONTEXT.md untagged token lines, rename-baseline.md :73+:104, crush_code_{harden
 - (pending) R5 wiring:
 - (pending) R6 gates:
 - (pending) R7 commit+push:
+- candy-sql BASE measured (linked, worktree-own script): 1580T/11900A OK @2.8s — gate target.
