@@ -95,7 +95,7 @@ To implement an item:
 | **candy-lister** | [research/libraries/candy-lister-research.md](libraries/candy-lister-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
 | **super-candy** | [research/libraries/super-candy-research.md](libraries/super-candy-research.md) | 1. Copy/move, 2. Bookmarks, 3. Preview |
 | **candy-git-server** | [research/libraries/candy-git-server-research.md](libraries/candy-git-server-research.md) | 1. Interactive TUI, 2. Repo browser, 3. HTTP server |
-| **candy-mold** | [research/libraries/candy-mold-research.md](libraries/candy-mold-research.md) | 1. editorconfig, 2. CI workflow, 3. configure.php |
+| **candy-starter** | [research/libraries/candy-starter-research.md](libraries/candy-starter-research.md) | 1. editorconfig, 2. CI workflow, 3. configure.php |
 | **candy-codetime** | [research/libraries/candy-codetime-research.md](libraries/candy-codetime-research.md) | 1. CSV export, 2. Tags, 3. Gaps detection |
 
 ---

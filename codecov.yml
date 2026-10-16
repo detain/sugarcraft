@@ -89,8 +89,8 @@ flag_management:
     - name: candy-metrics
       paths: ["candy-metrics/src/**"]
       carryforward: true
-    - name: candy-mold
-      paths: ["candy-mold/src/**"]
+    - name: candy-starter
+      paths: ["candy-starter/src/**"]
       carryforward: true
     - name: candy-mouse
       paths: ["candy-mouse/src/**"]
@@ -331,12 +331,12 @@ component_management:
         - "candy-metrics/src/**"
       flag_regexes:
         - "^candy-metrics$"
-    - component_id: candy-mold
-      name: candy-mold
+    - component_id: candy-starter
+      name: candy-starter
       paths:
-        - "candy-mold/src/**"
+        - "candy-starter/src/**"
       flag_regexes:
-        - "^candy-mold$"
+        - "^candy-starter$"
     - component_id: candy-mouse
       name: candy-mouse
       paths:

@@ -16,7 +16,7 @@
     {"batch":"B","kind":"rename","old":"sugar-wishlist","new":"candy-ssh-launcher","ns_old":"Wishlist","ns_new":"SshLauncher","type":"app","bins":{"bin/wishlist":"bin/candy-ssh-launcher"},"extra_literals":{"bin/wishlist":"bin/candy-ssh-launcher"},"status":"renamed"},
     {"batch":"B","kind":"rename","old":"sugar-tick","new":"candy-codetime","ns_old":"Tick","ns_new":"CodeTime","type":"app","bins":{"bin/sugar-tick":"bin/candy-codetime"},"status":"renamed"},
     {"batch":"B","kind":"rename","old":"candy-freeze","new":"candy-codeshot","ns_old":"Freeze","ns_new":"CodeShot","type":"app","bins":{"bin/candyfreeze":"bin/candy-codeshot"},"status":"renamed"},
-    {"batch":"B","kind":"rename","old":"candy-mold","new":"candy-starter","ns_old":"App","ns_new":"App","type":"app","bins":{},"status":"pending"},
+    {"batch":"B","kind":"rename","old":"candy-mold","new":"candy-starter","ns_old":"App","ns_new":"App","type":"app","bins":{},"status":"renamed"},
 
     {"batch":"C","kind":"rename","old":"sugar-boxer","new":"sugar-panels","ns_old":"Boxer","ns_new":"Panels","type":"lib","bins":{},"status":"pending"},
     {"batch":"C","kind":"rename","old":"sugar-stickers","new":"sugar-flexbox","ns_old":"Stickers","ns_new":"Flexbox","type":"lib","bins":{},"status":"pending"},

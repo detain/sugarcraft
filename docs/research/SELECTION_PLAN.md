@@ -440,7 +440,7 @@ All 45 research documents available at:
 | candy-log | 17KB |
 | candy-metrics | 20KB |
 | candy-minesweeper | 15KB |
-| candy-mold | 18KB |
+| candy-starter | 18KB |
 | candy-mosaic | 24KB |
 | candy-palette | 15KB |
 | candy-pty | 24KB |

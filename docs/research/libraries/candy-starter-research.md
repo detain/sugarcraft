@@ -1,14 +1,14 @@
 # Candy-Mold Research: PHP Skeleton/Scaffold Libraries
 
 **Date:** 2026-05-13
-**Subject:** PHP skeleton/scaffold tools for improving `candy-mold`
+**Subject:** PHP skeleton/scaffold tools for improving `candy-starter`
 **Sources:** GitHub, web search, Context7 (rate-limited)
 
 ---
 
 ## Executive Summary
 
-This document analyzes PHP skeleton/scaffold tools and provides recommendations for improving `candy-mold`, the SugarCraft TUI app bootstrapper. Current candy-mold is minimal (4 files + tests) — a solid foundation but lacking polish, CI/CD, interactive setup, and extensibility patterns.
+This document analyzes PHP skeleton/scaffold tools and provides recommendations for improving `candy-starter`, the SugarCraft TUI app bootstrapper. Current candy-starter is minimal (4 files + tests) — a solid foundation but lacking polish, CI/CD, interactive setup, and extensibility patterns.
 
 ---
 
@@ -17,7 +17,7 @@ This document analyzes PHP skeleton/scaffold tools and provides recommendations 
 ### 1.1 Structure
 
 ```
-candy-mold/
+candy-starter/
 ├── composer.json          # 130 lines, 24 VCS repos, dev dep on phpunit ^10.0
 ├── phpunit.xml            # 16 lines, basic bootstrap + colors
 ├── bin/start              # 39 lines, entry point
@@ -311,7 +311,7 @@ PANIC_HANDLER=false
 
 **Reference:** `spatie/package-skeleton-php/configure.php` (250+ lines)
 
-**Proposed simplified version for candy-mold:**
+**Proposed simplified version for candy-starter:**
 
 ```php
 #!/usr/bin/env php
@@ -334,7 +334,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Process;
 
-(new Application('candy-mold', '1.0.0'))
+(new Application('candy-starter', '1.0.0'))
     ->register('configure')
     ->addArgument('name', InputArgument::OPTIONAL, 'App name (from dir)')
     ->setCode(function (InputInterface $input, OutputInterface $output) use (&$name): int {
@@ -375,7 +375,7 @@ use Symfony\Component\Process\Process;
         foreach ($files as $file) {
             $content = file_get_contents($file);
             $content = str_replace(
-                ['CandyMold', 'candy-mold', 'App\\', 'sugarcraft/candy-mold'],
+                ['CandyStarter', 'candy-starter', 'App\\', 'sugarcraft/candy-starter'],
                 [$namespace, $appName, $namespace . '\\', "author/{$appName}"],
                 $content
             );
@@ -435,7 +435,7 @@ jobs:
 
         uses: codecov/codecov-action@v4
         with:
-          flags: candy-mold
+          flags: candy-starter
 ```
 
 **Effort:** 1 hour
@@ -609,7 +609,7 @@ Consider adding:
 
 ## 6. Conclusion
 
-Candy-mold is a solid foundation but benefits from modernization. The most impactful improvements are:
+CandyStarter is a solid foundation but benefits from modernization. The most impactful improvements are:
 
 1. **CI/CD workflows** (immediate quality gains)
 2. **Interactive configuration** (improved DX)

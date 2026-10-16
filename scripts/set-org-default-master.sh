@@ -16,7 +16,7 @@ LIBS=(
     sugar-bits sugar-charts candy-forms candy-scriptui
     candy-shine candy-kit candy-codeshot candy-mdview candy-ansi-inspect
     candy-wish candy-ssh-launcher candy-metrics
-    candy-mold candy-tetris super-candy sugar-crush
+    candy-starter candy-tetris super-candy sugar-crush
     candy-git candy-sql candy-codetime
     candy-minesweeper candy-flip candy-top candy-flappy
 )

@@ -1,6 +1,6 @@
-# Audit: candy-mold
+# Audit: candy-starter
 
-**Library:** `sugarcraft/candy-mold` — Skeleton repo for bootstrapping a SugarCraft TUI app  
+**Library:** `sugarcraft/candy-starter` — Skeleton repo for bootstrapping a SugarCraft TUI app  
 **Audit date:** 2026-06-30  
 **PHP version:** 8.3+  
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-`candy-mold` is a **skeleton/bootstrap template** — not a library in the traditional sense. Its sole purpose is to be cloned via `composer create-project sugarcraft/candy-mold` to bootstrap a new SugarCraft TUI app. The `Counter` class is a reference Model implementation demonstrating the Elm-architecture pattern (Model/View/Update), not production code that ships downstream. Many findings below are only actionable if this skeleton were to become a real app; they are marked **INFORMATIONAL**.
+`candy-starter` is a **skeleton/bootstrap template** — not a library in the traditional sense. Its sole purpose is to be cloned via `composer create-project sugarcraft/candy-starter` to bootstrap a new SugarCraft TUI app. The `Counter` class is a reference Model implementation demonstrating the Elm-architecture pattern (Model/View/Update), not production code that ships downstream. Many findings below are only actionable if this skeleton were to become a real app; they are marked **INFORMATIONAL**.
 
 ---
 
@@ -83,7 +83,7 @@ public function view(): string
 
 ---
 
-### Finding 5 — `bin/start` error message says `candy-template` instead of `candy-mold`
+### Finding 5 — `bin/start` error message says `candy-template` instead of `candy-starter`
 
 **Severity:** LOW  
 **Location:** `bin/start:25`  
@@ -91,8 +91,8 @@ public function view(): string
 ```php
 fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `composer install`?\n");
 ```
-**Issue:** The package name is `sugarcraft/candy-mold`. This is a copy-paste artifact from a different skeleton.
-**Recommendation:** Change `"candy-template"` to `"candy-mold"`.
+**Issue:** The package name is `sugarcraft/candy-starter`. This is a copy-paste artifact from a different skeleton.
+**Recommendation:** Change `"candy-template"` to `"candy-starter"`.
 
 ---
 
@@ -110,7 +110,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ### Finding 7 — No N+1, no DB, no loops — Performance is clean
 
 **Severity:** N/A  
-**Note:** As a template, `candy-mold` has no performance concerns. The only potential issue is Finding 4 (Style recreation on every frame).
+**Note:** As a template, `candy-starter` has no performance concerns. The only potential issue is Finding 4 (Style recreation on every frame).
 
 ---
 
@@ -135,7 +135,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ### Finding 10 — No `CALIBER_LEARNINGS.md` exists
 
 **Severity:** LOW  
-**Location:** `candy-mold/`  
+**Location:** `candy-starter/`  
 **Issue:** The skeleton lacks a `CALIBER_LEARNINGS.md` file.
 **Recommendation:** Add `CALIBER_LEARNINGS.md` documenting key patterns.
 
@@ -178,7 +178,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ### Finding 15 — No `examples/` directory
 
 **Severity:** INFORMATIONAL  
-**Location:** `candy-mold/`  
+**Location:** `candy-starter/`  
 **Recommendation:** Add `examples/counter-with-step.php` and `examples/async-counter.php`.
 
 ---
@@ -218,8 +218,8 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 | 2 | LOW | Bug | `src/Counter.php:53` | Ctrl+C quit is rune-sensitive |
 | 3 | LOW | UX | `src/Counter.php:51-55` | Quit ignores alt/ctrl-shift combos silently |
 | 4 | MEDIUM | Perf | `src/Counter.php:68-71` | `Style` chain rebuilt on every render frame |
-| 5 | LOW | Bug | `bin/start:25` | Error message says `candy-template` not `candy-mold` |
-| 10 | LOW | Missing | `candy-mold/` | No `CALIBER_LEARNINGS.md` |
+| 5 | LOW | Bug | `bin/start:25` | Error message says `candy-template` not `candy-starter` |
+| 10 | LOW | Missing | `candy-starter/` | No `CALIBER_LEARNINGS.md` |
 | 13-16 | INFO | Missing | various | No subscriptions/init/examples/View demos |
 | 17-18 | INFO | Compat/Async | various | PHP 8.3+ compatible, no async demo |
 

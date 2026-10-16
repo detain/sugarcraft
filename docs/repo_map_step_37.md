@@ -6,7 +6,7 @@
 
 ## Goal
 
-Pick up any lib the step-30 audit identified that didn't fit into steps 31-36's themed groupings. Examples might include: candy-log, candy-metrics, candy-mold, sugar-dash (already touched? confirm), super-candy bits not yet migrated, etc. Each gets its smallest beneficial adoption; anything bigger gets pushed to `docs/repo_map_update_followups.md` as a future plan item.
+Pick up any lib the step-30 audit identified that didn't fit into steps 31-36's themed groupings. Examples might include: candy-log, candy-metrics, candy-starter, sugar-dash (already touched? confirm), super-candy bits not yet migrated, etc. Each gets its smallest beneficial adoption; anything bigger gets pushed to `docs/repo_map_update_followups.md` as a future plan item.
 
 Reference: step-30 audit output — this step is dynamic.
 

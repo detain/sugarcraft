@@ -1,10 +1,10 @@
 {
-    "title": "CandyMold — SugarCraft",
-    "description": "CandyMold: Clone-and-run starter project for building your own SugarCraft apps.",
-    "ogTitle": "CandyMold — SugarCraft",
+    "title": "CandyStarter — SugarCraft",
+    "description": "CandyStarter: Clone-and-run starter project for building your own SugarCraft apps.",
+    "ogTitle": "CandyStarter — SugarCraft",
     "ogDescription": "Clone-and-run starter project for building your own SugarCraft apps.",
     "emoji": "🧪",
-    "displayName": "CandyMold",
+    "displayName": "CandyStarter",
     "tagline": "Starter skeleton for SugarCraft apps",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/bubbletea-app-template\" style=\"color: inherit;\">charmbracelet/bubbletea-app-template</a></span>\n          <span class=\"tag-chip\">starter</span>\n          <span class=\"tag-chip\">skeleton</span>\n          <span class=\"tag-chip\">create-project</span>"

@@ -395,7 +395,7 @@ because research adds three items the PTY plan did not call out:)
 - DAS/ARR keyboard timing (LOW).
 - Perfect-clear detection (LOW).
 
-### candy-mold
+### candy-starter
 
 (Scaffold-template lib; most items are repo-level concerns already
 handled by the monorepo.) Skip until someone uses it as a template.

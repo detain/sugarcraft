@@ -1,11 +1,13 @@
-<img src=".assets/icon.png" alt="candy-mold" width="160" align="right">
+<img src=".assets/icon.png" alt="candy-starter" width="160" align="right">
 
-# CandyMold
+# CandyStarter
+
+> Formerly published as `sugarcraft/candy-mold` (renamed 2026-10). <!-- @rename-keep -->
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-mold)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-mold)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-mold?label=packagist)](https://packagist.org/packages/sugarcraft/candy-mold)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-starter)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-starter)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-starter?label=packagist)](https://packagist.org/packages/sugarcraft/candy-starter)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
@@ -13,10 +15,10 @@
 
 ![demo](.vhs/start.gif)
 
-Skeleton repo for bootstrapping a SugarCraft TUI app. Pour your model into the mold and you've got a working app.
+Skeleton repo for bootstrapping a SugarCraft TUI app. Start from this template and you've got a working app.
 
 ```bash
-composer create-project sugarcraft/candy-mold my-app
+composer create-project sugarcraft/candy-starter my-app
 cd my-app
 ./bin/start
 ```

@@ -1,5 +1,5 @@
 # VHS tape — counter app from the bootstrap skeleton.
-# Render with: `vhs candy-mold/.vhs/start.tape`
+# Render with: `vhs candy-starter/.vhs/start.tape`
 Output .vhs/start.gif
 
 Set FontSize 16

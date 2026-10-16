@@ -1,8 +1,8 @@
-# Ecosystem Comparison Update Report: candy-mold
+# Ecosystem Comparison Update Report: candy-starter
 
 ## Overview
 
-**candy-mold** is the `composer create-project` bootstrap scaffold for the SugarCraft monorepo — a PHP port of the Go `charmbracelet/bubbletea-app-template` ecosystem. It is **not a library** but a starter template that developers fork to bootstrap new SugarCraft TUI applications.
+**candy-starter** is the `composer create-project` bootstrap scaffold for the SugarCraft monorepo — a PHP port of the Go `charmbracelet/bubbletea-app-template` ecosystem. It is **not a library** but a starter template that developers fork to bootstrap new SugarCraft TUI applications.
 
 **Biggest opportunities:**
 
@@ -238,7 +238,7 @@ final class Counter implements Model {
 
 **8. Minimal Bin Entry Point**
 
-- **Description:** Go template's `main.go` includes explicit error handling with `fmt.Println(err); os.Exit(1)`. candy-mold's `bin/start` delegates all error handling silently.
+- **Description:** Go template's `main.go` includes explicit error handling with `fmt.Println(err); os.Exit(1)`. candy-starter's `bin/start` delegates all error handling silently.
 
 - **Why it matters:** Silent failures make debugging harder. Explicit error handling sets a better example.
 
@@ -272,7 +272,7 @@ final class Counter implements Model {
 
 - **Why it matters:** Idiomatic PHPUnit uses data providers for parametrized tests.
 
-- **Source:** `docs/repo_map/sugarcraft_candy-mold.md` — "Tests do not use data providers"
+- **Source:** `docs/repo_map/sugarcraft_candy-starter.md` — "Tests do not use data providers"
 
 - **Implementation:** Refactor CounterTest to use `@dataProvider` for key handling tests.
 
@@ -509,7 +509,7 @@ final class Counter implements Model {
 
 **Gaps to Fill:**
 
-- No tests in Go template → candy-mold's 7 tests are BETTER
+- No tests in Go template → candy-starter's 7 tests are BETTER
 
 - No error handling → add this
 
@@ -581,7 +581,7 @@ final class Counter implements Model {
 
 ## Final Strategic Assessment
 
-candy-mold is a **solid, minimal scaffold** that correctly demonstrates the Elm Architecture in PHP. Its 72-line `Counter` Model shows immutability, message dispatch, command scheduling, and declarative styling. The 7-unit test suite demonstrates deterministic model testing without event loops or mocking. The `composer create-project` lifecycle makes it the correct entry point for PHP developers new to SugarCraft.
+candy-starter is a **solid, minimal scaffold** that correctly demonstrates the Elm Architecture in PHP. Its 72-line `Counter` Model shows immutability, message dispatch, command scheduling, and declarative styling. The 7-unit test suite demonstrates deterministic model testing without event loops or mocking. The `composer create-project` lifecycle makes it the correct entry point for PHP developers new to SugarCraft.
 
 The **three most critical improvements** are:
 
