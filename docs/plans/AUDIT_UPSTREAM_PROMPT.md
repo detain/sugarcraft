@@ -163,7 +163,7 @@ that are tiny but together justify a PR.
 - treilik/bubblelister → candy-lister
 - treilik/bubbleboxer → sugar-panels
 - rmhubbert/bubbletea-overlay → sugar-veil
-- KevM/bubbleo → sugar-crumbs
+- KevM/bubbleo → sugar-navstack
 - Genekkion/theHermit → candy-hermit
 - Evertras/bubble-table → sugar-table
 - erikgeiser/promptkit → sugar-readline

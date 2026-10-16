@@ -1,0 +1,267 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\NavStack;
+
+use SugarCraft\Core\Util\Sanitize;
+
+/**
+ * Navigation stack — last-in, first-out navigation state.
+ *
+ * Push new items to go deeper; pop to go back up.
+ * The top of the stack is the "current" screen/section.
+ *
+ * **Mutable by design** — `push`, `pop`, `updateTop`, `clear`, and <!-- @rename-keep -->
+ * `setItems` mutate `$this` and return `$this` for fluent chaining.
+ * This is a deliberate exception to the repo-wide immutable `with*()`
+ * convention: `filter()` correctly returns a new instance, but the
+ * push/pop/set family mutate in place. Callers must not assume
+ * copy-on-write for the push/pop/set family.
+ *
+ * ## Click dispatch
+ *
+ * When a mouse click resolves to a crumb zone (e.g. `crumb-0`, `crumb-1`)
+ * via the {@see Breadcrumb} scanner, the parent component should dispatch
+ * to this stack's navigation methods accordingly.
+ *
+ * Port of KevM/bubbleo NavStack.
+ *
+ * @see https://github.com/KevM/bubbleo
+ */
+final class NavStack
+{
+    /** Default separator used in view() and viewHtml() output. */
+    private const SEPARATOR = ' > ';
+
+    /**
+     * Mirrors bubbleo NavStack constructor.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    /** @var list<NavigationItem> */
+    private array $items = [];
+
+    /**
+     * Push a new navigation item onto the stack.
+     *
+     * Mirrors bubbleo NavStack.push.
+     */
+    public function push(string $title, mixed $data = null): self
+    {
+        $this->items[] = new NavigationItem($title, $data);
+        return $this;
+    }
+
+    /**
+     * Pop the topmost item off the stack and return it.
+     * Returns null if the stack is empty.
+     *
+     * Mirrors bubbleo NavStack.pop.
+     */
+    public function pop(): ?NavigationItem
+    {
+        if ($this->items === []) {
+            return null;
+        }
+        return \array_pop($this->items);
+    }
+
+    /**
+     * Can the stack pop without going empty?
+     *
+     * Returns false when depth is 0 or 1 (popping would empty the stack).
+     */
+    public function canPop(): bool
+    {
+        return \count($this->items) > 1;
+    }
+
+    /**
+     * Truncate the stack to the item at $index (inclusive), removing everything newer.
+     * The item at position $index becomes the top.
+     *
+     * Out-of-range indices are clamped silently: negative clamps to empty,
+     * oversized clamps to current depth.
+     *
+     * Mirrors bubbleo NavStack truncation.
+     */
+    public function popTo(int $index): self
+    {
+        $this->items = \array_slice($this->items, 0, \max(0, $index + 1));
+        return $this;
+    }
+
+    /**
+     * Peek at the top item without removing it.
+     *
+     * Mirrors bubbleo NavStack.current.
+     */
+    public function current(): ?NavigationItem
+    {
+        return $this->items[\count($this->items) - 1] ?? null;
+    }
+
+    /**
+     * Peek at the item below the top.
+     *
+     * Mirrors bubbleo NavStack.parent.
+     */
+    public function parent(): ?NavigationItem
+    {
+        $n = \count($this->items);
+        return $n >= 2 ? $this->items[$n - 2] : null;
+    }
+
+    /**
+     * Current stack depth (number of items).
+     */
+    public function depth(): int
+    {
+        return \count($this->items);
+    }
+
+    /**
+     * Is the stack empty?
+     */
+    public function isEmpty(): bool
+    {
+        return $this->items === [];
+    }
+
+    /**
+     * Get all items as a list.
+     *
+     * @return list<NavigationItem>
+     */
+    public function items(): array
+    {
+        return $this->items;
+    }
+
+    /**
+     * Replace the data on the topmost item.
+     * Does nothing if stack is empty.
+     */
+    public function updateTop(mixed $data): self
+    {
+        if ($this->items === []) {
+            return $this;
+        }
+        $top = $this->items[\count($this->items) - 1];
+        $this->items[\count($this->items) - 1] = new NavigationItem($top->title, $data);
+        return $this;
+    }
+
+    /**
+     * Clear the stack completely.
+     */
+    public function clear(): self
+    {
+        $this->items = [];
+        return $this;
+    }
+
+    /**
+     * Replace all items at once (used by Shell for immutable operations).
+     *
+     * @param list<NavigationItem> $items
+     */
+    public function setItems(array $items): self
+    {
+        $this->items = $items;
+        return $this;
+    }
+
+    /**
+     * Render the navigation stack as a breadcrumb string.
+     * e.g. "Home > Settings > Display"
+     */
+    public function view(string $separator = ' > '): string
+    {
+        if ($this->items === []) {
+            return '';
+        }
+        return \implode($separator, \array_map(
+            static fn(NavigationItem $item): string => self::sanitizeTitle($item->title),
+            $this->items
+        ));
+    }
+
+    /**
+     * Neutralize terminal-control-sequence injection in an untrusted title.
+     *
+     * Segments reaching a stack come from user-controlled sources —
+     * {@see Shell::pushDirectory} filesystem paths and {@see Url::parse}
+     * URL-decoded segments — so a raw ESC (desyncs the frame-diff renderer)
+     * or a newline (breaks the one-line-per-row model) can be injected. Full
+     * ANSI + C0/C1 strip via candy-core Sanitize (SSOT), then collapse the
+     * whitespace controls it deliberately preserves (\n \r \t) to spaces so
+     * the single-line breadcrumb stays single-line.
+     */
+    private static function sanitizeTitle(string $title): string
+    {
+        return \str_replace(["\r\n", "\r", "\n", "\t"], ' ', Sanitize::untrusted($title));
+    }
+
+    /**
+     * Render the stack as semantic HTML.
+     * Last item gets aria-current="page" for accessibility.
+     *
+     * Example output:
+     * <nav class="breadcrumb" aria-label="Breadcrumb">
+     *   <span>Home</span> > <span>Settings</span> > <span aria-current="page">Display</span>
+     * </nav>
+     */
+    public function viewHtml(): string
+    {
+        $items = $this->items;
+        if ($items === []) {
+            return '';
+        }
+
+        $parts = [];
+        for ($i = 0; $i < \count($items); $i++) {
+            $item = $items[$i];
+            $isLast = ($i === \count($items) - 1);
+            $escaped = \htmlspecialchars($item->title, \ENT_QUOTES, 'UTF-8');
+            if ($isLast === true) {
+                $parts[] = '<span aria-current="page">' . $escaped . '</span>';
+            } else {
+                $parts[] = '<span>' . $escaped . '</span>';
+            }
+        }
+
+        $separator = \htmlspecialchars(self::SEPARATOR, \ENT_QUOTES, 'UTF-8');
+        return '<nav class="breadcrumb" aria-label="Breadcrumb">'
+            . \implode($separator, $parts)
+            . '</nav>';
+    }
+
+    /**
+     * Filter items by title or data matching $term.
+     * Returns a new NavStack with only matching items.
+     */
+    public function filter(string $term): self
+    {
+        $filtered = \array_filter(
+            $this->items,
+            static function(NavigationItem $item) use ($term): bool {
+                $titleMatch = \stripos($item->title, $term) !== false;
+                // Only stringify data that is actually stringifiable: array or
+                // plain-object data (the example pattern stores arrays) would
+                // otherwise fatal / warn on the (string) cast under strict types.
+                $dataMatch = $item->data !== null
+                    && (\is_scalar($item->data) || $item->data instanceof \Stringable)
+                    && \stripos((string) $item->data, $term) !== false;
+                return $titleMatch || $dataMatch;
+            }
+        );
+        $new = new self();
+        $new->items = \array_values($filtered);
+        return $new;
+    }
+}

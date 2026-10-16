@@ -62,7 +62,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-lister.png" width="48" alt=""> | **[CandyLister](candy-lister/)** | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
 | <img src="media/icons/sugar-panels.png" width="48" alt=""> | **[SugarPanels](sugar-panels/)** | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | <img src="media/icons/sugar-veil.png" width="48" alt=""> | **[SugarVeil](sugar-veil/)** | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
-| <img src="media/icons/sugar-crumbs.png" width="48" alt=""> | **[SugarCrumbs](sugar-crumbs/)** | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
+| <img src="media/icons/sugar-navstack.png" width="48" alt=""> | **[SugarNavstack](sugar-navstack/)** | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
 | <img src="media/icons/sugar-dash.png" width="48" alt="" onerror="this.style.display='none'"> | **[SugarDash](sugar-dash/)** | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
 | <img src="media/icons/candy-hermit.png" width="48" alt=""> | **[CandyHermit](candy-hermit/)** | Fuzzy finder overlay — type to filter a list, arrow keys to select, Enter to confirm; wraps any Model. |
 | <img src="media/icons/sugar-flexbox.png" width="48" alt=""> | **[SugarFlexbox](sugar-flexbox/)** | FlexBox layout engine + simple sort/filter table. Ratio-based sizing, gap, justify, align, per-column styling. |

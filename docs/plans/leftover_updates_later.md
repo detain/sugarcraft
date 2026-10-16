@@ -115,13 +115,13 @@ sugar-flexbox research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. **
 
 - SSOT-03 — sugar-flexbox' `Viewport` becomes a `final class` extending or composing `\SugarCraft\Bits\Viewport\Viewport` with the sticky-positioning extras. Add sugar-bits to require.
 
-### SSOT-04 — sugar-crumbs click regions use candy-mouse
+### SSOT-04 — sugar-navstack click regions use candy-mouse
 
-sugar-crumbs research P4 calls for "Click-region rendering". `candy-mouse` is the canonical zone-tracking lib (APC marker + scan algorithm). sugar-crumbs should emit zone markers via candy-mouse, not embed click coordinates.
+sugar-navstack research P4 calls for "Click-region rendering". `candy-mouse` is the canonical zone-tracking lib (APC marker + scan algorithm). sugar-navstack should emit zone markers via candy-mouse, not embed click coordinates.
 
 **Action:**
 
-- SSOT-04 — When implementing click regions in sugar-crumbs, use `\SugarCraft\Mouse\Zones\Manager::mark()` for each crumb. Acceptance: `grep -n "zoneMark\|APC" sugar-crumbs/src` returns hits to candy-mouse, not inline copies.
+- SSOT-04 — When implementing click regions in sugar-navstack, use `\SugarCraft\Mouse\Zones\Manager::mark()` for each crumb. Acceptance: `grep -n "zoneMark\|APC" sugar-navstack/src` returns hits to candy-mouse, not inline copies.
 
 ### SSOT-05 — Chart duplication: sugar-dash depends on sugar-charts
 
@@ -178,7 +178,7 @@ Canonical pattern: `candy-ssh-launcher/src/Lang.php` wraps `\SugarCraft\Core\I18
 - `sugar-toast` — alert level labels (Info/Warning/Error) hardcoded.
 - `sugar-flexbox` — when feature work lands, must include Lang.
 - `sugar-panels` — alignment-mode labels in examples.
-- `sugar-crumbs` — separator + ellipsis labels.
+- `sugar-navstack` — separator + ellipsis labels.
 - `super-candy` — file-manager prompts.
 - `candy-git` — many user-facing strings (commit prompts, errors).
 
@@ -520,7 +520,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 - EventStore architecture.
 - i18n (needs Lang.php; see §2).
 
-### sugar-crumbs
+### sugar-navstack
 
 - Implement missing `pushDirectory` / `view` / `filter` referenced by `examples/navigation.php` (P1).
 - `Closable` + lifecycle hooks `onEnter` / `onLeave` (P2).

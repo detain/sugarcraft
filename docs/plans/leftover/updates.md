@@ -198,10 +198,10 @@ review for step 03.08 · clean · PR#541
   step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
 review for step 04.02 · clean · PR#566
 docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-flexbox.html
-step 04.03 · PR#568 · sugar-crumbs: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep
+step 04.03 · PR#568 · sugar-navstack: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-mouse dep
 review for step 04.03 · clean · PR#568
 tests-ci for step 04.03 · clean
-docs for step 04.03 · PR#569 · document withZoneManager() in README + CALIBER_LEARNINGS.md + docs/lib/sugar-crumbs.html
+docs for step 04.03 · PR#569 · document withZoneManager() in README + CALIBER_LEARNINGS.md + docs/lib/sugar-navstack.html
 step 05.01 · PR#570 · sugar-datepicker: add i18n via Lang::t() (lang/en.php + Lang.php facade + DatePicker.php refactor + LangCoverageTest)
 review for step 05.01 · clean · PR#570
 tests-ci for step 05.01 · clean
@@ -218,7 +218,7 @@ step 05.04 · PR#575 · sugar-panels: add i18n infrastructure (Lang.php facade +
 review for step 05.04 · clean · PR#575
 tests-ci for step 05.04 · clean
 docs for step 05.04 · clean
-step 05.05 · PR#576 · sugar-crumbs: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no src/ strings to translate — purely computational library)
+step 05.05 · PR#576 · sugar-navstack: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no src/ strings to translate — purely computational library)
 review for step 05.05 · clean · PR#576
 tests-ci for step 05.05 · clean
 docs for step 05.05 · clean
@@ -557,8 +557,8 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.18 · PR#785 · candy-codetime: CSV/JSON export + tags + sugartrackignore + gaps
     step 10.19 · PR#786 · candy-codetime: SQLite backend + milestones + iCal export + auto-backups + theme
     step 10.20 · PR#787 · sugar-datepicker: date range select + keyboard nav + EventStore
-    step 10.21 · PR#788 · sugar-crumbs: pushDirectory + view + filter
-    step 10.22 · PR#789 · sugar-crumbs: Closable + URL derivation + escape + semantic HTML
+    step 10.21 · PR#788 · sugar-navstack: pushDirectory + view + filter
+    step 10.22 · PR#789 · sugar-navstack: Closable + URL derivation + escape + semantic HTML
     step 10.23 · PR#790 · sugar-panels: alignment + margin tests (methods already existed)
     step 10.24 · PR#791 · candy-mdview: syntax highlighting + streaming pager
     docs for step 10.26 · PR#795 · refresh docs/lib/candy-mdview.html (lede: eight→eleven themes; Theme picker feature lists all 11 options; note solarized/monokai/github JSON loading)

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarNavstack — SugarCraft</title>
+<meta name="description" content="SugarNavstack: Navigation breadcrumbs for terminal UIs.">
+<meta property="og:title" content="SugarNavstack — SugarCraft">
+<meta property="og:description" content="Navigation breadcrumbs for terminal UIs.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-navstack.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-navstack.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-navstack.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-navstack.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-navstack.png" alt="SugarNavstack">
+      <div>
+        <h2>SugarNavstack</h2>
+        <p class="detail-sub">Navigation breadcrumbs for terminal UIs</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">inspired by <a href="https://github.com/KevM/bubbleo" style="color: inherit;">KevM/bubbleo</a></span>
+          <span class="tag-chip">navigation</span><span class="tag-chip">breadcrumb</span><span class="tag-chip">routing</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-navstack"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-navstack" alt="SugarNavstack code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and shell history.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-navstack</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\NavStack\NavStack;
+
+// NavStack is a mutable stack: push() returns the same stack for chaining.
+$nav = NavStack::new()
+    -&gt;push('Home', '/')                    // title, then any payload
+    -&gt;push('Settings', '/settings')
+    -&gt;push('Display', '/settings/display');
+
+echo $nav-&gt;view();          // Home &gt; Settings &gt; Display
+echo $nav-&gt;view(' / ');     // Home / Settings / Display
+
+$top = $nav-&gt;pop();         // NavigationItem: title 'Display', data '/settings/display'
+$nav-&gt;depth();              // 2</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
+            <div class="feature"><strong>Shell integration</strong><span>Detect directory changes and auto-push.</span></div>
+            <div class="feature"><strong>Filter</strong><span>Type-ahead filtering within the breadcrumb bar.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-navstack">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-navstack/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-navstack/tree/master/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/KevM/bubbleo">KevM/bubbleo</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
+<tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack)</td></tr>
+<tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / current() / parent() / depth()</td><td>Pop and inspect the stack</td></tr>
+<tr><td>NavStack</td><td>view(string $separator = ' &gt; ') / viewHtml()</td><td>Render breadcrumbs</td></tr>
+<tr><td>NavStack</td><td>filter(query)</td><td>Filter breadcrumbs</td></tr>
+<tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry</td></tr>
+<tr><td>Breadcrumb</td><td>withZoneManager(?Manager)</td><td>Attach Manager for mouse-click zone tracking (candy-mouse integration)</td></tr>
+<tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
+<tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Truncate if total width exceeds limit</td></tr>
+<tr><td>Breadcrumb</td><td>render(NavStack)</td><td>Render NavStack as breadcrumb string</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/navigation.gif" alt="Push / pop / back">
+                <h3>Push / pop / back</h3>
+                <span class="demo-caption">NavStack push / pop / back through nested screens.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/basic.gif" alt="Basic crumb trail">
+                <h3>Basic crumb trail</h3>
+                <span class="demo-caption">Render a `/Home > Settings > Account` crumb trail.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-navstack">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-navstack/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

@@ -40,7 +40,7 @@ To implement an item:
 | **sugar-veil** | [research/libraries/sugar-veil-research.md](libraries/sugar-veil-research.md) | 1. Backdrop, 2. Animation, 3. Border chrome |
 | **sugar-flexbox** | [research/libraries/sugar-flexbox-research.md](libraries/sugar-flexbox-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
 | **sugar-panels** | [research/libraries/sugar-panels-research.md](libraries/sugar-panels-research.md) | 1. Box styles enum, 2. Text alignment, 3. Box titles |
-| **sugar-crumbs** | [research/libraries/sugar-crumbs-research.md](libraries/sugar-crumbs-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
+| **sugar-navstack** | [research/libraries/sugar-navstack-research.md](libraries/sugar-navstack-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
 | **MySQL Workbench status & performance dashboard** (candy-sql parity study) | [mysql_workbench_dash.md](mysql_workbench_dash.md) | 1. Performance page metrics, 2. Two-connection cache model, 3. Page lifecycle / event-task model |
 
 ### Input & Readline
@@ -112,8 +112,8 @@ To implement an item:
 | 6 | candy-ansi-inspect | SGR underline styles | 1h | [link](libraries/candy-ansi-inspect-research.md) |
 | 7 | candy-ansi-inspect | C0/C1 codes | 1-2h | [link](libraries/candy-ansi-inspect-research.md) |
 | 8 | candy-hermit | Item interface | 2-3h | [link](libraries/candy-hermit-research.md) |
-| 9 | sugar-crumbs | Fix examples | 1h | [link](libraries/sugar-crumbs-research.md) |
-| 10 | sugar-crumbs | Separator escaping | 1h | [link](libraries/sugar-crumbs-research.md) |
+| 9 | sugar-navstack | Fix examples | 1h | [link](libraries/sugar-navstack-research.md) |
+| 10 | sugar-navstack | Separator escaping | 1h | [link](libraries/sugar-navstack-research.md) |
 | 11 | candy-codeshot | Background colors | 2h | [link](libraries/candy-codeshot-research.md) |
 | 12 | candy-codeshot | Ligature flag | 1h | [link](libraries/candy-codeshot-research.md) |
 | 13 | candy-mosaic | WezTerm detection fix | 0.5h | [link](libraries/candy-mosaic-research.md) |

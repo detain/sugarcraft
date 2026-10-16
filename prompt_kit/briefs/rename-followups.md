@@ -93,3 +93,12 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   `.ansi` content is rename-excluded; re-generate via the ansi toolchain when triaged.
 - `media/icons/sugar-flexbox.png` + `docs/img/icons/sugar-flexbox.png` — icon PNG path renamed; bytes unchanged <!-- @rename-keep -->
   (generate_icons.py prompt describes literal sticker imagery — semantically fine, redraw optional at owner triage).
+
+## C3 sugar-crumbs → sugar-navstack (2026-10-16) <!-- @rename-keep -->
+- `ansi/sugarcraft/sugarcraft-2-16-l-1.ansi`, `ansi/sugarcraft/sugarcraft-2-256-l-1.ansi`, <!-- @rename-keep -->
+  `ansi/sugarcraft/sugarcraft-3-16-l-2.ansi` — each carries 1 `sugar-crumbs` tile in the pre-rendered <!-- @rename-keep -->
+  monorepo logo-wall art. `.ansi` content is rename-excluded (tools and residue); re-render owed by <!-- @rename-keep -->
+  whoever next touches the ansi corpus (`php tools/gen-ansi-readme.php` after any redraw). <!-- @rename-keep -->
+- `media/icons/sugar-navstack.png` — renamed path, unchanged bytes (cookie-crumb motif predates the <!-- @rename-keep -->
+  NavStack naming; generate_icons.py prompt text "golden cookie crumbs" kept truthful for existing art, <!-- @rename-keep -->
+  B12 precedent). Redraw optional at owner triage.

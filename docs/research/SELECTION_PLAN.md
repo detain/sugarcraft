@@ -175,17 +175,17 @@
 - **Effort**: 1-2 hours
 - **Research**: `libraries/candy-flip-research.md`
 
-### sugar-crumbs
+### sugar-navstack
 
 ### [ ] Fix broken examples (view/filter/pushDirectory)
 
 - **Effort**: 1 hour
-- **Research**: `libraries/sugar-crumbs-research.md`
+- **Research**: `libraries/sugar-navstack-research.md`
 
 ### [ ] Add separator escaping for titles with ›
 
 - **Effort**: 1 hour
-- **Research**: `libraries/sugar-crumbs-research.md`
+- **Research**: `libraries/sugar-navstack-research.md`
 
 ### candy-hermit
 
@@ -459,7 +459,7 @@ All 45 research documents available at:
 | sugar-panels | 16KB |
 | sugar-datepicker | 19KB |
 | sugar-charts | 23KB |
-| sugar-crumbs | 14KB |
+| sugar-navstack | 14KB |
 | sugar-crush | 15KB |
 | sugar-dash | 25KB |
 | candy-mdview | 17KB |

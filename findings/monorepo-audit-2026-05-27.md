@@ -168,18 +168,18 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 8: sugar-crush, sugar-crumbs, sugar-dash, candy-mail
+### Group 8: sugar-crush, sugar-navstack, sugar-dash, candy-mail
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-crush | 158 ✓ | APPROVE | 0 | 0 | 2 | 0 |
-| sugar-crumbs | 75 ✓ | REQUEST_CHANGES | 0 | 0 | 3 | 0 |
+| sugar-navstack | 75 ✓ | REQUEST_CHANGES | 0 | 0 | 3 | 0 |
 | sugar-dash | 5409 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 | candy-mail | 54 ⚠️ | BLOCKED | 2 | 2 | 3 | 0 |
 
 **sugar-crush** — Chat TUI. Clean, 158 tests. Minor: `@proc_open` suppressions; no PHP version guard for `bypass_shell`.
 
-**sugar-crumbs** — Navigation components. Issues: `NavStack::updateTop()` and `setItems()` mutate internal state instead of returning clones — inconsistent with stated immutable pattern.
+**sugar-navstack** — Navigation components. Issues: `NavStack::updateTop()` and `setItems()` mutate internal state instead of returning clones — inconsistent with stated immutable pattern.
 
 **sugar-dash** — Dashboard library. Massive (5409 tests, 99.98% pass). Clean architecture throughout.
 
@@ -437,7 +437,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 7. **[REFACTOR]** super-candy: Decompose 915-line Manager into ConfirmHandler, SearchHandler, TabManager
 8. **[REFACTOR]** candy-git: Decompose 1201-line App into smaller handlers
 9. **[REFACTOR]** sugar-panels: Fix `with()` to use `null` sentinel so `0` values can be set
-10. **[REFACTOR]** sugar-crumbs: Fix `NavStack::updateTop()` and `setItems()` to return clones
+10. **[REFACTOR]** sugar-navstack: Fix `NavStack::updateTop()` and `setItems()` to return clones
 11. **[REFACTOR]** sugar-readline: Make `Highlight::highlight()` throw unsupported exception instead of silently returning no styling
 12. **[CLEANUP]** candy-flappy: Fix `saveHighScore()` to return false on write failure
 13. **[CLEANUP]** candy-flappy: Fix score detection to not rely on exact tick timing
@@ -569,7 +569,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
-| 8 | sugar-crush, sugar-crumbs, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
+| 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
 | 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |

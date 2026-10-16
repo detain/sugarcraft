@@ -138,7 +138,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 
 1. `step-01-boxer-composes-sprinkles.md`
 2. `step-02-stickers-composes-bits.md`
-3. `step-03-crumbs-uses-zone.md`
+3. `step-03-navstack-uses-zone.md`
 
 ### Phase 05 — i18n rollout (`phase-05-i18n/`)
 
@@ -146,7 +146,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 2. `step-02-sugar-table.md`
 3. `step-03-sugar-toast.md`
 4. `step-04-sugar-panels.md`
-5. `step-05-sugar-crumbs.md`
+5. `step-05-sugar-navstack.md`
 6. `step-06-super-candy.md`
 7. `step-07-candy-git.md`
 8. `step-08-sugar-flexbox.md`
@@ -253,8 +253,8 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 18. `step-18-tick-export-tags-ignore-gaps.md`
 19. `step-19-tick-sqlite-ical-themes.md`
 20. `step-20-calendar-range-eventstore.md`
-21. `step-21-crumbs-pushdir-view-filter.md`
-22. `step-22-crumbs-closable-url-semantic.md`
+21. `step-21-navstack-pushdir-view-filter.md`
+22. `step-22-navstack-closable-url-semantic.md`
 23. `step-23-boxer-align-margin.md`
 24. `step-24-glow-syntax-streaming.md`
 25. `step-25-glow-theme-watch-width.md`

@@ -251,7 +251,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **No smooth scroll parity** — Viewport lerp animation exists in candy-forms/candy-forms but not consistently applied.
 
-6. **No type-ahead filtering** — sugar-crumbs has it but most interactive selects do not.
+6. **No type-ahead filtering** — sugar-navstack has it but most interactive selects do not.
 
 ---
 
@@ -446,7 +446,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 5. **`SugarCraft/Ansi`** — Shared `charmbracelet/x/ansi` state machine port. Consumed by candy-ansi-inspect, candy-hermit, candy-codeshot, candy-vt.
 
-6. **`SugarCraft/Mouse`** — Shared Mark/Scan/Get pattern for self-contained zone hit-testing. Consumed by candy-mouse, sugar-veil, sugar-crumbs, and all zone-aware packages.
+6. **`SugarCraft/Mouse`** — Shared Mark/Scan/Get pattern for self-contained zone hit-testing. Consumed by candy-mouse, sugar-veil, sugar-navstack, and all zone-aware packages.
 
 7. **`SugarCraft/Input`** — New package with terminal escape sequence decoder (Kitty keyboard protocol, SGR mouse), enabling sugar-readline real-world usage.
 
@@ -502,7 +502,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 3. **String-based layout** — Every layout-sensitive package manually pads strings; none use constraint specification.
 
-4. **Manual mouse coordinate tracking** — sugar-veil, sugar-crumbs, candy-lister each wire candy-mouse Manager independently rather than using self-contained Mark/Scan/Get.
+4. **Manual mouse coordinate tracking** — sugar-veil, sugar-navstack, candy-lister each wire candy-mouse Manager independently rather than using self-contained Mark/Scan/Get.
 
 5. **ReactPHP async** — candy-forms/candy-forms have async suggestions; candy-core has exec() that blocks; inconsistent async models across ecosystem.
 
@@ -544,7 +544,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 11. **sugar-veil > rmhubbert/bubbletea-overlay** — 9-position anchor (vs upstream 5), multi-overlay z-index stacking, animation infrastructure, backdrop dimming, auto-size, click-outside dismissal, UTF-8 column tracking.
 
-12. **sugar-crumbs > KevM/bubbleo** — Type-ahead filtering, path parsing via `Shell::pushDirectory()`, HTML with ARIA semantics, 678-line test suite, i18n.
+12. **sugar-navstack > KevM/bubbleo** — Type-ahead filtering, path parsing via `Shell::pushDirectory()`, HTML with ARIA semantics, 678-line test suite, i18n.
 
 13. **sugar-readline > erikgeiser/promptkit** — True immutability via clone-on-mutation, pure PHP zero deps, Vi/Emacs abstraction, parallel undo/redo, decoupled confirmation, FIFO rollover, 708-line test suite.
 

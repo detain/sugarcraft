@@ -1,0 +1,11 @@
+{
+    "title": "SugarNavstack — SugarCraft",
+    "description": "SugarNavstack: Navigation breadcrumbs for terminal UIs.",
+    "ogTitle": "SugarNavstack — SugarCraft",
+    "ogDescription": "Navigation breadcrumbs for terminal UIs.",
+    "emoji": "",
+    "displayName": "SugarNavstack",
+    "tagline": "Navigation breadcrumbs for terminal UIs",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/KevM/bubbleo\" style=\"color: inherit;\">KevM/bubbleo</a></span>\n          <span class=\"tag-chip\">navigation</span><span class=\"tag-chip\">breadcrumb</span><span class=\"tag-chip\">routing</span>"
+}

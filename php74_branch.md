@@ -414,7 +414,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **5.1** `sugar-bits`(49,high, many deps) → **5.1a** `Table` (5), **5.1b** `TextInput/Timer/
   Progress` (12), **5.1c** `Spinner/Key/ItemList/FilePicker/Cursor` (≈15→a/b), **5.1d**
   `Viewport/Tree/TextArea/Tabs/Stopwatch/Scrollbar/Paginator/Help`+root (≈17→a/b).
-- **5.2** `sugar-panels`(3,low), `sugar-datepicker`(6,low), `sugar-crumbs`(8,low),
+- **5.2** `sugar-panels`(3,low), `sugar-datepicker`(6,low), `sugar-navstack`(8,low),
   `candy-kv`(8,med), `candy-ansi-inspect`(8,med), `sugar-flexbox`(7,med), `candy-ssh-launcher`(6,med),
   `candy-mail`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
   `sugar-veil`(7,high) — one step each (all small), in dependency order.
@@ -530,7 +530,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-flappy | low | 6 | ctor-promotion, named-args, readonly |
 | sugar-panels | low | 3 | attribute, ctor-promotion, first-class-callable, intersection, match |
 | sugar-datepicker | low | 6 | ctor-promotion, match, nullsafe, php8-strfn, readonly-class |
-| sugar-crumbs | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |
+| sugar-navstack | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |
 | candy-forms | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
 
 *`candy-ansi` fiber appears in audit; confirm at step time — may be a feature‑detected path.*
