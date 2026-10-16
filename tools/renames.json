@@ -11,7 +11,7 @@
     {"batch":"B","kind":"rename","old":"candy-shell","new":"candy-scriptui","ns_old":"Shell","ns_new":"ScriptUi","type":"app","bins":{"bin/candyshell":"bin/candy-scriptui"},"status":"packagist-done"},
     {"batch":"B","kind":"rename","old":"sugar-glow","new":"candy-mdview","ns_old":"Glow","ns_new":"MdView","type":"app","bins":{"bin/sugarglow":"bin/candy-mdview"},"status":"packagist-done"},
     {"batch":"B","kind":"rename","old":"sugar-spark","new":"candy-ansi-inspect","ns_old":"Spark","ns_new":"AnsiInspect","type":"app","bins":{"bin/sugarspark":"bin/candy-ansi-inspect"},"status":"packagist-done"},
-    {"batch":"B","kind":"rename","old":"sugar-skate","new":"candy-kv","ns_old":"Skate","ns_new":"Kv","type":"app","bins":{"bin/skate":"bin/candy-kv"},"extra_literals":{"bin/skate":"bin/candy-kv"},"status": "remote-done"},
+    {"batch":"B","kind":"rename","old":"sugar-skate","new":"candy-kv","ns_old":"Skate","ns_new":"Kv","type":"app","bins":{"bin/skate":"bin/candy-kv"},"extra_literals":{"bin/skate":"bin/candy-kv"},"status": "packagist-done"},
     {"batch":"B","kind":"rename","old":"sugar-post","new":"candy-mail","ns_old":"Post","ns_new":"Mail","type":"app","bins":{"bin/pop":"bin/candy-mail"},"extra_literals":{"bin/pop":"bin/candy-mail"},"status":"pending"},
     {"batch":"B","kind":"rename","old":"sugar-wishlist","new":"candy-ssh-launcher","ns_old":"Wishlist","ns_new":"SshLauncher","type":"app","bins":{"bin/wishlist":"bin/candy-ssh-launcher"},"extra_literals":{"bin/wishlist":"bin/candy-ssh-launcher"},"status":"pending"},
     {"batch":"B","kind":"rename","old":"sugar-tick","new":"candy-codetime","ns_old":"Tick","ns_new":"CodeTime","type":"app","bins":{"bin/sugar-tick":"bin/candy-codetime"},"status":"pending"},

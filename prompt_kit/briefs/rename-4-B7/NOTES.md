@@ -47,3 +47,12 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 - Split peek: sugarcraft/candy-kv master exists at `cab4bd4d0`; legacy/<old> + <old>-final refs not yet visible at peek time — CI SYNC mints them async (lag OK per law, B2-B6 precedent).
 - renames.json line 14 flipped status -> "remote-done" (targeted sed on line, space-tolerant regex; JSON validated).
 - Transient gotcha: two parallel bash calls (sed -i + read) raced and printed a bogus corrupted line; serial re-verify showed file clean/untouched — law: serial-verify after -i edits, never read in the same parallel batch.
+
+## R9 packagist — LANDED
+- create attempt 1: HTTP 406 (old registration held the redirected repo URL while split master was still pre-rename tip) — B3/B5 documented cure.
+- forced `update sugar-skate` (job a77860bda) -> sleep 60 -> create retry: HTTP 202 clean. <!-- @rename-keep -->
+- dev-master ABSENT through 2 polls (p2 empty, page existed) -> ONE forced bare-slug `update candy-kv` (job 25f1bc875) -> versions appeared (dev-master + dev-legacy branch).
+- dev-master ref == split refs/heads/master == `c033af0c6` EXACT; composer name on the wire = sugarcraft/candy-kv.
+- Continuity: refs/heads/legacy/sugar-skate + refs/tags/sugar-skate-final both at `cab4bd4d0`. <!-- @rename-keep -->
+- Abandon checklist line appended (house format, @rename-keep, old pkg stays installable; UI abandon deferred Phase 10). renames.json -> packagist-done.
+- Credentials exported via split-vars + unset after each invocation; never echoed.
