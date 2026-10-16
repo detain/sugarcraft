@@ -1,0 +1,496 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\ColorProfile\Probe;
+
+use SugarCraft\ColorProfile\DetectionChain;
+
+/**
+ * Terminal capability probe — the single source of truth for capability detection.
+ *
+ * Runs a 12-step detection pipeline:
+ *  1. CLICOLOR_FORCE=1                    → TrueColor  (overrides everything)
+ *  2. NO_COLOR (any value)                → NoColor
+ *  3. CLICOLOR=0                          → NoColor
+ *  4. TERM=dumb                           → NoColor
+ *  5. COLORTERM=24bit|truecolor|yes       → TrueColor
+ *  6. WT_SESSION set                      → TrueColor  (Windows Terminal)
+ *  7. GOOGLE_CLOUD_SHELL=true             → TrueColor
+ *  8. TMUX || STY set + base TERM checks  → Color256 (tmux/screen default to 256)
+ *  9. TERM=xterm-kitty|xterm-ghostty|*-256color → Color256
+ * 10. TERM=xterm*|screen*|tmux*           → Color16
+ * 11. Default                            → Color16
+ * 12. Optional Phase 2: infocmp Tc/RGB    → upgrade Color16 → TrueColor
+ *
+ * Additional capability detection (all env/terminfo lookups — this probe
+ * issues no raw OSC query round-trips; see checkEscapeQueries):
+ * - Sixel: terminfo (`infocmp -1` Sixel capability)
+ * - Kitty: TERM=xterm-kitty
+ * - ITerm2: TERM_PROGRAM=iTerm.app|Apple_Terminal table
+ * - Hyperlinks: TERM_PROGRAM=Hyper table
+ * - TrueColor upgrade: TERM_PROGRAM=WezTerm|vscode|Ghostty table
+ * - KittyKeyboard: TERM=xterm-kitty
+ * - BracketedPaste/FocusEvents: not probed (upstream TUI layer negotiates)
+ *
+ * @see https://github.com/charmbracelet/colorprofile
+ * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/
+ */
+class TerminalProbe
+{
+    /** @var array<string, string|null> */
+    private array $env = [];
+
+    private bool $interactive = false;
+
+    /**
+     * Create a new probe with optional environment overrides.
+     *
+     * @param array<string, string|null> $env  Environment map for testing
+     * @param bool                      $interactive  Whether the environment
+     *                                                upgrade table (Phase 3)
+     *                                                may run; ANDed with
+     *                                                isInteractive() here and
+     *                                                honored by runProbe() unless
+     *                                                that call overrides it
+     */
+    public function __construct(array $env = [], bool $interactive = true)
+    {
+        $this->env = array_merge($_ENV, getenv() ?: [], $env);
+        $this->interactive = $interactive && $this->isInteractive();
+    }
+
+    /**
+     * Run the full probe pipeline and return a report.
+     */
+    public static function run(): ProbeReport
+    {
+        $probe = new self();
+
+        return $probe->runProbe();
+    }
+
+    /**
+     * Run the full probe pipeline with optional environment overrides.
+     *
+     * @param array<string, string|null> $env          Environment overrides
+     * @param bool|null                  $interactive  null (default) keeps the
+     *                                                 constructor's decision;
+     *                                                 true re-evaluates
+     *                                                 isInteractive(); false
+     *                                                 forces Phase 3 off
+     */
+    public function runProbe(array $env = [], ?bool $interactive = null): ProbeReport
+    {
+        if ($env !== []) {
+            $this->env = array_merge($this->env, $env);
+        }
+        $this->interactive = match ($interactive) {
+            false => false,
+            true => $this->isInteractive(),
+            null => $this->interactive,
+        };
+
+        $caps = $this->checkEnvVars();
+
+        // A3b gate order: NO_COLOR / CLICOLOR=0 / TERM=dumb from the env phase
+        // terminate the whole capability ladder, per the de-facto NO_COLOR
+        // spec ("…disable colored output…entirely"). Running terminfo or
+        // escape queries after a suppression verdict re-added TrueColor/Sixel
+        // and silently defeated the user's explicit "no color" — suppression
+        // is a decision, not one input among many.
+        $suppressed = isset($caps[capabilityKey(Capability::NoColor)]);
+
+        // Phase 2: terminfo check if infocmp is available
+        if (!$suppressed) {
+            $caps = $this->checkTerminfo($caps);
+        }
+
+        // Phase 3: Escape queries (if interactive)
+        if (!$suppressed && $this->interactive) {
+            $caps = $this->checkEscapeQueries($caps);
+        }
+
+        // Phase 4: Apply fallbacks
+        $caps = $this->applyFallbacks($caps);
+
+        return new ProbeReport($caps);
+    }
+
+    /**
+     * Step 1: Check environment variables.
+     *
+     * Uses DetectionChain for the core detection logic, with TerminalProbe-specific
+     * overrides for WT_SESSION and GOOGLE_CLOUD_SHELL (set-but-don't-return behavior).
+     *
+     * @return array<Capability, string>
+     */
+    private function checkEnvVars(): array
+    {
+        $caps = [];
+
+        // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything, including NO_COLOR)
+        if ($this->getEnv('CLICOLOR_FORCE') === '1') {
+            $caps[capabilityKey(Capability::TrueColor)] = 'env:CLICOLOR_FORCE';
+            return $caps;
+        }
+
+        // Use DetectionChain for NO_COLOR, CLICOLOR=0, TERM=dumb, COLORTERM, and TERM patterns
+        $chain = DetectionChain::detect($this->env);
+
+        // 2-4: Handle NO_COLOR, CLICOLOR=0, TERM=dumb via DetectionChain
+        if (!$chain->allowsColor()) {
+            $source = match (true) {
+                str_contains($chain->source(), 'NO_COLOR') => 'env:NO_COLOR',
+                str_contains($chain->source(), 'CLICOLOR=0') => 'env:CLICOLOR=0',
+                str_contains($chain->source(), 'TERM=dumb') => 'env:TERM=dumb',
+                default => $chain->source(),
+            };
+            $caps[capabilityKey(Capability::NoColor)] = $source;
+            return $caps;
+        }
+
+        // 5. TrueColor from sources other than COLORTERM (handled below) is set
+        // by the chain match above via LEVEL_TRUECOLOR; WT_SESSION and
+        // GOOGLE_CLOUD_SHELL (steps 6-7) additionally record the capability.
+
+        // 5. COLORTERM=24bit|truecolor|yes → TrueColor (returns immediately)
+        $colorterm = $this->getEnv('COLORTERM');
+        if ($colorterm !== null) {
+            $ctLower = strtolower($colorterm);
+            if ($ctLower === '24bit' || $ctLower === 'truecolor' || $ctLower === 'yes') {
+                $caps[capabilityKey(Capability::TrueColor)] = 'env:COLORTERM=' . $colorterm;
+                return $caps;
+            }
+        }
+
+        // 6. WT_SESSION non-empty → TrueColor (set but don't return - continue
+        // to step 8). An empty WT_SESSION is not a Windows Terminal session.
+        $wtSession = $this->getEnv('WT_SESSION');
+        if ($wtSession !== null && $wtSession !== '') {
+            $caps[capabilityKey(Capability::TrueColor)] = 'env:WT_SESSION';
+        }
+
+        // 7. GOOGLE_CLOUD_SHELL=true → TrueColor (set but don't return - continue to step 8)
+        if ($this->getEnv('GOOGLE_CLOUD_SHELL') === 'true') {
+            $caps[capabilityKey(Capability::TrueColor)] = 'env:GOOGLE_CLOUD_SHELL';
+        }
+
+        // 8. TMUX || STY non-empty + base TERM checks tmux/screen first → Color256
+        $tmux = $this->getEnv('TMUX');
+        $sty = $this->getEnv('STY');
+        $inTmux = $tmux !== null && $tmux !== '';
+        $inSty = $sty !== null && $sty !== '';
+        if ($inTmux || $inSty) {
+            $term = $this->getEnv('TERM') ?? '';
+            if ($this->termIsScreen($term) || $this->termIsTmux($term)) {
+                $caps[capabilityKey(Capability::Color256)] = 'env:TMUX|STY+' . ($inTmux ? 'TMUX' : 'STY');
+                return $caps;
+            }
+        }
+
+        // 9. TERM=xterm-kitty|xterm-ghostty|*-256color → Color256
+        $term = $this->getEnv('TERM') ?? '';
+        if ($this->termIs256Color($term)) {
+            $caps[capabilityKey(Capability::Color256)] = 'env:TERM=' . $term;
+            // xterm-kitty also implies Kitty keyboard support
+            if ($term === 'xterm-kitty') {
+                $caps[capabilityKey(Capability::KittyKeyboard)] = 'env:TERM=xterm-kitty';
+            }
+            return $caps;
+        }
+
+        // 10. TERM=xterm*|screen*|tmux* → Color16
+        if ($this->termIsXterm($term) || $this->termIsScreen($term) || $this->termIsTmux($term)) {
+            $caps[capabilityKey(Capability::Color16)] = 'env:TERM=' . $term;
+            return $caps;
+        }
+
+        // 11. Default (TERM is empty) → Color16
+        if ($term === '') {
+            $caps[capabilityKey(Capability::Color16)] = 'fallback:default';
+        }
+
+        return $caps;
+    }
+
+    /**
+     * Step 2: Check terminfo for Tc/RGB capabilities.
+     *
+     * @param array<string, string> $caps
+     * @return array<string, string>
+     */
+    private function checkTerminfo(array $caps): array
+    {
+        $term = $this->getEnv('TERM');
+        if ($term === null || $term === '' || $term === 'dumb') {
+            return $caps;
+        }
+
+        if (!$this->infocmpAvailable()) {
+            return $caps;
+        }
+
+        $output = $this->runCommand('infocmp -1 ' . escapeshellarg($term) . ' 2>/dev/null');
+        if ($output === null || $output === '') {
+            return $caps;
+        }
+
+        // Tc (True-color) or RGB (direct color) capability present
+        if (preg_match('/\bTc\b/', $output) || preg_match('/\bRGB\b/', $output)) {
+            $key = capabilityKey(Capability::TrueColor);
+            if (!isset($caps[$key])) {
+                $caps[$key] = 'terminfo:Tc|RGB';
+            }
+        }
+
+        // Check for Sixel support in terminfo.
+        //
+        // WHY this replaced `preg_match('/\bsixel\b/', $output)`: that pattern
+        // was case-SENSITIVE and required a bare lowercase word, so it could
+        // never fire on the capability names real `infocmp -1` actually emits —
+        // `Sixel#1` (numeric), `Sixel=true` (string), `SixelScreenMode`, `Ss1`,
+        // `Ss2` are all capitalised or glued to a `#`/`=` separator with no
+        // trailing word boundary. The result was that sixel was systematically
+        // UNDER-detected through the terminfo path. See terminfo(5) capnames
+        // and the xterm DECGCI/Sixel graphics extension.
+        if ($this->terminfoHasSixel($output)) {
+            $key = capabilityKey(Capability::Sixel);
+            $caps[$key] = 'terminfo:sixel';
+        }
+
+        return $caps;
+    }
+
+    /**
+     * Terminfo capability names that advertise Sixel graphics output.
+     *
+     * ncurses and downstream vendors spell the Sixel capability differently
+     * across releases: the boolean `sixel`/`Sixel` (and the abbreviated `sixl`),
+     * the numeric-as-boolean `Sixel#1`, the string `Sixel=true`, and the
+     * `SixelScreenMode` / `Ss1` / `Ss2` user-defined caps shipped by sixel
+     * terminals (foot, mlterm, xterm).
+     * Names are matched after lowercasing and stripping underscores, so
+     * `SixelScreenMode` and `sixel_screen_mode` collapse to one token.
+     *
+     * @see terminfo(5) user-defined capabilities
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (Sixel)
+     */
+    private const SIXEL_TERMCAPS = ['sixel', 'sixl', 'sixelscreenmode', 'ss1', 'ss2'];
+
+    /**
+     * Whether `infocmp -1` output declares a Sixel graphics capability.
+     *
+     * `-1` prints one capability per line as `<TAB>name#<num>,` (numeric),
+     * `<TAB>name=<str>,` (string) or `<TAB>name,` (boolean), with `# …`
+     * comment lines and a leading `<name>|<description>,` header. We inspect
+     * ONLY the capability-name position of each line and compare it to
+     * {@see self::SIXEL_TERMCAPS}, so the literal word "sixel" buried inside
+     * an unrelated value (e.g. `desc=xterm with sixel,`) or a comment can
+     * never be mistaken for the capability — the failure mode the old regex
+     * invited. Presence of the capability name is treated as support (mirrors
+     * the name-only `Tc`/`RGB` check above); we do not parse the numeric/string
+     * value that follows the separator.
+     *
+     * @param string $output Raw `infocmp -1 <TERM>` stdout.
+     */
+    private function terminfoHasSixel(string $output): bool
+    {
+        foreach (preg_split('/\R/', $output) ?: [] as $line) {
+            $capability = ltrim($line, " \t:");
+            if ($capability === '' || $capability[0] === '#') {
+                // Blank line or an infocmp comment header: no capability here.
+                continue;
+            }
+
+            // The capability name is the leading identifier run, terminated by
+            // the boolean ',' / numeric '#' / string '=' separator (or EOL).
+            if (preg_match('/^([A-Za-z0-9_]+)/', $capability, $match) !== 1) {
+                continue;
+            }
+
+            $name = str_replace('_', '', strtolower($match[1]));
+            if (in_array($name, self::SIXEL_TERMCAPS, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Step 3: Interactive-only capability upgrade from the advertised environment.
+     *
+     * Despite the historical name this issues no raw OSC query round-trips
+     * (DA1, OSC 4;1;?, OSC 8, 2004, 1004): the implementation is a
+     * TERM_PROGRAM lookup table plus the TERM=xterm-kitty keyboard rule.
+     * Real query I/O would need raw-mode read-back owned by the TUI layer;
+     * until then terminfo (Phase 2) is the authoritative deep probe.
+     *
+     * @param array<string, string> $caps
+     * @return array<string, string>
+     */
+    private function checkEscapeQueries(array $caps): array
+    {
+        // TERM_PROGRAM hints for iTerm2 (and friends) — table lookup, no query.
+        $termProgram = $this->getEnv('TERM_PROGRAM');
+        if ($termProgram !== null) {
+            $known = [
+                'iTerm.app'       => Capability::ITerm2,
+                'Apple_Terminal'   => Capability::ITerm2,
+                'Hyper'           => Capability::Hyperlinks,
+                'WezTerm'         => Capability::TrueColor,
+                'vscode'          => Capability::TrueColor,
+                'Ghostty'         => Capability::TrueColor,
+            ];
+            if (isset($known[$termProgram])) {
+                $cap = $known[$termProgram];
+                $key = capabilityKey($cap);
+                if (!isset($caps[$key])) {
+                    $caps[$key] = 'env:TERM_PROGRAM=' . $termProgram;
+                }
+            }
+        }
+
+        // Check for Kitty keyboard protocol
+        $term = $this->getEnv('TERM') ?? '';
+        if ($term === 'xterm-kitty') {
+            $key = capabilityKey(Capability::KittyKeyboard);
+            $caps[$key] = 'env:TERM=xterm-kitty';
+        }
+
+        // BracketedPaste (OSC 2004) and FocusEvents (OSC 1004) are NOT probed
+        // here: reporting them requires the raw-mode query round-trip described
+        // above, which this library deliberately leaves to the TUI layer.
+
+        return $caps;
+    }
+
+    /**
+     * Step 4: Apply fallbacks to ensure BasicAscii minimum.
+     *
+     * @param array<string, string> $caps
+     * @return array<string, string>
+     */
+    private function applyFallbacks(array $caps): array
+    {
+        // BasicAscii is always available as the floor
+        $basicAsciiKey = capabilityKey(Capability::BasicAscii);
+        if (!isset($caps[$basicAsciiKey])) {
+            $caps[$basicAsciiKey] = 'fallback:basic-ascii';
+        }
+
+        // If no color capability detected, ensure at least Color16
+        // (many terminals default to at least 16 colors)
+        $trueColorKey = capabilityKey(Capability::TrueColor);
+        $color256Key = capabilityKey(Capability::Color256);
+        $color16Key = capabilityKey(Capability::Color16);
+        $noColorKey = capabilityKey(Capability::NoColor);
+
+        if (!isset($caps[$trueColorKey])
+            && !isset($caps[$color256Key])
+            && !isset($caps[$color16Key])
+            && !isset($caps[$noColorKey])
+        ) {
+            $caps[$color16Key] = 'fallback:color16-default';
+        }
+
+        return $caps;
+    }
+
+    // -------------------------------------------------------------------------
+    // Environment accessors (protected for testability)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get an environment variable value.
+     *
+     * @return string|null
+     */
+    protected function getEnv(string $name): ?string
+    {
+        $value = $this->env[$name] ?? null;
+        return $value === false ? null : $value;
+    }
+
+    /**
+     * Check if the terminal appears to be interactive.
+     */
+    protected function isInteractive(): bool
+    {
+        // Check if stdout is a TTY
+        if (function_exists('posix_isatty')) {
+            if (!@posix_isatty(STDOUT)) {
+                return false;
+            }
+        } elseif (function_exists('stream_isatty')) {
+            if (!@stream_isatty(STDOUT)) {
+                return false;
+            }
+        }
+
+        // Check for common non-interactive indicators
+        if ($this->getEnv('TERM') === 'dumb') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if infocmp binary is available.
+     *
+     * Delegates to the single shared sniff ({@see InfocmpBinary::path()});
+     * the method stays a protected seam so tests can override the answer.
+     */
+    protected function infocmpAvailable(): bool
+    {
+        return InfocmpBinary::path() !== null;
+    }
+
+    /**
+     * Run a shell command and return the output.
+     * Override in tests to inject mock output.
+     *
+     * @return string|null
+     */
+    protected function runCommand(string $cmd): ?string
+    {
+        return @shell_exec($cmd);
+    }
+
+    // -------------------------------------------------------------------------
+    // TERM pattern matchers
+    // -------------------------------------------------------------------------
+
+    protected function termIsXterm(string $term): bool
+    {
+        return str_starts_with($term, 'xterm');
+    }
+
+    protected function termIsScreen(string $term): bool
+    {
+        return str_starts_with($term, 'screen');
+    }
+
+    protected function termIsTmux(string $term): bool
+    {
+        return str_starts_with($term, 'tmux');
+    }
+
+    protected function termIs256Color(string $term): bool
+    {
+        return str_contains($term, '-256color')
+            || $term === 'xterm-kitty'
+            || $term === 'xterm-ghostty';
+    }
+}
+
+/**
+ * Helper function to get the string key for a Capability enum.
+ * This works around PHP's strict typing issues with enum array keys.
+ */
+function capabilityKey(Capability $cap): string
+{
+    return $cap->value;
+}

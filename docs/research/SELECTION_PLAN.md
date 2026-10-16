@@ -86,22 +86,22 @@
 - **Effort**: 30 minutes
 - **Research**: `libraries/candy-log-research.md`
 
-### candy-palette
+### sugar-colorprofile
 
 ### [ ] CLICOLOR / CLICOLOR_FORCE support
 
 - **Effort**: 2-4 hours
-- **Research**: `libraries/candy-palette-research.md`
+- **Research**: `libraries/sugar-colorprofile-research.md`
 
 ### [ ] Fix tmux/screen COLORTERM ignoring
 
 - **Effort**: 2-4 hours
-- **Research**: `libraries/candy-palette-research.md`
+- **Research**: `libraries/sugar-colorprofile-research.md`
 
 ### [ ] TERM=dumb special case handling
 
 - **Effort**: 1-2 hours
-- **Research**: `libraries/candy-palette-research.md`
+- **Research**: `libraries/sugar-colorprofile-research.md`
 
 ### sugar-toast
 
@@ -442,7 +442,7 @@ All 45 research documents available at:
 | candy-minesweeper | 15KB |
 | candy-starter | 18KB |
 | sugar-image | 24KB |
-| candy-palette | 15KB |
+| sugar-colorprofile | 15KB |
 | candy-pty | 24KB |
 | candy-sql | 11KB |
 | candy-git-server | 12KB |

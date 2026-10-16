@@ -27,7 +27,7 @@ The audit categories:
 2. **Cross-cutting: i18n via `Lang::t()`** — the canonical pattern from
    `candy-ssh-launcher/src/Lang.php`. Several libs still miss it.
 3. **Cross-cutting: ColorProfile + env detection** — should live in
-   `candy-palette`, not be re-rolled in each lib.
+   `sugar-colorprofile`, not be re-rolled in each lib.
 4. **Per-library leftover features** — verified gaps per research doc.
 5. **Sugar-dashboard detailed plan** — finish the Phase-0 reorg, fix the
    broken `ExternalModule`, wire a real interactive dashboard, kill the
@@ -147,15 +147,15 @@ Found in `sugar-image/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contr
 
 **Action:** see `plans/leftover_updates.md` CC-LO-07.
 
-### SSOT-08 — ColorProfile + env detection consolidate in candy-palette
+### SSOT-08 — ColorProfile + env detection consolidate in sugar-colorprofile
 
-`candy-log` research items M5/M6 (`NO_COLOR`/`FORCE_COLOR` detection + downsampling) and `candy-palette` itself need `CLICOLOR_FORCE`/`CLICOLOR`/`COLORTERM` precedence, tmux/screen detection, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, terminfo `Tc`/`RGB` parsing. All these env probes belong in **one** place: `candy-palette`.
+`candy-log` research items M5/M6 (`NO_COLOR`/`FORCE_COLOR` detection + downsampling) and `sugar-colorprofile` itself need `CLICOLOR_FORCE`/`CLICOLOR`/`COLORTERM` precedence, tmux/screen detection, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, terminfo `Tc`/`RGB` parsing. All these env probes belong in **one** place: `sugar-colorprofile`.
 
 **Actions:**
 
-- SSOT-08a — Pull all env-var probes into `candy-palette/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
+- SSOT-08a — Pull all env-var probes into `sugar-colorprofile/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
 - SSOT-08b — `candy-log`, `sugar-image`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
-- SSOT-08c — Implement the missing candy-palette items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
+- SSOT-08c — Implement the missing sugar-colorprofile items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
 
 ### SSOT-09 — `Module\Module` contract aligns with candy-core `Model`
 
@@ -408,11 +408,11 @@ handled by the monorepo.) Skip until someone uses it as a template.
 
 ### candy-log
 
-- `NO_COLOR` / `FORCE_COLOR` env detection — consume `candy-palette/Probe`.
+- `NO_COLOR` / `FORCE_COLOR` env detection — consume `sugar-colorprofile/Probe`.
 - `PadLevelText` for level-label alignment.
 - Level numeric values aligned with upstream (-4/0/4/8/12).
 - Per-field key styles `Styles::Keys[key]`.
-- ColorProfile downsampling — via `candy-palette/Probe`.
+- ColorProfile downsampling — via `sugar-colorprofile/Probe`.
 - CallerFormatter, slog/PSR-3 handler bridge, hook system, configurable `PartsOrder`.
 
 ### candy-metrics
@@ -423,7 +423,7 @@ handled by the monorepo.) Skip until someone uses it as a template.
 - UpDownCounter, Async Counter, Async Gauge instrument kinds.
 - Native histograms (low priority).
 
-### candy-palette
+### sugar-colorprofile
 
 (See SSOT-08 — most of the work happens here.) Specifically the
 research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
@@ -906,7 +906,7 @@ CLAUDE.md gotcha).
 
 1. SSOT-01a — Move Theme into candy-sprinkles (new class).
 2. SSOT-01g — Move StyleParser into candy-sprinkles.
-3. SSOT-08a/b/c — `candy-palette::Probe` consolidation.
+3. SSOT-08a/b/c — `sugar-colorprofile::Probe` consolidation.
 4. SSOT-09 — `Module\Module` aligns with `Model` (depends on SSOT-01a
    being available so Modules can use Theme).
 5. Dash-03 (sugar-dashboard imports the new canonical primitives).

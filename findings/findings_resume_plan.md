@@ -504,11 +504,11 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `candy-input/src/KeyModifier.php:159-162`
 **Agent:** Same coder agent as 1.16 (grouped — same lib)
 
-#### 1.18 🟡 candy-palette: No DetectionChain (Items 1.1-1.8)
+#### 1.18 🟡 sugar-colorprofile: No DetectionChain (Items 1.1-1.8)
 
-**Plan:** `findings/plan_candy-palette.md` — Items 1.1-1.8
+**Plan:** `findings/plan_sugar-colorprofile.md` — Items 1.1-1.8
 **Fix:** Create `DetectionChain.php` and refactor `Palette::detectProfile()`, `Probe::colorProfile()`, `TerminalProbe::checkEnvVars()` to use it. Reduce triplication of detection logic.
-**Files:** `candy-palette/src/DetectionChain.php` (new), `candy-palette/src/Palette.php`, `candy-palette/src/Probe.php`
+**Files:** `sugar-colorprofile/src/DetectionChain.php` (new), `sugar-colorprofile/src/Palette.php`, `sugar-colorprofile/src/Probe.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 **Note:** This is a large refactor — give this agent extra context time
 
@@ -516,11 +516,11 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 
 ### Group 1-D (3 agents)
 
-#### 1.19 🟡 candy-palette: StandardColors caching (Item 1.11)
+#### 1.19 🟡 sugar-colorprofile: StandardColors caching (Item 1.11)
 
-**Plan:** `findings/plan_candy-palette.md` — Item 1.11
+**Plan:** `findings/plan_sugar-colorprofile.md` — Item 1.11
 **Fix:** Add static cache to `StandardColors::all()` — return same instance on repeated calls
-**Files:** `candy-palette/src/StandardColors.php`
+**Files:** `sugar-colorprofile/src/StandardColors.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 1.20 🟡 sugar-dashboard: EventDispatcher mutation (Item C-3)
@@ -992,11 +992,11 @@ Same branch/PR check as Phase 0/1.
 **Files:** `candy-input/src/Driver/SignalResizeDriver.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.20 🟢 candy-palette: AsyncProbe (Item 3.1)
+#### 3.20 🟢 sugar-colorprofile: AsyncProbe (Item 3.1)
 
-**Plan:** `findings/plan_candy-palette.md` — Item 3.1
+**Plan:** `findings/plan_sugar-colorprofile.md` — Item 3.1
 **Fix:** Create `AsyncProbe.php` using ReactPHP ChildProcess for async terminal detection
-**Files:** `candy-palette/src/AsyncProbe.php` (new)
+**Files:** `sugar-colorprofile/src/AsyncProbe.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 3.21 🟢 sugar-spring: Spring reducedMotionOverride (Item 2.1)
@@ -1158,11 +1158,11 @@ Same verification as previous phases.
 
 ---
 
-#### 4.10 🟢 CALIBER_LEARNINGS: candy-palette async gap
+#### 4.10 🟢 CALIBER_LEARNINGS: sugar-colorprofile async gap
 
-**Plan:** `findings/plan_candy-palette.md` — Item 5.1 (implicit)
+**Plan:** `findings/plan_sugar-colorprofile.md` — Item 5.1 (implicit)
 **Fix:** Add note about synchronous probe design in CALIBER_LEARNINGS.md
-**Files:** `candy-palette/CALIBER_LEARNINGS.md`
+**Files:** `sugar-colorprofile/CALIBER_LEARNINGS.md`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 4.11 🟢 CALIBER_LEARNINGS: sugar-widgets transitional architecture (Item 3.4)

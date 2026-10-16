@@ -35,7 +35,7 @@
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-buffer": "dev-master",
-        "sugarcraft/candy-palette": "dev-master",
+        "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-image": "dev-master",
         "sugarcraft/sugar-animation": "dev-master"
     },

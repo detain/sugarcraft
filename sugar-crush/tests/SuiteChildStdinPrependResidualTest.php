@@ -43,7 +43,7 @@ use PHPUnit\Framework\TestCase;
  *
  * The price was priced wrong for two rounds at `9500 tests, 107 errors, rc 2`.
  * That run predated the sugar-image repairs: it was ONE defect — a fallback
- * naming a `Capability` case candy-palette spells differently — multiplied by
+ * naming a `Capability` case sugar-colorprofile spells differently — multiplied by
  * every test that reached it, plus the unguarded `?? STDIN` that dropped the
  * library into that fallback in the first place. Both are fixed. RE-MEASURED,
  * PHP 8.3.6, full suite, the descriptor replacement alone against a green

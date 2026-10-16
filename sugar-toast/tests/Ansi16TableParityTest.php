@@ -21,7 +21,7 @@ use SugarCraft\Toast\Toast;
  * method now indexes
  * {@see CoreColor::ANSI16_RGB} directly; these assertions cover all 16
  * slots so no future slot can silently drift again. Mirrors
- * candy-palette/tests/Ansi16TableParityTest.php.
+ * sugar-colorprofile/tests/Ansi16TableParityTest.php.
  */
 final class Ansi16TableParityTest extends TestCase
 {

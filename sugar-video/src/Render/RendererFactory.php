@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Render;
 
 use SugarCraft\Image\Mosaic;
-use SugarCraft\Palette\ColorProfile;
-use SugarCraft\Palette\Probe;
-use SugarCraft\Palette\Probe\Capability;
+use SugarCraft\ColorProfile\ColorProfile;
+use SugarCraft\ColorProfile\Probe;
+use SugarCraft\ColorProfile\Probe\Capability;
 
 /**
  * Static factory for FrameRenderer instances.
@@ -44,7 +44,7 @@ final class RendererFactory
         }
         if ($report->has(Capability::KittyKeyboard)) {
             // Note: Kitty image mode is gated on Capability::KittyKeyboard because
-            // candy-palette exposes no standalone KittyGraphics capability.
+            // sugar-colorprofile exposes no standalone KittyGraphics capability.
             return Mode::Kitty;
         }
         if ($report->has(Capability::ITerm2)) {

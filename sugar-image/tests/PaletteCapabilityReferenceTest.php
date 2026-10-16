@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Palette\Probe\Capability as PaletteCapability;
+use SugarCraft\ColorProfile\Probe\Capability as PaletteCapability;
 
 /**
  * EVERY `Capability::` CASE THIS LIBRARY NAMES MUST EXIST ON THE ENUM.

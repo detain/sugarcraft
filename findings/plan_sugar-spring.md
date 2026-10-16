@@ -158,7 +158,7 @@ Address all 29 findings from the sugar-spring code audit, starting with critical
 
 **Investigation notes**:
 
-- `Probe::reducedMotion()` at line 115-128 in `candy-palette/src/Probe.php` reads `REDUCE_MOTION` then `PREFERS_REDUCED_MOTION` env vars
+- `Probe::reducedMotion()` at line 115-128 in `sugar-colorprofile/src/Probe.php` reads `REDUCE_MOTION` then `PREFERS_REDUCED_MOTION` env vars
 - `Spring::update()` at line 112 calls `Probe::reducedMotion()` on every frame
 - `Probe::_reset()` at line 246 exists for testing — but not helpful for per-frame performance
 
@@ -605,4 +605,4 @@ These are feature requests that are out of scope for the current audit PR but ar
 - Item 1.3 (CubicBezier validation) should be implemented TDD: write the exception tests first, then implement validation.
 - Items 2.1 (reducedMotion caching) and 2.3 (Vector missing methods) are independent and can be parallelized.
 - The `::build()` removal (item 3.2) requires updating all test call sites — plan to do as a batch edit.
-- `Probe::reducedMotion()` is called via `use SugarCraft\Palette\Probe` at line 10 of `Spring.php` — the `candy-palette` path repo is already wired in `composer.json`.
+- `Probe::reducedMotion()` is called via `use SugarCraft\ColorProfile\Probe` at line 10 of `Spring.php` — the `sugar-colorprofile` path repo is already wired in `composer.json`.

@@ -1,0 +1,11 @@
+{
+    "title": "SugarColorprofile — SugarCraft",
+    "description": "SugarColorprofile: Terminal color profile detection + ANSI conversion.",
+    "ogTitle": "SugarColorprofile — SugarCraft",
+    "ogDescription": "Terminal color profile detection + ANSI conversion.",
+    "emoji": "",
+    "displayName": "SugarColorprofile",
+    "tagline": "Terminal color profile detection + ANSI conversion",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/colorprofile\" style=\"color: inherit;\">charmbracelet/colorprofile</a></span>\n          <span class=\"tag-chip\">color</span><span class=\"tag-chip\">terminal</span><span class=\"tag-chip\">output</span>"
+}

@@ -40,7 +40,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Widget library (Button, Input, Tree, etc.) | `sugar-widgets/` | ✅ Mapped |
 | TCSS Stylesheet, CSS properties | `candy-sprinkles/` | ✅ Mapped |
 | Layout, VerticalLayout, HorizontalLayout, GridLayout | `candy-sprinkles/` + `sugar-panels/` | ✅ Mapped |
-| Color, HSL/HSV/Lab color spaces | `candy-palette/` | ✅ Mapped |
+| Color, HSL/HSV/Lab color spaces | `sugar-colorprofile/` | ✅ Mapped |
 | Content, Text, Span, Style | `sugar-markdown/` | ✅ Mapped |
 | markdown, MarkdownViewer | `sugar-markdown/` | ✅ Mapped |
 | Tree, DirectoryTree | `sugar-treelist/` | ✅ Mapped |

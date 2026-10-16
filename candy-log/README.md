@@ -89,7 +89,7 @@ $log = Logger::new(formatter: new JsonFormatter());
 ## Styling
 
 Styles are applied automatically when the terminal supports color output.
-Color is determined by `candy-palette`'s Probe — it respects the `NO_COLOR`
+Color is determined by `sugar-colorprofile`'s Probe — it respects the `NO_COLOR`
 and `FORCE_COLOR` environment variables.
 
 Override level styles via `Logger::styles()`:

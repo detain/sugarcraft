@@ -474,7 +474,7 @@ NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
  *
  * WHAT WAS SAID: attempt 1 is unaffordable. A full suite with it applied
  * produced `9500 tests, 107 errors, rc 2`, every error
- * `Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`.
+ * `Error: Undefined constant SugarCraft\ColorProfile\Probe\Capability::Iterm2Image`.
  * The census behind the attempt had looked in `sugar-crush/src`, `bin` and
  * `tests` for `\STDIN`, and the reader that mattered was in a SIBLING LIBRARY:
  * {@see \SugarCraft\Image\Detect} resolved its probe stream as

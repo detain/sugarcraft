@@ -505,7 +505,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-kit | medium | 7 | ctor-promotion, named-args, ??=, readonly, union | <!-- @rename-keep historical provenance -->
 | sugar-treelist | medium | 10 | enum, match, nullsafe, php8-strfn, readonly |
 | candy-mouse | medium | 9 | backed-enum, ctor-promotion, match, nullsafe, php8-strfn | <!-- @rename-keep historical provenance -->
-| candy-palette | medium | 8 | ctor-promotion, enum-with-methods, match, named-args, new-in-init |
+| candy-palette | medium | 8 | ctor-promotion, enum-with-methods, match, named-args, new-in-init | <!-- @rename-keep historical provenance -->
 | candy-git-server | medium | 14 | ctor-promotion, first-class-callable, match, named-args; ssh2/openssl |
 | candy-scriptui | medium | 41 | attribute, backed-enum, ctor-promotion, enum-with-methods, match, mixed; symfony console |
 | candy-sprinkles | medium | 43 | backed-enum, enum, ctor-promotion, match, mixed, nullsafe |

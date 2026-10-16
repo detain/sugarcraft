@@ -7,7 +7,7 @@ namespace SugarCraft\Image\Renderer;
 use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
-use SugarCraft\Palette\Color;
+use SugarCraft\ColorProfile\Color;
 
 /**
  * ASCII / ANSI renderer — maps each pixel to a luminance character, optionally

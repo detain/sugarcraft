@@ -6,8 +6,8 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Mosaic;
-use SugarCraft\Palette\Probe\Capability;
-use SugarCraft\Palette\Probe\TerminalProbe;
+use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\TerminalProbe;
 
 /**
  * @covers \SugarCraft\Image\Mosaic::auto
@@ -103,7 +103,7 @@ final class MosaicAutoTest extends TestCase
 
         $report = Mosaic::diagnose();
 
-        $this->assertInstanceOf(\SugarCraft\Palette\Probe\ProbeReport::class, $report);
+        $this->assertInstanceOf(\SugarCraft\ColorProfile\Probe\ProbeReport::class, $report);
     }
 
     public function testDiagnoseHasBasicAscii(): void

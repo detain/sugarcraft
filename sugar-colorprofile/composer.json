@@ -1,0 +1,52 @@
+{
+    "name": "sugarcraft/sugar-colorprofile",
+    "description": "PHP port of charmbracelet/colorprofile \u2014 magical terminal color profile detection and color degradation (TrueColor \u2192 ANSI256 \u2192 ANSI \u2192 ASCII).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "terminal",
+        "color",
+        "truecolor",
+        "ansi",
+        "colorprofile",
+        "palette",
+        "tui",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-colorprofile",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-colorprofile/issues",
+        "source": "https://github.com/sugarcraft/sugar-colorprofile",
+        "docs": "https://sugarcraft.github.io/lib/sugar-colorprofile.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "react/child-process": "^0.6",
+        "react/promise": "^3.3",
+        "sugarcraft/candy-core": "dev-master"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\ColorProfile\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\ColorProfile\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

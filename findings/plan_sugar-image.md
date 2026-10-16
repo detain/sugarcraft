@@ -435,7 +435,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 **What:** Expand `autoFromPalette()` (L144-166) to check `TrueColor`, `Color256`, and `BasicAscii` capabilities from the `ProbeReport` before falling back to `halfBlock()`.
 
-**Why:** The `$report` parameter is passed in but used for only two checks. The full capability report from `candy-palette` is discarded.
+**Why:** The `$report` parameter is passed in but used for only two checks. The full capability report from `sugar-colorprofile` is discarded.
 
 **Severity:** low
 

@@ -16,7 +16,7 @@
 
 - **Upstream:** `charmbracelet/wishlist` (Go, ~700 stars)
 
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-widgets`, `sugarcraft/candy-pty`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-mouse`, `sugarcraft/sugar-spring`, `sugarcraft/candy-palette`
+- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-widgets`, `sugarcraft/candy-pty`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-mouse`, `sugarcraft/sugar-spring`, `sugarcraft/sugar-colorprofile`
 
 ---
 

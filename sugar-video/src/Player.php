@@ -14,8 +14,8 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Image\Mosaic;
-use SugarCraft\Palette\Probe;
-use SugarCraft\Palette\Probe\Capability;
+use SugarCraft\ColorProfile\Probe;
+use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\Video\Decode\Decoder;
 use SugarCraft\Video\Decode\DecoderFactory;
 use SugarCraft\Video\Decode\RgbFrame;
@@ -790,7 +790,7 @@ final class Player implements Model
             }
             if ($report->has(Capability::KittyKeyboard)) {
                 // Note: Kitty image mode is gated on Capability::KittyKeyboard because
-                // candy-palette exposes no standalone KittyGraphics capability.
+                // sugar-colorprofile exposes no standalone KittyGraphics capability.
                 $graphicsModes[] = Mode::Kitty;
             }
             if ($report->has(Capability::ITerm2)) {

@@ -7,7 +7,7 @@ namespace SugarCraft\Log;
 use SugarCraft\Log\Lang;
 use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\PartsOrder;
-use SugarCraft\Palette\Probe;
+use SugarCraft\ColorProfile\Probe;
 use SugarCraft\Sprinkles\Style;
 
 /**

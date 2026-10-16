@@ -6,7 +6,7 @@
 ## Deliverable
 
 - `NO_COLOR` / `FORCE_COLOR` env detection — consume
-  `\SugarCraft\Palette\Probe` (from step 02.03).
+  `\SugarCraft\ColorProfile\Probe` (from step 02.03).
 - `PadLevelText` — level-label alignment.
 - Level numeric values aligned with upstream (-4 / 0 / 4 / 8 / 12).
 - Per-field key styles `Styles::Keys[key]`.
@@ -18,7 +18,7 @@
 - `candy-log/src/Logger.php` — Probe-driven color decision.
 - `candy-log/src/Level.php` — numeric values.
 - `candy-log/src/Styles.php` — Keys map.
-- `candy-log/composer.json` — add `sugarcraft/candy-palette`.
+- `candy-log/composer.json` — add `sugarcraft/sugar-colorprofile`.
 
 ## Tests
 

@@ -556,7 +556,7 @@ Could add new command: `candy-scriptui chart` that renders data via sugar-charts
 candy-scriptui chart --type bar --data "a:10 b:20 c:30"
 ```
 
-## 3. Integration with candy-palette
+## 3. Integration with sugar-colorprofile
 
 Could add `--theme` flag to more commands that respects terminal color profile detection.
 

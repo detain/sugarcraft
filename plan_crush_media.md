@@ -2195,14 +2195,14 @@ Source: [media] — full audit of sugar-image/sugar-video/overlay transport, the
 | 256-color blocks / ASCII | `AsciiRenderer.php` + `AsciiColorMode` enum `Mono\|Ansi256\|TrueColor` (`AsciiColorMode.php:11-20`); `Mosaic::ascii()` `Mosaic.php:229` | **exists** |
 | External fallback renderer | `ChafaRenderer.php` (spawns `chafa`, memoized availability; `Mosaic::chafa()` `Mosaic.php:270`) | **exists** |
 | Terminal capability detection | `Detect.php` — env heuristics + DA1 `\x1b[c` query + XTWINOPS 14/16/18 font-size probe, 100 ms timeout (`:20-24`), per-process cache (`:37`) | **exists** (no XTGETTCAP — see gaps §8.6) |
-| Color-depth detection | `candy-palette/src/Probe.php:36` `colorProfile()` (COLORTERM/TERM/NO_COLOR/FORCE_COLOR + `infocmp` upgrade `:130`) | **exists** |
+| Color-depth detection | `sugar-colorprofile/src/Probe.php:36` `colorProfile()` (COLORTERM/TERM/NO_COLOR/FORCE_COLOR + `infocmp` upgrade `:130`) | **exists** |
 | PNG/JPEG/WEBP decode | `sugar-image/src/ImageSource.php` — `fromFile:138`, `fromString:215` via ext-gd; format sniff incl. GIF `:280`, webp `:289`; guards `MAX_PIXELS=50M:29`, `MAX_BYTES=64MiB:38` | **exists** (this box's gd has WebP) |
 | Animated GIF / APNG decode | `ImageSource::fromAnimatedFile:501` → `Animation` (frames+delays); `ApngDecoder.php` (fcTL/fdAT/acTL spec); budget notes at `ImageSource.php:42-63` | **exists** |
 | MP4/AVI/WEBM video decode | `sugar-video/src/Decode/FfmpegDecoder.php` — ffmpeg pipe; pure-PHP GIF fallback `GifDecoder.php` | **exists** (ffmpeg dep present) |
 | Video playback loop (frame-at-tick) | `sugar-video/src/Player.php` — TEA Model: `open:170`, `update:402`, `updateTick:434`, `view:871`, `frameToBuffer:924`, `renderDirect:1164` (graphics modes bypass cell buffer), seek `withSeek:1244`/`seekToSeconds:1337`/`frameAt:1385`, resize rebuild `rebuildDecoderAt:1220`, `subscriptions:1631` | **exists** |
 | Animation-in-TUI driver (GIF/APNG) | `sugar-image/src/AnimationDriver.php` (`init:46`, `update:64`, `view:93`, `FrameTickMsg`) + `Animation.php` | **exists** |
 | Aspect/scale math | `sugar-image/src/Scale.php:60` `computeDimensions`; letterbox+pad in ffmpeg `-vf` (`FfmpegDecoder::buildCommand:365-376`, `force_original_aspect_ratio=decrease` + center pad, quarter-block grid-squash); crush `/2` cell-aspect (`Renderer.php:4983`) | **exists** |
-| Color quantization / nearest palette | `candy-palette/src/NearestColor.php` — Lab-space `ansi256():61`, `ansi16():77`, `palette256Lab():148` | **exists** |
+| Color quantization / nearest palette | `sugar-colorprofile/src/NearestColor.php` — Lab-space `ansi256():61`, `ansi16():77`, `palette256Lab():148` | **exists** |
 | Out-of-band overlay paint into diff-rendered frames | `candy-core/src/ImageOverlay.php` — `MARKER_BASE=0xE002:62`, `marker:97`, `markerBlock:112`, `resolve:145`, `paint:229`, `signature:249`, `coveredRows:267`; consumed in `candy-core/src/Program.php:1353-1377` | **exists** |
 | Image placement lifecycle (multi image, release) | `sugar-image/src/ImageLayer.php` — `digestFor:99`, `place:112`, `placeTracked:136`, `release:210`, `releaseAllExcept:234` | **exists** |
 | tmux handling | `Capability::*(..., bool $inTmux)` + `TmuxPassthroughDecorator.php` (DCSS passthrough) | **exists** |

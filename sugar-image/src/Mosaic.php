@@ -16,9 +16,9 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\TmuxPassthroughDecorator;
-use SugarCraft\Palette\Probe\TerminalProbe;
-use SugarCraft\Palette\Probe\ProbeReport;
-use SugarCraft\Palette\Probe\Capability as PaletteCapability;
+use SugarCraft\ColorProfile\Probe\TerminalProbe;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
+use SugarCraft\ColorProfile\Probe\Capability as PaletteCapability;
 use React\Promise\PromiseInterface;
 
 use function React\Promise\resolve;
@@ -96,7 +96,7 @@ final class Mosaic
      *     variables plus DA1/XTWINOPS TTY queries. If it identifies any
      *     graphics protocol (Kitty, iTerm2, Sixel, Chafa) that answer wins.
      *  2. Only when Detect finds no graphics protocol at all does the
-     *     explicit fallback run: candy-palette's {@see TerminalProbe}
+     *     explicit fallback run: sugar-colorprofile's {@see TerminalProbe}
      *     environment-derived {@see ProbeReport}, which can still spot a
      *     Kitty-keyboard- or iTerm2-advertising terminal Detect's env table
      *     missed. Its result feeds the same {@see self::fromCapability()}
@@ -123,7 +123,7 @@ final class Mosaic
         }
 
         // No graphics protocol found by the authoritative stage — consult
-        // candy-palette's env-derived report as the explicit fallback.
+        // sugar-colorprofile's env-derived report as the explicit fallback.
         return self::autoFromPalette($cap ?? Capability::unknown());
     }
 
@@ -140,7 +140,7 @@ final class Mosaic
     }
 
     /**
-     * Explicit fallback detection via candy-palette's TerminalProbe.
+     * Explicit fallback detection via sugar-colorprofile's TerminalProbe.
      *
      * Only consulted when {@see Detect::probe()} identified no graphics
      * protocol. The palette report can still see Kitty/iTerm2 environment

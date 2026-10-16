@@ -105,7 +105,7 @@ SUBJECTS: dict[str, str] = {
     "sugar-cli":       "a small glossy candy toolbox open with a few candy tools peeking out",
     "candy-metrics":   "a chubby glossy candy gauge dial with a sweep needle pointing up",
     "candy-log":       "a stubby chocolate yule-log roll with rainbow sprinkles and creamy frosting on the end",
-    "candy-palette":   "a glossy artist's paint palette shaped from candy with five jelly-bean paint blobs in red orange yellow green and blue and a small candy paintbrush",
+    "sugar-colorprofile":   "a glossy artist's paint palette shaped from candy with five jelly-bean paint blobs in red orange yellow green and blue and a small candy paintbrush",
     "sugar-treelist":    "a glossy candy clipboard with a checklist of three tiny gumdrop items each with a tick mark beside it",
     "sugar-quickpick":    "a tiny cute hermit crab peeking out of a glossy pink-and-white striped candy spiral shell",
     "candy-git-server":     "a stack of three glossy candy server-rack units shaped like horizontal chocolate bars with small blinking gumdrop status lights",

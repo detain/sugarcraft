@@ -476,7 +476,7 @@ sugar-animation my.gif --density " ░▒▒▓▓██"    # block-focused
 
 ## 4. Theme Integration
 
-Support TokyoNight, Dracula, Nord themes via `candy-palette` for the status bar and any text overlays.
+Support TokyoNight, Dracula, Nord themes via `sugar-colorprofile` for the status bar and any text overlays.
 
 ---
 

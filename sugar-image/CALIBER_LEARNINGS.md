@@ -300,7 +300,7 @@ kept as design rationale for what shipped._
   reads live env and is NOT cached (`cached()` is the caching wrapper).
 - **[auto() restructured]** `Mosaic::auto()` is now one path with two stages:
   `Detect::probe()` is authoritative when it identifies any graphics protocol;
-  candy-palette's `TerminalProbe` runs ONLY as the explicit fallback when
+  sugar-colorprofile's `TerminalProbe` runs ONLY as the explicit fallback when
   Detect found none, and its Kitty/ITerm2 hints feed the same
   `fromCapability()` selection (tmux wrap included) instead of a parallel
   hand-rolled construction. Precedence everywhere: kitty → iterm2 → sixel →

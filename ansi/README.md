@@ -1512,179 +1512,179 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-image-9-tc-s-2.ansi` | 62x13 | truecolor | 20 | tide-step: three rock pools of graded water, spilling overflows, sparkle and anemones |
 <!-- END sugar-image SLOTS -->
 
-<!-- BEGIN candy-palette SLOTS -->
-### candy-palette — slot series
+<!-- BEGIN sugar-colorprofile SLOTS -->
+### sugar-colorprofile — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-palette-1-16-l-1.ansi` | 164x32 | 16 | 25 | 16-colour CGA dawn: dithered sky bands, sun, ridges, reflecting sea |
-| `candy-palette-1-16-l-2.ansi` | 192x34 | 16 | 32 | Gallery wall of sixteen framed ANSI colour niches over a perspective floor |
-| `candy-palette-1-16-m-1.ansi` | 86x24 | 16 | 32 | Block-letter CANDY / PALETTE over labelled rows of the basic sixteen |
-| `candy-palette-1-16-m-2.ansi` | 82x20 | 16 | 28 | Loading screen: colour-degradation runway bar from yellow down to red |
-| `candy-palette-1-16-s-1.ansi` | 56x12 | 16 | 24 | TERM=dumb card: eight bright chips passing a gate and dropping to plain grey |
-| `candy-palette-1-16-s-2.ansi` | 60x14 | 16 | 9 | Dither-shaded red heart showing the ░▒▓█ density ladder in sixteen colours |
-| `candy-palette-1-256-l-1.ansi` | 132x30 | 256 | 267 | Full 0-255 swatch wall, 16x16 grid annotated base / cube / grey |
-| `candy-palette-1-256-l-2.ansi` | 150x30 | 256 | 68 | 216-cube spiral field with dE heat bar and nearest-match panel |
-| `candy-palette-1-256-m-1.ansi` | 86x24 | 256 | 74 | Isometric 6x6x6 xterm colour cube built from 256 blocks |
-| `candy-palette-1-256-m-2.ansi` | 88x22 | 256 | 26 | SMPTE-style test card: colour bars, complements, grey staircase in 256 |
-| `candy-palette-1-256-s-1.ansi` | 62x11 | 256 | 40 | 24-step greyscale ladder with cube accent chips |
-| `candy-palette-1-256-s-2.ansi` | 68x13 | 256 | 53 | 30-stop hue ring walk at three cube saturations |
-| `candy-palette-1-tc-l-1.ansi` | 184x40 | truecolor | 846 | Prism splitting one white beam into a spectral fan above a truecolor wordmark |
-| `candy-palette-1-tc-l-2.ansi` | 200x44 | truecolor | 527 | One scene falling through four terraces: TrueColor, ANSI256, ANSI16, ASCII |
-| `candy-palette-1-tc-m-1.ansi` | 88x22 | truecolor | 118 | Painter's palette of truecolor dabs with a brush laying a rainbow streak |
-| `candy-palette-1-tc-m-2.ansi` | 86x22 | truecolor | 147 | Fake terminal window probing env vars, TRUECOLOR badge and hex swatches |
-| `candy-palette-1-tc-s-1.ansi` | 68x12 | truecolor | 186 | Hue, value and saturation gradient ramps painted with half-blocks |
-| `candy-palette-1-tc-s-2.ansi` | 58x15 | truecolor | 304 | Truecolor hue wheel ring with a 24-bit core |
-| `candy-palette-10-16-l-1.ansi` | 156x32 | 16 | 14 | candle maker's tint rack: dipped tapers graded across the spectrum, wax drips |
-| `candy-palette-10-16-m-1.ansi` | 86x22 | 16 | 7 | spectral post office: wavelength mail diverted by prism into eight P.O. boxes |
-| `candy-palette-10-16-m-2.ansi` | 84x22 | 16 | 7 | colour-audition stage: swatch contestants under a spot facing a 16-seat jury |
-| `candy-palette-10-16-s-2.ansi` | 62x14 | 16 | 7 | sea-glass tray sorted by depth: frosted chips surf-green to deep-indigo |
-| `candy-palette-10-256-l-1.ansi` | 176x36 | 256 | 36 | hot-spring terrace map: stepped travertine pools, thermal gradient, °C legend |
-| `candy-palette-10-256-l-2.ansi` | 172x33 | 256 | 25 | lichen boulder transect in 256: wide radial zones with a survey sample key |
-| `candy-palette-10-256-m-1.ansi` | 88x24 | 256 | 33 | dye-works drying field: skeins on clotheslines graded hue by hue over grass |
-| `candy-palette-10-256-m-2.ansi` | 86x22 | 256 | 24 | sea-glass depth tray in 256: tumbled shards banded by water depth colour |
-| `candy-palette-10-256-s-1.ansi` | 64x13 | 256 | 20 | hot-spring terrace strip: cascading thermal basins, microbe-mat colour legend |
-| `candy-palette-10-256-s-2.ansi` | 60x15 | 256 | 19 | feather merchant quiver mini: two shelves of dyed plumes in jars |
-| `candy-palette-10-256-s-3.ansi` | 62x13 | 256 | 33 | cave pigment cache: mineral mounds plus a ground-pigment swatch strip |
-| `candy-palette-10-tc-l-1.ansi` | 180x36 | truecolor | 251 | spectral post office: continuous 380-740nm mail fanned into hue-sealed P.O. boxes |
-| `candy-palette-10-tc-l-2.ansi` | 176x38 | truecolor | 73 | pigment cave gallery in 24-bit: ochre scenes with mineral-palette shelf |
-| `candy-palette-10-tc-m-1.ansi` | 86x22 | truecolor | 227 | candle tint rack: continuous dip-gradient tapers with glowing tips |
-| `candy-palette-10-tc-m-2.ansi` | 84x23 | truecolor | 127 | lichen rings radial truecolour: smooth crustose-to-granite thallus gradient |
-| `candy-palette-10-tc-s-1.ansi` | 58x15 | truecolor | 19 | sea-glass shard study: continuous depth gradient, surface-clear to abyss-blue |
-| `candy-palette-10-tc-s-2.ansi` | 60x13 | truecolor | 30 | audition spotlight chip: one contestant swatch fanned to truecolour under the beam |
-| `candy-palette-10-tc-s-3.ansi` | 56x14 | truecolor | 19 | feather merchant plumes: barbs blended in 24-bit structural colour |
-| `candy-palette-2-16-l-1.ansi` | 150x30 | 16 | 14 | Sweet shop storefront: striped awning, jar shelves, door with 1B[0m mat |
-| `candy-palette-2-16-l-2.ansi` | 156x29 | 16 | 11 | Mix desk console: 16 fader channels, blend demo, degradation rows |
-| `candy-palette-2-16-m-1.ansi` | 82x21 | 16 | 16 | Flavour menu board: all 16 ANSI scoops labelled, red-white stripes below |
-| `candy-palette-2-16-m-2.ansi` | 76x19 | 16 | 15 | Candy rack: beaded wind-chimes of raw ANSI hues over a 16-swatch shelf |
-| `candy-palette-2-16-s-1.ansi` | 60x10 | 16 | 16 | Sweet counter ticket: eight basic-sugar chips on candy-stripe rail |
-| `candy-palette-2-256-l-1.ansi` | 140x36 | 256 | 341 | Jukebox: rainbow arch, full 0-255 grille, now-playing hue ticker |
-| `candy-palette-2-256-l-2.ansi` | 138x28 | 256 | 41 | Colour-space metro map: RGB/HSL/LAB lines with transfer diamonds |
-| `candy-palette-2-256-m-1.ansi` | 84x21 | 256 | 26 | Lollipop tray: twelve cube-matched swirl pops on cream sticks |
-| `candy-palette-2-256-m-2.ansi` | 80x20 | 256 | 22 | Peppermint canes beside a 232-254 grey staircase |
-| `candy-palette-2-256-s-1.ansi` | 64x6 | 256 | 53 | Chip strip: 12-stop hue wheel band plus 24-grey escalator |
-| `candy-palette-2-256-s-2.ansi` | 57x12 | 256 | 38 | Hue arc smile: half-circle spectrum walk in xterm cube |
-| `candy-palette-2-tc-l-1.ansi` | 150x40 | truecolor | 553 | Gumball machine: radial-gradient globe, chrome collar, candy wordmark |
-| `candy-palette-2-tc-l-2.ansi` | 168x33 | truecolor | 2913 | Aurora over the spectrum sea: sine ribbons, foam crest, hue tide |
-| `candy-palette-2-tc-m-1.ansi` | 84x20 | truecolor | 181 | Preserved spectra: five gradient jars on a wooden shelf |
-| `candy-palette-2-tc-m-2.ansi` | 86x22 | truecolor | 1562 | Diagonal melt studio: banded truecolor dunes over a spectrum line |
-| `candy-palette-2-tc-s-1.ansi` | 62x6 | truecolor | 284 | Molten 24-bit ribbon with luminance-aware wordmark |
-| `candy-palette-2-tc-s-2.ansi` | 46x12 | truecolor | 72 | Slow-melt columns: four vertical truecolor blends |
-| `candy-palette-3-16-l-1.ansi` | 150x32 | 16 | 9 | Candy shop storefront with jars, then palette extracted to 16 colours |
-| `candy-palette-3-16-l-2.ansi` | 156x30 | 16 | 14 | Full WCAG contrast matrix + ratio meters across the ANSI-16 gamut |
-| `candy-palette-3-16-m-1.ansi` | 84x22 | 16 | 7 | Harmony wheel: complementary+triadic+analogous spokes over 16 hues |
-| `candy-palette-3-16-m-2.ansi` | 82x20 | 16 | 7 | Degradation elevator as a building: TrueColor down to NoTTY floors |
-| `candy-palette-3-16-s-1.ansi` | 62x11 | 16 | 9 | WCAG pass/fail gauntlet: five 16-colour pairs scored AA/AAA/FAIL |
-| `candy-palette-3-16-s-2.ansi` | 60x9 | 16 | 8 | Colour-blindness mode selector: protan/deutan/tritan chips in ANSI-16 |
-| `candy-palette-3-256-l-1.ansi` | 140x36 | 256 | 25 | Contrast heatmap grid, ratio bucketed green-pass to red-fail in 256 |
-| `candy-palette-3-256-l-2.ansi` | 140x30 | 256 | 19 | Shop scene reduced to six xterm palette cards with hex + index |
-| `candy-palette-3-256-m-1.ansi` | 84x22 | 256 | 81 | Spectrum under normal/protan/deutan/tritan vision in 256 colours |
-| `candy-palette-3-256-m-2.ansi` | 86x21 | 256 | 42 | Split-complement hue ring in the 216-cube with three anchor chips |
-| `candy-palette-3-256-s-1.ansi` | 60x8 | 256 | 9 | Analogous triad chips 30 degrees apart in the xterm cube |
-| `candy-palette-3-256-s-2.ansi` | 64x12 | 256 | 21 | Nearest-cube quantisation: continuous vs snapped band + dE error strip |
-| `candy-palette-3-tc-l-1.ansi` | 176x40 | truecolor | 310 | Hero candy shop in 24-bit, extracted theme, then the sweep degraded down |
-| `candy-palette-3-tc-l-2.ansi` | 150x42 | truecolor | 518 | Harmony atlas: continuous hue wheel with spokes + per-profile ladder |
-| `candy-palette-3-tc-m-1.ansi` | 84x20 | truecolor | 248 | Truecolour CVD sim: candy gradient under four vision models |
-| `candy-palette-3-tc-m-2.ansi` | 86x22 | truecolor | 26 | Degradation elevator with a smooth hue shaft descending profiles |
-| `candy-palette-3-tc-s-1.ansi` | 62x7 | truecolor | 64 | Smooth analogous 24-bit ramp with luminance-aware CandyPalette mark |
-| `candy-palette-3-tc-s-2.ansi` | 56x12 | truecolor | 7 | WCAG ratio gauge: gradient dial with needle at the 4.5:1 AA line |
-| `candy-palette-4-16-l-1.ansi` | 160x32 | 16 | 14 | Six-vat dye line with overhead pipes, gauges and a common collection trough |
-| `candy-palette-4-16-l-2.ansi` | 150x30 | 16 | 16 | Open drawer labelling all sixteen ANSI bins with snap and dither check bars |
-| `candy-palette-4-16-m-1.ansi` | 84x22 | 16 | 7 | Sunset filmstrip: five frames degrading TrueColor golden hour to NoTTY static |
-| `candy-palette-4-16-m-2.ansi` | 86x20 | 16 | 8 | Neon workshop bench: hand-bent CANDY tubing glowing over a dark wall |
-| `candy-palette-4-256-l-1.ansi` | 170x34 | 256 | 53 | Stained-glass cathedral window sorting TrueColor sunlight into 256 panes |
-| `candy-palette-4-256-l-2.ansi` | 180x36 | 256 | 81 | Conveyor QA line checking candy tile colours against xterm cube indices |
-| `candy-palette-4-256-m-1.ansi` | 88x24 | 256 | 17 | 256-colour aurora curtains over a silhouette fell under a starred sky |
-| `candy-palette-4-256-m-2.ansi` | 86x20 | 256 | 114 | Hue stream funnelled from 166 cube steps into sixteen ANSI seats |
-| `candy-palette-4-256-s-1.ansi` | 64x12 | 256 | 17 | Three test tubes of indexed-gradient candy liquid in a wooden rack |
-| `candy-palette-4-256-s-2.ansi` | 66x14 | 256 | 21 | Beaker trio: cube yellow plus cube blue pouring out cube green |
-| `candy-palette-4-tc-l-1.ansi` | 200x38 | truecolor | 681 | Factory panorama at truecolor dusk: glowing CANDY PALETTE sign over lit rooftops |
-| `candy-palette-4-tc-l-2.ansi` | 190x34 | truecolor | 899 | Rainbow chameleon striding a branch, every scale cell a distinct truecolor |
-| `candy-palette-4-tc-m-1.ansi` | 86x22 | truecolor | 601 | Overhead view of dye vat 07 marbling into a continuous truecolor vortex |
-| `candy-palette-4-tc-m-2.ansi` | 88x24 | truecolor | 302 | Taffy pull house: a rainbow candy rope stretched between iron hooks |
-| `candy-palette-4-tc-s-1.ansi` | 62x13 | truecolor | 145 | Truecolor candy glaze pouring off a lip into staggered rainbow drips |
-| `candy-palette-4-tc-s-2.ansi` | 64x14 | truecolor | 181 | Macro chameleon eye: radial truecolor iris around a vertical slit pupil |
-| `candy-palette-5-256-l-1.ansi` | 168x40 | 256 | 19 | Metro tunnel in one-point perspective: twelve 256 tile rings, lamps and converging rails |
-| `candy-palette-5-256-l-2.ansi` | 152x32 | 256 | 31 | Patisserie counter: six wobbling jellies graded in 256 rows over a checkered tile front |
-| `candy-palette-5-256-m-1.ansi` | 84x22 | 256 | 29 | Aurora curtains in 256 greens and magentas, sampled below into a palette strip |
-| `candy-palette-5-256-m-2.ansi` | 84x24 | 256 | 14 | Three striped hot-air balloons ascending on 256-wind toward the truecolor layer |
-| `candy-palette-5-256-s-1.ansi` | 52x12 | 256 | 8 | Barista's cup seen from above: cream rosetta in 256 tones, RGB sugar cubes |
-| `candy-palette-5-256-s-2.ansi` | 56x13 | 256 | 13 | Tunnel mouth of eight receding 256-hue rings with converging rails |
-| `candy-palette-5-tc-l-1.ansi` | 176x40 | truecolor | 114 | Alchemist atelier: alembic distills window-light into a stacked truecolor palette strip |
-| `candy-palette-5-tc-l-2.ansi` | 184x42 | truecolor | 158 | Night garden: a glowing lantern sampled onto pinned cards while moths circle the hue |
-| `candy-palette-5-tc-m-1.ansi` | 82x22 | truecolor | 205 | Koi pond in truecolor water: three fish, lily pads and ripples around a stone rim |
-| `candy-palette-5-tc-m-2.ansi` | 80x22 | truecolor | 46 | Brick hearth with layered truecolor flames, birch logs and a glowing ember row |
-| `candy-palette-5-tc-s-1.ansi` | 48x9 | truecolor | 74 | Chef's plate: three truecolor sauce quenelles with a gradient swipe and garnish |
-| `candy-palette-5-tc-s-2.ansi` | 52x14 | truecolor | 53 | Moth wing mirrored across an axis, banded in truecolor, feeding a four-chip column |
-| `candy-palette-6-16-l-1.ansi` | 152x36 | 16 | 8 | Sort-bot floor plan: hopper, belts, gantry arms and eight ANSI bins — 262k colours given sixteen seats |
-| `candy-palette-6-16-l-2.ansi` | 143x34 | 16 | 8 | Beacon Point: one lamp sweeping fog into six named ANSI bands over striped tower, waves and a ship |
-| `candy-palette-6-16-m-1.ansi` | 83x22 | 16 | 14 | Textile mill spool-dye line: six spools hung from an overhead rail dipping bath-by-bath red→magenta |
-| `candy-palette-6-16-s-1.ansi` | 58x10 | 16 | 8 | Sort-bot mini: an overhead arm lifts ▓ candies by hue into eight ANSI bins on a conveyor |
-| `candy-palette-6-16-s-2.ansi` | 48x9 | 16 | 6 | Cellar niche: three hue-aged bottles on an oak shelf with colour-keyed vintages |
-| `candy-palette-6-256-l-1.ansi` | 176x42 | 256 | 82 | Hue-sorting facility: rainbow facade, SORTBOT-X, ten 256 gradient bins and a degradation-chute console |
-| `candy-palette-6-256-l-2.ansi` | 168x37 | 256 | 71 | Low-tide transect: nine anemones on a rock shelf in 256 hue families with depth ruler and sand |
-| `candy-palette-6-256-m-1.ansi` | 88x23 | 256 | 35 | Wine-cellar rack wall: four shelves of bottle ends graded red→gold→straw with a temperature gauge |
-| `candy-palette-6-256-m-2.ansi` | 86x24 | 256 | 33 | Beacon cutting sea-fog into four graded 256 banks over a striped tower and swell |
-| `candy-palette-6-256-s-1.ansi` | 66x12 | 256 | 38 | Tide pool at low water: five anemones, each tentacle-fan keeping one 256 hue family |
-| `candy-palette-6-256-s-2.ansi` | 50x11 | 256 | 10 | Aurora assay: four corked vials with vertical green→violet 256-step liquid gradients |
-| `candy-palette-6-tc-l-1.ansi` | 196x43 | truecolor | 257 | Tide-pool panorama: seven radial-gradient anemones in a 24-bit pool flanked by shading rock walls |
-| `candy-palette-6-tc-l-2.ansi` | 204x45 | truecolor | 1799 | Aurora expedition: five 24-bit curtains funnelled through towers into eight hue-sealed casks |
-| `candy-palette-6-tc-m-1.ansi` | 86x21 | truecolor | 249 | Silk line: three truecolor ribbons waving through continuous dye baths, zero banding |
-| `candy-palette-6-tc-m-2.ansi` | 88x22 | truecolor | 192 | Fog prism: the lamp splits grey weather into seven continuous 24-bit spectral bands |
-| `candy-palette-6-tc-s-1.ansi` | 64x13 | truecolor | 32 | Lone anemone holding a magenta family in radial 24-bit tentacles over glowing deep water |
-| `candy-palette-6-tc-s-2.ansi` | 51x12 | truecolor | 47 | Bottled aurora: a hand-held vial of swirling 24-bit ribbons, corked at 03:12 |
-| `candy-palette-7-16-l-1.ansi` | 148x31 | 16 | 16 | ANSI-16 seat catalog: 8 fg + 8 bg + bright attr row, per-channel fallback |
-| `candy-palette-7-16-l-2.ansi` | 150x33 | 16 | 16 | Dye-vat dip ladder: 16 quantised hue baths widening step by step |
-| `candy-palette-7-16-m-1.ansi` | 82x21 | 16 | 13 | Paper chromatogram: one ink origin separating into six ANSI pigment bands |
-| `candy-palette-7-16-m-2.ansi` | 84x22 | 16 | 11 | Camouflage swatch degradation: five-tone blobs desaturating to two-tone grey |
-| `candy-palette-7-16-s-1.ansi` | 56x14 | 16 | 12 | Barbershop pole: red/white/blue hue spiral spinning on a striped cylinder |
-| `candy-palette-7-16-s-2.ansi` | 60x13 | 16 | 16 | Library bookplate spines: hue-coded shelf, ten colour-keyed volumes |
-| `candy-palette-7-256-l-1.ansi` | 168x36 | 256 | 38 | Op-art moire: two emitters beating into a continuous 256 hue field |
-| `candy-palette-7-256-l-2.ansi` | 172x40 | 256 | 45 | Cinema colour-leader: academy wheel, sweep, and 256 SMPTE reel bars |
-| `candy-palette-7-256-m-1.ansi` | 86x23 | 256 | 17 | Peacock train: nine concentric 256-indexed ocelli fanned on barbed stems |
-| `candy-palette-7-256-m-2.ansi` | 88x22 | 256 | 26 | Hardware paint-chip wall: 24 fan-deck chips mapped onto the 256 cube |
-| `candy-palette-7-256-s-1.ansi` | 62x11 | 256 | 26 | Rainbow lorikeet flock: five 256-indexed birds perched on a live wire |
-| `candy-palette-7-256-s-2.ansi` | 60x14 | 256 | 18 | Colour-temperature dial: 256-step blackbody arc 1500K to 12000K |
-| `candy-palette-7-tc-l-1.ansi` | 196x44 | truecolor | 565 | Coastline sunset through protan/deutan/normal color-vision filters |
-| `candy-palette-7-tc-l-2.ansi` | 150x40 | truecolor | 1552 | HSL paint-mixer drum: 360-degree 24-bit hue disc with radial shading |
-| `candy-palette-7-tc-m-1.ansi` | 86x23 | truecolor | 355 | Stained-glass rose window: 24-bit period glass set in a lead-came grid |
-| `candy-palette-7-tc-m-2.ansi` | 88x22 | truecolor | 972 | Ombre dip-dye scarf: zero-band continuous truecolour hue flow |
-| `candy-palette-7-tc-s-1.ansi` | 58x13 | truecolor | 24 | Jeweller's-vault prism: one white beam dispersing into a 7-band 24-bit fan |
-| `candy-palette-7-tc-s-2.ansi` | 62x15 | truecolor | 319 | RYB pigment triangle: barycentric subtractive truecolour mixing |
-| `candy-palette-8-16-l-1.ansi` | 168x34 | 16 | 15 | Grand souk facade: 33-stripe awning over six shaded spice cones, price row |
-| `candy-palette-8-16-l-2.ansi` | 150x36 | 16 | 8 | Butterfly wing-scale plate: mirrored zones, ocelli, crescents, colour key |
-| `candy-palette-8-16-m-1.ansi` | 84x22 | 16 | 7 | Squall-line PPI log: intensity ladder, sweep trail and 16-colour station panel |
-| `candy-palette-8-16-s-2.ansi` | 60x14 | 16 | 14 | Spice-souk awning: six bold hue stripes scalloped over five graded pigment cones |
-| `candy-palette-8-256-l-1.ansi` | 150x30 | 256 | 29 | Rain-slick highway at dawn: skyline, oil-rainbow puddles, lamp reflections |
-| `candy-palette-8-256-l-2.ansi` | 150x32 | 256 | 15 | Neon signage on brick: tube lettering, per-hue glow haloes, argon-blue frame |
-| `candy-palette-8-256-m-1.ansi` | 82x21 | 256 | 11 | Commit-graph lanes keyed per branch: merges, hotfix and a tagged release |
-| `candy-palette-8-256-m-2.ansi` | 84x20 | 256 | 12 | Player-piano roll: four voices rendered as four 256-index hue lanes |
-| `candy-palette-8-256-s-1.ansi` | 54x12 | 256 | 20 | Fibre-optic bundle end-on: hex-packed glowing cores with dim cladding rings |
-| `candy-palette-8-256-s-2.ansi` | 50x14 | 256 | 18 | Sunset pickled in a jar: eight 256-index brine bands, cucumber slices, label |
-| `candy-palette-8-tc-l-1.ansi` | 160x34 | truecolor | 30 | Diatom frustules false-colour SEM: centric ribs, pennate striae, colony chain |
-| `candy-palette-8-tc-l-2.ansi` | 150x34 | truecolor | 10 | Banknote guilloche rosette: four engine-turned hue curves and microprint border |
-| `candy-palette-8-tc-m-1.ansi` | 84x21 | truecolor | 12 | Cu2O crystal unit cell: species-tinted atoms, bonds and gilded boundary |
-| `candy-palette-8-tc-m-2.ansi` | 86x20 | truecolor | 128 | False-colour thermal frame: ironbow LUT, bodies, laptop heat, cold pane |
-| `candy-palette-8-tc-s-1.ansi` | 62x12 | truecolor | 255 | Oil slick on wet tarmac: continuous thin-film interference with raindrop rings |
-| `candy-palette-8-tc-s-2.ansi` | 64x13 | truecolor | 271 | Rock pool at noon: caustic shimmer over sand, shells and a hermit crab |
-| `candy-palette-9-16-l-1.ansi` | 150x34 | 16 | 13 | Lepidoptera hue board: eighteen pinned moths in forewing/hindwing pairs over an eight-tone scale |
-| `candy-palette-9-16-l-2.ansi` | 158x32 | 16 | 14 | Heraldic blazon key: eight shields engraved with traditional tincture hatchings |
-| `candy-palette-9-16-m-1.ansi` | 82x20 | 16 | 14 | Theatrical gel rack: seven hung sheets with barn doors, dot gobos and dime-step strips |
-| `candy-palette-9-16-m-2.ansi` | 84x22 | 16 | 13 | Mangrove tide zonation: sky, canopy, wrack, pneumatophore mud and creek belts in section |
-| `candy-palette-9-16-s-1.ansi` | 58x12 | 16 | 7 | Steel temper-oxide strip: eight candle-drawn oxide bands from pale straw to light blue on a black backing |
-| `candy-palette-9-256-l-1.ansi` | 170x30 | 256 | 39 | Fishmonger's ice display: five hue-family rows on crushed ice with lemon and slate prices |
-| `candy-palette-9-256-l-2.ansi` | 156x32 | 256 | 48 | Autumn leaf-fall pigment ledger: eight species x six weeks, chlorophyll to anthocyan grid |
-| `candy-palette-9-256-m-1.ansi` | 84x22 | 256 | 19 | Gemologist's refractometer bench: shadow-edge RI scale, swing-out lamp, D50 vs A tint test |
-| `candy-palette-9-256-m-2.ansi` | 82x24 | 256 | 18 | Botanical herbarium plate: pressed fern fading 28 to 137 with mounting strips and label block |
-| `candy-palette-9-256-s-1.ansi` | 54x14 | 256 | 29 | Overglaze kiln-tile branch: six hanging test tiles, split-face glazes with drips |
-| `candy-palette-9-256-s-2.ansi` | 62x12 | 256 | 19 | Poison dart frog census: five aposematic skins spotted on leaf litter |
-| `candy-palette-9-tc-l-1.ansi` | 164x34 | truecolor | 303 | Kelp forest light strata: surface-to-30m depth gradient with swaying stipes and reef fish dashes |
-| `candy-palette-9-tc-l-2.ansi` | 168x32 | truecolor | 89 | Tropical fruit crate: cut watermelon, mango, passionfruit, kiwi and fig faces to the light |
-| `candy-palette-9-tc-m-1.ansi` | 88x22 | truecolor | 79 | Morpho wing scale census: structural-blue field with veins, apical spots and lamellae cross-section |
-| `candy-palette-9-tc-m-2.ansi` | 86x22 | truecolor | 26 | Trout fly dressing box: eight silk-and-rib patterns bedded in foam with hackle fibers |
-| `candy-palette-9-tc-s-1.ansi` | 58x13 | truecolor | 106 | Opal cabochon assay card: red-to-violet play-of-color blobs on body-tone N3 with pale scale |
-| `candy-palette-9-tc-s-2.ansi` | 64x12 | truecolor | 38 | Jewel beetle elytra row: five gradient carapaces with sheen and splay legs on velvet |
-<!-- END candy-palette SLOTS -->
+| `sugar-colorprofile-1-16-l-1.ansi` | 164x32 | 16 | 25 | 16-colour CGA dawn: dithered sky bands, sun, ridges, reflecting sea |
+| `sugar-colorprofile-1-16-l-2.ansi` | 192x34 | 16 | 32 | Gallery wall of sixteen framed ANSI colour niches over a perspective floor |
+| `sugar-colorprofile-1-16-m-1.ansi` | 86x24 | 16 | 32 | Block-letter CANDY / PALETTE over labelled rows of the basic sixteen |
+| `sugar-colorprofile-1-16-m-2.ansi` | 82x20 | 16 | 28 | Loading screen: colour-degradation runway bar from yellow down to red |
+| `sugar-colorprofile-1-16-s-1.ansi` | 56x12 | 16 | 24 | TERM=dumb card: eight bright chips passing a gate and dropping to plain grey |
+| `sugar-colorprofile-1-16-s-2.ansi` | 60x14 | 16 | 9 | Dither-shaded red heart showing the ░▒▓█ density ladder in sixteen colours |
+| `sugar-colorprofile-1-256-l-1.ansi` | 132x30 | 256 | 267 | Full 0-255 swatch wall, 16x16 grid annotated base / cube / grey |
+| `sugar-colorprofile-1-256-l-2.ansi` | 150x30 | 256 | 68 | 216-cube spiral field with dE heat bar and nearest-match panel |
+| `sugar-colorprofile-1-256-m-1.ansi` | 86x24 | 256 | 74 | Isometric 6x6x6 xterm colour cube built from 256 blocks |
+| `sugar-colorprofile-1-256-m-2.ansi` | 88x22 | 256 | 26 | SMPTE-style test card: colour bars, complements, grey staircase in 256 |
+| `sugar-colorprofile-1-256-s-1.ansi` | 62x11 | 256 | 40 | 24-step greyscale ladder with cube accent chips |
+| `sugar-colorprofile-1-256-s-2.ansi` | 68x13 | 256 | 53 | 30-stop hue ring walk at three cube saturations |
+| `sugar-colorprofile-1-tc-l-1.ansi` | 184x40 | truecolor | 846 | Prism splitting one white beam into a spectral fan above a truecolor wordmark |
+| `sugar-colorprofile-1-tc-l-2.ansi` | 200x44 | truecolor | 527 | One scene falling through four terraces: TrueColor, ANSI256, ANSI16, ASCII |
+| `sugar-colorprofile-1-tc-m-1.ansi` | 88x22 | truecolor | 118 | Painter's palette of truecolor dabs with a brush laying a rainbow streak |
+| `sugar-colorprofile-1-tc-m-2.ansi` | 86x22 | truecolor | 147 | Fake terminal window probing env vars, TRUECOLOR badge and hex swatches |
+| `sugar-colorprofile-1-tc-s-1.ansi` | 68x12 | truecolor | 186 | Hue, value and saturation gradient ramps painted with half-blocks |
+| `sugar-colorprofile-1-tc-s-2.ansi` | 58x15 | truecolor | 304 | Truecolor hue wheel ring with a 24-bit core |
+| `sugar-colorprofile-10-16-l-1.ansi` | 156x32 | 16 | 14 | candle maker's tint rack: dipped tapers graded across the spectrum, wax drips |
+| `sugar-colorprofile-10-16-m-1.ansi` | 86x22 | 16 | 7 | spectral post office: wavelength mail diverted by prism into eight P.O. boxes |
+| `sugar-colorprofile-10-16-m-2.ansi` | 84x22 | 16 | 7 | colour-audition stage: swatch contestants under a spot facing a 16-seat jury |
+| `sugar-colorprofile-10-16-s-2.ansi` | 62x14 | 16 | 7 | sea-glass tray sorted by depth: frosted chips surf-green to deep-indigo |
+| `sugar-colorprofile-10-256-l-1.ansi` | 176x36 | 256 | 36 | hot-spring terrace map: stepped travertine pools, thermal gradient, °C legend |
+| `sugar-colorprofile-10-256-l-2.ansi` | 172x33 | 256 | 25 | lichen boulder transect in 256: wide radial zones with a survey sample key |
+| `sugar-colorprofile-10-256-m-1.ansi` | 88x24 | 256 | 33 | dye-works drying field: skeins on clotheslines graded hue by hue over grass |
+| `sugar-colorprofile-10-256-m-2.ansi` | 86x22 | 256 | 24 | sea-glass depth tray in 256: tumbled shards banded by water depth colour |
+| `sugar-colorprofile-10-256-s-1.ansi` | 64x13 | 256 | 20 | hot-spring terrace strip: cascading thermal basins, microbe-mat colour legend |
+| `sugar-colorprofile-10-256-s-2.ansi` | 60x15 | 256 | 19 | feather merchant quiver mini: two shelves of dyed plumes in jars |
+| `sugar-colorprofile-10-256-s-3.ansi` | 62x13 | 256 | 33 | cave pigment cache: mineral mounds plus a ground-pigment swatch strip |
+| `sugar-colorprofile-10-tc-l-1.ansi` | 180x36 | truecolor | 251 | spectral post office: continuous 380-740nm mail fanned into hue-sealed P.O. boxes |
+| `sugar-colorprofile-10-tc-l-2.ansi` | 176x38 | truecolor | 73 | pigment cave gallery in 24-bit: ochre scenes with mineral-palette shelf |
+| `sugar-colorprofile-10-tc-m-1.ansi` | 86x22 | truecolor | 227 | candle tint rack: continuous dip-gradient tapers with glowing tips |
+| `sugar-colorprofile-10-tc-m-2.ansi` | 84x23 | truecolor | 127 | lichen rings radial truecolour: smooth crustose-to-granite thallus gradient |
+| `sugar-colorprofile-10-tc-s-1.ansi` | 58x15 | truecolor | 19 | sea-glass shard study: continuous depth gradient, surface-clear to abyss-blue |
+| `sugar-colorprofile-10-tc-s-2.ansi` | 60x13 | truecolor | 30 | audition spotlight chip: one contestant swatch fanned to truecolour under the beam |
+| `sugar-colorprofile-10-tc-s-3.ansi` | 56x14 | truecolor | 19 | feather merchant plumes: barbs blended in 24-bit structural colour |
+| `sugar-colorprofile-2-16-l-1.ansi` | 150x30 | 16 | 14 | Sweet shop storefront: striped awning, jar shelves, door with 1B[0m mat |
+| `sugar-colorprofile-2-16-l-2.ansi` | 156x29 | 16 | 11 | Mix desk console: 16 fader channels, blend demo, degradation rows |
+| `sugar-colorprofile-2-16-m-1.ansi` | 82x21 | 16 | 16 | Flavour menu board: all 16 ANSI scoops labelled, red-white stripes below |
+| `sugar-colorprofile-2-16-m-2.ansi` | 76x19 | 16 | 15 | Candy rack: beaded wind-chimes of raw ANSI hues over a 16-swatch shelf |
+| `sugar-colorprofile-2-16-s-1.ansi` | 60x10 | 16 | 16 | Sweet counter ticket: eight basic-sugar chips on candy-stripe rail |
+| `sugar-colorprofile-2-256-l-1.ansi` | 140x36 | 256 | 341 | Jukebox: rainbow arch, full 0-255 grille, now-playing hue ticker |
+| `sugar-colorprofile-2-256-l-2.ansi` | 138x28 | 256 | 41 | Colour-space metro map: RGB/HSL/LAB lines with transfer diamonds |
+| `sugar-colorprofile-2-256-m-1.ansi` | 84x21 | 256 | 26 | Lollipop tray: twelve cube-matched swirl pops on cream sticks |
+| `sugar-colorprofile-2-256-m-2.ansi` | 80x20 | 256 | 22 | Peppermint canes beside a 232-254 grey staircase |
+| `sugar-colorprofile-2-256-s-1.ansi` | 64x6 | 256 | 53 | Chip strip: 12-stop hue wheel band plus 24-grey escalator |
+| `sugar-colorprofile-2-256-s-2.ansi` | 57x12 | 256 | 38 | Hue arc smile: half-circle spectrum walk in xterm cube |
+| `sugar-colorprofile-2-tc-l-1.ansi` | 150x40 | truecolor | 553 | Gumball machine: radial-gradient globe, chrome collar, candy wordmark |
+| `sugar-colorprofile-2-tc-l-2.ansi` | 168x33 | truecolor | 2913 | Aurora over the spectrum sea: sine ribbons, foam crest, hue tide |
+| `sugar-colorprofile-2-tc-m-1.ansi` | 84x20 | truecolor | 181 | Preserved spectra: five gradient jars on a wooden shelf |
+| `sugar-colorprofile-2-tc-m-2.ansi` | 86x22 | truecolor | 1562 | Diagonal melt studio: banded truecolor dunes over a spectrum line |
+| `sugar-colorprofile-2-tc-s-1.ansi` | 62x6 | truecolor | 284 | Molten 24-bit ribbon with luminance-aware wordmark |
+| `sugar-colorprofile-2-tc-s-2.ansi` | 46x12 | truecolor | 72 | Slow-melt columns: four vertical truecolor blends |
+| `sugar-colorprofile-3-16-l-1.ansi` | 150x32 | 16 | 9 | Candy shop storefront with jars, then palette extracted to 16 colours |
+| `sugar-colorprofile-3-16-l-2.ansi` | 156x30 | 16 | 14 | Full WCAG contrast matrix + ratio meters across the ANSI-16 gamut |
+| `sugar-colorprofile-3-16-m-1.ansi` | 84x22 | 16 | 7 | Harmony wheel: complementary+triadic+analogous spokes over 16 hues |
+| `sugar-colorprofile-3-16-m-2.ansi` | 82x20 | 16 | 7 | Degradation elevator as a building: TrueColor down to NoTTY floors |
+| `sugar-colorprofile-3-16-s-1.ansi` | 62x11 | 16 | 9 | WCAG pass/fail gauntlet: five 16-colour pairs scored AA/AAA/FAIL |
+| `sugar-colorprofile-3-16-s-2.ansi` | 60x9 | 16 | 8 | Colour-blindness mode selector: protan/deutan/tritan chips in ANSI-16 |
+| `sugar-colorprofile-3-256-l-1.ansi` | 140x36 | 256 | 25 | Contrast heatmap grid, ratio bucketed green-pass to red-fail in 256 |
+| `sugar-colorprofile-3-256-l-2.ansi` | 140x30 | 256 | 19 | Shop scene reduced to six xterm palette cards with hex + index |
+| `sugar-colorprofile-3-256-m-1.ansi` | 84x22 | 256 | 81 | Spectrum under normal/protan/deutan/tritan vision in 256 colours |
+| `sugar-colorprofile-3-256-m-2.ansi` | 86x21 | 256 | 42 | Split-complement hue ring in the 216-cube with three anchor chips |
+| `sugar-colorprofile-3-256-s-1.ansi` | 60x8 | 256 | 9 | Analogous triad chips 30 degrees apart in the xterm cube |
+| `sugar-colorprofile-3-256-s-2.ansi` | 64x12 | 256 | 21 | Nearest-cube quantisation: continuous vs snapped band + dE error strip |
+| `sugar-colorprofile-3-tc-l-1.ansi` | 176x40 | truecolor | 310 | Hero candy shop in 24-bit, extracted theme, then the sweep degraded down |
+| `sugar-colorprofile-3-tc-l-2.ansi` | 150x42 | truecolor | 518 | Harmony atlas: continuous hue wheel with spokes + per-profile ladder |
+| `sugar-colorprofile-3-tc-m-1.ansi` | 84x20 | truecolor | 248 | Truecolour CVD sim: candy gradient under four vision models |
+| `sugar-colorprofile-3-tc-m-2.ansi` | 86x22 | truecolor | 26 | Degradation elevator with a smooth hue shaft descending profiles |
+| `sugar-colorprofile-3-tc-s-1.ansi` | 62x7 | truecolor | 64 | Smooth analogous 24-bit ramp with luminance-aware SugarColorprofile mark |
+| `sugar-colorprofile-3-tc-s-2.ansi` | 56x12 | truecolor | 7 | WCAG ratio gauge: gradient dial with needle at the 4.5:1 AA line |
+| `sugar-colorprofile-4-16-l-1.ansi` | 160x32 | 16 | 14 | Six-vat dye line with overhead pipes, gauges and a common collection trough |
+| `sugar-colorprofile-4-16-l-2.ansi` | 150x30 | 16 | 16 | Open drawer labelling all sixteen ANSI bins with snap and dither check bars |
+| `sugar-colorprofile-4-16-m-1.ansi` | 84x22 | 16 | 7 | Sunset filmstrip: five frames degrading TrueColor golden hour to NoTTY static |
+| `sugar-colorprofile-4-16-m-2.ansi` | 86x20 | 16 | 8 | Neon workshop bench: hand-bent CANDY tubing glowing over a dark wall |
+| `sugar-colorprofile-4-256-l-1.ansi` | 170x34 | 256 | 53 | Stained-glass cathedral window sorting TrueColor sunlight into 256 panes |
+| `sugar-colorprofile-4-256-l-2.ansi` | 180x36 | 256 | 81 | Conveyor QA line checking candy tile colours against xterm cube indices |
+| `sugar-colorprofile-4-256-m-1.ansi` | 88x24 | 256 | 17 | 256-colour aurora curtains over a silhouette fell under a starred sky |
+| `sugar-colorprofile-4-256-m-2.ansi` | 86x20 | 256 | 114 | Hue stream funnelled from 166 cube steps into sixteen ANSI seats |
+| `sugar-colorprofile-4-256-s-1.ansi` | 64x12 | 256 | 17 | Three test tubes of indexed-gradient candy liquid in a wooden rack |
+| `sugar-colorprofile-4-256-s-2.ansi` | 66x14 | 256 | 21 | Beaker trio: cube yellow plus cube blue pouring out cube green |
+| `sugar-colorprofile-4-tc-l-1.ansi` | 200x38 | truecolor | 681 | Factory panorama at truecolor dusk: glowing CANDY PALETTE sign over lit rooftops |
+| `sugar-colorprofile-4-tc-l-2.ansi` | 190x34 | truecolor | 899 | Rainbow chameleon striding a branch, every scale cell a distinct truecolor |
+| `sugar-colorprofile-4-tc-m-1.ansi` | 86x22 | truecolor | 601 | Overhead view of dye vat 07 marbling into a continuous truecolor vortex |
+| `sugar-colorprofile-4-tc-m-2.ansi` | 88x24 | truecolor | 302 | Taffy pull house: a rainbow candy rope stretched between iron hooks |
+| `sugar-colorprofile-4-tc-s-1.ansi` | 62x13 | truecolor | 145 | Truecolor candy glaze pouring off a lip into staggered rainbow drips |
+| `sugar-colorprofile-4-tc-s-2.ansi` | 64x14 | truecolor | 181 | Macro chameleon eye: radial truecolor iris around a vertical slit pupil |
+| `sugar-colorprofile-5-256-l-1.ansi` | 168x40 | 256 | 19 | Metro tunnel in one-point perspective: twelve 256 tile rings, lamps and converging rails |
+| `sugar-colorprofile-5-256-l-2.ansi` | 152x32 | 256 | 31 | Patisserie counter: six wobbling jellies graded in 256 rows over a checkered tile front |
+| `sugar-colorprofile-5-256-m-1.ansi` | 84x22 | 256 | 29 | Aurora curtains in 256 greens and magentas, sampled below into a palette strip |
+| `sugar-colorprofile-5-256-m-2.ansi` | 84x24 | 256 | 14 | Three striped hot-air balloons ascending on 256-wind toward the truecolor layer |
+| `sugar-colorprofile-5-256-s-1.ansi` | 52x12 | 256 | 8 | Barista's cup seen from above: cream rosetta in 256 tones, RGB sugar cubes |
+| `sugar-colorprofile-5-256-s-2.ansi` | 56x13 | 256 | 13 | Tunnel mouth of eight receding 256-hue rings with converging rails |
+| `sugar-colorprofile-5-tc-l-1.ansi` | 176x40 | truecolor | 114 | Alchemist atelier: alembic distills window-light into a stacked truecolor palette strip |
+| `sugar-colorprofile-5-tc-l-2.ansi` | 184x42 | truecolor | 158 | Night garden: a glowing lantern sampled onto pinned cards while moths circle the hue |
+| `sugar-colorprofile-5-tc-m-1.ansi` | 82x22 | truecolor | 205 | Koi pond in truecolor water: three fish, lily pads and ripples around a stone rim |
+| `sugar-colorprofile-5-tc-m-2.ansi` | 80x22 | truecolor | 46 | Brick hearth with layered truecolor flames, birch logs and a glowing ember row |
+| `sugar-colorprofile-5-tc-s-1.ansi` | 48x9 | truecolor | 74 | Chef's plate: three truecolor sauce quenelles with a gradient swipe and garnish |
+| `sugar-colorprofile-5-tc-s-2.ansi` | 52x14 | truecolor | 53 | Moth wing mirrored across an axis, banded in truecolor, feeding a four-chip column |
+| `sugar-colorprofile-6-16-l-1.ansi` | 152x36 | 16 | 8 | Sort-bot floor plan: hopper, belts, gantry arms and eight ANSI bins — 262k colours given sixteen seats |
+| `sugar-colorprofile-6-16-l-2.ansi` | 143x34 | 16 | 8 | Beacon Point: one lamp sweeping fog into six named ANSI bands over striped tower, waves and a ship |
+| `sugar-colorprofile-6-16-m-1.ansi` | 83x22 | 16 | 14 | Textile mill spool-dye line: six spools hung from an overhead rail dipping bath-by-bath red→magenta |
+| `sugar-colorprofile-6-16-s-1.ansi` | 58x10 | 16 | 8 | Sort-bot mini: an overhead arm lifts ▓ candies by hue into eight ANSI bins on a conveyor |
+| `sugar-colorprofile-6-16-s-2.ansi` | 48x9 | 16 | 6 | Cellar niche: three hue-aged bottles on an oak shelf with colour-keyed vintages |
+| `sugar-colorprofile-6-256-l-1.ansi` | 176x42 | 256 | 82 | Hue-sorting facility: rainbow facade, SORTBOT-X, ten 256 gradient bins and a degradation-chute console |
+| `sugar-colorprofile-6-256-l-2.ansi` | 168x37 | 256 | 71 | Low-tide transect: nine anemones on a rock shelf in 256 hue families with depth ruler and sand |
+| `sugar-colorprofile-6-256-m-1.ansi` | 88x23 | 256 | 35 | Wine-cellar rack wall: four shelves of bottle ends graded red→gold→straw with a temperature gauge |
+| `sugar-colorprofile-6-256-m-2.ansi` | 86x24 | 256 | 33 | Beacon cutting sea-fog into four graded 256 banks over a striped tower and swell |
+| `sugar-colorprofile-6-256-s-1.ansi` | 66x12 | 256 | 38 | Tide pool at low water: five anemones, each tentacle-fan keeping one 256 hue family |
+| `sugar-colorprofile-6-256-s-2.ansi` | 50x11 | 256 | 10 | Aurora assay: four corked vials with vertical green→violet 256-step liquid gradients |
+| `sugar-colorprofile-6-tc-l-1.ansi` | 196x43 | truecolor | 257 | Tide-pool panorama: seven radial-gradient anemones in a 24-bit pool flanked by shading rock walls |
+| `sugar-colorprofile-6-tc-l-2.ansi` | 204x45 | truecolor | 1799 | Aurora expedition: five 24-bit curtains funnelled through towers into eight hue-sealed casks |
+| `sugar-colorprofile-6-tc-m-1.ansi` | 86x21 | truecolor | 249 | Silk line: three truecolor ribbons waving through continuous dye baths, zero banding |
+| `sugar-colorprofile-6-tc-m-2.ansi` | 88x22 | truecolor | 192 | Fog prism: the lamp splits grey weather into seven continuous 24-bit spectral bands |
+| `sugar-colorprofile-6-tc-s-1.ansi` | 64x13 | truecolor | 32 | Lone anemone holding a magenta family in radial 24-bit tentacles over glowing deep water |
+| `sugar-colorprofile-6-tc-s-2.ansi` | 51x12 | truecolor | 47 | Bottled aurora: a hand-held vial of swirling 24-bit ribbons, corked at 03:12 |
+| `sugar-colorprofile-7-16-l-1.ansi` | 148x31 | 16 | 16 | ANSI-16 seat catalog: 8 fg + 8 bg + bright attr row, per-channel fallback |
+| `sugar-colorprofile-7-16-l-2.ansi` | 150x33 | 16 | 16 | Dye-vat dip ladder: 16 quantised hue baths widening step by step |
+| `sugar-colorprofile-7-16-m-1.ansi` | 82x21 | 16 | 13 | Paper chromatogram: one ink origin separating into six ANSI pigment bands |
+| `sugar-colorprofile-7-16-m-2.ansi` | 84x22 | 16 | 11 | Camouflage swatch degradation: five-tone blobs desaturating to two-tone grey |
+| `sugar-colorprofile-7-16-s-1.ansi` | 56x14 | 16 | 12 | Barbershop pole: red/white/blue hue spiral spinning on a striped cylinder |
+| `sugar-colorprofile-7-16-s-2.ansi` | 60x13 | 16 | 16 | Library bookplate spines: hue-coded shelf, ten colour-keyed volumes |
+| `sugar-colorprofile-7-256-l-1.ansi` | 168x36 | 256 | 38 | Op-art moire: two emitters beating into a continuous 256 hue field |
+| `sugar-colorprofile-7-256-l-2.ansi` | 172x40 | 256 | 45 | Cinema colour-leader: academy wheel, sweep, and 256 SMPTE reel bars |
+| `sugar-colorprofile-7-256-m-1.ansi` | 86x23 | 256 | 17 | Peacock train: nine concentric 256-indexed ocelli fanned on barbed stems |
+| `sugar-colorprofile-7-256-m-2.ansi` | 88x22 | 256 | 26 | Hardware paint-chip wall: 24 fan-deck chips mapped onto the 256 cube |
+| `sugar-colorprofile-7-256-s-1.ansi` | 62x11 | 256 | 26 | Rainbow lorikeet flock: five 256-indexed birds perched on a live wire |
+| `sugar-colorprofile-7-256-s-2.ansi` | 60x14 | 256 | 18 | Colour-temperature dial: 256-step blackbody arc 1500K to 12000K |
+| `sugar-colorprofile-7-tc-l-1.ansi` | 196x44 | truecolor | 565 | Coastline sunset through protan/deutan/normal color-vision filters |
+| `sugar-colorprofile-7-tc-l-2.ansi` | 150x40 | truecolor | 1552 | HSL paint-mixer drum: 360-degree 24-bit hue disc with radial shading |
+| `sugar-colorprofile-7-tc-m-1.ansi` | 86x23 | truecolor | 355 | Stained-glass rose window: 24-bit period glass set in a lead-came grid |
+| `sugar-colorprofile-7-tc-m-2.ansi` | 88x22 | truecolor | 972 | Ombre dip-dye scarf: zero-band continuous truecolour hue flow |
+| `sugar-colorprofile-7-tc-s-1.ansi` | 58x13 | truecolor | 24 | Jeweller's-vault prism: one white beam dispersing into a 7-band 24-bit fan |
+| `sugar-colorprofile-7-tc-s-2.ansi` | 62x15 | truecolor | 319 | RYB pigment triangle: barycentric subtractive truecolour mixing |
+| `sugar-colorprofile-8-16-l-1.ansi` | 168x34 | 16 | 15 | Grand souk facade: 33-stripe awning over six shaded spice cones, price row |
+| `sugar-colorprofile-8-16-l-2.ansi` | 150x36 | 16 | 8 | Butterfly wing-scale plate: mirrored zones, ocelli, crescents, colour key |
+| `sugar-colorprofile-8-16-m-1.ansi` | 84x22 | 16 | 7 | Squall-line PPI log: intensity ladder, sweep trail and 16-colour station panel |
+| `sugar-colorprofile-8-16-s-2.ansi` | 60x14 | 16 | 14 | Spice-souk awning: six bold hue stripes scalloped over five graded pigment cones |
+| `sugar-colorprofile-8-256-l-1.ansi` | 150x30 | 256 | 29 | Rain-slick highway at dawn: skyline, oil-rainbow puddles, lamp reflections |
+| `sugar-colorprofile-8-256-l-2.ansi` | 150x32 | 256 | 15 | Neon signage on brick: tube lettering, per-hue glow haloes, argon-blue frame |
+| `sugar-colorprofile-8-256-m-1.ansi` | 82x21 | 256 | 11 | Commit-graph lanes keyed per branch: merges, hotfix and a tagged release |
+| `sugar-colorprofile-8-256-m-2.ansi` | 84x20 | 256 | 12 | Player-piano roll: four voices rendered as four 256-index hue lanes |
+| `sugar-colorprofile-8-256-s-1.ansi` | 54x12 | 256 | 20 | Fibre-optic bundle end-on: hex-packed glowing cores with dim cladding rings |
+| `sugar-colorprofile-8-256-s-2.ansi` | 50x14 | 256 | 18 | Sunset pickled in a jar: eight 256-index brine bands, cucumber slices, label |
+| `sugar-colorprofile-8-tc-l-1.ansi` | 160x34 | truecolor | 30 | Diatom frustules false-colour SEM: centric ribs, pennate striae, colony chain |
+| `sugar-colorprofile-8-tc-l-2.ansi` | 150x34 | truecolor | 10 | Banknote guilloche rosette: four engine-turned hue curves and microprint border |
+| `sugar-colorprofile-8-tc-m-1.ansi` | 84x21 | truecolor | 12 | Cu2O crystal unit cell: species-tinted atoms, bonds and gilded boundary |
+| `sugar-colorprofile-8-tc-m-2.ansi` | 86x20 | truecolor | 128 | False-colour thermal frame: ironbow LUT, bodies, laptop heat, cold pane |
+| `sugar-colorprofile-8-tc-s-1.ansi` | 62x12 | truecolor | 255 | Oil slick on wet tarmac: continuous thin-film interference with raindrop rings |
+| `sugar-colorprofile-8-tc-s-2.ansi` | 64x13 | truecolor | 271 | Rock pool at noon: caustic shimmer over sand, shells and a hermit crab |
+| `sugar-colorprofile-9-16-l-1.ansi` | 150x34 | 16 | 13 | Lepidoptera hue board: eighteen pinned moths in forewing/hindwing pairs over an eight-tone scale |
+| `sugar-colorprofile-9-16-l-2.ansi` | 158x32 | 16 | 14 | Heraldic blazon key: eight shields engraved with traditional tincture hatchings |
+| `sugar-colorprofile-9-16-m-1.ansi` | 82x20 | 16 | 14 | Theatrical gel rack: seven hung sheets with barn doors, dot gobos and dime-step strips |
+| `sugar-colorprofile-9-16-m-2.ansi` | 84x22 | 16 | 13 | Mangrove tide zonation: sky, canopy, wrack, pneumatophore mud and creek belts in section |
+| `sugar-colorprofile-9-16-s-1.ansi` | 58x12 | 16 | 7 | Steel temper-oxide strip: eight candle-drawn oxide bands from pale straw to light blue on a black backing |
+| `sugar-colorprofile-9-256-l-1.ansi` | 170x30 | 256 | 39 | Fishmonger's ice display: five hue-family rows on crushed ice with lemon and slate prices |
+| `sugar-colorprofile-9-256-l-2.ansi` | 156x32 | 256 | 48 | Autumn leaf-fall pigment ledger: eight species x six weeks, chlorophyll to anthocyan grid |
+| `sugar-colorprofile-9-256-m-1.ansi` | 84x22 | 256 | 19 | Gemologist's refractometer bench: shadow-edge RI scale, swing-out lamp, D50 vs A tint test |
+| `sugar-colorprofile-9-256-m-2.ansi` | 82x24 | 256 | 18 | Botanical herbarium plate: pressed fern fading 28 to 137 with mounting strips and label block |
+| `sugar-colorprofile-9-256-s-1.ansi` | 54x14 | 256 | 29 | Overglaze kiln-tile branch: six hanging test tiles, split-face glazes with drips |
+| `sugar-colorprofile-9-256-s-2.ansi` | 62x12 | 256 | 19 | Poison dart frog census: five aposematic skins spotted on leaf litter |
+| `sugar-colorprofile-9-tc-l-1.ansi` | 164x34 | truecolor | 303 | Kelp forest light strata: surface-to-30m depth gradient with swaying stipes and reef fish dashes |
+| `sugar-colorprofile-9-tc-l-2.ansi` | 168x32 | truecolor | 89 | Tropical fruit crate: cut watermelon, mango, passionfruit, kiwi and fig faces to the light |
+| `sugar-colorprofile-9-tc-m-1.ansi` | 88x22 | truecolor | 79 | Morpho wing scale census: structural-blue field with veins, apical spots and lamellae cross-section |
+| `sugar-colorprofile-9-tc-m-2.ansi` | 86x22 | truecolor | 26 | Trout fly dressing box: eight silk-and-rib patterns bedded in foam with hackle fibers |
+| `sugar-colorprofile-9-tc-s-1.ansi` | 58x13 | truecolor | 106 | Opal cabochon assay card: red-to-violet play-of-color blobs on body-tone N3 with pale scale |
+| `sugar-colorprofile-9-tc-s-2.ansi` | 64x12 | truecolor | 38 | Jewel beetle elytra row: five gradient carapaces with sheen and splay legs on velvet |
+<!-- END sugar-colorprofile SLOTS -->
 
 <!-- BEGIN candy-sql SLOTS -->
 ### candy-sql — slot series

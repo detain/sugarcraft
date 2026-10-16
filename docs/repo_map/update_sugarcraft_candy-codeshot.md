@@ -535,7 +535,7 @@ Add Levenshtein distance for theme names — `tokyonight` → suggests `tokyo-ni
 
 ## 3. Terminal Background Detection
 
-Use `candy-palette`'s `HasDarkBackground()` to auto-select dark/light theme
+Use `sugar-colorprofile`'s `HasDarkBackground()` to auto-select dark/light theme
 **Source**: `docs/repo_map/charmbracelet_lipgloss.md` — `HasDarkBackground()` pattern
 
 ## 4. Progress Feedback

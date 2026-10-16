@@ -329,7 +329,7 @@ final class Buffer implements \JsonSerializable
                 // +40% model below would keep it pure black, painting
                 // invisible black-on-black text on dark terminals. The
                 // canonical bright-palette value (xterm colour 8, and
-                // candy-palette's StandardColors::$brightBlack) is mid
+                // sugar-colorprofile's StandardColors::$brightBlack) is mid
                 // grey 0x7F7F7F, so SGR 90 / `38;5;8` resolve there.
                 return 0x7f7f7f;
             }

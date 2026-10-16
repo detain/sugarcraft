@@ -13,7 +13,7 @@
 1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `sugar-forms` (leaf libs). The dep graph points the wrong way. <!-- @rename-keep historical provenance -->
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
 3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
-4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`.
+4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`. <!-- @rename-keep historical provenance -->
 5. Two incompatible Boxer layout engines (`sugar-panels` vs `sugar-dash/src/Layout/Boxer`). <!-- @rename-keep -->
 6. Almost everything else — README quickstarts, examples, type signatures, defaults, error messages, `final` policy — is already in great shape. See §6.
 
@@ -171,7 +171,7 @@ Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 - `sugar-dash/src/Foundation/Buffer.php` <!-- @rename-keep -->
 - `sugar-dash/src/Plot/Braille/BrailleCanvas.php` <!-- @rename-keep -->
 
-Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders.
+Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders. <!-- @rename-keep historical provenance -->
 
 ✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, sugar-quickpick, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR). <!-- @rename-keep historical provenance -->
 

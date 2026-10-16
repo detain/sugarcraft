@@ -44,7 +44,7 @@ From the first-stage analysis, SugarCraft's direct equivalent is **sugar-cli** (
 | **SugarCli** | Direct port | `fang` — CLI presentation helpers |
 | **SugarMarkdown** | Thematic cousin | Terminal styling via Glamour port |
 | **CandyLog** | Indirect complement | Styled terminal output |
-| **CandyPalette** | Dependency | Terminal color detection |
+| **SugarColorprofile** | Dependency | Terminal color detection |
 | **CandySprinkles** | Thematic relation | Lipgloss-based styling |
 
 ### First-Stage Assessment Gaps

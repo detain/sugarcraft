@@ -60,7 +60,7 @@
         "sugarcraft/candy-minesweeper": "dev-master",
         "sugarcraft/candy-starter": "dev-master",
         "sugarcraft/sugar-image": "dev-master",
-        "sugarcraft/candy-palette": "dev-master",
+        "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/candy-sql": "dev-master",
         "sugarcraft/candy-git-server": "dev-master",
@@ -251,7 +251,7 @@
         },
         {
             "type": "path",
-            "url": "candy-palette",
+            "url": "sugar-colorprofile",
             "options": {
                 "symlink": true
             }

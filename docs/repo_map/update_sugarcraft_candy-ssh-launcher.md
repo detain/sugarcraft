@@ -218,7 +218,7 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 **Source reference:** `charmbracelet/lipgloss.md` — "Adaptive colors: `LightDark(hasDarkBackground)` helper returns light/dark variant"  
 **Implementation ideas:**
 
-- Use `candy-palette` color detection (`HasDarkBackground`, `BackgroundColor`) to detect terminal theme
+- Use `sugar-colorprofile` color detection (`HasDarkBackground`, `BackgroundColor`) to detect terminal theme
 - Define light/dark color variants in the style constants
 - Select appropriate variant at render time
 
@@ -673,7 +673,7 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 ## Immediate Wins (Low Complexity, High Impact)
 
 1. **Multiple identity files** — Fix `toSshArgv()` to emit all identity files
-2. **Theme detection** — Use `candy-palette` to detect light/dark background and adapt colors
+2. **Theme detection** — Use `sugar-colorprofile` to detect light/dark background and adapt colors
 3. **Config file watching** — Use `inotify`/`FSEvents` to watch config and reload on change
 4. **SSH config `Include` directive** — Add `Include` parsing to `SshConfigParser`
 

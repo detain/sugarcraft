@@ -50,7 +50,7 @@ private static function autoFromPalette(ProbeReport $report): self
 }
 ```
 
-The `$report` parameter (a `ProbeReport` from `candy-palette`) is passed in but used only for two checks before falling back to `halfBlock()` for everything else. The full capability information from `TerminalProbe::run()` is discarded. The method should refine the renderer choice using more of the probe report (e.g., `TrueColor`, `Color256`, `BasicAscii`).
+The `$report` parameter (a `ProbeReport` from `sugar-colorprofile`) is passed in but used only for two checks before falling back to `halfBlock()` for everything else. The full capability information from `TerminalProbe::run()` is discarded. The method should refine the renderer choice using more of the probe report (e.g., `TrueColor`, `Color256`, `BasicAscii`).
 
 **Recommendation**: Use more of the `ProbeReport` to make a more informed renderer choice before falling back to half-block.
 
@@ -412,9 +412,9 @@ public static function supportedProtocols(): array<string>
 
 **File**: `src/Mosaic.php:94-125`
 
-`Mosaic::auto()` uses `Detect::probe()` (custom DA1/XTWINOPS probing specific to sugar-image) and falls back to `TerminalProbe` from `candy-palette`. These two systems may disagree on terminal capabilities. The `Detect` system has sixel detection via DA1, while `TerminalProbe` has its own capability enumeration. The precedence is undocumented and the fallback logic is convoluted.
+`Mosaic::auto()` uses `Detect::probe()` (custom DA1/XTWINOPS probing specific to sugar-image) and falls back to `TerminalProbe` from `sugar-colorprofile`. These two systems may disagree on terminal capabilities. The `Detect` system has sixel detection via DA1, while `TerminalProbe` has its own capability enumeration. The precedence is undocumented and the fallback logic is convoluted.
 
-**Recommendation**: Clarify the relationship between `Detect::probe()` (sugar-image) and `TerminalProbe::run()` (candy-palette). Ideally, one system should be the source of truth with the other as fallback.
+**Recommendation**: Clarify the relationship between `Detect::probe()` (sugar-image) and `TerminalProbe::run()` (sugar-colorprofile). Ideally, one system should be the source of truth with the other as fallback.
 
 ---
 

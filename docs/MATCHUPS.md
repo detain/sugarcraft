@@ -46,7 +46,7 @@ called out in the table below.
 | **CandyWish** (`candy-wish/`) | 🟢 ready | SSH-server middleware framework (leans on host `sshd`); pluggable Transport: InProcessTransport (default — candy-pty supervisor + Spawn middleware) or HostSshdTransport (legacy, opt-in — inline middleware, including running SugarCraft apps in SSH sessions). |
 | **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + CandyWish session middleware. |
 | **CandyLog** (`candy-log/`) | 🟢 ready | Minimal, colorful logging library. |
-| **CandyPalette** (`candy-palette/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
+| **SugarColorprofile** (`sugar-colorprofile/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
 | **SugarAnimation** (`sugar-animation/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
 | **CandyVt** (`candy-vt/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
@@ -170,7 +170,7 @@ reference projects supplied the ideas, not the code.
 | CandyStarter (candy-starter/) | none — first-party |
 | SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | SugarImage (sugar-image/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
-| CandyPalette (candy-palette/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
+| SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
 | CandyPty (candy-pty/) | [x/xpty](https://github.com/charmbracelet/x/tree/main/xpty) |
 | CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
 | CandyGitServer (candy-git-server/) | [soft-serve](https://github.com/charmbracelet/soft-serve) |

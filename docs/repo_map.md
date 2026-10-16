@@ -19,7 +19,7 @@
 | [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | candy-core |
 | [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, sugar-forms |
 | [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, candy-sprinkles, candy-core |
-| [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, candy-palette |
+| [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, sugar-colorprofile |
 | [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | sugar-spring, sugar-charts |
 | [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, sugar-forms, sugar-markdown |
 | [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | sugar-cli |
@@ -283,7 +283,7 @@
 
 **SugarCraft Mapping:**
 - `candy-core` → Terminal capability detection
-- `candy-palette` → Color profile handling
+- `sugar-colorprofile` → Color profile handling
 
 **Strengths:** Standards-compliant (NO_COLOR, CLICOLOR), thread-safe memoization, recognizes modern terminals.
 **Weaknesses:** No built-in color generation.
