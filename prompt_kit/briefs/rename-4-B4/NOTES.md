@@ -70,7 +70,7 @@ refresh-deps --mode=linked candy-scriptui OK; committed-tree path-repo guard rc=
 - tools/tests: **426/1484 EXACT**; path-repos rc=0; child-lifetimes rc=0.
 - generic-word safety: `git diff --cached -U0 | grep -i '^-.*shell' | grep scriptui` → ZERO corrupt hits;
   survivors verified: README "shell scripts" ×2, _data description "call from shell scripts",
-  sugar-post "Shell wrapper patterns", composer keyword "shell", ProgramOptions stdin prose.
+  sugar-post "Shell wrapper patterns", composer keyword "shell", ProgramOptions stdin prose. <!-- @rename-keep -->
 - diff: 283 files changed, 1069+/1057−.
 
 ## R7 commit

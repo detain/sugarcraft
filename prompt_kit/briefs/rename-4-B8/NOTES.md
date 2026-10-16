@@ -1,19 +1,19 @@
 # Rename 4-B8: sugar-post → candy-mail <!-- @rename-keep -->
 
 Started 2026-10-16. Base master == origin == 3b914bf97. Entry: tools/renames.json batch-B line 15,
-kind=rename, type=app, ns Post→Mail, bins {"bin/pop":"bin/candy-mail"}, extra_literals same.
+kind=rename, type=app, ns Post→Mail, bins {"bin/pop":"bin/candy-mail"}, extra_literals same. <!-- @rename-keep -->
 
 ## Recon findings (pre-R1)
 
 - Baseline suite (rename-baseline.md:78): 203T/361A/0F/0E/0S/0W. <!-- @rename-keep -->
 - `SugarCraft\Mail` collision check: NONE repo-wide (php grep, word boundary) — clear. No *mail* dir, no candy-mail token anywhere.
-- PHP consumers of `SugarCraft\Post\`: ZERO outside the lib. Root composer require + its own files only.
+- PHP consumers of `SugarCraft\Post\`: ZERO outside the lib. Root composer require + its own files only. <!-- @rename-keep -->
 - sugar-crush hits are DOCBLOCK ancestry cites only (src/Cli/ArgvParser.php:12, Help.php:15,
-  NonInteractive.php:192,1015 — `sugar-post/bin/pop` pattern provenance). No composer dep, no tests pin
-  (`grep sugar-post sugar-crush/tests/` empty). Mechanical R7+R3 rewrite = correct (`candy-mail/bin/candy-mail`). No consumer suite owed; crush unaffected (docblock text only).
+  NonInteractive.php:192,1015 — `sugar-post/bin/pop` pattern provenance). No composer dep, no tests pin <!-- @rename-keep -->
+  (`grep sugar-post sugar-crush/tests/` empty). Mechanical R7+R3 rewrite = correct (`candy-mail/bin/candy-mail`). No consumer suite owed; crush unaffected (docblock text only). <!-- @rename-keep -->
 - tools/tests/DocsQuickstartTest.php:41 — narrative docblock mention, rewrites mechanically. No behavioural pin.
 - ENV PREMISE CORRECTION: plan:950 claims `SUGARPOST*`/`SUGAR_POST_*` — FALSE at tree. Actual user env prefix
-  is `POP_*` (bin/pop: POP_FROM, POP_SMTP_HOST/PORT/USERNAME/PASSWORD, POP_SIGNATURE; RESEND_API_KEY is
+  is `POP_*` (bin/pop: POP_FROM, POP_SMTP_HOST/PORT/USERNAME/PASSWORD, POP_SIGNATURE; RESEND_API_KEY is <!-- @rename-keep -->
   third-party — KEEP). SUGARPOST only appears in ansi art descriptions (all-caps, invisible to rules,
   truthful until art pass). Plan INTENT (shim for credential env users WILL have set) applies to POP_*.
   R5 derived prefixes (SUGAR_POST_/SUGARPOST_) are a tool no-op here.
@@ -26,14 +26,14 @@ kind=rename, type=app, ns Post→Mail, bins {"bin/pop":"bin/candy-mail"}, extra_
   CliTest argv0 fakes `'pop'` — flip to `'candy-mail'` for hygiene (argv0 never read; parseArgs starts at i=1).
   tmp-dir prefixes `/pop-test-` (AttachmentTest) `/pop-demo-` (examples/attachments) — brand-derived → flip to candy-mail-* (hygiene law, precedent B-notes temp-prefix rule).
   Bare `pop` command prose in bin docblock (`Usage: pop --from`, `pop < message.txt`) — flip to candy-mail.
-- ansi/: dir ansi/sugar-post + ansi.json keys + ansi/README rows migrated by TOOL (B6 precedent 812d53243 —
+- ansi/: dir ansi/sugar-post + ansi.json keys + ansi/README rows migrated by TOOL (B6 precedent 812d53243 — <!-- @rename-keep -->
   paths renamed, 976 json lines rewritten); art bytes still paint SUGARPOST wordmark → followups line.
   All-caps SUGARPOST in descriptions stays truthful (content-excluded) → leave.
 - .vhs/: showcase.tape + showcase.gif exist; paths rewrite, tape content lib-relative OK; GIF shows old wordmark
   → followups (CI re-renders). vhs.yml all=() row + lib matrix line rewrite mechanically.
-- Glued blindspot refs needing manual sed (R3 lookbehind `_` blind): `plan_sugar-post.md` cites in
-  sugar-post/CALIBER_LEARNINGS.md ×4 + findings/plan.md:182 (file itself renames to plan_candy-mail.md — B7 precedent);
-  `docs/plans/leftover/.../step-01-sugar-post-identity.md` + its references (`sugar-post-identity.md`) — VISIBLE
+- Glued blindspot refs needing manual sed (R3 lookbehind `_` blind): `plan_sugar-post.md` cites in <!-- @rename-keep -->
+  sugar-post/CALIBER_LEARNINGS.md ×4 + findings/plan.md:182 (file itself renames to plan_candy-mail.md — B7 precedent); <!-- @rename-keep -->
+  `docs/plans/leftover/.../step-01-sugar-post-identity.md` + its references (`sugar-post-identity.md`) — VISIBLE <!-- @rename-keep -->
   (hyphen-terminated), tool rewrites file + refs consistently (research-doc precedent: candy-scriptui-research.md).
 - Data paths: app grep for .config/.local/.cache derivation — none expected (send-only mailer, no store). Verify R4 #4.
 - prompt_kit/CONTEXT.md + rename-baseline.md: whole-file sentinel-excluded (existing tags) — no per-line prep needed;
