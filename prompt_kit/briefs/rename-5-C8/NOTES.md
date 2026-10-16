@@ -42,3 +42,4 @@ CONTEXT.md untagged token lines, rename-baseline.md :73+:104, crush_code_{harden
 - (pending) R6 gates:
 - (pending) R7 commit+push:
 - candy-sql BASE measured (linked, worktree-own script): 1580T/11900A OK @2.8s — gate target.
+- BASE-RED found: sugar-crush ChildStderrCaptureTest unaccounted roster — Media/ReelDependencyTest.php:49 shell_exec. Proven identical failure at 4d472bc62 (probe worktree, linked). NOT ours; crush-media lane minted it; closeout/owner owed. Recorded 2F crush-pair narrative becomes 3F-at-weld shape (pair + this).
