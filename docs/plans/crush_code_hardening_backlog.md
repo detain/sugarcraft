@@ -15107,12 +15107,12 @@ NOT round-54 fallout — it predates the merge).
 ```
 Dead path-repo dependencies (candidates for pruning):
 sugar-crush:
-  - PRUNE_REQUIRE_AND_REPO  sugarcraft/candy-kit  tests_uses: no  (not reachable via other requires or require-dev)
+  - PRUNE_REQUIRE_AND_REPO  sugarcraft/candy-kit  tests_uses: no  (not reachable via other requires or require-dev) <!-- @rename-keep historical provenance -->
 1 finding(s). Read-only report
 ##[error]Process completed with exit code 1.
 ```
 
-`sugar-crush` requires `sugarcraft/candy-kit`, nothing in `src/` or `tests/` reaches it, and the policy
+`sugar-crush` requires `sugarcraft/candy-kit`, nothing in `src/` or `tests/` reaches it, and the policy <!-- @rename-keep historical provenance -->
 job exits 1 on that. Note the local guard does NOT catch this: `php tools/check-path-repos.php
 --no-lib-path-repos` exits 0 at the same commit, because it checks a different property. **The
 supervisor's merge checklist has therefore been passing a check that CI fails**, which is the more
@@ -15120,22 +15120,22 @@ important half of this finding — a green local invariant that does not imply a
 
 🔴 **THE OBVIOUS FIX IS THE WRONG ONE.** The report's own recommendation is `PRUNE_REQUIRE_AND_REPO`, and
 the standing rule is that dormant code gets WIRED or documented as an intentional seam, never deleted.
-`candy-kit` is a foundation lib; a `sugar-crush` that cannot reach it is more likely to be missing a
+`candy-kit` is a foundation lib; a `sugar-crush` that cannot reach it is more likely to be missing a <!-- @rename-keep historical provenance -->
 wiring than carrying a stale require.
 
 **STEP:** decide which it is, with evidence. Either (a) find what `sugar-crush` was meant to use
-`candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the
+`candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the <!-- @rename-keep historical provenance -->
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
 
 **Decision record added 2026-10-07 (lane LL-kit-sprinkles) — the E453 STEP's two options were both the
 wrong frame, and the standing rule in this very section already names the third: dormant code is "WIRED or
-documented as an intentional seam, never deleted".** `candy-kit` is the documented seam. It stays in
+documented as an intentional seam, never deleted".** `candy-kit` is the documented seam. It stays in <!-- @rename-keep historical provenance -->
 `sugar-crush`'s require set UNWIRED, and `PRUNE_REQUIRE_AND_REPO` (option b) is explicitly refused — the
 dependency is not spent, it is deferred against one named restyle. What defers it is a genuine conflict of
 intent between the two libraries, not an oversight:
 
-- `candy-kit`'s `Internal\SafeText::line()` (`candy-kit/src/Internal/SafeText.php:35-38`, reached from
+- `candy-kit`'s `Internal\SafeText::line()` (`candy-kit/src/Internal/SafeText.php:35-38`, reached from <!-- @rename-keep historical provenance -->
   `HelpText.php` and `Section.php`) strips the whole C0 range, **including `\n`**, because its presenters
   feed a frame-diff renderer that owns one row per line — a stray newline would knock a row out of a border
   box. The flattening is the library's contract, not a bug.
@@ -16039,9 +16039,9 @@ step. Out of lane c's file list, hence not done here.
 
 **Round 55, lane c.** RESOLVED, with a forced out-of-lane edit to `tools/check-path-repos.php`.
 
-`candy-kit` is **not spent**. `git log -S` on the manifest names `ddd9560d0`, which says what it was
+`candy-kit` is **not spent**. `git log -S` on the manifest names `ddd9560d0`, which says what it was <!-- @rename-keep historical provenance -->
 added for: Phase 3 item 5b, restyling `Cli\Help::screen()`. Still open, and deferred with a measured
-reason rather than forgotten — candy-kit's primitives emit ANSI unconditionally, `--help` is routinely
+reason rather than forgotten — candy-kit's primitives emit ANSI unconditionally, `--help` is routinely <!-- @rename-keep historical provenance -->
 piped, so a faithful restyle needs a `posix_isatty()` guard the item never specified, against the single
 `<<<'HELP'` heredoc that IS that method's body and a `HelpTest` asserting line-start regexes any SGR
 prefix breaks. (This said "a 145-line heredoc" when it was written. Measured: 143 content lines, 145

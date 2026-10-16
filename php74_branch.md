@@ -378,7 +378,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   `candy-zone`(14,low), `candy-mouse`(9,med), `candy-mold`(1,low). <!-- @rename-keep historical provenance -->
 - **3.2** `candy-sprinkles` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
   `Table/Border/Tree/Listing` (10), **3.2c** root color/style files (≈10), **3.2d** remainder.
-- **3.3** `candy-palette`(8,med), `candy-kit`(7,med), `sugar-treelist`(10,med) — deps core(+sprinkles).
+- **3.3** `candy-palette`(8,med), `candy-kit`(7,med), `sugar-treelist`(10,med) — deps core(+sprinkles). <!-- @rename-keep historical provenance -->
 - **3.4** `candy-testing`(8,med) — deps core+buffer; **Fiber** + attributes + first‑class‑callable
   + intersection. *(High‑touch; extra review per §4.11.)*
 - **3.5** `candy-git-server`(14,med, deps core+async), `candy-sql`(14,high, core+sprinkles),
@@ -502,7 +502,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-flip | medium | 9 | WeakMap, ctor-promotion, named-args, readonly |
 | sugar-forms | medium | 48 | backed-enum, ctor-promotion, match, non-capturing-catch, nullsafe |
 | sugar-quickpick | medium | 7 | ctor-promotion, first-class-callable, readonly-class |
-| candy-kit | medium | 7 | ctor-promotion, named-args, ??=, readonly, union |
+| candy-kit | medium | 7 | ctor-promotion, named-args, ??=, readonly, union | <!-- @rename-keep historical provenance -->
 | sugar-treelist | medium | 10 | enum, match, nullsafe, php8-strfn, readonly |
 | candy-mouse | medium | 9 | backed-enum, ctor-promotion, match, nullsafe, php8-strfn | <!-- @rename-keep historical provenance -->
 | candy-palette | medium | 8 | ctor-promotion, enum-with-methods, match, named-args, new-in-init |
