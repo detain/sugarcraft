@@ -619,18 +619,18 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 **Files:** `sugar-reel/src/Decoder.php`, `sugar-reel/src/FakeDecoder.php`, `sugar-reel/src/Player.php:904`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.32 🟡 honey-bounce: CubicBezier x-value validation (Item 1.3)
+#### 1.32 🟡 sugar-spring: CubicBezier x-value validation (Item 1.3)
 
-**Plan:** `findings/plan_honey-bounce.md` — Item 1.3
+**Plan:** `findings/plan_sugar-spring.md` — Item 1.3
 **Fix:** Add range check `0 <= x <= 1` for x1/x2 in `CubicBezier.php` constructor; throw `\InvalidArgumentException` on invalid
-**Files:** `honey-bounce/src/Easing/CubicBezier.php:40-47`
+**Files:** `sugar-spring/src/Easing/CubicBezier.php:40-47`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.33 🟡 honey-bounce: SpringConfig silent clamping (Item 1.4)
+#### 1.33 🟡 sugar-spring: SpringConfig silent clamping (Item 1.4)
 
-**Plan:** `findings/plan_honey-bounce.md` — Item 1.4
+**Plan:** `findings/plan_sugar-spring.md` — Item 1.4
 **Fix:** Throw `\InvalidArgumentException` for mass ≤ 0 instead of silently clamping to 0.001
-**Files:** `honey-bounce/src/SpringConfig.php:33`
+**Files:** `sugar-spring/src/SpringConfig.php:33`
 **Agent:** Same coder agent as 1.32 (grouped — same lib)
 
 ---
@@ -999,27 +999,27 @@ Same branch/PR check as Phase 0/1.
 **Files:** `candy-palette/src/AsyncProbe.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.21 🟢 honey-bounce: Spring reducedMotionOverride (Item 2.1)
+#### 3.21 🟢 sugar-spring: Spring reducedMotionOverride (Item 2.1)
 
-**Plan:** `findings/plan_honey-bounce.md` — Item 2.1
+**Plan:** `findings/plan_sugar-spring.md` — Item 2.1
 **Fix:** Add `reducedMotionOverride: ?bool = null` parameter to `Spring` constructor; cache per-instance
-**Files:** `honey-bounce/src/Spring.php:34-38`
+**Files:** `sugar-spring/src/Spring.php:34-38`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 3.22 🟢 honey-bounce: Vector methods (Item 2.3)
+#### 3.22 🟢 sugar-spring: Vector methods (Item 2.3)
 
-**Plan:** `findings/plan_honey-bounce.md` — Item 2.3
+**Plan:** `findings/plan_sugar-spring.md` — Item 2.3
 **Fix:** Add `lengthSquared()`, `normalize()`, `lerp()` to `Vector.php`
-**Files:** `honey-bounce/src/Vector.php`
+**Files:** `sugar-spring/src/Vector.php`
 **Agent:** Same coder agent as 3.21 (grouped — same lib)
 
-#### 3.23 🟢 honey-bounce: EasingFunction interface (Item 2.5)
+#### 3.23 🟢 sugar-spring: EasingFunction interface (Item 2.5)
 
-**Plan:** `findings/plan_honey-bounce.md` — Item 2.5
+**Plan:** `findings/plan_sugar-spring.md` — Item 2.5
 **Fix:** Create `EasingFunction.php` interface; have `Easing` enum implement it
-**Files:** `honey-bounce/src/Easing/EasingFunction.php` (new)
+**Files:** `sugar-spring/src/Easing/EasingFunction.php` (new)
 **Agent:** Same coder agent as 3.21 (grouped — same lib)
 
 #### 3.24 🟢 candy-git-server: Async GitDaemon (Item 6.1)
@@ -1233,11 +1233,11 @@ Same verification as previous phases.
 
 ### Group 5-B (3 agents)
 
-#### 5.7 🟢 honey-bounce: CubicBezier invalid control points (Item 4.1)
+#### 5.7 🟢 sugar-spring: CubicBezier invalid control points (Item 4.1)
 
-**Plan:** `findings/plan_honey-bounce.md` — Item 4.1
+**Plan:** `findings/plan_sugar-spring.md` — Item 4.1
 **Fix:** Add test expecting `\InvalidArgumentException` for out-of-range x values
-**Files:** `honey-bounce/tests/CubicBezierTest.php`
+**Files:** `sugar-spring/tests/CubicBezierTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 5.8 🟢 candy-mdview: Viewport key binding tests (Item 2.1)
@@ -1314,7 +1314,7 @@ Same verification as previous phases.
 | `plan_sugar-calendar.md` | 2.1-2.2, 3.1, 4.1, 5.1 | Viewport width config, month grid cache, week-boundary docs, ISO week column |
 | `plan_sugar-readline.md` | 1.1, 1.2, 2.1, 2.3-2.4, 3.1-3.3, 4.1, 5.1 | Ctrl+R search, Vi cursor off-by-one, history race, unbounded growth, chmod 0600, Emacs incremental search, Vi text objects, architecture docs |
 | `plan_sugar-flexbox.md` | 1.1, 2.1-2.2, 3.1-3.3 | FlexBox multibyte, Justify import, cursor reset docs, scroll default, perf docs |
-| `plan_honey-bounce.md` | 2.2, 2.6, 3.2-3.4, 4.2-4.5 | SETTLING_THRESHOLD constant, EasingFunction interface, __toString, SpringChain::build, JsonSerializable, fps float, ReducedMotionTest parallel-unsafe, examples autoload |
+| `plan_sugar-spring.md` | 2.2, 2.6, 3.2-3.4, 4.2-4.5 | SETTLING_THRESHOLD constant, EasingFunction interface, __toString, SpringChain::build, JsonSerializable, fps float, ReducedMotionTest parallel-unsafe, examples autoload |
 
 ---
 

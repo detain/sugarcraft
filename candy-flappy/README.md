@@ -16,7 +16,7 @@
 
 ![demo](.vhs/play.gif)
 
-candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a HoneyBounce projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
+candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
 
 ## Run it
 
@@ -37,7 +37,7 @@ composer install
 
 | File            | Role                                                                           |
 |-----------------|--------------------------------------------------------------------------------|
-| `Bird`          | Wraps a HoneyBounce `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
+| `Bird`          | Wraps a SugarSpring `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
 | `Pipe`          | Single-column pipe pair with a centred gap. Slides left one cell per tick.     |
 | `TickMsg`       | Frame-tick message scheduled by `Cmd::tick(0.033, …)` ≈ 30 fps.                |
 | `Game` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
@@ -61,7 +61,7 @@ Gap shrinks by 1 every 5 points, bottoming out at 3 cells to keep the game playa
 
 ## Bird physics & tuning
 
-The bird's vertical motion is a HoneyBounce `Projectile` in the Y-down convention (positive velocity = falling). Three constants on `Bird` tune the feel for an 18-row playfield at 30 ticks/sec:
+The bird's vertical motion is a SugarSpring `Projectile` in the Y-down convention (positive velocity = falling). Three constants on `Bird` tune the feel for an 18-row playfield at 30 ticks/sec:
 
 | Constant             | Value        | Role                                                        |
 |----------------------|--------------|-------------------------------------------------------------|

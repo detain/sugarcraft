@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flappy\Tests;
 
-use SugarCraft\Bounce\Projectile;
+use SugarCraft\Spring\Projectile;
 use SugarCraft\Flappy\Bird;
 use PHPUnit\Framework\TestCase;
 

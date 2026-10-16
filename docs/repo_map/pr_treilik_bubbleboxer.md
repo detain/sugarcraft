@@ -33,7 +33,7 @@ From `repo_map/treilik_bubbleboxer.md`, the following mappings were identified:
 | `Boxer` struct + `LayoutTree` | `candy-core` viewport/layout | Tree-based vs termbox-cell |
 | `Node.VerticalStacked` | `candy-shine` table layout | Row/column orientation |
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` | Address/key lookup indirection |
-| `SizeFunc` | `honey-bounce` layout weights | Flex-weight/grid-template sizing |
+| `SizeFunc` | `sugar-spring` layout weights | Flex-weight/grid-template sizing |
 | `EditLeaf()` safe edit | Immutable `with*()` builders | Functional edit vs copy-on-write |
 | `View()` rendering | `sugar-widgets` view pipeline | String output for terminal |
 | `renderHorizontal/Vertical` | `candy-shine` table rendering | Separator-based cell rendering |

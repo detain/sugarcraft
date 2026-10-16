@@ -229,7 +229,7 @@ These would be leaf libs under `Sugar\` (components/data/forms/apps) rather than
 - **`candy-shine`** (styling/output) — `CLIFramework\Formatter` + `CLIFramework\Logger` = ANSI text styling
 - **`sugar-widgets`** (small utilities) — `Buffer`, `Corrector`, `ValueCollection`, `ArgInfo`, `ArgInfoList`, `CommandGroup`
 - **`sugar-charts`** — not relevant (Table component is text-only, not data visualization)
-- **`honey-bounce`** — not relevant (no physics/animation)
+- **`sugar-spring`** — not relevant (no physics/animation)
 
 ### Architecture Comparison
 

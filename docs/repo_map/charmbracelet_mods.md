@@ -181,7 +181,7 @@ SugarCraft is a PHP monorepo of TUI library ports from the Charmbracelet ecosyst
 - **`sugar-forms`**: A hypothetical LL client port would handle OpenAI/Anthropic API calls with streaming
 - **`sugar-charts`**: If mods had data visualization, but currently doesn't
 - **`candy-scriptui`**: The `tea.Model` / `Update` / `View` pattern is fully implemented
-- **`honey-bounce`**: Animation/spinner timing patterns for loading states
+- **`sugar-spring`**: Animation/spinner timing patterns for loading states
 
 ---
 

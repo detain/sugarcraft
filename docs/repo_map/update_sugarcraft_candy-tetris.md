@@ -2,9 +2,9 @@
 
 candy-tetris is a production-ready, well-architected Tetris implementation that has surpassed its Go upstream (Broderick-Westrope/tetrigo) in feature completeness. It implements the full Super Rotation System (SRS), 7-bag randomizer, ghost piece, NES-style scoring with T-Spin/B2B/Combo/PerfectClear bonuses, level-driven gravity, lock delay, hold piece, DAS/ARR input, and a VS Computer mode with garbage row passing and AI opponent.
 
-**Biggest opportunities:** Full SRS kick integration (vertical kicks not wired), soft/hard drop scoring, honey-bounce physics animation integration, and comprehensive demo/gameplay recording infrastructure.
+**Biggest opportunities:** Full SRS kick integration (vertical kicks not wired), soft/hard drop scoring, sugar-spring physics animation integration, and comprehensive demo/gameplay recording infrastructure.
 
-**Biggest missing capabilities:** Soft-drop scoring, hard-drop scoring (2pts per cell), true SRS vertical kicks, honey-bounce physics integration for visual polish, and Next Piece Preview queue.
+**Biggest missing capabilities:** Soft-drop scoring, hard-drop scoring (2pts per cell), true SRS vertical kicks, sugar-spring physics integration for visual polish, and Next Piece Preview queue.
 
 ---
 
@@ -69,15 +69,15 @@ src/
 |------|-----------|--------------------------|----------|
 | `charmbracelet/bubbletea` | High | TEA pattern (Model/Update/View), Elm architecture in PHP via candy-core | P0 |
 | `charmbracelet/lipgloss` → candy-sprinkles | High | Declarative styling, color system, border rendering | P0 |
-| `charmbracelet/harmonica` → honey-bounce | High | Spring physics for ghost-piece animation, line-clear particles, camera shake | P1 |
+| `charmbracelet/harmonica` → sugar-spring | High | Spring physics for ghost-piece animation, line-clear particles, camera shake | P1 |
 | `ratatui/ratatui` | Medium | Widget trait pattern, immediate-mode rendering, buffer diffing | P1 |
 | `charmbracelet/bubbles` → sugar-widgets | Medium | Component patterns (Timer, Progress, Help) for game UI chrome | P1 |
 | `charmbracelet/vhs` | Medium | Demo recording infrastructure (.tape format) | P2 |
-| `sugarcraft/honey-bounce` | High | Spring physics, easing curves, WCAG REDUCE_MOTION | P0 |
+| `sugarcraft/sugar-spring` | High | Spring physics, easing curves, WCAG REDUCE_MOTION | P0 |
 | `sugarcraft/candy-sprinkles` | High | Styling foundation for board rendering, borders, colors | P0 |
 | `sugarcraft/candy-core` | High | TEA runtime, View rendering, input handling | P0 |
 
-**Source:** `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_honey-bounce.md`, `docs/repo_map/sugarcraft_candy-sprinkles.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`
+**Source:** `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_candy-sprinkles.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`
 
 ---
 
@@ -138,12 +138,12 @@ src/
 - **Complexity:** Medium — requires Bag modification + rendering update + Game state change
 - **Impact:** Medium — standard player expectation
 
-### 5. honey-bounce Integration for Visual Polish
+### 5. sugar-spring Integration for Visual Polish
 
 - **Title:** Spring-animated ghost piece, line-clear particles, camera shake on Tetris
-- **Description:** The existing `honey-bounce` library provides damped spring physics that could animate the ghost piece settling, particles on line clears, and camera shake on 4-line clears.
+- **Description:** The existing `sugar-spring` library provides damped spring physics that could animate the ghost piece settling, particles on line clears, and camera shake on 4-line clears.
 - **Why it matters:** juice" — visual feedback that makes the game feel more responsive and satisfying. The upstream (tetrigo) has none of this.
-- **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:564`, `docs/repo_map/sugarcraft_honey-bounce.md:303-364`
+- **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:564`, `docs/repo_map/sugarcraft_sugar-spring.md:303-364`
 - **Implementation ideas:**
   1. `SpringCollection` for ghost piece X-axis spring settling
   2. `Projectile` instances for line-clear particle emission
@@ -275,7 +275,7 @@ src/
 
 **Improvement:** An `AnimationFramebudget` that separates logical updates (gravity tick, lock delay countdown) from visual interpolation (spring-eased ghost piece position).
 
-**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:248-264` — candy-flappy separates physics from rendering.
+**Reference:** `docs/repo_map/sugarcraft_sugar-spring.md:248-264` — candy-flappy separates physics from rendering.
 
 ## 4. Separate Display State from Game Logic
 
@@ -344,9 +344,9 @@ How to extend `Computer.php` with custom heuristics or integrate ML-trained weig
 
 ## 4. Physics Integration Examples
 
-How to use honey-bounce for ghost piece animation, particles, and camera shake — with copy-paste code snippets.
+How to use sugar-spring for ghost piece animation, particles, and camera shake — with copy-paste code snippets.
 
-**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:266-301` — candy-flappy integration example.
+**Reference:** `docs/repo_map/sugarcraft_sugar-spring.md:266-301` — candy-flappy integration example.
 
 ---
 
@@ -358,7 +358,7 @@ How to use honey-bounce for ghost piece animation, particles, and camera shake �
 
 The ghost piece appears instantly at the landing position. A spring-eased interpolation from current Y to ghost Y would provide visual feedback about where the piece will land.
 
-**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:303-364` — Spring animation system available.
+**Reference:** `docs/repo_map/sugarcraft_sugar-spring.md:303-364` — Spring animation system available.
 
 ## 2. Line Clear Visual Effect
 
@@ -495,13 +495,13 @@ The Elm Architecture is well-understood in the Go ecosystem with extensive examp
 
 **Reference:** `docs/repo_map/charmbracelet_bubbletea.md:208-221`
 
-## From honey-bounce
+## From sugar-spring
 
 The physics library is production-validated in `candy-flappy` (Flappy Bird clone). The `REDUCE_MOTION` accessibility support is already built into `Spring::update()`.
 
 **Key lesson:** Frame-rate independence via `Spring::fps(60)` returning `1.0/60` deltaTime ensures consistent simulation across platforms.
 
-**Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:375-377`
+**Reference:** `docs/repo_map/sugarcraft_sugar-spring.md:375-377`
 
 ---
 
@@ -517,7 +517,7 @@ The physics library is production-validated in `candy-flappy` (Flappy Bird clone
 ## Medium-Term (1-2 releases)
 
 5. **Next piece preview queue** — Show 1-2 upcoming pieces
-6. **honey-bounce ghost animation** — Spring-eased ghost piece settling
+6. **sugar-spring ghost animation** — Spring-eased ghost piece settling
 7. **Line-clear visual effect** — Flash/pulse on line clear
 8. **Game configuration builder** — Fluent API for game setup
 9. **Initial Rotation System (IRS)** — Pre-rotate next piece during ARE
@@ -525,7 +525,7 @@ The physics library is production-validated in `candy-flappy` (Flappy Bird clone
 
 ## Major Upgrades (v2.0)
 
-11. **Animation subsystem** — Hook honey-bounce into Game event stream for particles/camera shake
+11. **Animation subsystem** — Hook sugar-spring into Game event stream for particles/camera shake
 12. **Pluggable scoring system** — Interface + NES/Guideline/Custom implementations
 13. **Tournament mode** — Standardized rules (Sprint, Ultra, etc.)
 14. **Network VS mode** — Two-player over network
@@ -547,7 +547,7 @@ The physics library is production-validated in `candy-flappy` (Flappy Bird clone
 | Soft drop scoring | Medium | Low | Low | P1 |
 | Ghost piece toggle | Low | Low | Low | P1 |
 | Next piece preview | Medium | Medium | Low | P1 |
-| honey-bounce ghost animation | Medium | High | Medium | P2 |
+| sugar-spring ghost animation | Medium | High | Medium | P2 |
 | Line-clear visual effect | Medium | High | Medium | P2 |
 | Game configuration builder | Medium | Low | Low | P1 |
 | IRS / IHS | Low | Medium | Medium | P2 |
@@ -565,15 +565,15 @@ candy-tetris is a **mature, well-architected** library that has already surpasse
 
 **Immediate focus should be:** Completing the full SRS kick system (critical gap), adding drop scoring (soft/hard), and implementing next-piece preview. These are core Tetris features that players expect.
 
-**Medium-term differentiator:** The honey-bounce integration for visual polish is where candy-tetris can exceed other Tetris implementations. Spring-animated ghost pieces, particle effects on line clears, and camera shake would make the game feel more polished and responsive than most terminal Tetris implementations.
+**Medium-term differentiator:** The sugar-spring integration for visual polish is where candy-tetris can exceed other Tetris implementations. Spring-animated ghost pieces, particle effects on line clears, and camera shake would make the game feel more polished and responsive than most terminal Tetris implementations.
 
 **Long-term positioning:** If candy-tetris adds tournament-standard game modes (Sprint, Ultra, Battle), network VS play, and a replay system, it could become the definitive Tetris implementation for the terminal.
 
 **Noted lessons from ecosystem:**
 
 - The Elm Architecture (bubbletea → candy-core) is the correct model — immutable state + pure update functions + declarative views work equally well in PHP
-- honey-bounce's physics-first approach (no rendering dependency) is the right split — rendering should remain consumer's responsibility
+- sugar-spring's physics-first approach (no rendering dependency) is the right split — rendering should remain consumer's responsibility
 - DAS/ARR keyboard timing is essential for competitive play; native terminal key repeat (Kitty protocol) is a future optimization
 - The 7-bag randomizer with injectable RNG is a best practice other games should adopt
 
-**Source citations:** `docs/repo_map/sugarcraft_candy-tetris.md`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_honey-bounce.md`, `docs/repo_map/sugarcraft_candy-sprinkles.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/charmbracelet_bubbles.md`, `candy-tetris/README.md`, `candy-tetris/CALIBER_LEARNINGS.md`
+**Source citations:** `docs/repo_map/sugarcraft_candy-tetris.md`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_candy-sprinkles.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/charmbracelet_bubbles.md`, `candy-tetris/README.md`, `candy-tetris/CALIBER_LEARNINGS.md`

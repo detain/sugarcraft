@@ -86,7 +86,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 
 ## Weaknesses
 
-1. **Animation stub** (`withAnimationDuration()`) is a no-op — honey-bounce integration deferred
+1. **Animation stub** (`withAnimationDuration()`) is a no-op — sugar-spring integration deferred
 2. **Action button callbacks** stored but never auto-triggered — consumer must call manually
 3. **No custom alert type registration** (upstream has `RegisterNewAlertType()`)
 4. **`allowEscToClose` flag** stored but actual key handling is consumer's responsibility
@@ -127,7 +127,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 
 **Implementation Ideas**:
 
-- Integrate `honey-bounce` `CubicBezier` class for timing curves
+- Integrate `sugar-spring` `CubicBezier` class for timing curves
 - Use `harmonica` LAB color blending concept for fade transitions
 - Implement character-reveal animation during `animationDuration > 0`
 
@@ -292,7 +292,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Implementation Ideas**:
 
 - Animate each toast's y-position from off-screen or overlapping position
-- Use `honey-bounce` spring animation for natural easing
+- Use `sugar-spring` spring animation for natural easing
 - Stagger animation start times for visual appeal
 
 **Estimated Complexity**: Medium — requires animation timing
@@ -417,7 +417,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 # Documentation / Cookbook Opportunities
 
-1. **Animation cookbook**: Document how to wire honey-bounce for fade animations
+1. **Animation cookbook**: Document how to wire sugar-spring for fade animations
 2. **Queue management guide**: Explain overflow strategies with visual examples
 3. **Integration patterns**: Show how to integrate with candy-core, sugar-overlay for complex overlays
 4. **i18n guide**: How to add new locales beyond English
@@ -469,7 +469,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 **Finding**: bubbleup implements fade animation using LAB color space blending with 100ms tick intervals.
 
-**Lesson**: The animation approach in bubbleup works but requires timer-based updates. SugarToast's pure renderer approach intentionally avoids this, but the fade animation itself should still be implemented using honey-bounce's CubicBezier curves.
+**Lesson**: The animation approach in bubbleup works but requires timer-based updates. SugarToast's pure renderer approach intentionally avoids this, but the fade animation itself should still be implemented using sugar-spring's CubicBezier curves.
 
 ## From charmbracelet ecosystem
 
@@ -515,7 +515,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 ## Medium-Term Improvements
 
-4. **Implement fade animation with honey-bounce CubicBezier** — Completes the animation gap
+4. **Implement fade animation with sugar-spring CubicBezier** — Completes the animation gap
 5. **Add custom alert type registry** — Restores upstream feature lost in port
 6. **Add TTY detection and color stripping** — Follows lipgloss v2 architecture
 7. **Implement LAB color blending** — Enables smooth fade transitions
@@ -574,10 +574,10 @@ SugarToast represents a **significant enhancement** over its upstream bubbleup, 
 
 **Key Gaps to Address**:
 
-1. **Animation is the #1 gap** — The stub must become real using honey-bounce
+1. **Animation is the #1 gap** — The stub must become real using sugar-spring
 2. **Custom alert types** — Restoring upstream's extensibility feature
 3. **Action button keyboard handling** — Making buttons actually usable without consumer boilerplate
 
 **Competitive Threat**: bubbleup (Go) remains more feature-complete with real fade animation and custom type registration. SugarCraft's PHP advantage is Unicode correctness and framework-agnostic pure renderer simplicity.
 
-**Long-term Vision**: SugarToast should become the notification layer for the entire SugarCraft ecosystem, with integrations into sugar-overlay (overlay compositor), sugar-charts (progress charts), and candy-scriptui (shell notifications). The animation system connecting to honey-bounce is the critical path to making this vision compelling.
+**Long-term Vision**: SugarToast should become the notification layer for the entire SugarCraft ecosystem, with integrations into sugar-overlay (overlay compositor), sugar-charts (progress charts), and candy-scriptui (shell notifications). The animation system connecting to sugar-spring is the critical path to making this vision compelling.

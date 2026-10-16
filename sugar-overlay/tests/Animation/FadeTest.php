@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Overlay\Tests\Animation;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Bounce\Easing\CubicBezier;
+use SugarCraft\Spring\Easing\CubicBezier;
 use SugarCraft\Overlay\Animation\Fade;
 
 final class FadeTest extends TestCase

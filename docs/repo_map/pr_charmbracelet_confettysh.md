@@ -34,12 +34,12 @@ From `repo_map/charmbracelet_confettysh.md`:
 | SugarCraft Lib | Mapping | Confidence |
 |---|---|---|
 | `sugar-widgets` | Bubble Tea `Model` pattern (`init/update/view` cycle) | Direct |
-| `honey-bounce` | Particle physics (velocity, gravity, projectile trajectory) | Conceptual |
+| `sugar-spring` | Particle physics (velocity, gravity, projectile trajectory) | Conceptual |
 | `candy-core` | SSH server infrastructure (wish, ssh) | Theoretical |
 | `sugar-charts` | ANSI color palette + terminal rendering | Loose |
 | `candy-shine` | "Delightful" status output effects | Very loose |
 
-**Key insight**: The particle physics abstraction (harmonica.Projectile with position/velocity/gravity) is the core engine. SugarCraft's `honey-bounce` is the natural home for this, but currently does not exist as a real library.
+**Key insight**: The particle physics abstraction (harmonica.Projectile with position/velocity/gravity) is the core engine. SugarCraft's `sugar-spring` is the natural home for this, but currently does not exist as a real library.
 
 ## 3. Previously Identified Gaps
 
@@ -62,13 +62,13 @@ The first-pass analysis noted:
 - *Severity*: Performance/bug
 - *Problem*: When a firework rocket moves slowly near the top of the screen, the explosion triggers at the wrong moment (velocity threshold of Y > -3 fires too early or too late during deceleration)
 - *Root cause*: `Simulation.Update()` checks `p.Physics.Velocity().Y > -3` to trigger explosion, but this is a heuristic that fails during the deceleration phase of the rocket's arc
-- *SugarCraft direct risk*: YES — if `honey-bounce` implements fireworks, this is the exact timing issue to avoid. The velocity-threshold trigger is a brittle pattern.
+- *SugarCraft direct risk*: YES — if `sugar-spring` implements fireworks, this is the exact timing issue to avoid. The velocity-threshold trigger is a brittle pattern.
 - *Fix approach*: The issue remains open, suggesting maintainers have not prioritized it or the fix is non-obvious without changing the physics model
 
 **#11 — Moving starting point (e.g. using arrow keys)**
 
 - *Signal*: Users want interactive spawn point control
-- *SugarCraft opportunity*: `honey-bounce` should expose a configurable spawn point API, not just a global system spawn
+- *SugarCraft opportunity*: `sugar-spring` should expose a configurable spawn point API, not just a global system spawn
 
 **#15 — Enhancement request: Add text modal**
 
@@ -210,7 +210,7 @@ func (s *System) Render() string {
 
 This allocates a full 2D string grid on every frame. At 30 FPS with a 200x50 terminal, that's 3,000 string allocations per frame = 90,000/second. This is a known anti-pattern in Go string rendering — a `strings.Builder` with direct position tracking would be more efficient.
 
-**SugarCraft implication**: PHP string concatenation in a render loop is also expensive. `honey-bounce` should use a fixed-size buffer approach (pre-allocated array of ANSI strings) rather than repeated string allocation.
+**SugarCraft implication**: PHP string concatenation in a render loop is also expensive. `sugar-spring` should use a fixed-size buffer approach (pre-allocated array of ANSI strings) rather than repeated string allocation.
 
 **Physics Update Bottleneck**:
 The `harmonica.Projectile.Update()` is called per-particle per-frame. With 75 confetti + 50 firework particles = 125 physics updates at 30 FPS = 3,750 physics calculations/second. This is trivial in Go; in PHP this could be significant.
@@ -356,12 +356,12 @@ The project only works over SSH. A local `./confettysh --effect fireworks` mode 
 
 ### Problem 1: Firework Explosion Timing Bug (issue #10)
 
-**Direct risk to honey-bounce**: YES — the velocity-threshold explosion trigger is fundamentally flawed. When a projectile decelerates against gravity near its apex, its velocity approaches zero, triggering the explosion too early or not at all.
+**Direct risk to sugar-spring**: YES — the velocity-threshold explosion trigger is fundamentally flawed. When a projectile decelerates against gravity near its apex, its velocity approaches zero, triggering the explosion too early or not at all.
 **SugarCraft fix**: Use time-based triggering (`if timeSinceLaunch > someThreshold`) rather than velocity-based triggering, or use a position-based trigger (`if pos.Y < someHeight`).
 
 ### Problem 2: Per-Frame String Grid Allocation (Render bottleneck)
 
-**Direct risk to honey-bounce**: YES — PHP string concatenation is expensive. Building a full terminal-size string grid every frame is a guaranteed performance problem at scale.
+**Direct risk to sugar-spring**: YES — PHP string concatenation is expensive. Building a full terminal-size string grid every frame is a guaranteed performance problem at scale.
 **SugarCraft fix**: Use ANSI escape sequences with cursor positioning (`\x1b[<row>;<col>H`) rather than filling the entire screen with spaces. Render only non-empty cells.
 
 ### Problem 3: Dependency Velocity
@@ -370,11 +370,11 @@ The project only works over SSH. A local `./confettysh --effect fireworks` mode 
 
 ### Problem 4: Hardcoded Physics Constants
 
-**Risk to honey-bounce**: If honey-bounce ships with hardcoded gravity/particle count/FPS, it will face the same configurability complaints. The `harmonica.TerminalGravity` constant should be exposed as a configurable parameter.
+**Risk to sugar-spring**: If sugar-spring ships with hardcoded gravity/particle count/FPS, it will face the same configurability complaints. The `harmonica.TerminalGravity` constant should be exposed as a configurable parameter.
 
 ### Problem 5: Terminal Size Handling
 
-**Risk to honey-bounce**: The `tea.WindowSizeMsg` handling shows the pattern for dynamic terminal resize:
+**Risk to sugar-spring**: The `tea.WindowSizeMsg` handling shows the pattern for dynamic terminal resize:
 ```go
 case tea.WindowSizeMsg:
     if m.system.Frame.Width == 0 && m.system.Frame.Height == 0 {
@@ -389,7 +389,7 @@ This is the correct pattern — SugarCraft should handle resize events similarly
 
 ### Feature 1: Configurable ParticleSystem
 
-`honey-bounce` should expose all physics parameters as constructor/builder options:
+`sugar-spring` should expose all physics parameters as constructor/builder options:
 - Particle count (per effect type)
 - Color palette (hex colors)
 - Character set (Unicode block elements)
@@ -438,7 +438,7 @@ The harmonica library uses projectile physics with `TerminalGravity`. SugarCraft
 
 ### Feature 7: Text Overlay System
 
-As requested in confetty issue #15, overlaying text on particle effects is a legitimate feature. SugarCraft's `honey-bounce` could implement a `ParticleSystem::withText(string, x, y, style)` method.
+As requested in confetty issue #15, overlaying text on particle effects is a legitimate feature. SugarCraft's `sugar-spring` could implement a `ParticleSystem::withText(string, x, y, style)` method.
 
 ## 20. Architectural Lessons
 
@@ -446,7 +446,7 @@ As requested in confetty issue #15, overlaying text on particle effects is a leg
 
 confettysh is an application, not a library — but it imports a library (maaslalani/confetty) which provides the actual value. This is a useful pattern for demonstrating ecosystem capabilities without maintaining complex abstractions.
 
-**SugarCraft implication**: `honey-bounce` should be a proper library (no SSH dependency, pure physics/rendering) while a separate demo app (like `sugar-bounce-demo`) exercises it over a TTY or SSH transport.
+**SugarCraft implication**: `sugar-spring` should be a proper library (no SSH dependency, pure physics/rendering) while a separate demo app (like `sugar-bounce-demo`) exercises it over a TTY or SSH transport.
 
 ### Lesson 2: Factory Pattern for Endpoint Creation
 
@@ -458,7 +458,7 @@ The `wishlist.Factory` pattern creates distinct SSH server instances with differ
 
 The `simulation.System` completely separates physics (`Update()` — moves particles, triggers explosions) from rendering (`Render()` — draws particles to screen). This separation means the physics model could be reused with a different renderer (e.g., HTML canvas, WebGL).
 
-**SugarCraft implication**: `honey-bounce` should have a strict `PhysicsEngine` class and a separate `Renderer` class with a shared `Particle[]` state.
+**SugarCraft implication**: `sugar-spring` should have a strict `PhysicsEngine` class and a separate `Renderer` class with a shared `Particle[]` state.
 
 ### Lesson 4: Middleware Chain Composition
 
@@ -551,7 +551,7 @@ Even a demo application like confettysh exposes Prometheus metrics. This signals
 
 ### Opportunity 1: Port harmonica Physics to PHP
 
-The `harmonica` library provides projectile physics with configurable FPS, initial position, velocity vector, and gravity. Porting this to PHP as `honey-bounce/physics` would be a direct value-add and could be used by any PHP project needing 2D projectile simulation.
+The `harmonica` library provides projectile physics with configurable FPS, initial position, velocity vector, and gravity. Porting this to PHP as `sugar-spring/physics` would be a direct value-add and could be used by any PHP project needing 2D projectile simulation.
 
 ### Opportunity 2: Build a Unified Particle System API
 
@@ -567,7 +567,7 @@ The Go implementation allocates a full 2D grid every frame. A PHP implementation
 
 ### Opportunity 5: WebSocket-Native Particle Effects
 
-The Bubble Tea model (state → update → view) maps naturally to WebSocket-based real-time rendering. SugarCraft could create a `honey-bounce/web` variant that renders particles in a browser via WebSocket, targeting a different deployment model.
+The Bubble Tea model (state → update → view) maps naturally to WebSocket-based real-time rendering. SugarCraft could create a `sugar-spring/web` variant that renders particles in a browser via WebSocket, targeting a different deployment model.
 
 ## 24. Cross-Ecosystem Pattern Matches
 
@@ -587,11 +587,11 @@ The wish middleware chain (`append(e.Middlewares, promwish, lm, activeterm)`) is
 
 ### Pattern: simulation.System → ParticleEngine
 
-The simulation `System` class holds particles and frame metadata, runs per-frame `Update()` and `Render()`. This is the core loop pattern that `honey-bounce` should implement.
+The simulation `System` class holds particles and frame metadata, runs per-frame `Update()` and `Render()`. This is the core loop pattern that `sugar-spring` should implement.
 
 ## 25. High ROI Recommendations
 
-### Priority 1: Build honey-bounce Particle Physics Core (High ROI)
+### Priority 1: Build sugar-spring Particle Physics Core (High ROI)
 
 The upstream confetti physics is simple enough to port cleanly to PHP:
 - `harmonica.Projectile` → `Projectile` class (position, velocity, gravity)

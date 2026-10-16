@@ -779,7 +779,7 @@ func MapRangeToRange(fromMin, fromMax, toMin, toMax, current float32) int {
     return int(toMin + ((toMax-toMin)/(fromMax-fromMin))*(current-fromMin))
 }
 ```
-Used for: bar chart values → terminal positions, RGB color fades, keyboard navigation offsets. A foundational utility that should be in sugar-core or honey-bounce.
+Used for: bar chart values → terminal positions, RGB color fades, keyboard navigation offsets. A foundational utility that should be in sugar-core or sugar-spring.
 
 **Location:** `pterm/internal/map_range_to_range.go`
 

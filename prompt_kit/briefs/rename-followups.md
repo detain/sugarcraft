@@ -131,3 +131,13 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `ansi/candy-forms/candy-forms-2-256-m-1.ansi`, `ansi/sugarcraft/sugarcraft-4-256-l-1.ansi`, <!-- @rename-keep -->
   `ansi/sugarcraft/sugarcraft-5-256-l-1.ansi` — art CONTENT carries the pre-rename `candy-fuzzy` <!-- @rename-keep -->
   wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->
+
+## D6 honey-bounce → sugar-spring (2026-10-16, lane rename/d6) <!-- @rename-keep -->
+- `ansi/sugar-spring/*.ansi` (171 files) still render the old **HONEY BOUNCE** / **HONEYBOUNCE** block <!-- @rename-keep -->
+  wordmarks — `*.ansi` content is C.3-excluded by design; needs hand-art re-roll at owner triage.
+- `ansi/sugarcraft/*.ansi` (15 files), `ansi/sugar-crush/{41,42,50}-*.ansi` (3) and `ansi/candy-flappy/*.ansi` (2) <!-- @rename-keep -->
+  embed the old slug/wordmark in pixel content (same C.3 exclusion; banners/captions list libs).
+- `media/icons/sugar-spring.png` + `docs/img/icons/sugar-spring.png`: bytes unchanged (old honey-jar artwork at new path). <!-- @rename-keep -->
+- `scripts/generate_icons.py:121` prompt still describes a honey jar (byte-true vs the PNG); rewrite together with the <!-- @rename-keep -->
+  Phase-9/10 prefix-family prose.
+- `sugar-spring/.vhs/*.gif` recorded frames show the pre-rename prompt; CI `vhs.yml` re-renders on next tape run. <!-- @rename-keep -->

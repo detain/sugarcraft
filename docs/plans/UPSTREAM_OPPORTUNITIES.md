@@ -62,11 +62,11 @@ SugarCraft ports. Use this to prioritize the next port wave.
 
 ---
 
-## charmbracelet/harmonica → honey-bounce
+## charmbracelet/harmonica → sugar-spring
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in honey-bounce | Notes |
+| Upstream | Title | Status in sugar-spring | Notes |
 |---|---|:--:|---|
 | [#9](https://github.com/charmbracelet/harmonica/pull/9) (2021-11-02) | Expose Velocity and Acceleration on Projectiles | ✅ | Already present in `Projectile` class |
 | [#8](https://github.com/charmbracelet/harmonica/pull/8) (2021-10-27) | Generalize package to include projectiles | ✅ | Already implemented |

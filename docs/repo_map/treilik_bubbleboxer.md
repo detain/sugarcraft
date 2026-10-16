@@ -177,7 +177,7 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 | `Boxer` struct + `LayoutTree` | `candy-core` viewport/layout primitives | Both provide TUI layout composition; bubbleboxer is tree-based, SugarCraft uses termbox-cell approach |
 | `Node.VerticalStacked` | `candy-shine` table layout | Vertical/horizontal stacking maps to row/column orientation |
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` indirection | Both use address/key lookup pattern separating reference from data |
-| `SizeFunc` custom allocation | `honey-bounce` layout weights | Custom size distribution similar to flex-weight or grid-template sizing |
+| `SizeFunc` custom allocation | `sugar-spring` layout weights | Custom size distribution similar to flex-weight or grid-template sizing |
 | `EditLeaf()` safe edit pattern | Immutable `with*()` builders | Both provide safe mutation patterns; bubbleboxer uses functional edit, SugarCraft uses copy-on-write |
 | `View()` string rendering | `sugar-widgets` view rendering | Both produce final string output for terminal display |
 | `renderHorizontal()` / `renderVertical()` | Table rendering in `candy-shine` | Horizontal join with separator parallels table cell rendering |
@@ -192,7 +192,7 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 
 - `sugar-widgets` (view rendering pipeline)
 
-- `honey-bounce` (flex-weight sizing via SizeFunc)
+- `sugar-spring` (flex-weight sizing via SizeFunc)
 
 ## Analysis
 

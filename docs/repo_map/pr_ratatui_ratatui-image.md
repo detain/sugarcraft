@@ -36,7 +36,7 @@ From `repo_map/ratatui_ratatui-image.md`:
 | Picker/cap detection | `candy-core` | Terminal capability detection |
 | StatefulImage | `sugar-charts`? | Dynamic resize behavior |
 | ThreadProtocol | `candy-core` | Async/thread messaging |
-| Resize algorithm | `honey-bounce`? | Image transformation math |
+| Resize algorithm | `sugar-spring`? | Image transformation math |
 | FontSize detection | `candy-core` | Terminal geometry |
 
 **Gap**: No SugarCraft equivalent for the terminal graphics protocols themselves (Sixel/Kitty/iTerm2). These would require new `sugar-*` or `honey-*` libraries.

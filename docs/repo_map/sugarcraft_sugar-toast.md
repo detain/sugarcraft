@@ -252,7 +252,7 @@ The `charmbracelet/bubbles` library provides a `Progress` component used as a re
 |---------|-------------|
 | `candy-core` | Provides `SugarCraft\Core\Util\Width` (display-cell measurement) and `SugarCraft\Core\Util\Ansi` (SGR helpers) — both used heavily |
 | `sugar-overlay` | General-purpose floating overlay compositor; sugar-toast uses similar overlay pattern |
-| `honey-bounce` | Animation easing library; referenced in CALIBER_LEARNINGS.md for future CubicBezier fade animation |
+| `sugar-spring` | Animation easing library; referenced in CALIBER_LEARNINGS.md for future CubicBezier fade animation |
 
 ---
 
@@ -271,7 +271,7 @@ It addresses the most glaring gap in bubbleup (single-alert limitation) with a w
 
 **Weaknesses / Technical Debt**:
 
-- Animation stub (`withAnimationDuration()`) is a no-op — honey-bounce integration is documented as "deferred step 09.17" in CALIBER_LEARNINGS.md
+- Animation stub (`withAnimationDuration()`) is a no-op — sugar-spring integration is documented as "deferred step 09.17" in CALIBER_LEARNINGS.md
 - Action button callbacks stored but never auto-triggered — consumer must call them manually in key handler, which is not obvious from the README
 - No custom alert type registration (upstream has `RegisterNewAlertType()`)
 - The `allowEscToClose` flag is stored but the actual ESC key handling is entirely the consumer's responsibility — the flag documents intent but doesn't enforce it

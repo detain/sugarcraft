@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Widgets\Progress;
 
-use SugarCraft\Bounce\Spring;
+use SugarCraft\Spring\Spring;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -15,7 +15,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Spring-physics-driven progress bar.
  *
  * Wraps a static {@see Progress} with `(currentPercent, velocity,
- * targetPercent)` state that's integrated forward via a HoneyBounce
+ * targetPercent)` state that's integrated forward via a SugarSpring
  * {@see Spring} on every animation tick. Mirrors charmbracelet/bubbles'
  * `Progress` Model — `SetPercent` / `IncrPercent` / `DecrPercent`
  * return Cmds that schedule the first tick; subsequent ticks come

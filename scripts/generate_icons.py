@@ -118,7 +118,7 @@ SUBJECTS: dict[str, str] = {
     "candy-top":       "a chubby glossy candy computer monitor showing a bright rainbow line graph with little peaks, a gumdrop power light below the screen",
 
     # --- physics / games (honey) ---
-    "honey-bounce":    "a chubby cartoon honey jar bouncing along a curved honey-drip arc",
+    "sugar-spring":    "a chubby cartoon honey jar bouncing along a curved honey-drip arc",
     "candy-flappy":      "a chubby cartoon bee with tiny flappy wings caught mid-flap",
 
     # --- sugar libs / apps ---

@@ -1,4 +1,4 @@
-# Step 36 — candy-flip + candy-kit + honey-bounce + candy-flappy adopt candy-testing
+# Step 36 — candy-flip + candy-kit + sugar-spring + candy-flappy adopt candy-testing
 
 **Branch:** `ai/testing-rollout`
 **Depends on:** step-04 (candy-testing), step-30 (audit)
@@ -6,9 +6,9 @@
 
 ## Goal
 
-Four libs that render output (candy-flip GIF flipbook, candy-kit CLI presenter, honey-bounce spring physics with sample rendering, candy-flappy projectile physics with sample rendering) adopt candy-testing for snapshot coverage. None of these were named in the primary analysis but all have rendered output that benefits from golden-file pinning.
+Four libs that render output (candy-flip GIF flipbook, candy-kit CLI presenter, sugar-spring spring physics with sample rendering, candy-flappy projectile physics with sample rendering) adopt candy-testing for snapshot coverage. None of these were named in the primary analysis but all have rendered output that benefits from golden-file pinning.
 
-Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§446) — pinning their behavior protects that superiority during future refactors.
+Reference: step-30 audit. sugar-spring + candy-kit superiority cited (§420/§446) — pinning their behavior protects that superiority during future refactors.
 
 ## Files expected to be modified
 
@@ -27,7 +27,7 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 1. Step-30 audit per lib.
 2. **path-repo closure** (dev-only).
 3. Per lib: identify a representative output, capture as golden, assertGoldenAnsi.
-4. honey-bounce / candy-flappy: their outputs might be numeric trajectories rather than ANSI — in that case, use assertGolden (file equality) on the JSON / CSV representation, not assertGoldenAnsi specifically.
+4. sugar-spring / candy-flappy: their outputs might be numeric trajectories rather than ANSI — in that case, use assertGolden (file equality) on the JSON / CSV representation, not assertGoldenAnsi specifically.
 5. Run phpunit + check-path-repos.
 
 ## Tester brief
@@ -35,7 +35,7 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 - Per lib: at least one snapshot of canonical output.
 - candy-flip: a single frame snapshot.
 - candy-kit: a presenter slide snapshot.
-- honey-bounce: a spring trajectory snapshot (numeric).
+- sugar-spring: a spring trajectory snapshot (numeric).
 - candy-flappy: a projectile trajectory snapshot (numeric).
 
 ## Scribe brief
@@ -45,12 +45,12 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 
 ## Ship brief
 
-- **PR title**: `candy-flip + candy-kit + honey-bounce + candy-flappy: snapshot tests via candy-testing`
+- **PR title**: `candy-flip + candy-kit + sugar-spring + candy-flappy: snapshot tests via candy-testing`
 - **PR body**:
   ```
   ## Summary
   - Four libs gain golden-file snapshot coverage via candy-testing.
-  - Pins behavior of libs cited as superior to upstream (§420 honey-bounce, §446 candy-kit).
+  - Pins behavior of libs cited as superior to upstream (§420 sugar-spring, §446 candy-kit).
   - Numeric outputs use assertGolden file equality; ANSI outputs use assertGoldenAnsi.
 
   ## Test plan
@@ -60,4 +60,4 @@ Reference: step-30 audit. honey-bounce + candy-kit superiority cited (§420/§44
 
   Refs: docs/repo_map_step_36.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `candy-flip + candy-kit + honey-bounce + candy-flappy: snapshot tests via candy-testing`.
+- Commit subject: `candy-flip + candy-kit + sugar-spring + candy-flappy: snapshot tests via candy-testing`.

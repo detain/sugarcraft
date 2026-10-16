@@ -39,8 +39,8 @@ From `repo_map/pterm_pterm.md`, pterm maps almost entirely to `sugar-widgets`:
 | InteractiveSelectPrinter, InteractiveMultiSelectPrinter | `sugar-widgets` |
 | InteractiveConfirmPrinter, InteractiveContinuePrinter | `sugar-widgets` |
 | InteractiveTextInputPrinter, PrefixPrinter | `sugar-widgets` |
-| MapRangeToRange() | `honey-bounce` |
-| RGB.Fade() multi-stop color interpolation | `candy-shine` or `honey-bounce` |
+| MapRangeToRange() | `sugar-spring` |
+| RGB.Fade() multi-stop color interpolation | `candy-shine` or `sugar-spring` |
 
 ---
 
@@ -527,7 +527,7 @@ pterm has no plugin architecture. Everything is composed through the printer com
 
 ### 17.2 No Built-In Animation/Tweening
 
-pterm's `AreaPrinter` can be used for animations, but there's no built-in tweening or easing system. The `honey-bounce` library in SugarCraft is intended to fill this gap.
+pterm's `AreaPrinter` can be used for animations, but there's no built-in tweening or easing system. The `sugar-spring` library in SugarCraft is intended to fill this gap.
 
 ### 17.3 No Screen Reader / Accessibility Support
 

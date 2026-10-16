@@ -681,7 +681,7 @@ The cursor management patterns are identical. php-console-spinner's delta-timer 
 
 9. **Sixel/Kitty graphics rendering** — Sequences are defined in `Ansi` but no actual renderer for these graphics formats.
 
-10. **Built-in animations** — No animation system like textual's `Animator`. `honey-bounce` provides spring physics but no animation driver in core.
+10. **Built-in animations** — No animation system like textual's `Animator`. `sugar-spring` provides spring physics but no animation driver in core.
 
 ---
 
@@ -725,7 +725,7 @@ Then `Model::view(Buffer $buf)` instead of `view(): string`. This enables per-ce
 
 ### From ratatui: Cassowary Layout Solver
 
-Port the Cassowary algorithm (already exists in `honey-bounce`?):
+Port the Cassowary algorithm (already exists in `sugar-spring`?):
 
 ```php
 final class Layout {
@@ -903,7 +903,7 @@ $program->withExceptionHandler(fn(\Throwable $e) => ...);
 
 3. **CSS-like stylesheet** — `Stylesheet` parser + `Styles` value object with cascading. Very ambitious but would bring web developer familiarity.
 
-4. **Animation engine** — `Animator` class with easing functions and `Transition` objects. `honey-bounce` provides the physics; candy-core could provide the animation driver that calls `view()` at interpolated states.
+4. **Animation engine** — `Animator` class with easing functions and `Transition` objects. `sugar-spring` provides the physics; candy-core could provide the animation driver that calls `view()` at interpolated states.
 
 5. **Hot reload** — Watch source files and recompile on change. Combined with a `View` that can re-execute without restarting the Program.
 

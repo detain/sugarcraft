@@ -176,12 +176,12 @@ SugarCraft is a PHP TUI library monorepo (40+ libs, PHP 8.3+). pterm maps to Sug
 | `ThemeDefault` | `candy-shine` | Default styling constants and theme preset system |
 | `ProgressbarPrinter` | `sugar-widgets` | Progress bar display with title/percentage/elapsed time |
 | `SpinnerPrinter` | `sugar-widgets` | Loading spinner with timer and Info/Success/Fail states |
-| `AreaPrinter` | `sugar-widgets` or `honey-bounce` | Dynamic content region; `honey-bounce` if animation/tweening is added |
+| `AreaPrinter` | `sugar-widgets` or `sugar-spring` | Dynamic content region; `sugar-spring` if animation/tweening is added |
 | `Logger` + `SlogHandler` | `sugar-widgets` | Structured logging with levels, JSON/colorful formatting |
 | `TablePrinter` | `sugar-widgets` | Table rendering from 2D string array, CSV import |
 | `BoxPrinter` | `sugar-widgets` | Unicode box-drawing with title, padding, 6 title positions |
 | `PanelPrinter` | `sugar-widgets` | 2D grid panel layout with equalized column widths |
-| `BarChartPrinter` | `sugar-widgets` (or `honey-bounce` if charts gain animation) | Vertical/horizontal bars with negative value support |
+| `BarChartPrinter` | `sugar-widgets` (or `sugar-spring` if charts gain animation) | Vertical/horizontal bars with negative value support |
 | `BigTextPrinter` | `sugar-widgets` | ASCII art big letter rendering (95-char font map) |
 | `HeaderPrinter` | `sugar-widgets` | Full-width banner with background fill |
 | `SectionPrinter` | `sugar-widgets` | Indented section titles with `#` indent character |
@@ -189,18 +189,18 @@ SugarCraft is a PHP TUI library monorepo (40+ libs, PHP 8.3+). pterm maps to Sug
 | `BulletListPrinter` | `sugar-widgets` | Indented bullet lists with per-level custom bullets |
 | `CenterPrinter` | `sugar-widgets` | Horizontal text centering (block-level and per-line) |
 | `ParagraphPrinter` | `sugar-widgets` | Auto-wrapped text to terminal width |
-| `HeatmapPrinter` | `sugar-widgets` | Color-intensity grid (potential `honey-bounce` candidate) |
+| `HeatmapPrinter` | `sugar-widgets` | Color-intensity grid (potential `sugar-spring` candidate) |
 | `InteractiveSelectPrinter` + `InteractiveMultiSelectPrinter` + fuzzy search | `sugar-widgets` | Keyboard-navigated select/multiselect with live filtering |
 | `InteractiveConfirmPrinter`, `InteractiveContinuePrinter` | `sugar-widgets` | Yes/No and Continue prompts |
 | `InteractiveTextInputPrinter` | `sugar-widgets` | Line-based text entry |
 | `PrefixPrinter` (`Info`/`Success`/`Warning`/`Error`/`Debug`/`Fatal`) | `sugar-widgets` | Styled prefix logging (`Info.Println("msg")` style) |
-| `MapRangeToRange()` algorithm | `honey-bounce` (math) | Linear interpolation used for bar chart scaling and progress color fades |
-| `RGB.Fade()` multi-stop color interpolation | `candy-shine` or `honey-bounce` | Gradient generation; potential standalone color utility lib |
+| `MapRangeToRange()` algorithm | `sugar-spring` (math) | Linear interpolation used for bar chart scaling and progress color fades |
+| `RGB.Fade()` multi-stop color interpolation | `candy-shine` or `sugar-spring` | Gradient generation; potential standalone color utility lib |
 | `putils.LettersFromString*` utilities | `sugar-widgets` | Per-character styled letter creation for `BigTextPrinter` |
 | `putils.TableDataFromCSV/StructSlice/etc` | `sugar-widgets` | Data import utilities for tables |
 | `putils.DownloadWithProgressbar`, `putils.RunWithSpinner` | `sugar-widgets` | Composed utility functions combining multiple printers |
 
-**Key insight**: pterm's entire feature surface maps almost 1:1 onto `sugar-widgets` (the primary SugarCraft component/data lib). The color foundation (`Color`, `Style`, `RGB`, `ThemeDefault`) maps to `candy-core` and `candy-shine`. Math utilities (`MapRangeToRange`, `Fade`) could live in `honey-bounce`. The `BigTextPrinter` font map is a unique artifact — no direct SugarCraft equivalent; would need to be re-implemented in PHP with ASCII art letter definitions.
+**Key insight**: pterm's entire feature surface maps almost 1:1 onto `sugar-widgets` (the primary SugarCraft component/data lib). The color foundation (`Color`, `Style`, `RGB`, `ThemeDefault`) maps to `candy-core` and `candy-shine`. Math utilities (`MapRangeToRange`, `Fade`) could live in `sugar-spring`. The `BigTextPrinter` font map is a unique artifact — no direct SugarCraft equivalent; would need to be re-implemented in PHP with ASCII art letter definitions.
 
 ## Analysis
 

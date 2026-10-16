@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-13  
 **Upstream:** kbrgl/flapioca (Go + Bubble Tea)  
-**Stack:** SugarCraft monorepo, PHP 8.3+, HoneyBounce physics
+**Stack:** SugarCraft monorepo, PHP 8.3+, SugarSpring physics
 
 ---
 
@@ -12,7 +12,7 @@
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/Bird.php` | 71 | HoneyBounce Projectile physics (gravity + flap impulse) |
+| `src/Bird.php` | 71 | SugarSpring Projectile physics (gravity + flap impulse) |
 | `src/Game.php` | 263 | Game state, collision, scoring, high scores |
 | `src/Pipe.php` | 45 | Pipe pair with gap collision detection |
 | `src/Renderer.php` | 83 | ASCII framebuffer rendering |
@@ -44,7 +44,7 @@ final class Bird
 }
 ```
 
-**Key observation:** Uses HoneyBounce `Projectile` with Y-down gravity (70.0 cells/sec²), flap resets velocity to -22.0 cells/sec upward.
+**Key observation:** Uses SugarSpring `Projectile` with Y-down gravity (70.0 cells/sec²), flap resets velocity to -22.0 cells/sec upward.
 
 ---
 
@@ -87,7 +87,7 @@ func (m Model) Frame() (tea.Model, tea.Cmd) {
 |--------|----------|------------|
 | Gravity | 1 cell/tick (discrete) | 70.0 cells/sec² (continuous) |
 | Tick rate | 5 Hz | 30 Hz |
-| Physics lib | None (manual) | HoneyBounce Projectile |
+| Physics lib | None (manual) | SugarSpring Projectile |
 | Collision | `abs(y-rightmost.Y) <= radius` | `row < top || row > bottom` |
 | Bird glyph | `*` | `>` |
 
@@ -193,7 +193,7 @@ pub fn jump(mut query: Query<&mut Bird>, keyboard_input: Res<ButtonInput<KeyCode
 
 | Feature | flapioca (Go) | candy-flappy (PHP) | Bevy (Rust) |
 |---------|---------------|------------------|-------------|
-| **Physics** | Discrete gravity | HoneyBounce Projectile | ECS gravity system |
+| **Physics** | Discrete gravity | SugarSpring Projectile | ECS gravity system |
 | **Gravity value** | 1 cell/tick | 70.0 cells/sec² | 9.8 * 150 scale factor |
 | **Flap impulse** | Y-- (discrete) | -22.0 cells/sec | 400.0 (Bevy), 5000.0 (Rust) |
 | **Collision** | Cell-based | Cell-based | AABB/Circle |
@@ -331,7 +331,7 @@ foreach ($pipes as $p) {
 
 ### 5.8 Velocity-Based Terminal Velocity (Low Priority)
 
-**Reference:** HoneyBounce Projectile::TERMINAL_GRAVITY
+**Reference:** SugarSpring Projectile::TERMINAL_GRAVITY
 
 Currently gravity is constant. Add terminal velocity cap.
 
@@ -376,7 +376,7 @@ public const TERMINAL_VELOCITY = 100.0;
 
 ## 7. Key Insights
 
-1. **Physics approach difference:** candy-flappy uses continuous physics (HoneyBounce Projectile) vs Rust discrete timestep. The 30fps tick rate with 70.0 gravity gives ~2.3 cells/tick² acceleration.
+1. **Physics approach difference:** candy-flappy uses continuous physics (SugarSpring Projectile) vs Rust discrete timestep. The 30fps tick rate with 70.0 gravity gives ~2.3 cells/tick² acceleration.
 
 2. **No rotation in current impl:** Both Go upstream and PHP candy-flappy lack bird rotation. Bevy implementations all add velocity-based rotation for game feel.
 
@@ -394,5 +394,5 @@ public const TERMINAL_VELOCITY = 100.0;
 - **Physics reference:** [rust-adventure/floppy-corgi](https://github.com/rust-adventure/floppy-corgi) - Bevy 0.18
 - **Tutorial:** [rustfinity.com Flappy Bird](https://rustfinity.com/tutorials/flappy-rust) - Bevy 0.14
 - **Rust impl:** [dangreen07/Flappy-Bird-Rust](https://github.com/dangreen07/Flappy-Bird-Rust)
-- **HoneyBounce:** `/home/sites/sugarcraft/honey-bounce/src/Projectile.php`
+- **SugarSpring:** `/home/sites/sugarcraft/sugar-spring/src/Projectile.php`
 - **Current tests:** `/home/sites/sugarcraft/candy-flappy/tests/`

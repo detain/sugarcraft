@@ -19,7 +19,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 | sugar-dashboard Phase 1 runs in Group A | Parse error in `Stack.php:78` (missing space before `&&`) blocks compilation of the largest sugar-* lib | `ref:sugar-dashboard-audit` |
 | sugar-reel runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-reel-audit` |
 | repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
-| honey-bounce runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:honey-bounce-audit` |
+| sugar-spring runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:sugar-spring-audit` |
 | candy-git path-repo closure check deferred | sugar-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
 | candy-codetime plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:candy-codetime-audit` |
 
@@ -41,7 +41,7 @@ sugar-dashboard (Phase 1: Stack.php parse error + RingBuffer oldest() bug)
 sugar-reel (Phase 1: AudioPlayer SIGSTOP/PTY, mutate() ?? bug)
     └── Independent
 
-honey-bounce (Phase 1: Spring tick mutates in place)
+sugar-spring (Phase 1: Spring tick mutates in place)
     └── candy-starter (uses SpringChain)
 
 sugar-charts (Phase 1: Extract ChartExtras trait — DRY)
@@ -83,9 +83,9 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 
 | Lib | Phase | Items | Key Fix |
 |-----|-------|-------|---------|
-| honey-bounce | P1 | 2 | SpringChain::tick() and SpringCollection::tick() must return new instances |
+| sugar-spring | P1 | 2 | SpringChain::tick() and SpringCollection::tick() must return new instances |
 | sugar-charts | P1 | 2 | Extract ChartExtras trait (DRY across BarChart/Scatter/OHLCChart ~200 lines) |
-| candy-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to candy-core after honey-bounce |
+| candy-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to candy-core after sugar-spring |
 | candy-buffer | P1 | 2 | AsyncOps duplication (same as candy-async) |
 | candy-sprinkles | P1 | 1 | Style value object — finalize after candy-core foundation stable |
 | candy-mdview | P1 | 2 | Glow Renderer animation timing |
@@ -161,7 +161,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 ### Group C Source Plans
 
-- `findings/plan_honey-bounce.md` — Phase 1 (Spring tick mutates in place)
+- `findings/plan_sugar-spring.md` — Phase 1 (Spring tick mutates in place)
 - `findings/plan_sugar-charts.md` — Phase 1 (ChartExtras trait extraction)
 - `findings/plan_candy-async.md` — Phase 1 (AsyncOps duplication)
 - `findings/plan_candy-buffer.md` — Phase 1 (AsyncOps duplication)
@@ -222,7 +222,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 ### Step 3: Execute Group C
 
 1. Spawn 6 subagents in parallel:
-   - **Subagent C1:** honey-bounce (SpringChain::tick() returns new instances)
+   - **Subagent C1:** sugar-spring (SpringChain::tick() returns new instances)
    - **Subagent C2:** sugar-charts (ChartExtras trait extraction)
    - **Subagent C3:** candy-async (AsyncOps deduplication)
    - **Subagent C4:** candy-buffer (AsyncOps deduplication)

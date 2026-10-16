@@ -120,7 +120,7 @@ final class AgentLabelFoldingTest extends TestCase
         $labels = [
             'You are auditing one library in sugar-dashboard',
             'You are auditing one library in candy-mosaic',
-            'You are auditing one library in honey-bounce',
+            'You are auditing one library in sugar-spring',
         ];
         $forward = AgentLabelFolding::fold($labels);
 

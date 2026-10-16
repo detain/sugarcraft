@@ -12,20 +12,20 @@
 
 - **Status**: 🟢 v1 ready (public API + tests + docs + demo)
 
-- **Role**: Flappy Bird-style arcade game demonstrating HoneyBounce projectile physics in a TUI
+- **Role**: Flappy Bird-style arcade game demonstrating SugarSpring projectile physics in a TUI
 
 ## Overview
 
-candy-flappy is a Flappy Bird-inspired terminal game that ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP using the SugarCraft stack. The bird's vertical motion is powered by **HoneyBounce projectile physics** (gravity + upward velocity kick on flap), pipes scroll left at a fixed cell rate, and collision is per-cell. Difficulty scales with score via shrinking pipe gaps.
+candy-flappy is a Flappy Bird-inspired terminal game that ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP using the SugarCraft stack. The bird's vertical motion is powered by **SugarSpring projectile physics** (gravity + upward velocity kick on flap), pipes scroll left at a fixed cell rate, and collision is per-cell. Difficulty scales with score via shrinking pipe gaps.
 
-The library demonstrates the clean separation between physics (honey-bounce) and TUI rendering (candy-core) — a Flappy Bird clone is effectively a physics consumer with ANSI output.
+The library demonstrates the clean separation between physics (sugar-spring) and TUI rendering (candy-core) — a Flappy Bird clone is effectively a physics consumer with ANSI output.
 
 ## Architecture
 
 ```
 candy-flappy/src/
 ├── Game.php          # TEA Model: world state + init/update/view + game loop
-├── Bird.php          # Wraps HoneyBounce Projectile — physics-based vertical motion
+├── Bird.php          # Wraps SugarSpring Projectile — physics-based vertical motion
 ├── Pipe.php          # Single-column pipe pair with centred gap
 ├── PipeGenerator.php # Generates pipes with score-dependent gap height
 ├── Renderer.php      # Pure view: ANSI-styled playfield + border + HUD
@@ -47,7 +47,7 @@ candy-flappy/bin/
 
 ### Design Principles
 
-- **Physics-first**: Bird motion is a HoneyBounce `Projectile` with gravity and velocity kick — not integer increment/decrement
+- **Physics-first**: Bird motion is a SugarSpring `Projectile` with gravity and velocity kick — not integer increment/decrement
 
 - **Immutable state**: Every `update()` / `tick()` / `flap()` returns a new instance
 
@@ -62,7 +62,7 @@ candy-flappy/bin/
 | Class | Description | Key Methods |
 |-------|-------------|-------------|
 | `Game` | TEA Model: bird + pipes + score + crashed + tick counter | `start()`, `init()`, `update()`, `view()`, `tickN()` |
-| `Bird` | HoneyBounce Projectile wrapper | `spawn()`, `tick()`, `flap()`, `row()` |
+| `Bird` | SugarSpring Projectile wrapper | `spawn()`, `tick()`, `flap()`, `row()` |
 | `Pipe` | Single-column obstacle pair | `tick()`, `collides()`, `isOffScreen()` |
 | `PipeGenerator` | Pipe factory with difficulty scaling | `makePipe()`, `gapHeightForScore()` |
 | `Renderer` | Pure ANSI view | `render()` |
@@ -94,15 +94,15 @@ candy-flappy/bin/
 | 10–14 | 4 cells | — |
 | 15+ | 3 cells | `PipeGenerator::GAP_MIN` floor |
 
-## HoneyBounce Physics Integration
+## SugarSpring Physics Integration
 
 ### Source Files
 
 - **Bird.php**: `candy-flappy/src/Bird.php:22-71`
 
-- **Projectile.php**: `honey-bounce/src/Projectile.php:36-120`
+- **Projectile.php**: `sugar-spring/src/Projectile.php:36-120`
 
-- **Spring.php**: `honey-bounce/src/Spring.php:20-144`
+- **Spring.php**: `sugar-spring/src/Spring.php:20-144`
 
 ### Projectile Configuration
 
@@ -133,7 +133,7 @@ public function tick(): self
 }
 ```
 
-Each tick calls `Projectile::update()` (`honey-bounce/src/Projectile.php:65-70`):
+Each tick calls `Projectile::update()` (`sugar-spring/src/Projectile.php:65-70`):
 
 ```php
 public function update(): self
@@ -155,7 +155,7 @@ This is **Euler integration**:
 public function flap(): self
 {
     // Carry the current position, reset vertical velocity to the
-    // upward kick. (HoneyBounce projectile has no setter; rebuild
+    // upward kick. (SugarSpring projectile has no setter; rebuild
     // a fresh one off the current position.)
     return new self(
         $this->x,
@@ -407,7 +407,7 @@ When crashed:
 | Aspect | flapioca (Go) | candy-flappy (PHP) | Advantage |
 |--------|--------------|-----------------|------------|
 | Framework | Bubble Tea | candy-core (ReactPHP) | Both use TEA pattern |
-| Physics | Integer increment | HoneyBounce Projectile | candy-flappy |
+| Physics | Integer increment | SugarSpring Projectile | candy-flappy |
 | Bird motion | `Cursor.Y++` each tick | Projectile with gravity + flap kick | candy-flappy |
 | Gravity | None (integer stepping) | 70 cells/sec² | candy-flappy |
 | Tick rate | 5 Hz | 30 Hz | candy-flappy |
@@ -462,13 +462,13 @@ Both use the same algorithm (column check + gap boundary check). candy-flappy us
 ### 1. Physics Integration Pattern
 
 candy-flappy demonstrates a **physics-as-a-service** pattern:
-- `honey-bounce/Projectile` is a pure kinematics engine (no rendering, no collision)
+- `sugar-spring/Projectile` is a pure kinematics engine (no rendering, no collision)
 
 - `Game` is a physics consumer that wraps physics state in a TEA Model
 
 - `Renderer` consumes physics state to produce ANSI output
 
-This separation means honey-bounce physics can power other games without game-specific knowledge. The pattern is:
+This separation means sugar-spring physics can power other games without game-specific knowledge. The pattern is:
 
 ```php
 // 1. Physics layer (framework-agnostic)
@@ -587,19 +587,19 @@ public function testCellsAboveAndBelowGapCollide(): void
 | File | Purpose |
 |------|---------|
 | `candy-flappy/src/Game.php` | TEA Model: 265 lines, all game state + logic |
-| `candy-flappy/src/Bird.php` | HoneyBounce Projectile wrapper: 71 lines |
+| `candy-flappy/src/Bird.php` | SugarSpring Projectile wrapper: 71 lines |
 | `candy-flappy/src/Pipe.php` | Pipe obstacle: 45 lines |
 | `candy-flappy/src/PipeGenerator.php` | Pipe factory + difficulty scaling: 56 lines |
 | `candy-flappy/src/Renderer.php` | Pure ANSI view: 83 lines |
 | `candy-flappy/src/TickMsg.php` | Frame-tick message: 17 lines |
-| `honey-bounce/src/Projectile.php` | Euler-integrated physics: 120 lines |
-| `honey-bounce/src/Spring.php` | Damped spring oscillator: 144 lines |
-| `honey-bounce/src/Point.php` | 3D immutable point: 41 lines |
-| `honey-bounce/src/Vector.php` | 3D immutable vector: 76 lines |
+| `sugar-spring/src/Projectile.php` | Euler-integrated physics: 120 lines |
+| `sugar-spring/src/Spring.php` | Damped spring oscillator: 144 lines |
+| `sugar-spring/src/Point.php` | 3D immutable point: 41 lines |
+| `sugar-spring/src/Vector.php` | 3D immutable vector: 76 lines |
 
 ## Strengths
 
-1. **Clean physics integration**: Bird motion correctly uses HoneyBounce Projectile — gravity, velocity kick, 30fps timestep
+1. **Clean physics integration**: Bird motion correctly uses SugarSpring Projectile — gravity, velocity kick, 30fps timestep
 
 2. **Proper TEA pattern**: Full `Model::init()/update()/view()` contract, testable without rendering
 
@@ -613,7 +613,7 @@ public function testCellsAboveAndBelowGapCollide(): void
 
 7. **Real arcade feel**: 30fps physics vs upstream's 5Hz — much more responsive
 
-8. **Separation of concerns**: Physics layer (honey-bounce) is framework-agnostic
+8. **Separation of concerns**: Physics layer (sugar-spring) is framework-agnostic
 
 ## Weaknesses
 
@@ -654,7 +654,7 @@ The SugarCraft monorepo contains other game-related ports:
 
 - **sugar-crush**: Match-3 game (no physics)
 
-candy-flappy is unique in its use of honey-bounce physics for game motion — all other games use integer-grid movement only.
+candy-flappy is unique in its use of sugar-spring physics for game motion — all other games use integer-grid movement only.
 
 ## Potential Enhancements
 

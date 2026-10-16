@@ -42,7 +42,7 @@ From the first-pass analysis, Ultraviolet maps across multiple SugarCraft libs:
 | Terminal lifecycle | `candy-core` | **HIGH** |
 | KeyPress/Mouse/Paste/Focus events | `sugar-widgets` | **HIGH** |
 | Window parent/child hierarchy | `candy-sprinkles` | MEDIUM |
-| Cassowary layout solver | `honey-bounce` | MEDIUM |
+| Cassowary layout solver | `sugar-spring` | MEDIUM |
 | Border functions | `candy-scriptui` | LOW |
 | StyledString + screen.Context | `sugar-widgets` | **HIGH** |
 | ProgressBar + Cursor encoding | `sugar-widgets` | MEDIUM |
@@ -214,7 +214,7 @@ Added OSC 66 support to `StyledString` for multi-cell scaled glyphs in Kitty ter
 
 The UV `layout` package uses a Cassowary solver derived from Ratatui. A third party has built an alternative. This validates that the constraint-based layout approach is sound but shows there may be alternative implementations to consider.
 
-**Relevance to SugarCraft**: `honey-bounce` is the intended home for layout. SugarCraft could either port UV's solver or adopt the third-party one.
+**Relevance to SugarCraft**: `sugar-spring` is the intended home for layout. SugarCraft could either port UV's solver or adopt the third-party one.
 
 ---
 

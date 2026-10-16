@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `sugar-forms` `candy-files` `candy-flip` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `candy-shine` `candy-scriptui` `candy-kit` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `honey-bounce`.
+**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `sugar-forms` `candy-files` `candy-flip` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `candy-shine` `candy-scriptui` `candy-kit` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
 
 ## Commands
 
@@ -24,7 +24,7 @@ cd candy-core && composer install && vendor/bin/phpunit
 ```
 
 ```sh
-for d in candy-core candy-sprinkles sugar-forms honey-bounce sugar-mouse sugar-widgets sugar-charts candy-scriptui candy-shine; do
+for d in candy-core candy-sprinkles sugar-forms sugar-spring sugar-mouse sugar-widgets sugar-charts candy-scriptui candy-shine; do
   (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```

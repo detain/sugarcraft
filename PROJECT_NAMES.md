@@ -125,7 +125,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | Name | Why it works |
 |---|---|
 | **SugarCraft** | umbrella brand — vague is correct here, it's the meta |
-| **HoneyBounce** | honey is sticky / springy; bounce = spring physics. ✓✓ |
+| **SugarSpring** | honey is sticky / springy; bounce = spring physics. ✓✓ |
 | **SugarCharts** | sugar + charts = charts. literal. |
 | **SugarTable** | sugar + table = data table. literal. |
 | **SugarDatepicker** | sugar + datepicker = date picker. literal. |
@@ -229,7 +229,7 @@ vocabulary above — these three remain reserved as the safe defaults.
 |---|---|---|
 | **Candy-** | foundation / system / framework | runtime (SugarCraft), terminal scripting (CandyScriptui), markdown (CandyShine) |
 | **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
-| **Honey-** | math / physics / motion | spring physics (HoneyBounce); the Flappy clone left this prefix family in the 2026-10 rename (now CandyFlappy) |
+| **Honey-** | math / physics / motion | spring physics (SugarSpring); the Flappy clone left this prefix family in the 2026-10 rename (now CandyFlappy) |
 
 `Candy-` (Files) is the naming for the file manager (formerly SuperCandy).
 Don't mint new prefixes without a discussion in this file.

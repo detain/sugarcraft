@@ -20,7 +20,7 @@
 | [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, sugar-forms |
 | [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, candy-sprinkles, candy-core |
 | [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, candy-palette |
-| [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | honey-bounce, sugar-charts |
+| [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | sugar-spring, sugar-charts |
 | [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, sugar-forms, candy-shine |
 | [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | candy-kit |
 | [charmbracelet/fantasy](#charmbraceletfantasy) | Go | 774 | candy-scriptui |
@@ -28,7 +28,7 @@
 | [charmbracelet/glamour](#charmbraceletglamour) | Go | ~3400 | candy-shine |
 | [charmbracelet/glow](#charmbraceletglow) | Go | ~9000 | candy-mdview, sugar-widgets, candy-shine |
 | [charmbracelet/gum](#charmbraceletgum) | Go | ~8700 | candy-scriptui, candy-sprinkles, sugar-widgets |
-| [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | honey-bounce |
+| [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | sugar-spring |
 | [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | sugar-forms, sugar-widgets, candy-shine |
 | [charmbracelet/lipgloss](#charmbraceletlipgloss) | Go | ~3500 | candy-sprinkles |
 | [charmbracelet/log](#charmbraceletlog) | Go | ~700 | candy-log |
@@ -205,7 +205,7 @@
 - `sugar-widgets` → Components built on core
 - `candy-scriptui` → Application shell
 - `candy-sprinkles` → Styling
-- `honey-bounce` → Animations
+- `sugar-spring` → Animations
 
 **Strengths:** Battle-tested, excellent docs, huge ecosystem, clean architecture.
 **Weaknesses:** Go-specific (goroutine concurrency vs PHP ReactPHP), large API surface.
@@ -303,7 +303,7 @@
 **Features:** Confetti (falling particles) and fireworks (radial explosions), wishlist endpoint factory, Prometheus metrics.
 
 **SugarCraft Mapping:**
-- `honey-bounce` → Particle physics (velocity, gravity, acceleration)
+- `sugar-spring` → Particle physics (velocity, gravity, acceleration)
 - `sugar-charts` → ANSI color palette
 
 **Note:** Not a library — application only.
@@ -461,9 +461,9 @@
 **Features:** Spring with under/critically/over-damped regimes, projectile with velocity/acceleration, O(1) per-frame updates.
 
 **SugarCraft Mapping:**
-- `honey-bounce` → Primary port (already extended with immutable patterns, SpringChain, Easing, etc.)
+- `sugar-spring` → Primary port (already extended with immutable patterns, SpringChain, Easing, etc.)
 
-**Note:** Port exists as `honey-bounce` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `sugar-spring` (🟢 in MATCHUPS.md).
 
 ---
 
@@ -695,7 +695,7 @@
 - `candy-core` → Buffer/screen/terminal
 - `sugar-widgets` → Styling/input/width methods
 - `candy-scriptui`/`candy-sprinkles` → Borders/windows
-- `honey-bounce` → Cassowary layout
+- `sugar-spring` → Cassowary layout
 
 ---
 
@@ -873,7 +873,7 @@
 - `sugar-widgets` → Primary target (all components)
 - `candy-shine` → Color/style system
 - `candy-core` → Terminal utilities
-- `honey-bounce` → Math utilities (MapRangeToRange, Fade)
+- `sugar-spring` → Math utilities (MapRangeToRange, Fade)
 
 ---
 
@@ -910,7 +910,7 @@
 **SugarCraft Mapping:**
 - `candy-core` → Display/Buffer/Backend/Widget interfaces
 - `candy-sprinkles` → Style/Color/Modifier/Text/Span
-- `honey-bounce` → Cassowary constraint solver
+- `sugar-spring` → Cassowary constraint solver
 - `sugar-widgets` → Individual widgets
 
 ---
@@ -952,7 +952,7 @@
 - `sugar-widgets` → Widget library
 - `candy-sprinkles` → Styling/layout
 - `candy-scriptui` → TTY I/O
-- `honey-bounce` → Cassowary constraint solver
+- `sugar-spring` → Cassowary constraint solver
 
 ---
 

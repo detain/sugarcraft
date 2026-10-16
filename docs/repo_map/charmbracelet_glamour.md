@@ -147,7 +147,7 @@
 | `candy-shine` | Styles/theme system | **Reference** — glamour's `StyleConfig` + `cascadeStyle()` is a complete stylesheet-in-JSON pattern. The `StylePrimitive` (Color, Bold, Italic, Underline, etc.) maps to `candy-shine`'s style primitives. |
 | `candy-core` (rendering) | BaseElement, Element, Renderer pattern | **Direct port** — The `BaseElement.doRender()` with prefix/suffix/blockPrefix/blockSuffix and the Entering/Exiting/Renderer/Finisher tuple pattern is directly portable to `candy-core`'s render architecture. |
 | `sugar-forms` | Word wrapping, ANSI output | **Direct port** — glamour's `MarginWriter`/`lipgloss.Wrap` wrapping logic and UTF-8 aware `PaddingWriter` are directly reusable in `sugar-forms` for multi-line prompt rendering. |
-| `honey-bounce` | Animation timing | **Not applicable** — glamour has no animation concepts. |
+| `sugar-spring` | Animation timing | **Not applicable** — glamour has no animation concepts. |
 | `candy-scriptui` | Link rendering (hyperlinks) | **Reference** — glamour's `LinkElement` with OSC 8 hyperlink generation (FNV hash for URL ID, `ansi.SetHyperlink`) provides a production implementation of terminal hyperlink rendering. |
 
 ## Analysis

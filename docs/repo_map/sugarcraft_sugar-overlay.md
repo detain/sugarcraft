@@ -8,7 +8,7 @@
 
 - **Status:** v1 Ready
 
-- **Depends on:** `candy-core` (runtime), `candy-sprinkles` (Border/Style), `sugar-mouse` (Manager), `honey-bounce` (CubicBezier easing)
+- **Depends on:** `candy-core` (runtime), `candy-sprinkles` (Border/Style), `sugar-mouse` (Manager), `sugar-spring` (CubicBezier easing)
 
 - **Namespace:** `SugarCraft\Overlay`
 
@@ -318,7 +318,7 @@ enum AnimationKind {
 
 ### Animation Infrastructure
 
-All animations consume `SugarCraft\Bounce\Easing\CubicBezier` from honey-bounce:
+All animations consume `SugarCraft\Spring\Easing\CubicBezier` from sugar-spring:
 - **Slide** → `CubicBezier::easeOut()`
 
 - **Fade** → `CubicBezier::easeInOut()`
@@ -398,7 +398,7 @@ return $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 ---
 
-## Integration with candy-core, candy-sprinkles, sugar-mouse, honey-bounce
+## Integration with candy-core, candy-sprinkles, sugar-mouse, sugar-spring
 
 ### candy-core
 
@@ -418,7 +418,7 @@ return $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 - **Manager** — spatial database for click-outside hit testing (`withManager()` / `isClickOutside()`)
 
-### honey-bounce
+### sugar-spring
 
 - **CubicBezier** easing — used by all three animation types (Slide, Fade, Scale)
 
@@ -674,7 +674,7 @@ The `Manager` is injected via `withManager()`, not created internally. This:
 | `candy-core` | Provides `Model` interface + `MouseMsg` + `Width` + `Ansi` utilities |
 | `candy-sprinkles` | Provides `Border` and `Style` for border chrome |
 | `sugar-mouse` | Provides `Manager` for spatial hit testing |
-| `honey-bounce` | Provides `CubicBezier` easing for animations |
+| `sugar-spring` | Provides `CubicBezier` easing for animations |
 | `sugar-toast` | Uses sugar-overlay pattern for floating notifications |
 | `candy-sprinkles` Layer/Compositor | Related but more sophisticated cell-buffer approach |
 

@@ -22,7 +22,7 @@ sugar-overlay — modal/overlay compositing for terminal UIs, for PHP 8.3+. Comp
 - **Pure rendering**: composites any background + foreground strings
 - **Works with any TUI framework**: render your models first, then composite
 - **Backdrop dimming**: truecolor opacity blend (0–100) applied to plain background lines during assembly
-- **Animated transitions**: Slide, Fade, and Scale animations driven by honey-bounce CubicBezier easing
+- **Animated transitions**: Slide, Fade, and Scale animations driven by sugar-spring CubicBezier easing
 - **Z-index stacking**: control render order across multiple overlays via `withZIndex()`
 - **Stack content channel**: `withContent(string)` gives a veil its own foreground so `VeilStack` layers render their boxes, not just their dim
 - **Click-outside dismiss**: detect when a mouse click falls outside a veil's zone via `withClickOutsideDismiss()`
@@ -94,7 +94,7 @@ $output = $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 ## Animations
 
-Overlay transitions can be animated using `withAnimation(AnimationKind)`. The `animate()` method accepts a `float $progress` parameter (0.0–1.0) to drive the transition. Animations use honey-bounce `CubicBezier` easing internally.
+Overlay transitions can be animated using `withAnimation(AnimationKind)`. The `animate()` method accepts a `float $progress` parameter (0.0–1.0) to drive the transition. Animations use sugar-spring `CubicBezier` easing internally.
 
 ### Available Animation Kinds
 

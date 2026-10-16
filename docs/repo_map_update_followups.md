@@ -40,7 +40,7 @@ The 8 shared packages:
 | Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, sugar-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
-| Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
+| Step 36 | candy-flip, candy-kit, sugar-spring, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
 | Step 37 | candy-metrics, candy-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing |
 
 ---
@@ -232,14 +232,14 @@ The 8 shared packages:
 
 ---
 
-### honey-bounce
+### sugar-spring
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Physics visualization: point positions rendered via string — Buffer would enable diff-optimized frame rendering | M |
 | candy-async | SpringChain.php uses Timer loops for animation — CancellationToken would simplify animation cancellation | M |
 
-**Notes:** honey-bounce is a physics simulation library. Visualizing spring animations as ANSI frames is a natural buffer use case. Animation timing loops are a good fit for candy-async.
+**Notes:** sugar-spring is a physics simulation library. Visualizing spring animations as ANSI frames is a natural buffer use case. Animation timing loops are a good fit for candy-async.
 
 ---
 
@@ -299,7 +299,7 @@ The 8 shared packages:
 | Effort | libs |
 |--------|------|
 | **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, candy-flip (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, honey-bounce, candy-metrics, candy-log |
+| **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, candy-metrics, candy-log |
 
 ---
 

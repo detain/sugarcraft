@@ -42,7 +42,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-mouse.png" width="48" alt=""> | **[SugarMouse](sugar-mouse/)** | Mouse hit-testing — mark rendered regions, scan an event, get the zone back; `ZoneClickTracker` for press/release dedupe, plus the absorbed bubblezone-style `Zones` Manager (hover / drag / multi-click) under `SugarCraft\Mouse\Zones`. Owned per consumer or via `Zones\Manager` global. |
 | <img src="media/icons/candy-sprinkles.png" width="48" alt=""> | **[CandySprinkles](candy-sprinkles/)** | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor). |
 | <img src="media/icons/candy-testing.png" width="48" alt=""> | **[CandyTesting](candy-testing/)** | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
-| <img src="media/icons/honey-bounce.png" width="48" alt=""> | **[HoneyBounce](honey-bounce/)** | Damped spring physics + Newtonian projectile simulation. |
+| <img src="media/icons/sugar-spring.png" width="48" alt=""> | **[SugarSpring](sugar-spring/)** | Damped spring physics + Newtonian projectile simulation. |
 | <img src="media/icons/sugar-fuzzy.png" width="48" alt=""> | **[SugarFuzzy](sugar-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |
 | <img src="media/icons/sugar-widgets.png" width="48" alt=""> | **[SugarWidgets](sugar-widgets/)** | Components: TextInput, TextArea, ItemList, Table, Tabs, Tree, Scrollbar, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. |
 | <img src="media/icons/candy-vt.png" width="48" alt=""> | **[CandyVt](candy-vt/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. |
@@ -98,7 +98,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-gifview.png" width="48" alt=""> | **[CandyGifView](candy-gifview/)** | Terminal GIF + .ansi-art viewer — the candy-flip CLI: sizes to the viewport, plays in the alternate screen (solid 24-bit blocks or a luminance ramp). |
 | <img src="media/icons/candy-top.png" width="48" alt=""> | **[CandyTop](candy-top/)** | Terminal system monitor — per-core CPU with frequencies, temperatures and battery, memory, disks, network, and process boxes with braille graphs and gradient meters; multi-menu navigation, presets, 43 themes with btop-compatible config; Linux `/proc` + `/sys` and FreeBSD collectors, container/VM tags. |
 | <img src="media/icons/sugar-reel.png" width="48" alt=""> | **[SugarReel](sugar-reel/)** | Terminal video player — pipes mp4 (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty (GIF via ext-gd, no ffmpeg). |
-| <img src="media/icons/candy-flappy.png" width="48" alt=""> | **[CandyFlappy](candy-flappy/)** | Flappy-Bird-style game — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate. |
+| <img src="media/icons/candy-flappy.png" width="48" alt=""> | **[CandyFlappy](candy-flappy/)** | Flappy-Bird-style game — bird motion is a SugarSpring projectile, pipes scroll left at a fixed cell rate. |
 
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.

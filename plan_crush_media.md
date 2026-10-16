@@ -2727,7 +2727,7 @@ candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
 | Scrollable list w/ filter | `Forms\ItemList\ItemList` | ✔ click + wheel | `/` filtering, `LoadMoreMsg` paging |
 | Scrollable pane | `Forms\Viewport\Viewport` | ✔ wheel | scrollbar, smooth scroll |
 | Tabs (form pages) | `Bits\Tabs\Tabs` | ✔ (`withZoneManager`) | needs new `sugar-bits` + `candy-zone` requires | <!-- @rename-keep historical provenance -->
-| Modal/popup frame | `Veil\Veil` (+`VeilStack`) | ✔ click-outside-dismiss | `withBackdrop(0–100)`, `withBorder`, `withPosition`, animations (Fade/Scale/Slide, honey-bounce easing) |
+| Modal/popup frame | `Veil\Veil` (+`VeilStack`) | ✔ click-outside-dismiss | `withBackdrop(0–100)`, `withBorder`, `withPosition`, animations (Fade/Scale/Slide, sugar-spring easing) |
 | Region focus (list vs field vs preview) | `Focus\FocusRing` | — | host maps Tab/Shift-Tab |
 | Progress (generation %) | `Bits\Progress\Progress` / `AnimatedProgress` (spring) | — | |
 | Spinner | `Forms\Spinner\Spinner` | — | |

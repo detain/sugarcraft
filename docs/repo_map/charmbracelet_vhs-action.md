@@ -148,7 +148,7 @@ The vhs-action is the **CI/CD automation layer** for the upstream `charmbracelet
 | `candy-shine` | Theme handling in SugarCraft (`Theme::ansi()`, `Theme::dracula()`) mirrors VHS's `Set Theme` command for color scheme application |
 | `candy-core` | The `Model::update()`/`Model::view()` cycle mirrors VHS's command-interpretation loop |
 | `sugar-forms` | Input handling (`Type`, key events) maps to VHS's `Type`/`Enter`/`Tab` commands |
-| `honey-bounce` | Animation/timing (`Sleep`, `PlaybackSpeed`) maps to VHS timing commands |
+| `sugar-spring` | Animation/timing (`Sleep`, `PlaybackSpeed`) maps to VHS timing commands |
 | `candy-sprinkles` | Layout/box model (`Set Width`/`Set Height`/`Set Padding`) maps to VHS layout commands |
 | **CI/vhs-action** | Not a port — this is the *infrastructure* that renders the GIF demos of all above libs in CI; no direct SugarCraft equivalent exists yet; candidate for a `sugar-ci` or `sugar-vhs` helper lib |
 

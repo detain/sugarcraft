@@ -1,6 +1,6 @@
 ---
 name: audit-walkthrough
-description: Processes docs/plans/AUDIT_*.md files by marking items ✅/⏭️ inline where they live (never moving them — readers see history in place), skipping 'credit upstream author' and UPGRADE_GUIDE items (out of scope pre-1.0), and splitting multi-lib audits into one PR per lib sequenced by dependency order (candy-core → candy-sprinkles → honey-bounce → leaf libs). Use when the user says 'work through audit', 'process AUDIT_*.md', 'fix audit findings', or names a docs/plans/AUDIT_*.md file. Do NOT bundle multiple libs into one PR, do NOT use for net-new feature work, and do NOT retroactively rewrite or force-push already-merged audit PRs.
+description: Processes docs/plans/AUDIT_*.md files by marking items ✅/⏭️ inline where they live (never moving them — readers see history in place), skipping 'credit upstream author' and UPGRADE_GUIDE items (out of scope pre-1.0), and splitting multi-lib audits into one PR per lib sequenced by dependency order (candy-core → candy-sprinkles → sugar-spring → leaf libs). Use when the user says 'work through audit', 'process AUDIT_*.md', 'fix audit findings', or names a docs/plans/AUDIT_*.md file. Do NOT bundle multiple libs into one PR, do NOT use for net-new feature work, and do NOT retroactively rewrite or force-push already-merged audit PRs.
 paths:
   - 'docs/plans/AUDIT_*.md'
   - 'plans/AUDIT_*.md'
@@ -13,7 +13,7 @@ Work through a `docs/plans/AUDIT_*.md` file top-down, marking each item in place
 ## Critical
 
 - **Mark in place — never move items.** When an item is done, edit the line/row where it already lives. Append `✅` + a one-line summary. For skipped items use `⏭️` + the reason. Readers see history in context; relocating items into a "Completed" section destroys that. (See marked rows in `docs/plans/dash_update_claude.md` for the exact shape.)
-- **One PR per library. Never bundle multiple libs into one PR.** A multi-lib audit splits into N PRs, sequenced by dependency order: `candy-core` → `candy-sprinkles` → `honey-bounce` → leaf libs (anything whose `<slug>/composer.json` `require` lists `sugarcraft/*` deps already shipped above it). Within ONE lib, bundle 2–4 related items per PR.
+- **One PR per library. Never bundle multiple libs into one PR.** A multi-lib audit splits into N PRs, sequenced by dependency order: `candy-core` → `candy-sprinkles` → `sugar-spring` → leaf libs (anything whose `<slug>/composer.json` `require` lists `sugarcraft/*` deps already shipped above it). Within ONE lib, bundle 2–4 related items per PR.
 - **Skip these item categories entirely** (out of scope pre-1.0), marking `⏭️ skipped — pre-1.0, out of scope` in place:
   - "credit upstream author" / attribution items
   - `UPGRADE_GUIDE` / migration-guide items
@@ -26,7 +26,7 @@ Work through a `docs/plans/AUDIT_*.md` file top-down, marking each item in place
 1. **Locate and read the audit file.** Audit prompts live in `docs/plans/AUDIT_*.md`. Read the WHOLE file with Read (don't Grep a subset — you'll lose ordering and the per-category "Guard rails" / PR-body template). 
    *Verify:* you can name the audit's scope and quote its guard-rails section before proceeding.
 
-2. **Build the lib queue in dependency order.** Bucket every item by `<slug>`. Order buckets `candy-core` → `candy-sprinkles` → `honey-bounce` → leaf libs. A lib is a leaf when its `<slug>/composer.json` `require` only lists `sugarcraft/*` deps already shipped above it. Create a TodoWrite task per `(lib, phase)` bucket so the PR sequence is visible. 
+2. **Build the lib queue in dependency order.** Bucket every item by `<slug>`. Order buckets `candy-core` → `candy-sprinkles` → `sugar-spring` → leaf libs. A lib is a leaf when its `<slug>/composer.json` `require` only lists `sugarcraft/*` deps already shipped above it. Create a TodoWrite task per `(lib, phase)` bucket so the PR sequence is visible. 
    *Verify:* no lib precedes a lib it depends on; every item is in exactly one bucket or marked skip-eligible. Uses the file from Step 1.
 
 3. **Pre-filter skip-eligible items in one edit pass.** For items matching `credit upstream author`, `attribute upstream`, `UPGRADE_GUIDE`, or pre-1.0 attribution rewording, append `⏭️ skipped — pre-1.0, out of scope` to the original line with Edit. 
@@ -114,7 +114,7 @@ Wrong (moved into a new section — DON'T):
 - **`composer install` errors `Could not find package sugarcraft/<dep> matching @dev`:** the consuming lib's `composer.json` `repositories` array is missing a path-repo. Copy the full block from `sugar-charts/composer.json`, paste in, re-run.
 - **`composer validate` complains about every `"sugarcraft/*": "@dev"`:** expected for path-repos pre-1.0. Drop `--strict`.
 - **PR title rejected / linter wants `<lib>:` prefix:** title MUST start with the slug + colon, e.g. `sugar-widgets: clamp negative cursor (audit #7)`. Fix with `gh pr edit <n> --title "..."`.
-- **Reviewer says the PR mixes two libs:** you bundled across libs. Split into one `ai/<slug>-audit-<short>` branch/PR each, sequenced candy-core → candy-sprinkles → honey-bounce → leaf.
+- **Reviewer says the PR mixes two libs:** you bundled across libs. Split into one `ai/<slug>-audit-<short>` branch/PR each, sequenced candy-core → candy-sprinkles → sugar-spring → leaf.
 - **You moved audit items into a 'Completed' section:** revert (`git checkout -- docs/plans/AUDIT_*.md`) and re-apply only inline `✅`/`⏭️` markers on the original lines.
 - **Pre-commit hook fails:** fix the underlying issue and create a NEW commit — never `--no-verify`, never `--amend` a commit whose hook failed. If Caliber is missing, run `/setup-caliber`.
 - **A finding would rename a public method (`getX()` → `x()`):** do NOT ship it. Add to "Flagged for user decision" in the PR body; breaking changes need explicit approval.

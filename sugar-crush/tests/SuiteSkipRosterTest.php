@@ -173,7 +173,7 @@ final class SuiteSkipRosterTest extends TestCase
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
         mkdir($dir . '/candy-core-real');
-        mkdir($farm . '/honey-bounce');
+        mkdir($farm . '/sugar-spring');
         symlink($dir . '/candy-core-real', $farm . '/candy-core');
 
         try {

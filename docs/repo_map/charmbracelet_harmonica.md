@@ -65,25 +65,25 @@
 - **No easing functions** — No cubic-bezier, elastic, or bounce easings — just raw physics
 - **Limited coordinate system support** — Only one Y-direction convention (origin bottom-left); no built-in Y-flip for terminal vs. screen coordinates
 - **No reduced-motion support** — No `prefers-reduced-motion` or `REDUCE_MOTION` env-var handling for accessibility
-- **Go-only** — No WASM, no other language ports; PHP port (`honey-bounce`) exists separately in SugarCraft
+- **Go-only** — No WASM, no other language ports; PHP port (`sugar-spring`) exists separately in SugarCraft
 - **3D vectors lack operations** — `Vector` is just 3 floats; no `add`, `scale`, `dot`, `cross` methods
 
 ## SugarCraft Mapping
 
 | harmonica feature | SugarCraft lib | SugarCraft class(es) | Notes |
 |---|---|---|---|
-| `Spring` (damped harmonic oscillator) | `honey-bounce` | `Spring`, `SpringConfig`, `SpringPreset`, `SpringChain`, `SpringCollection` | PHP port adds presets (UIKit tensions), `SpringChain` (sequenced animations), `SpringCollection` (multi-spring manager), immutable `update()` returns new instance, `REDUCE_MOTION` support |
-| `Projectile` (Newtonian physics) | `honey-bounce` | `Projectile`, `Point`, `Vector`, `Gravity` | PHP port adds immutable `update()` (returns new `Projectile`), Y-down gravity variants, richer `Point`/`Vector` with methods (`add`, `scale`, `dot`, `cross`, `distance`) |
-| `FPS(int)` utility | `honey-bounce` | `Spring::fps(int)` | Static factory method on `Spring` class |
-| `Gravity` / `TerminalGravity` constants | `honey-bounce` | `Gravity` class + `Projectile::gravity()` / `Projectile::terminalGravity()` | SugarCraft adds `standardYDown()` / `terminalYDown()` for flipped Y-axis |
-| (not in harmonica) | `honey-bounce` | `Easing`, `CubicBezier` | Not in upstream — SugarCraft extension with CSS-named easings and Newton-Raphson cubic-bezier evaluator |
+| `Spring` (damped harmonic oscillator) | `sugar-spring` | `Spring`, `SpringConfig`, `SpringPreset`, `SpringChain`, `SpringCollection` | PHP port adds presets (UIKit tensions), `SpringChain` (sequenced animations), `SpringCollection` (multi-spring manager), immutable `update()` returns new instance, `REDUCE_MOTION` support |
+| `Projectile` (Newtonian physics) | `sugar-spring` | `Projectile`, `Point`, `Vector`, `Gravity` | PHP port adds immutable `update()` (returns new `Projectile`), Y-down gravity variants, richer `Point`/`Vector` with methods (`add`, `scale`, `dot`, `cross`, `distance`) |
+| `FPS(int)` utility | `sugar-spring` | `Spring::fps(int)` | Static factory method on `Spring` class |
+| `Gravity` / `TerminalGravity` constants | `sugar-spring` | `Gravity` class + `Projectile::gravity()` / `Projectile::terminalGravity()` | SugarCraft adds `standardYDown()` / `terminalYDown()` for flipped Y-axis |
+| (not in harmonica) | `sugar-spring` | `Easing`, `CubicBezier` | Not in upstream — SugarCraft extension with CSS-named easings and Newton-Raphson cubic-bezier evaluator |
 
-**Source:** MATCHUPS.md:L30 (`honey-bounce` row), honey-bounce/README.md
+**Source:** MATCHUPS.md:L30 (`sugar-spring` row), sugar-spring/README.md
 
 ## Analysis
 
 Harmonica is a focused, high-quality physics animation library that does exactly two things—spring physics and projectile motion—and does them well. Its core strength is the Ryan Juckett algorithm, which solves the damped harmonic oscillator analytically for a fixed timestep rather than numerically integrating each frame. This means the spring update is just 4 multiplies and 2 adds after a one-time coefficient setup, making it both fast and numerically stable. The library's tight scope (3 source files, ~350 lines of Go) makes it trivially auditable and portable.
 
-The most significant design limitation is the mutable `Projectile` struct—its `Update()` method returns the new `Point` but mutates `*Projectile` in place, which is a footgun in concurrent or pure-functional contexts. SugarCraft's `honey-bounce` ports this correctly with immutable `update()` semantics. The spring side is handled better in both libraries (no mutation in `Update`), but harmonica lacks the ergonomic extensions SugarCraft adds: spring presets (UIKit-style tension/friction), `SpringChain` for sequenced animations, `SpringCollection` for managing multiple independent springs, and built-in `REDUCE_MOTION` accessibility support. The absence of easing functions (elastic, bounce, cubic-bezier) is notable given how often animation libraries pair physics springs with named easing curves.
+The most significant design limitation is the mutable `Projectile` struct—its `Update()` method returns the new `Point` but mutates `*Projectile` in place, which is a footgun in concurrent or pure-functional contexts. SugarCraft's `sugar-spring` ports this correctly with immutable `update()` semantics. The spring side is handled better in both libraries (no mutation in `Update`), but harmonica lacks the ergonomic extensions SugarCraft adds: spring presets (UIKit-style tension/friction), `SpringChain` for sequenced animations, `SpringCollection` for managing multiple independent springs, and built-in `REDUCE_MOTION` accessibility support. The absence of easing functions (elastic, bounce, cubic-bezier) is notable given how often animation libraries pair physics springs with named easing curves.
 
-The library's 1530 GitHub stars reflect strong community trust in the Charmbracelet ecosystem, and its use powering TUI animations in `bubbletea` provides production validation. It maps cleanly to SugarCraft's `honey-bounce` package, which is a faithful PHP port that also extends the upstream with meaningful ergonomic improvements (immutable patterns, presets, easing curves, accessibility support) without distorting the core algorithm.
+The library's 1530 GitHub stars reflect strong community trust in the Charmbracelet ecosystem, and its use powering TUI animations in `bubbletea` provides production validation. It maps cleanly to SugarCraft's `sugar-spring` package, which is a faithful PHP port that also extends the upstream with meaningful ergonomic improvements (immutable patterns, presets, easing curves, accessibility support) without distorting the core algorithm.

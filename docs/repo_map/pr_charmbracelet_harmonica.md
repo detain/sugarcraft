@@ -12,11 +12,11 @@ From `repo_map/charmbracelet_harmonica.md`:
 
 | harmonica feature | SugarCraft lib | SugarCraft class(es) | Notes |
 |---|---|---|---|
-| `Spring` (damped harmonic oscillator) | `honey-bounce` | `Spring`, `SpringConfig`, `SpringPreset`, `SpringChain`, `SpringCollection` | PHP port adds presets (UIKit tensions), `SpringChain`, `SpringCollection`, immutable `update()`, `REDUCE_MOTION` support |
-| `Projectile` (Newtonian physics) | `honey-bounce` | `Projectile`, `Point`, `Vector`, `Gravity` | PHP port adds immutable `update()`, Y-down gravity variants, richer `Point`/`Vector` ops |
-| `FPS(int)` utility | `honey-bounce` | `Spring::fps(int)` | Static factory method |
-| `Gravity`/`TerminalGravity` constants | `honey-bounce` | `Gravity` class + `Projectile::gravity()`/`::terminalGravity()` | SugarCraft adds Y-down variants |
-| (not in harmonica) | `honey-bounce` | `Easing`, `CubicBezier` | SugarCraft extension |
+| `Spring` (damped harmonic oscillator) | `sugar-spring` | `Spring`, `SpringConfig`, `SpringPreset`, `SpringChain`, `SpringCollection` | PHP port adds presets (UIKit tensions), `SpringChain`, `SpringCollection`, immutable `update()`, `REDUCE_MOTION` support |
+| `Projectile` (Newtonian physics) | `sugar-spring` | `Projectile`, `Point`, `Vector`, `Gravity` | PHP port adds immutable `update()`, Y-down gravity variants, richer `Point`/`Vector` ops |
+| `FPS(int)` utility | `sugar-spring` | `Spring::fps(int)` | Static factory method |
+| `Gravity`/`TerminalGravity` constants | `sugar-spring` | `Gravity` class + `Projectile::gravity()`/`::terminalGravity()` | SugarCraft adds Y-down variants |
+| (not in harmonica) | `sugar-spring` | `Easing`, `CubicBezier` | SugarCraft extension |
 
 ---
 
@@ -79,7 +79,7 @@ From PR #6 (Introduce 2D + 3D projectile motion) the PR author explicitly called
 2. **Forces system** (`projectile.AddForce(Force{...})`) — Not implemented
 3. **Collisions** — Not implemented
 
-These were noted as TODOs in the PR but never addressed. SugarCraft's `honey-bounce` also doesn't implement any of these, leaving them as future opportunities.
+These were noted as TODOs in the PR but never addressed. SugarCraft's `sugar-spring` also doesn't implement any of these, leaving them as future opportunities.
 
 **No feature requests appear in the issue tracker** — the repository is very low-activity and most "requests" are implicit in PRs (e.g., exposing `Velocity`/`Acceleration` on Projectiles came from the confetty use case in PR #9).
 
@@ -191,7 +191,7 @@ These represent a gap between what the maintainer roadmap sketched and what was 
 
 ## 18. Problems Likely Relevant To SugarCraft
 
-1. **Mutable `Projectile`** — SugarCraft's `honey-bounce` already fixed this with immutable `update()` that returns a new `Projectile`. This is a meaningful improvement over upstream.
+1. **Mutable `Projectile`** — SugarCraft's `sugar-spring` already fixed this with immutable `update()` that returns a new `Projectile`. This is a meaningful improvement over upstream.
 
 2. **Missing spring presets** — Users must manually tune `angularFrequency` and `dampingRatio`. SugarCraft's `SpringPreset` class (with UIKit tension mappings) directly addresses this. **This is SugarCraft's strongest differentiation from upstream.**
 
@@ -231,7 +231,7 @@ These represent a gap between what the maintainer roadmap sketched and what was 
 
 4. **Coefficient precomputation**: The Juckett algorithm's power comes from computing all coefficients once in `NewSpring`/`__construct`, making each `Update` call just 4 multiplies and 2 additions. SugarCraft's PHP implementation should ensure the constructor does the same precomputation.
 
-5. **Sharp scope boundary**: Harmonica has exactly two subsystems (spring + projectile) that share nothing. SugarCraft should maintain this — if `honey-bounce` grows beyond spring physics and projectile physics (e.g., adding easing curves), it should be clearly separated.
+5. **Sharp scope boundary**: Harmonica has exactly two subsystems (spring + projectile) that share nothing. SugarCraft should maintain this — if `sugar-spring` grows beyond spring physics and projectile physics (e.g., adding easing curves), it should be clearly separated.
 
 ---
 
@@ -255,7 +255,7 @@ These represent a gap between what the maintainer roadmap sketched and what was 
 
 2. **Terminal animation as legitimate use case**: The Charmbracelet ecosystem (bubbletea, harmonica, lipgloss) has legitimized terminal-based animations. SugarCraft can build on this precedent for PHP TUI animation.
 
-3. **Framework-agnostic design as differentiator**: Harmonica's lack of framework dependencies means it works in OpenGL, TUIs, game engines, and web contexts. SugarCraft's `honey-bounce` should maintain this portability — no coupling to a specific PHP framework.
+3. **Framework-agnostic design as differentiator**: Harmonica's lack of framework dependencies means it works in OpenGL, TUIs, game engines, and web contexts. SugarCraft's `sugar-spring` should maintain this portability — no coupling to a specific PHP framework.
 
 4. **Preset-driven usability**: The UIKit tension/friction preset system (used by Framer Motion, SwiftUI, and SugarCraft's `SpringPreset`) represents a maturing of spring animation APIs toward accessible defaults. Upstream harmonica never built this, leaving the gap for SugarCraft to fill.
 
@@ -319,7 +319,7 @@ These represent a gap between what the maintainer roadmap sketched and what was 
 
 9. **Collision detection for Projectile**: Implement bounding-box or point-in-rect collision for Projectiles. Natural extension from the forces system.
 
-10. **Publish `honey-bounce` as standalone package**: When SugarCraft reaches v1.0, publishing `honey-bounce` separately to Packagist as `sugarcraft/honey-bounce` will expose it to the broader PHP ecosystem beyond the SugarCraft monorepo context.
+10. **Publish `sugar-spring` as standalone package**: When SugarCraft reaches v1.0, publishing `sugar-spring` separately to Packagist as `sugarcraft/sugar-spring` will expose it to the broader PHP ecosystem beyond the SugarCraft monorepo context.
 
 ---
 

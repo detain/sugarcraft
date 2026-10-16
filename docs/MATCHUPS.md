@@ -36,7 +36,7 @@ called out in the table below.
 | **CandyAsync** (`candy-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
 | **SugarCraft** (`candy-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
 | **CandySprinkles** (`candy-sprinkles/`) | 🟢 ready | Declarative styling + layout. |
-| **HoneyBounce** (`honey-bounce/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
+| **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
 | **SugarMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
 | **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture. |
@@ -98,7 +98,7 @@ called out in the table below.
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF + .ansi-art viewer CLI (ext-gd via candy-flip) — port of gifterm. |
 | **SugarReel** (`sugar-reel/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
 | **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
-| **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a HoneyBounce projectile. |
+| **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a SugarSpring projectile. |
 
 <!-- Windows ConPTY backend for candy-pty: tracked as a future row. -->
 
@@ -113,7 +113,7 @@ package. Suffixes are short, technical, and describe the role.
 |---|---|---|
 | **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyScriptui), markdown (CandyShine) |
 | **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
-| **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (CandyFlappy) |
+| **Honey-** | math / physics / motion | spring physics (SugarSpring), Flappy clone (CandyFlappy) |
 
 `Candy-` (Files) is the file manager naming. Don't mint new prefixes without a discussion in
 [`PROJECT_NAMES.md`](../PROJECT_NAMES.md).
@@ -183,7 +183,7 @@ reference projects supplied the ideas, not the code.
 | CandyVcr (candy-vcr/) | [x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) |
 | CandyVt (candy-vt/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
 | CandyWish (candy-wish/) | [wish](https://github.com/charmbracelet/wish) |
-| HoneyBounce (honey-bounce/) | [harmonica](https://github.com/charmbracelet/harmonica) |
+| SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
 | SugarWidgets (sugar-widgets/) | [bubbles](https://github.com/charmbracelet/bubbles) |
 | SugarPanels (sugar-panels/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |

@@ -6,7 +6,7 @@
 ## Deliverable
 
 - Backdrop dimming effect (semi-transparent overlay).
-- Animation system — slide / fade / scale (consume honey-bounce
+- Animation system — slide / fade / scale (consume sugar-spring
   CubicBezier from step 09.17).
 
 ## Files

@@ -47,7 +47,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 | `charmbracelet/x` | Medium | x/vcr HTTP recording patterns, golden file testing | Medium |
 | `textualize/textual` | Medium | CSS-based theming, command palette, Pilot testing class | Medium |
 | `ratatui/ratatui` | Low | Widget system patterns, buffer diffing (sugar-widgets is equivalent) | Low |
-| `php-tui/php-tui` | Low | Cassowary layout (already in honey-bounce) | Low |
+| `php-tui/php-tui` | Low | Cassowary layout (already in sugar-spring) | Low |
 | `charmbracelet/freeze` | Low | ANSI parsing for image generation (interesting but not directly applicable) | Low |
 
 # Feature Gap Analysis
