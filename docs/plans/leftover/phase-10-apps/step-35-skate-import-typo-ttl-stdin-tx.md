@@ -1,6 +1,6 @@
-# Step 10.35 — sugar-skate import/export + levenshtein + TTL + STDIN + atomic tx
+# Step 10.35 — candy-kv import/export + levenshtein + TTL + STDIN + atomic tx
 
-**Source:** `leftover_updates_later.md` sugar-skate P1-P6
+**Source:** `leftover_updates_later.md` candy-kv P1-P6
 **Branch:** `ai/skate-import-typo-ttl-stdin-tx`
 
 ## Deliverable
@@ -14,9 +14,9 @@
 
 ## Files
 
-**Modify:** `sugar-skate/src/Store.php`, `Database.php`.
+**Modify:** `candy-kv/src/Store.php`, `Database.php`.
 
-**Create:** `sugar-skate/src/Import/JsonImporter.php`,
+**Create:** `candy-kv/src/Import/JsonImporter.php`,
 `YamlImporter.php`, `Cli/ImportCommand.php`, `Cli/ExportCommand.php`.
 
 ## Tests
@@ -25,7 +25,7 @@
 
 ## Acceptance
 
-- `cd sugar-skate && vendor/bin/phpunit` green.
+- `cd candy-kv && vendor/bin/phpunit` green.
 
 ---
 

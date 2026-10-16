@@ -1,0 +1,179 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * CandyKv CLI — charmbracelet/skate equivalent.
+ *
+ * Usage:
+ *   candy-kv set <key> [value] [--ttl=SECONDS]  Set a key (reads from stdin if no value)
+ *   candy-kv get <key>                         Get a value (suggests typo on miss)
+ *   candy-kv list [-k|-v] [-r] [-d delim] [pattern]  List entries
+ *   candy-kv delete <key>                       Delete a key (supports glob)
+ *   candy-kv list-dbs                          List all databases
+ *   candy-kv import <format> <path>           Import from JSON/YAML file
+ *   candy-kv export <format> [db] [pattern]    Export to JSON/YAML
+ *
+ * Database suffix: key@dbname
+ *
+ * Formats: json, yaml (or yml)
+ * Path '-' or '/dev/stdin' reads from standard input for import.
+ */
+namespace SugarCraft\Kv;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use SugarCraft\Kv\Cli\ArgParser;
+use SugarCraft\Kv\Cli\ImportCommand;
+use SugarCraft\Kv\Cli\ExportCommand;
+use SugarCraft\Kv\Lang;
+use SugarCraft\Kv\Store;
+
+$bin = basename($argv[0]);
+
+if ($argc < 2) {
+    help($bin);
+    exit(0);
+}
+
+$store = new Store();
+$cmd = $argv[1];
+
+switch ($cmd) {
+    case 'set':
+        $opts = ArgParser::set($argv, 2);
+        if ($opts['key'] === null) {
+            fwrite(STDERR, Lang::t('cli.usage_set', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        // Read value from stdin if not provided as argument
+        $value = $opts['value'];
+        if ($value === null) {
+            $value = stream_get_contents(STDIN);
+            if ($value === false) {
+                $value = '';
+            }
+        }
+        $store->set($opts['key'], $value, false, $opts['ttl']);
+        break;
+
+    case 'get':
+        if ($argc < 3) {
+            fwrite(STDERR, Lang::t('cli.usage_get', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        // get() already emits any "did you mean" typo suggestion to stderr on a
+        // miss; branch on entry existence so a truly-missing key exits 1 while an
+        // existing key that holds an empty value still exits 0.
+        $val = $store->get($argv[2]);
+        if ($val === '' && $store->entry($argv[2]) === null) {
+            exit(1);
+        }
+        echo $val;
+        break;
+
+    case 'list':
+        $opts = ArgParser::list($argv, 2);
+        $delim = $opts['delimiter'];
+        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $delim) as $item) {
+            if ($item instanceof Entry) {
+                $key = Store::sanitizeForTty($item->key);
+                $val = Store::sanitizeForTty($item->rawValue());
+                echo "{$key}{$delim}{$val}\n";
+            } else {
+                // keys-only or values-only mode: sanitize the yielded string
+                echo Store::sanitizeForTty((string) $item) . "\n";
+            }
+        }
+        break;
+
+    case 'delete':
+        if ($argc < 3) {
+            fwrite(STDERR, Lang::t('cli.usage_delete', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        $n = $store->delete($argv[2]);
+        echo Lang::t('cli.deleted_n', ['count' => $n]) . "\n";
+        break;
+
+    case 'list-dbs':
+        foreach ($store->listDatabases() as $db) {
+            echo "{$db}\n";
+        }
+        break;
+
+    case 'import':
+        $opts = ArgParser::import($argv, 2);
+        if ($opts['format'] === null || $opts['path'] === null) {
+            fwrite(STDERR, Lang::t('cli.usage_import', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        $exitCode = (new ImportCommand($store))->run(
+            $opts['format'],
+            $opts['path'],
+            $opts['atomic'],
+        );
+        exit($exitCode);
+
+    case 'export':
+        $opts = ArgParser::export($argv, 2);
+        if ($opts['format'] === null) {
+            fwrite(STDERR, Lang::t('cli.usage_export', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        $exitCode = (new ExportCommand($store))->run(
+            $opts['format'],
+            $opts['db'],
+            $opts['pattern'],
+        );
+        exit($exitCode);
+
+    case '--help':
+    case '-h':
+    case 'help':
+        help($bin);
+        break;
+
+    default:
+        fwrite(STDERR, Lang::t('cli.unknown_command', ['cmd' => $cmd]) . "\n");
+        help($bin);
+        exit(1);
+}
+
+function help(string $bin): void
+{
+    echo <<<HELP
+CandyKv — personal key/value store
+
+Usage:
+  {$bin} set <key> [value] [--ttl=SECONDS]
+                                  Set a key (reads stdin if no value)
+  {$bin} get <key>                Get a value (suggests typo on miss)
+  {$bin} list [-k|-v] [-r] [-d delim] [pattern]
+                                  List entries (default: keys+values)
+  {$bin} delete <key>             Delete a key (glob patterns supported)
+  {$bin} list-dbs                 List all databases
+  {$bin} import <format> <path>   Import entries (json|yaml, path=- for stdin)
+  {$bin} export <format> [db] [pattern]
+                                  Export entries (json|yaml)
+  {$bin} --help                   Show this help
+
+Options:
+  --ttl=SECONDS   Set a TTL (expiry in seconds) for the key.
+  --no-atomic      Disable atomic transaction for import.
+
+Patterns:
+  *  matches any characters
+  ?  matches a single character
+
+Database suffix:
+  Use key@dbname to target a specific database.
+  E.g. {$bin} get token@passwords
+
+Import/Export:
+  JSON and YAML formats supported.
+  Use path '-' to read import data from STDIN.
+
+HELP;
+}

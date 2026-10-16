@@ -46,7 +46,7 @@ paths:
 4. **Add the slug to `.github/workflows/vhs.yml`** in the `all=(...)` bash array. The array is alphabetical within prefix groups (Candy first, then Honey, then Sugar, then super-candy). Read the file, locate `all=(`, insert `<slug>` in the correct group. Verify the slug is present before proceeding.
 
 5. **Register non-default PHP extensions** if the example requires any. Open `.github/workflows/vhs.yml`, find the step that calls `shivammathur/setup-php` (or the matrix's `extensions:` key). The default set typically includes `mbstring`, `intl`, `tokenizer`. Add any of these the lib needs:
-   - `ssh2` — `ext-ssh2` (used by `candy-wish`, `sugar-skate`)
+   - `ssh2` — `ext-ssh2` (used by `candy-wish`, `candy-kv`)
    - `gd` — `ext-gd` (image rendering)
    - `ffi` — `ext-ffi` (FFI bindings — but recall non-visual FFI libs are exempt)
    - `shmop` — `ext-shmop` (shared memory; gate with `os: ubuntu-latest` if Windows-incompatible)

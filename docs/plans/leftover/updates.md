@@ -586,7 +586,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.34 · PR#812 · candy-git-server: git-daemon real daemon mode (GitDaemon.php + --daemon/--pid-file + socket connections + signal handling)
     fix for step 10.34 · PR#813 · resolved 5 issues (pkt-line format + signal handlers + daemon fork + unused variables + misleading variable naming)
     docs for step 10.34 · PR#814 · README: add GitDaemon to architecture + "Git Protocol (Daemon Mode)" section; CALIBER_LEARNINGS: add 4 new patterns
-    step 10.35 · PR#815 · sugar-skate: import/export JSON/YAML + TTL/expiry + Levenshtein typo suggestions + STDIN input + atomic transactions
+    step 10.35 · PR#815 · candy-kv: import/export JSON/YAML + TTL/expiry + Levenshtein typo suggestions + STDIN input + atomic transactions
     fix for step 10.35 · PR#816 · resolved 1 major (atomic import cross-database routing bug) + added withManager() getter
     docs for step 10.35 · PR#817 · README: add TTL/import-export/atomic-transaction sections; CALIBER_LEARNINGS: new file
     step 10.36 · PR#818 · sugar-veil: backdrop dimming (withBackdrop) + animation system (Slide/Fade/Scale consuming honey-bounce CubicBezier)

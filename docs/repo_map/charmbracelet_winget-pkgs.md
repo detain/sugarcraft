@@ -64,7 +64,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 | `pop` | (email-related) | `charmbracelet.pop` | Terminal email client |
 | `wishlist` | `sugar-wishlist` | `charmbracelet.wishlist` | Wishlist manager |
 | `mods` | (modifications) | `charmbracelet.mods` | File modification tool |
-| `skate` | (skate key-value) | `charmbracelet.skate` | Key-value store |
+| `skate` | (skate key-value) | `charmbracelet.skate` | Key-value store | <!-- @rename-keep -->
 | `soft-serve` | `candy-soft-serve` | `charmbracelet.soft-serve` | Git server TUI | <!-- @rename-keep upstream charm bucket record -->
 | `melt` | (YAML related) | `charmbracelet.melt` | YAML toolkit |
 | `crush` | (shell) | `charmbracelet.crush` | Shell with TUI |

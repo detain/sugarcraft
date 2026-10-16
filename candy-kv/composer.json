@@ -1,0 +1,50 @@
+{
+    "name": "sugarcraft/candy-kv",
+    "description": "PHP port of charmbracelet/skate \u2014 a personal key/value store with multi-database support, binary data, and glob/list filtering.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "key-value",
+        "store",
+        "database",
+        "sqlite",
+        "skate",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-kv",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-kv/issues",
+        "source": "https://github.com/sugarcraft/candy-kv"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
+        "ext-sqlite3": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Kv\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Kv\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "bin": [
+        "bin/candy-kv"
+    ]
+}

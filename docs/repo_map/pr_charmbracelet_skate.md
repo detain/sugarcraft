@@ -14,9 +14,9 @@
 
 ## 2. Existing SugarCraft Mapping
 
-The `sugar-skate/` port is already well-established:
+The `candy-kv/` port is already well-established:
 
-- **Composer pkg**: `sugarcraft/sugar-skate` → `SugarCraft\Skate` namespace
+- **Composer pkg**: `sugarcraft/candy-kv` → `SugarCraft\Kv` namespace
 - **Storage**: SQLite-backed (distinct from Go's Badger), with one SQLite file per database under `~/.config/skate/`
 - **Key classes**: `Store` (main facade, handles `@db` routing), `Database` (per-file SQLite), `Entry` (value wrapper), `Cli\ExportCommand`, `Cli\ImportCommand`, `Lang.php`
 - **Status**: 🟢 v1.0.0 equivalent — local-only KV with multi-database support
@@ -53,7 +53,7 @@ From the first-stage analysis, these gaps were identified:
 ### Issue #120 — "Skate is painfully slow" (Open, Jan 2025)
 
 **Signal**: Active discussion thread, unresolved as of May 2026.
-**Key finding**: Performance degrades to ~6 seconds for `skate list` on machines with **encrypted home directories** (ecryptfs). The same operations are fast on machines without encrypted homes. This is an I/O performance issue — Badger/SQLite with WAL mode is performing many small synchronous I/O ops that get amplified by the encrypted filesystem layer.
+**Key finding**: Performance degrades to ~6 seconds for `skate list` on machines with **encrypted home directories** (ecryptfs). The same operations are fast on machines without encrypted homes. This is an I/O performance issue — Badger/SQLite with WAL mode is performing many small synchronous I/O ops that get amplified by the encrypted filesystem layer. <!-- @rename-keep -->
 **Root cause hypothesis**: `PRAGMA journal_mode = WAL` + `PRAGMA synchronous = NORMAL` means many small writes/reads that compound on encrypted filesystems. Also `db.Sync()` calls add overhead.
 **Relevance to SugarCraft**: Sugar-skate uses the same SQLite WAL approach. PHP's SQLite3 extension has the same vulnerability. **High risk** — users on encrypted Linux homes (common for security-conscious developers) will experience severe slowdowns.
 **Workaround observed**: None satisfactory. Suggestion to use `PRAGMA synchronous = OFF` for bulk reads, but risks data integrity loss on crash.
@@ -74,10 +74,10 @@ From the first-stage analysis, these gaps were identified:
 **SugarCraft gap**: Sugar-skate stores data unencrypted. No encryption layer exists.
 **Strategic note**: Encryption is the #1 most requested feature that hasn't been addressed. SugarCraft could implement it with a cleaner API than the fork's `--password` flag approach.
 
-### Issue #162 — "Copy the value to clipboard on `skate get`" (Open, Sep 2025)
+### Issue #162 — "Copy the value to clipboard on `skate get`" (Open, Sep 2025) <!-- @rename-keep -->
 
 **Signal**: 4 👍, 1 👎
-**Request**: `skate get secret -c` to copy value to clipboard (like `xclip -selection c`).
+**Request**: `skate get secret -c` to copy value to clipboard (like `xclip -selection c`). <!-- @rename-keep -->
 **Maintainer response**: Not directly addressed in thread.
 **SugarCraft gap**: Not implemented. Sugar-skate has no clipboard integration.
 **Strategic note**: This is a trivial feature to add via `proc_open('xclip')` or similar in PHP. It demonstrates ecosystem awareness but is low priority.
@@ -93,14 +93,14 @@ From the first-stage analysis, these gaps were identified:
 ### Issue #145 — "feature request: autocomplete key names" (Open, Apr 2025)
 
 **Signal**: Active, open.
-**Request**: Shell completion for key names when using `skate get <TAB>`.
+**Request**: Shell completion for key names when using `skate get <TAB>`. <!-- @rename-keep -->
 **SugarCraft gap**: No shell integration at all.
 **Strategic note**: This is a CLI UX feature rather than a library feature. SugarCraft's PHP CLI nature makes this harder to implement natively (would need to support bash/zsh completions externally).
 
 ### Issue #138 — "Support for concurrent requests" (Open, Mar 2025)
 
 **Signal**: Open, no explicit maintainer response visible.
-**Request**: Multiple simultaneous `skate` invocations should not corrupt the database.
+**Request**: Multiple simultaneous `skate` invocations should not corrupt the database. <!-- @rename-keep -->
 **Root cause**: SQLite WAL mode allows concurrent reads but only one writer. Concurrent writes from multiple processes can cause `SQLITE_BUSY` errors or in worst case database corruption if the locking protocol fails.
 **SugarCraft exposure**: Identical — `Database.php` uses WAL mode with no explicit busy timeout handling beyond `busyTimeout(5000)`. This is a **real risk for production use**.
 **Workaround**: Users must serialize writes externally (e.g., `flock` around skate invocations).
@@ -109,7 +109,7 @@ From the first-stage analysis, these gaps were identified:
 
 ## 5. Important Closed Issues
 
-### Issue #21 — "`skate get {key}` takes ~1.17s, `skate get {key}` takes ~2.9s" (Closed, Jan 2025)
+### Issue #21 — "`skate get {key}` takes ~1.17s, `skate get {key}` takes ~2.9s" (Closed, Jan 2025) <!-- @rename-keep -->
 
 **Historical significance**: This was the performance issue that drove the cloud sync design. Skate was phoning home for crypt keys on *every operation* — even local-only ones — causing 1-3 second delays per invocation. Multiple users confirmed the issue.
 **Resolution**: v1.0.0 removed cloud features entirely. Issue closed as "no longer an issue."
@@ -124,7 +124,7 @@ From the first-stage analysis, these gaps were identified:
 
 ### Issue #35 — "feat: add styling to skate list" (Closed, merged)
 
-**Resolution**: Added lipgloss styling to `skate list` output.
+**Resolution**: Added lipgloss styling to `skate list` output. <!-- @rename-keep -->
 **SugarCraft status**: Sugar-skate outputs plain text. Lipgloss styling could be added as an optional feature via `candy-sprinkles`.
 
 ### Issue #97 — "skate list should not print long strings with newlines" (Open)
@@ -161,7 +161,7 @@ Ranked by community demand (based on issue reactions, discussion engagement, and
 5. **Clipboard integration** — Issue #162, 4 👍
 6. **Shell autocomplete** — Issue #145, CLI UX standard expectation
 7. **Long string preview truncation** — Issue #97, PR #177 just merged (May 2026)
-8. **TTL/expiry** — ✅ Already implemented in sugar-skate (sugar-skate already has this)
+8. **TTL/expiry** — ✅ Already implemented in candy-kv (candy-kv already has this)
 
 ---
 
@@ -170,7 +170,7 @@ Ranked by community demand (based on issue reactions, discussion engagement, and
 ### PR #177 — "feat(list): show single-line previews for long/multiline values" (Merged May 2026)
 
 **Significance**: Addresses Issue #97 — long multiline values now display truncated previews instead of raw dump. This is the most recent significant feature addition.
-**Note**: This is a Go implementation detail for the upstream. SugarCraft sugar-skate doesn't currently truncate — implementing this would be a user-facing improvement.
+**Note**: This is a Go implementation detail for the upstream. SugarCraft candy-kv doesn't currently truncate — implementing this would be a user-facing improvement.
 
 ### PR #125 — "fix: delete-dbs" (v1.0.1, Mar 2025)
 
@@ -186,7 +186,7 @@ Ranked by community demand (based on issue reactions, discussion engagement, and
 
 ### PR #74 — "feat: add delete-db suggestions" (v1.0.0)
 
-**Significance**: Added Levenshtein suggestions when deleting a database that doesn't exist. This is the same typo-suggestion pattern already in sugar-skate's `suggestSimilar()`.
+**Significance**: Added Levenshtein suggestions when deleting a database that doesn't exist. This is the same typo-suggestion pattern already in candy-kv's `suggestSimilar()`.
 
 ---
 
@@ -229,7 +229,7 @@ The performance issue on encrypted filesystems is the most significant ongoing p
 **Reproduced scenario**:
 
 - Linux Mint with ecryptfs encrypted home directory
-- `skate list` takes 6+ seconds
+- `skate list` takes 6+ seconds <!-- @rename-keep -->
 - Same binary on non-encrypted machine: fast
 - Root cause: SQLite in WAL mode performs fsync-heavy operations that compound on stacked filesystem encryption
 
@@ -276,7 +276,7 @@ The emergence of `AmrSaber/KV` demonstrates that when skate's architecture can't
 
 **AmrSaber/KV features beyond skate**:
 
-- Full SQLite per-database storage (like sugar-skate)
+- Full SQLite per-database storage (like candy-kv)
 - Per-key AES-256-GCM encryption with PBKDF2
 - Value history/versioning
 - TTL/expiry
@@ -294,7 +294,7 @@ The emergence of `AmrSaber/KV` demonstrates that when skate's architecture can't
 
 ### Issue #97 — Multiline Values Break List Output
 
-**Complaint**: Storing a shell script via `skate set script < script.sh` causes `skate list` to dump the entire script content with raw newlines, making the output unreadable and potentially breaking terminal scrollback.
+**Complaint**: Storing a shell script via `skate set script < script.sh` causes `skate list` to dump the entire script content with raw newlines, making the output unreadable and potentially breaking terminal scrollback. <!-- @rename-keep -->
 **User expectation**: Preview format like `(2000 chars omitted)` or `string with newlines omitted`.
 **Resolution**: PR #177 merged addressing this (May 2026).
 
@@ -340,21 +340,21 @@ Users who switched between local `charm serve` and production servers hit "Encry
 
 ### Levenshtein Suggestions
 
-The typo suggestion system in `findDb()` is a well-loved UX touch. It uses Levenshtein distance computed against all known database names, with a threshold of `diff` (length difference between names). This pattern was directly ported to sugar-skate's `suggestSimilar()`.
+The typo suggestion system in `findDb()` is a well-loved UX touch. It uses Levenshtein distance computed against all known database names, with a threshold of `diff` (length difference between names). This pattern was directly ported to candy-kv's `suggestSimilar()`.
 
 **Elegance**: The suggestion only appears on actual miss, doesn't interfere with normal operation, and stderr output keeps stdout clean for piped values.
 
 ### STDIN Value Reading
 
-The `set` command accepts no value argument and reads from stdin: `skate set foo < file.txt`. This is documented but users frequently discover it by accident. It's a clean interface that aligns with Unix conventions.
+The `set` command accepts no value argument and reads from stdin: `skate set foo < file.txt`. This is documented but users frequently discover it by accident. It's a clean interface that aligns with Unix conventions. <!-- @rename-keep -->
 
-**SugarCraft status**: Already implemented in `bin/skate` CLI script (reads one line from STDIN when no value given).
+**SugarCraft status**: Already implemented in `bin/candy-kv` CLI script (reads one line from STDIN when no value given).
 
 ### Delimiter Parsing Fix (PR #30)
 
 A subtle bug where delimiter strings like `\t` were not being properly unquoted. The fix used `strconv.Unquote()` instead of raw string formatting. This demonstrates the hazard of using `fmt.Sprintf` for string formatting of format strings.
 
-**Pattern applicable to SugarCraft**: Any string that will be used as a format string should be unquoted/escaped properly. The sugar-skate `list()` method uses `$delimiter` directly in output — but it's used as a literal string concatenation, not a format string, so it's safe.
+**Pattern applicable to SugarCraft**: Any string that will be used as a format string should be unquoted/escaped properly. The candy-kv `list()` method uses `$delimiter` directly in output — but it's used as a literal string concatenation, not a format string, so it's safe.
 
 ### Go Module v2 Path
 
@@ -385,7 +385,7 @@ This is a workaround, not a fix.
 
 ### Shell History
 
-Users are warned that `skate set key value` leaves the command in shell history. Workaround is to use STDIN: `skate set key < <(echo "value")` or use environment variable suppression.
+Users are warned that `skate set key value` leaves the command in shell history. Workaround is to use STDIN: `skate set key < <(echo "value")` or use environment variable suppression. <!-- @rename-keep -->
 
 **SugarCraft**: The same issue exists for PHP CLI. Could be addressed by adding a `--no-history` flag or documenting the STDIN workaround.
 
@@ -421,7 +421,7 @@ These are ideas that were raised but never accepted upstream, which SugarCraft c
 
 Author attempted to implement `--key` / `SKATE_DB_KEY` but maintainers haven't accepted the PR. This would add AES encryption per database or per key.
 
-**SugarCraft opportunity**: Implement this cleanly with a `SugarCraft\Skate\Crypto` layer. Use PHP's `openssl_encrypt`/`openssl_decrypt` with AES-256-GCM. Provide both env-var and interactive password modes.
+**SugarCraft opportunity**: Implement this cleanly with a `SugarCraft\Kv\Crypto` layer. Use PHP's `openssl_encrypt`/`openssl_decrypt` with AES-256-GCM. Provide both env-var and interactive password modes.
 
 ### Value Versioning (Issue #80)
 
@@ -514,13 +514,13 @@ In priority order based on ecosystem demand and strategic value:
    - Could be a `--preview-length` flag
 
 5. **Shell Completion** (Issue #145)
-   - Provide a `skate --completion bash` command that outputs completions
+   - Provide a `skate --completion bash` command that outputs completions <!-- @rename-keep -->
    - Users source the output to get key-name completion
    - More portable than deep shell integration
 
 6. **Clipboard Integration** (Issue #162)
    - `Store::getClipboard($key)` method using `proc_open('xclip')` or similar
-   - CLI flag: `skate get --copy key`
+   - CLI flag: `skate get --copy key` <!-- @rename-keep -->
 
 ### Lower Priority (Nice to Have)
 
@@ -562,7 +562,7 @@ The `main.go` single-file design prevents plugin architectures, alternative back
 
 ### Fork as Innovation Channel
 
-When the upstream can't/won't implement features, forks do. `AmrSaber/KV` is now ahead of `skate` in features. This is healthy for the ecosystem — it proves demand and provides a reference implementation.
+When the upstream can't/won't implement features, forks do. `AmrSaber/KV` is now ahead of `skate` in features. This is healthy for the ecosystem — it proves demand and provides a reference implementation. <!-- @rename-keep -->
 
 **SugarCraft strategy**: Monitor the fork for proven patterns. The fork's features (encryption, versioning, TTL) are all validated demand.
 
@@ -584,9 +584,9 @@ The Go code in PR #30 fixed `db.Sync()` ignoring its error return. This is a com
 
 ### Escape Shell Metacharacters in CLI
 
-The `skate set` command takes user input and passes it through the shell. Values containing `$`, backticks, or special characters can cause unexpected behavior.
+The `skate set` command takes user input and passes it through the shell. Values containing `$`, backticks, or special characters can cause unexpected behavior. <!-- @rename-keep -->
 
-**SugarCraft rule**: Use `escapeshellarg()` for all user-supplied values passed to shell commands. In the existing `bin/skate` script, this should be verified.
+**SugarCraft rule**: Use `escapeshellarg()` for all user-supplied values passed to shell commands. In the existing `bin/candy-kv` script, this should be verified.
 
 ### Test on Encrypted Filesystems
 
@@ -614,13 +614,13 @@ The number of encryption requests (#160) and the existence of encrypted forks de
 
 `AmrSaber/KV` has out-innovated the upstream through faster iteration, better feature coverage (encryption, versioning, TTL, batch ops, shell completion). This pattern is common in mature ecosystems.
 
-**SugarCraft opportunity**: Position sugar-skate as the "full-featured PHP port" with features the Go upstream won't accept.
+**SugarCraft opportunity**: Position candy-kv as the "full-featured PHP port" with features the Go upstream won't accept.
 
 ### MCP Integration Trend
 
 The `kv-secrets` fork explicitly mentions MCP (Model Context Protocol) integration for AI coding agents. This is an emerging pattern — KV stores as backends for AI agent secret management.
 
-**Future-looking**: SugarCraft should consider an MCP server implementation for sugar-skate, allowing AI tools (Cursor, Claude Code) to access secrets securely.
+**Future-looking**: SugarCraft should consider an MCP server implementation for candy-kv, allowing AI tools (Cursor, Claude Code) to access secrets securely.
 
 ---
 
@@ -664,7 +664,7 @@ The `@db` multi-database syntax is elegant. Sugar-skate already has it. No other
 
 ### AmrSaber/KV Fork Feature Matrix
 
-| Feature | skate (upstream) | AmrSaber/KV (fork) | sugar-skate (SugarCraft) |
+| Feature | skate (upstream) | AmrSaber/KV (fork) | candy-kv (SugarCraft) |
 |---------|-------------------|--------------------|-------------------------|
 | Local SQLite storage | ✅ Badger | ✅ SQLite | ✅ SQLite |
 | Multi-database | ✅ | ✅ | ✅ |
@@ -794,4 +794,4 @@ The charmbracelet/skate ecosystem reveals a KV store that was fundamentally well
 4. **Concurrent write safety** is a data corruption risk requiring a one-line fix
 5. **The fork ecosystem** (AmrSaber/KV) validates feature demand and provides reference implementations
 
-SugarCraft's sugar-skate is well-positioned: it has the local-only correctness, the modular architecture, and the PHP-native integration that upstream lacks. By implementing versioning and encryption — both validated by the ecosystem — SugarCraft can exceed the upstream's capability while maintaining compatibility.
+SugarCraft's candy-kv is well-positioned: it has the local-only correctness, the modular architecture, and the PHP-native integration that upstream lacks. By implementing versioning and encryption — both validated by the ecosystem — SugarCraft can exceed the upstream's capability while maintaining compatibility.

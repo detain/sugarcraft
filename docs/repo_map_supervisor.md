@@ -113,7 +113,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 30 — Ecosystem audit (no code, produces roadmap)](repo_map_step_30.md) — branch: `ai/ecosystem-audit`, PR #909
 - [x] [Step 31 — candy-pty adopts candy-input + candy-ansi](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
 - [x] [Step 32 — candy-tetris + candy-minesweeper adopt candy-buffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
-- [x] [Step 33 — sugar-skate + sugar-wishlist + candy-git adopt candy-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
+- [x] [Step 33 — candy-kv + sugar-wishlist + candy-git adopt candy-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
 - [x] [Step 34 — sugar-datepicker + sugar-toast adopt candy-buffer + candy-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
 - [x] [Step 35 — sugar-tick + sugar-post + candy-git-server adopt candy-async](repo_map_step_35.md) — branch: `ai/async-adopters`, PR #915
 - [x] [Step 36 — candy-flip + candy-kit + honey-bounce + candy-flappy adopt candy-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`, PR #916
@@ -137,7 +137,7 @@ The shared-foundation refactor is **complete**. Summary:
 
 - **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 candy-forms migration which was not completed)
 - **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, candy-fuzzy, candy-async
-- **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, sugar-skate, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy
+- **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, candy-kv, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy
 - **4 items deferred** to future plan (candy-metrics, candy-log, candy-mouse, candy-mold — see docs/repo_map_update_followups.md)
 - **1 step not completed** (step-15 candy-forms — FuzzyMatcher API incompatibility; deferred)
 - Retrospective: docs/repo_map_update.md § Plan retrospective

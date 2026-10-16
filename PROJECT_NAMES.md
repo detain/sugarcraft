@@ -134,6 +134,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
 | **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
 | **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
+| **CandyKv** | candy + kv = personal key/value store app. `kv` says the domain plainly (was SugarSkate — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
 | **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the `sugar-` family placement. |
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |
@@ -173,7 +174,6 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyKit** | "Kit" is filler; the lib is CLI presentation primitives | `CupcakeKit`, `BentoCli`, `BiscuitCli` |
 | **CandyShine** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
 | **CandyHermit** | "Hermit" is an inherited name; doesn't say fuzzy-find | `TruffleFinder`, `MacaronFilter` |
-| **SugarSkate** | "Skate" is an inherited name; doesn't say KV store | `CaramelStore`, `HoneyStore` |
 | **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
 | **SugarWishlist** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
 | **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
@@ -207,7 +207,7 @@ matching package turns out to be.
 | **BentoLauncher** | launcher / picker (SugarWishlist alternative) |
 | **MarshmallowFilter** | fuzzy-finder (CandyHermit alternative) |
 | **HoneyTunnel** | SSH / tunnel (CandyWish alternative) |
-| **CaramelStore** | KV / cache (SugarSkate alternative) |
+| **CaramelStore** | KV / cache (CandyKv alternative) |
 | **TruffleFinder** | fuzzy / search overlay |
 | **GlazeMarkdown** | markdown renderer (CandyShine alternative) |
 | **IcingTheme** | theme system / palette extension |

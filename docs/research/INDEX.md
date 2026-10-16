@@ -87,7 +87,7 @@ To implement an item:
 
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
-| **sugar-skate** | [research/libraries/sugar-skate-research.md](libraries/sugar-skate-research.md) | 1. JSON export, 2. Levenshtein, 3. TTL |
+| **candy-kv** | [research/libraries/candy-kv-research.md](libraries/candy-kv-research.md) | 1. JSON export, 2. Levenshtein, 3. TTL |
 | **candy-git** | [research/libraries/candy-git-research.md](libraries/candy-git-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
 | **sugar-crush** | [research/libraries/sugar-crush-research.md](libraries/sugar-crush-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
 | **sugar-post** | [research/libraries/sugar-post-research.md](libraries/sugar-post-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
@@ -119,8 +119,8 @@ To implement an item:
 | 13 | candy-mosaic | WezTerm detection fix | 0.5h | [link](libraries/candy-mosaic-research.md) |
 | 14 | candy-vt | DECSTBM margins | 2-3h | [link](libraries/candy-vt-research.md) |
 | 15 | candy-vt | Auto-wrap DECAWM | 2h | [link](libraries/candy-vt-research.md) |
-| 16 | sugar-skate | CSV/JSON export | 1-2h | [link](libraries/sugar-skate-research.md) |
-| 17 | sugar-skate | Levenshtein suggestions | 1h | [link](libraries/sugar-skate-research.md) |
+| 16 | candy-kv | CSV/JSON export | 1-2h | [link](libraries/candy-kv-research.md) |
+| 17 | candy-kv | Levenshtein suggestions | 1h | [link](libraries/candy-kv-research.md) |
 | 18 | candy-flip | imagecreatefromstring | 1-2h | [link](libraries/candy-flip-research.md) |
 | 19 | candy-flip | Per-frame timing | 3-4h | [link](libraries/candy-flip-research.md) |
 | 20 | sugar-mines | Chord clicks | 2-3h | [link](libraries/candy-minesweeper-research.md) |

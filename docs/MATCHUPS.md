@@ -84,7 +84,7 @@ called out in the table below.
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **SugarWishlist** (`sugar-wishlist/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
-| **SugarSkate** (`sugar-skate/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
+| **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
 | **SugarPost** (`sugar-post/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | **CandyGitServer** (`candy-git-server/`) | 🟢 ready | Self-hostable Git server over SSH (authorized keys), Git daemon, and HTTP — users, repos, access control, optional LFS. |
 | **SugarCrush** (`sugar-crush/`) | 🟢 ready | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions. |
@@ -202,7 +202,7 @@ reference projects supplied the ideas, not the code.
 | CandyForms (candy-forms/) | [huh](https://github.com/charmbracelet/huh) |
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
 | SugarReel (sugar-reel/) | [tplay](https://github.com/maxcurzi/tplay) · [glyph](https://github.com/seatedro/glyph) · [video-to-ascii](https://github.com/joelibaceta/video-to-ascii) |
-| SugarSkate (sugar-skate/) | [skate](https://github.com/charmbracelet/skate) |
+| CandyKv (candy-kv/) | [skate](https://github.com/charmbracelet/skate) |
 | CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
 | CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
 | SugarStickers (sugar-stickers/) | [stickers](https://github.com/76creates/stickers) |

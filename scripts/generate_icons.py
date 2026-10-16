@@ -135,7 +135,7 @@ SUBJECTS: dict[str, str] = {
     "sugar-stickers":  "a glossy five-point candy star sticker with one corner peeling up to show the white sticker backing surrounded by smaller heart and circle sticker shapes",
     "sugar-toast":     "a chubby glossy slice of golden-brown toast with a square pat of butter melting on top",
     "sugar-table":     "a glossy candy spreadsheet grid floating in the air, three columns by three rows of pastel cells with the header row in pink and tiny gumdrop dots inside two cells",
-    "sugar-skate":     "a glossy candy-pink skateboard deck with rainbow-sprinkle grip tape and lollipop wheels at three-quarter angle",
+    "candy-kv":     "a glossy candy-pink skateboard deck with rainbow-sprinkle grip tape and lollipop wheels at three-quarter angle",
     "sugar-readline":  "a chubby glossy candy speech bubble with a chunky chevron prompt and a blinking cursor block inside",
     "sugar-post":      "a glossy candy-pink envelope with a heart wax seal and a small folded paper airplane darting out of it",
     "sugar-veil":      "a pair of glossy candy-pink theater curtains tied back with satin bows parting to reveal a single bright sparkle in the middle",

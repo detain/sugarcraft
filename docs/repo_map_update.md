@@ -55,13 +55,13 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 ### Ecosystem-wide adoption sweep (Phase 6, steps 31–37)
 - step-31 candy-pty: adopted candy-input + candy-ansi (PR #910)
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + candy-mouse + candy-testing (PR #911)
-- step-33 sugar-skate + sugar-wishlist + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
+- step-33 candy-kv + sugar-wishlist + candy-git: adopted candy-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
 - step-35 sugar-tick + sugar-post + candy-git-server: adopted candy-async (PR #915)
 - step-36 candy-flip + candy-kit + honey-bounce + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, sugar-skate, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, sugar-wishlist, candy-git, sugar-datepicker, sugar-toast, sugar-tick, sugar-post, candy-git-server, candy-flip, candy-kit, honey-bounce, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, candy-mouse, candy-mold — all deferred from step-37 catch-all).
@@ -536,7 +536,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 7. **sugar-toast > daltonsw/bubbleup** — Queue-based multi-alert (upstream single-alert), 9 positions (upstream 6), progress bar, action buttons, history log, UTF-8 multibyte fixes.
 
-8. **sugar-skate > charmbracelet/skate** — Import/export system (Go has none), 17-locale i18n (Go has none), schema migration, glob-to-SQL, multi-database via suffix syntax.
+8. **candy-kv > charmbracelet/skate** — Import/export system (Go has none), 17-locale i18n (Go has none), schema migration, glob-to-SQL, multi-database via suffix syntax.
 
 9. **candy-freeze > charmbracelet/freeze** — 5 window decoration styles (macOS-only upstream), TTF font embedding, line highlighting, language detection, pure PHP SVG (no WASM/FFI), immutable builders.
 

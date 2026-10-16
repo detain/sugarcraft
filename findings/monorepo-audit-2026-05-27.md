@@ -130,20 +130,20 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 6: sugar-bits, sugar-charts, sugar-skate, candy-git
+### Group 6: sugar-bits, sugar-charts, candy-kv, candy-git
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-bits | 681 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | sugar-charts | 327 ✓ | APPROVE | 0 | 2 | 3 | 0 |
-| sugar-skate | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 2 | 0 |
+| candy-kv | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 2 | 0 |
 | candy-git | 116 ⚠️ | REQUEST_CHANGES | 0 | 3 | 5 | 0 |
 
 **sugar-bits** — TUI components. 681 tests. Issue: 19 `class_alias()` entries to `SugarCraft\Forms\*` create confusing architecture where the "real" code lives elsewhere (candy-forms).
 
 **sugar-charts** — Charting library. Issues: `BarChart::copy()` and `barWidthCopy()` have nearly identical 69-line bodies (DRY violation); many features documented as 🟡 "pending" in README.
 
-**sugar-skate** — Key/value store. Issues: `YamlImporter` uses reflection to access private `Store::database()` method (fragile); minimal YAML parser only handles `key: value` pairs; `Store::setWithTtl()` silently no-ops on invalid TTL; `get()` writes suggestion to STDERR (not configurable).
+**candy-kv** — Key/value store. Issues: `YamlImporter` uses reflection to access private `Store::database()` method (fragile); minimal YAML parser only handles `key: value` pairs; `Store::setWithTtl()` silently no-ops on invalid TTL; `get()` writes suggestion to STDERR (not configurable).
 
 **candy-git** — Git TUI. 116 tests (2 skipped). Issues: `App` class at 1201 lines violates single responsibility; `WorktreeEntry::fromPorcelainLine()` calls `is_dir()` causing test skips; `HistoryManager` uses string op names in `match` (type-unsafe); `withAll()` has 22 parameters.
 
@@ -448,7 +448,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 15. **[EXTRACT]** Extract `TickMsg` base class from candy-tetris/candy-minesweeper/candy-flappy
 16. **[EXTRACT]** Create `SugarCraft\Core\Tests\TestCase` base + `StreamHelper` trait
 17. **[DOCS]** Add CALIBER_LEARNINGS.md to sugar-datepicker
-18. **[FIX]** sugar-skate: Replace reflection in YamlImporter with public method
+18. **[FIX]** candy-kv: Replace reflection in YamlImporter with public method
 19. **[FIX]** sugar-tick: Add `close()` to SqliteBackend
 20. **[FIX]** sugar-tick: Fix ExporterInterface mismatch
 
@@ -567,7 +567,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, candy-lister | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
-| 6 | sugar-bits, sugar-charts, sugar-skate, candy-git | 1,190 | ⚠️ stash 2 skipped |
+| 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
 | 8 | sugar-crush, sugar-crumbs, sugar-dash, sugar-post | 5,714 | ⚠️ post blocked |
 | 9 | candy-ansi-inspect, sugar-stickers, sugar-table, sugar-tick, sugar-veil | 539 | ⚠️ tick, stickers issues |

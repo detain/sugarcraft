@@ -37,7 +37,7 @@ The 8 shared packages:
 |------|-------------|--------------------------|
 | Step 31 | candy-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
-| Step 33 | sugar-skate, sugar-wishlist, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
+| Step 33 | candy-kv, sugar-wishlist, candy-git | candy-buffer, candy-fuzzy, candy-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | sugar-tick, sugar-post, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | candy-flip, candy-kit, honey-bounce, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
@@ -116,14 +116,14 @@ The 8 shared packages:
 
 ---
 
-### sugar-skate
+### candy-kv
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-fuzzy | Entry.php/Store.php filter/search database entries — SmithWatermanMatcher would replace ad-hoc string matching | S |
 | candy-buffer | Store.php renders list output via string — Buffer would give diff-friendly rendering | S |
 
-**Notes:** sugar-skate is a database-migration tool. Fuzzy entry lookup (search for a migration by partial name) is a natural fit for candy-fuzzy.
+**Notes:** candy-kv is a database-migration tool. Fuzzy entry lookup (search for a migration by partial name) is a natural fit for candy-fuzzy.
 
 ---
 
@@ -298,7 +298,7 @@ The 8 shared packages:
 
 | Effort | libs |
 |--------|------|
-| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, sugar-skate, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
+| **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, candy-kit (buffer+layout), candy-mouse, candy-kv, sugar-wishlist (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), sugar-tick (testing), candy-mold, candy-flip (buffer+async), candy-flappy (all 3) |
 | **M** (multiple pkgs or larger surface) | candy-pty, candy-flip, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), sugar-tick (buffer+async), sugar-post, candy-git-server, honey-bounce, candy-metrics, candy-log |
 
 ---

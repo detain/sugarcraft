@@ -1,0 +1,91 @@
+<p class="lede" style="margin-top: 28px;">Persistent key/value store with a plugin architecture. Ships with Memory, SQLite, Badger (BadgerDB), and InMemory backends. Supports glob + prefix listing.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-kv</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
+
+$skate = new Store();                       // SQLite files under ~/.config/skate
+
+$skate-&gt;set('user:1', 'Alice');
+$skate-&gt;set('user:2', 'Bob');
+echo $skate-&gt;get('user:1');                 // 'Alice'
+echo $skate-&gt;get('missing', 'n/a');         // fallback: 'n/a'
+
+// A key@db suffix routes to a named database
+$skate-&gt;set('token@passwords', 'ghp_xxxx');
+$skate-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
+
+foreach ($skate-&gt;list('user:*') as $entry) {  // glob patterns; yields Entry
+    echo "{$entry-&gt;key} =&gt; {$entry-&gt;value}\n";
+}
+$skate-&gt;listDatabases();                    // ['default', 'passwords']</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>~/.config/skate</code> by default); <code>key@db</code> picks the database.</span></div>
+      <div class="feature"><strong>Glob and fuzzy listing</strong><span><code>*</code> / <code>?</code> glob patterns, reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
+      <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time; expired entries are never returned.</span></div>
+      <div class="feature"><strong>Binary values and transactions</strong><span>Store files as binary entries and group writes in a transaction.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-kv">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-kv/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-kv/tree/main/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files</td></tr>
+<tr><td>Store</td><td>set(key, value, bool $binary = false, ?int $ttlSeconds = null) / setWithTtl(key, value, ttl)</td><td>Write a key; <code>key@db</code> routes to a named database</td></tr>
+<tr><td>Store</td><td>get(key, fallback = '') / entry(key)</td><td>Read a value, or the full Entry</td></tr>
+<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode, delimiter) / fuzzyFilter(query)</td><td>Glob or fuzzy listing</td></tr>
+<tr><td>Store</td><td>delete(key) / setFile(key, path) / getFile(key, path)</td><td>Delete; binary values from and to files</td></tr>
+<tr><td>Store</td><td>listDatabases() / deleteDatabase(name) / transaction(dbName, callable)</td><td>Database management</td></tr>
+<tr><td>Database</td><td>__construct(path, name) / get / set / delete / list / count / deleteMany / transaction</td><td>One SQLite database</td></tr>
+<tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired()</td><td>A stored value</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/basic.gif" alt="Get / set / list">
+                <h3>Get / set / list</h3>
+                <span class="demo-caption">Default in-memory store — set, get, list, delete.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/glob.gif" alt="Glob listing">
+                <h3>Glob listing</h3>
+                <span class="demo-caption">List keys matching `users/*` and `cache/*`.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/reverse-order.gif" alt="Reverse-order list">
+                <h3>Reverse-order list</h3>
+                <span class="demo-caption">List a key range in reverse insertion order.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/binary.gif" alt="Binary values">
+                <h3>Binary values</h3>
+                <span class="demo-caption">Round-trip raw bytes in / out of the store.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/multidb.gif" alt="Multiple DBs">
+                <h3>Multiple DBs</h3>
+                <span class="demo-caption">Two named stores side-by-side, no collisions.</span>
+            </div>
+        </div>
+    </div>
+</section>

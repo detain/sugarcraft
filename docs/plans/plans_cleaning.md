@@ -25,7 +25,7 @@
 
 - W7: unused path-repos — candy-vt still has unused candy-buffer path-repo
 - W14.4/5: icons — 60 present but need size verification
-- W15: orphaned features — only sugar-skate verified
+- W15: orphaned features — only candy-kv verified
 - W16: status bar SSOT exists but migration unclear
 
 ### ❌ NOT DONE
@@ -49,7 +49,7 @@
 - candy-core: AtomicJsonFile/Json::decodeArray/Sanitize SSOT
 - candy-fuzzy: ScoringProfile port, DoS caps
 - candy-git: rename parsing
-- sugar-skate: sanitizeForTty
+- candy-kv: sanitizeForTty
 
 ### ⚠️ PARTIAL (2)
 

@@ -182,8 +182,8 @@ flag_management:
     - name: sugar-readline
       paths: ["sugar-readline/src/**"]
       carryforward: true
-    - name: sugar-skate
-      paths: ["sugar-skate/src/**"]
+    - name: candy-kv
+      paths: ["candy-kv/src/**"]
       carryforward: true
     - name: sugar-stickers
       paths: ["sugar-stickers/src/**"]
@@ -517,12 +517,12 @@ component_management:
         - "sugar-readline/src/**"
       flag_regexes:
         - "^sugar-readline$"
-    - component_id: sugar-skate
-      name: sugar-skate
+    - component_id: candy-kv
+      name: candy-kv
       paths:
-        - "sugar-skate/src/**"
+        - "candy-kv/src/**"
       flag_regexes:
-        - "^sugar-skate$"
+        - "^candy-kv$"
     - component_id: sugar-stickers
       name: sugar-stickers
       paths:

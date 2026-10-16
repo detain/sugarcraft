@@ -347,15 +347,15 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/skate → sugar-skate
+## charmbracelet/skate → candy-kv
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in sugar-skate | Notes |
+| Upstream | Title | Status in candy-kv | Notes |
 |---|---|:--:|---|
 | [#151](https://github.com/charmbracelet/skate/pull/151) (2025-06-26) | feat: use fang | ⚪ | Uses fang for CLI |
 | [#150](https://github.com/charmbracelet/skate/pull/150) (2025-06-23) | feat: basic aliases for list and delete commands | 🟡 | Aliases — may be nice to add |
-| [#96](https://github.com/charmbracelet/skate/pull/96) (2025-02-03) | Document STDIN support for `set` | ✅ | sugar-skate already supports STDIN for values |
+| [#96](https://github.com/charmbracelet/skate/pull/96) (2025-02-03) | Document STDIN support for `set` | ✅ | candy-kv already supports STDIN for values |
 
 ### High-comment open issues
 

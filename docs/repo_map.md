@@ -38,7 +38,7 @@
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
 | [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, candy-ansi-inspect |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
-| [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | sugar-skate |
+| [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | candy-kv |
 | [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-git-server |
 | [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-bits |
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, candy-shine |
@@ -654,9 +654,9 @@
 **Features:** Multi-database (subdirectories), Levenshtein distance for fuzzy DB names, read/write Badger transactions.
 
 **SugarCraft Mapping:**
-- `sugar-skate` → Primary port
+- `candy-kv` → Primary port
 
-**Note:** Port exists as `sugar-skate` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `candy-kv` (🟢 in MATCHUPS.md).
 
 ---
 

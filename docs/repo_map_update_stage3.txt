@@ -1,7 +1,7 @@
 # SugarCraft Stage 3 Update Analysis
 
 Cross-cutting analysis of 9 update documents covering candy-ansi-inspect, candy-freeze,
-sugar-datepicker, candy-metrics, sugar-toast, sugar-skate, candy-git-server, sugar-wishlist,
+sugar-datepicker, candy-metrics, sugar-toast, candy-kv, candy-git-server, sugar-wishlist,
 candy-hermit.
 
 ---
@@ -48,7 +48,7 @@ requires modifying core loops rather than registering handlers.
 ### B. No Golden File / Snapshot Testing Infrastructure
 candy-ansi-inspect has 116 unit tests but zero golden file regression tests. sugar-datepicker
 has 57 tests but no snapshot tests for `View()` output. candy-freeze's WindowStyleTest
-tests SVG structure but could use full render comparison. Only sugar-skate and
+tests SVG structure but could use full render comparison. Only candy-kv and
 candy-hermit have what could be called structured test coverage.
 
 **Shared risk:** Refactoring any rendering code can silently corrupt output format
@@ -122,7 +122,7 @@ Adding `--format png` to the CLI is trivial wiring. This closes the CLI/API pari
 - History log (not in upstream)
 - Display-cell aware slicing (fixes UTF-8 multibyte bugs in Go)
 
-### sugar-skate > charmbracelet/skate
+### candy-kv > charmbracelet/skate
 - Import/export system (Go skate has neither)
 - 17-locale i18n (Go skate has none)
 - Schema migration for legacy databases

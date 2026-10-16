@@ -156,17 +156,17 @@
 - **Effort**: 2-3 hours
 - **Research**: `libraries/candy-vt-research.md`
 
-### sugar-skate
+### candy-kv
 
 ### [ ] Add CSV/JSON export
 
 - **Effort**: 1-2 hours
-- **Research**: `libraries/sugar-skate-research.md`
+- **Research**: `libraries/candy-kv-research.md`
 
 ### [ ] Add Levenshtein typo suggestions
 
 - **Effort**: 1 hour
-- **Research**: `libraries/sugar-skate-research.md`
+- **Research**: `libraries/candy-kv-research.md`
 
 ### candy-flip
 
@@ -466,7 +466,7 @@ All 45 research documents available at:
 | sugar-post | 25KB |
 | candy-forms | 20KB |
 | sugar-readline | 18KB |
-| sugar-skate | 21KB |
+| candy-kv | 21KB |
 | candy-ansi-inspect | 13KB |
 | candy-git | 23KB |
 | sugar-stickers | 14KB |

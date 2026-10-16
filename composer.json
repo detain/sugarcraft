@@ -90,7 +90,7 @@
         "sugarcraft/sugar-post": "dev-master",
         "sugarcraft/sugar-readline": "dev-master",
         "sugarcraft/sugar-reel": "dev-master",
-        "sugarcraft/sugar-skate": "dev-master",
+        "sugarcraft/candy-kv": "dev-master",
         "sugarcraft/candy-ansi-inspect": "dev-master",
         "sugarcraft/candy-git": "dev-master",
         "sugarcraft/sugar-stickers": "dev-master",
@@ -461,7 +461,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-skate",
+            "url": "candy-kv",
             "options": {
                 "symlink": true
             }

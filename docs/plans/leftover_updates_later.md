@@ -289,7 +289,7 @@ because research adds three items the PTY plan did not call out:)
 - MCP client (M7).
 - Load `CLAUDE.md` on startup (M8).
 
-### sugar-skate
+### candy-kv
 
 - Import/export JSON/YAML (P1).
 - Levenshtein typo suggestions on db-not-found error (P2).
