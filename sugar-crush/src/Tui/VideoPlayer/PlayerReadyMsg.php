@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\VideoPlayer;
 
 use SugarCraft\Crush\App\Msg;
-use SugarCraft\Reel\Player;
+use SugarCraft\Video\Player;
 
 /**
  * The answer to the player build the shell armed behind its "Preparing…"

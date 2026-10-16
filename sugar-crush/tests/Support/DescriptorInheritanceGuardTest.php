@@ -474,25 +474,25 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 .             'DESCRIPTOR half: spec names 0,1,2 only and says nothing about 3+, the same '
                 . 'shape as the candy-pty rows above. NOT FIXABLE FROM THIS PACKAGE.',
         ],
-        // crush-media W5.1 put sugar-reel in the reachable closure (the /play
+        // crush-media W5.1 put sugar-video in the reachable closure (the /play
         // screen renders through it); both spawn sites are licensed here with
-        // the exposure filed as finding 58 of findings/sugar-reel.md, per the
+        // the exposure filed as finding 58 of findings/sugar-video.md, per the
         // guard's own both-halves protocol.
-        'sugar-reel/AudioPlayer.php::start' => [
+        'sugar-video/AudioPlayer.php::start' => [
             'count' => 1,
             'reason' => 'the audio child (ffplay/mpv), held in $this->processHandle for the '
-                . 'life of playback and bounded-killed by the destructor family sugar-reel '
+                . 'life of playback and bounded-killed by the destructor family sugar-video '
                 . 'shipped for E366. Spec names 0,1,2 only; the lifetime half is accounted '
                 . 'in tools/check-child-lifetimes.php. This row is the DESCRIPTOR half, '
-                . 'filed as finding 58 of findings/sugar-reel.md. NOT FIXABLE FROM THIS '
+                . 'filed as finding 58 of findings/sugar-video.md. NOT FIXABLE FROM THIS '
                 . 'PACKAGE — a child that outlives its spawn function by design cannot be '
                 . 'un-exposed from the spec side.',
         ],
-        'sugar-reel/Decode/FfmpegDecoder.php::open' => [
+        'sugar-video/Decode/FfmpegDecoder.php::open' => [
             'count' => 1,
             'reason' => 'the ffmpeg decoder, held in $this->process for the life of the '
                 . 'open stream — the same shape as the AudioPlayer row beside it, with the '
-                . 'same filed finding (sugar-reel finding 58) and the same lifetime '
+                . 'same filed finding (sugar-video finding 58) and the same lifetime '
                 . 'accounting in tools/check-child-lifetimes.php. NOT FIXABLE FROM THIS '
                 . 'PACKAGE.',
         ],

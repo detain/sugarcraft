@@ -1,0 +1,183 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Video\Tests;
+
+use SugarCraft\Video\Decode\Decoder;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Render\Mode;
+
+/**
+ * A Decoder that yields a fixed sequence of synthetic RgbFrame objects.
+ *
+ * Used in tests to provide deterministic frame sequences without any
+ * real video file or external process.
+ */
+class FakeDecoder implements Decoder
+{
+    /** @var list<RgbFrame> */
+    protected array $frames;
+
+    private int $index = 0;
+
+    /** How many times reopen() was called — observable proof a seek used it. */
+    private int $reopenCount = 0;
+
+    /** How many times open() was called — proves a mode switch did NOT re-spawn. */
+    private int $openCount = 0;
+
+    /** How many times close() was called — a re-spawn always closes first. */
+    private int $closeCount = 0;
+
+    /** $startSec of the most recent reopen() — lets tests verify seek targets. */
+    private ?float $lastReopenStartSec = null;
+
+    private bool $opened = false;
+
+    private bool $everOpened = false;
+
+    /**
+     * @param list<RgbFrame> $frames Sequence of frames to yield on each next() call
+     */
+    public function __construct(array $frames)
+    {
+        $this->frames = $frames;
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * The $mode and $startSec parameters are accepted for interface compatibility
+     * but ignored — FakeDecoder always replays its predetermined frame sequence
+     * from the start.
+     */
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
+    {
+        $this->opened = true;
+        $this->everOpened = true;
+        $this->index = 0;
+        $this->openCount++;
+    }
+
+    /**
+     * This decoder holds its frames in memory and can reset its index without a
+     * rebuild — the exact capability Player::rebuildDecoderAt() consults so an
+     * injected decoder survives seek/resize/mode-change instead of being
+     * silently re-created through DecoderFactory (which would try to open the
+     * fake path as a real file). Real ffmpeg/GIF decoders answer false.
+     */
+    public function reopensInPlace(): bool
+    {
+        return true;
+    }
+
+    public function next(): ?RgbFrame
+    {
+        // Auto-open on first use so tests don't need to call open() explicitly.
+        // But do NOT re-open after close() — close() truly closes the decoder.
+        if (!$this->opened) {
+            if (!$this->everOpened) {
+                $this->opened = true;
+                $this->everOpened = true;
+            } else {
+                // Was opened previously, then closed — stay closed.
+                return null;
+            }
+        }
+        return $this->frames[$this->index++] ?? null;
+    }
+
+    public function close(): void
+    {
+        $this->opened = false;
+        $this->everOpened = true; // Mark as "was opened then closed"
+        $this->closeCount++;
+    }
+
+    public function getIterator(): \Generator
+    {
+        while (($frame = $this->next()) !== null) {
+            yield $frame;
+        }
+    }
+
+    /**
+     * Re-open the decoder, resetting the frame index to replay the
+     * predetermined frame sequence from the start.
+     *
+     * Mirrors open() but preserves the existing frame sequence rather
+     * than re-allocating.
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
+    {
+        $this->index = 0;
+        $this->opened = true;
+        $this->everOpened = true;
+        $this->reopenCount++;
+        $this->lastReopenStartSec = $startSec;
+    }
+
+    /**
+     * Number of reopen() calls since construction. Lets a test observe that a
+     * seek/thumbnail path went THROUGH the in-place reopen (frameAt(), rebuild)
+     * rather than silently serving a stale frame from the current position.
+     */
+    public function reopenCount(): int
+    {
+        return $this->reopenCount;
+    }
+
+    /**
+     * Number of open() calls since construction. Together with reopenCount()/
+     * closeCount() this is the observable proof for finding #13: a mode cycle
+     * that keeps the decode geometry must leave all three counters untouched,
+     * because a decoder that survives the switch never re-spawns its source.
+     */
+    public function openCount(): int
+    {
+        return $this->openCount;
+    }
+
+    /**
+     * Number of close() calls since construction. A legitimate rebuild closes the
+     * old process first (finding F21: no leaked ffmpeg), so a nonzero count here
+     * always has a matching reopen()/re-spawn behind it.
+     */
+    public function closeCount(): int
+    {
+        return $this->closeCount;
+    }
+
+    /**
+     * $startSec passed to the most recent reopen() (null before any reopen).
+     */
+    public function lastReopenStartSec(): ?float
+    {
+        return $this->lastReopenStartSec;
+    }
+
+    /**
+     * Reset the frame index so next() starts from the beginning again.
+     */
+    public function reset(): void
+    {
+        $this->index = 0;
+    }
+
+    /**
+     * Return the number of frames in this decoder.
+     */
+    public function count(): int
+    {
+        return count($this->frames);
+    }
+
+    /**
+     * Return true if close() has been called.
+     */
+    public function isClosed(): bool
+    {
+        return !$this->opened;
+    }
+}

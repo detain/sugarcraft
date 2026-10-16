@@ -18,10 +18,10 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\VideoPlayer\OpenVideoPlayerMsg;
 use SugarCraft\Crush\Tui\VideoPlayer\PlayerReadyMsg;
 use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerScreen;
-use SugarCraft\Reel\Decode\RgbFrame;
-use SugarCraft\Reel\Msg\TickMsg as ReelTickMsg;
-use SugarCraft\Reel\Player;
-use SugarCraft\Reel\Render\Mode;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Msg\TickMsg as VideoTickMsg;
+use SugarCraft\Video\Player;
+use SugarCraft\Video\Render\Mode;
 
 /**
  * The W5.4 shell wiring around the player: the slot's lifecycle through
@@ -152,7 +152,7 @@ final class VideoPlayerWiringTest extends TestCase
     {
         $app = $this->vwApp();
 
-        [$same, $cmd] = $app->update(new ReelTickMsg());
+        [$same, $cmd] = $app->update(new VideoTickMsg());
 
         self::assertNull($cmd);
         self::assertNull($same->videoPlayer);

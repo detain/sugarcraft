@@ -28,7 +28,7 @@ namespace SugarCraft\Core\Util\Proc;
  * whose liveness is a `WNOHANG` poll — the three shapes that previously grew
  * five separate private ladders downstream (sugar-crush's `ProcessReaper`
  * absorbed four of them; sugar-dashboard's `ExternalModule::terminateBounded()`
- * and sugar-reel's `BoundedReaper` were documented per-lib copies of the
+ * and sugar-video's `BoundedReaper` were documented per-lib copies of the
  * same rungs). Callers bring their own budgets; the sequence never varies.
  *
  * SIGNALS ARE INTEGER LITERALS, never the `SIGTERM`/`SIGKILL` constants:
@@ -39,7 +39,7 @@ namespace SugarCraft\Core\Util\Proc;
  *
  * DEADLINES RUN ON `hrtime()` — the monotonic clock. An NTP step during a
  * teardown must not stretch the escalation window (or shorten it to zero),
- * which is the sugar-reel copy's recorded lesson, kept here once.
+ * which is the sugar-video copy's recorded lesson, kept here once.
  *
  * WHAT THIS DELIBERATELY IS NOT: a detached-watchdog spawner. Library
  * teardown cannot afford to fork a watchdog per shutdown — that puts a

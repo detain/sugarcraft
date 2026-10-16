@@ -1,0 +1,421 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Video\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Flip\Decoder as FlipDecoder;
+use SugarCraft\Video\Decode\Decoder;
+use SugarCraft\Video\Decode\DecoderFactory;
+use SugarCraft\Video\Decode\GifDecoder;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Source\Probe;
+use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
+
+/**
+ * Unit tests for GifDecoder.
+ *
+ * Creates a minimal valid GIF using PHP's built-in GD functions,
+ * then tests GifDecoder against it. No hand-crafted hex bytes needed.
+ *
+ * @covers \SugarCraft\Video\Decode\GifDecoder
+ */
+final class GifDecoderTest extends TestCase
+{
+    use CapturesErrorLog;
+
+    private ?string $tempGifPath = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->tempGifPath !== null && file_exists($this->tempGifPath)) {
+            unlink($this->tempGifPath);
+            $this->tempGifPath = null;
+        }
+        parent::tearDown();
+    }
+
+    /**
+     * Create a minimal valid 1×1 black pixel GIF using PHP's GD functions,
+     * write it to a temp file, and return the path.
+     */
+    private function createTempGif(): string
+    {
+        // Create a 1×1 black pixel image using GD
+        $img = imagecreate(1, 1);
+        $black = imagecolorallocate($img, 0, 0, 0); // black
+        imagesetpixel($img, 0, 0, $black);
+
+        $path = sys_get_temp_dir() . '/sugarcraft-gif-test-' . uniqid('', true) . '.gif';
+        imagegif($img, $path);
+        imagedestroy($img);
+
+        $this->tempGifPath = $path;
+        return $path;
+    }
+
+    // -------------------------------------------------------------------------
+    // open + next returns an RgbFrame
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox open() followed by next() returns an RgbFrame with correct dimensions
+     *
+     * With no $mode the decoder defaults to HalfBlock semantics (2 source rows
+     * per cell), so a 1×1 cell GIF decodes to 1 col × 2 pixel-rows.
+     */
+    public function testOpenAndNextReturnsRgbFrame(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0);
+
+        $frame = $decoder->next();
+
+        $this->assertInstanceOf(RgbFrame::class, $frame);
+        $this->assertSame(1, $frame->w);
+        // $mode === null defaults to HalfBlock (rowsPerCell 2): cellsH 1 → 2 rows.
+        $this->assertSame(2, $frame->h);
+        // RgbFrame bytes length = w * h * 3 = 1 * 2 * 3 = 6
+        $this->assertSame(6, strlen($frame->bytes));
+
+        $decoder->close();
+    }
+
+    /**
+     * @testdox a zero startSec starts from the first frame
+     */
+    public function testStartSecZeroStartsFromFirstFrame(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 0.0);
+
+        $this->assertInstanceOf(RgbFrame::class, $decoder->next());
+        $decoder->close();
+    }
+
+    /**
+     * @testdox a positive startSec advances (best-effort) past the seeked frames
+     *
+     * The fixture GIF has a single frame, so seeking to 1.0s @ 10fps (frame 10,
+     * clamped to the one available) lands past the end → next() is null.
+     */
+    public function testStartSecSeeksPastTheAvailableFrames(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 1.0);
+
+        $this->assertNull($decoder->next(), 'a seek beyond the GIF lands past the end');
+        $decoder->close();
+    }
+
+    // -------------------------------------------------------------------------
+    // Iterator exhaustion
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox next() returns null when all frames have been consumed
+     */
+    public function testOpenAndNextReturnsNullWhenExhausted(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0);
+
+        $first = $decoder->next();
+        $this->assertNotNull($first); // At least one frame
+
+        $second = $decoder->next();
+        $this->assertNull($second); // No more frames
+
+        $decoder->close();
+    }
+
+    /**
+     * @testdox next() returns null after close() is called (not an exception)
+     */
+    public function testCloseThenNextReturnsNull(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0);
+        $decoder->next(); // consume the one frame
+        $decoder->close();
+
+        // After close(), next() must return null, not throw
+        $result = $decoder->next();
+        $this->assertNull($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // getIterator
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox getIterator() returns a Generator that yields at least one frame
+     */
+    public function testGetIterator(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0);
+
+        $iterator = $decoder->getIterator();
+        $this->assertInstanceOf(\Generator::class, $iterator);
+
+        // Iterate and count frames using the iterator (NOT $decoder directly —
+        // foreach on the Decoder object calls getIterator() again, creating
+        // a second generator that starts from frameIndex 0 and racing with
+        // the first, resulting in 0 frames counted in the wrong iterator).
+        $frameCount = 0;
+        foreach ($iterator as $frame) {
+            $frameCount++;
+            $this->assertInstanceOf(RgbFrame::class, $frame);
+        }
+
+        $this->assertGreaterThanOrEqual(1, $frameCount, 'Should yield at least 1 frame');
+        $decoder->close();
+    }
+
+    // -------------------------------------------------------------------------
+    // Pixel content verification
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox toGd() on the decoded RgbFrame produces a correct black pixel image
+     */
+    public function testDecodedFramePixelContentIsBlack(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0);
+
+        $frame = $decoder->next();
+        $this->assertNotNull($frame);
+
+        // Convert RgbFrame back to GD and check the pixel color
+        $img = $frame->toGd();
+        $rgb = imagecolorat($img, 0, 0);
+
+        // R=0, G=0, B=0 for black pixel
+        $this->assertSame(0, ($rgb >> 16) & 0xff, 'R component should be 0');
+        $this->assertSame(0, ($rgb >> 8) & 0xff, 'G component should be 0');
+        $this->assertSame(0, $rgb & 0xff, 'B component should be 0');
+
+        imagedestroy($img);
+        $decoder->close();
+    }
+
+    // -------------------------------------------------------------------------
+    // F5: GIF decode height honors the rendering mode
+    // -------------------------------------------------------------------------
+
+    /**
+     * Create a small multi-color truecolor GIF and return its path.
+     */
+    private function createTempColorGif(int $w, int $h): string
+    {
+        $img = imagecreatetruecolor($w, $h);
+        // Paint a deterministic gradient so the frame is non-trivial.
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $color = imagecolorallocate($img, ($x * 31) % 256, ($y * 47) % 256, (($x + $y) * 17) % 256);
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+
+        $path = sys_get_temp_dir() . '/sugar-video-mode-gif-' . uniqid('', true) . '.gif';
+        imagegif($img, $path);
+        imagedestroy($img);
+
+        $this->tempGifPath = $path;
+        return $path;
+    }
+
+    /**
+     * Regression for F5. GifDecoder must scale the decoded frame height to
+     * cellsH * mode->rowsPerCell() so it matches FfmpegDecoder per mode:
+     *   - HalfBlock packs 2 source rows per cell → frame->h == cellsH * 2
+     *   - Ascii (and the other 1-row modes) → frame->h == cellsH
+     *
+     * On master GifDecoder always decoded at cellsH (mode ignored), so the
+     * HalfBlock frame came out at h == cellsH (6) instead of 12 — the assert
+     * `$frame->h === 12` fails.
+     *
+     * @testdox GifDecoder frame height tracks the mode (HalfBlock 2x, Ascii 1x)
+     */
+    public function testGifDecodeHeightHonorsMode(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(8, 6);
+
+        // HalfBlock: 2 source rows per cell → height doubled.
+        $hb = new GifDecoder();
+        $hb->open($path, 8, 6, 10.0, Mode::HalfBlock);
+        $hbFrame = $hb->next();
+        $hb->close();
+
+        $this->assertNotNull($hbFrame);
+        $this->assertSame(8, $hbFrame->w, 'width must equal cellsW');
+        $this->assertSame(6 * 2, $hbFrame->h, 'HalfBlock height must be cellsH * 2 == 12');
+
+        // Ascii: 1 source row per cell → height equals cellsH.
+        $ascii = new GifDecoder();
+        $ascii->open($path, 8, 6, 10.0, Mode::Ascii);
+        $asciiFrame = $ascii->next();
+        $ascii->close();
+
+        $this->assertNotNull($asciiFrame);
+        $this->assertSame(8, $asciiFrame->w, 'width must equal cellsW');
+        $this->assertSame(6, $asciiFrame->h, 'Ascii height must equal cellsH == 6');
+    }
+
+    // -------------------------------------------------------------------------
+    // Graphics modes decode at the terminal's FULL pixel resolution
+    // -------------------------------------------------------------------------
+
+    /**
+     * A graphics Mode (Sixel/Kitty/iTerm2) must decode the GIF at
+     * cellsW·cellPxW × cellsH·cellPxH so the image protocols get real detail,
+     * not one pixel per cell. The decoder is built with explicit cell pixel
+     * geometry (new GifDecoder($cellPxW, $cellPxH)).
+     *
+     * @testdox GifDecoder sizes a graphics-mode frame to cellsW*cellPxW x cellsH*cellPxH
+     */
+    public function testGifDecodeGraphicsModeUsesFullPixelResolution(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(8, 6);
+
+        $cellsW = 8;
+        $cellsH = 6;
+        $cellPxW = 10;
+        $cellPxH = 20;
+
+        $decoder = new GifDecoder($cellPxW, $cellPxH);
+        $decoder->open($path, $cellsW, $cellsH, 10.0, Mode::Sixel);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame);
+        $this->assertSame($cellsW * $cellPxW, $frame->w, 'graphics width = cellsW * cellPxW');
+        $this->assertSame($cellsH * $cellPxH, $frame->h, 'graphics height = cellsH * cellPxH');
+    }
+
+    /**
+     * REGRESSION. `php examples/play.php synthetic sixel` died outright with
+     * `candy-flip: cell grid product exceeds maximum (100000)`.
+     *
+     * An ordinary 80×24 terminal at the default 10×20 cell box is 800×480 =
+     * 384,000 — six times {@see FlipDecoder::MAX_CELLS} — and the graphics
+     * branch handed that straight to candy-flip as a CELL grid, which it
+     * area-averages one `imagecolorat()` at a time. So every graphics mode
+     * was unusable on any real terminal size, not merely slow.
+     *
+     * The frame still arrives at the full pixel box, because
+     * {@see \SugarCraft\Video\Render\GraphicsRenderer} recovers the cell
+     * footprint by dividing that size by the cell geometry.
+     *
+     * @testdox a graphics decode larger than candy-flip's cap still yields a full-box frame
+     */
+    public function testGraphicsModeAboveFlipCellCapStillDecodes(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(120, 60);
+
+        // 80 x 24 cells at the default 10 x 20 cell box.
+        $decoder = new GifDecoder();
+        $decoder->open($path, 80, 24, 10.0, Mode::Sixel);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame);
+        $this->assertGreaterThan(FlipDecoder::MAX_CELLS, 800 * 480, 'the box under test must exceed the cap, or this proves nothing');
+        $this->assertSame(800, $frame->w);
+        $this->assertSame(480, $frame->h);
+        // Presented as PNG, like FfmpegDecoder's graphics frames: rebuilding an
+        // rgb24 buffer for 384,000 upscaled pixels in PHP is the very cost the
+        // bounded decode grid exists to avoid, and nothing on this path reads it.
+        $this->assertNotNull($frame->png);
+        $this->assertSame('', $frame->bytes);
+        $this->assertSame([800, 480], [(int) getimagesizefromstring($frame->png)[0], (int) getimagesizefromstring($frame->png)[1]]);
+    }
+
+    /**
+     * The cell pixel geometry is configurable per decoder; a different cellPx
+     * box yields a proportionally different graphics-mode frame size.
+     *
+     * @testdox GifDecoder honours a custom cellPx box for graphics modes
+     */
+    public function testGifDecodeGraphicsModeHonoursCustomCellPx(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(4, 3);
+
+        $decoder = new GifDecoder(6, 8);
+        $decoder->open($path, 4, 3, 10.0, Mode::Kitty);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame);
+        $this->assertSame(4 * 6, $frame->w);
+        $this->assertSame(3 * 8, $frame->h);
+    }
+
+    /**
+     * @testdox GifDecoder reports it does NOT reopen in place (factory-owned)
+     */
+    public function testGifDecoderIsNotReopenedInPlace(): void
+    {
+        $this->assertFalse((new GifDecoder())->reopensInPlace());
+    }
+
+    /**
+     * @testdox a GIF source with headers decodes anyway and logs that they were dropped
+     *
+     * The brief's "headers ignored, with a documented reason, not silently": a GIF
+     * is fetched from disk, never over HTTP, so request headers are meaningless —
+     * but we say so in the log rather than swallowing the caller's credentials.
+     */
+    public function testGifHeadersIgnoredWithLoggedReason(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempGif();
+
+        $logged = $this->captureErrorLog(function () use ($path): void {
+            $decoder = new GifDecoder();
+            $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 0.0, ['Authorization' => 'Bearer x']);
+            // Decoding still works — headers are dropped, not fatal.
+            $this->assertNotNull($decoder->next());
+            $decoder->close();
+        });
+
+        $this->assertStringContainsString('ignoring 1 HTTP request header', $logged);
+    }
+}

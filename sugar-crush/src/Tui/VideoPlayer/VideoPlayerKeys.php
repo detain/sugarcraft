@@ -8,7 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 
 /**
- * The key table in front of sugar-reel's Player (crush-media W5.4).
+ * The key table in front of sugar-video's Player (crush-media W5.4).
  *
  * The Player carries its own keys — space play/pause, ←/→ ±10-frame seek,
  * `[`/`]` speed, digits jump-to-percent, `m` mode cycle — and it answers

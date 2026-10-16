@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Support;
 
-use SugarCraft\Reel\Decode\Decoder;
-use SugarCraft\Reel\Decode\RgbFrame;
-use SugarCraft\Reel\Render\Mode;
+use SugarCraft\Video\Decode\Decoder;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Render\Mode;
 
 /**
- * A deterministic, child-free sugar-reel Decoder for crush's player tests
+ * A deterministic, child-free sugar-video Decoder for crush's player tests
  * (crush-media W5.4). Cycles a fixed frame list forever so ticks, seeks and
  * teardown are observable without ffmpeg — and without ever being mistaken
  * for the library's own FakeDecoder: this is the crush-side consumer

@@ -87,7 +87,7 @@ done as one fused phase (Phase 2). Each step's Tester runs `composer update && v
 to prove the whole dependency set parses on 7.4.
 
 ## In‑progress work — do not disturb
-`sugar-reel` is under active development (and any other lib the requester is editing). It is
+`sugar-reel` is under active development (and any other lib the requester is editing). It is <!-- @rename-keep -->
 scheduled **last** (plan §5.7). Before its step, re‑audit it fresh and confirm with the requester
 that their feature work is merged. **Never start a lib's backport while it is being edited.**
 

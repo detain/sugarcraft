@@ -74,11 +74,11 @@ use SugarCraft\Crush\Tui\VideoPlayer\OpenVideoPlayerMsg;
 use SugarCraft\Crush\Tui\VideoPlayer\PlayerReadyMsg;
 use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerKeys;
 use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerScreen;
-use SugarCraft\Reel\Msg\ResizeRebuildMsg as ReelResizeRebuildMsg;
-use SugarCraft\Reel\Msg\TickMsg as ReelTickMsg;
-use SugarCraft\Reel\Player as ReelPlayer;
-use SugarCraft\Reel\Render\Mode as ReelMode;
-use SugarCraft\Reel\Render\RendererFactory as ReelRendererFactory;
+use SugarCraft\Video\Msg\ResizeRebuildMsg as VideoResizeRebuildMsg;
+use SugarCraft\Video\Msg\TickMsg as VideoTickMsg;
+use SugarCraft\Video\Player as VideoPlayer;
+use SugarCraft\Video\Render\Mode as VideoMode;
+use SugarCraft\Video\Render\RendererFactory as VideoRendererFactory;
 use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
 use SugarCraft\Crush\Tui\Settings\SettingsFileEditedMsg;
@@ -1546,9 +1546,9 @@ final class App implements Model
      * before the new build starts, so at most one decoder child lives per
      * slot at any instant.
      *
-     * @param (callable(string,int,int,ReelMode):ReelPlayer)|null $playerFactory
+     * @param (callable(string,int,int,VideoMode):VideoPlayer)|null $playerFactory
      *        build seam (tests hand in a scripted decoder's Player; null
-     *        selects {@see ReelPlayer::open()})
+     *        selects {@see VideoPlayer::open()})
      * @return array{0: self, 1: ?\Closure}
      */
     public function openVideoPlayer(string $path, ?\Closure $playerFactory = null): array
@@ -1559,7 +1559,7 @@ final class App implements Model
         $mode = self::videoPlayerMode();
         [$cellsW, $cellsH] = $this->videoPlayerCells();
         $factory = $playerFactory
-            ?? static fn (string $p, int $w, int $h, ReelMode $m): ReelPlayer => ReelPlayer::open($p, $w, $h, mode: $m);
+            ?? static fn (string $p, int $w, int $h, VideoMode $m): VideoPlayer => VideoPlayer::open($p, $w, $h, mode: $m);
 
         return [
             $this->mutate(videoPlayer: VideoPlayerScreen::preparing($path, $mode)),
@@ -1592,17 +1592,17 @@ final class App implements Model
 
     /**
      * The render mode the player opens in (plan §W5.4 ruling): a crush
-     * `ui.imageRenderMode` naming one of sugar-reel's modes is honoured,
+     * `ui.imageRenderMode` naming one of sugar-video's modes is honoured,
      * every other answer (the `auto` default and the `half`/`quarter`/
-     * `chafa` spellings with no Reel analogue) fails soft to the reel's
+     * `chafa` spellings with no video analogue) fails soft to the player's
      * OWN auto-ladder — video-first sixel > kitty > iterm2 > truecolor
      * halfblock > ansi256 > ascii.
      */
-    private static function videoPlayerMode(): ReelMode
+    private static function videoPlayerMode(): VideoMode
     {
         $word = strtolower(trim(\SugarCraft\Crush\ToolResult::renderMode()));
 
-        return ReelMode::tryFrom($word) ?? ReelRendererFactory::autoMode();
+        return VideoMode::tryFrom($word) ?? VideoRendererFactory::autoMode();
     }
 
     /**
@@ -1624,7 +1624,7 @@ final class App implements Model
 
     /**
      * Drive the open player with one message; with the slot empty the
-     * message is DROPPED (a stray reel tick must never reach Chat, which
+     * message is DROPPED (a stray video tick must never reach Chat, which
      * has no answer for it) — and a Player built for a slot that closed
      * mid-build is stopped here rather than leaked.
      *
@@ -2579,7 +2579,7 @@ final class App implements Model
             // rebuild messages are the shell's to route while it is up.
             $msg instanceof OpenVideoPlayerMsg => $this->openVideoPlayer($msg->path),
             $msg instanceof PlayerReadyMsg => $this->driveVideoPlayer($msg),
-            $msg instanceof ReelTickMsg || $msg instanceof ReelResizeRebuildMsg => $this->driveVideoPlayer($msg),
+            $msg instanceof VideoTickMsg || $msg instanceof VideoResizeRebuildMsg => $this->driveVideoPlayer($msg),
             // crush-media W4.2: with the form up, a clipboard paste lands in
             // the img2img slot, not in the input box. Form down → the msg
             // rides on to Chat's @mention arm untouched.

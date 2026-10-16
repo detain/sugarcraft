@@ -131,7 +131,7 @@ interface Model
 **sugar-* libs (20+):**
 - `sugar-widgets/src/Table.php`, `Tabs.php`, `Tree.php`, `Timer.php`, `Stopwatch.php`, `Paginator.php`, `Progress/AnimatedProgress.php`
 - `sugar-crush/src/Chat.php`
-- `sugar-reel/src/Player.php`
+- `sugar-video/src/Player.php`
 - `candy-git/src/App.php`
 - `candy-codetime/src/Dashboard.php`
 - `candy-mdview/src/MdViewModel.php`

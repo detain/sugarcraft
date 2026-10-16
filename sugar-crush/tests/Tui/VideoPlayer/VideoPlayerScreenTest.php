@@ -15,10 +15,10 @@ use SugarCraft\Crush\Tui\VideoPlayer\PlayerReadyMsg;
 use SugarCraft\Crush\Tui\VideoPlayer\Scrubber;
 use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerKeys;
 use SugarCraft\Crush\Tui\VideoPlayer\VideoPlayerScreen;
-use SugarCraft\Reel\Decode\RgbFrame;
-use SugarCraft\Reel\Msg\TickMsg;
-use SugarCraft\Reel\Player;
-use SugarCraft\Reel\Render\Mode;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Msg\TickMsg;
+use SugarCraft\Video\Player;
+use SugarCraft\Video\Render\Mode;
 
 /**
  * The W5.4 player surface in isolation: state machine, chrome composition,
@@ -158,7 +158,7 @@ final class VideoPlayerScreenTest extends TestCase
     }
 
     /**
-     * R13-C1: the reel Player re-mints a new wrapper on every seek, resize
+     * R13-C1: the video Player re-mints a new wrapper on every seek, resize
      * rebuild and mode cycle (immutability), while the live decoder rides
      * along. The shutdown memo must follow the newest wrapper — otherwise
      * the Ctrl+C teardown stops the superseded object and the child of the

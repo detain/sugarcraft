@@ -11,7 +11,7 @@ use SugarCraft\Crush\Lang;
 //   /rendermode                 current word + both render ladders
 //   /rendermode kitty           persist ui.imageRenderMode and re-derive now
 // The write rides the workspace SettingsWriter door, never a side-channel
-// config.json edit. The player keeps sugar-reel's own ladder, cycled live
+// config.json edit. The player keeps sugar-video's own ladder, cycled live
 // with m inside it (W5.4 asymmetry, documented in the command's help).
 return BuiltInCommand::new(CommandSpec::new(
     'rendermode',

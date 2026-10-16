@@ -243,7 +243,7 @@ jobs:
           git checkout -- .
       # E486, closing E448. sugar-crush's DescriptorInheritanceGuardTest can
       # only reach the eighteen libraries in ITS vendor/sugarcraft closure;
-      # the three exposed spawns E448 measured (sugar-dashboard, sugar-reel x2) sat
+      # the three exposed spawns E448 measured (sugar-dashboard, sugar-video x2) sat
       # outside that reach, where a new one could appear with nothing saying
       # so. This pass reads the declared autoload roots of all 57 other libs
       # from the same checkout — no dependency changes, which is why it lives

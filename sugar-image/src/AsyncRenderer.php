@@ -27,11 +27,11 @@ use React\Promise\PromiseInterface;
  *  - OWNER-REAP: every spawned child is reaped on every settle path of
  *    the promise — resolve, reject, and abandonment. An in-flight render
  *    must die with the renderer, never outlive it (TERM→poll→KILL
- *    bounded ladder; sugar-reel's Support\BoundedReaper spells out the
+ *    bounded ladder; sugar-video's Support\BoundedReaper spells out the
  *    rungs).
  *  - NO READER-LESS PIPES: drain or file-sink every child descriptor. A
  *    writer blocked on a full ~64KB kernel buffer is a child that never
- *    exits — the sugar-reel F7 deadlock shape; ChafaRendererChildTest
+ *    exits — the sugar-video F7 deadlock shape; ChafaRendererChildTest
  *    pins it behaviourally for the shipped sites.
  *  - PUMP LAW (r69): a wait loop built on pump/poll carries no internal
  *    deadline — the CALLER bounds. Do not park a render promise's

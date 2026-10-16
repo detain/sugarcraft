@@ -34,7 +34,7 @@ use SugarCraft\Crush\ToolResult;
  * only at the next launch. `SUGARCRUSH_MEDIA_RENDER_MODE` reasserts its
  * precedence there too — a mid-session switch is a switch of the session,
  * not of the environment. The player picks the new word up on the NEXT
- * `/play`; inside the player, `m` still cycles reel's own ladder live
+ * `/play`; inside the player, `m` still cycles the player's own ladder live
  * (W5.4 asymmetry).
  *
  * Permission reasoning (recorded per house law): this writes the user's own

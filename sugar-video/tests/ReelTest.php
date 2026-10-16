@@ -1,0 +1,348 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Video\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Video\Reel;
+use SugarCraft\Video\Render\Mode;
+
+final class ReelTest extends TestCase
+{
+    public function testOpenRecordsThePath(): void
+    {
+        $this->assertSame('/tmp/x.mp4', Reel::open('/tmp/x.mp4')->path());
+    }
+
+    public function testOpenUrlRecordsTheUrlAsThePath(): void
+    {
+        $url = 'https://srv.example/media/m1/stream?exp=1&sig=abc';
+        $this->assertSame($url, Reel::openUrl($url)->path());
+    }
+
+    public function testOpenUrlAcceptsPlainHttp(): void
+    {
+        $this->assertSame('http://box:8096/s.mkv', Reel::openUrl('http://box:8096/s.mkv')->path());
+    }
+
+    /**
+     * @testdox openUrl() rejects a non-http(s) argument so a path typo fails fast
+     */
+    public function testOpenUrlRejectsNonHttpScheme(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Not an http(s) URL');
+        Reel::openUrl('/tmp/local.mp4');
+    }
+
+    // -------------------------------------------------------------------------
+    // SSRF: openUrl() host allowlist (openUrl second arg + withAllowedHosts())
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox openUrl() with an allowlist REJECTS a non-allowlisted host (SSRF guard)
+     *
+     * Load-bearing: revert the allowlist branch and the non-allowlisted host is
+     * accepted instead of rejected — this test then fails.
+     */
+    public function testOpenUrlWithAllowlistRejectsNonAllowlistedHost(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Remote host not in allowlist');
+        Reel::openUrl('https://evil.example/media/stream', allowedHosts: ['trusted.example']);
+    }
+
+    /**
+     * @testdox openUrl() with an allowlist ACCEPTS an allowlisted host and records it
+     */
+    public function testOpenUrlWithAllowlistAcceptsAllowlistedHost(): void
+    {
+        $reel = Reel::openUrl('https://trusted.example/media/stream', allowedHosts: ['trusted.example']);
+        $this->assertSame('https://trusted.example/media/stream', $reel->path());
+        $this->assertSame(['trusted.example'], $reel->allowedHosts());
+    }
+
+    /**
+     * @testdox openUrl() host allowlist matching is case-insensitive
+     */
+    public function testOpenUrlAllowlistIsCaseInsensitive(): void
+    {
+        $reel = Reel::openUrl('https://TRUSTED.Example/s.mkv', allowedHosts: ['trusted.example']);
+        $this->assertSame('https://TRUSTED.Example/s.mkv', $reel->path());
+    }
+
+    /**
+     * @testdox openUrl() without an allowlist stays unrestricted (allowedHosts() null)
+     */
+    public function testOpenUrlWithoutAllowlistIsUnrestricted(): void
+    {
+        // Unset allowlist preserves the prior behavior: any http(s) host accepted.
+        $reel = Reel::openUrl('https://anything.example/s.mkv');
+        $this->assertSame('https://anything.example/s.mkv', $reel->path());
+        $this->assertNull($reel->allowedHosts());
+    }
+
+    /**
+     * @testdox withAllowedHosts() re-validates an already-bound remote URL and rejects a bad host
+     *
+     * Load-bearing: revert assertHostAllowed in withAllowedHosts() and the bound
+     * bad-host URL is accepted — this test then fails.
+     */
+    public function testWithAllowedHostsRejectsBoundRemoteBadHost(): void
+    {
+        $reel = Reel::openUrl('https://evil.example/s.mkv');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Remote host not in allowlist');
+        $reel->withAllowedHosts(['trusted.example']);
+    }
+
+    /**
+     * @testdox withAllowedHosts() accepts a bound remote URL whose host is allowlisted
+     */
+    public function testWithAllowedHostsAcceptsBoundRemoteGoodHost(): void
+    {
+        $reel = Reel::openUrl('https://trusted.example/s.mkv')->withAllowedHosts(['trusted.example']);
+        $this->assertSame(['trusted.example'], $reel->allowedHosts());
+        $this->assertSame('https://trusted.example/s.mkv', $reel->path());
+    }
+
+    /**
+     * @testdox withAllowedHosts() on a local (non-remote) source just records the list
+     */
+    public function testWithAllowedHostsOnLocalSourceRecordsList(): void
+    {
+        // No remote URL bound → nothing to validate, the list is simply stored.
+        $reel = Reel::open('/tmp/x.mp4')->withAllowedHosts(['trusted.example']);
+        $this->assertSame(['trusted.example'], $reel->allowedHosts());
+        $this->assertNotSame($reel, Reel::open('/tmp/x.mp4'));
+    }
+
+    /**
+     * @testdox allowedHosts() defaults to null
+     */
+    public function testAllowedHostsDefaultsToNull(): void
+    {
+        $this->assertNull(Reel::new()->allowedHosts());
+        $this->assertNull(Reel::open('/tmp/x.mp4')->allowedHosts());
+    }
+
+    /**
+     * @testdox an openUrl() source is configurable just like open() (immutable with*)
+     */
+    public function testOpenUrlSourceIsConfigurable(): void
+    {
+        $reel = Reel::openUrl('https://srv/v.mkv')->withSize(120, 40)->withFps(30.0);
+        $this->assertSame('https://srv/v.mkv', $reel->path());
+        $this->assertSame(120, $reel->cols());
+        $this->assertSame(40, $reel->rows());
+        $this->assertSame(30.0, $reel->fps());
+    }
+
+    public function testNewConstructsWithEmptyPath(): void
+    {
+        $this->assertSame('', Reel::new()->path());
+    }
+
+    // -------------------------------------------------------------------------
+    // fps() and withFps()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Reel::new()->fps() returns null (default is null)
+     */
+    public function testFpsDefaultsToNull(): void
+    {
+        $this->assertNull(Reel::new()->fps());
+    }
+
+    /**
+     * @testdox Reel::new()->withFps(60.0)->fps() returns 60.0
+     */
+    public function testWithFpsSetsFps(): void
+    {
+        $reel = Reel::new()->withFps(60.0);
+        $this->assertSame(60.0, $reel->fps());
+    }
+
+    /**
+     * @testdox Reel::new()->withFps(30.0)->withFps(24.0)->fps() returns 24.0 (override works)
+     */
+    public function testWithFpsOverrideIsImmutable(): void
+    {
+        $reel = Reel::new()->withFps(30.0)->withFps(24.0);
+        $this->assertSame(24.0, $reel->fps());
+    }
+
+    /**
+     * @testdox Reel::new()->withFps() returns a new Reel instance (immutable)
+     */
+    public function testWithFpsReturnsNewInstance(): void
+    {
+        $original = Reel::new();
+        $modified = $original->withFps(60.0);
+
+        $this->assertNotSame($original, $modified);
+        $this->assertNull($original->fps());
+        $this->assertSame(60.0, $modified->fps());
+    }
+
+    // -------------------------------------------------------------------------
+    // mode() / withMode()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Reel::open()->mode() defaults to null (auto-detect)
+     */
+    public function testModeDefaultsToHalfBlock(): void
+    {
+        // null mode means auto-detect at play() time (F3).
+        $this->assertNull(Reel::open('/tmp/x.mp4')->mode());
+    }
+
+    /**
+     * @testdox withMode() sets the mode and is immutable
+     */
+    public function testWithModeSetsModeImmutably(): void
+    {
+        $original = Reel::open('/tmp/x.mp4');
+        $modified = $original->withMode(Mode::Ascii);
+
+        $this->assertNotSame($original, $modified);
+        $this->assertNull($original->mode(), 'original keeps null (auto-detect)');
+        $this->assertSame(Mode::Ascii, $modified->mode());
+        // Other fields are preserved across the with*() call.
+        $this->assertSame('/tmp/x.mp4', $modified->path());
+    }
+
+    // -------------------------------------------------------------------------
+    // cols() / rows() / withSize()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox cols()/rows() default to 80x24
+     */
+    public function testSizeDefaults(): void
+    {
+        $reel = Reel::new();
+        $this->assertSame(80, $reel->cols());
+        $this->assertSame(24, $reel->rows());
+    }
+
+    /**
+     * @testdox withSize() sets cols/rows and is immutable
+     */
+    public function testWithSizeSetsDimensionsImmutably(): void
+    {
+        $original = Reel::new();
+        $modified = $original->withSize(120, 40);
+
+        $this->assertNotSame($original, $modified);
+        $this->assertSame(80, $original->cols());
+        $this->assertSame(24, $original->rows());
+        $this->assertSame(120, $modified->cols());
+        $this->assertSame(40, $modified->rows());
+    }
+
+    /**
+     * @testdox builders chain and each returns a distinct Reel
+     */
+    public function testBuildersChain(): void
+    {
+        $reel = Reel::open('/tmp/clip.mp4')
+            ->withMode(Mode::TrueColor)
+            ->withSize(100, 30)
+            ->withFps(25.0);
+
+        $this->assertSame('/tmp/clip.mp4', $reel->path());
+        $this->assertSame(Mode::TrueColor, $reel->mode());
+        $this->assertSame(100, $reel->cols());
+        $this->assertSame(30, $reel->rows());
+        $this->assertSame(25.0, $reel->fps());
+    }
+
+    // -------------------------------------------------------------------------
+    // loop() / withLoop()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox loop() defaults to false
+     */
+    public function testLoopDefaultsToFalse(): void
+    {
+        $this->assertFalse(Reel::new()->loop());
+        $this->assertFalse(Reel::open('/tmp/x.mp4')->loop());
+    }
+
+    /**
+     * @testdox withLoop() enables looping (defaults to true) immutably
+     */
+    public function testWithLoopEnablesLoopImmutably(): void
+    {
+        $original = Reel::open('/tmp/x.mp4');
+        $looping = $original->withLoop();
+
+        $this->assertNotSame($original, $looping);
+        $this->assertFalse($original->loop());
+        $this->assertTrue($looping->loop());
+        // Other fields are preserved across the with*() call.
+        $this->assertSame('/tmp/x.mp4', $looping->path());
+    }
+
+    /**
+     * @testdox withLoop(false) explicitly disables looping
+     */
+    public function testWithLoopFalseDisablesLoop(): void
+    {
+        $reel = Reel::open('/tmp/x.mp4')->withLoop()->withLoop(false);
+        $this->assertFalse($reel->loop());
+    }
+
+    // -------------------------------------------------------------------------
+    // ramp() / withRamp()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox ramp() defaults to 'standard'
+     */
+    public function testRampDefaultsToStandard(): void
+    {
+        $this->assertSame('standard', Reel::new()->ramp());
+        $this->assertSame('standard', Reel::open('/tmp/x.mp4')->ramp());
+    }
+
+    /**
+     * @testdox withRamp() sets the ramp immutably
+     */
+    public function testWithRampSetsRampImmutably(): void
+    {
+        $original = Reel::new();
+        $dense = $original->withRamp('dense');
+
+        $this->assertNotSame($original, $dense);
+        $this->assertSame('standard', $original->ramp());
+        $this->assertSame('dense', $dense->ramp());
+    }
+
+    /**
+     * @testdox withRamp('unknown') throws InvalidArgumentException
+     */
+    public function testWithRampUnknownThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Reel::new()->withRamp('nonexistent');
+    }
+
+    /**
+     * @testdox withRamp('minimal') and withRamp('dense') set different ramps
+     */
+    public function testWithRampMinimalAndDenseAreDistinct(): void
+    {
+        $minimal = Reel::open('/tmp/x.mp4')->withRamp('minimal');
+        $dense = Reel::open('/tmp/x.mp4')->withRamp('dense');
+
+        $this->assertNotSame($minimal->ramp(), $dense->ramp());
+        $this->assertSame('minimal', $minimal->ramp());
+        $this->assertSame('dense', $dense->ramp());
+    }
+}

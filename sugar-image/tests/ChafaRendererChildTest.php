@@ -21,7 +21,7 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  *  - the child's stderr is INHERITED, never a reader-less pipe — a flood
  *    larger than the 64KB kernel buffer cannot wedge the render the way it
  *    would if the descriptor spec ever grew an unread `2 => pipe` entry
- *    (sugar-reel's F7 deadlock, structurally mirrored here);
+ *    (sugar-video's F7 deadlock, structurally mirrored here);
  *  - available() probes without leaking a pipe or a process.
  *
  * The flood pin runs under a `timeout -s KILL` leash (r69 law: a wait-loop
@@ -132,7 +132,7 @@ final class ChafaRendererChildTest extends TestCase
      *
      * Structural half of the flood posture: the render() spec is a
      * single-entry array. Add `2 => ['pipe','w']` without a reader and
-     * ffmpeg… chafa dies exactly like sugar-reel's F7 deadlock — this pin
+     * ffmpeg… chafa dies exactly like sugar-video's F7 deadlock — this pin
      * reads red at the source, and the leashed flood test below reads red
      * at the behaviour.
      */

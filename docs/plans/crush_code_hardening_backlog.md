@@ -12478,7 +12478,7 @@ individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled bef
 | candy-codeshot | 315 / 619 | 0 |
 | candy-testing | 129 / 230 | 0 |
 | candy-core | 799 / 7210 | 0 |
-| sugar-reel | 352 / 2423 | 0 |
+| sugar-reel | 352 / 2423 | 0 | <!-- @rename-keep -->
 | sugar-dash | 5853 / 9154 | 0 | <!-- @rename-keep -->
 | candy-ansi-inspect | 205 / 659 | 0 |
 | candy-kv | 206 / 427 | 0 |
@@ -12513,10 +12513,10 @@ children ranked by exposure:
   immediately closes. No `__destruct()`.
 - `sugar-crush/src/Sessions/BackgroundSupervisor.php:188` — STRING command (the dash mismatch is
   acknowledged in its own comment at :226); deliberately double-forks; the happy path never reaps.
-- `sugar-reel/src/AudioPlayer.php:79` — ffplay/mpv; `stop()`/`pause()`/`resume()` all terminate-then-close
+- `sugar-reel/src/AudioPlayer.php:79` — ffplay/mpv; `stop()`/`pause()`/`resume()` all terminate-then-close <!-- @rename-keep -->
   with no wait. No `__destruct()`.
 
-**MEDIUM:** `sugar-reel/src/Decode/FfmpegDecoder.php:160` · `candy-core/src/WorkerPool.php:286` ·
+**MEDIUM:** `sugar-reel/src/Decode/FfmpegDecoder.php:160` · `candy-core/src/WorkerPool.php:286` · <!-- @rename-keep -->
 `sugar-crush/src/Agents/ProcessExecutor.php:426` (split personality — `escalateAndKill()` is correct,
 `cancel()`/`cancelAll()` are not) · `sugar-crush/src/Providers/ClaudeCodeProvider.php:109` +
 `ClaudeCodeInvocation.php:109` (no deadline at all) · `candy-core/src/Program.php:792`.
@@ -14152,7 +14152,7 @@ SIGKILL teardown.
 `DescriptorInheritanceGuardTest` walks `sugar-crush/src` only. **Not covered:** `sugar-crush/bin/` ·
 `sugar-crush/tests/` (spawn-heavy, and a test's child is short-lived by construction far more often) · and
 every other lib. E366's cross-lib HIGH/MEDIUM list — `sugar-dash/src/Plugin/ExternalModule.php`, <!-- @rename-keep -->
-`sugar-reel/src/AudioPlayer.php`, `sugar-reel/src/Decode/FfmpegDecoder.php`,
+`sugar-reel/src/AudioPlayer.php`, `sugar-reel/src/Decode/FfmpegDecoder.php`, <!-- @rename-keep -->
 `candy-core/src/WorkerPool.php`, `candy-core/src/Program.php` — has no equivalent guard, and the scanner is
 a sugar-crush test-support class so pointing another lib at it means promoting it somewhere shared first.
 
@@ -14983,8 +14983,8 @@ rostered in `ACCOUNTED_FOR_IN_LIBS`. The remaining three are in packages sugar-c
 no guard anywhere sees them:
 
 - `sugar-dash/src/Plugin/ExternalModule.php::startProcess` — long, spec 0,1,2 <!-- @rename-keep -->
-- `sugar-reel/src/Decode/FfmpegDecoder.php::open` — long, spec 0,1,2
-- `sugar-reel/src/AudioPlayer.php::start` — long, spec 0,1,2
+- `sugar-reel/src/Decode/FfmpegDecoder.php::open` — long, spec 0,1,2 <!-- @rename-keep -->
+- `sugar-reel/src/AudioPlayer.php::start` — long, spec 0,1,2 <!-- @rename-keep -->
 
 Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8.3.6.
 
@@ -16016,7 +16016,7 @@ ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
 
 E448's premise reproduces exactly. Scanning all 57 non-`sugar-crush` monorepo libs: **6 exposed spawns,
 3 of them in libraries outside sugar-crush's closure** — `sugar-dash/ExternalModule.php::startProcess`, <!-- @rename-keep -->
-`sugar-reel/FfmpegDecoder.php::open`, `sugar-reel/AudioPlayer.php::start`. All three are `long`, all
+`sugar-reel/FfmpegDecoder.php::open`, `sugar-reel/AudioPlayer.php::start`. All three are `long`, all <!-- @rename-keep -->
 three spec 0,1,2 only, and no guard anywhere sees them.
 
 **E448's own suggestion — promotion into `candy-testing` — was measured and is the weaker option.**
@@ -20636,11 +20636,11 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 ### E711 [CLOSED] — sugar-forms Spinner forks the action with no wall-clock bound — a wedged child spins forever and a SIGKILLed parent orphans it
 
-**What:** phase-4 sibling sweep (pattern-sweep.md §3/§5 rank-2): `sugar-forms/src/Spinner.php:135` is the ONLY real `pcntl_fork` in the monorepo outside sugar-crush; the parent animation loop polls `pcntl_waitpid(WNOHANG)` (:198) with SIGINT/SIGTERM handlers that waitpid-then-chain, but there is **no wall-clock ceiling** — an action that wedges spins the spinner forever — and a SIGKILL of the parent ORPHANS the forked child (no reaper covers that door). `tools/check-child-lifetimes.php` does NOT see it: the tool accounts `proc_open` sites; a bare fork sits outside its walk (sweep §5 "unrostered"). House remedies exist: `sugar-reel/src/Support/BoundedReaper.php` per-package ladder (E366) and sugar-crush `ProcessReaper::escalate` TERM→KILL rungs (E687 shape). **Acceptance:** bounded grace ladder (TERM→KILL) around the forked action with a documented ceiling, the orphan door addressed (reap story or honest documented limitation), a ceiling pin test that is mutation-discriminating (wedged child ⇒ spinner stops + escalates), `php tools/check-child-lifetimes.php` stays rc=0 repo-wide, full sugar-forms suite green. **Conf:** HIGH.
+**What:** phase-4 sibling sweep (pattern-sweep.md §3/§5 rank-2): `sugar-forms/src/Spinner.php:135` is the ONLY real `pcntl_fork` in the monorepo outside sugar-crush; the parent animation loop polls `pcntl_waitpid(WNOHANG)` (:198) with SIGINT/SIGTERM handlers that waitpid-then-chain, but there is **no wall-clock ceiling** — an action that wedges spins the spinner forever — and a SIGKILL of the parent ORPHANS the forked child (no reaper covers that door). `tools/check-child-lifetimes.php` does NOT see it: the tool accounts `proc_open` sites; a bare fork sits outside its walk (sweep §5 "unrostered"). House remedies exist: `sugar-reel/src/Support/BoundedReaper.php` per-package ladder (E366) and sugar-crush `ProcessReaper::escalate` TERM→KILL rungs (E687 shape). **Acceptance:** bounded grace ladder (TERM→KILL) around the forked action with a documented ceiling, the orphan door addressed (reap story or honest documented limitation), a ceiling pin test that is mutation-discriminating (wedged child ⇒ spinner stops + escalates), `php tools/check-child-lifetimes.php` stays rc=0 repo-wide, full sugar-forms suite green. **Conf:** HIGH. <!-- @rename-keep -->
 
 
 
-**CLOSED 2026-09-15 (round 82, lane q1 `42a46a3e6` → pick `3336bea5f`; rv APPROVE 0C/0M/1MINOR):** New per-package `src/Support/BoundedReaper.php` (sugar-reel precedent; sugar-crush's ProcessReaper is unreachable from a prompt component) runs TERM → bounded WNOHANG poll → KILL → bounded poll — never an unflagged waitpid — wired into both the spin-loop deadline and the SIGINT/SIGTERM handlers. Wall-clock ceiling `MAX_RUNTIME_SECONDS = 600.0`, tunable via `withMaxRuntimeSeconds()`; on expiry `run()` throws a `\RuntimeException` naming the outcome (terminated, or abandoned-with-pid when the ladder exhausts), both bullets documented in the README fork-semantics section (companion fold `5c3bb3d1c`, rv-q1 MINOR-1). The spin loop additionally breaks on `waitpid` ESRCH (a handler that already reaped the child used to spin on a pid no longer ours). Ceiling pin is mutation-discriminating (wedged child ⇒ spinner stops + escalates). `tools/check-child-lifetimes.php` stays rc=0 — a bare fork is outside its proc_open walk, and the roster needed no row (verdict on record). sugar-forms suite 158T/310A/2S (+12T/+42A).
+**CLOSED 2026-09-15 (round 82, lane q1 `42a46a3e6` → pick `3336bea5f`; rv APPROVE 0C/0M/1MINOR):** New per-package `src/Support/BoundedReaper.php` (sugar-reel precedent; sugar-crush's ProcessReaper is unreachable from a prompt component) runs TERM → bounded WNOHANG poll → KILL → bounded poll — never an unflagged waitpid — wired into both the spin-loop deadline and the SIGINT/SIGTERM handlers. Wall-clock ceiling `MAX_RUNTIME_SECONDS = 600.0`, tunable via `withMaxRuntimeSeconds()`; on expiry `run()` throws a `\RuntimeException` naming the outcome (terminated, or abandoned-with-pid when the ladder exhausts), both bullets documented in the README fork-semantics section (companion fold `5c3bb3d1c`, rv-q1 MINOR-1). The spin loop additionally breaks on `waitpid` ESRCH (a handler that already reaped the child used to spin on a pid no longer ours). Ceiling pin is mutation-discriminating (wedged child ⇒ spinner stops + escalates). `tools/check-child-lifetimes.php` stays rc=0 — a bare fork is outside its proc_open walk, and the roster needed no row (verdict on record). sugar-forms suite 158T/310A/2S (+12T/+42A). <!-- @rename-keep -->
 ### E712 [CLOSED] — candy-vcr exits from library code: RecordCommand.php:430 `exit(128+$signo)` plus the repo's second-highest @-suppression density
 
 **What:** phase-4 sibling sweep (§5 rank-8): `candy-vcr/src/Cli/RecordCommand.php:430` calls `exit(128 + $signo)` INSIDE `src/` — a library-side process termination (borderline CLI-command-class, but the house rule is throw + map at the binary; cf. r62-Q's ProviderException exitCode-on-property pattern); the lib also carries 46 call-shaped `@`-suppressions — second absolute density behind candy-core's 51 (sweep §3). **Acceptance:** the exit becomes a throw (signal-aware exception or exitCode-on-property) mapped at the `bin/` entry; the 46 suppressions judged IN PLACE — each one kept-with-why or removed, no blind sweeps; full candy-vcr suite green. **Conf:** MED.

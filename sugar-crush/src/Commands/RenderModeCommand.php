@@ -5,25 +5,25 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Config\Settings\Definitions\MediaSettings;
-use SugarCraft\Reel\Render\Mode as ReelMode;
+use SugarCraft\Video\Render\Mode as VideoMode;
 
 /**
  * argv-style parser behind the `/rendermode` console command (crush-media W5.7).
  *
  * The command exists because the session carries TWO render ladders and only
  * one setting: `ui.imageRenderMode` governs IMAGE painting through candy-
- * mosaic, while the video player rides sugar-reel's OWN ladder (see
+ * mosaic, while the video player rides sugar-video's OWN ladder (see
  * {@see \SugarCraft\Crush\App\App::videoPlayerMode()} — a word that names a
- * reel mode seeds the player's start, everything else fails soft to reel's
- * auto-ladder). `/rendermode` makes both ladders visible in one place and
+ * video mode seeds the player's start, everything else fails soft to the
+ * player's own auto-ladder). `/rendermode` makes both ladders visible in one place and
  * switches the image word without a restart.
  *
  * Like {@see PlayCommand} this class is pure: no settings I/O, no probing,
  * no Chat state. Validation is membership in {@see MediaSettings::RENDER_
  * MODES} — the same list the settings Enum validator enforces and
  * MediaSettingsTest re-derives against mosaic's `fromModeString` oracle — so
- * parsing a word never touches the terminal. The reel analogue is reported
- * through the pure `ReelMode::tryFrom` half of the pick law only; the
+ * parsing a word never touches the terminal. The video analogue is reported
+ * through the pure `VideoMode::tryFrom` half of the pick law only; the
  * `autoMode()` half PROVES nothing about a typed word and probes the TTY, so
  * it stays out of this file entirely.
  */
@@ -100,24 +100,24 @@ final class RenderModeCommand
             '',
             '  allowed: ' . implode(', ', MediaSettings::RENDER_MODES),
             '  images:  auto ladder kitty > iterm2 > sixel > chafa > halfblock',
-            '  video:   the player keeps reel\'s own ladder (m cycles it live);',
-            '           a reel-shaped word seeds its start, otherwise reel auto',
+            '  video:   the player keeps its own ladder (m cycles it live);',
+            '           a video-shaped word seeds its start, otherwise auto',
             '           goes sixel > kitty > iterm2 > truecolor > ansi256 > ascii',
         ]);
     }
 
     /**
-     * The bare-command report: current word, its reel analogue, the ladder
+     * The bare-command report: current word, its video analogue, the ladder
      * explanation the plan asks to live in one place. Pure string over the
      * already-normalized static — no probe, no settings read.
      */
     public static function report(string $current): string
     {
-        $analogue = ReelMode::tryFrom($current);
+        $analogue = VideoMode::tryFrom($current);
 
         return implode("\n", [
             'render mode: ' . $current . '  (new image labels and the next /play follow this word; transcript painting keeps the launch-time renderer until the next launch)',
-            'reel analogue: ' . ($analogue?->value ?? 'none — player uses its own auto-ladder') . '  (cycle live with m inside the player)',
+            'video analogue: ' . ($analogue?->value ?? 'none — player uses its own auto-ladder') . '  (cycle live with m inside the player)',
             '',
             '  allowed: ' . implode(', ', MediaSettings::RENDER_MODES),
             '  set one with /rendermode <mode>; SUGARCRUSH_MEDIA_RENDER_MODE reasserts at next launch when set.',

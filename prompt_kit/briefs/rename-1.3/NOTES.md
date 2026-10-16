@@ -18,7 +18,7 @@ Evidence log (2026-10-15). Plan authority: plan_rename.md lines 596-628 (step 1.
 | candy-gifview | — | **16T/71A/0F/exit0** | Cli 8 + Lang 3 + BinSize 5 (PTY test executed, not skipped, on this box) |
 | candy-top | 2110T/107777A | 2110T/107831A/exit0 | test count exact; A-wobble +54 is the documented CANDY_TOP_LOGO=random per-open re-roll non-determinism (campaign floor note says "~107.8k"), untouched by this step |
 | candy-mosaic | 661T/14820A/5S | 661T/14820A/5S/exit0 | unchanged | <!-- @rename-keep historical provenance -->
-| sugar-reel | 552T/8489A | 552T/8489A/exit0 | unchanged |
+| sugar-reel | 552T/8489A | 552T/8489A/exit0 | unchanged | <!-- @rename-keep -->
 | tools/tests | 414T/1391A | **418T/1398A/exit0** | +4T/+7A = docs/_data-driven provider rows for the new candy-gifview page (expected drift, green) |
 
 sugar-crush: ZERO references to `SugarCraft\Flip` / candy-flip in src|bin|composer.json → no crush filter run needed (per brief).

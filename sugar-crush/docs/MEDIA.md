@@ -95,7 +95,7 @@ replace in place, clear on settle, and their bytes never enter the journal.
 Video artifacts get a 🎞 notice row and a path row instead of an inline
 frame.
 
-**`/play <name|path>`** opens the full-screen reel player for a video
+**`/play <name|path>`** opens the full-screen player for a video
 artifact or a local clip. It is a read-only command: nothing it does writes
 state. Inside the player `m` cycles the graphics ladder live.
 
@@ -159,7 +159,7 @@ gets the bare stride law and no ceiling.
 
 Sound: v1 is silent by ruling. SugarCrush wires no audio surface to the
 player. Generated videos carry no audio track, so they are inherently quiet;
-playing a *user's own* clip that has audio does sound, because the reel
+playing a *user's own* clip that has audio does sound, because the video
 library auto-plays audio for sources that carry it when an external player
 is present — that is accepted library behaviour, with operator enforcement
 left open.
