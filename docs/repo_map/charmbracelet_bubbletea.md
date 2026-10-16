@@ -265,7 +265,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 | `bubbles` | `sugar-widgets` | 14 prebuilt components (TextInput, List, Table, etc.) |
 | `ntcharts` | `sugar-charts` | Terminal charting library |
 | `huh` | `sugar-forms` | Interactive form library |
-| `glamour` | `candy-shine` | Markdown rendering |
+| `glamour` | `sugar-markdown` | Markdown rendering |
 | `colorprofile` | `candy-palette` | Terminal color detection |
 | `exec` (internal) | `candy-pty` | Process spawning (PTY) |
 | `x/vt` | `candy-vt` | Virtual terminal emulation |

@@ -260,7 +260,7 @@ The implementation lives in `sugar-forms/src/` with re-exports in `sugar-forms/s
 - **Current approach:** Fixed width/height dimensions
 - **External approach:** Ratatui/php-tui use Cassowary for responsive layouts
 - **Why external is better:** Enables layouts that adapt to terminal resize without explicit handling
-- **Tradeoffs:** Significant complexity; probably belongs in `candy-shine` not forms
+- **Tradeoffs:** Significant complexity; probably belongs in `sugar-markdown` not forms
 - **Applicability:** Would benefit multi-group forms with complex geometry
 
 ---
@@ -526,7 +526,7 @@ The most critical gaps are testing-related: **snapshot tests** and **FuzzyMatche
 
 The medium-term roadmap should focus on UX polish: **auto-pagination**, **common prefix auto-complete**, and **history persistence** are all low-risk improvements that significantly enhance the CLI user experience. The **Closable interface** is a simple addition that enables important embedded use cases.
 
-The most ambitious architectural opportunities—**buffer diffing** and **Cassowary layout**—would bring SugarCraft's rendering infrastructure to parity with ratatui and php-tui. However, these belong in `candy-core` (renderer) and `candy-shine` (layout) respectively, not directly in sugar-forms. Their value to sugar-forms is indirect—better rendering for all fields.
+The most ambitious architectural opportunities—**buffer diffing** and **Cassowary layout**—would bring SugarCraft's rendering infrastructure to parity with ratatui and php-tui. However, these belong in `candy-core` (renderer) and `sugar-markdown` (layout) respectively, not directly in sugar-forms. Their value to sugar-forms is indirect—better rendering for all fields.
 
 The strategic positioning of sugar-forms is strong: it's the canonical form library for the SugarCraft ecosystem, living atop the foundational `sugar-forms` layer. As the ecosystem matures, sugar-forms will benefit from improvements in all dependent libraries. The deprecation path (direct `SugarCraft\Forms\*` usage) is already clear, making sugar-forms a stable API surface for users.
 

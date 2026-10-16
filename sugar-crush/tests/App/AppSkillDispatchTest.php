@@ -373,8 +373,8 @@ final class AppSkillDispatchTest extends TestCase
     /**
      * Half two of the fix, and the half Agent::systemPrompt()'s own fallback
      * gets wrong: the block orients at the App's configured `--root`, not at
-     * the process directory. A `--root candy-shine` fork has to be told it is
-     * standing in candy-shine.
+     * the process directory. A `--root candy-shine` fork has to be told it is @rename-keep historical provenance: real-defect narrative naming the then-live lib path
+     * standing in candy-shine. @rename-keep historical provenance: real-defect narrative naming the then-live lib path
      *
      * The temp directory is chosen precisely because it is NOT getcwd(), so the
      * two answers are distinguishable — which is the only way this test has any

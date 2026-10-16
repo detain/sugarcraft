@@ -35,12 +35,12 @@ refuses a path url that does not exist. So per-lib manifests carry no
 root is the directory those `../` urls resolve against.
 
 To get local wiring back — so an edit to `candy-core/src/Util/Width.php`
-shows up in `candy-shine`'s test run — inject the path repos, then throw
+shows up in `sugar-markdown`'s test run — inject the path repos, then throw
 them away:
 
 ```sh
 php tools/check-path-repos.php --fix --strict-closure   # scratch only
-cd candy-shine && composer update && vendor/bin/phpunit
+cd sugar-markdown && composer update && vendor/bin/phpunit
 cd .. && git checkout -- '*/composer.json'              # never commit these
 ```
 

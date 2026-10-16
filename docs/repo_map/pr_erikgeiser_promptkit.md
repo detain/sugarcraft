@@ -34,7 +34,7 @@ From `repo_map/erikgeiser_promptkit.md`:
 | Confirmation prompt (`Confirmation`) | `sugar-forms` | Core component |
 | Template-based rendering | `sugar-forms` | View system |
 | KeyMap/keybindings | `sugar-forms` | Key binding config |
-| Lipgloss styling | `candy-shine` | Style system |
+| Lipgloss styling | `sugar-markdown` | Style system |
 | BubbleTea Model pattern | `candy-core` | MVC pattern |
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text utilities |
 

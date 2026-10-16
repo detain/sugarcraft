@@ -73,7 +73,7 @@ This is a **wrapper application** (not a library), so it does not map directly t
 - **`candy-core`** (potential): The SSH server infrastructure (`wish`, `ssh`) could inspire a SugarCraft SSH/Telnet wrapper library if needed
 - **`honey-bounce`** (conceptual): Particle system physics (velocity, acceleration, gravity) — confetti uses gravity-based particle trajectories; fireworks use explosive radial velocity with decay
 - **`sugar-charts`** (loose): Color palette management and ANSI color rendering for terminal output — both use color to convey visual information
-- **`candy-shine`** (very loose): Progress indicators/status displays — confetti is a "delightful" output effect similar in spirit to progress spinners
+- **`sugar-markdown`** (very loose): Progress indicators/status displays — confetti is a "delightful" output effect similar in spirit to progress spinners
 
 **Note**: confettysh is an _application_, not a reusable library. It wraps `maaslalani/confetty` (which itself is a standalone CLI tool) through an SSH interface. SugarCraft does not currently have a direct port of this functionality — it would require porting the confetti particle system from Go to PHP and integrating it with an SSH server or a terminal rendering library.
 

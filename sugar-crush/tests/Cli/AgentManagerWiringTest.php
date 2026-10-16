@@ -545,8 +545,8 @@ final class AgentManagerWiringTest extends TestCase
      * directory, because `Agent::systemPrompt()`'s last-resort
      * `EnvironmentBlock::capture(getcwd())` was the only path any caller took.
      * Bootstrap holds the session's root, so it now hands every registered
-     * agent a snapshot captured there — `sugarcrush --root candy-shine`
-     * orients its sub-agents at candy-shine.
+     * agent a snapshot captured there — `sugarcrush --root candy-shine` @rename-keep historical provenance: real-defect narrative naming the then-live lib path
+     * orients its sub-agents at candy-shine. @rename-keep historical provenance: real-defect narrative naming the then-live lib path
      *
      * Deliberately asserts the ABSENCE of the process cwd too: a passing
      * "contains $root" alone would be satisfiable by a run whose cwd happened

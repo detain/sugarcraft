@@ -311,7 +311,7 @@ $supervisor->addSession($defuseHeartbeat(new BackgroundSession(
     workingDirectory: getcwd() ?: '/tmp',
     createdAt: new FixedAge(318), // reads "5m 18s" in every frame
     status: BackgroundSessionStatus::TimedOut,
-    output: "wrote docs/lib/sugar-crush.html\nwrote docs/lib/candy-shine.html\n(no output for 300s)",
+    output: "wrote docs/lib/sugar-crush.html\nwrote docs/lib/sugar-markdown.html\n(no output for 300s)",
 )));
 
 $app = App::new($provider, 'echo')

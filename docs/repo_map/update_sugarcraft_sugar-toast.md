@@ -314,7 +314,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Implementation Ideas**:
 
 - Add `Toast::withMarkdown(bool $enabled)` option
-- Use `candy-shine` for markdown→ANSI rendering
+- Use `sugar-markdown` for markdown→ANSI rendering
 - Support bold, italic, code, and links in message body
 
 **Estimated Complexity**: Medium — requires markdown parsing integration

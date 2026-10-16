@@ -99,15 +99,15 @@ Each command follows `cmd/options.go + cmd/command.go + cmd/<model>.go`:
 | `gum file` | `sugar-file` (planned) | File tree browser |
 | `gum pager` | `sugar-pager` (planned) | Viewport scroll; mirrors `bubbles/viewport` |
 | `gum spin` | `sugar-spin` (planned) | Spinner + command execution |
-| `gum style` | `candy-shine` | Lipgloss wrapper; `sugar-shine` in SugarCraft |
+| `gum style` | `sugar-markdown` | Lipgloss wrapper; `sugar-markdown` in SugarCraft |
 | `gum format` | `sugar-format` (planned) | Markdown/code/template/emoji rendering via glamour |
 | `gum table` | `sugar-table` (planned) | Table with row selection; mirrors `bubbles/table` |
 | `gum log` | `candy-log` | Structured logging |
-| `gum join` | `candy-shine` | Layout joining via lipgloss; part of `sugar-shine` |
+| `gum join` | `sugar-markdown` | Layout joining via lipgloss; part of `sugar-markdown` |
 | Bubbles dep | `candy-sprinkles` | TUI component primitives (textinput, textarea, viewport, spinner, etc.) |
-| Lipgloss dep | `candy-shine` / `sugar-shine` | Styling/rendering engine |
+| Lipgloss dep | `sugar-markdown` | Styling/rendering engine |
 
-**Key insight**: `gum` is essentially a CLI wrapper around `charmbracelet/bubbles` and `charmbracelet/lipgloss`. SugarCraft's `candy-sprinkles` maps to the bubbles layer, and `candy-shine` maps to lipgloss. The gum commands themselves (`input`, `filter`, `choose`, etc.) would become individual SugarCraft leaf libs that depend on the foundation libs.
+**Key insight**: `gum` is essentially a CLI wrapper around `charmbracelet/bubbles` and `charmbracelet/lipgloss`. SugarCraft's `candy-sprinkles` maps to the bubbles layer, and `sugar-markdown` maps to lipgloss. The gum commands themselves (`input`, `filter`, `choose`, etc.) would become individual SugarCraft leaf libs that depend on the foundation libs.
 
 ## Analysis
 

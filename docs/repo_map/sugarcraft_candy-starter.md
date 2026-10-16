@@ -359,7 +359,7 @@ The README's "common next steps" table maps developer intents to SugarCraft libr
 |---|---|---|
 | Add a text input | `sugar-widgets` | `use SugarCraft\Widgets\TextInput; ... $input = new TextInput();` |
 | Show a spinner while loading | `sugar-widgets` | `use SugarCraft\Widgets\Spinner; $spinner = new Spinner();` |
-| Render Markdown help text | `candy-shine` | `use SugarCraft\Shine\Renderer; echo (new Renderer())->render($md);` |
+| Render Markdown help text | `sugar-markdown` | `use SugarCraft\Markdown\Renderer; echo (new Renderer())->render($md);` |
 | Tail a log into scrollable pane | `sugar-widgets` | `use SugarCraft\Widgets\Viewport;` |
 | Build a multi-page wizard | `sugar-forms` | `use SugarCraft\Forms\Group;` |
 | Plot a sparkline | `sugar-charts` | `use SugarCraft\Charts\Sparkline;` |

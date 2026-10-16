@@ -676,9 +676,9 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * Guard against over-sanitization: the Assistant/CandyShine path emits
+     * Guard against over-sanitization: the Assistant/SugarMarkdown path emits
      * legitimate, already-processed SGR and must NOT be run through the
-     * untrusted() strip. Shine renders bold as \x1b[1m — a sequence the
+     * untrusted() strip. sugar-markdown renders bold as \x1b[1m — a sequence the
      * renderer's own "assistant" label (\x1b[1;35m) never produces, so its
      * presence proves the content styling survived intact.
      */
@@ -688,7 +688,7 @@ final class RendererTest extends TestCase
             Message::assistant("# Heading\n\n**bold** text", 0),
         ]));
 
-        $this->assertStringContainsString("\x1b[1m", $out, 'legitimate Shine SGR must survive');
+        $this->assertStringContainsString("\x1b[1m", $out, 'legitimate sugar-markdown SGR must survive');
         $this->assertStringContainsString('bold', $out);
     }
 

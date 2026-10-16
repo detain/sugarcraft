@@ -70,7 +70,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 |---------|---------|----------|-------------|
 | candy-starter | Style chain rebuilt per render frame | Counter.php:68 | 3 intermediate Style objects per 60fps render tick |
 | candy-starter | Quit doesn't fire for uppercase Q | Counter.php:51 | strtolower not used — CapsLock breaks quit |
-| candy-shine | BlockStack/StyleSheet state not reset in copy() | Renderer.php:276 | withTheme() shares block stack with original renderer |
+| sugar-markdown | BlockStack/StyleSheet state not reset in copy() | Renderer.php:276 | withTheme() shares block stack with original renderer |
 | candy-tetris | AI rotation bug — loop runs when rotDelta=0 | Game.php:309 | Unwanted 90° rotation when AI needs no rotation |
 | candy-tetris | Garbage overflow off-by-one | Game.php:482 | Row $count displaced into visible area not validated |
 | sugar-forms | No validation for negative viewport | Forms.php | Silent empty output for negative dimensions |
@@ -96,7 +96,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-git-server | 7 HIGH, 12 MED, 9 LOW | Git daemon security/injection issues |
 | candy-scriptui | 2 HIGH, 7 MED, 6 LOW | Shell injection, env var exposure, async blocking |
 | candy-vcr | 2 HIGH, 9 MED, 8 LOW | Undefined variable, Imagick cache sharing, blocking I/O |
-| candy-shine | 1 HIGH, 6 MED, 9 LOW | BlockStack state, string concat in loops, missing Write() parity |
+| sugar-markdown | 1 HIGH, 6 MED, 9 LOW | BlockStack state, string concat in loops, missing Write() parity |
 | sugar-panels | 1 HIGH, 4 MED, 9 LOW | Division by zero, multibyte sanitization, flex separator gap |
 | sugar-gallery | 3 HIGH, 6 MED, 2 LOW | Path traversal, FFI memory, no format fallback |
 | sugar-forms | 1 HIGH, 4 MED, 7 LOW | Viewport validation, input handling gaps |
@@ -139,7 +139,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 ### 3. Performance Optimization
 
-- Cache Style objects in hot render loops (candy-starter, candy-flappy, candy-shine)
+- Cache Style objects in hot render loops (candy-starter, candy-flappy, sugar-markdown)
 - Pre-compute visible column indices before row iteration (sugar-flexbox, sugar-table)
 - Add caching to SmithWatermanMatcher in fuzzy filter (candy-scriptui, sugar-crush)
 - Use array rewind + single-pass iteration instead of multiple array_map passes

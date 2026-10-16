@@ -17,7 +17,7 @@ https://sugarcraft.github.io/lib/sugar-mouse.html
 https://sugarcraft.github.io/lib/sugar-widgets.html
 https://sugarcraft.github.io/lib/sugar-charts.html
 https://sugarcraft.github.io/lib/sugar-forms.html
-https://sugarcraft.github.io/lib/candy-shine.html
+https://sugarcraft.github.io/lib/sugar-markdown.html
 https://sugarcraft.github.io/lib/candy-kit.html
 https://sugarcraft.github.io/lib/candy-metrics.html
 https://sugarcraft.github.io/lib/sugar-image.html

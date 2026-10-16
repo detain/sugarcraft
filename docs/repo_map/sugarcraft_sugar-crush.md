@@ -12,7 +12,7 @@
 
 - **Status:** 🟢 v1 ready
 
-- **Description:** Chat-shell TUI for AI coding assistants with pluggable backends (EchoBackend offline; CommandBackend for Anthropic/OpenAI/Ollama via wrapper script). Markdown rendering via CandyShine, scrollback viewport, session persistence.
+- **Description:** Chat-shell TUI for AI coding assistants with pluggable backends (EchoBackend offline; CommandBackend for Anthropic/OpenAI/Ollama via wrapper script). Markdown rendering via SugarMarkdown, scrollback viewport, session persistence.
 
 ---
 
@@ -25,7 +25,7 @@ sugar-crush/src/
 ├── Chat.php                     # Main TUI Model (implements Model interface)
 ├── Message.php                  # Immutable conversation turn (role/content/toolCalls)
 ├── Role.php                     # Enum: System | User | Assistant
-├── Renderer.php                 # Pure view function (CandyShine markdown + borders)
+├── Renderer.php                 # Pure view function (SugarMarkdown markdown + borders)
 ├── AssistantMsg.php             # Internal Msg for backend completion delivery
 ├── Session.php                  # Persists UI state to ~/.config/sugarcraft-crush/
 ├── ToolCall.php                 # VO: name, arguments, optional id (from AI)
@@ -343,7 +343,7 @@ public static function render(Chat $chat): string {
 
 - User messages: raw text with cyan `user>` prefix
 
-- Assistant messages: rendered via CandyShine (markdown) with magenta `assistant` prefix
+- Assistant messages: rendered via SugarMarkdown (markdown) with magenta `assistant` prefix
 
 - System messages: faint styling
 
@@ -539,7 +539,7 @@ Matches Anthropic/OpenAI tool_result wire format for compatibility with standard
 | Dependency | Purpose | File Reference |
 |------------|---------|-----------------|
 | `sugarcraft/candy-core` | `Model`, `Msg`, `Cmd`, `KeyType`, `KeyMsg`, `Subscriptions` | `Chat.php`, `AssistantMsg.php` |
-| `sugarcraft/candy-shine` | `Renderer` (markdown), `Ansi` | `Renderer.php` |
+| `sugarcraft/sugar-markdown` | `Renderer` (markdown), `Ansi` | `Renderer.php` |
 | `sugarcraft/candy-sprinkles` | `Border`, `Style` | `Renderer.php` |
 
 ### 4.2 External (Vendor)
@@ -547,7 +547,7 @@ Matches Anthropic/OpenAI tool_result wire format for compatibility with standard
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `react/promise` | ^3.3 | Async backend calls via `PromiseInterface` |
-| `league/commonmark` | (transitive) | Markdown parsing (via CandyShine) |
+| `league/commonmark` | (transitive) | Markdown parsing (via SugarMarkdown) |
 
 ### 4.3 PHP Version
 
@@ -618,7 +618,7 @@ Requires PHP >= 8.3 (due to readonly properties, first-class callable `Closure::
 ```
 sugar-crush
 ├── candy-core (TUI runtime, Model/Msg/Cmd)
-├── candy-shine (Markdown rendering via league/commonmark)
+├── sugar-markdown (Markdown rendering via league/commonmark)
 └── candy-sprinkles (Border, Style)
 
 Dependent packages: None yet

@@ -12,7 +12,7 @@ use SugarCraft\Crush\Permissions\DenialKind;
  * on the {@see Chat} model.
  *
  * Content stays as a plain string here — Markdown is rendered
- * lazily at view time via CandyShine. That keeps `Message`
+ * lazily at view time via SugarMarkdown. That keeps `Message`
  * cheap to build (every keystroke updates the in-flight user
  * message) and keeps the backend adapter API ASCII-only.
  */

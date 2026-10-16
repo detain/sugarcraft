@@ -843,7 +843,7 @@ final class InstructionFileLoader
     /**
      * Resolve glob patterns from config and load matching file contents.
      *
-     * These patterns (e.g. "candy-shine/CALIBER_LEARNINGS.md") force-load
+     * These patterns (e.g. "sugar-markdown/CALIBER_LEARNINGS.md") force-load
      * regardless of what the agent has touched, providing cross-cutting
      * guidance that shouldn't depend on an agent opening the right file.
      *

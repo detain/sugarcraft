@@ -16,14 +16,14 @@ use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Shine\Renderer as Markdown;
+use SugarCraft\Markdown\Renderer as Markdown;
 
 /**
  * Audit 15b-10: a frame must not cost time proportional to the whole
  * session.
  *
  * Every keystroke, token batch and tick repaints, and {@see Renderer} used
- * to re-render every assistant reply through CandyShine on every frame,
+ * to re-render every assistant reply through SugarMarkdown on every frame,
  * tokenize every transcript row byte by byte, sanitize every hidden tool
  * body, and re-parse the whole streaming partial. MEASURED before the fix
  * (120x40): 706 ms per frame at 200 exchanges, 2.1 s per frame for a 200 KB
@@ -77,7 +77,7 @@ final class RenderMemoTest extends TestCase
         self::assertCount(300, $entries, 'one memo entry per distinct reply');
 
         // Poisoned: if the second frame rendered any reply again instead of
-        // reading it back, the newest rows would show CandyShine output, not
+        // reading it back, the newest rows would show SugarMarkdown output, not
         // the marker.
         $i = 0;
         foreach ($entries as $key => $_) {
@@ -243,7 +243,7 @@ final class RenderMemoTest extends TestCase
     public function testALinkReferenceDefinitionResolvesWithoutAWholeRender(): void
     {
         // A definition applies to the whole document, so the `[foo]` before
-        // it must still become a link. Audit 15b-30: candy-shine now carries
+        // it must still become a link. Audit 15b-30: sugar-markdown now carries
         // definitions across sections, so the partial is no longer rendered
         // whole to get that right.
         $theme = Theme::byName('dark');
@@ -348,7 +348,7 @@ final class RenderMemoTest extends TestCase
      * The same scaling law the brief asked for (8x content, <=3x time),
      * applied where the memo puts it in force: idle repaint frames of an
      * open-tail reply. Growth frames of a single unclosed fence stay
-     * whole-tail renders until CandyShine stops padding every fenced line
+     * whole-tail renders until SugarMarkdown stops padding every fenced line
      * to the block's widest row - a splice there would not be byte-identical
      * (cl-4 FIX-B probe: appending a longer line REWRITES the earlier rows'
      * padding bytes). min-of-N ratios, the house shape of

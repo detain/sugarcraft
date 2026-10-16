@@ -211,7 +211,7 @@ final class App implements Model
          * so consumers spell the fallback themselves as `$root ?? getcwd()`.
          *
          * This exists because `--root` used to reach only the TOOLS. A
-         * `sugarcrush --root candy-shine` jailed Bash/Read/Edit/Glob to that
+         * `sugarcrush --root sugar-markdown` jailed Bash/Read/Edit/Glob to that
          * library while {@see \SugarCraft\Crush\Runtime}'s environment block
          * and hook contexts still reported the whole monorepo — so the model
          * reasoned about one repository while acting inside another, which is
@@ -2417,7 +2417,7 @@ final class App implements Model
         //
         //   - At $root, not the process directory. The block renders the
         //     "Working directory"/"Is directory a git repo" lines that orient
-        //     the model, and on a `--root candy-shine` run they have to name
+        //     the model, and on a `--root sugar-markdown` run they have to name
         //     the directory the tools are jailed to. The fallback spelling
         //     mirrors Runtime::projectRoot() exactly, including that null
         //     stays distinguishable from "explicitly rooted at getcwd()".

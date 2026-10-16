@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ee305de6efeed88a824a4e54b5e08847",
+    "content-hash": "426caa62d64a442e10a19dfa23e514d1",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4559,12 +4559,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mdview",
-                "reference": "81d42a24d2916eec27e270de9975867061057a6d"
+                "reference": "114c9f4eea91a688db691a7ca4ea7e27c82dee41"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-shine": "dev-master",
+                "sugarcraft/sugar-markdown": "dev-master",
                 "sugarcraft/sugar-widgets": "dev-master",
                 "symfony/console": "^6.4 || ^7.0"
             },
@@ -4596,7 +4596,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Markdown CLI viewer / pager composing CandyShine + Viewport, modeled on charmbracelet/glow. 8 stock themes, word-wrap, OSC 8 hyperlinks.",
+            "description": "Markdown CLI viewer / pager composing SugarMarkdown + Viewport, modeled on charmbracelet/glow. 8 stock themes, word-wrap, OSC 8 hyperlinks.",
             "homepage": "https://github.com/sugarcraft/candy-mdview",
             "keywords": [
                 "ansi",
@@ -4948,17 +4948,17 @@
             "dist": {
                 "type": "path",
                 "url": "candy-scriptui",
-                "reference": "5113cc5bf5c187b2e487dbcb52da4d5b0b98b6c9"
+                "reference": "89e4d75c3b14bfb318eefeffb4bf0d8f772e6f30"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-markdown": "dev-master",
                 "symfony/console": "^6.4 || ^7.0"
             },
             "require-dev": {
@@ -5008,68 +5008,6 @@
                 "issues": "https://github.com/sugarcraft/candy-scriptui/issues",
                 "source": "https://github.com/sugarcraft/candy-scriptui",
                 "docs": "https://sugarcraft.github.io/lib/candy-scriptui.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-shine",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-shine",
-                "reference": "2345aeb1a9f0027dba026aeafe081ab191903d78"
-            },
-            "require": {
-                "league/commonmark": "^2.4",
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Shine\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Shine\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/glamour — Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, syntax highlighting, and 8 stock themes (ansi/plain/dark/light/notty/dracula/tokyo-night/pink).",
-            "homepage": "https://github.com/sugarcraft/candy-shine",
-            "keywords": [
-                "ansi",
-                "commonmark",
-                "glamour",
-                "markdown",
-                "renderer",
-                "sugarcraft",
-                "syntax-highlighting",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-shine/issues",
-                "source": "https://github.com/sugarcraft/candy-shine",
-                "docs": "https://sugarcraft.github.io/lib/candy-shine.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -5878,7 +5816,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "6a6dd4c6d46e0ff33258dbfe8dd978f2ad1a6984"
+                "reference": "5ff368bee0c549c277cbbdbb2ef11ca3efcce7ac"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5899,12 +5837,12 @@
                 "sugarcraft/candy-layout": "dev-master",
                 "sugarcraft/candy-mosaic": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-focus": "@dev",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-markdown": "dev-master",
                 "sugarcraft/sugar-mcp-client": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-overlay": "dev-master",
@@ -5948,7 +5886,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Chat-shell TUI for AI coding assistants — port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via CandyShine, scrollback viewport via SugarWidgets, input area via SugarWidgets TextArea.",
+            "description": "Chat-shell TUI for AI coding assistants — port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarWidgets TextArea.",
             "homepage": "https://github.com/sugarcraft/sugar-crush",
             "keywords": [
                 "ai",
@@ -6524,6 +6462,68 @@
                 "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
                 "source": "https://github.com/sugarcraft/sugar-gallery",
                 "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-markdown",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-markdown",
+                "reference": "acc7f7a6158919b0471a4b326bbbd4be39ca6655"
+            },
+            "require": {
+                "league/commonmark": "^2.4",
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Markdown\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Markdown\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/glamour — Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, syntax highlighting, and 8 stock themes (ansi/plain/dark/light/notty/dracula/tokyo-night/pink).",
+            "homepage": "https://github.com/sugarcraft/sugar-markdown",
+            "keywords": [
+                "ansi",
+                "commonmark",
+                "glamour",
+                "markdown",
+                "renderer",
+                "sugarcraft",
+                "syntax-highlighting",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-markdown/issues",
+                "source": "https://github.com/sugarcraft/sugar-markdown",
+                "docs": "https://sugarcraft.github.io/lib/sugar-markdown.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8609,7 +8609,6 @@
         "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-scriptui": 20,
-        "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,
         "sugarcraft/candy-ssh-launcher": 20,
@@ -8632,6 +8631,7 @@
         "sugarcraft/sugar-forms": 20,
         "sugarcraft/sugar-fuzzy": 20,
         "sugarcraft/sugar-gallery": 20,
+        "sugarcraft/sugar-markdown": 20,
         "sugarcraft/sugar-mcp-client": 20,
         "sugarcraft/sugar-mouse": 20,
         "sugarcraft/sugar-navstack": 20,

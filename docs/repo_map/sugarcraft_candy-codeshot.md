@@ -6,7 +6,7 @@
 - **Upstream**: `charmbracelet/freeze` (Go, ~4.6k stars)
 - **Status**: 🟢 v1 ready
 - **PHP**: `^8.3`
-- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-shine`
+- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-markdown`
 - **CLI**: `bin/candy-codeshot` (stdin/stdout, theme flags, window controls)
 - **Docs**: https://sugarcraft.github.io/lib/candy-codeshot.html
 
@@ -154,12 +154,12 @@ Theme {
 - **Hyper** (`Hyper`) — thin title bar rect + 3 circles inside it
 - **None** (`None`) — empty string (no chrome)
 
-### How it Uses candy-shine / candy-core
+### How it Uses sugar-markdown / candy-core
 
 - **`SugarCraft\Core\Util\Ansi::strip()`** — Called in both SvgRenderer and PngRenderer to compute visible character width for layout math (line 122 in SvgRenderer, line 100 in PngRenderer). This is the only ANSI utility consumed from candy-core.
 - **`SugarCraft\Core\I18n\Lang`** — Extended by `Lang.php` with namespace `'freeze'`, providing `Lang::t()` for i18n.
 
-The package does NOT use candy-shine for rendering — it implements its own SVG DOM building inline (string concatenation into SVG XML).
+The package does NOT use sugar-markdown for rendering — it implements its own SVG DOM building inline (string concatenation into SVG XML).
 
 ---
 
@@ -310,7 +310,7 @@ Coverage runs via `cd candy-codeshot && composer install && vendor/bin/phpunit`.
 
 ## SugarCraft Ecosystem Position
 
-- **Depends on**: `candy-core` (Ansi::strip), `candy-sprinkles` (?), `candy-shine` (?)
+- **Depends on**: `candy-core` (Ansi::strip), `candy-sprinkles` (?), `sugar-markdown` (?)
 - **Consumed by**: Not yet used by other packages in the monorepo (verified by searching composer.json files for sugarcraft/candy-codeshot)
 - **candy-palette** (ColorProfile) is consumed by candy-codeshot for color profile detection in terminals, but the dependency is not declared in composer.json — ColorProfile is accessed through candy-core
 

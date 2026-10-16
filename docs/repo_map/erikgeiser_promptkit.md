@@ -308,7 +308,7 @@ func (m *Model[T]) filteredAndPagedChoices() ([]*Choice[T], int) {
 | Confirmation prompt (`Confirmation`) | `sugar-forms` | Yes/no prompt |
 | Template-based rendering | `sugar-forms` | Uses template system similar to SugarCraft's view templates |
 | KeyMap/keybindings | `sugar-forms` | Key binding configuration |
-| Lipgloss styling | `candy-shine` | Style system for terminal colors/formatting |
+| Lipgloss styling | `sugar-markdown` | Style system for terminal colors/formatting |
 | BubbleTea Model pattern | `candy-core` | MVC pattern implementation |
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text wrapping utilities |
 

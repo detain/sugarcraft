@@ -633,7 +633,7 @@ if ($unused) {
         // E488. THE HATCH APPLIES REPO-WIDE AND ITS VALIDATION DID NOT. The
         // lookup above is consulted only for a dep this pass has ALREADY
         // decided is dead, so a row naming something else is never looked at:
-        // measured, two rows added to `candy-shine` -- one for
+        // measured, two rows added to `sugar-markdown` -- one for
         // `sugarcraft/candy-core`, which its `src/` references on every page,
         // and one for `sugarcraft/package-that-does-not-exist`, which is not
         // even a require -- produced no output at all and exit 0.

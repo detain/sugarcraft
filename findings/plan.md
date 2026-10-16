@@ -128,7 +128,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 
 | Lib | Phase | Items | Key Fix |
 |-----|-------|-------|---------|
-| candy-shine | P1 | 3 | BlockStack state not reset in copy(); withTheme() shares block stack |
+| sugar-markdown | P1 | 3 | BlockStack state not reset in copy(); withTheme() shares block stack |
 | sugar-image | P1 | 2 | Mosaic grid layout edge cases |
 | sugar-quickpick | P1 | 2 | Shell environment isolation |
 | sugar-focus | P1 | 2 | Focus ring rendering |
@@ -188,7 +188,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 ### Group F Source Plans
 
-- `findings/plan_candy-shine.md` — Phase 1 (BlockStack state not reset, withTheme shares stack)
+- `findings/plan_sugar-markdown.md` — Phase 1 (BlockStack state not reset, withTheme shares stack)
 - `findings/plan_sugar-image.md` — Phase 1 (mosaic grid layout edge cases)
 - `findings/plan_sugar-quickpick.md` — Phase 1 (shell environment isolation)
 - `findings/plan_sugar-focus.md` — Phase 1 (focus ring rendering)

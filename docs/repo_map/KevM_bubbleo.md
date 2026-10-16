@@ -158,12 +158,12 @@ The architecture maps well to SugarCraft's TUI component philosophy:
 
 | bubbleo Component | SugarCraft Library | Mapping Rationale |
 |-------------------|---------------------|-------------------|
-| `navstack.Model` (stack management, push/pop) | `sugar-forms` or `candy-shine` | Navigation model with state machine patterns, message-driven updates |
+| `navstack.Model` (stack management, push/pop) | `sugar-forms` or `sugar-markdown` | Navigation model with state machine patterns, message-driven updates |
 | `menu.Model` (list selection) | `sugar-widgets` (base components) | Menu/select widget building on bubbles/list |
-| `breadcrumb.Model` (trail rendering) | `sugar-widgets` or `candy-shine` | View component rendering hierarchical context |
+| `breadcrumb.Model` (trail rendering) | `sugar-widgets` or `sugar-markdown` | View component rendering hierarchical context |
 | `shell.Model` (composite shell) | `candy-scriptui` (shell wrapper) | Composite component managing child views |
 | `window.Model` (dimension management) | `candy-core` | Layout/dimension tracking utilities |
-| `styles`, `lipgloss` usage | `candy-shine` | Lipgloss-based styling/theme system |
+| `styles`, `lipgloss` usage | `sugar-markdown` | Lipgloss-based styling/theme system |
 | `tea.Model` interface pattern | All SugarCraft libs | Immutable + fluent `Model` pattern with Init/Update/View |
 | `Closable` interface | Resource cleanup patterns | Similar to disposal/cleanup patterns in view components |
 | `Cmdize` utility | `SugarCraft\Core\Utils` | Message/command factory utilities |

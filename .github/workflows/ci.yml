@@ -544,7 +544,7 @@ jobs:
 
       # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  Downstream libs (sugar-forms, sugar-widgets, candy-scriptui,
-      # candy-shine): run full suite — any failures there are pre-existing and
+      # sugar-markdown): run full suite — any failures there are pre-existing and
       # unrelated to the x/windows changes.
       - name: Run tests
         run: |

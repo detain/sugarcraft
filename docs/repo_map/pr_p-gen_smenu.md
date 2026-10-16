@@ -26,7 +26,7 @@ From `repo_map/p-gen_smenu.md`:
 | SugarCraft Lib | Relevant smenu Concept |
 |---|---|
 | **sugar-widgets** | TST implementation, bitmap tracking for search highlighting, linked list |
-| **sugar-forms / candy-shine** | Word/tag selection model, scrollable window rendering, search with real-time highlighting |
+| **sugar-forms / sugar-markdown** | Word/tag selection model, scrollable window rendering, search with real-time highlighting |
 | **honey-bounce** | Scrolling behavior and cursor movement timing |
 | **Overall** | **No direct port exists.** smenu is a standalone app, not a library. SugarCraft gap: no TST-based prefix/fuzzy filtering of large word lists. |
 

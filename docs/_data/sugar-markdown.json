@@ -1,0 +1,11 @@
+{
+    "title": "SugarMarkdown — SugarCraft",
+    "description": "SugarMarkdown: Markdown → ANSI renderer.",
+    "ogTitle": "SugarMarkdown — SugarCraft",
+    "ogDescription": "Markdown → ANSI renderer.",
+    "emoji": "🌟",
+    "displayName": "SugarMarkdown",
+    "tagline": "Markdown → ANSI renderer",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/glamour\" style=\"color: inherit;\">charmbracelet/glamour</a></span>\n          <span class=\"tag-chip\">markdown</span>\n          <span class=\"tag-chip\">ansi</span>\n          <span class=\"tag-chip\">renderer</span>\n          <span class=\"tag-chip\">themes</span>"
+}

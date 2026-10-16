@@ -34,11 +34,11 @@ From `repo_map/charmbracelet_huh.md`:
 | huh Feature | SugarCraft Lib | Notes |
 |-------------|----------------|-------|
 | Form + Groups + Fields | `sugar-forms` (hypothetical) | Core form infrastructure |
-| Input / Text fields | `sugar-input` (extends `candy-shine`) | Text with validation |
+| Input / Text fields | `sugar-input` (extends `sugar-markdown`) | Text with validation |
 | Select / MultiSelect | `sugar-select` / `sugar-chips` | Option selection |
 | Confirm | `sugar-confirm` | Yes/No prompt |
 | FilePicker | `sugar-file-picker` | File/folder browser |
-| Theming | `candy-shine` | ANSI styling |
+| Theming | `sugar-markdown` | ANSI styling |
 | Spinner | `sugar-spin` | Loading indicator |
 | Bubble Tea integration | `candy-scriptui` | TUI framework |
 | Dynamic forms | sugar-forms | `*Func` pattern |

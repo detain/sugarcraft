@@ -253,7 +253,7 @@ Ultraviolet is a terminal TUI foundation layer. SugarCraft is a PHP monorepo of 
 | `Terminal` (event loop, start/stop, raw mode, suspend/resume) | `candy-core` | Application lifecycle management |
 | `KeyPressEvent` / `KeyReleaseEvent` / `MouseClickEvent` / `MouseScrollEvent` / `PasteEvent` / `FocusEvent` | `sugar-widgets` | Input event types and keyboard/mouse handling |
 | `Window` (parent/child hierarchy, shared-buffer views) | `candy-sprinkles` | Windowing model, view composition |
-| `layout` package with Cassowary algorithm | `honey-bounce` or `candy-shine` | Constraint-based layout solver |
+| `layout` package with Cassowary algorithm | `honey-bounce` or `sugar-markdown` | Constraint-based layout solver |
 | `Border` functions (Normal, Rounded, Block, Thick, Double, etc.) | `candy-scriptui` | Box-drawing borders (shells contain content) |
 | `StyledString` + `screen.Context` (styled text → cells) | `sugar-widgets` | High-level styled string drawing |
 | `ProgressBar` + `EncodeProgressBar()` | `sugar-widgets` | Progress indication (Windows Terminal sequences) |

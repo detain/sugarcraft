@@ -37,7 +37,7 @@ From `repo_map/charmbracelet_confettysh.md`:
 | `honey-bounce` | Particle physics (velocity, gravity, projectile trajectory) | Conceptual |
 | `candy-core` | SSH server infrastructure (wish, ssh) | Theoretical |
 | `sugar-charts` | ANSI color palette + terminal rendering | Loose |
-| `candy-shine` | "Delightful" status output effects | Very loose |
+| `sugar-markdown` | "Delightful" status output effects | Very loose |
 
 **Key insight**: The particle physics abstraction (harmonica.Projectile with position/velocity/gravity) is the core engine. SugarCraft's `honey-bounce` is the natural home for this, but currently does not exist as a real library.
 

@@ -34,13 +34,13 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 | `gum file` | `sugar-forms` (FilePicker) | 🟡 | File tree browser |
 | `gum pager` | `sugar-pager` (planned) | 🔴 | Viewport scroll |
 | `gum spin` | `sugar-spin` (planned) | 🔴 | Spinner + PTY command execution |
-| `gum style` | `candy-shine` | 🟡 | Lipgloss wrapper for styling |
+| `gum style` | `sugar-markdown` | 🟡 | Lipgloss wrapper for styling |
 | `gum format` | `sugar-format` (planned) | 🔴 | Markdown/code/template/emoji via glamour |
 | `gum table` | `sugar-table` | 🟢 | Table with row selection |
 | `gum log` | `candy-log` | 🟢 | Structured logging |
-| `gum join` | `candy-shine` | 🟡 | Layout joining via lipgloss |
+| `gum join` | `sugar-markdown` | 🟡 | Layout joining via lipgloss |
 | Bubbles dep | `candy-sprinkles` + `sugar-widgets` | 🟢 / 🟡 | TUI component primitives |
-| Lipgloss dep | `candy-shine` / `sugar-shine` | 🟡 | Styling/rendering engine |
+| Lipgloss dep | `sugar-markdown` | 🟡 | Styling/rendering engine |
 
 **Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `sugar-forms`, `sugar-widgets`) is what enables the shell commands.
 
@@ -297,7 +297,7 @@ From `repo_map/charmbracelet_gum.md`:
 **PR**: #960 (merged in v0.17.0)
 **Feature**: `--padding` flag on most commands (1-4 values like CSS)
 **Implementation**: `ParsePadding` function, apply in View via `lipgloss.NewStyle().Padding()`
-**Relevance**: 🟢 DONE — SugarCraft has this in candy-shine
+**Relevance**: 🟢 DONE — SugarCraft has this in sugar-markdown
 
 ### C. Horizontal Scrolling
 
@@ -1060,7 +1060,7 @@ if errors.Is(err, tea.ErrProgramKilled) {
 
 **Source**: Issue #966 (padding for join)
 **Match**: Fish's layout system with automatic padding
-**SugarCraft**: sugar-shine already has padding; extend to join
+**SugarCraft**: sugar-markdown already has padding; extend to join
 
 ---
 

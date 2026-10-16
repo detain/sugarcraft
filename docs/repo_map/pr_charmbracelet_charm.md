@@ -34,7 +34,7 @@ From `repo_map/charmbracelet_charm.md`:
 | charm Component | SugarCraft Library | Notes |
 |----------------|-------------------|-------|
 | `kv/` package | `sugar-widgets` | KV store, not direct port |
-| `fs/` package | `candy-shine` or `sugar-widgets` | Filesystem FS interface |
+| `fs/` package | `sugar-markdown` or `sugar-widgets` | Filesystem FS interface |
 | `crypt/` package | (none) | No encryption port yet |
 | `client/` package | `candy-scriptui` | Shell/env config management |
 | `ui/` (Bubble Tea) | `candy-sprinkles` | TUI component patterns |

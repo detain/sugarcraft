@@ -29,14 +29,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Package-by-Package Findings
 
-### Group 1: candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server
+### Group 1: candy-core, candy-scriptui, candy-sprinkles, sugar-markdown, candy-git-server
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-core | 588 ✓ | APPROVE | 0 | 2 | 3 | 0 |
 | candy-scriptui | 230 ✓ | APPROVE | 0 | 0 | 3 | 0 |
 | candy-sprinkles | 522 ✓ | APPROVE | 0 | 0 | 4 | 0 |
-| candy-shine | 158 ✓ | APPROVE | 0 | 1 | 3 | 0 |
+| sugar-markdown | 158 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-git-server | 140 ✓ | APPROVE | 0 | 2 | 4 | 0 |
 
 **candy-core** — Foundation TUI runtime (Elm architecture). Well-architected with 588 passing tests. Issues: `Ansi::sgr()` called with 4 args where 3 expected (ghost rendering); `Subscription::startSubscription()` returns `mixed` instead of typed return.
@@ -45,7 +45,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-sprinkles** — Styling/layout library (lipgloss port). Excellent 522 tests. Issues: Style's sentinel-bool pattern is exceptional (documented but creates inconsistency).
 
-**candy-shine** — Markdown renderer (glamour port). 158 tests. Issues: `Theme::fromJsonString()` doesn't support all glamour v2 properties; incomplete emoji map.
+**sugar-markdown** — Markdown renderer (glamour port). 158 tests. Issues: `Theme::fromJsonString()` doesn't support all glamour v2 properties; incomplete emoji map.
 
 **candy-git-server** — Git HTTP server. 140 tests. Issues: `Repo::branches()` uses unescaped path; `git` binary not verified at startup.
 
@@ -562,7 +562,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Group | Packages | Tests | Status |
 |-------|----------|-------|--------|
-| 1 | candy-core, candy-scriptui, candy-sprinkles, candy-shine, candy-git-server | 1,638 | ✅ All pass |
+| 1 | candy-core, candy-scriptui, candy-sprinkles, sugar-markdown, candy-git-server | 1,638 | ✅ All pass |
 | 2 | candy-sql, candy-starter, candy-kit, candy-codeshot | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked | <!-- @rename-keep historical provenance -->
 | 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass |

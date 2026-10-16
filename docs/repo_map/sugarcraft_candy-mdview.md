@@ -22,7 +22,7 @@
 
 ## Feature List
 
-- **Markdown Rendering:** Composes `candy-shine` (Renderer/Theme) for ANSI-escaped styled output
+- **Markdown Rendering:** Composes `sugar-markdown` (Renderer/Theme) for ANSI-escaped styled output
 
 - **Dual-Mode CLI:** Direct stdout rendering (default) or fullscreen pager via `MdViewModel` + `Viewport`
 
@@ -59,7 +59,7 @@
 ```
 candy-mdview/
 ├── bin/candy-mdview                  # CLI entry point (20 lines)
-├── composer.json                  # deps: candy-core, candy-shine, sugar-widgets, symfony/console
+├── composer.json                  # deps: candy-core, sugar-markdown, sugar-widgets, symfony/console
 ├── phpunit.xml                    # colors=true, failOnWarning=true, cacheDirectory=.phpunit.cache
 ├── README.md                      # CLI usage, library API, VHS demo links
 ├── CALIBER_LEARNINGS.md           # WidthHelper mb_strwidth, FileWatcher Generator gotcha
@@ -111,14 +111,14 @@ RenderCommand::loadInput()
     ↓ (file path or stdin)
 Renderer::render($markdown)
     ├── League\CommonMark\MarkdownRenderer (from sugar-widgets)
-    └── Renderer (from candy-shine)
+    └── Renderer (from sugar-markdown)
         ├── ->withWordWrap($width)
         └── ->withHyperlinks($enabled)
     ↓ (ANSI-escaped string)
 [stdout | MdViewModel::fromContent()]
 ```
 
-The rendering pipeline uses `SugarCraft\Shine\Renderer` which wraps the League CommonMark parser with candy-shine's ANSI styling engine. The `Renderer` applies word-wrap and hyperlink styling based on configuration.
+The rendering pipeline uses `SugarCraft\Markdown\Renderer` which wraps the League CommonMark parser with sugar-markdown's ANSI styling engine. The `Renderer` applies word-wrap and hyperlink styling based on configuration.
 
 ### MdViewModel (Pager State Machine)
 
@@ -201,7 +201,7 @@ Uses `filemtime()` polling — no extension required. Resolution is filesystem-d
 | Package | Role |
 |---------|------|
 | `sugarcraft/candy-core` | `Viewport`, `Model`, `Cmd`, `Msg`, `Program`, `TtyDetect`, `Width`, `Ansi` |
-| `sugarcraft/candy-shine` | `Renderer`, `Theme` (ANSI text styling engine) |
+| `sugarcraft/sugar-markdown` | `Renderer`, `Theme` (ANSI text styling engine) |
 | `sugarcraft/sugar-widgets` | Markdown parsing (League CommonMark integration) |
 | `symfony/console` | `Application`, `Command`, `InputInterface`, `OutputInterface` |
 
@@ -209,7 +209,7 @@ Uses `filemtime()` polling — no extension required. Resolution is filesystem-d
 
 | Feature | charmbracelet/glow (Go) | candy-mdview (PHP) |
 |--------|----------------------|-----------------|
-| **Markdown rendering** | glamour (goldmark-based) | Renderer via candy-shine (League CommonMark) |
+| **Markdown rendering** | glamour (goldmark-based) | Renderer via sugar-markdown (League CommonMark) |
 | **TUI framework** | Bubble Tea (bubbletea) | Custom MdViewModel + Program (ReactPHP-based) |
 | **Pager** | bubbles/viewport | SugarCraft\Widgets\Viewport |
 | **File discovery** | gitcha (git-aware recursive search) | Not implemented |
@@ -262,9 +262,9 @@ Glamour is the markdown rendering engine used by glow. Key differences:
 |--------|---------|------------|
 | **Parser** | goldmark (Go) | League\CommonMark (PHP) |
 | **Style system** | JSON stylesheets with cascading | JSON via Theme + GlamourTheme |
-| **Block stack** | Yes (nested block margin/indent tracking) | Delegated to candy-shine |
+| **Block stack** | Yes (nested block margin/indent tracking) | Delegated to sugar-markdown |
 | **Chroma integration** | Full lexer for syntax highlighting | Regex tokenizer |
-| **Custom writers** | MarginWriter, PaddingWriter, IndentWriter | Via candy-shine Renderer |
+| **Custom writers** | MarginWriter, PaddingWriter, IndentWriter | Via sugar-markdown Renderer |
 | **GFM support** | Full (tables, task lists, strikethrough, emoji) | Via League CommonMark |
 | **OSC 8 hyperlinks** | Yes (FNV-32a hash for URL ID) | Via Renderer::withHyperlinks |
 
@@ -332,7 +332,7 @@ This is critical for correct visual rendering since `strlen()` counts code units
 
 ## Strengths
 
-1. **Clean separation of concerns** — Rendering (candy-shine), TUI (MdViewModel+Viewport), CLI (Symfony) are cleanly layered
+1. **Clean separation of concerns** — Rendering (sugar-markdown), TUI (MdViewModel+Viewport), CLI (Symfony) are cleanly layered
 
 2. **Immutable model pattern** — MdViewModel follows the functional update pattern correctly
 
@@ -382,7 +382,7 @@ candy-core (Viewport, Model, Cmd, Program, Tty, Width, Ansi)
     ↓
 sugar-widgets (MarkdownRenderer via League\CommonMark)
     ↓
-candy-shine (Renderer, Theme)
+sugar-markdown (Renderer, Theme)
     ↓
 candy-mdview (RenderCommand, MdViewModel, FileWatcher, GlamourTheme)
 ```
@@ -390,14 +390,14 @@ candy-mdview (RenderCommand, MdViewModel, FileWatcher, GlamourTheme)
 Dependencies:
 - `sugarcraft/candy-core` — Viewport, Model, Program, TtyDetect, Width, Ansi
 
-- `sugarcraft/candy-shine` — Renderer, Theme
+- `sugarcraft/sugar-markdown` — Renderer, Theme
 
 - `sugarcraft/sugar-widgets` — MarkdownRenderer
 
 - `symfony/console` — Application, Command
 
 Path repos in `composer.json`:
-- candy-core, candy-shine, sugar-widgets, candy-pty, candy-sprinkles, sugar-forms, sugar-mouse, honey-bounce, candy-palette
+- candy-core, sugar-markdown, sugar-widgets, candy-pty, candy-sprinkles, sugar-forms, sugar-mouse, honey-bounce, candy-palette
 
 ## Potential Enhancements
 

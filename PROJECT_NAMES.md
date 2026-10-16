@@ -171,7 +171,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | (the runtime, `candy-core`) | "SugarCraft" is also the umbrella; the sub-package needs a less-collision-prone name | `CakeStage`, `BatterCore`, `WhiskLoop`, `MochiCore` |
 | ~~**SugarBits**~~ → **SugarWidgets** | resolved by the 2026-10 rename — "Bits" was generic; the lib is a set of named widgets <!-- @rename-keep --> | `BiscuitWidgets`, `SprinkleParts`, `ChipParts` |
 | **CandyKit** | "Kit" is filler; the lib is CLI presentation primitives | `CupcakeKit`, `BentoCli`, `BiscuitCli` |
-| **CandyShine** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
+| **SugarMarkdown** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
 | **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
 | **CandySshLauncher** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
 | **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
@@ -207,7 +207,7 @@ matching package turns out to be.
 | **HoneyTunnel** | SSH / tunnel (CandyWish alternative) |
 | **CaramelStore** | KV / cache (CandyKv alternative) |
 | **TruffleFinder** | fuzzy / search overlay |
-| **GlazeMarkdown** | markdown renderer (CandyShine alternative) |
+| **GlazeMarkdown** | markdown renderer (SugarMarkdown alternative) |
 | **IcingTheme** | theme system / palette extension |
 | **FrostingPaint** | colors / styling overlay |
 | **SherbetSnap** | screenshot / capture (CandyCodeshot alternative) |
@@ -227,7 +227,7 @@ vocabulary above — these three remain reserved as the safe defaults.
 
 | Prefix | Meaning | Example uses |
 |---|---|---|
-| **Candy-** | foundation / system / framework | runtime (SugarCraft), terminal scripting (CandyScriptui), markdown (CandyShine) |
+| **Candy-** | foundation / system / framework | runtime (SugarCraft), terminal scripting (CandyScriptui), markdown (SugarMarkdown) |
 | **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce); the Flappy clone left this prefix family in the 2026-10 rename (now CandyFlappy) |
 

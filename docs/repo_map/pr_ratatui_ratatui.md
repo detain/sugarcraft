@@ -45,7 +45,7 @@ From `repo_map/ratatui_ratatui.md`, SugarCraft maps to Ratatui as follows:
 | ratatui-core (Widget/StatefulWidget traits, Buffer, Layout, Style, Text) | candy-core |
 | ratatui-widgets (Block, Paragraph, List, Table, Chart, Gauge, etc.) | sugar-widgets |
 | ratatui-crossterm backend | candy-scriptui |
-| Layout + Cassowary constraints | candy-shine |
+| Layout + Cassowary constraints | sugar-markdown |
 | Stylize trait | sugar-forms |
 | ratatui-macros | sugar-widgets (likely) |
 | Terminal::draw + Frame pattern | candy-core (Model) |
@@ -78,7 +78,7 @@ From the first-stage analysis, the following gaps were identified:
 
 **Root Cause**: Non-deterministic behavior in `HashMap` usage within the solver. The fix involved replacing `HashMap<Symbol, Row>` with `HashMap<Symbol, Row, BuildHasherDefault<SimpleStateHasher>>` to make hashing deterministic.
 
-**Direct Risk to SugarCraft**: HIGH - If we use a Cassowary-derived or similar constraint solver in candy-shine, we could inherit this exact bug. The workaround of using deterministic hashing is essential.
+**Direct Risk to SugarCraft**: HIGH - If we use a Cassowary-derived or similar constraint solver in sugar-markdown, we could inherit this exact bug. The workaround of using deterministic hashing is essential.
 
 **Key Insight**: The bug manifests with many constraints (30+) and is non-deterministic due to default HashMap randomization.
 
@@ -193,7 +193,7 @@ terminal.swap_buffers();
 
 **Outcome**: Issue still open, no final decision.
 
-**Direct Risk to SugarCraft**: HIGH - candy-shine's layout system needs similar caching. The pattern of "cache by default but allow disabling" is correct, but we should design for this from the start.
+**Direct Risk to SugarCraft**: HIGH - sugar-markdown's layout system needs similar caching. The pattern of "cache by default but allow disabling" is correct, but we should design for this from the start.
 
 ---
 
@@ -278,7 +278,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Key Doc Added**: "If app doesn't make use of no_std-compatibility, and disables default-feature, it is recommended to explicitly re-enable layout cache."
 
-**SugarCraft Implication**: MEDIUM - candy-shine should ensure layout caching is clearly documented and defaults are sensible for common use cases.
+**SugarCraft Implication**: MEDIUM - sugar-markdown should ensure layout caching is clearly documented and defaults are sensible for common use cases.
 
 ---
 
@@ -372,7 +372,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Key Insight**: "Using static arrays anyway" - most Layout usage has small, fixed constraint counts.
 
-**SugarCraft Implication**: HIGH - candy-shine should consider similar optimizations: slice-based constraints, fast hashing, static allocation for common cases.
+**SugarCraft Implication**: HIGH - sugar-markdown should consider similar optimizations: slice-based constraints, fast hashing, static allocation for common cases.
 
 ---
 
@@ -476,7 +476,7 @@ loop {
 - Static storage for small constraint counts
 - Layout cache with try_split() method
 
-**SugarCraft Implication**: HIGH - candy-shine should apply similar optimizations: reference-based constraints, fast hashing, caching.
+**SugarCraft Implication**: HIGH - sugar-markdown should apply similar optimizations: reference-based constraints, fast hashing, caching.
 
 ---
 
@@ -869,7 +869,7 @@ impl Component {
 
 **Evidence**: Layout cache doubled framerate in embedded, 30% faster on desktop.
 
-**SugarCraft Action**: candy-shine layout system should cache results, with clear documentation about enabling it.
+**SugarCraft Action**: sugar-markdown layout system should cache results, with clear documentation about enabling it.
 
 ---
 
@@ -951,7 +951,7 @@ impl Component {
 ```
 candy-core (stable)
   ↓ depend
-sugar-widgets, candy-scriptui, candy-shine, sugar-forms
+sugar-widgets, candy-scriptui, sugar-markdown, sugar-forms
   ↓ depend
 sugar-* (user-facing components)
 ```
@@ -1034,7 +1034,7 @@ sugar-* (user-facing components)
 
 **Lesson**: Document what defaults mean and how to get equivalent behavior when changing settings.
 
-**SugarCraft**: candy-core and sugar-shine should clearly document what defaults mean and what happens when changed.
+**SugarCraft**: candy-core and sugar-markdown should clearly document what defaults mean and what happens when changed.
 
 ---
 
@@ -1178,7 +1178,7 @@ class MyComponent {
    - Critical for performance
    - Clean implementation with ReactPHP event model
 
-2. **Add Layout Caching** to candy-shine
+2. **Add Layout Caching** to sugar-markdown
    - Cache layout computations
    - Document enabling/disabling clearly
 

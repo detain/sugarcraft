@@ -156,11 +156,11 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 | Core image generation | `sugar-widgets` | Core output/rendering primitives |
 | ANSI escape parsing | `candy-core` | Terminal ANSI code handling (colors, styles) |
 | Chroma syntax highlighting | `sugar-widgets` | Token-based rendering, syntax highlighting |
-| SVG output generation | `candy-shine` (potential) | Vector graphics rendering |
+| SVG output generation | `sugar-markdown` (potential) | Vector graphics rendering |
 | Interactive TUI forms | `sugar-forms` / `huh` port | Form components, file picker |
 | Config/flag parsing | `candy-core` | Command-line argument handling |
 | Window decorations | `sugar-widgets` | Border rendering, rounded corners |
-| Shadow effects | `sugar-widgets` / `candy-shine` | Visual effects, filters |
+| Shadow effects | `sugar-widgets` / `sugar-markdown` | Visual effects, filters |
 | PTY execution | `candy-pty` | Pseudo-terminal control |
 | Font handling | `candy-core` / `sugar-widgets` | Font metrics, text rendering |
 | Style/theming | `sugar-widgets` | Theme management, style registry |
@@ -169,7 +169,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 
 - **ANSI parsing & color handling** → `SugarCraft\Core\Ansi` (if exists) or `SugarCraft\Widgets\Renderer` - The 256-color palette and SGR sequence handling in `ansi.go` would map to a PHP ANSI parser
 
-- **SVG manipulation** → `SugarCraft\Shine` - The etree-based SVG DOM manipulation for adding shadows, clips, corners, and positioning maps to vector graphics operations
+- **SVG manipulation** → `SugarCraft\Markdown` - The etree-based SVG DOM manipulation for adding shadows, clips, corners, and positioning maps to vector graphics operations
 
 - **Image export (PNG/WebP)** → No current SugarCraft equivalent - This is a significant gap; a `SugarCraft\Image` or `SugarCraft\Export` library could handle rasterization
 

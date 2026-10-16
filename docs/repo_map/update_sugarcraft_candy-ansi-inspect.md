@@ -223,7 +223,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 
 **Implementation ideas:**
 
-- Add `Inspector::reportStyled()` method using `candy-shine`
+- Add `Inspector::reportStyled()` method using `sugar-markdown`
 - Create theme constants (Tokyo Night, Dracula, etc.)
 - Color-code sequence types (CSI=cyan, OSC=yellow, DCS=green, etc.)
 - Add `--theme` CLI flag
@@ -632,7 +632,7 @@ Available commands: help, exit, stats, clear, load <file>
 
 ### 2. Colorized Output (--color=auto)
 
-When stdout is a TTY, use `candy-shine` to colorize:
+When stdout is a TTY, use `sugar-markdown` to colorize:
 
 - CSI sequences: cyan
 - OSC sequences: yellow  
@@ -870,7 +870,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
    - **Impact:** Correctness, maintainability
 
 9. **Theme system**
-   - Colorized output with `candy-shine`
+   - Colorized output with `sugar-markdown`
    - Multiple themes (Tokyo Night, Dracula, etc.)
    - **Impact:** Developer experience
 
@@ -920,7 +920,7 @@ candy-ansi-inspect is a mature, well-tested PHP port of Go sequin that provides 
 The manual byte-by-byte parsing approach, while functional, differs from the state-machine approach used by both Go sequin (`charmbracelet/x/ansi`) and the ecosystem's own `candy-vt`. Migrating to a state machine would improve maintainability and align with the VT500 standard, but carries risk of regression. A phased approach (parallel operation, then migration) is recommended.
 
 **Ecosystem positioning:**
-candy-ansi-inspect is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `candy-core` (TUI runtime), `candy-vt` (terminal emulation), `candy-pty` (PTY execution), and `candy-shine` (styling). The primary opportunity is integration with `candy-pty` to provide the PTY execution that makes Go sequin so powerful.
+candy-ansi-inspect is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `candy-core` (TUI runtime), `candy-vt` (terminal emulation), `candy-pty` (PTY execution), and `sugar-markdown` (styling). The primary opportunity is integration with `candy-pty` to provide the PTY execution that makes Go sequin so powerful.
 
 **Recommended focus:**
 

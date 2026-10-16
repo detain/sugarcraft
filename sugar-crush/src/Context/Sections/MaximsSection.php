@@ -60,7 +60,7 @@ use SugarCraft\Crush\Context\Stability;
  * PALETTE_ITEM_ZONE_PREFIX, SESSION_TAB_ZONE_PREFIX and TOOL_CALL_ZONE_PREFIX
  * — pane, palette, tab and tool-call ROWS, with no handler anywhere that
  * recognises a `file:line` shape in text — and OSC 8 links reach the terminal
- * only via CandyShine's rendering of markdown links in ASSISTANT output, never
+ * only via SugarMarkdown's rendering of markdown links in ASSISTANT output, never
  * from system-prompt prose. So the shipped line claims only what is true:
  * a human reader can open the exact spot (that is what the notation is for),
  * and the pointer is CHECKABLE because Grep itself answers in the same

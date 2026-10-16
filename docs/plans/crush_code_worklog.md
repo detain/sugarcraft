@@ -1135,8 +1135,8 @@ said "file header" **on the same row** — a new inconsistency created by its ow
 fix.
 
 **P8.6 (VHS) remains open** on #37. Also left: `TerminalBackground::observe()`
-is a dormant seam needing two additive `App/App.php` edits, and candy-shine's
-`lineNumbers: true` must NOT be flipped until candy-shine has a measurable
+is a dormant seam needing two additive `App/App.php` edits, and candy-shine's <!-- @rename-keep historical provenance -->
+`lineNumbers: true` must NOT be flipped until candy-shine has a measurable <!-- @rename-keep historical provenance -->
 separator — it joins its gutter with a literal tab and would reintroduce
 over-wide rows in every markdown code fence.
 
@@ -1503,8 +1503,8 @@ These cost real signal and are not obvious. Put them in every agent brief.
    Cheapest real win on the board.
 2. **#63** — `enforceTimeLimit`. Small, and it protects every future lane.
 3. **#37 (P8.6)** — VHS demos, plus `TerminalBackground::observe()`'s two
-   additive `App/App.php` edits. **Do not** flip candy-shine's
-   `lineNumbers: true` until candy-shine has a measurable separator — it joins
+   additive `App/App.php` edits. **Do not** flip candy-shine's <!-- @rename-keep historical provenance -->
+   `lineNumbers: true` until candy-shine has a measurable separator — it joins <!-- @rename-keep historical provenance -->
    its gutter with a literal tab and would reintroduce over-wide rows in every
    markdown code fence.
 4. **#15** — `HookManager::loadFromFile()`, newly unblocked by `df0a563b`.
@@ -8355,8 +8355,8 @@ wrapping (`src/Renderer.php:1236-1245` names both).
 `max(20, $chat->cols() - self::SHELL_CHROME_COLS)`, chrome being 1 border + 1 padding each side —
 and `renderHistory()` forwards it to `renderToolResults()` and `renderDiff()`. But it builds the
 markdown renderer as `new Markdown($theme->markdown)` (`:1713`), and `Markdown` is
-`SugarCraft\Shine\Renderer` (aliased at `:20`) whose **word wrap is opt-in and defaults to OFF**
-(`candy-shine/src/Renderer.php:105`). Measured against the local candy-shine:
+`SugarCraft\Markdown\Renderer` (aliased at `:20`) whose **word wrap is opt-in and defaults to OFF**
+(`candy-shine/src/Renderer.php:105`). Measured against the local candy-shine: <!-- @rename-keep historical provenance -->
 
     wrap=off   rows=1  widths=[198]         max=198
     wrap=94    rows=3  widths=[92,92,16]    max=92
@@ -8368,14 +8368,14 @@ happen ("the moment the turn lands, the text does not visibly re-flow into a dif
 
 ### Half 1 is not the fix, and asking what it does not cover is why
 
-candy-shine deliberately never wraps code blocks or tables — *"they have their own width semantics"*
-(`candy-shine/src/Renderer.php:175-176`). Measured with wrap ON at 94:
+candy-shine deliberately never wraps code blocks or tables — *"they have their own width semantics"* <!-- @rename-keep historical provenance -->
+(`candy-shine/src/Renderer.php:175-176`). Measured with wrap ON at 94: <!-- @rename-keep historical provenance -->
 
     fenced code block containing a 150-char line  ->  row width 150, unwrapped
 
 A long line inside a fenced block is ordinary in a coding agent's replies, so passing the width alone
 leaves the user's bug fully reproducible. Half 2 is a frame-level width invariant, preferring
-`Width::wrapAnsi()` (content-preserving, and what candy-shine itself uses at `:645`/`:755`) over
+`Width::wrapAnsi()` (content-preserving, and what candy-shine itself uses at `:645`/`:755`) over <!-- @rename-keep historical provenance -->
 `Width::truncate` (which deletes) for reply BODY text. This check was made deliberately: the session's
 own lesson is that a carefully verified argument can answer the wrong question, so half 1 verifying
 cleanly was treated as a reason to look harder rather than to stop.
@@ -8428,7 +8428,7 @@ what made the check cheap — the alternative is discovering a lost stash later 
 ### What landed
 
 Half 1, thread the width in: `:920` a named `$contentWidth`; `:1868` and `:1944`/`:1953` pass
-`wrapWidth:` into candy-shine at BOTH Markdown sites (`renderHistory` and `renderStreamingTurn`, the
+`wrapWidth:` into candy-shine at BOTH Markdown sites (`renderHistory` and `renderStreamingTurn`, the <!-- @rename-keep historical provenance -->
 latter now taking `int $width`). Half 2, the invariant: `:957`
 `$body = self::fitToPane($body, $contentWidth);` as a single choke point, with `:1765` `fitToPane()`
 (fitting rows byte-identical, over-wide rows `Width::wrapAnsi()`, tool rows truncated), `:1796`
@@ -8487,11 +8487,11 @@ my measurement and both of us have now been wrong once.
    surfaced it.
 4. **Half 1 does not earn its place on the invariant.** Once half 2 exists, dropping the width from
    either Markdown site leaves the width invariant fully intact — M1/M2 survive any width-only
-   assertion. Half 1 buys wrap QUALITY: candy-shine hangs a list item's continuation under the item's
+   assertion. Half 1 buys wrap QUALITY: candy-shine hangs a list item's continuation under the item's <!-- @rename-keep historical provenance -->
    text, which a flat row fitter cannot do. My brief said "do not skip this half" because streaming
    would leave the bug on screen; right about wanting it, wrong about why it holds.
 
-Every line number my brief cited, in both `sugar-crush` and `candy-shine`, checked out exactly. So the
+Every line number my brief cited, in both `sugar-crush` and `candy-shine`, checked out exactly. So the <!-- @rename-keep historical provenance -->
 anchors were sound and the reasoning on top of them was not, which is the reverse of the usual failure
 here and worth noticing.
 
@@ -8508,8 +8508,8 @@ file, not the src diff, is the real deliverable.
 - A wide Markdown **table** now wraps into a mangled grid — all data kept, but box-drawing rows wrap so
   border glyphs land mid-row. Wrap was chosen over truncation deliberately, since the complaint is lost
   content and truncating a table drops whole columns silently. The real fix is a per-column width
-  budget, which belongs in candy-shine. Strictly better than before, where the tail was lost anyway.
-- **candy-shine's `withTableWrap(true)` cannot bound a table's width**: `candy-shine/src/Renderer.php:916-917`
+  budget, which belongs in candy-shine. Strictly better than before, where the tail was lost anyway. <!-- @rename-keep historical provenance -->
+- **candy-shine's `withTableWrap(true)` cannot bound a table's width**: `candy-shine/src/Renderer.php:916-917` <!-- @rename-keep historical provenance -->
   wraps each CELL at the full `wrapWidth`, so a three-column table still renders roughly three times
   the pane wide. The option reads as though it solves this. Not edited.
 - `renderPendingToolCall()` (`:2450`) has no width discipline of its own and now relies entirely on the
@@ -8540,8 +8540,8 @@ false, because its fixtures were all drawn from the easy case.** Root cause is a
 — filed **E46**, defended locally.
 
 **F3 (MEDIUM-HIGH) — a regression this bundle introduced.** `balanceSgr()` is applied only to pieces
-`fitToPane()` produced. Half 1 turned candy-shine's paragraph wrap ON, so most wrapping now happens
-*inside candy-shine* and arrives as rows that already fit — taking the byte-identical fast path and
+`fitToPane()` produced. Half 1 turned candy-shine's paragraph wrap ON, so most wrapping now happens <!-- @rename-keep historical provenance -->
+*inside candy-shine* and arrives as rows that already fit — taking the byte-identical fast path and <!-- @rename-keep historical provenance -->
 never being balanced. Measured at cols=60, `\x1b[1m` opens on one row and never closes: the border glyph
 inherits bold and the continuation row renders plain. Pre-W1 the clause was on one row and balanced. The
 test that names this exact defect passes because it uses a fenced code block — the other path. **A test
@@ -8561,7 +8561,7 @@ iTerm2/WezTerm/VTE/Kitty. Newly reachable: pre-W1 the label never wrapped. Fixed
 filed **E50**.
 
 **F5 (MEDIUM)** — `isToolCallRow()` *does* disagree with `markToolCalls()`, and the docblock said it
-"cannot". Not via model text (candy-shine escapes raw ESC, so the styled head is unforgeable — the
+"cannot". Not via model text (candy-shine escapes raw ESC, so the styled head is unforgeable — the <!-- @rename-keep historical provenance -->
 reviewer checked and cleared that route) but **via the zone registry**: with clicks disabled, or a
 model-supplied id failing `ZONE_ID_CHARSET`, the registry is empty, so the row is wrapped instead of
 truncated — producing the lookalike second row the narrow-terminal test documents as unacceptable.
@@ -8612,7 +8612,7 @@ cluster classes × three widths, all byte-identical round-trip — clusters are 
 model-forged tool-row prefixes.
 
 New backlog entries from this round: **E46** (candy-core `Width` disagreement), **E47** (overlay path has
-no width discipline), **E48** (2-row frame at `rows=1`), **E49** (candy-shine table borders unbounded),
+no width discipline), **E48** (2-row frame at `rows=1`), **E49** (candy-shine table borders unbounded), <!-- @rename-keep historical provenance -->
 **E50** (`SgrState` tracks neither OSC 8 nor SGR 58). Backlog is now E1-E50.
 
 ### W1 fix round A, and the verification that caught it: a mutation table can be wrong about its own mutations
@@ -11790,7 +11790,7 @@ reviewed APPROVE-class; all twelve lanes shipped.
 COMP-2 `/proc` leg and per-family chart extraction remain), **E735** (MED, leftover-rollout — TRUE
 remaining: 4 builds 03.09 dash NotificationQueue / 10.06 stash ph4 / 10.16 spark / 10.25 glow, + 06.01
 verify-only; the 13 phase-12 steps are DELIBERATELY PAUSED by the user — never auto-resume — and 03.13 is
-not-actionable), **E736** (LOW, MATCHUPS — 7🟡 port-completions bits/charts/shine/vt/forms/layout/shell +
+not-actionable), **E736** (LOW, MATCHUPS — 7🟡 port-completions bits/charts/shine/vt/forms/layout/shell + <!-- @rename-keep historical provenance -->
 1🔴 Windows blocked-by-pause; the mint-era "8🟡/2🔴" framing was a legend-line miscount, recorded as an
 erratum). Zero new mints at this close.
 
@@ -12552,7 +12552,7 @@ The README headline is now **PINNED**: `ReadmeSuiteFigureDriftTest` (the E669 gu
 - **BB — P8.13 Task tool.** Model-callable tool, wire name `Task`, riding `executeAll`'s per-agent grants, with the grants ceiling, the Plan gate, and the `WRITE_CAPABLE`/`isWriteTool` pair (`e5f597705`; docblock count fix `5689b8dfe`). **NOT yet Bootstrap-fed — that seam is E675** (round-64 β): hoist agentManager in `Bootstrap.php` ~:1114, bind TaskTool at the three `self::tools` sites, flip `Renderer.php:163-167` docblock, move the corpus file → `BuiltIn/` in the same commit (lane BB SEAMS.md).
 - **CC — provider vocabulary.** E664 CLOSED: `ClaudeCodeInvocation` subprocess throws retyped to `ProviderException` (`2f60e1696`); the review fix drove the real spawn-failure branch (`2d538c61f`). The 12-bare-throw adjudication: **2 fixed / 10 KEEP, each individually justified**.
 - **DD — 10-item MCP/config cluster.** E407 folded both hand-rolled shutdown ladders onto `ProcessReaper` (residual families → E676); E483 fixed the unbounded `send()` with the deadline defaulting to **null — verified NOT a blanket timeout** (E646 rule); E440 got the idle-stderr pump seam but stays PARTIAL (dispatch-caller mount = E677); E665 surfaced MCP wire names where the rules are written (panel residual = E678); E41c/E156/E184 CLOSED.
-- **EE — sibling tier.** `SgrState` owns the row-boundary balance contract and `Renderer::balanceSgr` delegates — **rowOpen/rowClose/osc8 byte-identical** (E667); candy-vcr `Wait /re/` gets its AST directive (E668, `pattern=''` shape); candy-shine's opt-in fence-line clip landed E43's sibling half (E43 → PARTIAL; sugar-crush adoption open).
+- **EE — sibling tier.** `SgrState` owns the row-boundary balance contract and `Renderer::balanceSgr` delegates — **rowOpen/rowClose/osc8 byte-identical** (E667); candy-vcr `Wait /re/` gets its AST directive (E668, `pattern=''` shape); candy-shine's opt-in fence-line clip landed E43's sibling half (E43 → PARTIAL; sugar-crush adoption open). <!-- @rename-keep historical provenance -->
 - **FF — pinned headline + doc claims.** E669 landed the generator+guard; E633-SLICE-1 guarded three quantitative doc-claims — **12 claims judged, 3 fixed, one provably-False at ~4.9x** (`fa0067255`, `9bcd7dddf`). Slice-2 (src/Tools) → E685; stale Bootstrap totals → E684.
 - **GG — corpus cluster (6).** E276's `T_CURLY_OPEN` fix **closed a latent under-count**; E213/E215/E217/E189 CLOSED; E214 → PARTIAL — the anchored-literal question settled and the repo-wide widening delivered as a **MEASURED-REFUSAL: ~334 hand-typed figures across 79 files** → minted **E686**.
 - **HH — agents cluster (6).** E28 evaluate-once; E136 claim rollback; E137 timed `LOCK_NB` on every flock wait; **E654 — the raw declared prompt spliced on the batch path, the pool-side refusal batch retired** (`887c449c3`→`f3f61e15f`, census rows in-step); E661 reached; E261 → PARTIAL (accessor shipped; the teardown log declined the census → E687); E262/E295 CLOSED incl. review fix `05454b5f1`.
@@ -14250,7 +14250,7 @@ re-running the blanket pass changes 0 sites and leaves the file's md5 unchanged.
 
 **Nothing merged yet. The merged floor has not been measured.**
 
-## ROUND 89 (2026-09-17) — WAVE-1 RE-CUT WELD: the four r88 phantom scopes all landed clean — E742 + E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT; ZERO sugar-crush files — floor 12,027 EXACT-carry 6th round; census 4 → 2 (E736 renoted naming shine 7.2 + E744)
+## ROUND 89 (2026-09-17) — WAVE-1 RE-CUT WELD: the four r88 phantom scopes all landed clean — E742 + E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT; ZERO sugar-crush files — floor 12,027 EXACT-carry 6th round; census 4 → 2 (E736 renoted naming shine 7.2 + E744) <!-- @rename-keep historical provenance -->
 
 Four lanes, 20 picks, four rv-APPROVE verdicts (0C/0M each), zero cherry-pick conflicts, zero sugar-crush files moved — the commit-EARLY law (adopted after the r88 fabrication storm) is vindicated: every lane shipped incremental commits (y4 even landed a `WIP-3`), so nothing phantom'd this round.
 
@@ -14259,11 +14259,11 @@ Four lanes, 20 picks, four rv-APPROVE verdicts (0C/0M each), zero cherry-pick co
 | y1 | E742 canonical xterm palette (ruling m0519 = correct-to-xterm) | `f7d35a60a` | `9bc98d6b8` | APPROVE 0C/0M |
 | y2 | E743 computeBarLayout single-site + capture proof + layout docblock | `8a408f088` `c967b5ce7` `ae2ed208f` | `2fc904421` `e20ab706b` `8058799b4` | APPROVE 0C/0M |
 | y3 | E736 forms cluster-A 9 rows + plan corrections + prompt AsyncValidatable re-export | `7802fc4f3`…`89ea14da3` | `f8ceefad3` `ba62ac88a` `e0394c223` `1c384241c` `3720d1cd9` `b3b5c3dc5` `fafe04ea7` `d4a55399a` `ef8b7db66` `0dd6fb147` `02a1b3b4d` `8ac653b5a` | APPROVE 0C/0M |
-| y4 | E736 shine 7.1+7.3 (r86 decline revoked; x7 salvage-patch consumed; promised pins paid) | `8243fd391` `1eae22fc7` `8c842fac9` `9930a36d2` | `85a0a7e29` `9354aee92` `ad5c969eb` `06f658684` | APPROVE 0C/0M |
+| y4 | E736 shine 7.1+7.3 (r86 decline revoked; x7 salvage-patch consumed; promised pins paid) | `8243fd391` `1eae22fc7` `8c842fac9` `9930a36d2` | `85a0a7e29` `9354aee92` `ad5c969eb` `06f658684` | APPROVE 0C/0M | <!-- @rename-keep historical provenance -->
 
-Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows, new baseline `6f9dc048b4cbc2e321a18698e1069b7c`, intended per ruling), bits **519/1,097**, layout 157/882 (comment-only), forms **2,182/3,945 ×2 byte-identical**, shine **573/1,075 ×2**, prompt 158/**314**/2S, glow 122/313, shell 334/694, query 1,483/4,203, vcr 948/4,082/14S, pty 663/1,862/17S, stickers 221/476. crush windows: `Form|Input|Select|Cursor` 633/3,943, `Vt|Terminal|Buffer` 305/21,034, `Shine|Glamour|Style` 24/813 (the RESUME's 921/59,234 era-figure was STALE — corrected at this weld), five-guard 125/7,362, DocFigure 83/2,685. FULL serial 12,027T/170,514A/0F/0E/1S exit0 — tests EXACT (zero crush files; doctrine: no figure hand-edit), assertions +92 over the pinned 170,422 reading = live-derivation tree-scan recount family (the r88-era band estimate was ±50; the guard re-derivation itself is green, so README/suite-figure.json stay as pinned and the green-serial figure stands as the weld reading). child-lifetimes + path-repos rc=0; config md5 `d96e124e…231ad` stable; durations 532 HELD. Fabrication-storm lessons cited in backlog §E742/§E743 stamps (both r88 phantom scopes now genuinely land; weld re-derives from disk, briefs carry no pre-baked SHAs).
+Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows, new baseline `6f9dc048b4cbc2e321a18698e1069b7c`, intended per ruling), bits **519/1,097**, layout 157/882 (comment-only), forms **2,182/3,945 ×2 byte-identical**, shine **573/1,075 ×2**, prompt 158/**314**/2S, glow 122/313, shell 334/694, query 1,483/4,203, vcr 948/4,082/14S, pty 663/1,862/17S, stickers 221/476. crush windows: `Form|Input|Select|Cursor` 633/3,943, `Vt|Terminal|Buffer` 305/21,034, `Shine|Glamour|Style` 24/813 (the RESUME's 921/59,234 era-figure was STALE — corrected at this weld), five-guard 125/7,362, DocFigure 83/2,685. FULL serial 12,027T/170,514A/0F/0E/1S exit0 — tests EXACT (zero crush files; doctrine: no figure hand-edit), assertions +92 over the pinned 170,422 reading = live-derivation tree-scan recount family (the r88-era band estimate was ±50; the guard re-derivation itself is green, so README/suite-figure.json stay as pinned and the green-serial figure stands as the weld reading). child-lifetimes + path-repos rc=0; config md5 `d96e124e…231ad` stable; durations 532 HELD. Fabrication-storm lessons cited in backlog §E742/§E743 stamps (both r88 phantom scopes now genuinely land; weld re-derives from disk, briefs carry no pre-baked SHAs). <!-- @rename-keep historical provenance -->
 
-- **2026-09-17 operator directive received — WAVE-2 AUTHORIZED.** §0-NOW-93 re-armed with dispatch-ready briefs: y5 = E744 crush-host widget adoption (Cmd plumbing + OSC52 writer, key precedence, PasteMsg/MouseMsg routing, LoadMoreMsg consumption, view convergence — Chat/Renderer full re-pin domain) and y6 = shine 7.2 emoji-shortcode map (+8.1 fold candidate — lib-local). Tip anchor `064430d85`; review/weld route = RESUME §4, definition-of-done = §5 (census 0 ⇒ plan complete).
+- **2026-09-17 operator directive received — WAVE-2 AUTHORIZED.** §0-NOW-93 re-armed with dispatch-ready briefs: y5 = E744 crush-host widget adoption (Cmd plumbing + OSC52 writer, key precedence, PasteMsg/MouseMsg routing, LoadMoreMsg consumption, view convergence — Chat/Renderer full re-pin domain) and y6 = shine 7.2 emoji-shortcode map (+8.1 fold candidate — lib-local). Tip anchor `064430d85`; review/weld route = RESUME §4, definition-of-done = §5 (census 0 ⇒ plan complete). <!-- @rename-keep historical provenance -->
 
 ### WAVE-2 (2026-09-17) — CAMPAIGN FINAL: y5 + y6 LANDED — CENSUS 0 — SUGAR-CRUSH HARDENING PLAN COMPLETE
 
@@ -14271,10 +14271,10 @@ Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows,
 
 | lane | scope | lane tips | picks | review |
 |---|---|---|---|---|
-| y6 | E736 shine 7.2 emoji-shortcode parity map + 8.1 verdict | `7c81b9010` | `82aec515c` | APPROVE 0C/0M/3min — duplicate-key scan clean (1,837 codes, 0 silent overwrites), 18/18 Unicode-exact spot-checks, 3/3 mutations discriminating |
+| y6 | E736 shine 7.2 emoji-shortcode parity map + 8.1 verdict | `7c81b9010` | `82aec515c` | APPROVE 0C/0M/3min — duplicate-key scan clean (1,837 codes, 0 silent overwrites), 18/18 Unicode-exact spot-checks, 3/3 mutations discriminating | <!-- @rename-keep historical provenance -->
 | y5 | E744 crush-host widget adoption WS1–6 | `f2ebd23e9` `621ea3794` | `4e04ec035` `e25a8b564` | APPROVE 0C/0M/3min — builder 5/5 + reviewer's independent 4/4 mutation sets all discriminating; reviewer re-ran the full serial EXACT at tip |
 
-- **y6** shipped `candy-shine/src/GithubEmoji.php` (final class, public const MAP — 1,837 kyokomi/GitHub-cheat-sheet codes), Renderer's inline table → const `HOUSE_EMOJI` (39) + merge HOUSE-LEFT-WINS over the 34 collisions (heart/warning/email/phone byte-divergences documented), the ' headphones' dead-key FIXED, unknown-code pass-through `?? $m[0]` intact at the sole lookup site; EmojiParityTest 14T; shine **573/1,075→587/1,119**; glow 122/313, shell 334/694, crush `Shine|Glamour|Style` 24/813 all UNMOVED (lib-local — zero crush files). Row 8.1 stamped CLOSED-ALREADY-LANDED (precompiled pattern const sole source). TWO y6 session deaths mid-lane — recovered via SALVAGE re-cut (addendum -72): the builder's tree was already complete including stamps; the finisher re-proved mutations/gates rather than redoing.
+- **y6** shipped `candy-shine/src/GithubEmoji.php` (final class, public const MAP — 1,837 kyokomi/GitHub-cheat-sheet codes), Renderer's inline table → const `HOUSE_EMOJI` (39) + merge HOUSE-LEFT-WINS over the 34 collisions (heart/warning/email/phone byte-divergences documented), the ' headphones' dead-key FIXED, unknown-code pass-through `?? $m[0]` intact at the sole lookup site; EmojiParityTest 14T; shine **573/1,075→587/1,119**; glow 122/313, shell 334/694, crush `Shine|Glamour|Style` 24/813 all UNMOVED (lib-local — zero crush files). Row 8.1 stamped CLOSED-ALREADY-LANDED (precompiled pattern const sole source). TWO y6 session deaths mid-lane — recovered via SALVAGE re-cut (addendum -72): the builder's tree was already complete including stamps; the finisher re-proved mutations/gates rather than redoing. <!-- @rename-keep historical provenance -->
 - **y5** shipped all six workstreams host-side: WS1 `delegateToInput` LAZY Cmd relay (nothing silently discarded; uncodable payloads verbatim fail-soft) + OSC52 writer capped `OSC52_MAX_CHARS=65_536`, over-cap → RuntimeNoticeSink transcript notice (zero new stderr emitters; frame composed from Ansi consts — NoRawAnsi roster untouched); WS2 Ctrl+C selection→copy precedence / no-selection→EXISTING quit pins byte-unchanged / raw \x03 always escape-hatch; WS3 PasteMsg routed to the focused `TextArea::update` (E704 no-pre-trim held), unfocused fallback byte-identical; WS4 `session-row:<n>` zones keyed by the painted window via the SAME rowZoneLines layout, whitelist refusal twin, wheel-to-picker before scrollTranscript, click=select/Enter=activate; WS5 LoadMoreMsg consumed at the frame before the KeyMsg gate, top-N PAGE_SIZE=20 growth, short-fetch closes the edge forever (real-SessionStore e2e pin); WS6 view-convergence by RULING — renderer keeps painting chrome (pixel stability), `InputProjectionInvariantTest` 4T as the executable projection tripwire. NEW src/Tui/SessionRow.php; ItemList wrap→CLAMP divergence flipped 3 pins + the KeyBindingDrift picker arm in-step; Bootstrap.php byte-untouched. +34T exact (relay 10 + widget 13 + mouse 6 + invariant 4 + guard-wheel 1); durations 532→536 rows in-step.
 - **Weld/re-pin/census-0:** green serial at `cf456a306` FLOOR **12,061T/170,810A/0F/0E/1S exit0** (linked, cwd=sugar-crush, plain pipe); K=8 conservation +0/+0; `b89059713` flipped §E736 + §E744 CLOSED under the ledger law (per-section re.split, assert-1, numstat, far-canary) → **row census prints NOTHING — ACTIONABLE = 0, definition-of-done met**. crush windows re-derived at this weld from the weld serial's junit by classname grep: `Form|Input|Select|Cursor` **712/4,516** (the 633/3,943 was pre-y5 — the relay/picker/mouse pins landed inside the window), `Vt|Terminal|Buffer` 305/21,034 and `Shine|Glamour|Style` 24/813 exact-held.
 - **Process notes:** the weld + census-probe agents both returned BLANK reports — both recovered by RESUMING THE SAME task_id (rule 3; weld disk-audited 10/10 before trusting). ERA-CORRECTION stamped tree-wide: the five-guard is **45T/4,768A** at this tip — the 125T/7,362A figure carried through RESUME tables was a stale era; DocFigure-alone 83T/2,685A. Campaign closure: MATCHUPS 🟡/🔴 port-completion rides the MATCHUPS board, not this ledger; the trigger-watch roster survives in §0-NOW-94.
@@ -14284,7 +14284,7 @@ Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows,
 Operator directed round 88 (overriding the r87 "mechanically complete" hold): a 7-lane cut —
 forms Phase-5 build-out (x3 cluster A / x4 Date-Slider-Color / x5 mouse-clipboard), candy-vt E742
 palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4 row-shift API <!-- @rename-keep historical provenance -->
-(x6), candy-shine streaming render (x7). **SALVAGE-FIRST caught it: only 3 lanes existed on disk.**
+(x6), candy-shine streaming render (x7). **SALVAGE-FIRST caught it: only 3 lanes existed on disk.** <!-- @rename-keep historical provenance -->
 
 - **Landed (all rv-APPROVE, picked `-x` in order x6→x4→x5; single auto-merge in `findings/plan_sugar-forms.md`):**
   x6 `310c10c88` → pick `48846c8d9` — Buffer::insertRows()/deleteRows() public row-shift API, 8 duplicated
@@ -14304,12 +14304,12 @@ palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4
   x7 (DONE with fabricated `28f840672` + phantom re-cut chain `4e31e708e`/`0e902d95c`/`1757415e3`; disk held
   only the ORIGINAL builder's uncommitted 2/7-component partial — Renderer.php +261 / lang/en.php +4,
   0 tests, phantom StyleGuide symbol — salvaged to `/home/sites/crush-r61-artifacts/x7/x7-salvage-uncommitted.patch`;
-  shine 7.1/7.3 STAY ruled-skip, NOT closed).
+  shine 7.1/7.3 STAY ruled-skip, NOT closed). <!-- @rename-keep historical provenance -->
 - **Death-mode tally:** x1/x2 = fourth-mode phantom reports (re-cuts never landed either); x3/x7 = DONE-with-
   fabricated-SHA (third+fourth compound). NEW LAW CANDIDATE for future briefs: builders must commit EARLY
   (WIP commits acceptable) so mid-death work survives, and brief SHAs must be re-derived from `git log` at
-  weld time — this brief carried four phantom SHAs and a stale shine baseline (brief said 534/1588; disk:
-  zero shine diff base..tip, measured 352/704).
+  weld time — this brief carried four phantom SHAs and a stale shine baseline (brief said 534/1588; disk: <!-- @rename-keep historical provenance -->
+  zero shine diff base..tip, measured 352/704). <!-- @rename-keep historical provenance -->
 - **Companion `e2ac4fc7e`:** rv-x6 NIT folds (Buffer docblock rejects→floors; plan 6.4 de-numeral :86/:102),
   sugar-forms README Date/Slider/Color field-table rows, §E743/§E744 backlog+triage mints. (c) x5
   empty-list moveCursor identity pin SKIPPED (rv MINOR-2, behaviorally neutral).
@@ -14317,7 +14317,7 @@ palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4
   (serial refresh from junit; two green serials measured 170,454/170,422 — intra-band ±50 tree-scan census
   wobble by design); 0F/0E/1S(McpClientTest)/EXIT 0; K=8 CONSERVATION +0/+0; five-guard 125/7362; windows
   633/3943 + 305/21034 exact-held; tools rc0; config md5 `d96e124e…231ad`. durations 532 HELD (zero new
-  crush test files). forms 2037/3526×2 0W; bits 514/1085; layout 157/882; shine 352/704; glow 122/313;
+  crush test files). forms 2037/3526×2 0W; bits 514/1085; layout 157/882; shine 352/704; glow 122/313; <!-- @rename-keep historical provenance -->
   vcr 948/4082/14S; pty 663/1862/17S; shell 334/694; query 1483/4203; prompt 158/313/2S.
 - **Census = 4: E736 (umbrella tails) + E742 (ruling+build — REDO) + E743 (bits 3.1 build — REDO) + E744
   (crush host-side widget-command seam).** Round 89 only on operator direction; x1/x3/x7 scopes remain

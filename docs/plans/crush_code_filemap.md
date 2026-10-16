@@ -11,7 +11,7 @@ file-disjoint lanes. **Actionable set (one row per id — 0 rows below): ACTIONA
 (OPEN-table 0 / PARTIAL-table 0 / STALE-CITATION 0 / UNCERTAIN 0) — re-derived from the four triage
 section tables (awk strict-prefix survivor recount, exact command + verbatim empty output pasted below and at
 `crush_code_RESUME.md` §0-NOW-94 §1; wave-1 left 2 survivors — round-89 wave-2 CLOSED **§E736**
-(y6 shipped its single unbuilt row — shine 7.2 emoji-shortcode parity via new `candy-shine/src/GithubEmoji.php`
+(y6 shipped its single unbuilt row — shine 7.2 emoji-shortcode parity via new `candy-shine/src/GithubEmoji.php` <!-- @rename-keep historical provenance -->
 1,837-code MAP, house-39 left-wins over 34 collisions, ' headphones' dead-key fixed; 8.1 measured
 ALREADY-LANDED) and **§E744** (y5 shipped all six crush-host workstreams — lazy widget-Cmd relay with
 OSC52_MAX_CHARS=65,536 cap + transcript notice, Ctrl+C copy-over-quit precedence, PasteMsg/MouseMsg zone

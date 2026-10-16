@@ -41,7 +41,7 @@ called out in the table below.
 | **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture. |
 | **SugarForms** (`sugar-forms/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color. |
-| **CandyShine** (`candy-shine/`) | 🟡 in progress | Markdown → ANSI renderer (themes, syntax, OSC 8 hyperlinks). |
+| **SugarMarkdown** (`sugar-markdown/`) | 🟡 in progress | Markdown → ANSI renderer (themes, syntax, OSC 8 hyperlinks). |
 | **CandyKit** (`candy-kit/`) | 🟢 ready | CLI presentation helpers (StatusLine / Banner / Section / Stage / HelpText). |
 | **CandyWish** (`candy-wish/`) | 🟢 ready | SSH-server middleware framework (leans on host `sshd`); pluggable Transport: InProcessTransport (default — candy-pty supervisor + Spawn middleware) or HostSshdTransport (legacy, opt-in — inline middleware, including running SugarCraft apps in SSH sessions). |
 | **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + CandyWish session middleware. |
@@ -81,7 +81,7 @@ called out in the table below.
 | **CandyStarter** (`candy-starter/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
 | **CandyScriptui** (`candy-scriptui/`) | 🟡 in progress | Composer-installable CLI of 13 one-shot subcommands. |
 | **CandyCodeshot** (`candy-codeshot/`) | 🟢 ready | Code → SVG screenshot (no GD / Imagick required). |
-| **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes CandyShine). |
+| **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes SugarMarkdown). |
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **CandySshLauncher** (`candy-ssh-launcher/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
 | **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
@@ -111,7 +111,7 @@ package. Suffixes are short, technical, and describe the role.
 
 | Prefix | Meaning | Example uses |
 |---|---|---|
-| **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyScriptui), markdown (CandyShine) |
+| **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyScriptui), markdown (SugarMarkdown) |
 | **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (CandyFlappy) |
 
@@ -175,7 +175,7 @@ reference projects supplied the ideas, not the code.
 | CandySql (candy-sql/) | [lazysql](https://github.com/jorgerojas26/lazysql) |
 | CandyGitServer (candy-git-server/) | [soft-serve](https://github.com/charmbracelet/soft-serve) |
 | CandyScriptui (candy-scriptui/) | [gum](https://github.com/charmbracelet/gum) |
-| CandyShine (candy-shine/) | [glamour](https://github.com/charmbracelet/glamour) |
+| SugarMarkdown (sugar-markdown/) | [glamour](https://github.com/charmbracelet/glamour) |
 | CandySprinkles (candy-sprinkles/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
 | CandyTesting (candy-testing/) | none — first-party |
 | CandyTetris (candy-tetris/) | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) |

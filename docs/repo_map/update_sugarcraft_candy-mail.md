@@ -469,7 +469,7 @@ $mailer->send($email, onProgress: fn(int $sent, int $total) => ...);
 
 **Problem:** Success/error messages are plain text.
 **Source:** `docs/repo_map/charmbracelet_gum.md` — lipgloss styling
-**Solution:** Use candy-shine for colored output:
+**Solution:** Use sugar-markdown for colored output:
 ```php
 // Success: green "Email sent via smtp"
 ```

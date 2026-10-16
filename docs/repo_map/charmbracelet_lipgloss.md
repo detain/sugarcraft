@@ -287,8 +287,8 @@ All setter methods on `Style` return `Style` (not `*Style`). Calling `s.Bold(tru
 - **Go-specific:** Cannot be directly used from other languages. SugarCraft must manually port every feature; no shared core.
 - **Complex internal property system:** The `propKey` bitmask + dual `attrs` representation makes the internal implementation harder to follow than it needs to be. The `set()` method's massive switch statement (covering every property key) is ~100 lines.
 - **Global state in `compat` package:** `HasDarkBackground` and `Profile` are initialized at package import time by reading stdin/stdout — this is explicitly discouraged in the docs but the `compat` package exists for migration purposes.
-- **No built-in syntax highlighting:** Lip Gloss handles ANSI SGR sequences but does not include a syntax highlighter. For that you need Glamour (also a Charmbracelet project, already mapped to `candy-shine`).
-- **No built-in markdown rendering:** Lip Gloss styles individual strings; it doesn't parse markdown structure. Glamour (`candy-shine`) handles that.
+- **No built-in syntax highlighting:** Lip Gloss handles ANSI SGR sequences but does not include a syntax highlighter. For that you need Glamour (also a Charmbracelet project, already mapped to `sugar-markdown`).
+- **No built-in markdown rendering:** Lip Gloss styles individual strings; it doesn't parse markdown structure. Glamour (`sugar-markdown`) handles that.
 - **Color blending is 1D around border perimeter only:** `Blend2D` is diagonal-linear, not a full 2D rectangular gradient. True rectangular gradients require custom iteration over `Blend1D` results.
 - **Limited widget set:** Lip Gloss provides styling primitives and the table/list/tree sub-packages, but no text input, scrollable viewports, progress bars, spinners, or other interactive components. Those are in `bubbles` (mapped to `sugar-widgets`).
 - **Go 1.25 dependency:** `go.mod` declares `go 1.25.0` which is very recent (future version), limiting adoption in older codebases.
@@ -303,7 +303,7 @@ All setter methods on `Style` return `Style` (not `*Style`). Calling `s.Bold(tru
 | **CandySprinkles** (`candy-sprinkles/`) | `SugarCraft\Sprinkles` | **Primary mapping:** The core `Style` type and all its setters (`Bold`, `Italic`, `Foreground`, `Background`, `Padding`, `Margin`, `Border*`, `Align`, etc.), color system (`Color`, `Darken`, `Lighten`, `Complementary`, `Alpha`, `Blend1D`, `Blend2D`, `AdaptiveColor`), border presets, position types, measurement utilities (`Width`, `Height`, `Size`), text wrapping/joining/placement, layer compositing (`Layer`, `Compositor`, `Canvas`), `StyleRunes` |
 | **SugarWidgets** (`sugar-widgets/`) | `SugarCraft\Widgets` | `table` sub-package → `Table.php` with `Column.php`, `SortState.php`, `Styles.php`; `list` sub-package → potential future `ItemList.php` enhancements |
 | **CandyPalette** (`candy-palette/`) | `SugarCraft\Palette` | `charmbracelet/colorprofile` → terminal color detection (`HasDarkBackground`, `BackgroundColor`, `LightDark`, `Complete`) — but note SugarCraft's `candy-palette` maps directly to `colorprofile` itself |
-| **CandyShine** (`candy-shine/`) | `SugarCraft\Shine` | Adjacent: Lip Gloss handles ANSI styling; Glamour handles Markdown → these compose together in Charm apps |
+| **SugarMarkdown** (`sugar-markdown/`) | `SugarCraft\Markdown` | Adjacent: Lip Gloss handles ANSI styling; Glamour handles Markdown → these compose together in Charm apps |
 | **SugarCharts** (`sugar-charts/`) | `SugarCraft\Charts` | `Blend2D` / color gradient functions could power heatmap cell coloring |
 | **SugarForms** (`sugar-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
 

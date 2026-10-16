@@ -504,7 +504,7 @@ Currently `Form::validate()` returns void and populates `Form::$errors`. Conside
 
 ## 4. Field Description as Markdown
 
-huh supports markdown in descriptions (rendered via glamour). Consider `Field::withDescription(string $md, bool $renderMarkdown = true)` using `candy-shine`.
+huh supports markdown in descriptions (rendered via glamour). Consider `Field::withDescription(string $md, bool $renderMarkdown = true)` using `sugar-markdown`.
 
 ---
 

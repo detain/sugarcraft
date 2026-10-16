@@ -17,7 +17,7 @@ use SugarCraft\Core\Syntax\TokenSpan;
  * syntax pass ("candy-mdview integration deferred"). Step 10.24 has since
  * landed the highlighting pipeline; its reusable surface is candy-core's
  * pure {@see RegexHighlighter} lexer — the same primitive candy-mdview /
- * candy-shine render through (via Shine\SyntaxHighlighter's Theme slots) and
+ * sugar-markdown render through (via Markdown\SyntaxHighlighter's Theme slots) and
  * candy-codeshot consumes directly (CodeShot\CodeHighlighter). candy-mdview itself
  * exposes no embeddable highlight surface (it is the markdown pager CLI), so
  * candy-git follows the candy-codeshot precedent: consume the shared lexer,

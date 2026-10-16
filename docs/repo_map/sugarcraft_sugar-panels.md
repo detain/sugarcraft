@@ -618,7 +618,7 @@ sugar-panels
 
 ### 5.2 Consumers
 
-sugar-panels is a **foundational layout primitive** used by other SugarCraft libs that need box-drawing compositions. It sits at the same level as `candy-shine`'s table rendering — both are output producers that render to strings.
+sugar-panels is a **foundational layout primitive** used by other SugarCraft libs that need box-drawing compositions. It sits at the same level as `sugar-markdown`'s table rendering — both are output producers that render to strings.
 
 ### 5.3 Strengths
 

@@ -37,7 +37,7 @@ candy-mail/lang/      — 16 locales (en.php + 15 translations)
 ```
 candy-mail
   └── sugarcraft/candy-core  (dev-master, path-repo)
-       └── sugarcraft/candy-shine (styling)
+       └── sugarcraft/sugar-markdown (styling)
 ```
 
 No heavy dependencies. Pure PHP with minimal requirements (cURL for Resend, stream_socket_client for SMTP).
@@ -739,4 +739,4 @@ Delegates to `SugarCraft\Core\I18n\T` with 'post' namespace baked in.
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-scriptui.md` — Shell wrapper patterns relevant to CLI design
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-shine.md` — Styling, note: upstream pop uses goldmark for Markdown→ANSI (related to HTML body concept)
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-markdown.md` — Styling, note: upstream pop uses goldmark for Markdown→ANSI (related to HTML body concept)

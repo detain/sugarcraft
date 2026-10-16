@@ -630,7 +630,7 @@ Explicitly test ProfileWriter with a buffered writer to ensure io.Writer contrac
 
 Ensure sugar-widgets components (TextInput, etc.) use `Probe::colorProfile()` for color decisions rather than re-implementing detection.
 
-## 2. candy-shine Theme System
+## 2. sugar-markdown Theme System
 
 Provide `Color::adaptive()` method for light/dark theme support (like lipgloss v2's `LightDark`).
 

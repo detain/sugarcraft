@@ -34,7 +34,7 @@ namespace SugarCraft\Core\Util;
  * Msg objects — that's `InputReader`'s job. Parser stays neutral
  * so the same tokens can power InputReader (input side), output
  * stripping (CandySprinkles), and OSC-reply handlers
- * (CandyShine).
+ * (SugarMarkdown).
  */
 final class Parser
 {

@@ -8,7 +8,7 @@
 
 ## Summary
 
-Candy-mdview is a PHP port of charmbracelet/glow — a Markdown CLI viewer/pager that composes CandyShine (rendering) and SugarWidgets Viewport (scrolling). The library is well-structured with good test coverage, immutable patterns, and clean separation of concerns. However, several issues ranging from minor inefficiencies to architectural limitations were identified.
+Candy-mdview is a PHP port of charmbracelet/glow — a Markdown CLI viewer/pager that composes SugarMarkdown (rendering) and SugarWidgets Viewport (scrolling). The library is well-structured with good test coverage, immutable patterns, and clean separation of concerns. However, several issues ranging from minor inefficiencies to architectural limitations were identified.
 
 ---
 
@@ -280,7 +280,7 @@ The library appears security-conscious. No user-provided data is passed to `exec
 
 1. Uses `SugarCraft\Core\Model` contract for MdViewModel
 2. Uses `SugarCraft\Widgets\Viewport\Viewport` for scrolling
-3. Uses `SugarCraft\Shine\Renderer` and `Theme` for markdown rendering
+3. Uses `SugarCraft\Markdown\Renderer` and `Theme` for markdown rendering
 4. Uses `SugarCraft\Core\Util\TtyDetect` for TTY detection
 5. Uses `SugarCraft\Core\Util\Tty` for terminal size
 6. Uses `SugarCraft\Palette\Probe\TerminalProbe` for color capability probing

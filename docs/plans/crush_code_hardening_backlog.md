@@ -2329,15 +2329,15 @@ anyone who *does* wire one knows what gate to add at the same time.
 - **What** Bundle W1 makes the transcript honour the pane width, which it must —
   a row wider than the terminal breaks candy-core's one-logical-line-per-row model
   and every row painted after it lands at a stale absolute coordinate. But
-  `candy-shine` deliberately never wraps code blocks or tables ("they have their
-  own width semantics", `candy-shine/src/Renderer.php:175-176`), so W1's
+  `candy-shine` deliberately never wraps code blocks or tables ("they have their <!-- @rename-keep historical provenance -->
+  own width semantics", `candy-shine/src/Renderer.php:175-176`), so W1's <!-- @rename-keep historical provenance -->
   frame-level net is what handles them, and reflowing a code block is a
   compromise: it preserves every byte and damages the shape, which for aligned
   code or a wide table is exactly the information the reader wanted. The real
   answer is horizontal scrolling (or a per-block "expand" the way tool results
   already have one), not reflow.
 - **Where** `sugar-crush/src/Renderer.php` — `renderHistory()` and whatever W1
-  lands as the width net; `candy-shine/src/Renderer.php` for why the wrap does
+  lands as the width net; `candy-shine/src/Renderer.php` for why the wrap does <!-- @rename-keep historical provenance -->
   not cover these two block types.
 - **Severity** Not security. A readability regression against the alternative of
   a corrupted frame, so the compromise is the right way round — but it is a
@@ -2358,7 +2358,7 @@ anyone who *does* wire one knows what gate to add at the same time.
   offset/scroll anywhere under `sugar-crush/src/` — and E682's own stamp names
   the full composite-live route still open (closed-by-decision under E12/E666's
   route (b)). Shipped halves remain: preconditions (`f4b3407ec` clipOverlay +
-  E48 floor, lane R r62) and the candy-shine sibling fence clip (opt-in,
+  E48 floor, lane R r62) and the candy-shine sibling fence clip (opt-in, <!-- @rename-keep historical provenance -->
   `5ba4e022f`, lane EE r63). The open half is sugar-crush adoption — a per-block
   reflow-vs-clip toggle or expand-driven horizontal offset — still unowned and
   unlaned for round 67.
@@ -2588,14 +2588,14 @@ that prose rather than leaving a claim its own sweep (8/20/40) would have refute
 **Step.** Either reserve the bar out of `$available` so the frame can be 1 row, or decide 2 is the floor
 and say so in `renderStatusBar()`'s docblock.
 
-### E49 [CLOSED] — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can
+### E49 [CLOSED] — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can <!-- @rename-keep historical provenance -->
 
 **What.** `withTableWrap(true)` wraps each **cell** at the full `wrapWidth`, so a three-column table
 still renders roughly three times the pane wide. Measured at `wrapWidth: 60`: cells wrap to 67/49/56/23
 while the box borders stay **195** columns. The option name and its docblock read as though it solves
 "table too wide", and it does not.
 
-**Where.** `candy-shine/src/Renderer.php:916-917`.
+**Where.** `candy-shine/src/Renderer.php:916-917`. <!-- @rename-keep historical provenance -->
 
 **Severity.** Medium for readability of a coding agent's output — tables are common in replies. This is
 the mechanism behind **E43**: with W1's invariant in force a wide table keeps all its data but its
@@ -2607,11 +2607,11 @@ The reviewer measured it and it is **not** — at cols=100 the header loses its 
 is cut mid-run, and the 195-column border rows wrap into several rows of dashes. Better on the reported
 axis, **visually worse**. A trade, not an improvement.
 
-**Step.** A per-column width budget in candy-shine's table renderer, sized to `wrapWidth`. Pairs with
+**Step.** A per-column width budget in candy-shine's table renderer, sized to `wrapWidth`. Pairs with <!-- @rename-keep historical provenance -->
 E43's horizontal-scroll answer: budget the columns, and let a genuinely wide table scroll rather than
 reflow.
 
-**Blocked on.** It is a **candy-shine** change; W1 was scoped to sugar-crush.
+**Blocked on.** It is a **candy-shine** change; W1 was scoped to sugar-crush. <!-- @rename-keep historical provenance -->
 
 ### E50 [CLOSED] — `SgrState` does not track SGR 58 (underline colour) or OSC 8 hyperlinks
 
@@ -12654,7 +12654,7 @@ cause. Unlike sites 2–5 this needs no unusual process state — only a shell r
 
 - `candy-git-server/src/StatsServer.php` casts a stream to `int` and is **not** an instance: the value is an
   array key for handle identity, which is precisely what a resource id is for.
-- `candy-palette/src/Probe/TerminalProbe.php` and `candy-shine/src/Theme.php` call `posix_isatty(STDOUT)`
+- `candy-palette/src/Probe/TerminalProbe.php` and `candy-shine/src/Theme.php` call `posix_isatty(STDOUT)` <!-- @rename-keep historical provenance -->
   passing the **resource itself**, with no cast. `posix_isatty()` accepts `resource|int`, so this is
   correct — and it is the shape the other sites should be moving toward, not away from.
 - `candy-vcr/src/Cli/RecordCommand.php` calls `TermiosFactory::open(0)` with a literal `0`. That is a real
@@ -13619,7 +13619,7 @@ package they never touched.
 
 Mutation-verified against the census alone (`--filter DescriptorSinkArgumentCensusTest`): reintroducing
 the cast in `candy-flip/src/Renderer.php`, in `candy-pty/src/SizeIoctl.php`, and in
-`candy-shine/src/Theme.php` each reds it — the last of those being a library no earlier scoping of this
+`candy-shine/src/Theme.php` each reds it — the last of those being a library no earlier scoping of this <!-- @rename-keep historical provenance -->
 census would have looked at.
 
 ---
@@ -13828,7 +13828,7 @@ census exists to have. **Fixed this round.**
 and the later hit won.
 
 **MEASURED — round-53 mutation R4b.** A second, entirely unjudged `posix_isatty(STDOUT)` added to
-`candy-shine/src/Theme.php` — whose one rostered site is spelled identically — left the census
+`candy-shine/src/Theme.php` — whose one rostered site is spelled identically — left the census <!-- @rename-keep historical provenance -->
 **green**: `OK (4 tests, 22 assertions)`, rc 0. The class doc-block's *"A NEW site fails because it is
 unjudged"* was simply false for that shape.
 
@@ -16822,7 +16822,7 @@ travel:** that guard is a PHPUnit test inside `sugar-crush` reading `sugar-crush
 the only one of 58 libs that has it, while `tools/check-path-repos.php` honours the hatch for all of them
 and `ci.yml` gates on `--unused` with no `continue-on-error`.
 
-**Probed:** two rows added to `candy-shine` — one for `sugarcraft/candy-core` (referenced from its `src/`
+**Probed:** two rows added to `candy-shine` — one for `sugarcraft/candy-core` (referenced from its `src/` <!-- @rename-keep historical provenance -->
 on every page) and one for `sugarcraft/package-that-does-not-exist` (not even a require) — produced **no
 output at all and exit 0**. The tool's lookup is consulted only for a dep it has already decided is dead,
 so a row naming anything else is never read.
@@ -20802,11 +20802,11 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 **ROUND-87 WELD APPEND (companion fold — erratum + stamp-verify, no code):** (i) ZONE-COST ERRATUM from rv-w2: a candy-mouse `Mark::zone` span costs ≈**13 cells** to `Width::of` (sentinels + id on BOTH sides), NOT the ≤7 earlier lane prose estimated — `scanRoot` strips the cost before measurement and the w2 audit harness strips each zone per row, so all width-budget claims measured on stripped rows stand; future geometry pins MUST measure stripped rows. (ii) vt plan row 6.2 stamp VERIFIED at the weld (`findings/plan_candy-vt.md:616` reads `⏭ r87w1: gated+measured-no-build` — consumer sweep reads correctly: candy-vcr `ScreenAssertion` always same-dims, `ScreenTest` order-agnostic, crush imports zero `Vt\Screen`; closed-by-decision holds). <!-- @rename-keep historical provenance -->
 
-**ROUND-88 WELD 2026-09-17 (7 lanes cut — 3 LANDED, 4 PHANTOM'D; forms Ph5 built out under OPERATOR OVERRIDE of the r86 blanket product-DECLINE).** Weld chain atop `f22353b2e`: picks `48846c8d9`(x6)/`871107869`(x4)/`6e83c1675`(x5) → companion `e2ac4fc7e` → re-pin `b475df971`. **BUILT:** vt **6.4 CLOSED** (public `Buffer::insertRows()/deleteRows()` row-shift API, 8 walk sites routed, `RowShiftApiTest` +22T/46A, render-dump md5 `dccc5c48…` unchanged; x6 rv APPROVE — the brief's fix `514159c27` phantom, pins rode the single commit); forms **5.6/5.7/5.8 BUILT** (x4 — Date/Slider/Color + 27 en.php keys + sugar-forms shims + README rows folded at weld); forms **5.13/5.14 BUILT** (x5 — TextArea selection/OSC52 clipboard + ItemList mouse; TEA-contract-correct, crush-side adoption routed → §E744). **PHANTOM'D at weld (disk audit: no branch/commit/object; rv-verified):** x1 (E742 palette fix — **E742 STAYS OPEN**, no CLOSED stamp), x2 (bits 3.1 → **promoted to §E743**; layout CassowarySolver docblock fold UNBUILT — seam stays), x3 (forms cluster A 5.9–5.12/5.15 — rows STAY ⏭ ruled), x7 (shine streaming — 2/7 uncommitted partial salvaged to artifacts; **7.1/7.3 STAY ruled-skip, NOT closed**). forms 1891/3164 → **2037/3526 ×2 0W**; vt → 948/12,735; shine MEASURED baseline 352/704 (the r88 brief's 534/1588 was stale — zero shine diff base..tip). Row STAYS OPEN — survivors trigger/ruling-shaped. See worklog ROUND 88 + `/home/sites/crush-r61-artifacts/r88-rv-x*/REVIEW.md`.
+**ROUND-88 WELD 2026-09-17 (7 lanes cut — 3 LANDED, 4 PHANTOM'D; forms Ph5 built out under OPERATOR OVERRIDE of the r86 blanket product-DECLINE).** Weld chain atop `f22353b2e`: picks `48846c8d9`(x6)/`871107869`(x4)/`6e83c1675`(x5) → companion `e2ac4fc7e` → re-pin `b475df971`. **BUILT:** vt **6.4 CLOSED** (public `Buffer::insertRows()/deleteRows()` row-shift API, 8 walk sites routed, `RowShiftApiTest` +22T/46A, render-dump md5 `dccc5c48…` unchanged; x6 rv APPROVE — the brief's fix `514159c27` phantom, pins rode the single commit); forms **5.6/5.7/5.8 BUILT** (x4 — Date/Slider/Color + 27 en.php keys + sugar-forms shims + README rows folded at weld); forms **5.13/5.14 BUILT** (x5 — TextArea selection/OSC52 clipboard + ItemList mouse; TEA-contract-correct, crush-side adoption routed → §E744). **PHANTOM'D at weld (disk audit: no branch/commit/object; rv-verified):** x1 (E742 palette fix — **E742 STAYS OPEN**, no CLOSED stamp), x2 (bits 3.1 → **promoted to §E743**; layout CassowarySolver docblock fold UNBUILT — seam stays), x3 (forms cluster A 5.9–5.12/5.15 — rows STAY ⏭ ruled), x7 (shine streaming — 2/7 uncommitted partial salvaged to artifacts; **7.1/7.3 STAY ruled-skip, NOT closed**). forms 1891/3164 → **2037/3526 ×2 0W**; vt → 948/12,735; shine MEASURED baseline 352/704 (the r88 brief's 534/1588 was stale — zero shine diff base..tip). Row STAYS OPEN — survivors trigger/ruling-shaped. See worklog ROUND 88 + `/home/sites/crush-r61-artifacts/r88-rv-x*/REVIEW.md`. <!-- @rename-keep historical provenance -->
 
-**ROUND-89 WAVE-1 WELD 2026-09-17 (lanes y1–y4 → 20 picks `9bc98d6b8`…`06f658684`; ZERO sugar-crush files → floor 12,027T EXACT-carry 6th round; all four lanes rv-APPROVE 0C/0M).** The r88 phantom scopes all paid: y1 closed §E742 (x1), y2 closed §E743 (x2), y3 built forms cluster-A 5.2/5.3/5.4/5.9/5.10/5.11/5.12/5.15 + plan stale-fact corrections (x3 redo — forms **2037→2182T/3,945A** ×2 byte-identical, E741 six-slot carrier census widened IN-STEP, sugar-forms `AsyncValidatable` re-export 158/**314A**), y4 built shine **7.1+7.3** (x7 salvage — r86 DECLINE revoked per operator ruling; Writer/StreamSink/SectionScanner/renderStream/StyleGuide split under the no-glow-require ruling; shine **352/704→573T/1,075A**; promised pins paid — the rv-x7 M1 mutation now reddens 59 tests). Render-dump VALUE flip rode y1 (new baseline `6f9dc048…`). REMAINING UNBUILT: exactly ONE plan row — **candy-shine 7.2 Limited Emoji Shortcode Map (`findings/plan_candy-shine.md:672` PENDING, MEDIUM)** — net-new feature scope; row STAYS OPEN naming that single line (plus the standing ruling/trigger-shaped survivors: forms Ph5 declined-with-trigger, vt 6.2 gated / 6.4 CLOSED-at-r88, MATCHUPS 🟡/🔴 port-completion backlog, layout 1.2 / charts 3.1 / bits 4.3 declines).
+**ROUND-89 WAVE-1 WELD 2026-09-17 (lanes y1–y4 → 20 picks `9bc98d6b8`…`06f658684`; ZERO sugar-crush files → floor 12,027T EXACT-carry 6th round; all four lanes rv-APPROVE 0C/0M).** The r88 phantom scopes all paid: y1 closed §E742 (x1), y2 closed §E743 (x2), y3 built forms cluster-A 5.2/5.3/5.4/5.9/5.10/5.11/5.12/5.15 + plan stale-fact corrections (x3 redo — forms **2037→2182T/3,945A** ×2 byte-identical, E741 six-slot carrier census widened IN-STEP, sugar-forms `AsyncValidatable` re-export 158/**314A**), y4 built shine **7.1+7.3** (x7 salvage — r86 DECLINE revoked per operator ruling; Writer/StreamSink/SectionScanner/renderStream/StyleGuide split under the no-glow-require ruling; shine **352/704→573T/1,075A**; promised pins paid — the rv-x7 M1 mutation now reddens 59 tests). Render-dump VALUE flip rode y1 (new baseline `6f9dc048…`). REMAINING UNBUILT: exactly ONE plan row — **candy-shine 7.2 Limited Emoji Shortcode Map (`findings/plan_candy-shine.md:672` PENDING, MEDIUM)** — net-new feature scope; row STAYS OPEN naming that single line (plus the standing ruling/trigger-shaped survivors: forms Ph5 declined-with-trigger, vt 6.2 gated / 6.4 CLOSED-at-r88, MATCHUPS 🟡/🔴 port-completion backlog, layout 1.2 / charts 3.1 / bits 4.3 declines). <!-- @rename-keep historical provenance -->
 
-**CLOSED 2026-09-17 (round-89 wave-2; lane y6 tip `7c81b9010` → pick `82aec515c`; rv APPROVE 0C/0M/3MINOR).** The sole unbuilt plan row — candy-shine **7.2 Limited Emoji Shortcode Map** — landed: new `GithubEmoji` 1,837-entry map transcribed from the GitHub cheat sheet (duplicate-key scan clean, all codepoints byte-verified incl. 208 ZWJ + 260 regional-indicator entries), the house `:shortcode:` map wins its 34 collisions (4 byte-divergent spellings documented), sole lookup site in `Renderer` with `?? $m[0]` pass-through; shine **573→587T/1,119A** (+14T parity pins; consumers UNMOVED: glow 122/313, shell 334/694, crush `Shine|Glamour|Style` 24/813). Row **8.1 measured ALREADY-LANDED** (streaming render contract rode the r89 y4 picks). Every other row under this umbrella is now built or ruled (r86 declines, r87/r88 dispositions, r89 wave-1 cluster-A/phantom-redos). The remaining MATCHUPS 🟡/🔴 PORT-COMPLETION residual is the MATCHUPS board's per-row verdict pass — a product-completion campaign, not defect-hardening ledger work — and stays tracked there. Row CLOSED; schedule a port campaign as fresh rows if demand arrives.
+**CLOSED 2026-09-17 (round-89 wave-2; lane y6 tip `7c81b9010` → pick `82aec515c`; rv APPROVE 0C/0M/3MINOR).** The sole unbuilt plan row — candy-shine **7.2 Limited Emoji Shortcode Map** — landed: new `GithubEmoji` 1,837-entry map transcribed from the GitHub cheat sheet (duplicate-key scan clean, all codepoints byte-verified incl. 208 ZWJ + 260 regional-indicator entries), the house `:shortcode:` map wins its 34 collisions (4 byte-divergent spellings documented), sole lookup site in `Renderer` with `?? $m[0]` pass-through; shine **573→587T/1,119A** (+14T parity pins; consumers UNMOVED: glow 122/313, shell 334/694, crush `Shine|Glamour|Style` 24/813). Row **8.1 measured ALREADY-LANDED** (streaming render contract rode the r89 y4 picks). Every other row under this umbrella is now built or ruled (r86 declines, r87/r88 dispositions, r89 wave-1 cluster-A/phantom-redos). The remaining MATCHUPS 🟡/🔴 PORT-COMPLETION residual is the MATCHUPS board's per-row verdict pass — a product-completion campaign, not defect-hardening ledger work — and stays tracked there. Row CLOSED; schedule a port campaign as fresh rows if demand arrives. <!-- @rename-keep historical provenance -->
 ### E737 [CLOSED] — repo-root `.mcp.json` poisons BootstrapMcpLivenessTest only inside K=8 shard buckets (NEW hazard from the upstream-merge weld — root cause un-minted)
 
 **What:** PHASE-5-KICKOFF (merge-upstream REPORT.md, 2026-09-15, weld `61b28175c`→`052025282`): an operator repo-root `.mcp.json` (untracked, do-not-touch working-copy artifact) makes `sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php` red ONLY in the K=8 sharded shape — repo-root cwd + co-bucketed test order; serial, standalone, and pairwise runs are GREEN; CI and lane sandboxes (no repo-root `.mcp.json`) unaffected. The test already snapshots/restores the liveness memo around itself (`:31/:45/:51`) yet still falls in-bucket, so the pollution path is NOT the test's own memo hygiene — candidate mechanisms: an earlier bucket-mate warming `McpClient::create()`'s static client memo (pid+configPath keyed, lane-ce precedent) or the process-global decision cache BEFORE this test's cold-snapshot assert (`assertSame([], ...)` at :76). Root cause deliberately left un-minted during the merge closeout (merge-agent scope). **Acceptance:** reproduce deterministically in-bucket (plant a temp repo-root `.mcp.json` in a fixture harness, run the co-bucket subset), name the exact shared-state carrier, land the per-test reset (or an isolation seam) for it, K=8 shardcheck green WITH the operator `.mcp.json` present at the working root. **Conf:** MED (hazard real and repeatedly observed; mechanism not yet isolated).

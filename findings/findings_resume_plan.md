@@ -767,27 +767,27 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `candy-buffer/src/Hyperlink.php`, `candy-buffer/src/Buffer.php:458`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 2.14 🟢 candy-shine: String concat loops (Items 2.1-2.4)
+#### 2.14 🟢 sugar-markdown: String concat loops (Items 2.1-2.4)
 
-**Plan:** `findings/plan_candy-shine.md` — Items 2.1-2.4
+**Plan:** `findings/plan_sugar-markdown.md` — Items 2.1-2.4
 **Fix:**
 
 - 2.1: Replace `foreach ($lines as &$line)` reference loop with `array_map`
 - 2.2: Use array accumulation + `implode()` in `Renderer::renderChildren()`
 - 2.3: Cache regex pattern in `tokenise()`
 - 2.4: Use array accumulation in `renderList()`
-**Files:** `candy-shine/src/SyntaxHighlighter.php`, `candy-shine/src/Renderer.php`
+**Files:** `sugar-markdown/src/SyntaxHighlighter.php`, `sugar-markdown/src/Renderer.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 2.15 🟢 candy-shine: Theme::fromJson issues (Items 3.1-3.3)
+#### 2.15 🟢 sugar-markdown: Theme::fromJson issues (Items 3.1-3.3)
 
-**Plan:** `findings/plan_candy-shine.md` — Items 3.1-3.3
+**Plan:** `findings/plan_sugar-markdown.md` — Items 3.1-3.3
 **Fix:**
 
 - 3.1: Remove `@` from `file_get_contents()`; use `error_get_last()` for enrichment
 - 3.2: Add `json_last_error() !== JSON_ERROR_NONE` check
 - 3.3: Remove redundant `is_file()` check before `file_get_contents()`
-**Files:** `candy-shine/src/Theme.php:555-572`
+**Files:** `sugar-markdown/src/Theme.php:555-572`
 **Agent:** Same coder agent as 2.14 (grouped — same lib)
 
 ---
@@ -1289,7 +1289,7 @@ Same verification as previous phases.
 | `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
 | `plan_candy-git-server.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
 | `plan_candy-scriptui.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |
-| `plan_candy-shine.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |
+| `plan_sugar-markdown.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |
 | `plan_candy-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |
 | `plan_candy-wish.md` | 2.1-2.4, 3.1-3.3 | Double getenv, rate limit atomicity, setTransport consistency, middleware error handling |

@@ -66,7 +66,7 @@
         "sugarcraft/candy-git-server": "dev-master",
         "sugarcraft/candy-testing": "dev-master",
         "sugarcraft/candy-scriptui": "dev-master",
-        "sugarcraft/candy-shine": "dev-master",
+        "sugarcraft/sugar-markdown": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-tetris": "dev-master",
         "sugarcraft/candy-top": "dev-master",
@@ -293,7 +293,7 @@
         },
         {
             "type": "path",
-            "url": "candy-shine",
+            "url": "sugar-markdown",
             "options": {
                 "symlink": true
             }

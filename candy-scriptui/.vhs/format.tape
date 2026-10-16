@@ -4,6 +4,6 @@ Set Width 800
 Set Height 360
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
-Type "echo '# Hello\n\nMarkdown rendered as **bold** ANSI via *CandyShine*.\n\n- list item\n- another' | ./bin/candy-scriptui format"
+Type "echo '# Hello\n\nMarkdown rendered as **bold** ANSI via *SugarMarkdown*.\n\n- list item\n- another' | ./bin/candy-scriptui format"
 Enter
 Sleep 2500ms

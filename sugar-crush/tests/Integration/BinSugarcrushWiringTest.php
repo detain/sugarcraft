@@ -769,8 +769,8 @@ final class BinSugarcrushWiringTest extends TestCase
     //
     // Every test below points --root at $this->tempDir . '/repo', which is
     // NEVER the process cwd (PHPUnit runs from the package directory). That
-    // divergence IS the bug: `--root candy-shine` correctly jailed the tools
-    // to candy-shine/ while telling the model — through the environment block
+    // divergence IS the bug: `--root candy-shine` correctly jailed the tools @rename-keep historical provenance: real-defect narrative naming the then-live lib path
+    // to candy-shine/ while telling the model — through the environment block @rename-keep historical provenance: real-defect narrative naming the then-live lib path
     // and through every HookContext — that it was standing in the enclosing
     // monorepo. A test where the configured root and getcwd() coincide cannot
     // observe that at all.

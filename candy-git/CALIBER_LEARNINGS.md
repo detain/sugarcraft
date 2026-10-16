@@ -231,7 +231,7 @@ Source: step-33 ai/filter-consumers
 Pattern: Step 10.06's deferred "syntax highlighting in diff view" landed by
 consuming `SugarCraft\Core\Syntax\RegexHighlighter` — the pure tokenisation
 primitive shipped with the step 10.24 highlighting pipeline (candy-mdview itself
-is a pager CLI with no embeddable highlight surface; candy-shine's
+is a pager CLI with no embeddable highlight surface; sugar-markdown's
 `SyntaxHighlighter` and candy-codeshot's `CodeHighlighter` are the other two
 consumers of this same lexer). `DiffHighlighter` keeps ZERO colour knowledge:
 it maps file extension → lexer language (only languages the lexer actually

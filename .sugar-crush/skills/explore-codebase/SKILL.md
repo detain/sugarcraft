@@ -50,7 +50,7 @@ Stop once you have enough context. Do not read every source file.
 
 From `composer.json`:
 - PHP version constraint (e.g. `^8.3`)
-- Namespace prefix (e.g. `SugarCraft\Shine\`)
+- Namespace prefix (e.g. `SugarCraft\Markdown\`)
 - Internal dependencies (`sugarcraft/*` path repos)
 
 From `CALIBER_LEARNINGS.md` (if present):

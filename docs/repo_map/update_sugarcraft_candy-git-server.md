@@ -139,7 +139,7 @@ candy-git-server/
 
 - Port the upstream Go TUI to PHP using `candy-core` (Bubble Tea equivalent)
 - Implement `RepoView` component for browsing files and commits
-- Add syntax highlighting via `candy-shine` (Glamour port)
+- Add syntax highlighting via `sugar-markdown` (Glamour port)
 - Use `sugar-mouse` for mouse interactions in the TUI
 - Bridge TUI over SSH using `candy-wish` (if/when it supports serving TUIs)
 
@@ -807,7 +807,7 @@ Implement webhook-driven notifications:
 8. **TUI Implementation**
    - Port upstream Go TUI to PHP using `candy-core`
    - Implement repo browser, file viewer, commit history
-   - Add syntax highlighting via `candy-shine`
+   - Add syntax highlighting via `sugar-markdown`
 
 9. **Mirror/Sync Automation**
    - Implement cron-based mirror jobs

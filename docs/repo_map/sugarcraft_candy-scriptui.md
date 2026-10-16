@@ -89,7 +89,7 @@ candy-scriptui
 ├── sugarcraft/candy-core              (TUI runtime: Program, Msg, Model)
 ├── sugarcraft/sugar-forms             (form components: TextInput, ItemList, etc.)
 ├── sugarcraft/candy-pty              (PosixProcess for spin command)
-├── sugarcraft/candy-shine            (Theme, Renderer for format command)
+├── sugarcraft/sugar-markdown            (Theme, Renderer for format command)
 └── sugarcraft/candy-sprinkles        (Style, Border, Align for style command)
 ```
 
@@ -451,7 +451,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 - `FormatCommand.php` — non-interactive
 
-- Uses `SugarCraft\Shine\Renderer` for markdown, `Theme::byName()` for themes
+- Uses `SugarCraft\Markdown\Renderer` for markdown, `Theme::byName()` for themes
 
 **Options:**
 ```
@@ -473,7 +473,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 - `emoji` — `:smile:` shortcode expansion (built-in map of 20 emojis)
 
-**Component dependency:** `SugarCraft\Shine\Renderer` + `SugarCraft\Shine\Theme`
+**Component dependency:** `SugarCraft\Markdown\Renderer` + `SugarCraft\Markdown\Theme`
 
 ---
 
@@ -920,7 +920,7 @@ candy-scriptui
 ├── candy-core          TUI runtime: Program, Model, Msg, KeyType, Cmd, Subscriptions
 ├── sugar-forms         Components: TextInput, TextArea, ItemList, FilePicker, Viewport, Spinner, Confirm
 ├── candy-pty           PosixProcess for spawning child processes
-├── candy-shine         Renderer (markdown), Theme system
+├── sugar-markdown         Renderer (markdown), Theme system
 ├── candy-sprinkles    Style, Border, Align, Table (layout + styling)
 └── symfony/console    CLI application framework
 ```

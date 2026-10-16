@@ -1,7 +1,7 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
 Sources: candy-core, candy-scriptui, sugar-forms, candy-sprinkles, sugar-widgets,
-sugar-forms, honey-bounce, candy-palette, candy-shine, candy-pty
+sugar-forms, honey-bounce, candy-palette, sugar-markdown, candy-pty
 
 ---
 
@@ -27,13 +27,13 @@ candy-sprinkles has a one-pass greedy layout solver — cannot express "column A
 
 ### D. Snapshot Tests for ANSI Render Output Are Almost Entirely Absent
 
-sugar-forms, sugar-forms, sugar-widgets, candy-shine — none have golden file assertions on ANSI SGR bytes. Every `view()` method renders complex multi-line ANSI output; regressions in color codes, cursor positioning, or layout are silent. Upstream repos (bubbletea, huh, ratatui, pterm) all use golden/snapshot tests. pterm has 28,952 tests with exact byte assertions.
+sugar-forms, sugar-forms, sugar-widgets, sugar-markdown — none have golden file assertions on ANSI SGR bytes. Every `view()` method renders complex multi-line ANSI output; regressions in color codes, cursor positioning, or layout are silent. Upstream repos (bubbletea, huh, ratatui, pterm) all use golden/snapshot tests. pterm has 28,952 tests with exact byte assertions.
 
 **Impact**: Without snapshot tests, any rendering regression is invisible until runtime. Confidence in refactoring is near-zero across all form and component libraries.
 
-### E. Cascading Style Inheritance + BlockStack Are Missing (candy-shine)
+### E. Cascading Style Inheritance + BlockStack Are Missing (sugar-markdown)
 
-glamour maintains a `BlockStack` that computes available width dynamically as blocks nest (`WordWrap - Indent - Margin*2`). candy-shine handles nesting directly in `renderList()` and `renderBlockQuote()` but cannot propagate accumulated indent to deeper nested structures. Style inheritance uses null-slot fallthrough instead of glamour's recursive `cascadeStyle()` merge. Deeply nested blocks (blockquote > list > blockquote > paragraph) are not architecturally supported.
+glamour maintains a `BlockStack` that computes available width dynamically as blocks nest (`WordWrap - Indent - Margin*2`). sugar-markdown handles nesting directly in `renderList()` and `renderBlockQuote()` but cannot propagate accumulated indent to deeper nested structures. Style inheritance uses null-slot fallthrough instead of glamour's recursive `cascadeStyle()` merge. Deeply nested blocks (blockquote > list > blockquote > paragraph) are not architecturally supported.
 
 **Impact**: Nested markdown rendering produces incorrect indentation for real-world documents. Glamour parity requires BlockStack + cascading style merge.
 
@@ -51,7 +51,7 @@ candy-core has ReactPHP integration but `exec()` blocks during external command 
 
 ### C. No Consistent Buffer/Cell Abstraction for Rendering
 
-Packages that do rendering (candy-core renderer, candy-sprinkles Canvas, candy-shine Renderer, sugar-widgets components, sugar-forms primitives) each maintain their own string-composition approach. No package has a shared `Buffer`/`Cell` value object hierarchy. This means: (1) cell-level diffing cannot be shared across packages, (2) canvas layering and animation are all implemented independently, (3) a future cell-based renderer would need to be implemented per-package rather than centrally. **The weakness**: rendering infrastructure is not layered — every package reinventing terminal output.
+Packages that do rendering (candy-core renderer, candy-sprinkles Canvas, sugar-markdown Renderer, sugar-widgets components, sugar-forms primitives) each maintain their own string-composition approach. No package has a shared `Buffer`/`Cell` value object hierarchy. This means: (1) cell-level diffing cannot be shared across packages, (2) canvas layering and animation are all implemented independently, (3) a future cell-based renderer would need to be implemented per-package rather than centrally. **The weakness**: rendering infrastructure is not layered — every package reinventing terminal output.
 
 ---
 

@@ -14,7 +14,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 - **Mutation happens through ONE private helper, `mutate(array $changes): self`.** Every `with*()` calls it. Do not clone-and-assign inline in each setter.
 - **Accessors have NO `get` prefix.** `theme()`, not `getTheme()`.
 - **Factory methods mirror upstream** Charmbracelet names: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`. Add doc-comment `Mirrors charmbracelet/<repo>.<Method>`.
-- **Namespace quirk**: lib `candy-core` → `SugarCraft\Core\`. All other libs follow `Candy<X>` / `Sugar<X>` / `Honey<X>` → `SugarCraft\<X>\` (e.g. `candy-shine` → `SugarCraft\Shine\`).
+- **Namespace quirk**: lib `candy-core` → `SugarCraft\Core\`. All other libs follow `Candy<X>` / `Sugar<X>` / `Honey<X>` → `SugarCraft\<X>\` (e.g. `sugar-markdown` → `SugarCraft\Markdown\`).
 - **Don't add comments restating code.** Only doc *why* (upstream link, invariant, constraint).
 - **TUI Model contract** is in `candy-core/src/Model.php`: `init(): ?Cmd`, `update(Msg $msg): array{0: Model, 1: ?Cmd}`, `view(): string`. Implement the interface verbatim — do not invent a `render()` method.
 - **After scaffolding, run `cd <lib> && composer dump-autoload && vendor/bin/phpunit`.** If autoload misses the class, the namespace or filename is wrong — fix before continuing.
@@ -22,7 +22,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 ## Instructions
 
 1. **Identify the target lib and class shape.** From the user request, pick:
-   - Target lib slug (`<slug>`, e.g. `sugar-widgets`, `candy-shine`).
+   - Target lib slug (`<slug>`, e.g. `sugar-widgets`, `sugar-markdown`).
    - Class name in PascalCase (e.g. `Style`, `Spinner`, `Theme`).
    - Shape: **Data** (value object — `Style`, `Theme`, `KeyMap`) or **TUI Root** (implements `SugarCraft\Core\Model`).
    - Upstream reference if porting (`charmbracelet/<repo>.<Type>`).
@@ -167,18 +167,18 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 
 ## Examples
 
-**User**: "Add a `Pulse` widget to candy-shine that mirrors charmbracelet/lipgloss.Blink"
+**User**: "Add a `Pulse` widget to sugar-markdown that mirrors charmbracelet/lipgloss.Blink"
 
 **Actions**:
-1. Confirm `candy-shine/src/` exists; namespace from `candy-shine/composer.json` is `SugarCraft\Shine\`.
+1. Confirm `sugar-markdown/src/` exists; namespace from `sugar-markdown/composer.json` is `SugarCraft\Markdown\`.
 2. Read `candy-sprinkles/src/Style.php` (data shape — `Pulse` doesn't implement Model, it's a render decorator).
-3. Create `candy-shine/src/Pulse.php`:
+3. Create `sugar-markdown/src/Pulse.php`:
    ```php
    <?php
 
    declare(strict_types=1);
 
-   namespace SugarCraft\Shine;
+   namespace SugarCraft\Markdown;
 
    /**
     * Mirrors charmbracelet/lipgloss.Blink.
@@ -220,10 +220,10 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
        }
    }
    ```
-4. Create `candy-shine/tests/PulseTest.php` asserting immutability + clamp on `withInterval(-5)`.
-5. Run `cd candy-shine && composer dump-autoload -q && vendor/bin/phpunit`. Verify green.
+4. Create `sugar-markdown/tests/PulseTest.php` asserting immutability + clamp on `withInterval(-5)`.
+5. Run `cd sugar-markdown && composer dump-autoload -q && vendor/bin/phpunit`. Verify green.
 
-**Result**: `Pulse` slots into the existing `candy-shine` API surface and is indistinguishable in shape from `Spinner` / `Theme`.
+**Result**: `Pulse` slots into the existing `sugar-markdown` API surface and is indistinguishable in shape from `Spinner` / `Theme`.
 
 ## Common Issues
 
