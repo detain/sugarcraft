@@ -1007,6 +1007,8 @@ Entry status: `sugar-mcp` → `sugar-mcp-client` ✅ **R1–R9 (batch-C R8/R9-LI
 
 Entry status: `sugar-dash` → `sugar-dashboard` ✅ **R1–R9 (batch-C R8/R9-LITE)** — lane c8 db2f049bd + C-weld; R8 remote verified 2026-10-16 (rename pre-landed at lane R2 — resync rc0; split master e29d3e414 + legacy/sugar-dash + sugar-dash-final @6381a98df); R9-LITE create fired once = HTTP 202 clean; abandon checklist line appended; commit ef547e10e. Packagist indexing verification deferred to end-of-campaign batch pass.
 
+Entry status: `sugar-bits` → `sugar-widgets` ✅ **R1–R9 (batch-C R8/R9-LITE)** — lane c9 dcc9c4b4f + C-weld; R8 remote verified 2026-10-16 (rename pre-landed at lane R2 — topics step 422 at GitHub 20-topic cap, benign no-op; split master 55e87b44c + legacy/sugar-bits + sugar-bits-final @1d8d792d7); R9-LITE create fired once = HTTP 202 clean; abandon checklist line appended; commit 9d10bf27d. Packagist indexing verification deferred to end-of-campaign batch pass.
+
 ## Phase 6 — Batch D (media / rendering)
 
 Order: `honey-bounce`, `candy-palette`, `candy-kit`, `candy-flip`, `candy-mosaic`, `sugar-reel`, `candy-shine`. Notes:
