@@ -957,6 +957,8 @@ Order: `sugar-stash`, `candy-query`, `candy-serve`, `candy-shell`, `sugar-glow`,
 
 Entry status: `sugar-stash` → `candy-git` ✅ **R1–R9 complete** — tag-prep 6b9a854a5, R7 1d2860811 (131 files), remote-done aeaae7583, published 6abff90d4 (packagist create HTTP 202 clean; dev-master indexed at split SHA 9c8d1fdbe0f710b1c3ae0a95cac02613b6352c8b after forced update 23705a76; continuity refs/heads/master + refs/heads/legacy/sugar-stash + tag sugar-stash-final at 00a369998 live). Suite 326T/4638A exact baseline; consumers sugar-diff 70T/225A exact; tools/tests 426T/1484A; zero env reads / zero old-slug data paths — no LegacyEnv/LegacyPaths (honest none); R4.8 section move moot (already under Apps).
 
+
+Entry status: `candy-query` → `candy-sql` ✅ **R1–R9 complete** — tag-prep 2fbd67ea7, R7 094d92660 (580 files, +3008/−2967), remote-done 2f9c2f06e, published 215e7a08e (packagist create HTTP 202 clean; dev-master indexed at split SHA 8151fed8317dfb1eac136b8aa2bb005fb04a3b78 after forced update f6d851ef; continuity refs/heads/master 8151fed83 + refs/heads/legacy/candy-query + tag candy-query-final at 77a4a069b live — CI sync minted the legacy pair on this fast-forward sync too). Suite 1580T/11900A exact baseline; consumers: root composer only (zero libs require it); tools/tests 426T/1484A; residue 0; no LegacyEnv/LegacyPaths (honest none — zero env reads outside docs/old, no HOME/XDG persistence); composer description fixed to SQL-client wording per entry note; _candy-query completion refs renamed; ansi wordmark art recorded in followups. Foreign vhs-GIF commit 11ef95fd3 rebased under R7 — fresh GIF blobs verified carried into candy-sql/ intact.
 **Done when:** all 12 are `packagist-done`, CI and sync are green.
 
 ## Phase 5 — Batch C (components)
