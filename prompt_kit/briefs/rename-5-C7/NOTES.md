@@ -32,3 +32,23 @@
 - R5 wiring:
 - R6 gates:
 - R7 commit:
+
+## R6 gates (worktree, post-R5, all EXACT vs base-measured baselines)
+- residue `check-rename-residue --old=sugar-mcp`: 0 findings BEFORE staging. @rename-keep
+- sugar-mcp-client lib: 226T/899A OK (baseline 226/899 exact).
+- crush --filter Mcp: 1058T/5271A/1S(canary) exact; --filter Lsp: 287T/1206A exact;
+  --filter DocFigureProseDrift|DescriptorInheritance|ProcessReaper: 111T/8436A exact.
+- tools/tests: 426T/1484A (via sugar-crush/vendor/bin/phpunit — fresh worktree lacks
+  candy-core/vendor; equivalent binary, pinned figures hold).
+- check-path-repos --no-lib-path-repos rc=0; check-child-lifetimes 60 libs/28 sites/
+  8 findings/8 accounted/0 problems (renamed StdioMcpServer key rides tools/ rewrite);
+  gen-docs --check + gen-ansi --check rc=0.
+- R5 wiring: root composer update sugarcraft/sugar-mcp-client --no-install (lock M,
+  committed R7); refresh-deps linked sugar-mcp-client,sugar-crush; stale dangling
+  sugar-crush/vendor/sugarcraft/sugar-mcp symlink removed (escaping=1 -> 23/23 0). @rename-keep
+
+## R7
+- renames.json line 28 status pending -> renamed (lane-terminal; packagist R8/R9
+  owed by weld, NOT this lane). Commit `sugar-mcp-client: rename from sugar-mcp`. @rename-keep
+- push origin rename/c7 ONLY. Old-name pkg sugarcraft/sugar-mcp must NOT be @rename-keep
+  re-created; GitHub 301 sugarcraft/sugar-mcp -> sugar-mcp-client verified at R2. @rename-keep

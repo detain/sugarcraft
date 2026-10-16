@@ -1,5 +1,8 @@
 # Sugar MCP
 
+> Formerly published as `sugarcraft/sugar-mcp` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Mcp\` → `SugarCraft\McpClient\`. <!-- @rename-keep -->
+
 MCP (Model Context Protocol) client core for PHP: a JSON-RPC 2.0 envelope
 codec, a newline-delimited stdio transport with a fully bounded lifecycle,
 the initialize/tools protocol layer, and policy-free allow/deny routing.

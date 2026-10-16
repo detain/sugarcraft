@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9c4ccaeaa31c6a05ce073734e28972b8",
+    "content-hash": "092e4d2027b15755411eff0ab188bfd3",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -6409,7 +6409,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "d61ae27b6c2dc76104b5c10ce73497c09cc123f3"
+                "reference": "e06ecd688fa8aa2cb563bba31229c1dd5d02d463"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -6437,7 +6437,7 @@
                 "sugarcraft/candy-shine": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
-                "sugarcraft/sugar-mcp": "dev-master",
+                "sugarcraft/sugar-mcp-client": "dev-master",
                 "sugarcraft/sugar-reel": "@dev",
                 "sugarcraft/sugar-toast": "dev-master",
                 "sugarcraft/sugar-veil": "dev-master",
@@ -6830,12 +6830,12 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-mcp",
+            "name": "sugarcraft/sugar-mcp-client",
             "version": "dev-master",
             "dist": {
                 "type": "path",
-                "url": "sugar-mcp",
-                "reference": "4903cf5e96db184d565e85af68a877eada48264a"
+                "url": "sugar-mcp-client",
+                "reference": "f97820e05d7619a221da8fb08e37e35d3bd3856d"
             },
             "require": {
                 "php": "^8.3",
@@ -6847,12 +6847,12 @@
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "SugarCraft\\Mcp\\": "src/"
+                    "SugarCraft\\McpClient\\": "src/"
                 }
             },
             "autoload-dev": {
                 "psr-4": {
-                    "SugarCraft\\Mcp\\Tests\\": "tests/"
+                    "SugarCraft\\McpClient\\Tests\\": "tests/"
                 }
             },
             "license": [
@@ -6866,7 +6866,7 @@
                 }
             ],
             "description": "MCP client core — JSON-RPC 2.0 codec, newline-delimited stdio transport and initialize/tools protocol layer. Extracted from sugar-crush.",
-            "homepage": "https://github.com/sugarcraft/sugar-mcp",
+            "homepage": "https://github.com/sugarcraft/sugar-mcp-client",
             "keywords": [
                 "json-rpc",
                 "jsonrpc",
@@ -6877,9 +6877,9 @@
                 "transport"
             ],
             "support": {
-                "issues": "https://github.com/sugarcraft/sugar-mcp/issues",
-                "source": "https://github.com/sugarcraft/sugar-mcp",
-                "docs": "https://github.com/sugarcraft/sugar-mcp/blob/master/README.md"
+                "issues": "https://github.com/sugarcraft/sugar-mcp-client/issues",
+                "source": "https://github.com/sugarcraft/sugar-mcp-client",
+                "docs": "https://github.com/sugarcraft/sugar-mcp-client/blob/master/README.md"
             },
             "transport-options": {
                 "symlink": true,
@@ -8633,7 +8633,7 @@
         "sugarcraft/sugar-datepicker": 20,
         "sugarcraft/sugar-diff": 20,
         "sugarcraft/sugar-gallery": 20,
-        "sugarcraft/sugar-mcp": 20,
+        "sugarcraft/sugar-mcp-client": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-stickers": 20,
