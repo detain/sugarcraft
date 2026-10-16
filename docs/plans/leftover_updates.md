@@ -504,7 +504,7 @@ gaps the audit surfaced.
 ## Out of scope for this file
 
 - **Library research-doc gaps** (single-source-of-truth violations *outside*
-  the PTY surface, missing features in non-PTY libs, sugar-dash dashboards).
+  the PTY surface, missing features in non-PTY libs, sugar-dashboard dashboards).
   See `plans/leftover_updates_later.md`.
 - **New PTY features beyond the deferred list.** If a user requests
   `forkpty(3)`-style anonymous spawn (no `proc_open` shim), open a new

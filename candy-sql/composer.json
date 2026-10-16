@@ -39,7 +39,7 @@
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/sugar-bits": "dev-master",
         "sugarcraft/sugar-charts": "dev-master",
-        "sugarcraft/sugar-dash": "dev-master",
+        "sugarcraft/sugar-dashboard": "dev-master",
         "sugarcraft/sugar-table": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
         "react/mysql": "0.7.x-dev",

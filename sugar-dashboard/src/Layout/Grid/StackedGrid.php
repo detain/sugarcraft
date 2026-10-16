@@ -1,0 +1,344 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Dashboard\Layout\Grid;
+
+use SugarCraft\Dashboard\Foundation\Drawable;
+use SugarCraft\Dashboard\Foundation\Theme;
+use SugarCraft\Dashboard\Layout\Breakpoint;
+use SugarCraft\Dashboard\State\Persistence;
+use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Sprinkles\Position;
+
+/**
+ * Multi-column stacked grid layout.
+ *
+ * Items are placed into columns (0-based index). Items within the same
+ * column are stacked vertically and share the column width. Items in
+ * different columns are placed side-by-side with equal column widths
+ * (unless FitScreen is disabled).
+ *
+ * Supports nested grids (a StackedGrid can be added as an item) and any
+ * type implementing Sizer for explicit dimension propagation.
+ *
+ * @implements \SugarCraft\Dashboard\Foundation\Sizer
+ */
+final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
+{
+    /** @var ItemWithOptions[] */
+    private array $items = [];
+
+    private int $width = 0;
+    private int $height = 0;
+
+    public function __construct(
+        private readonly Options $options = new Options(),
+    ) {}
+
+    /**
+     * Add an item to the grid with the given placement options.
+     */
+    public function addItem(\SugarCraft\Dashboard\Foundation\Item $item, ItemOptions $options = new ItemOptions()): void
+    {
+        $this->items[] = new ItemWithOptions($item, $options);
+    }
+
+    /**
+     * Propagate terminal dimensions to the grid.
+     */
+    public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+    {
+        $this->width = $width;
+        $this->height = $height;
+        return $this;
+    }
+
+    /**
+     * Render the entire grid.
+     *
+     * Returns "Loading..." until setSize has been called with non-zero
+     * dimensions.
+     *
+     * When the terminal is narrower than the breakpoint threshold (90 cells
+     * by default), multi-column layouts are collapsed into a single column
+     * so content remains readable on small terminals.
+     */
+    public function render(): string
+    {
+        if ($this->width === 0 || $this->height === 0) {
+            return 'Loading...';
+        }
+
+        $columns = $this->groupByColumn();
+        $colCount = count($columns);
+
+        if ($colCount === 0) {
+            return '';
+        }
+
+        // Collapse to single column when narrow — all items stacked vertically.
+        if (Breakpoint::narrow($this->width)) {
+            $flattened = [];
+            foreach ($columns as $colItems) {
+                foreach ($colItems as $itemWithOpts) {
+                    $flattened[] = $itemWithOpts;
+                }
+            }
+            return $this->renderColumn($flattened, $this->width);
+        }
+
+        if ($colCount === 1) {
+            return $this->renderColumn($columns[0], $this->width);
+        }
+
+        $colWidth = $this->options->fitScreen
+            ? (int) floor($this->width / $colCount)
+            : $this->width;
+
+        $renderedColumns = [];
+        foreach ($columns as $colItems) {
+            $renderedColumns[] = $this->renderColumn($colItems, $colWidth);
+        }
+
+        return Layout::joinHorizontal(Position::TOP, ...$renderedColumns);
+    }
+
+    /**
+     * Group items by their column index.
+     *
+     * @return array<int, ItemWithOptions[]>
+     */
+    private function groupByColumn(): array
+    {
+        $columns = [];
+        foreach ($this->items as $itemWithOpts) {
+            $col = $itemWithOpts->options->column;
+            if (!isset($columns[$col])) {
+                $columns[$col] = [];
+            }
+            $columns[$col][] = $itemWithOpts;
+        }
+
+        if ($columns === []) {
+            return [];
+        }
+
+        ksort($columns);
+        return array_values($columns);
+    }
+
+    /**
+     * Render a single column (a stack of items sharing one width).
+     */
+    private function renderColumn(array $items, int $colWidth): string
+    {
+        if ($items === []) {
+            return str_repeat("\n", $this->height > 0 ? $this->height : 0);
+        }
+
+        // Partition into expanding and non-expanding
+        $expanding = [];
+        $fixed = [];
+        foreach ($items as $itemWithOpts) {
+            if ($itemWithOpts->options->expandVertical) {
+                $expanding[] = $itemWithOpts;
+            } else {
+                $fixed[] = $itemWithOpts;
+            }
+        }
+
+        // Calculate height for non-expanding items
+        $fixedHeight = 0;
+        foreach ($fixed as $itemWithOpts) {
+            $fixedHeight += $this->getItemNaturalHeight($itemWithOpts->item);
+        }
+
+        // Remaining space goes to expanding items
+        $remainingHeight = max(0, $this->height - $fixedHeight);
+        $expandingCount = count($expanding);
+        $heightPerExpanding = $expandingCount > 0
+            ? (int) floor($remainingHeight / $expandingCount)
+            : 0;
+        $remainder = $expandingCount > 0
+            ? $remainingHeight - ($heightPerExpanding * $expandingCount)
+            : 0;
+
+        $renderedItems = [];
+        foreach ($items as $i => $itemWithOpts) {
+            $item = $itemWithOpts->item;
+            $itemHeight = $itemHeight = $item instanceof self
+                ? $this->getItemNaturalHeight($item)
+                : $this->getItemNaturalHeight($item);
+
+            if ($itemWithOpts->options->expandVertical) {
+                $itemHeight = $heightPerExpanding;
+                if ($i === count($items) - 1) {
+                    $itemHeight += $remainder;
+                }
+            }
+
+            $rendered = $this->renderItem($item, $colWidth, $itemHeight);
+            $renderedItems[] = $rendered;
+        }
+
+        return implode("\n", $renderedItems);
+    }
+
+    /**
+     * Render a single item within a column at the allocated width/height.
+     */
+    private function renderItem(\SugarCraft\Dashboard\Foundation\Item $item, int $width, int $height): string
+    {
+        // Nested grid
+        if ($item instanceof self) {
+            $item->setSize($width, $height);
+            return $item->render();
+        }
+
+        // Sizer (e.g. Frame) — setSize returns a NEW sized clone for immutable
+        // items, so we MUST use the return value.
+        if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
+            return $item->setSize($width, $height)->render();
+        }
+
+        // Plain item — wrap with style
+        $rendered = $item->render();
+        $lines = explode("\n", $rendered);
+
+        // Trim or pad each line to $width
+        $styledLines = [];
+        foreach ($lines as $line) {
+            $lineWidth = \SugarCraft\Core\Util\Width::string($line);
+            if ($lineWidth > $width) {
+                // Truncate with ellipsis
+                $line = self::truncateToWidth($line, $width);
+                $lineWidth = $width;
+            }
+            if ($lineWidth < $width) {
+                $line = $line . str_repeat(' ', $width - $lineWidth);
+            }
+            $styledLines[] = $line;
+        }
+
+        // Pad to $height with blank lines
+        $styledCount = count($styledLines);
+        while ($styledCount < $height) {
+            $styledLines[] = str_repeat(' ', $width);
+            $styledCount++;
+        }
+
+        return implode("\n", $styledLines);
+    }
+
+    /**
+     * Compute the natural rendered height of an item (number of lines).
+     */
+    private function getItemNaturalHeight(\SugarCraft\Dashboard\Foundation\Item $item): int
+    {
+        if ($item instanceof self) {
+            // For nested grids, use current height or default to 1
+            return $this->height > 0 ? $this->height : 1;
+        }
+        if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
+            return 1; // Sizer will receive explicit size from renderItem
+        }
+        $lines = substr_count($item->render(), "\n") + 1;
+        return max(1, $lines);
+    }
+
+    /**
+     * Truncate a string to fit within $width cell columns, preferring
+     * to preserve the end of the string (filename pattern) when
+     * truncation is needed.
+     */
+    private static function truncateToWidth(string $s, int $width): string
+    {
+        if ($width <= 0) {
+            return '';
+        }
+        if ($width === 1) {
+            return mb_substr($s, 0, 1, 'UTF-8');
+        }
+        // Try keeping full string first
+        if (\SugarCraft\Core\Util\Width::string($s) <= $width) {
+            return $s;
+        }
+        // Binary search for the longest prefix that fits
+        $lo = 0;
+        $hi = mb_strlen($s, 'UTF-8');
+        while ($lo < $hi) {
+            $mid = (int) (($lo + $hi + 1) / 2);
+            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
+            if (\SugarCraft\Core\Util\Width::string($candidate) <= $width) {
+                $lo = $mid;
+            } else {
+                $hi = $mid - 1;
+            }
+        }
+        $result = mb_substr($s, 0, $lo, 'UTF-8');
+        // Ensure we show at least something
+        if ($result === '') {
+            return mb_substr($s, 0, 1, 'UTF-8');
+        }
+        return $result;
+    }
+
+    // ─── Persistence ─────────────────────────────────────────────
+
+    /**
+     * Persist stacked grid state to disk.
+     *
+     * Note: Item content is not directly serializable. Callers should
+     * persist collapsed panel identifiers through this hook; items must
+     * be re-built by the application on restore.
+     *
+     * @param list<string> $collapsedAddresses Addresses of collapsed panels.
+     */
+    public function persistState(Persistence $persistence, string $path, array $collapsedAddresses = []): void
+    {
+        $persistence->save($path, [
+            'collapsedAddresses' => $collapsedAddresses,
+        ]);
+    }
+
+    /**
+     * Restore stacked grid state from disk.
+     *
+     * @return list<string> Addresses that were collapsed.
+     */
+    public function restoreState(Persistence $persistence, string $path): array
+    {
+        $data = $persistence->load($path);
+        if ($data === null) {
+            return [];
+        }
+
+        return $data['collapsedAddresses'] ?? [];
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $itemWithOpts) {
+            $item = $itemWithOpts->item;
+            if ($item instanceof Drawable) {
+                $themedItems[] = new ItemWithOptions(
+                    $item->withTheme($theme),
+                    $itemWithOpts->options
+                );
+            } else {
+                $themedItems[] = $itemWithOpts;
+            }
+        }
+
+        $clone = new self($this->options);
+        $clone->items = $themedItems;
+        $clone->width = $this->width;
+        $clone->height = $this->height;
+        return $clone;
+    }
+}

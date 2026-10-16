@@ -9,7 +9,7 @@
 - **PHP syntax**: ✅ Sampled 20 `src/*.php` files — all pass `php -l`. Also verified `PosixBackend.php`, `PosixPump.php`, `RealProcess.php`, `Process.php` individually.
 - **Step 07 preconditions**: ⚠️ P3-LO-01 and CC-LO-08 are NOT YET in the done log — step 01.07 is the next logical step (matching `step-07-realprocess-deletion.md`). Pre-step grep was run during this health check; `RealProcess` has **active callers** in `candy-scriptui/src/Command/SpinCommand.php:71` and `candy-scriptui/tests/Process/RealProcessTest.php` — deletion is NOT safe. The step file's own logic handles this correctly (keep as deprecated alias if callers exist). No blocker — the step can proceed on its defined path.
 - **leftover_updates.md**: ✅ Reviewed. No urgent items missed. Sequencing in that file (P5-LO-01 first, CC-LO-02 second, step 07 fifth) is consistent with current done-log state.
-- **Symlinks**: ✅ All `composer.json` files in consumer libs resolve to real files — no broken symlinks. Verified `candy-pty`, `candy-scriptui`, `sugar-bits`, `sugar-charts`, `sugar-dash`, `candy-sprinkles`, `candy-vt`.
+- **Symlinks**: ✅ All `composer.json` files in consumer libs resolve to real files — no broken symlinks. Verified `candy-pty`, `candy-scriptui`, `sugar-bits`, `sugar-charts`, `sugar-dash`, `candy-sprinkles`, `candy-vt`. <!-- @rename-keep -->
 - **candy-scriptui dep on candy-pty**: ✅ Already satisfied — `candy-scriptui/composer.json` already has `sugarcraft/candy-pty: dev-master` in `require`.
 
 ---
@@ -34,17 +34,17 @@ this before spawning the next subagent.)
 
 - **step 01.12** (SignalForwarder tests): ~~RESOLVED via PR#513~~ — NOT a PHP architectural limitation. Two real, narrow candy-pty bugs: (1) `posix_openpt` master fd lacked `FD_CLOEXEC` so the forked child inherited it, keeping the kernel master-side refcount > 0 across parent close; (2) `PosixMasterPty::close()` returned early after `fclose($stream)`, but `fopen('php://fd/N')` dup()s the fd so the original `posix_openpt` fd stayed open. Both required — with only one fix, child still survives 2 s+. With both: `sleep 30` exits ~20 ms after master close. Fixes + the three integration tests (SignalForwarderReactLoop, SIGHUPForwarding, NoControllingTerminal) landed together.
 
-- ~~**step 03.05** (sugar-dash canonical primitives): **BLOCKED**~~ — **PARTIALLY RESOLVED (2026-05-18)**: Color class replaced with `class_alias` shim → Core\Util\Color (true duplicate). Five non-duplicates (Style/Theme/Rect/Buffer/Cell) retained with clarifying docblocks + CALIBER_LEARNINGS entries. **Remaining narrow blocker**: `StyleParser` was declared a "true duplicate" in the revised step scope but is NOT drop-in compatible with `\SugarCraft\Sprinkles\StyleParser` — the Sprinkles version returns `list<\SugarCraft\Sprinkles\Cell>` with `\SugarCraft\Sprinkles\Style` (private `$fg`/`$bg`), while sugar-dash tests access `$cell->style->foreground->r` (requires public `readonly ?Color $foreground` on the Dash Style class). Replacing the parser would require rewriting all StyleParserTest assertions to use the Sprinkles Style API — out of scope per step instructions. StyleParser kept as sugar-dash SSOT. **ACTION NEEDED**: If future work wants to eliminate the sugar-dash StyleParser duplication, the test suite for StyleParserTest.php must be rewritten to use Sprinkles\Style API, then StyleParser.php can be deleted.
+- ~~**step 03.05** (sugar-dash canonical primitives): **BLOCKED**~~ — **PARTIALLY RESOLVED (2026-05-18)**: Color class replaced with `class_alias` shim → Core\Util\Color (true duplicate). Five non-duplicates (Style/Theme/Rect/Buffer/Cell) retained with clarifying docblocks + CALIBER_LEARNINGS entries. **Remaining narrow blocker**: `StyleParser` was declared a "true duplicate" in the revised step scope but is NOT drop-in compatible with `\SugarCraft\Sprinkles\StyleParser` — the Sprinkles version returns `list<\SugarCraft\Sprinkles\Cell>` with `\SugarCraft\Sprinkles\Style` (private `$fg`/`$bg`), while sugar-dash tests access `$cell->style->foreground->r` (requires public `readonly ?Color $foreground` on the Dash Style class). Replacing the parser would require rewriting all StyleParserTest assertions to use the Sprinkles Style API — out of scope per step instructions. StyleParser kept as sugar-dash SSOT. **ACTION NEEDED**: If future work wants to eliminate the sugar-dash StyleParser duplication, the test suite for StyleParserTest.php must be rewritten to use Sprinkles\Style API, then StyleParser.php can be deleted. <!-- @rename-keep -->
 
-- **step 03.13** (sugar-dash depends on sugar-charts, kill chart duplication): **BLOCKER — INCORRECT PREMISE**. After thorough code inspection, NONE of the files listed for deletion (Bar.php, Heatmap.php/HeatMapChart.php, OHLC.php, Sparkline.php, Chart.php) are direct duplicates of their sugar-charts counterparts — they are distinct implementations with different rendering approaches and APIs:
-  - `Bar.php` in sugar-dash = horizontal UI status bar (content display); sugar-charts Bar = data point for bar charts — **completely different purpose**
-  - `Heatmap.php` in sugar-dash = renders directly to ANSI strings; sugar-charts Heatmap = Canvas-based — **different rendering approach**
-  - `OHLC.php` in sugar-dash = terminal UI component; sugar-charts OHLCChart = Canvas-based — **completely different architecture**
-  - `Sparkline.php` in sugar-dash = RingBuffer for O(1) push, dim-edge padding, no Style dependency; sugar-charts Sparkline = Style-based rendering, min/max, autoMaxValue — **different API and internals**
-  - `Chart.php` in sugar-dash = concrete self-contained bar/line chart (ANSI-rendered); sugar-charts Chart = abstract base class with legend/title/label composition — **completely different class hierarchy**
-  - `LineChart.php` does not exist in sugar-dash/src/Plot/Chart/
+- **step 03.13** (sugar-dash depends on sugar-charts, kill chart duplication): **BLOCKER — INCORRECT PREMISE**. After thorough code inspection, NONE of the files listed for deletion (Bar.php, Heatmap.php/HeatMapChart.php, OHLC.php, Sparkline.php, Chart.php) are direct duplicates of their sugar-charts counterparts — they are distinct implementations with different rendering approaches and APIs: <!-- @rename-keep -->
+  - `Bar.php` in sugar-dash = horizontal UI status bar (content display); sugar-charts Bar = data point for bar charts — **completely different purpose** <!-- @rename-keep -->
+  - `Heatmap.php` in sugar-dash = renders directly to ANSI strings; sugar-charts Heatmap = Canvas-based — **different rendering approach** <!-- @rename-keep -->
+  - `OHLC.php` in sugar-dash = terminal UI component; sugar-charts OHLCChart = Canvas-based — **completely different architecture** <!-- @rename-keep -->
+  - `Sparkline.php` in sugar-dash = RingBuffer for O(1) push, dim-edge padding, no Style dependency; sugar-charts Sparkline = Style-based rendering, min/max, autoMaxValue — **different API and internals** <!-- @rename-keep -->
+  - `Chart.php` in sugar-dash = concrete self-contained bar/line chart (ANSI-rendered); sugar-charts Chart = abstract base class with legend/title/label composition — **completely different class hierarchy** <!-- @rename-keep -->
+  - `LineChart.php` does not exist in sugar-dash/src/Plot/Chart/ <!-- @rename-keep -->
 
-  This is NOT a chart duplication problem. Per CALIBER_LEARNINGS entry 38 [pattern:dual-foundation-ssot]: "The 5 retained types are intentionally distinct from same-named canonical types in candy-sprinkles/candy-core/candy-vt due to different upstream lineage." The same applies here. **The step should be closed as "not actionable"** — there is nothing to delete and no dependency to add. sugar-dash chart components serve dashboard-specific visualization needs; sugar-charts serves canonical chart primitives. The boundary is already correct.   Supervisor decision needed: should this step be dropped from the rollout, or should I attempt a different interpretation (e.g., adding sugar-charts as a dep even without deleting anything)?
+  This is NOT a chart duplication problem. Per CALIBER_LEARNINGS entry 38 [pattern:dual-foundation-ssot]: "The 5 retained types are intentionally distinct from same-named canonical types in candy-sprinkles/candy-core/candy-vt due to different upstream lineage." The same applies here. **The step should be closed as "not actionable"** — there is nothing to delete and no dependency to add. sugar-dash chart components serve dashboard-specific visualization needs; sugar-charts serves canonical chart primitives. The boundary is already correct.   Supervisor decision needed: should this step be dropped from the rollout, or should I attempt a different interpretation (e.g., adding sugar-charts as a dep even without deleting anything)? <!-- @rename-keep -->
 
 - **step 07.15** (candy-mosaic animation support): ~~BLOCKED~~ **RESOLVED via PR#660 (step 11.04)** — strategic plan `plans/candy-flip-mosaic-split.md` shipped 2026-05-19. Decision: Animation lives in `candy-mosaic`; `Animation` ctor takes `list<ImageSource>` + per-frame delays (frame-source-agnostic); candy-mosaic does **not** require candy-flip — drop the `"sugarcraft/candy-flip": "@dev"` bullet from step 07.15's Modify list. Future GIF→Mosaic bridge (if any) lives in candy-flip, not in mosaic. See plan §3 for the answer table, §4 for API contract.
 
@@ -93,7 +93,7 @@ step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
 review for step 01.05 · clean · PR#498
 step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
 candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue)
-path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02)
+path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02) <!-- @rename-keep -->
 step 01.07 · PR#502 · candy-scriptui: RealProcess kept as deprecated alias; Process interface aligned with candy-pty/Contract
 review for step 01.07 · clean · PR#502
 docs for step 01.07 · clean · PR#502
@@ -123,76 +123,76 @@ step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rol
 review for step 01.14 · clean · PR#517
 step 02.01 · PR#519 · candy-sprinkles: Theme class (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized* + with* + adaptive)
 docs for step 02.01 · PR#520 · document Theme in README/end-user docs/PHPDoc/CALIBER_LEARNINGS.md
-step 02.02 · PR#521 · candy-sprinkles: StyleParser SSOT port from sugar-dash (inline [text](fg:red) syntax)
+step 02.02 · PR#521 · candy-sprinkles: StyleParser SSOT port from sugar-dash (inline [text](fg:red) syntax) <!-- @rename-keep -->
 review for step 02.02 · clean · PR#521
 docs for step 02.02 · clean
 step 02.03 · PR#522 · candy-palette: Probe class (colorProfile/isNoColor/isForceColor/reducedMotion) + ColorProfile enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor)
 review for step 02.03 · clean · PR#522
 docs for step 02.03 · PR#523 · document Probe + ColorProfile in README + add CALIBER_LEARNINGS.md
-step 02.04 · PR#524 · sugar-dash: Module aligned with Core Model (update returns [Module,?Cmd]) + LegacyModuleAdapter for compat
+step 02.04 · PR#524 · sugar-dash: Module aligned with Core Model (update returns [Module,?Cmd]) + LegacyModuleAdapter for compat <!-- @rename-keep -->
 docs for step 02.04 · clean · PR#525
-step 03.01 · PR#526 · sugar-dash: Grid reorg part 1 — move Foundation primitives + Layout enums from Grid/ (Options, ItemOptions, ItemWithOptions, StackedGrid, JustifyContent, AlignItems to Layout/; delete duplicate Grid/Buffer; update 91 example imports)
+step 03.01 · PR#526 · sugar-dash: Grid reorg part 1 — move Foundation primitives + Layout enums from Grid/ (Options, ItemOptions, ItemWithOptions, StackedGrid, JustifyContent, AlignItems to Layout/; delete duplicate Grid/Buffer; update 91 example imports) <!-- @rename-keep -->
 review for step 03.01 · clean · PR#526
 docs for step 03.01 · clean · PR#527
-step 03.02 · PR#528 · sugar-dash: Grid reorg part 2 — delete Grid chart duplicates (keep Plot/), move Features/Transformer to Card, delete Graph (canonical is Plot/Graph/), backward-compat re-exports for ChartDataPoint/WaterfallItem/WaterfallBarType; Grid Sparkline/SparkArea retained due to Plot API incompatibility
+step 03.02 · PR#528 · sugar-dash: Grid reorg part 2 — delete Grid chart duplicates (keep Plot/), move Features/Transformer to Card, delete Graph (canonical is Plot/Graph/), backward-compat re-exports for ChartDataPoint/WaterfallItem/WaterfallBarType; Grid Sparkline/SparkArea retained due to Plot API incompatibility <!-- @rename-keep -->
 review for step 03.02 · clean · PR#528
 docs for step 03.02 · clean
-step 03.03 · PR#529 · sugar-dash: Grid reorg part 3 — events/Keys/State/Foundation moves + delete empty Grid/ dir (Event/Focus/Key* to Events/Keys/State; EdgeStyle/Segment to Foundation; Progress/ProgressRing to Plot/Chart; BC stubs for all moved files; chart duplicates deleted)
+step 03.03 · PR#529 · sugar-dash: Grid reorg part 3 — events/Keys/State/Foundation moves + delete empty Grid/ dir (Event/Focus/Key* to Events/Keys/State; EdgeStyle/Segment to Foundation; Progress/ProgressRing to Plot/Chart; BC stubs for all moved files; chart duplicates deleted) <!-- @rename-keep -->
 fix for step 03.03 · PR#530 · resolved 2 findings (Key files wrong dir + Grid/ 44 files) + PHP 8.4 type alias compat fix
 fix for step 03.03 · clean · PR#530
 docs for step 03.03 · clean · PR#531
-step 03.04 · PR#532 · sugar-dash: fix ExternalModule proc_get_status pipes bug + migrate to PosixProcess + integration test
+step 03.04 · PR#532 · sugar-dash: fix ExternalModule proc_get_status pipes bug + migrate to PosixProcess + integration test <!-- @rename-keep -->
 review for step 03.04 · clean · PR#532
 tests-ci for step 03.04 · clean
 docs for step 03.04 · clean
-step 03.05 · PR#533 · sugar-dash: Color.php replaced with class_alias shim → Core\Util\Color; Style/Theme/Rect/Buffer/Cell docblocks added (dual-SSOT clarified); StyleParser kept (not drop-in compatible — see Blockers); 6 CALIBER_LEARNINGS entries
+step 03.05 · PR#533 · sugar-dash: Color.php replaced with class_alias shim → Core\Util\Color; Style/Theme/Rect/Buffer/Cell docblocks added (dual-SSOT clarified); StyleParser kept (not drop-in compatible — see Blockers); 6 CALIBER_LEARNINGS entries <!-- @rename-keep -->
 fix for step 03.05 · PR#534 · resolved 3 findings (StyleParser docblock + dead $clone in withPrimary + explicit nullable in setString); Finding 2 closed as false-positive (candy-sprinkles IS actively used in 15+ src/test files)
 tests-ci for step 03.05 · clean
-docs for step 03.05 · PR#535 · sugar-dash README + docs/dev/sugar-dash.md: dual-SSOT primitives section documenting Foundation\Style/Theme/Rect/Buffer/Cell/StyleParser distinctions vs canonical siblings; Color flagged as class_alias
-step 03.06 · PR#536 · sugar-dash: built-in modules rewritten to Core\Model contract (immutable state, Cmd::tick for periodic refresh; Clock/System/Uptime/Generic all return [Module, ?Cmd]; Greeting static)
-docs for step 03.06 · PR#537 · fix broken code example in sugar-dash dev guide (non-existent Core\Msg\TickMsg import + Msg::tick() call replaced with Clock\TickMsg + anonymous Msg)
+docs for step 03.05 · PR#535 · sugar-dash README + docs/dev/sugar-dash.md: dual-SSOT primitives section documenting Foundation\Style/Theme/Rect/Buffer/Cell/StyleParser distinctions vs canonical siblings; Color flagged as class_alias <!-- @rename-keep -->
+step 03.06 · PR#536 · sugar-dash: built-in modules rewritten to Core\Model contract (immutable state, Cmd::tick for periodic refresh; Clock/System/Uptime/Generic all return [Module, ?Cmd]; Greeting static) <!-- @rename-keep -->
+docs for step 03.06 · PR#537 · fix broken code example in sugar-dash dev guide (non-existent Core\Msg\TickMsg import + Msg::tick() call replaced with Clock\TickMsg + anonymous Msg) <!-- @rename-keep -->
 review for step 03.06 · clean · PR#536
-step 03.07 · PR#538 · sugar-dash: dashboard-live.php interactive demo + VHS tape + README update
-fix for step 03.07 · PR#539 · resolved 1 finding (dashboard-live already covered by sugar-dash in all=(...) matrix at line 83; VHS matrix is lib-level, not demo-level; acceptance criterion #4 satisfied)
-docs for step 03.07 · PR#540 · document dashboard-live architecture in docs/dev/sugar-dash.md (Boxer+FocusManager+DashboardModel pattern, per-panel tick routing, keyboard handling)
- step 03.08 · PR#541 · sugar-dash: WeatherModule with wttr.in fetch + 30min cache + fallback + 15 tests (leftover-rollout step 03.08)
+step 03.07 · PR#538 · sugar-dash: dashboard-live.php interactive demo + VHS tape + README update <!-- @rename-keep -->
+fix for step 03.07 · PR#539 · resolved 1 finding (dashboard-live already covered by sugar-dash in all=(...) matrix at line 83; VHS matrix is lib-level, not demo-level; acceptance criterion #4 satisfied) <!-- @rename-keep -->
+docs for step 03.07 · PR#540 · document dashboard-live architecture in docs/dev/sugar-dash.md (Boxer+FocusManager+DashboardModel pattern, per-panel tick routing, keyboard handling) <!-- @rename-keep -->
+ step 03.08 · PR#541 · sugar-dash: WeatherModule with wttr.in fetch + 30min cache + fallback + 15 tests (leftover-rollout step 03.08) <!-- @rename-keep -->
 review for step 03.08 · clean · PR#541
- step 03.10 · PR#545 · sugar-dash: Breakpoint helper (narrow/medium/wide/pick) + StackedGrid collapse-to-single-column at width < 90; COLUMNS env var in dashboard-live
+ step 03.10 · PR#545 · sugar-dash: Breakpoint helper (narrow/medium/wide/pick) + StackedGrid collapse-to-single-column at width < 90; COLUMNS env var in dashboard-live <!-- @rename-keep -->
  review for step 03.10 · clean · PR#545
   tests-ci for step 03.10 · clean
-  docs for step 03.10 · PR#546 · sugar-dash: document Breakpoint in README + dev docs (narrow/medium/wide/pick, thresholds 90/140, StackedGrid collapse)
-  step 03.11 · PR#555 · sugar-dash: Plot::draw(Buffer) writes cells directly — BrailleCanvas::cells() generator + rewrite draw() to write Cell objects via $buffer->grid mutation (matching Buffer::draw() pattern); Buffer::$grid made public; 7 new tests in PlotDrawIntoBufferTest.php; 5136 tests green
+  docs for step 03.10 · PR#546 · sugar-dash: document Breakpoint in README + dev docs (narrow/medium/wide/pick, thresholds 90/140, StackedGrid collapse) <!-- @rename-keep -->
+  step 03.11 · PR#555 · sugar-dash: Plot::draw(Buffer) writes cells directly — BrailleCanvas::cells() generator + rewrite draw() to write Cell objects via $buffer->grid mutation (matching Buffer::draw() pattern); Buffer::$grid made public; 7 new tests in PlotDrawIntoBufferTest.php; 5136 tests green <!-- @rename-keep -->
   review for step 03.11 · clean · PR#555
   tests-ci for step 03.11 · clean
   docs for step 03.11 · clean
-  step 03.12 · PR#556 · sugar-dash: split State/State.php — TransitionType/StateNode/StateTransition/StateMachine to Components/Tree/ (PSR-4 one-class-per-file); add State/Persistence.php (atomic tmp+rename); BC class_alias re-exports; persistState/restoreState wired into FocusManager/Boxer/StackedGrid; 5141 tests green
+  step 03.12 · PR#556 · sugar-dash: split State/State.php — TransitionType/StateNode/StateTransition/StateMachine to Components/Tree/ (PSR-4 one-class-per-file); add State/Persistence.php (atomic tmp+rename); BC class_alias re-exports; persistState/restoreState wired into FocusManager/Boxer/StackedGrid; 5141 tests green <!-- @rename-keep -->
   review for step 03.12 · clean · PR#556
   tests-ci for step 03.12 · clean
   docs for step 03.12 · clean · PR#557
-  step 03.14 · PR#558 · sugar-dash: fix TD-1 CandlestickChart readonly withers (clone-mutate → new self()); regression test; TD-2..TD-8 already fixed in prior sessions
+  step 03.14 · PR#558 · sugar-dash: fix TD-1 CandlestickChart readonly withers (clone-mutate → new self()); regression test; TD-2..TD-8 already fixed in prior sessions <!-- @rename-keep -->
   review for step 03.14 · clean · PR#558
   tests-ci for step 03.14 · clean
   docs for step 03.14 · clean
-  step 03.15 · PR#559 · sugar-dash: generate-goldens.php + GoldenSnapshotTest.php + 244 golden snapshots at 80x24 and 120x40 (leftover-rollout step 03.15)
+  step 03.15 · PR#559 · sugar-dash: generate-goldens.php + GoldenSnapshotTest.php + 244 golden snapshots at 80x24 and 120x40 (leftover-rollout step 03.15) <!-- @rename-keep -->
   review for step 03.15 · clean · PR#559
   tests-ci for step 03.15 · clean
   docs for step 03.15 · clean
-  step 03.16 · PR#560 · sugar-dash: create plot-braille/gridtable-demo/boxer examples + update golden snapshots + README GIF demos table (leftover-rollout step 03.16)
+  step 03.16 · PR#560 · sugar-dash: create plot-braille/gridtable-demo/boxer examples + update golden snapshots + README GIF demos table (leftover-rollout step 03.16) <!-- @rename-keep -->
   review for step 03.16 · clean · PR#560
   tests-ci for step 03.16 · clean
   docs for step 03.16 · clean
-  step 03.17 · PR#561 · sugar-dash: Drawable::withTheme + layout containers fan theme to children + Badge/Card/NProgress opt-in + dashboard-live Ctrl-T toggle (leftover-rollout step 03.17)
+  step 03.17 · PR#561 · sugar-dash: Drawable::withTheme + layout containers fan theme to children + Badge/Card/NProgress opt-in + dashboard-live Ctrl-T toggle (leftover-rollout step 03.17) <!-- @rename-keep -->
   review for step 03.17 · clean · PR#561
   fix for step 03.17 · PR#562 · resolved 3 findings (5 containers +Theme, test naming acceptable, remaining hex→theme carry-forward)
   tests-ci for step 03.17 · clean
   docs for step 03.17 · clean
-  step 03.18 · PR#563 · sugar-dash: delete 7 one-shot migration scripts + rename dashboard-interactive.php → dashboard-accordion-timeline.php (leftover-rollout step 03.18)
+  step 03.18 · PR#563 · sugar-dash: delete 7 one-shot migration scripts + rename dashboard-interactive.php → dashboard-accordion-timeline.php (leftover-rollout step 03.18) <!-- @rename-keep -->
   review for step 03.18 · clean · PR#563
   tests-ci for step 03.18 · clean
   docs for step 03.18 · clean
   carry-forward: step 03.17 Issue #1: 760+ hardcoded Color::hex() calls remain in Components/ (Modal/Notification, Alert, Toast, Card/*, Tree/*, Media/*, Feedback/*, Gauge, Bullet, etc.) — bulk hex→theme conversion needed as follow-up
   carry-forward: step 03.17 Issue #3 (minor): DrawableThemeTest.php naming (vs step-spec RenderUsesThemeTest.php per family) — acceptable as test covers same ground; no action needed
-  carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix
+  carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix <!-- @rename-keep -->
   step 04.01 · PR#564 · sugar-panels: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
   docs for step 04.01 · PR#565 · sugar-panels: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-panels.html quickstart + API table
   step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
@@ -331,7 +331,7 @@ review for step 11.03 · clean · PR#658
 tests-ci for step 11.03 · clean
 docs for step 11.03 · clean
 step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo (Option C — neither lib depends on the other; Animation lives in candy-mosaic with ImageSource[] ctor; resolves step 07.15 blocker — drop the candy-flip require from 07.15's Modify list)
-fix for step 11.04 · PR#662 · resolved 5 findings (§1.2 totals 21/3236→22/3426; MosaicBuilder row merged into Mosaic.php note; §6.1+§6.4 phantom sugar-dash/sugar-charts consumers reframed to "no current consumers"; §4.1 withFrame() body filled in with clone-mutate pattern + sketch pointer; §3 divergence note explaining Option A→C deviation from step file framing)
+fix for step 11.04 · PR#662 · resolved 5 findings (§1.2 totals 21/3236→22/3426; MosaicBuilder row merged into Mosaic.php note; §6.1+§6.4 phantom sugar-dash/sugar-charts consumers reframed to "no current consumers"; §4.1 withFrame() body filled in with clone-mutate pattern + sketch pointer; §3 divergence note explaining Option A→C deviation from step file framing) <!-- @rename-keep -->
 tests-ci for step 11.04 · clean
 docs for step 11.04 · clean
 step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, immutable + fluent) + AnimationDriver (Model + Cmd::tick frame timing + delete+render cycle) + KittyRenderer::renderFrame() + FrameTickMsg + tests (leftover-rollout step 07.15)
@@ -454,10 +454,10 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 ## Open review findings — 03.05
 
-- [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions)
-- [→] sugar-dash/composer.json: `"sugarcraft/candy-sprinkles": "dev-master"` is a phantom dep — **FINDING INCORRECT**: grep of sugar-dash/src and sugar-dash/tests shows 15+ active `use SugarCraft\Sprinkles\*` imports (Style, Border, VAlign, Layout, Position) across Spinner.php, Pad.php, Window.php, Frame.php, StackedGrid.php, Gauge.php, Bullet.php, and 3 test files. The dep is real and must stay. No path-repo is needed for `dev-master` constraints (only `@dev` triggers the path-repo requirement — confirmed by check-path-repos.php logic). Closing as false-positive, no action taken.
-- [x] sugar-dash/src/Foundation/Theme.php:332: dead `$clone = clone $this;` in withPrimary() — assigned but never read before `return new self(...)`
-- [x] sugar-dash/src/Foundation/Buffer.php:122: implicit nullable `Style $style = null` should be `?Style $style = null` (PHP 8.4 deprecation; failOnWarning=true in phpunit.xml)
+- [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions) <!-- @rename-keep -->
+- [→] sugar-dash/composer.json: `"sugarcraft/candy-sprinkles": "dev-master"` is a phantom dep — **FINDING INCORRECT**: grep of sugar-dash/src and sugar-dash/tests shows 15+ active `use SugarCraft\Sprinkles\*` imports (Style, Border, VAlign, Layout, Position) across Spinner.php, Pad.php, Window.php, Frame.php, StackedGrid.php, Gauge.php, Bullet.php, and 3 test files. The dep is real and must stay. No path-repo is needed for `dev-master` constraints (only `@dev` triggers the path-repo requirement — confirmed by check-path-repos.php logic). Closing as false-positive, no action taken. <!-- @rename-keep -->
+- [x] sugar-dash/src/Foundation/Theme.php:332: dead `$clone = clone $this;` in withPrimary() — assigned but never read before `return new self(...)` <!-- @rename-keep -->
+- [x] sugar-dash/src/Foundation/Buffer.php:122: implicit nullable `Style $style = null` should be `?Style $style = null` (PHP 8.4 deprecation; failOnWarning=true in phpunit.xml) <!-- @rename-keep -->
 
 ## Open review findings — 02.03
 

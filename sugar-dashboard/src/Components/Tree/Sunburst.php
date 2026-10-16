@@ -1,0 +1,483 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Dashboard\Components\Tree;
+
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
+
+/**
+ * A Sunburst chart component for radial hierarchical visualization.
+ *
+ * Features:
+ * - Hierarchical data as concentric rings
+ * - Proportional segment sizes based on values
+ * - Multiple levels of nesting
+ * - Color customization per segment
+ * - Center label for root
+ *
+ * Mirrors sunburst/radial treemap patterns adapted to PHP with
+ * wither-style immutable setters.
+ */
+final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
+{
+    private ?int $width = null;
+    private ?int $height = null;
+
+    /** @var list<SunburstSegment> */
+    private array $segments = [];
+
+    private string $centerLabel = 'Total';
+    private bool $showLabels = true;
+    private bool $showValues = false;
+    private int $maxDepth = 3;
+    private string $style = 'rounded';
+
+    public function __construct(
+        private ?Color $segmentColor = null,
+        private ?Color $textColor = null,
+        private ?Color $centerColor = null,
+    ) {}
+
+    /**
+     * Create a new Sunburst chart with default styling.
+     */
+    public static function new(): self
+    {
+        return new self(
+            segmentColor: Color::hex('#89B4FA'),
+            textColor: Color::hex('#CDD6F4'),
+            centerColor: Color::hex('#CBA6F7'),
+        );
+    }
+
+    /**
+     * Set the allocated dimensions for this Sunburst chart.
+     */
+    public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+    {
+        $clone = clone $this;
+        $clone->width = $width;
+        $clone->height = $height;
+        return $clone;
+    }
+
+    /**
+     * Add a segment to the chart.
+     */
+    public function withSegment(SunburstSegment $segment): self
+    {
+        $clone = clone $this;
+        $clone->segments[] = $segment;
+        return $clone;
+    }
+
+    /**
+     * Add a segment by parameters.
+     */
+    public function addSegment(string $id, string $label, float $value, ?Color $color = null): self
+    {
+        return $this->withSegment(new SunburstSegment($id, $label, $value, $color));
+    }
+
+    /**
+     * Set all segments at once.
+     *
+     * @param list<SunburstSegment> $segments
+     */
+    public function withSegments(array $segments): self
+    {
+        $clone = clone $this;
+        $clone->segments = $segments;
+        return $clone;
+    }
+
+    /**
+     * Set the center label.
+     */
+    public function withCenterLabel(string $label): self
+    {
+        $clone = clone $this;
+        $clone->centerLabel = $label;
+        return $clone;
+    }
+
+    /**
+     * Show or hide labels.
+     */
+    public function withShowLabels(bool $show): self
+    {
+        $clone = clone $this;
+        $clone->showLabels = $show;
+        return $clone;
+    }
+
+    /**
+     * Show or hide values.
+     */
+    public function withShowValues(bool $show): self
+    {
+        $clone = clone $this;
+        $clone->showValues = $show;
+        return $clone;
+    }
+
+    /**
+     * Set maximum nesting depth.
+     */
+    public function withMaxDepth(int $depth): self
+    {
+        $clone = clone $this;
+        $clone->maxDepth = max(1, $depth);
+        return $clone;
+    }
+
+    /**
+     * Set the border style.
+     */
+    public function withStyle(string $style): self
+    {
+        $clone = clone $this;
+        $clone->style = $style;
+        return $clone;
+    }
+
+    /**
+     * Render the Sunburst chart as a string.
+     */
+    public function render(): string
+    {
+        $useWidth = $this->width ?? 50;
+        $useHeight = $this->height ?? 25;
+
+        if ($useWidth < 20 || $useHeight < 10) {
+            return '';
+        }
+
+        return $this->renderChart($useWidth, $useHeight);
+    }
+
+    /**
+     * Render the complete Sunburst chart.
+     */
+    private function renderChart(int $width, int $height): string
+    {
+        [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
+        $textColor = $this->textColor ?? Color::hex('#CDD6F4');
+        $segmentColor = $this->segmentColor ?? Color::hex('#89B4FA');
+        $centerColor = $this->centerColor ?? Color::hex('#CBA6F7');
+
+        $result = '';
+
+        // Title
+        $title = 'Sunburst Chart';
+        $titleX = intval(($width - strlen($title)) / 2);
+        $result .= $tl . str_repeat('─', $titleX - 1) . $title . str_repeat('─', $width - 2 - $titleX - strlen($title)) . $tr . "\n";
+
+        // Calculate total value
+        $totalValue = 0.0;
+        foreach ($this->segments as $segment) {
+            $totalValue += $segment->getTotalValue();
+        }
+
+        if ($totalValue <= 0) {
+            $totalValue = 1.0;
+        }
+
+        // Calculate ring dimensions
+        $chartWidth = $width - 4;
+        $chartHeight = $height - 4;
+        $centerX = intval($chartWidth / 2) + 2;
+        $centerY = intval($chartHeight / 2) + 2;
+        $maxRadius = min($centerX, $centerY) - 1;
+
+        // Draw the sunburst using ASCII art approximation
+        // Since we can't do true arcs in ASCII, we create a radial representation
+        $ringHeight = intval($maxRadius / max(1, $this->maxDepth));
+
+        // Draw center
+        $centerRow = $centerY;
+        $centerCol = $centerX;
+
+        // Center circle with label
+        $centerDiameter = min(5, $ringHeight * 2);
+        if ($centerDiameter < 3) {
+            $centerDiameter = 3;
+        }
+
+        // Codepoint view of the center label, split ONCE before the row loop:
+        // byte indexing ($label[$i]) slices through multi-byte UTF-8 sequences
+        // and emits stray continuation bytes (and mid-codepoint garbage on a
+        // straddling offset) into the render; indexing this array keeps the
+        // content whole. The WINDOW itself is measured in DISPLAY CELLS via
+        // SugarCraft\Core\Util\Width: a double-width glyph occupies the two
+        // cells it spans — its trailing cell paints nothing, so later glyphs
+        // keep their columns — and a glyph is never split across the budget.
+        // For BMP-narrow runs (ASCII) one codepoint is one cell, so those
+        // renders stay byte-for-byte unchanged.
+        $centerLabelChars = mb_str_split($this->centerLabel);
+        $centerHalfWindow = intval($centerDiameter / 4);
+        $centerWindowCells = 2 * $centerHalfWindow + 1;
+
+        /** @var array<int, string> $centerGlyphAtCell window-cell offset => glyph (zero-width marks fold onto their base cell) */
+        $centerGlyphAtCell = [];
+        /** @var array<int, true> $centerWideTrailing cells already consumed by the second column of a wide glyph */
+        $centerWideTrailing = [];
+        $cellCursor = 0;
+        $lastPlacedCell = -1;
+        foreach ($centerLabelChars as $glyph) {
+            $glyphCells = Width::of($glyph);
+            if ($glyphCells === 0) {
+                if ($lastPlacedCell >= 0) {
+                    $centerGlyphAtCell[$lastPlacedCell] .= $glyph;
+                }
+                continue;
+            }
+            if ($cellCursor + $glyphCells > $centerWindowCells) {
+                // Never split a glyph across the budget: stop placing.
+                break;
+            }
+            $centerGlyphAtCell[$cellCursor] = $glyph;
+            if ($glyphCells > 1) {
+                $centerWideTrailing[$cellCursor + 1] = true;
+            }
+            $lastPlacedCell = $cellCursor;
+            $cellCursor += $glyphCells;
+        }
+
+        for ($row = $centerY - intval($centerDiameter / 2); $row <= $centerY + intval($centerDiameter / 2); $row++) {
+            if ($row < 1 || $row >= $height - 1) {
+                continue;
+            }
+
+            $line = $v;
+            $isCenterRow = ($row === $centerY);
+
+            for ($col = 2; $col < $width - 2; $col++) {
+                $dx = $col - $centerX;
+                $dy = $row - $centerY;
+                $distance = sqrt($dx * $dx + $dy * $dy);
+
+                if ($distance <= intval($centerDiameter / 2)) {
+                    // Inside center circle
+                    if ($isCenterRow && abs($dx) <= $centerHalfWindow) {
+                        // Show label in center row (window counted in cells)
+                        $cell = $dx + $centerHalfWindow;
+                        if (isset($centerWideTrailing[$cell])) {
+                            // Second cell of a wide glyph: the terminal already
+                            // consumed it — emit nothing so the columns stay put.
+                            continue;
+                        }
+                        $char = $centerGlyphAtCell[$cell] ?? ' ';
+                    } else {
+                        $char = '●';
+                    }
+
+                    if ($centerColor !== null) {
+                        $line .= $centerColor->toFg(ColorProfile::TrueColor);
+                    }
+                    $line .= $char;
+                    if ($centerColor !== null) {
+                        $line .= Ansi::reset();
+                    }
+                } else {
+                    // Check if we're in a ring segment
+                    $inSegment = false;
+
+                    foreach ($this->segments as $segment) {
+                        $proportion = $segment->getTotalValue() / $totalValue;
+                        $segmentRadius = intval($proportion * $maxRadius);
+
+                        if ($distance <= $segmentRadius && $distance > intval($centerDiameter / 2)) {
+                            // In a ring segment
+                            if ($segment->color !== null) {
+                                $line .= $segment->color->toFg(ColorProfile::TrueColor);
+                            } elseif ($segmentColor !== null) {
+                                $line .= $segmentColor->toFg(ColorProfile::TrueColor);
+                            }
+
+                            // Choose character based on angle
+                            $angle = atan2($dy, $dx);
+                            $char = $this->getArcChar($angle, $distance, $segmentRadius);
+                            $line .= $char;
+
+                            if ($segment->color !== null || $segmentColor !== null) {
+                                $line .= Ansi::reset();
+                            }
+                            $inSegment = true;
+                            break;
+                        }
+                    }
+
+                    if (!$inSegment) {
+                        $line .= ' ';
+                    }
+                }
+            }
+
+            $line .= $v;
+            $result .= $line . "\n";
+        }
+
+        // Draw legend
+        if ($this->showLabels) {
+            $legendY = $height - 2;
+            $legendX = 2;
+            $legendLine = '';
+
+            foreach ($this->segments as $segment) {
+                $color = $segment->color ?? $segmentColor;
+                $visible = '▪ ' . $segment->label;
+                $visibleWidth = Width::string($visible);
+
+                // Same budget the former fit predicate used ($legendX +
+                // $visibleWidth < $width - 2), expressed as the widest entry
+                // that still lands inside the border — in display cells.
+                $available = $width - 3 - $legendX;
+                if ($available < 1) {
+                    // Degenerate guard: not even one cell of room left, so
+                    // nothing (not a truncated stub) can render from here on —
+                    // later segments cannot fit either, stop honestly.
+                    break;
+                }
+                if ($visibleWidth > $available) {
+                    // Over-long entries truncate to the remaining CELL budget
+                    // instead of the whole entry being silently dropped
+                    // (chart_v4 C3, ruling R5(ii)); a wide glyph straddling
+                    // the cut is dropped whole, never split. Hard cut,
+                    // ellipsis-free — matches the plain-cell box style.
+                    $visible = Width::truncate($visible, $available);
+                    $visibleWidth = Width::string($visible);
+                }
+
+                $entry = '';
+                if ($color !== null) {
+                    $entry .= $color->toFg(ColorProfile::TrueColor);
+                }
+                $entry .= $visible;
+                if ($color !== null) {
+                    $entry .= Ansi::reset();
+                }
+
+                $legendLine .= $entry . '  ';
+                $legendX += $visibleWidth + 2;
+            }
+
+            if ($legendLine !== '') {
+                // str_pad() counts BYTES, but $legendLine embeds truecolor SGR
+                // sequences, so padding to a byte target lands the right border
+                // inside the box (reconA CASE 1c). Pad by DISPLAY CELLS instead:
+                // SugarCraft\Core\Util\Width strips the SGR itself and scores a
+                // double-width glyph its two columns, so the border stays
+                // column-aligned for wide entries; for SGR-free BMP-narrow
+                // (ASCII) lines this equals the old str_pad math exactly.
+                $visibleLegendWidth = Width::string($legendLine);
+                $result .= $bl . str_pad('', $width - 2) . $br . "\n";
+                $result .= $v . $legendLine . str_repeat(' ', max(0, $width - 2 - $visibleLegendWidth)) . $v . "\n";
+            }
+        }
+
+        // Bottom border
+        $result .= $bl . str_repeat('─', $width - 2) . $br;
+
+        return $result;
+    }
+
+    /**
+     * Get the appropriate character for an arc position.
+     */
+    private function getArcChar(float $angle, float $distance, int $segmentRadius): string
+    {
+        // Normalize angle to 0-2PI
+        if ($angle < 0) {
+            $angle += 2 * M_PI;
+        }
+
+        // Determine which octant we're in
+        $octant = intval(($angle / (2 * M_PI)) * 8) % 8;
+
+        // Choose character based on octant and position in ring
+        $innerRadius = $segmentRadius - 1;
+        $density = ($distance - $innerRadius) / max(1, $segmentRadius - $innerRadius);
+
+        $chars = match ($octant) {
+            0 => ['╭', '─', '╮'],    // right
+            1 => ['╮', '│', '┐'],    // bottom-right
+            2 => ['┐', '│', '┘'],    // bottom
+            3 => ['┘', '─', '╯'],    // bottom-left
+            4 => ['╯', '─', '╰'],    // left
+            5 => ['╰', '│', '┌'],    // top-left
+            6 => ['┌', '│', '│'],    // top
+            7 => ['│', '─', '╮'],    // top-right
+            default => ['─', '─', '─'],
+        };
+
+        $charIndex = min(2, max(0, intval($density * 2)));
+        return $chars[$charIndex];
+    }
+
+    /**
+     * Get the style characters for the border.
+     *
+     * @return array{0:string, 1:string, 2:string, 3:string, 4:string, 5:string}
+     */
+    private function getStyleChars(): array
+    {
+        return match ($this->style) {
+            'double' => ['╔', '╗', '╚', '╝', '═', '║'],
+            'rounded' => ['╭', '╮', '╰', '╯', '─', '│'],
+            'single' => ['┌', '┐', '└', '┘', '─', '│'],
+            'bold' => ['┏', '┓', '┗', '┛', '━', '┃'],
+            'empty' => [' ', ' ', ' ', ' ', ' ', ' '],
+            default => ['╭', '╮', '╰', '╯', '─', '│'],
+        };
+    }
+
+    /**
+     * Calculate the natural dimensions of this Sunburst chart.
+     *
+     * @return array{0:int, 1:int} [width, height]
+     */
+    public function getInnerSize(): array
+    {
+        $width = $this->width ?? 50;
+        $height = $this->height ?? 25;
+
+        return [$width, $height];
+    }
+
+    // ─── Withers ──────────────────────────────────────────────────
+
+    /**
+     * Set the default segment color.
+     */
+    public function withSegmentColor(?Color $color): self
+    {
+        $clone = clone $this;
+        $clone->segmentColor = $color;
+        return $clone;
+    }
+
+    /**
+     * Set the text color.
+     */
+    public function withTextColor(?Color $color): self
+    {
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
+    }
+
+    /**
+     * Set the center circle color.
+     */
+    public function withCenterColor(?Color $color): self
+    {
+        $clone = clone $this;
+        $clone->centerColor = $color;
+        return $clone;
+    }
+}

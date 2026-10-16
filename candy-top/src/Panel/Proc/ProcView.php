@@ -7,10 +7,10 @@ namespace SugarCraft\Top\Panel\Proc;
 use SugarCraft\Bits\Input\TextEdit;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
-use SugarCraft\Dash\Plot\DistanceFade;
-use SugarCraft\Dash\Plot\ProcRow\ProcGraphTracker;
-use SugarCraft\Dash\Plot\ProcRow\ProcRowComposer;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\DistanceFade;
+use SugarCraft\Dashboard\Plot\ProcRow\ProcGraphTracker;
+use SugarCraft\Dashboard\Plot\ProcRow\ProcRowComposer;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Lang;
@@ -28,7 +28,7 @@ use SugarCraft\Top\View\Symbols;
  * absolute `Mv::to(row, x + n)` offsets as Region-local columns (the box's
  * left border is column 0, so btop's `x + n` is local `n`).
  *
- * Rows are composed from the sugar-dash L6 primitives — {@see DistanceFade}
+ * Rows are composed from the sugar-dashboard L6 primitives — {@see DistanceFade}
  * for the proc_gradient fade and the proc_colors metric blend,
  * {@see ProcGraphTracker} graphs for the 5×1 cpu sparklines on their
  * graph_bg underlay, {@see ProcRowComposer}'s btop label formatters —

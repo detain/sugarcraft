@@ -59,7 +59,7 @@ namespace SugarCraft\Core\Util;
  *     helper (commit 114118393);
  *   - `cellValue()` — byte-identical to candy-sql's `CellValue::sanitize()`
  *     (commit 8ac981ebf);
- *   - `untrusted()` — ported from sugar-dash (commit 8ac981ebf).
+ *   - `untrusted()` — ported from sugar-dashboard (commit 8ac981ebf).
  * Consolidating them gives every component one audited injection boundary.
  * Provenance: `git log --follow -- candy-core/src/Util/Sanitize.php`.
  */

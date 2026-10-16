@@ -9,7 +9,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\Collect\ContainerCollector;
 use SugarCraft\Top\Collect\ContainerSnapshot;
 use SugarCraft\Top\Collect\Platform;

@@ -1,0 +1,811 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Dashboard\Plot\Chart;
+
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
+
+/**
+ * A bar/line chart component with axes, labels, and grid.
+ *
+ * Displays data as either vertical bars or connected line points.
+ * Supports custom colors, axis labels, grid lines, and value labels.
+ *
+ * Mirrors chart rendering from bubbletea/spinner but adapted to PHP
+ * with wither-style immutable setters.
+ */
+final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
+{
+    use ChartGridGeometry;
+
+    private ?int $width = null;
+    private ?int $height = null;
+
+    /** @var list<ChartDataPoint> */
+    private array $dataPoints;
+
+    /** @var ChartRenderContext|null Render context for diff-based emission (avoids mutating scattered properties) */
+    private ?ChartRenderContext $renderContext = null;
+
+    public function __construct(
+        array $dataPoints = [],
+        private readonly ChartType $type = ChartType::Bar,
+        private readonly ?int $widthConstraint = null,
+        private readonly int $heightConstraint = 10,
+        private readonly bool $showGrid = true,
+        private readonly bool $showValues = false,
+        private readonly bool $showLabels = true,
+        private readonly ?string $xAxisLabel = null,
+        private readonly ?string $yAxisLabel = null,
+        private readonly ?Color $color = null,
+        private readonly ?Color $gridColor = null,
+        private readonly ?Color $labelColor = null,
+    ) {
+        $this->dataPoints = $dataPoints;
+    }
+
+    /**
+     * Create a new chart with default styling.
+     *
+     * @param list<ChartDataPoint> $dataPoints
+     */
+    public static function new(array $dataPoints = [], ChartType $type = ChartType::Bar): self
+    {
+        return new self(
+            dataPoints: $dataPoints,
+            type: $type,
+            widthConstraint: null,
+            heightConstraint: 10,
+            showGrid: true,
+            showValues: false,
+            showLabels: true,
+            xAxisLabel: null,
+            yAxisLabel: null,
+            color: Color::hex('#89B4FA'),
+            gridColor: Color::hex('#45475A'),
+            labelColor: Color::hex('#6C7086'),
+        );
+    }
+
+    /**
+     * Set the allocated dimensions for this chart.
+     */
+    public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+    {
+        $clone = clone $this;
+        $clone->width = $width;
+        $clone->height = $height;
+        return $clone;
+    }
+
+    /**
+     * Render the chart as a string.
+     *
+     * On the first render (or after a resize), emits the full output.
+     * On subsequent renders with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
+     * Uses a render-context object stored on the instance to track diff state
+     * instead of mutating multiple scattered properties ($previousFrame,
+     * $prevWidth, $prevHeight). This consolidates mutation into a single
+     * context object that can be reset via resetPreviousFrame().
+     */
+    public function render(): string
+    {
+        $chartWidth = $this->getChartWidth();
+        $chartHeight = $this->getChartHeight();
+
+        // (Resize detection moved below, where the diff-buffer geometry is
+        // known — the gate must compare ACTUAL buffer dimensions, F1.)
+
+        if ($chartWidth <= 0 || $chartHeight <= 0 || empty($this->dataPoints)) {
+            return '';
+        }
+
+        $output = '';
+
+        // Calculate chart bounds
+        $values = array_map(fn(ChartDataPoint $p) => $p->value, $this->dataPoints);
+        $minValue = min(0, min($values)); // Always start at 0 or lower
+        $maxValue = max($values);
+        if ($maxValue === $minValue) {
+            $maxValue = $minValue + 1;
+        }
+
+        // Generate grid lines
+        $gridLines = $this->generateGridLines($minValue, $maxValue, $chartHeight);
+
+        // Render based on chart type
+        if ($this->type === ChartType::Bar) {
+            $output = $this->renderBarChart($chartWidth, $chartHeight, $minValue, $maxValue, $gridLines);
+        } else {
+            $output = $this->renderLineChart($chartWidth, $chartHeight, $minValue, $maxValue, $gridLines);
+        }
+
+        // Diff-state rows cover the FULL emitted frame, not just the chart
+        // area: renderBarChart appends the x-axis row (showGrid) and the labels
+        // row (showLabels); renderLineChart only the labels row (its border grid
+        // lives inside the chart area). Storing only $chartHeight rows clipped
+        // those rows out of the buffer, so an axis/label-only mutation diffed to
+        // ZERO bytes and a delta-tracking terminal kept painting stale labels.
+        // The height is structural, not count(explode($output)): the renderers
+        // trim() their frames, so an emitted-line count can vary between frames
+        // of identical parameters (all-blank top rows vanish), and Buffer::diff()
+        // throws on dimension mismatch — the readonly flags make this expression
+        // constant for an instance. Resize detection is keyed on the ACTUAL
+        // diff-buffer dimensions — see the gate below (F1 moved it here because
+        // $diffWidth now tracks the data count too, which the chart-area keys
+        // never carried).
+        $diffHeight = $chartHeight
+            + ($this->type === ChartType::Bar && $this->showGrid ? 1 : 0)
+            + ($this->showLabels ? 1 : 0);
+
+        // F1 COLUMN parity (the column twin of the D1 row clip above): frames
+        // paint past $chartWidth — a colored 40-wide, 2-point bar row is 50
+        // cells — so the diff buffer spans the full emitted row extent
+        // (diffWidth()). Clipping it at $chartWidth froze every column beyond
+        // the chart width at the first-frame paint: a mutation landing only
+        // out there diffed to ZERO bytes while a fresh full frame carried the
+        // glyphs, exactly the stale-cell class D1 closed for rows.
+        $diffWidth = $this->diffWidth($chartWidth);
+
+        // Detect resize / diff-geometry change — reset diff state so the next
+        // render emits a full frame. The gate MUST compare the actual stored
+        // buffer dimensions: $diffWidth depends on the data count, so a
+        // dataCount change resizes the diff buffer even when the chart area is
+        // untouched — and Buffer::diff() throws on ANY dimension mismatch
+        // (candy-buffer Buffer.php:416-422). A chart-area resize always moves
+        // $diffHeight (chartHeight enters it additively), so it trips this
+        // gate as well; prevWidth/prevHeight mirror these same buffer dims.
+        if ($this->renderContext !== null &&
+            ($this->renderContext->previousFrame === null ||
+             $this->renderContext->previousFrame->width() !== $diffWidth ||
+             $this->renderContext->previousFrame->height() !== $diffHeight)) {
+            $this->renderContext = null;
+        }
+
+        // First frame or resize: emit full output and store as previousFrame.
+        if ($this->renderContext === null) {
+            $this->renderContext = new ChartRenderContext(
+                previousFrame: $this->bufferFromOutput($output, $diffWidth, $diffHeight),
+                prevWidth: $diffWidth,
+                prevHeight: $diffHeight
+            );
+            return $output;
+        }
+
+        // Subsequent frames with same dimensions: compute diff and emit delta.
+        $currentFrame = $this->bufferFromOutput($output, $diffWidth, $diffHeight);
+        $ops = $currentFrame->diff($this->renderContext->previousFrame);
+        $this->renderContext = new ChartRenderContext(
+            previousFrame: $currentFrame,
+            prevWidth: $diffWidth,
+            prevHeight: $diffHeight
+        );
+
+        $encoder = new DiffEncoder();
+        return $encoder->encode($ops);
+    }
+
+    /**
+     * Render a bar chart.
+     *
+     * @return string Multi-line frame (rows joined with \n, trailing newline trimmed)
+     */
+    private function renderBarChart(
+        int $chartWidth,
+        int $chartHeight,
+        float $minValue,
+        float $maxValue,
+        array $gridLines
+    ): string {
+        $output = '';
+        $dataCount = count($this->dataPoints);
+        $barWidth = max(1, (int) floor($chartWidth / $dataCount) - 1);
+        $range = $maxValue - $minValue;
+
+        // Build the chart area line by line (top to bottom)
+        for ($row = $chartHeight - 1; $row >= 0; $row--) {
+            $line = '';
+            $yValue = $gridLines[$row];
+
+            // Y-axis label
+            if ($this->showGrid && $row < count($gridLines)) {
+                $yLabel = $this->formatYLabel($yValue);
+                $line .= str_pad($yLabel, 8) . ' ';
+            }
+
+            // Draw each bar
+            for ($i = 0; $i < $dataCount; $i++) {
+                $point = $this->dataPoints[$i];
+                $barHeight = (int) round((($point->value - $minValue) / $range) * $chartHeight);
+                $threshold = $row + 1;
+
+                if ($barHeight >= $threshold) {
+                    // Filled bar
+                    if ($this->color !== null) {
+                        $line .= $this->color->toFg(ColorProfile::TrueColor);
+                    }
+                    $line .= str_repeat('█', $barWidth);
+                    if ($this->color !== null) {
+                        $line .= Ansi::reset();
+                    }
+                } else {
+                    $line .= str_repeat(' ', $barWidth);
+                }
+
+                // Spacing between bars
+                $line .= ' ';
+            }
+
+            // Grid line
+            if ($this->showGrid) {
+                if ($this->gridColor !== null) {
+                    $line .= $this->gridColor->toFg(ColorProfile::TrueColor);
+                }
+                $line .= '─';
+                if ($this->gridColor !== null) {
+                    $line .= Ansi::reset();
+                }
+            }
+
+            $output .= $line . "\n";
+        }
+
+        // X-axis line
+        if ($this->showGrid) {
+            $line = str_repeat(' ', 8); // Y-axis spacing
+            $line .= str_repeat('─', $chartWidth);
+            if ($this->gridColor !== null) {
+                $line = $this->gridColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            }
+            $output .= $line . "\n";
+        }
+
+        // Labels
+        if ($this->showLabels) {
+            $line = str_repeat(' ', 8);
+            foreach ($this->dataPoints as $point) {
+                $label = mb_substr($point->label, 0, $barWidth, 'UTF-8');
+                $label = str_pad($label, $barWidth);
+                $line .= $label . ' ';
+            }
+            if ($this->labelColor !== null) {
+                $line = $this->labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            }
+            $output .= $line;
+        }
+
+        return trim($output);
+    }
+
+    /**
+     * Render a line chart.
+     *
+     * @return string Multi-line frame (rows joined with \n, trailing newline trimmed)
+     */
+    private function renderLineChart(
+        int $chartWidth,
+        int $chartHeight,
+        float $minValue,
+        float $maxValue,
+        array $gridLines
+    ): string {
+        $output = '';
+        $dataCount = count($this->dataPoints);
+        $range = $maxValue - $minValue;
+        $plotWidth = $chartWidth - 1;
+
+        // Calculate normalized points
+        $points = [];
+        for ($i = 0; $i < $dataCount; $i++) {
+            $x = (int) (($i / max(1, $dataCount - 1)) * $plotWidth);
+            $y = $chartHeight - 1 - (int) round((($this->dataPoints[$i]->value - $minValue) / $range) * ($chartHeight - 1));
+            $points[] = [$x, $y];
+        }
+
+        // Build the chart area
+        $grid = [];
+        for ($h = 0; $h < $chartHeight; $h++) {
+            $grid[] = array_fill(0, $chartWidth, ' ');
+        }
+
+        // Draw grid lines
+        if ($this->showGrid) {
+            for ($row = 0; $row < $chartHeight; $row++) {
+                for ($col = 0; $col < $chartWidth; $col++) {
+                    if ($row === 0 || $row === $chartHeight - 1 || $col === 0 || $col === $chartWidth - 1) {
+                        if ($this->gridColor !== null) {
+                            $grid[$row][$col] = $this->gridColor->toFg(ColorProfile::TrueColor) . '·' . Ansi::reset();
+                        } else {
+                            $grid[$row][$col] = '·';
+                        }
+                    }
+                }
+            }
+        }
+
+        // Draw line segments
+        $pointCount = count($points);
+        for ($i = 0; $i < $pointCount - 1; $i++) {
+            [$x1, $y1] = $points[$i];
+            [$x2, $y2] = $points[$i + 1];
+
+            // Interpolate between points
+            $steps = max(1, abs($x2 - $x1));
+            for ($step = 0; $step <= $steps; $step++) {
+                $t = $step / $steps;
+                $x = (int) ($x1 + ($x2 - $x1) * $t);
+                $y = (int) ($y1 + ($y2 - $y1) * $t);
+
+                if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
+                    if ($this->color !== null) {
+                        $grid[$y][$x] = $this->color->toFg(ColorProfile::TrueColor) . '●' . Ansi::reset();
+                    } else {
+                        $grid[$y][$x] = '●';
+                    }
+                }
+            }
+        }
+
+        // Convert grid to string (top row first; grid row 0 holds the max-value points)
+        for ($row = 0; $row < $chartHeight; $row++) {
+            $line = '';
+
+            // Y-axis label — gridLines[0] is min, so invert the index so the
+            // top row shows the maximum value.
+            $labelIndex = $chartHeight - 1 - $row;
+            if ($this->showGrid && isset($gridLines[$labelIndex])) {
+                $yLabel = $this->formatYLabel($gridLines[$labelIndex]);
+                $line .= str_pad($yLabel, 8) . ' ';
+            }
+
+            $line .= implode('', $grid[$row]);
+
+            $output .= $line . "\n";
+        }
+
+        // X-axis labels
+        if ($this->showLabels) {
+            $line = str_repeat(' ', 8);
+            $labelWidth = max(1, (int) floor($chartWidth / $dataCount));
+            foreach ($this->dataPoints as $point) {
+                $label = mb_substr($point->label, 0, $labelWidth, 'UTF-8');
+                $label = str_pad($label, $labelWidth);
+                $line .= $label;
+            }
+            if ($this->labelColor !== null) {
+                $line = $this->labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            }
+            $output .= $line;
+        }
+
+        return trim($output);
+    }
+
+    /**
+     * Get the chart width.
+     */
+    private function getChartWidth(): int
+    {
+        if ($this->width !== null && $this->width > 0) {
+            return max(0, $this->width - 10); // Account for y-axis labels
+        }
+        return $this->widthConstraint ?? 40;
+    }
+
+    /**
+     * Get the chart height.
+     */
+    private function getChartHeight(): int
+    {
+        return $this->height ?? $this->heightConstraint;
+    }
+
+    /**
+     * Width of the diff-state buffer: the full emitted row extent, not just
+     * the chart area (F1 column parity; render() gates on it).
+     *
+     * Colored/bar frames paint past $chartWidth: the y-label gutter is
+     * str_pad(label, 8) + ' ' (9 cells), each bar occupies
+     * max(1, floor($chartWidth / n) - 1) fill cells plus one separator
+     * space, and the trailing grid dash adds another — so the bar run alone
+     * spans at most n * (max(1, floor($chartWidth / n) - 1) + 1) columns
+     * (the default 40-wide, 2-point chart emits 50-cell rows). The +10
+     * gutter covers the 9-cell label gutter plus the dash and matches what
+     * getInnerSize() already advertises for a full emitted frame
+     * (width + 10).
+     *
+     * RESIDUAL (documented, out of scope): y-labels formatted wider than 8
+     * chars (|value| ≳ 1e10) push rows past this bound; bufferFromOutput
+     * clips them there — a regime where the rendered frame already
+     * misaligns visually (pre-existing).
+     */
+    private function diffWidth(int $chartWidth): int
+    {
+        $dataCount = count($this->dataPoints);
+        if ($dataCount === 0) {
+            return $chartWidth + 10; // no bars: gutter+dash only
+        }
+
+        $barColumns = $dataCount * (max(1, intdiv($chartWidth, $dataCount) - 1) + 1);
+
+        return max($chartWidth, $barColumns) + 10;
+    }
+
+    /**
+     * Calculate the natural dimensions of this chart.
+     *
+     * @return array{0:int,1:int} [width, height]
+     */
+    public function getInnerSize(): array
+    {
+        $width = ($this->width ?? $this->widthConstraint ?? 50) + 10;
+        $height = ($this->height ?? $this->heightConstraint) + 2; // For labels
+
+        return [$width, $height];
+    }
+
+    // ─── Withers ──────────────────────────────────────────────────
+
+    /**
+     * Set the data points.
+     *
+     * @param list<ChartDataPoint> $dataPoints
+     */
+    public function withDataPoints(array $dataPoints): self
+    {
+        return new self(
+            dataPoints: $dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the chart type.
+     */
+    public function withType(ChartType $type): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the width constraint.
+     */
+    public function withWidth(int $width): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $width,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the height constraint.
+     */
+    public function withHeight(int $height): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $height,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Show or hide grid lines.
+     */
+    public function withGrid(bool $show): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $show,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Show or hide value labels.
+     */
+    public function withShowValues(bool $show): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $show,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Show or hide X-axis labels.
+     */
+    public function withShowLabels(bool $show): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $show,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the X-axis label.
+     */
+    public function withXAxisLabel(?string $label): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $label,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the Y-axis label.
+     */
+    public function withYAxisLabel(?string $label): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $label,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the chart color.
+     */
+    public function withColor(?Color $color): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $color,
+            gridColor: $this->gridColor,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the grid color.
+     */
+    public function withGridColor(?Color $color): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $color,
+            labelColor: $this->labelColor,
+        );
+    }
+
+    /**
+     * Set the label color.
+     */
+    public function withLabelColor(?Color $color): self
+    {
+        return new self(
+            dataPoints: $this->dataPoints,
+            type: $this->type,
+            widthConstraint: $this->widthConstraint,
+            heightConstraint: $this->heightConstraint,
+            showGrid: $this->showGrid,
+            showValues: $this->showValues,
+            showLabels: $this->showLabels,
+            xAxisLabel: $this->xAxisLabel,
+            yAxisLabel: $this->yAxisLabel,
+            color: $this->color,
+            gridColor: $this->gridColor,
+            labelColor: $color,
+        );
+    }
+
+    /**
+     * Canonical wither accepting an overrides array.
+     *
+     * Merges $overrides into the current property values and returns a new
+     * Chart instance. This replaces the boilerplate of 12 individual withers
+     * with a single unified method.
+     *
+     * @param array{
+     *   dataPoints?: list<ChartDataPoint>,
+     *   type?: ChartType,
+     *   widthConstraint?: int|null,
+     *   heightConstraint?: int,
+     *   showGrid?: bool,
+     *   showValues?: bool,
+     *   showLabels?: bool,
+     *   xAxisLabel?: string|null,
+     *   yAxisLabel?: string|null,
+     *   color?: Color|null,
+     *   gridColor?: Color|null,
+     *   labelColor?: Color|null,
+     * } $overrides
+     */
+    public function with(array $overrides): self
+    {
+        return new self(
+            dataPoints: $overrides['dataPoints'] ?? $this->dataPoints,
+            type: $overrides['type'] ?? $this->type,
+            widthConstraint: $overrides['widthConstraint'] ?? $this->widthConstraint,
+            heightConstraint: $overrides['heightConstraint'] ?? $this->heightConstraint,
+            showGrid: $overrides['showGrid'] ?? $this->showGrid,
+            showValues: $overrides['showValues'] ?? $this->showValues,
+            showLabels: $overrides['showLabels'] ?? $this->showLabels,
+            xAxisLabel: $overrides['xAxisLabel'] ?? $this->xAxisLabel,
+            yAxisLabel: $overrides['yAxisLabel'] ?? $this->yAxisLabel,
+            color: $overrides['color'] ?? $this->color,
+            gridColor: $overrides['gridColor'] ?? $this->gridColor,
+            labelColor: $overrides['labelColor'] ?? $this->labelColor,
+        );
+    }
+
+    /**
+     * Build a Buffer from a multi-line string output.
+     *
+     * All cells are created with null style — the diff algorithm will
+     * still work correctly for detecting changed character positions.
+     *
+     * Columns address cells, not bytes: every line is split into codepoints
+     * (house idiom, see DrawingOps::drawText) so rows containing multi-byte
+     * UTF-8 runes — CJK labels, or the '─'/'█' chart glyphs — map each cell
+     * to the exact glyph the first render painted. A byte-indexed guard
+     * (isset($line[$col]) + mb_substr) mis-maps such rows: past the last
+     * codepoint, still-unset bytes make isset() true while mb_substr returns
+     * '', so padding columns became empty-rune cells instead of blanks.
+     *
+     * SGR sequences are stripped before the split (house regex, see
+     * BubbleTest::strippedRenderLines): color is presentation, not content,
+     * and the cells carry null style anyway — leaving the escapes in would
+     * store ESC/'['/digit fragments as runes, so any SGR length change on a
+     * row shifted every later rune right and produced phantom whole-row
+     * diffs on re-render. This is the diff-state buffer ONLY: render()
+     * returns the untouched full frame (SGR included) to stdout, so the
+     * first-frame bytes and every golden are unaffected by the strip.
+     *
+     * @param string $output Multi-line string from render()
+     * @param int    $width  Buffer width in cells — callers pass diffWidth(),
+     *                       the full emitted row-extent bound, so painted
+     *                       columns beyond the chart area are stored (F1);
+     *                       rows longer than $width (oversized-y-label
+     *                       residual) clip here, shorter rows pad with blanks.
+     * @param int    $height Rows to store — callers pass the full emitted-frame
+     *                       height (chart area + x-axis + labels) so the axis
+     *                       and label rows participate in the diff; rows past
+     *                       the end of $output store as blanks.
+     */
+    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    {
+        $buffer = Buffer::new($width, $height);
+        $display = (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $output);
+        $lines = \explode("\n", $display);
+
+        for ($row = 0; $row < $height; $row++) {
+            $runes = \mb_str_split($lines[$row] ?? '');
+            for ($col = 0; $col < $width; $col++) {
+                $cell = Cell::new($runes[$col] ?? ' ', null, null, 1);
+                $buffer = $buffer->withCellAt($col, $row, $cell);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next render to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->renderContext = null;
+    }
+}

@@ -2001,7 +2001,7 @@ final class Renderer
      *
      * Delegates segment joining, the `' | '` separator and the leading-space
      * edge cap to the shared {@see BarStatusBar} (candy-sprinkles) primitive —
-     * the same primitive sugar-dash and sugar-quickpick's status bars sit on top
+     * the same primitive sugar-dashboard and sugar-quickpick's status bars sit on top
      * of — so there is a single status-bar implementation. This class only
      * supplies the crush theme (per-segment colours) and the segment set,
      * including the literal `[Tab] Switch Pane` hint. The provider / model

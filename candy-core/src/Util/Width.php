@@ -69,7 +69,7 @@ final class Width
      * disagrees with `string()`; that residue is deliberate and recorded rather
      * than papered over.
      *
-     * Not to be confused with `\SugarCraft\Dash\Components\Card\Highlight`'s
+     * Not to be confused with `\SugarCraft\Dashboard\Components\Card\Highlight`'s
      * own `$tabWidth`, an unrelated field on a different class that happens to
      * share the name and the default of 4 and is settable to any value >= 1.
      */

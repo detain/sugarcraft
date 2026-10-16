@@ -347,7 +347,7 @@ final class DiffEncoderTest extends TestCase
 
     public function testConsumerShapedConcatenationDoesNotBleedStyleIntoTheNextFrame(): void
     {
-        // sugar-overlay RenderSession and sugar-dash Chart return encode()
+        // sugar-overlay RenderSession and sugar-dashboard Chart return encode()
         // verbatim; a following delta frame that clears the red cell opens
         // with ECH at whatever rendition the terminal is in. With the tail
         // reset the combined wire is red-X, RESET, ECH; without it the ECH

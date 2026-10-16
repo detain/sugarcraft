@@ -3813,7 +3813,7 @@ worked on multi-lib pushes and silently dropped everything on single-lib ones.
 
 Fix: carry the lib inside the archive. Each render job stages `<lib>/.vhs/*.gif`
 into `/tmp/staged/<lib>/` and uploads that directory; the download merges
-(`merge-multiple: true`); the move step keys off that directory. The sugar-dash
+(`merge-multiple: true`); the move step keys off that directory. The sugar-dash <!-- @rename-keep -->
 batch suffix no longer needs stripping. `.vhs` is deliberately absent from the
 staged path — dot-prefixed paths need `include-hidden-files`, one more thing to get
 wrong. And the move step now **fails loudly** when placed ≠ downloaded, because a
@@ -10501,7 +10501,7 @@ to the assertion (8905 + 4 tests, 101022 + 29 assertions, skips back to 1), whic
 restore rather than merely asserting it.
 
 **One residue, and it is EXPECTED rather than a defect.** After the restore, `candy-testing` (and
-`candy-vcr` under `sugar-dash`) remain real directories in eight libs' `vendor/sugarcraft/` while every
+`candy-vcr` under `sugar-dash`) remain real directories in eight libs' `vendor/sugarcraft/` while every <!-- @rename-keep -->
 other entry is a symlink. `--fix --strict-closure` walks `require`, not `require-dev`, so a test-only
 sibling resolves from Packagist — which is also what CI does. `sugar-crush` itself is **18 of 18
 symlinks**, which is the figure the invariant names. Recorded here so the next reader does not "fix" it.
@@ -11635,7 +11635,7 @@ prose sat above an unrelated declaration.
 
 | lane | lib | tip → picks | shipped | gate |
 |---|---|---|---|---|
-| u1 `a6adc27f6`+`70d0a5e53` | sugar-dash | → `b8b702618`+`11992bf81` | E731 per-family literal-twin sweep (five traits, 17 content pins, 65-fixture render byte-identity) + COMP-2 closure half: `/proc` door-probes x4, option-(b) design paragraph, progressRing example + 2 goldens repaired | dash 5994T/10034A/1S/0W |
+| u1 `a6adc27f6`+`70d0a5e53` | sugar-dash | → `b8b702618`+`11992bf81` | E731 per-family literal-twin sweep (five traits, 17 content pins, 65-fixture render byte-identity) + COMP-2 closure half: `/proc` door-probes x4, option-(b) design paragraph, progressRing example + 2 goldens repaired | dash 5994T/10034A/1S/0W | <!-- @rename-keep -->
 | u2 `ef54fafb0` | candy-forms | → `23aea4386` | E736 F1: **Confirm trait-drop bugfix** (validator + HideFunc/DynamicLabels closures died across `new self(...)`; fix = `carryNonCtorState()` sole carrier) + workerPool reserved-docs + 1.3/1.7/1.8 + Phase-4 docs | forms 1830T (+7T) |
 | u3 `2fc82e0c5` | candy-forms | → `be0b010d6` | E736 F3: Cursor id re-key (spl_object_id REJECTED — handle recycling collides live lineages), Form valuesMemo, ViewportPan twin-law extraction, TextInput length cache, 8.4 implicit-nullable compat test | forms +21T → 1851 |
 
@@ -11649,12 +11649,12 @@ dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/303
 
 ### ROUND-85 WAVE-2 + CLOSE (2026-09-17) — u4 (E741 + E736 F2) + u6 (E731 COMP-2 (b)) welded; two umbrellas CLOSED; census 3 → 1 (E736 sole survivor); OPERATOR DECISION POINT
 
-**Welded 2026-09-17 on `ccb86e5fa` (NEVER pushed).** Two lanes, file-DISJOINT (candy-forms vs sugar-dash), both reviewed APPROVE-class BEFORE merge, FIVE picks zero conflicts.
+**Welded 2026-09-17 on `ccb86e5fa` (NEVER pushed).** Two lanes, file-DISJOINT (candy-forms vs sugar-dash), both reviewed APPROVE-class BEFORE merge, FIVE picks zero conflicts. <!-- @rename-keep -->
 
 | lane | lib | tip → picks | shipped | gate |
 |---|---|---|---|---|
 | u4 | candy-forms | `6029c8fb7`/`d16dd6c8f`/`2f1e145ca`/`7fb6a64be` → `ac82cf822`/`c1cebb634`/`5461ded56`/`2aba19b05` | **E741** shared-carrier family fix (`CarriesNonCtorState.php` into 6 Field classes, 25 `new self(...)` sites, fail-closed roster + 17-pin carrier-neuter proof) + **E736 F2**: Phase-2 perf (2.1 progressive-visibility DISCLOSED behavior change, single-pass validateAll, memoized caches) + Phase-6 async (opt-in `fetchTimeoutSeconds`, null⇒byte-identical wire; quiet-cancel; existence censuses) + rv fix-round (Select matcher docblock measured truth, Confirm fold seam note) | forms **1891T/3164A/0W** (1851→+40T exact) |
-| u6 | sugar-dash | `0eba02549` → `0f26082fe` | **E731(b)** COMP-2 ADOPTED-IMPLEMENTED: `ProcAvailability` probe-once memo + `'n/a'` sentinel render on /proc-absent hosts (System + Uptime), injected-probe pins, history-non-accumulation | dash **6006T/10076A/1S/0W** |
+| u6 | sugar-dash | `0eba02549` → `0f26082fe` | **E731(b)** COMP-2 ADOPTED-IMPLEMENTED: `ProcAvailability` probe-once memo + `'n/a'` sentinel render on /proc-absent hosts (System + Uptime), injected-probe pins, history-non-accumulation | dash **6006T/10076A/1S/0W** | <!-- @rename-keep -->
 
 **u4 death-mode evidence (10-resume law + salvage-first PROVEN):** the u4 builder died with TEN consecutive blank reports AFTER landing all four commits; the REFINED resume law (same task_id ≤10x, disk-probe between) plus salvage-first step 0 (porcelain/artifacts/tree audit before any redo) recovered a complete verified lane with ZERO redo — tip `7fb6a64be` matched the last known claim.
 
@@ -11677,8 +11677,8 @@ dash reads 0F.
 | t2 `17e1036cb` | candy-git | → `e0bff28cc` | E735 10.06: diff-view syntax highlighting via shared lexer (`DiffHighlighter`, 1 new test file) | stash FULL 256T/659A/5S exit0 |
 | t3 `7031e17dc` | candy-ansi-inspect | → `5499c50bd` | E735 10.16: C1 truth pass — SOS/PM naming, DEL fidelity, colon-SGR regressions (upstream had landed most; 8 defects fixed) | spark FULL 269T/1380A exit0 |
 | t4 `dd1fec6c0` | candy-mdview | → `676e597d7` | E735 10.25: GlamourTheme JSON themes + pager auto-reload (watch-integration) + width pins (3 new test files) | glow FULL 122T/313A exit0 |
-| t6 `39671bedd` | sugar-dash goldens | → `bb2e28cfb` | re-roll the 2 stale toast goldens after upstream 68d73f9ba blue revalue (surgical 2-file/+2-line; self-verified probe+x2+mutation) | dash golden pair CURED — zero stale blues tree-wide |
-| t1 `837763041` | sugar-dash code+tests | → `35f327d5b` | E735 03.09: NotificationQueue dual-ring verified ALREADY-SHIPPED + fixed state-losing withers + stale example | dash FULL x2: 5977T/9,889-9,890A/0F/1S exit0 |
+| t6 `39671bedd` | sugar-dash goldens | → `bb2e28cfb` | re-roll the 2 stale toast goldens after upstream 68d73f9ba blue revalue (surgical 2-file/+2-line; self-verified probe+x2+mutation) | dash golden pair CURED — zero stale blues tree-wide | <!-- @rename-keep -->
+| t1 `837763041` | sugar-dash code+tests | → `35f327d5b` | E735 03.09: NotificationQueue dual-ring verified ALREADY-SHIPPED + fixed state-losing withers + stale example | dash FULL x2: 5977T/9,889-9,890A/0F/1S exit0 | <!-- @rename-keep -->
 | t5 `7e28b3c9e` | docs/plans/leftover/updates.md | → `7a3280759` (AMENDED) | E735 06.01 verify-only Done-line (PR#581/582 audit) | candy-core `--filter Subscription` 14T/38A/1S exit0 |
 
 ### Deaths, resumes, and process lessons of the round
@@ -11720,7 +11720,7 @@ dash reads 0F.
 
 ### Queue carried to round 85 (2 survivors)
 
-E731 (sugar-dash AbstractChart umbrella + COMP-2) and E736 (MATCHUPS 7 yellow + 1 red ports, one-lib-per-
+E731 (sugar-dash AbstractChart umbrella + COMP-2) and E736 (MATCHUPS 7 yellow + 1 red ports, one-lib-per- <!-- @rename-keep -->
 wave). Phase-12 stays PAUSED by user decision. The next move is an OPERATOR DECISION POINT (§0-NOW-86 §2):
 remaining work is product completion at port scale, not defect work — pick one lib for r85 or close the
 campaign.
@@ -11786,7 +11786,7 @@ reviewed APPROVE-class; all twelve lanes shipped.
 
 ### Queue carried to round 84 (3 survivors)
 
-**E731** (MED, sugar-dash umbrella — r7 ruling landed: ChartGridGeometry dedup + big-bang DECLINED;
+**E731** (MED, sugar-dash umbrella — r7 ruling landed: ChartGridGeometry dedup + big-bang DECLINED; <!-- @rename-keep -->
 COMP-2 `/proc` leg and per-family chart extraction remain), **E735** (MED, leftover-rollout — TRUE
 remaining: 4 builds 03.09 dash NotificationQueue / 10.06 stash ph4 / 10.16 spark / 10.25 glow, + 06.01
 verify-only; the 13 phase-12 steps are DELIBERATELY PAUSED by the user — never auto-resume — and 03.13 is
@@ -11815,7 +11815,7 @@ at `e765b1742`) over six waves.
 ### Per-lib suite figures at the FINAL weld (all linked, plain pipe)
 
 candy-mdview **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5),
-sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6), candy-input 307/40762/1S,
+sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6), candy-input 307/40762/1S, <!-- @rename-keep -->
 candy-pty 663/1862/1W(base-carry)/17S, candy-core 862/7646/27S, candy-git-server 354/875, sugar-reel 361/2473/1S,
 candy-mosaic 465/7783/6S, candy-sql 1483/4203, candy-kv 206/427 (audit-only); sugar-crush
 **11,991 / 172,291 / 0F / 0E / 1S (McpClientTest canary) / EXIT 0 — UNCHANGED**: a sibling-lib round that
@@ -11847,7 +11847,7 @@ caught a REAL pre-lane leaveAltScreen Mode-mirror divergence. E726's FIX-vs-CONT
 four items pin-only (both mint errata held). E727's contract verdict (fresh-process-per-connection) refused
 the timeout and found the EOF auth hole live. E728 consumed the six 🔀 MOVED marks — ✅3/⏭️3/❗0.
 Three future-options recorded un-minted at the stamps: candy-vcr phpunit.xml failOnWarning (own-measured-
-lane candidate), sugar-dash Meter/GaugeCircle render-clamps (same family as E726-4), wish `SHELL=`
+lane candidate), sugar-dash Meter/GaugeCircle render-clamps (same family as E726-4), wish `SHELL=` <!-- @rename-keep -->
 set-but-empty pin. The deferred FLAG list survives: vt dual-Cell/Buffer unification, wish async-core
 restructure, dash AbstractChart/COMP-2, mosaic sixel-default.
 
@@ -12380,7 +12380,7 @@ ff's reviewer returned FOUR blank reports; the same task_id was resumed each tim
 
 ## ROUND 67 — six lanes land, the tmpfiles red-herring, the census refuses its own brief, K=8 becomes the local gate, and TWO builders fabricate their work (2026-09-11/12)
 
-**CLOSED at `323605773` (code floor; this closeout's docs sit above it).** Base `d15bdefdf` (round-66 closeout). Wave-1: six code lanes da–df (eleven picks) + merge-fixes + tooling lane ks. Chain: `0e9ce9e05` (db) → `2da286745` (de) → `2973380d4` (de review-fix — E17 raw-estimate splice) → `d3fb349fd` (da) → `18daf2d55` (dc) → `4d58dadd7` (dd) → `7fbc7636b` `436965761` `aa2497e07` `5b6bb6b1b` `1a4c39fc4` (df ×5: candy-core / candy-pty / sugar-dash / sugar-reel / repo) → `9f0c5db62` (F4 fix) → `351d5a915` (F1 heal) → `4610f3580` (dc×df load-graph coupling) → re-pin `56501908d` (census sextet) → `fb5078e6d` (ks — K=8 local default, cherry-pick of lane `4810321e4`) → `6682c9426` (wave-1 bookkeeping docs). Wave-2: four lanes dh/dj/di/dl — **four picks, zero conflicts, dupcheck empty** — chain `b08a96cf1` (dh, lane `0575d4080`) → `00c8bc14b` (dj, lane `b43fb131c`) → `a94628c5b` (di, lane `9df5ac6e3` on `lane/di-rebuilt`) → `66b92e3d6` (dl, lane `c73374dca`) → re-pin `323605773`. NOT pushed.
+**CLOSED at `323605773` (code floor; this closeout's docs sit above it).** Base `d15bdefdf` (round-66 closeout). Wave-1: six code lanes da–df (eleven picks) + merge-fixes + tooling lane ks. Chain: `0e9ce9e05` (db) → `2da286745` (de) → `2973380d4` (de review-fix — E17 raw-estimate splice) → `d3fb349fd` (da) → `18daf2d55` (dc) → `4d58dadd7` (dd) → `7fbc7636b` `436965761` `aa2497e07` `5b6bb6b1b` `1a4c39fc4` (df ×5: candy-core / candy-pty / sugar-dash / sugar-reel / repo) → `9f0c5db62` (F4 fix) → `351d5a915` (F1 heal) → `4610f3580` (dc×df load-graph coupling) → re-pin `56501908d` (census sextet) → `fb5078e6d` (ks — K=8 local default, cherry-pick of lane `4810321e4`) → `6682c9426` (wave-1 bookkeeping docs). Wave-2: four lanes dh/dj/di/dl — **four picks, zero conflicts, dupcheck empty** — chain `b08a96cf1` (dh, lane `0575d4080`) → `00c8bc14b` (dj, lane `b43fb131c`) → `a94628c5b` (di, lane `9df5ac6e3` on `lane/di-rebuilt`) → `66b92e3d6` (dl, lane `c73374dca`) → re-pin `323605773`. NOT pushed. <!-- @rename-keep -->
 
 ### THE FLOOR
 
@@ -12398,7 +12398,7 @@ ff's reviewer returned FOUR blank reports; the same task_id was resumed each tim
 - **dc — child-scanner cluster (lane `bb83512bc` → pick `18daf2d55`): E174/E205/E235/E283/E343 CLOSED + E417 CLOSED-WITH-EVIDENCE (zero code), +0T/+35A.** `SplitsTopLevelArgumentsTrait` consolidated the three depth-walk copies with ZERO moves across the 215-stderr / 1706-lifetime scan sites; E205 replaced the text-regex predicate with `commandFragments()` + a quote/order-aware `shellFdTwo()` walker over ARGV0 only; E235/E283 OUT_OF_SCOPE deferrals became lower-bound `{minOffenders, reason}` data (mins 1,1,3,10,2,57,1,1,1,5,6,2 — growth silent, shrink reds); E417's prescribed fix was MEASURED WRONG (naming a high fd in the spec does not stop inheritance) — closed no-code, stale-prescription renote is a round-close chore. E319/E342/E358 verified zero-in-file — still out-of-ownership, wave-2 routing.
 - **dd — doc-oracle cluster (lane `1e4ff44c5` → pick `4d58dadd7`): E111/E125/E127/E143/E144/E148/E149/E357/E386 CLOSED, +9T.** `readOrFail()` now has ONE implementation tree-wide (`RefusesAnUnreadableSourceTrait`); E143's memoization cut ~14.2k per-paragraph window assertions — HONEST, measured, cited (Config window 31,014A → 16,830A at the lane); E111's five claim families pinned (premise drift documented: the claims live in SKILLS.md/README/TROUBLESHOOTING, not SETTINGS.md). GOTCHA: `GlobDialectDifferentialTest` harvests glob-shaped string literals TREE-WIDE — deleting `'/docs/*.md'` from a fixture drifted a FORBIDDEN docblock census (PathGlob 365×361); any test edit touching a glob-shaped literal can redden it.
 - **de — Chat behavioral (lane `bc3e11e1a` + review-fix `e4d448ead` → picks `2da286745`+`2973380d4`): E4/E17/E20/E175 CLOSED (+ the E154(c) detach-gate site), +36T live (34 methods + 2 derived provider rows); E3 → PARTIAL.** E4 cursor checkpoint (`inputCursorOffset()` saved/restored); E17 raw-record calibration f←clamp(real/raw) kills the period-2 √r oscillation; E20 mid-turn spend abort delivered as a `SpendCapBreached` FRAME EVENT — NO wall-clock kill anywhere (the standing E646 ban honored, documented at the ctor); E175 `SUGARCRUSH_DEBUG_STREAM` gate on the onToken detach log. E3 SEAM-REFUSED: the palette caret needs `src/Renderer.php:3600`'s unconditional '█' + PaletteState — forbidden ownership, needs a wave-2 TUI lane. Side finding carried to close: `Chat::dropLast` docblock says grapheme, the loop walks codepoints.
-- **df — sibling libs + CI (five picks).** `7fbc7636b` candy-core: E370 pinned (PosixBackend::isTty into the closed-descriptor-zero family); **E447 CLOSED-REFUTED — a no-op: the "unreadable spec" claim was refuted by E485's own instrument**. `436965761` candy-pty: E466 caller census (18 scopes, zero post-close fd reads — the dup window never existed). `aa2497e07` sugar-dash + `5b6bb6b1b` sugar-reel: E366/E448 bounded TERM→KILL reapers (`terminateBounded` / per-package `BoundedReaper` — sugar-crush's ProcessReaper is unreachable from siblings; the reel change also removed a LATENT SIGTERM-constant fatal when ext-pcntl is absent). `1a4c39fc4` repo: **E486 `tools/check-child-lifetimes.php` requires the canonical ChildLifetimeScanner BY PATH — no third copy — 57-lib autoload walk, ACCOUNTED roster fail-closed, wired as the LAST step of the path-repo CI check**; E629 needs:/job-name parser name-pins; E566 re-derived — no action (all remaining T_FUNCTION mentions are benign idioms).
+- **df — sibling libs + CI (five picks).** `7fbc7636b` candy-core: E370 pinned (PosixBackend::isTty into the closed-descriptor-zero family); **E447 CLOSED-REFUTED — a no-op: the "unreadable spec" claim was refuted by E485's own instrument**. `436965761` candy-pty: E466 caller census (18 scopes, zero post-close fd reads — the dup window never existed). `aa2497e07` sugar-dash + `5b6bb6b1b` sugar-reel: E366/E448 bounded TERM→KILL reapers (`terminateBounded` / per-package `BoundedReaper` — sugar-crush's ProcessReaper is unreachable from siblings; the reel change also removed a LATENT SIGTERM-constant fatal when ext-pcntl is absent). `1a4c39fc4` repo: **E486 `tools/check-child-lifetimes.php` requires the canonical ChildLifetimeScanner BY PATH — no third copy — 57-lib autoload walk, ACCOUNTED roster fail-closed, wired as the LAST step of the path-repo CI check**; E629 needs:/job-name parser name-pins; E566 re-derived — no action (all remaining T_FUNCTION mentions are benign idioms). <!-- @rename-keep -->
 
 ### MERGE-FIXES, COUPLING, TOOLING
 

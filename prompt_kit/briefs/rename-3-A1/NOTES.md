@@ -99,7 +99,7 @@ the first force-push). Old repo URL 301-redirects to new (R2). VHS demos run
 (full matrix, force_all) FINAL: candy-flappy Test 8.3 + Test 8.4 + Coverage ALL
 SUCCESS. Red set = pre-existing 2.5-NOTES families {PHPStan 8.3/8.4 candy-core,
 Windows 8.3/8.4 candy-forms, candy-mines 8.3/8.4/Cov, candy-top 8.3/8.4/Cov, <!-- @rename-keep -->
-sugar-dash 8.3/8.4/Cov} (sugar-crush greens this round) + ONE extra:
+sugar-dash 8.3/8.4/Cov} (sugar-crush greens this round) + ONE extra: <!-- @rename-keep -->
 macOS · 8.3 · candy-core, log-identified as
 ProgramRuntimeTeardownTest::testPendingEscapeFlushDoesNotFireAfterRun — the
 documented intermittent ESC-flush timing flake family (baseline 5254bdbd2 ran

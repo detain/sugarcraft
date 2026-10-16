@@ -2,7 +2,7 @@
 
 SugarCharts (`sugar-charts`) is a comprehensive PHP terminal charting library providing ASCII/Unicode chart rendering with ANSI SGR color support for the SugarCraft TUI ecosystem. It ports the NimbleMarkets/ntcharts API to PHP with meaningful extensions including BrailleCanvas integration, Theme support, and multi-dataset charts.
 
-**Ecosystem Positioning**: sugar-charts is a mid-layer component that sits above `candy-core` (Style/Color/ANSI primitives) and `candy-sprinkles` (Theme/input) but depends on `sugar-dash` for the BrailleCanvas bridge. It is a consumer of canvas primitives and a producer of chart output for dashboards.
+**Ecosystem Positioning**: sugar-charts is a mid-layer component that sits above `candy-core` (Style/Color/ANSI primitives) and `candy-sprinkles` (Theme/input) but depends on `sugar-dashboard` for the BrailleCanvas bridge. It is a consumer of canvas primitives and a producer of chart output for dashboards.
 
 **Biggest Opportunity Areas**:
 
@@ -136,7 +136,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Description**: Ratatui has a `Gauge` widget; sugar-charts does not.
 **Why it matters**: Gauge charts are common for progress/kpi dashboards.
 **Source**: `docs/repo_map/ratatui_ratatui.md` (widget list)
-**Implementation ideas**: Implement `Gauge` class with Arc/ semicircle Unicode rendering; integrate with sugar-dash Frame/Panel.
+**Implementation ideas**: Implement `Gauge` class with Arc/ semicircle Unicode rendering; integrate with sugar-dashboard Frame/Panel.
 **Expected complexity**: Medium — new chart type with arc calculation.
 **Expected impact**: High — fills common dashboard need.
 
@@ -267,10 +267,10 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Tradeoffs**: 
 
 - PHP's single-threaded nature makes diffing less critical than in Go/Rust
-- sugar-dash already has `Buffer` with diffing capability
-- Implementing diffing at chart level would require buffer abstraction matching sugar-dash
+- sugar-dashboard already has `Buffer` with diffing capability
+- Implementing diffing at chart level would require buffer abstraction matching sugar-dashboard
 
-**Applicability**: Sugar-dash's `Buffer` class already implements diff. sugar-charts could adopt a similar buffer model if integrated more deeply with sugar-dash for dashboard rendering.
+**Applicability**: Sugar-dash's `Buffer` class already implements diff. sugar-charts could adopt a similar buffer model if integrated more deeply with sugar-dashboard for dashboard rendering.
 
 ## Sixel Encoding Performance
 
@@ -433,7 +433,7 @@ $chart = $chart->withColorProfile($profile);
 **Gap**: Heatmap palettes can produce non-uniform gradients.
 **Proposed**: Document palette design principles (equal perceptual spacing, avoiding banding).
 
-## 5. Integration with sugar-dash
+## 5. Integration with sugar-dashboard
 
 **Gap**: BrailleCanvas integration is mentioned but not fully documented.
 **Proposed**: Cookbook section showing `LineChart::withCanvas(BrailleCanvas)` for dashboard use.
@@ -527,10 +527,10 @@ public function testSparklineRendersCorrectly(): void
 
 # Ecosystem / Integration Opportunities
 
-## 1. Deeper sugar-dash Integration
+## 1. Deeper sugar-dashboard Integration
 
 **Current**: BrailleCanvas bridge is experimental.
-**Proposed**: Formalize `Chart` → `Drawable` adapter so charts integrate seamlessly into sugar-dash layouts.
+**Proposed**: Formalize `Chart` → `Drawable` adapter so charts integrate seamlessly into sugar-dashboard layouts.
 
 ```php
 $grid->addItem(
@@ -539,7 +539,7 @@ $grid->addItem(
 );
 ```
 
-**Source**: `docs/repo_map/sugarcraft_sugar-dash.md` — chart integration.
+**Source**: `docs/repo_map/sugarcraft_sugar-dashboard.md` — chart integration.
 
 ## 2. Integration with sugar-table for DataTable + Chart Combos
 
@@ -690,7 +690,7 @@ sugar-charts is a **well-structured, mature charting library** that successfully
 3. **Implement Gauge** — fills common dashboard need, matches ecosystem expectations
 4. **Wire up ReactPHP animation** — enables live data dashboards, differentiates from competitors
 
-**Dependency health**: The bridge to sugar-dash via BrailleCanvas is experimental but functional. The pure-PHP Sixel encoder is a strong differentiator — no GD/Imagick dependency. Dependencies on candy-core and candy-sprinkles are stable.
+**Dependency health**: The bridge to sugar-dashboard via BrailleCanvas is experimental but functional. The pure-PHP Sixel encoder is a strong differentiator — no GD/Imagick dependency. Dependencies on candy-core and candy-sprinkles are stable.
 
 **Pre-1.0 opportunities**: The v11 breaking changes in ratatui-image demonstrate that pre-1.0 is the time for API cleanup. sugar-charts should consider:
 

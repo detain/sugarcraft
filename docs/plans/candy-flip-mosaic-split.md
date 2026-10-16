@@ -163,7 +163,7 @@ candy-flip  ── exposes ── list<Frame>  ─→  bridge  ─→  candy-mos
   direction. candy-flip is a higher-level lib that already requires
   candy-core + candy-sprinkles + ext-gd — making mosaic depend on
   flip pulls a binary-shipping app into the dependency closure of
-  every consumer of candy-mosaic (sugar-charts, sugar-dash, hypothetical
+  every consumer of candy-mosaic (sugar-charts, sugar-dashboard, hypothetical
   candy-glow image-in-markdown, etc.). That is a dependency-direction
   inversion the monorepo has been careful to avoid.
 - The `Animation` type only consumes `Frame` if it ties itself to
@@ -195,7 +195,7 @@ animated cases.
 - candy-flip's namespace is `SugarCraft\Flip\` — that is the GIF-
   viewer namespace from upstream `namzug16/gifterm`. Promoting it to
   "the image lib" mis-credits the upstream.
-- Multiple consumers (sugar-dash preview pane, hypothetical glow port)
+- Multiple consumers (sugar-dashboard preview pane, hypothetical glow port)
   want single-image rendering with zero animation overhead. Forcing
   them through a flip dep is worse than the current state.
 
@@ -235,7 +235,7 @@ candy-flip ── Decoder.frames → ImageSource[] (re-encode each cell-grid fra
   candy-flip.
 - step 07.15 ships entirely inside candy-mosaic — no composer.json
   edits to add a flip dep, no path-repo closure ripple, no new
-  transitive requirements landing on sugar-dash / sugar-charts /
+  transitive requirements landing on sugar-dashboard / sugar-charts /
   whoever else consumes mosaic.
 - candy-flip's GIF-specific code path keeps its own optimisation
   story (the planned step 09.01 `imagecreatefromstring()` + per-frame
@@ -605,7 +605,7 @@ different one.
 |---|---|
 | `candy-mosaic` | **none** (no new requires; the animation code is internal and uses only existing deps) |
 | `candy-flip` | **none** (step 07.15 does not touch candy-flip) |
-| Any future consumer of `candy-mosaic` (sugar-dash, sugar-charts, candy-glow, etc. — none today; `grep -l candy-mosaic */composer.json` returns only `candy-mosaic/composer.json` itself) | **none** (the addition is purely additive; future consumers inherit a clean closure) |
+| Any future consumer of `candy-mosaic` (sugar-dashboard, sugar-charts, candy-glow, etc. — none today; `grep -l candy-mosaic */composer.json` returns only `candy-mosaic/composer.json` itself) | **none** (the addition is purely additive; future consumers inherit a clean closure) |
 
 ### 6.2 Path-repo closure
 
@@ -625,7 +625,7 @@ existing renderer changes shape. No constructor signature changes.
 No library currently requires `sugarcraft/candy-mosaic`
 (`grep -l candy-mosaic */composer.json` returns only `candy-mosaic`'s
 own manifest), so the migration risk is zero — future consumers
-(sugar-dash preview pane, sugar-charts inline-image axis, hypothetical
+(sugar-dashboard preview pane, sugar-charts inline-image axis, hypothetical
 candy-glow image-in-markdown) inherit the animation surface for free
 when they take the dep.
 

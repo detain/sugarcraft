@@ -12,7 +12,7 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Dash\Foundation\NetAutoScale;
+use SugarCraft\Dashboard\Foundation\NetAutoScale;
 use SugarCraft\Top\Collect\Net;
 use SugarCraft\Top\Collect\NetSnapshot;
 use SugarCraft\Top\Collect\Sentinel;

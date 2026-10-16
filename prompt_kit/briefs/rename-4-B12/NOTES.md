@@ -28,7 +28,7 @@ DONE (R1–R7 this lane; R8/R9 weld owed). Branch `rename/b12`, base `10f121d49`
 - `sugar-crush/src/Tui/MediaForm/MediaForm.php:21` "in exactly the {SettingsEditor} mold" — English idiom, unrelated package.
 - `candy-shine/src/GithubEmoji.php:1056` `'moldova'` — country emoji.
 - `candy-sql/tests/Admin/Calc/HostLoadSamplerTest.php:106` `TrimOldest…` — camelCase seam false-match.
-- ansi/: `sugarcraft-3-16-l-2.ansi` + `sugarcraft-3-16-m-2.ansi` carry the old **wordmark art bytes** (content-excluded from residue tool); `candy-layout-7…` "Chocolate mold tray", `candy-tetris-10…` glass-furnace, `sugar-dash-10…` foundry-molding captions = art prose about OTHER libs (space-form, non-brand).
+- ansi/: `sugarcraft-3-16-l-2.ansi` + `sugarcraft-3-16-m-2.ansi` carry the old **wordmark art bytes** (content-excluded from residue tool); `candy-layout-7…` "Chocolate mold tray", `candy-tetris-10…` glass-furnace, `sugar-dash-10…` foundry-molding captions = art prose about OTHER libs (space-form, non-brand). <!-- @rename-keep -->
 - `scripts/generate_icons.py:104` dict KEY renamed (R3) but prompt string "pink silicone candy mold tray with two small gummy bears" KEPT — truthful description of the existing committed PNG bytes.
 - `starter` new-side: generic; no collision introduced (can't create residue).
 

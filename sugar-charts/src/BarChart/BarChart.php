@@ -169,7 +169,7 @@ final class BarChart
      * Residuals rounding to 0/8 eighths render blank/full respectively
      * (no `▁` ghost from float noise). Default off — legacy output is
      * preserved for existing consumers. Concept ported from the
-     * eighth-block ramp used by sugar-dash `RenderBar`.
+     * eighth-block ramp used by sugar-dashboard `RenderBar`.
      */
     public function withFractionalHeights(bool $on = true): self
     {

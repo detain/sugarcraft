@@ -301,7 +301,7 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 | **Per-tape total** | **1–5 s** | |
 | 841 tapes serial | 14–70 min | Borderline |
 
-**Parallelization saves it:** the existing CI matrix shards by lib (sugar-dash gets 4×). At ~15 effective shards, 841/15 ≈ 56 tapes per shard × 5 s ≈ 5 min — well inside the budget.
+**Parallelization saves it:** the existing CI matrix shards by lib (sugar-dashboard gets 4×). At ~15 effective shards, 841/15 ≈ 56 tapes per shard × 5 s ≈ 5 min — well inside the budget.
 
 ---
 

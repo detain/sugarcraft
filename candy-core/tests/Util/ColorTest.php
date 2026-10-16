@@ -289,7 +289,7 @@ final class ColorTest extends TestCase
      * The test above covers cube slot 202 only, and that gap was measured, not
      * guessed: dropping the index from the greyscale branch alone —
      * `new self($g, $g, $g, $index)` -> `new self($g, $g, $g)` — left
-     * candy-core, candy-kit and sugar-dash all green while
+     * candy-core, candy-kit and sugar-dashboard all green while
      * `Color::ansi256(244)->toFg(TrueColor)` silently changed from
      * `\x1b[38;5;244m` to `\x1b[38;2;128;128;128m`, i.e. from deferring to the
      * user's palette to overriding it. Both ends of the ramp are asserted

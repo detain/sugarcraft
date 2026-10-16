@@ -76,7 +76,7 @@ final class WideCellPairingTest extends TestCase
 
     public function testClearViaWithCellAtMakesTheRowRepaintCleanly(): void
     {
-        // Consumer-shape pin (sugar-dash Chart's per-column withCellAt
+        // Consumer-shape pin (sugar-dashboard Chart's per-column withCellAt
         // writes): after clearing a wide cell the delta from the paired
         // frame must repaint BOTH columns, not silently keep a ghost.
         $before = Buffer::new(2, 1)

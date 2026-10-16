@@ -168,20 +168,20 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ---
 
-### Group 8: sugar-crush, sugar-navstack, sugar-dash, candy-mail
+### Group 8: sugar-crush, sugar-navstack, sugar-dash, candy-mail <!-- @rename-keep -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-crush | 158 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 | sugar-navstack | 75 ✓ | REQUEST_CHANGES | 0 | 0 | 3 | 0 |
-| sugar-dash | 5409 ✓ | APPROVE | 0 | 0 | 2 | 0 |
+| sugar-dash | 5409 ✓ | APPROVE | 0 | 0 | 2 | 0 | <!-- @rename-keep -->
 | candy-mail | 54 ⚠️ | BLOCKED | 2 | 2 | 3 | 0 |
 
 **sugar-crush** — Chat TUI. Clean, 158 tests. Minor: `@proc_open` suppressions; no PHP version guard for `bypass_shell`.
 
 **sugar-navstack** — Navigation components. Issues: `NavStack::updateTop()` and `setItems()` mutate internal state instead of returning clones — inconsistent with stated immutable pattern.
 
-**sugar-dash** — Dashboard library. Massive (5409 tests, 99.98% pass). Clean architecture throughout.
+**sugar-dash** — Dashboard library. Massive (5409 tests, 99.98% pass). Clean architecture throughout. <!-- @rename-keep -->
 
 **candy-mail** — **BLOCKED**: Path-repo symlink for candy-core is incomplete/missing `I18n/Lang.php`. Two tests fail with `"Class 'SugarCraft\Core\I18n\Lang' not found"`. Run `composer reinstall` in candy-mail. Issues: `Attachment::fromPath()` silently returns empty on missing file; SMTPTransport has no connection timeout.
 
@@ -496,7 +496,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 4. **phpstan level 9** — only candy-core has phpstan configured
 5. **codecov integration** — ensure all packages have coverage tracking
 6. **VHS demo automation** — .vhs/ .tape files exist but rendering is hand-maintained
-7. **Inter-op testing** — test that packages work together (e.g., sugar-charts in sugar-dash)
+7. **Inter-op testing** — test that packages work together (e.g., sugar-charts in sugar-dash) <!-- @rename-keep -->
 8. **Performance benchmarking** — establish baselines for rendering/latency/throughput
 
 ---
@@ -532,7 +532,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 1. **Run `composer reinstall` in CI** — detect broken path-repo symlinks before merge
 2. **Add phpstan to all packages** — only candy-core has it; bring others up to max level
 3. **Add codecov flags per-package** — track coverage per lib in the monorepo
-4. **Test inter-op** — e.g., sugar-charts embedded in sugar-dash renders correctly
+4. **Test inter-op** — e.g., sugar-charts embedded in sugar-dash renders correctly <!-- @rename-keep -->
 5. **Add mutation testing** — check test quality beyond coverage
 6. **CI should verify CALIBER_LEARNINGS.md exists** — detect when docs are missing
 
@@ -569,8 +569,8 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues |
 | 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
 | 7 | sugar-datepicker, candy-mdview, candy-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
-| 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
-| 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues | <!-- @rename-keep historical provenance -->
+| 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked | <!-- @rename-keep -->
+| 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
 | 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 

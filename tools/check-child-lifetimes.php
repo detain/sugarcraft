@@ -12,7 +12,7 @@ declare(strict_types=1);
  * sugar-crush child inherit", so both read through `vendor/sugarcraft` — the
  * eighteen libraries sugar-crush actually requires. That reach is correct for
  * the question it answers and it is NOT the whole tree: E448 measured three
- * long-lived exposed spawns (`sugar-dash` ExternalModule, `sugar-reel`
+ * long-lived exposed spawns (`sugar-dashboard` ExternalModule, `sugar-reel`
  * AudioPlayer and FfmpegDecoder) sitting in libraries no sugar-crush test can
  * see, where a new one could appear, move, or multiply with nothing saying
  * so. The filed options were to promote the scanner into `candy-testing` or
@@ -69,7 +69,7 @@ declare(strict_types=1);
  * exemption list): for the two `candy-pty` rows and the `candy-core` row, the
  * same REPORT sugar-crush's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
  * a package this repo's CI does not own, so the row buys visibility, not
- * silence. For the three `sugar-dash`/`sugar-reel` rows, E366 shipped a
+ * silence. For the three `sugar-dashboard`/`sugar-reel` rows, E366 shipped a
  * bounded TERM→KILL reap ladder at each site's teardown in this same round,
  * which closes the orphan half; the fd≥3 inheritance half REMAINS and this
  * row is where that stays written down. A row is allowed to say "exposed and
@@ -127,12 +127,12 @@ final class CheckChildLifetimes
                 . 'descriptors and still says nothing about 3+. Report row — NOT FIXABLE FROM '
                 . 'REPO GUARD; mirrors sugar-crush\'s ACCOUNTED_FOR_IN_LIBS.',
         ],
-        'sugar-dash/src/Plugin/ExternalModule.php::startProcess' => [
+        'sugar-dashboard/src/Plugin/ExternalModule.php::startProcess' => [
             'count' => 1,
             'reason' => 'persistent third-party plugin daemon, pipes on 0,1,2. E366 shipped the '
                 . 'bounded TERM→KILL reap ladder in __destruct() (this round), so the child '
                 . 'cannot outlive the dashboard; the fd≥3 inheritance exposure stands and this '
-                . 'row is where it stays written down for sugar-dash to own.',
+                . 'row is where it stays written down for sugar-dashboard to own.',
         ],
         'sugar-reel/src/AudioPlayer.php::start' => [
             'count' => 1,

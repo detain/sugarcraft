@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Panel\Vms;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\Collect\VmGuest;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Gfx\History;

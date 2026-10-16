@@ -700,7 +700,7 @@ Used for: Many reported bugs that are fixed in HEAD
 **Request**: 2D grid with multiple columns
 **Rejection reason**: Not planned short-term
 **Alternative**: Build in Bubble Tea (trivial)
-**SugarCraft opportunity**: Implement as `SugarDash` (already exists as grid library)
+**SugarCraft opportunity**: Implement as `SugarDashboard` (already exists as grid library)
 
 ### Extended Search Syntax (Issue #688)
 

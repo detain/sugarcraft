@@ -10,7 +10,7 @@ use SugarCraft\Top\View\Ink;
  * btop's one-row percent bar: every `■` is coloured at ITS OWN position on
  * the gradient, the unfilled tail in `meter_bg`.
  *
- * Same law as sugar-dash's position-mode `Meter` (whose bytes the test
+ * Same law as sugar-dashboard's position-mode `Meter` (whose bytes the test
  * suite compares against), but resolved through {@see Ink}: the dash
  * Meter always emits TrueColor escapes, which would put 24-bit colour on
  * a TTY-mode (16-colour) frame.

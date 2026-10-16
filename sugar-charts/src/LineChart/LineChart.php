@@ -15,7 +15,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Charts\Canvas\BrailleGrid;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
-use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Sprinkles\Theme;
 
@@ -269,7 +269,7 @@ final class LineChart extends Chart
      * {@see withAxes()} — e.g. `Graph::LINE_ROUNDED` for arc corners
      * (`╰`) instead of the default sharp thin ones (`└`). Passing null
      * restores the LINE_THIN default. WHY: ntcharts has no rune-style
-     * setter; this closes the org-wide rounded-box gap sugar-dash
+     * setter; this closes the org-wide rounded-box gap sugar-dashboard
      * already defaults to.
      *
      * @param ?array<string,string> $runes  a Graph::LINE_* preset
@@ -697,7 +697,7 @@ final class LineChart extends Chart
      * dot-matrix grid (2×4 dots per terminal cell) and paints each touched
      * cell exactly once, carrying the series' legend color as the cell
      * style — so dataset colors actually reach the strokes and the render
-     * is one batched walk instead of sugar-dash `BrailleCanvas::setPoint`'s
+     * is one batched walk instead of sugar-dashboard `BrailleCanvas::setPoint`'s
      * copy-on-write-per-dot cost. The `$brailleCanvas` instance only
      * selects this mode; its own buffer is never read or mutated.
      *

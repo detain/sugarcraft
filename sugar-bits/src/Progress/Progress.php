@@ -207,7 +207,7 @@ final class Progress
      * after any percent suffix is reserved). That gives btop's
      * position COLOURING — cell `$i` at `round(($i + 1) * 100 / $barWidth)`
      * through a 101-stop ramp — but not its fill count (Progress fills
-     * `round(percent * width)` cells); for exact btop fill use sugar-dash
+     * `round(percent * width)` cells); for exact btop fill use sugar-dashboard
      * `Meter::withGradient(..., positionWise: true)`. The arg is appended, so existing three-param closures keep
      * working (PHP drops surplus args to user closures).
      *

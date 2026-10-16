@@ -20,7 +20,7 @@ namespace SugarCraft\Focus;
  * mutator returns a new instance and leaves the receiver untouched.
  *
  * Mirrors the focus-traversal role of charmbracelet/bubbles' focus handling and
- * sugar-dash's FocusManager, but as a standalone, dependency-free, ordered ring.
+ * sugar-dashboard's FocusManager, but as a standalone, dependency-free, ordered ring.
  */
 final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializable
 {

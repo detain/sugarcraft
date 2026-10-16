@@ -27,7 +27,7 @@ namespace SugarCraft\Core\Util\Proc;
  * resource, a containment-wrapped process group, and a `pcntl_fork()`ed pid
  * whose liveness is a `WNOHANG` poll — the three shapes that previously grew
  * five separate private ladders downstream (sugar-crush's `ProcessReaper`
- * absorbed four of them; sugar-dash's `ExternalModule::terminateBounded()`
+ * absorbed four of them; sugar-dashboard's `ExternalModule::terminateBounded()`
  * and sugar-reel's `BoundedReaper` were documented per-lib copies of the
  * same rungs). Callers bring their own budgets; the sequence never varies.
  *

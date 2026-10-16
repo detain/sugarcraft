@@ -117,7 +117,7 @@ final class AgentSplitColumn
         $skip = max(0, min($skip, count($runs) - 1));
         // CL-2 FIX 4: fold over the FULL run set before the scroll slice, so
         // a scrolled-off twin still explains why its visible sibling reads
-        // "… sugar-dash". Fresh states, whole set in hand — the sibling seam
+        // "… sugar-dashboard". Fresh states, whole set in hand — the sibling seam
         // is AgentDashboardPane::managerEntries().
         $states = AgentLabelFolding::apply(array_map(self::runState(...), $runs));
         if ($skip === 0) {

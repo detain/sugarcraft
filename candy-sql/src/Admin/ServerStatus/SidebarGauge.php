@@ -6,8 +6,8 @@ namespace SugarCraft\Sql\Admin\ServerStatus;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dash\Foundation\Threshold;
-use SugarCraft\Dash\Plot\Chart\Gauge;
+use SugarCraft\Dashboard\Foundation\Threshold;
+use SugarCraft\Dashboard\Plot\Chart\Gauge;
 
 /**
  * A single sidebar gauge displaying a metric with threshold coloring.
@@ -68,7 +68,7 @@ final class SidebarGauge
      * Yellow:  0.6 ≤ ratio < 0.8
      * Red:     0.8 ≤ ratio ≤ 1.0
      *
-     * Delegates to the shared {@see Threshold::health()} ramp in sugar-dash so
+     * Delegates to the shared {@see Threshold::health()} ramp in sugar-dashboard so
      * every gauge/indicator shares one definition of "healthy/warn/critical".
      */
     public static function thresholdColor(float $ratio): Color

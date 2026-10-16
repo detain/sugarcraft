@@ -6,7 +6,7 @@ namespace SugarCraft\Charts\Chart;
 
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
-use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Sprinkles\Theme;
 
 /**
@@ -258,7 +258,7 @@ abstract class Chart
      * Honored by LineChart only; other chart classes ignore it. The
      * canvas object is not mutated — the chart rasterizes into its own
      * internal grid on every render and the instance merely selects the
-     * braille mode (its dimensions are not consulted). Mirrors sugar-dash
+     * braille mode (its dimensions are not consulted). Mirrors sugar-dashboard
      * Plot/Braille canvas mode.
      */
     public function withCanvas(BrailleCanvas $canvas): self

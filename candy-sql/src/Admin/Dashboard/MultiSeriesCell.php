@@ -9,8 +9,8 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Braille\Bresenham;
-use SugarCraft\Dash\Plot\Braille\BrailleMatrix;
+use SugarCraft\Dashboard\Plot\Braille\Bresenham;
+use SugarCraft\Dashboard\Plot\Braille\BrailleMatrix;
 use SugarCraft\Sql\Admin\StatusSnapshot;
 
 /**
@@ -29,8 +29,8 @@ use SugarCraft\Sql\Admin\StatusSnapshot;
  * never reach the strokes, and its withCanvas(BrailleCanvas) is plumbed
  * through the constructor but never consumed by any render path. Drawing
  * per-series colored polylines at sub-cell resolution needs the dot grid,
- * so this cell rasterizes with sugar-dash's Bresenham + BrailleMatrix
- * primitives (the same ones sugar-dash\BrailleCanvas is built from) into
+ * so this cell rasterizes with sugar-dashboard's Bresenham + BrailleMatrix
+ * primitives (the same ones sugar-dashboard\BrailleCanvas is built from) into
  * one mutable bit buffer: BrailleCanvas.setPoint() clones the whole cell
  * grid per dot, which is fine for one-shot charts but would cost hundreds
  * of thousands of cell copies per frame at 7 series × 120 samples redrawn

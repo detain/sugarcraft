@@ -18,7 +18,7 @@ declare(strict_types=1);
  *
  * WHY THE GREEN POLARITIES CALL derive() RATHER THAN THE CLI: the default
  * roster describes THIS repository. A throwaway fixture tree under /tmp can
- * never satisfy it — every candy-pty/candy-core/sugar-dash/sugar-reel row
+ * never satisfy it — every candy-pty/candy-core/sugar-dashboard/sugar-reel row
  * would read STALE there — so asserting exit 0 on a fixture would be
  * asserting the wrong contract. The red polarities still go through the CLI,
  * because what they prove is the wiring from scanner to exit code, and the

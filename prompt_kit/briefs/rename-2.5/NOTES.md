@@ -75,7 +75,7 @@ defects in the 34-commit chain being CI'd for the first time, plus one infra fam
    lock/temp residue — known documented family).
 6. candy-top — BorderBatteryTest::testAppShrinksTheClockForThePresentBattery
    (asserts 140==52; known "candy-top red on master" family).
-7. sugar-dash — WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp +
+7. sugar-dash — WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp + <!-- @rename-keep -->
    PersistenceTest::testSaveLeavesNoLeftoverTempFiles (same AtomicJsonFile residue
    family; proc_open posix_spawn warning = absent external cmds on runner, noise).
 8. sugar-crush (8.3+8.4 sharded) — DoctorExtensionProbesTest::

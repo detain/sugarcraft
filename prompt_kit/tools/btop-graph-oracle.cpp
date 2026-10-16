@@ -1,4 +1,4 @@
-// Independent oracle for sugar-dash DualSampleGraph (candy-top lane L3).
+// Independent oracle for sugar-dashboard DualSampleGraph (candy-top lane L3).
 //
 // Body of Graph::_create + the Graph ctor copied verbatim from
 // aristocratos/btop src/btop_draw.cpp (graph_symbols :89-133, _create :422-492,
@@ -28,7 +28,7 @@
 //
 // Build + regenerate the PHPUnit fixture:
 //   g++ -std=c++20 -O1 -o /tmp/btop-graph-oracle prompt_kit/tools/btop-graph-oracle.cpp
-//   /tmp/btop-graph-oracle > sugar-dash/tests/fixtures/btop-graph-oracle.json
+//   /tmp/btop-graph-oracle > sugar-dashboard/tests/fixtures/btop-graph-oracle.json
 #include <algorithm>
 #include <array>
 #include <cmath>

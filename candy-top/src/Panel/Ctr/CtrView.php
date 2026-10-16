@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Panel\Ctr;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\Collect\Cgroup;
 use SugarCraft\Top\Collect\ContainerInfo;
 use SugarCraft\Top\Collect\ContainerSnapshot;

@@ -64,7 +64,7 @@ called out in the table below.
 | **SugarPanels** (`sugar-panels/`) | 🟢 ready | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | **SugarOverlay** (`sugar-overlay/`) | 🟢 ready | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | **SugarNavstack** (`sugar-navstack/`) | 🟢 ready | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
-| **SugarDash** (`sugar-dash/`) | 🟢 ready | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
+| **SugarDashboard** (`sugar-dashboard/`) | 🟢 ready | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
 | **SugarQuickpick** (`sugar-quickpick/`) | 🟢 ready | Fuzzy finder overlay — renders over your app's view string while the background keeps updating; type to filter, arrow keys to select, Enter to confirm. |
 | **SugarTable** (`sugar-table/`) | 🟢 ready | Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows/cols. |
 | **SugarReadline** (`sugar-readline/`) | 🟢 ready | Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency. |
@@ -193,7 +193,7 @@ reference projects supplied the ideas, not the code.
 | SugarCrush (sugar-crush/) | [Crush](https://github.com/charmbracelet/crush) |
 | SugarCrushWeb (sugar-crush-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |
 | SugarNavstack (sugar-navstack/) | [bubbleo](https://github.com/KevM/bubbleo) |
-| SugarDash (sugar-dash/) | [bubble-grid](https://github.com/charmbracelet/bubble-grid) |
+| SugarDashboard (sugar-dashboard/) | [bubble-grid](https://github.com/charmbracelet/bubble-grid) |
 | SugarDiff (sugar-diff/) | none — first-party |
 | SugarGallery (sugar-gallery/) | [bubbles](https://github.com/charmbracelet/bubbles) (list/viewport) · phlix web media grid (loosely) |
 | CandyMdview (candy-mdview/) | [glow](https://github.com/charmbracelet/glow) |

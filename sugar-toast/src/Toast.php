@@ -527,7 +527,7 @@ final class Toast
      *
      * Lowercase `view()` per the project renderer convention; PHP method
      * dispatch is case-insensitive, so the legacy `View()` call sites in
-     * sugar-dash/candy-sql keep resolving here without an alias.
+     * sugar-dashboard/candy-sql keep resolving here without an alias.
      *
      * @param string $background  The underlying viewport content
      * @param int $viewportWidth  Viewport width in cells
@@ -718,7 +718,7 @@ final class Toast
      * (╭ ─ ╮ │ ╰ ╯) take the border colour; remaining interior text takes
      * the foreground colour. Cells that already carry a colour — the
      * severity-coloured icon and any inline-SGR message spans — keep it.
-     * Mirrors the styled toast box rendered by sugar-dash's Toast::render().
+     * Mirrors the styled toast box rendered by sugar-dashboard's Toast::render().
      *
      * @param list<string> $lines The rendered alert rows, used to bound the
      *                            styled columns to each row's box width so a

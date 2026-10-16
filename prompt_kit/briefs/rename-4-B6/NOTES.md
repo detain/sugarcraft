@@ -8,7 +8,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 - Baseline (rename-baseline.md:83): 278T/1412A/0F/0E/0S/0W — tagged @rename-keep in tag-prep 5718a6148.
 - Sibling dirs/packages prefixed `sugar-spark`: NONE (`ls -d *spark*` = only the lib itself). <!-- @rename-keep -->
   NO sugar-sparkline lib exists (brief premise checked): sparkline code lives INSIDE sugar-charts <!-- @rename-keep -->
-  (`src/Sparkline/Sparkline.php`), sugar-dash (`src/Plot/Chart/Sparkline*.php` + examples/goldens) and
+  (`src/Sparkline/Sparkline.php`), sugar-dash (`src/Plot/Chart/Sparkline*.php` + examples/goldens) and <!-- @rename-keep -->
   candy-sql (TimeSeriesCell prose) — ALL SAFE: R3 needs the full `sugar-spark` literal, R2 is Pascal <!-- @rename-keep -->
   `SugarSpark`, R4 is glued `sugarspark`; `Sparkline`/`sparkline` matches none. VERIFIED at R3: zero <!-- @rename-keep -->
   sparkline paths in the staged diff, zero sparkline lines in the (re-)dry-run.
@@ -44,7 +44,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 - PROJECT_NAMES.md: ZERO spark mentions (unlike B4/B5) — no rationale rewrite owed. Honest record.
 - Capital-hyphen `Sugar-spark` prose form: ZERO occurrences tree-wide → no living-doc hand-fix needed (B5 law applied).
 - Generic-word 'spark' landscape: NO Apache Spark/spark-sql citations; bare `spark`/`sparks`/`sparkline` live in
-  ansi/README+ansi.json art descriptions (forge imagery) and sugar-charts/sugar-dash code — no rule fires on bare
+  ansi/README+ansi.json art descriptions (forge imagery) and sugar-charts/sugar-dash code — no rule fires on bare <!-- @rename-keep -->
   words. Audit executed at R6 (B4/B5 method).
 - codecov.yml rows (flag + component) auto-rewrote via R3. `scripts/__pycache__/generate_icons.cpython-313.pyc`
   is a TRACKED binary (NUL bytes → C.3 content-excluded; residue NUL-skip) — pre-existing repo dirt, untouched.
@@ -104,7 +104,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 - Generic-word audit (B4/B5 method): changed bare-spark lines = ONLY `SugarCraft\Spark\*` namespace tokens (R1 rewrites) <!-- @rename-keep -->
   + own NOTES lines + ONE docs/plans/crush_code_worklog.md:11678 t3 history row — lib-column identifier renamed, its
   `spark FULL 269T/1380A` suite-column abbreviation + figures preserved (mechanical rename of a reference, claim intact —
-  same entity; accepted, no falsification). sugar-charts/sugar-dash sparkline prose+code lines: byte-untouched ✓.
+  same entity; accepted, no falsification). sugar-charts/sugar-dash sparkline prose+code lines: byte-untouched ✓. <!-- @rename-keep -->
 - No completions file existed for `sugarspark` (git ls-files zero) — bin sweep vacuous-clean; `.opencode/`+`.caliber/` <!-- @rename-keep -->
   hits are gitignored session artifacts; `.ansi` art wordmark content = logged followup ✓.
 

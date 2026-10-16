@@ -112,13 +112,13 @@ $up   = Resample::linear(30, $timestampedData);
 ### Braille canvas rendering
 
 Charts support high-resolution dot-matrix (braille) rendering via
-`SugarCraft\Dash\Plot\Braille\BrailleCanvas`. Pass a `BrailleCanvas`
+`SugarCraft\Dashboard\Plot\Braille\BrailleCanvas`. Pass a `BrailleCanvas`
 instance via `withCanvas()` to switch from character-cell to 2×4
 sub-cell resolution:
 
 ```php
 use SugarCraft\Charts\LineChart\LineChart;
-use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 
 $canvas = new BrailleCanvas(80, 24);
 $chart  = LineChart::new([1, 4, 2, 8, 6], 80, 24)

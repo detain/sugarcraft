@@ -414,7 +414,7 @@ the *inverse* of what the decoders need. Worth lifting either:
 - **Option C — duplicate the GD glue:** ~30 LOC duplicated between
   the two libs. Cheapest; matches the dual-foundation-SSOT pattern
   noted in `CALIBER_LEARNINGS.md` entry 38 (5 retained Foundation
-  types in sugar-dash).
+  types in sugar-dashboard).
 
 **Recommendation: Option C** until the decoder ships; revisit after.
 Cross-lib dependencies always cost more than 30 LOC of well-commented
@@ -752,8 +752,8 @@ the following must hold:
    images would be silently dropped today.
 4. **A SugarCraft demo app wants to display inline images in a
    sub-region of a TUI rendered through candy-vt.** E.g.
-   sugar-dash's WeatherModule wanting to embed a radar PNG. Today
-   sugar-dash bypasses candy-vt and writes directly to the host
+   sugar-dashboard's WeatherModule wanting to embed a radar PNG. Today
+   sugar-dashboard bypasses candy-vt and writes directly to the host
    terminal; this is the most plausible future trigger.
 
 ### 7.2 Soft triggers (raise priority but don't force start)

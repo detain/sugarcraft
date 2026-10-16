@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Coverage for the additive per-alert bg/fg/border colour styling on the
- * Toast renderer (W18 foundation for the sugar-dash toast migration).
+ * Toast renderer (W18 foundation for the sugar-dashboard toast migration).
  *
  * The plain (colour-less) render path MUST stay byte-identical to the
  * pre-styling behaviour — proven by comparing a push()'d bare Alert to the

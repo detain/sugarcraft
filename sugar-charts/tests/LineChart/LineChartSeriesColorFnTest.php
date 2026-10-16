@@ -7,7 +7,7 @@ namespace SugarCraft\Charts\Tests\LineChart;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 
 /**
  * candy-top L1: per-point color resolver on LineChart, layered over the

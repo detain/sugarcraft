@@ -14,7 +14,7 @@
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
 3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
 4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`.
-5. Two incompatible Boxer layout engines (`sugar-panels` vs `sugar-dash/src/Layout/Boxer`).
+5. Two incompatible Boxer layout engines (`sugar-panels` vs `sugar-dash/src/Layout/Boxer`). <!-- @rename-keep -->
 6. Almost everything else — README quickstarts, examples, type signatures, defaults, error messages, `final` policy — is already in great shape. See §6.
 
 ---
@@ -154,10 +154,10 @@ Recommend Option A. Tracked separately because of size — gate the work on expl
 ### 3.2 ANSI-strip regex duplicated across leaf libs
 
 Same `preg_replace('/\x1b\[[0-9;]*m/', '', $str)` pattern (plus `mb_strwidth` or `mb_strlen`) appears in:
-- `sugar-dash/src/Components/Feedback/Alert.php`
-- `sugar-dash/src/Components/Nav/Scrollbar.php`
-- `sugar-veil/src/Animation/Slide.php` <!-- @rename-keep historical provenance -->
-- `sugar-dash/src/Plot/Chart/OHLC.php`
+- `sugar-dash/src/Components/Feedback/Alert.php` <!-- @rename-keep -->
+- `sugar-dash/src/Components/Nav/Scrollbar.php` <!-- @rename-keep -->
+- `sugar-veil/src/Animation/Slide.php`
+- `sugar-dash/src/Plot/Chart/OHLC.php` <!-- @rename-keep -->
 
 Replace each with `\SugarCraft\Core\Util\Ansi::strip()` followed by `\SugarCraft\Core\Util\Width::string()`. This is the lowest-risk batch in the entire audit.
 
@@ -165,15 +165,15 @@ Replace each with `\SugarCraft\Core\Util\Ansi::strip()` followed by `\SugarCraft
 
 Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 - `sugar-charts/src/Legend/Legend.php`
-- `sugar-dash/src/Foundation/Style.php`
-- `sugar-dash/src/Components/System/Terminal.php`
+- `sugar-dash/src/Foundation/Style.php` <!-- @rename-keep -->
+- `sugar-dash/src/Components/System/Terminal.php` <!-- @rename-keep -->
 - `candy-mdview/src/Highlighter/ChromaJsonHighlighter.php`
-- `sugar-dash/src/Foundation/Buffer.php`
-- `sugar-dash/src/Plot/Braille/BrailleCanvas.php`
+- `sugar-dash/src/Foundation/Buffer.php` <!-- @rename-keep -->
+- `sugar-dash/src/Plot/Braille/BrailleCanvas.php` <!-- @rename-keep -->
 
 Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders.
 
-✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, sugar-quickpick, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
+✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, sugar-quickpick, candy-scriptui, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR). <!-- @rename-keep -->
 
 ✅ Also fixed (PR #878): candy-ssh-launcher Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
 
@@ -183,16 +183,16 @@ Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `
 
 ### 3.4 Two Boxer implementations — ⏭️ NOT a duplication; keep both (evaluated, won't consolidate)
 
-**Original claim (incorrect):** that `sugar-panels/src/SugarPanels.php` and `sugar-dash/src/Layout/Boxer/` are two ports of the same "box layout engine" and the latter should be dropped in favor of the former.
+**Original claim (incorrect):** that `sugar-panels/src/SugarPanels.php` and `sugar-dash/src/Layout/Boxer/` are two ports of the same "box layout engine" and the latter should be dropped in favor of the former. <!-- @rename-keep -->
 
 **Finding after reading both implementations:** they are legitimately different things that happen to share the word "Boxer", and consolidating them would be net-harmful. Evidence:
 
-- **Different upstreams.** `sugar-panels` doc-comments cite `treilik/bubbleboxer`; `sugar-dash/src/Layout/Boxer` cites `charmbracelet/boxer`. Two distinct upstream projects, not a duplicate port.
-- **Opposite rendering models, zero shared algorithm.** `SugarPanels` paints onto a mutable 2D cell grid — it draws box-drawing borders around leaf text it word-wraps itself, distributing space by minWidth/minHeight weights. `sugar-dash`'s `Node::renderTree` is a line-list compositor — it calls each leaf model's own `render()`, validates the returned lines against the allocated size (returns `SizeError` on overflow), and `implode()`s panels with single-char separators. One paints a grid; the other concatenates pre-rendered strings.
-- **sugar-dash's Boxer is deeply wired into sugar-dash's own systems** that `sugar-panels` has no concept of: `implements Item, Sizer`, dotted-address navigation, an address→`Item` model map (renders live component output, not static strings), interactive `editLeaf`, `persistState`/`restoreState` via `Persistence`, and `withTheme` fan-out. `sugar-panels` takes one static string per leaf.
-- A "thin adapter" would not be thin — it would amount to reimplementing `sugar-dash`'s ~825-line Boxer/Node (36-test suite in `sugar-dash/tests/Layout/BoxerTest.php`) on top of an API that lacks model maps, addresses, Sizer propagation, persistence, and themes.
+- **Different upstreams.** `sugar-panels` doc-comments cite `treilik/bubbleboxer`; `sugar-dash/src/Layout/Boxer` cites `charmbracelet/boxer`. Two distinct upstream projects, not a duplicate port. <!-- @rename-keep -->
+- **Opposite rendering models, zero shared algorithm.** `SugarPanels` paints onto a mutable 2D cell grid — it draws box-drawing borders around leaf text it word-wraps itself, distributing space by minWidth/minHeight weights. `sugar-dash`'s `Node::renderTree` is a line-list compositor — it calls each leaf model's own `render()`, validates the returned lines against the allocated size (returns `SizeError` on overflow), and `implode()`s panels with single-char separators. One paints a grid; the other concatenates pre-rendered strings. <!-- @rename-keep -->
+- **sugar-dash's Boxer is deeply wired into sugar-dash's own systems** that `sugar-panels` has no concept of: `implements Item, Sizer`, dotted-address navigation, an address→`Item` model map (renders live component output, not static strings), interactive `editLeaf`, `persistState`/`restoreState` via `Persistence`, and `withTheme` fan-out. `sugar-panels` takes one static string per leaf. <!-- @rename-keep -->
+- A "thin adapter" would not be thin — it would amount to reimplementing `sugar-dash`'s ~825-line Boxer/Node (36-test suite in `sugar-dash/tests/Layout/BoxerTest.php`) on top of an API that lacks model maps, addresses, Sizer propagation, persistence, and themes. <!-- @rename-keep -->
 
-**Resolution:** keep both. `sugar-panels` = static bordered-box painter (treilik/bubbleboxer). `sugar-dash`'s `Layout\Boxer` = stateful address-tree panel compositor (charmbracelet/boxer). The namespaces (`SugarCraft\Panels` vs `SugarCraft\Dash\Layout\Boxer`) already disambiguate them. A future rename of the sugar-dash class (e.g. `PanelTree`) to reduce the name clash is optional and would go through the repo's separate rename flow — not pursued here.
+**Resolution:** keep both. `sugar-panels` = static bordered-box painter (treilik/bubbleboxer). `sugar-dash`'s `Layout\Boxer` = stateful address-tree panel compositor (charmbracelet/boxer). The namespaces (`SugarCraft\Panels` vs `SugarCraft\Dash\Layout\Boxer`) already disambiguate them. A future rename of the sugar-dash class (e.g. `PanelTree`) to reduce the name clash is optional and would go through the repo's separate rename flow — not pursued here. <!-- @rename-keep -->
 
 ### 3.5 33 cloned Lang.php files
 
@@ -298,10 +298,10 @@ Recorded here so future audits don't re-litigate:
 
 Each step is a self-contained PR ending with the local gate (phpunit + phpstan + cs-fixer) per affected lib, then the review cycle, docs updates, and ship-pr per the Execution protocol above.
 
-1. **Quick wins (1 PR, ~½ day):** Delete `candy-mdview/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`. <!-- @rename-keep historical provenance -->
-2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + candy-mdview batch.
+1. **Quick wins (1 PR, ~½ day):** Delete `candy-mdview/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`. <!-- @rename-keep -->
+2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + candy-mdview batch. <!-- @rename-keep -->
 3. **Lang.php consolidation (1 PR):** Add `SugarCraft\Core\I18n\LangFactory` + update `scaffold-library` skill + mechanically migrate 33 libs.
-4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-panels/SugarPanels`.
+4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-panels/SugarPanels`. <!-- @rename-keep -->
 5. **`candy-forms` extraction (multi-PR phased, gated):** Extract `candy-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/candy-forms during transition. Largest item — needs explicit go-ahead.
 6. **Polish round (1 PR):** `catalog()` methods, candy-forms validator shortcuts, `TestCase` base, `StreamHelper` trait.
 7. **Optional / opportunistic:** shared `phpunit.xml.dist`; `candy-term` foundation lib for raw-mode.

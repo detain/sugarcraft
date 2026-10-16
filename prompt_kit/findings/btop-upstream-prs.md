@@ -3,7 +3,7 @@
 Base: aristocratos/btop @ d3389d7 (local `/home/sites/btop`). Plan: `plan_top.md` §1 (Linux-first v1; GPU only via
 `nvidia-smi`; no NVML/ROCm dlopen; no BSD/macOS collectors), §3 (architecture), §4 (P-A..P-G). Landed code
 checked: `candy-top/src/Collect/*`, `candy-top/src/Config/{Schema,ConfigReader,ConfigWriter,ConfigFile}.php`,
-`candy-top/src/Theme/*`, `sugar-dash/src/Plot/Braille/DualSampleGraph.php`.
+`candy-top/src/Theme/*`, `sugar-dashboard/src/Plot/Braille/DualSampleGraph.php`.
 Every PR was fetched with `gh pr view --json …` and `gh pr diff` on 2026-10-08. All 32 are OPEN.
 
 Verdict key: **ADOPT** = in v1, lands in a P-B..P-G phase or lane. **ADOPT-LATER** = worth having, but post-v1
@@ -307,7 +307,7 @@ the `Battery` sentinel and heuristic.
 - Rounding `mod` is 0.6 when height == 1 and 0.2 otherwise (block, braille and tty keep 0.3 / 0.1).
 - The value is added to `graph_symbol` and to every `graph_symbol_<box>`.
 - A height-1 row fix-up trims the first glyph.
-**Our state:** `sugar-dash` `DualSampleGraph` ports braille, block and tty verbatim (`SYMBOLS`,
+**Our state:** `sugar-dashboard` `DualSampleGraph` ports braille, block and tty verbatim (`SYMBOLS`,
 `FAMILY_*` constants, index `prev*5 + cur`, underlay index 6). `Schema::GRAPH_SYMBOLS` and `GRAPH_SYMBOLS_DEF`
 lack `block2`.
 **Verdict: ADOPT (lib lane L3 extension, then the Schema enum).**
@@ -557,7 +557,7 @@ Propose a post-v1 **P-H GPU**:
 | #1791 | ADOPT (a,b) / LATER (c) | Branch-total tree sort; options section headings; tree-state persistence in an XDG state file, not config | P-E, P-F, post-v1 |
 | #1787 | N/A | FreeBSD only | none |
 | #1785 | ADOPT | Per-core freq from `cpuN/cpufreq`; `show_core_freq=off\|value\|graph` | Freq + P-B CPU grid |
-| #1783 | ADOPT | `block2` sextant family (clampMax 3, mod .6/.2) + enum value | sugar-dash L3 + Schema |
+| #1783 | ADOPT | `block2` sextant family (clampMax 3, mod .6/.2) + enum value | sugar-dashboard L3 + Schema |
 | #1747 | ADOPT | `mem_selected` single focused mem graph | P-B MemView |
 | #1739 | ADOPT | Zswap/Zswapped from meminfo; `show_zswap=true`; on-disk "Used"; gradient fallback | Memory + P-B |
 | #1730 | ADOPT-LATER | GPU box slots with switchable target; `gpuN` any N, max 6 | P-H |
@@ -595,7 +595,7 @@ feature itself is kept. Totals: 16 ADOPT (2 of them split with a later part: #18
    M in total.
 
 **U2: library lane (with L3)**
-7. #1783 `block2` in sugar-dash `DualSampleGraph`, plus the `Schema` graph_symbol enums. S-M.
+7. #1783 `block2` in sugar-dashboard `DualSampleGraph`, plus the `Schema` graph_symbol enums. S-M.
 
 **U3: per-phase panel features (fold into each phase's acceptance)**
 

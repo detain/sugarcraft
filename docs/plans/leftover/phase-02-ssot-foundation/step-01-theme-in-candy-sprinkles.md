@@ -7,9 +7,9 @@
 ## Deliverable
 
 Create the canonical `Theme` class in `candy-sprinkles`. Today
-sugar-dash has a 349-line `Foundation/Theme.php` and no other lib has
+sugar-dashboard has a 349-line `Foundation/Theme.php` and no other lib has
 one — but every dashboard/widget consumer needs themes. After this
-step, every other lib imports `\SugarCraft\Sprinkles\Theme`; sugar-dash
+step, every other lib imports `\SugarCraft\Sprinkles\Theme`; sugar-dashboard
 will retire its bespoke version in step 03.05.
 
 ## Files
@@ -54,11 +54,11 @@ will retire its bespoke version in step 03.05.
 
 ## Notes
 
-- This is the new SHARED home for themes. sugar-dash will adopt it in
+- This is the new SHARED home for themes. sugar-dashboard will adopt it in
   step 03.05; sugar-charts will pick it up via SSOT-05 in step 03.13.
 - Use `\SugarCraft\Core\Util\Color` for color values, not a new color
   type.
-- This class is the precondition for downstream sugar-dash and chart
+- This class is the precondition for downstream sugar-dashboard and chart
   work. Keep API stable from day one.
 
 ---

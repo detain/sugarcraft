@@ -422,7 +422,7 @@ echo Progress::new()
 ```
 
 This gives btop's *colouring*, not its fill count (Progress fills
-`round(percent * width)` cells). For an exact btop meter use sugar-dash
+`round(percent * width)` cells). For an exact btop meter use sugar-dashboard
 `Meter::withGradient($stops, positionWise: true)`.
 
 ## Snapshot tests

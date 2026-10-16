@@ -2,10 +2,10 @@
 status: not-started
 phase: 0
 updated: 2026-05-13
-goal: Reorganize sugar-dash from flat src/Grid/ namespace into proper subpackages, then extract missing patterns from 7 reference Go libraries.
+goal: Reorganize sugar-dashboard from flat src/Grid/ namespace into proper subpackages, then extract missing patterns from 7 reference Go libraries.
 ---
 
-# SugarDash — Update Plan (claude)
+# SugarDashboard — Update Plan (claude)
 
 ## Reference material — local source dumps from the 7 reference repos
 
@@ -32,11 +32,11 @@ Cloned for this plan to `/tmp/dash-research/src/` on 2026-05-13. Use as the cita
    ```
 2. **Persist** — `cp -r /tmp/dash-research <somewhere-stable>` before reboot. Or stash a tarball in `plans/dash-research.tar.gz` (gitignored).
 
-**Note on `termui` (sashakoshka/termui at git.tebibyte.media):** GPLv3 — sugar-dash is MIT. The math (braille bit-table, BRAILLE_OFFSET, cell coords, Bresenham line) is not copyrightable. The state-machine ParseStyles parser needs a **clean-room rewrite** from the algorithmic description in this plan, not from copying the Go source. Don't paste termui code into PHP files.
+**Note on `termui` (sashakoshka/termui at git.tebibyte.media):** GPLv3 — sugar-dashboard is MIT. The math (braille bit-table, BRAILLE_OFFSET, cell coords, Bresenham line) is not copyrightable. The state-machine ParseStyles parser needs a **clean-room rewrite** from the algorithmic description in this plan, not from copying the Go source. Don't paste termui code into PHP files.
 
 ## Summary of current state vs. plan
 
-**Current state:** 222 PHP files all under `SugarCraft\Dash\Grid\` namespace. The lib has accumulated way more than the original 18-package plan envisioned — a lot of components are done, just unsorted. The `Grid/` name is misleading (it holds widgets, layout primitives, events, themes, drawing, etc.).
+**Current state:** 222 PHP files all under `SugarCraft\Dashboard\Grid\` namespace. The lib has accumulated way more than the original 18-package plan envisioned — a lot of components are done, just unsorted. The `Grid/` name is misleading (it holds widgets, layout primitives, events, themes, drawing, etc.).
 
 **Original plan scope (18 packages):** Grid, Boxer, Layout, RatioGrid, GridTable, Tree, StatusBar, Modal, Select, Toast, Tabs, Plot, Drawable, Module, Registry, Plugin, Modules, Keys/Theme/Position/Output.
 
@@ -82,7 +82,7 @@ These split into clear families: **Layout primitives** (Stack/VStack/HStack/ZSta
 
 ## Ingenious math/logic worth extracting (verbatim from sources)
 
-These are the non-obvious algorithms that should land in sugar-dash regardless of whether we ship the full lib:
+These are the non-obvious algorithms that should land in sugar-dashboard regardless of whether we ship the full lib:
 
 ### 1. Braille canvas math (termui/drawille)
 
@@ -104,7 +104,7 @@ var BRAILLE = [4][2]rune{
 // Final rune emitted = rune + BRAILLE_OFFSET (U+2800 = base Braille pattern)
 ```
 
-**Why this matters:** Gives 2× horizontal and 4× vertical resolution vs. the 1:1 pixel canvas sugar-dash currently ships. A 80×24 terminal becomes a 160×96 dot canvas for line charts, scatter plots, and arbitrary geometry. Plot widget gets dramatically smoother curves.
+**Why this matters:** Gives 2× horizontal and 4× vertical resolution vs. the 1:1 pixel canvas sugar-dashboard currently ships. A 80×24 terminal becomes a 160×96 dot canvas for line charts, scatter plots, and arbitrary geometry. Plot widget gets dramatically smoother curves.
 
 ### 2. Five-phase constraint solver (go-tealeaves/tealayout)
 
@@ -135,7 +135,7 @@ Five-phase resolver beats tilelayout's iterative leftover distribution:
 
 Layout tree (`Node`) is structurally distinct from model instances (`ModelMap[address]string → tea.Model`). Mutating a model never requires traversing the tree. `CreateLeaf(address, model)` is the **only** way to spawn a valid leaf — the `address` field is private. `EditLeaf(address, fn)` runs a closure on the model and auto-saves only on success.
 
-**Why this matters:** Sugar-dash currently rebuilds entire layouts on each `setSize()`. With a Node/ModelMap split, panels can update independently without re-allocating the tree. Critical for dashboards where one panel updates per second and the others are quiescent.
+**Why this matters:** Sugar-dashboard currently rebuilds entire layouts on each `setSize()`. With a Node/ModelMap split, panels can update independently without re-allocating the tree. Critical for dashboards where one panel updates per second and the others are quiescent.
 
 ### 4. ParseStyles inline syntax (termui)
 
@@ -143,7 +143,7 @@ Layout tree (`Node`) is structurally distinct from model instances (`ModelMap[ad
 
 Syntax: `[text](fg:red,bg:blue,mod:bold)` with state-machine parser. Nested `[...]` allowed via `squareCount` tracking. Falls back to default style on malformed input via `rollback()`.
 
-**Why this matters:** Markdown/Highlight/Code/Text widgets all currently take an external `Style` argument per chunk. Inline syntax compresses theming into the string itself — much nicer ergonomics for log output, status messages, hover hints. Becomes the canonical "rich text" syntax for sugar-dash.
+**Why this matters:** Markdown/Highlight/Code/Text widgets all currently take an external `Style` argument per chunk. Inline syntax compresses theming into the string itself — much nicer ergonomics for log output, status messages, hover hints. Becomes the canonical "rich text" syntax for sugar-dashboard.
 
 ### 5. RatioGrid recursive composition (termui/grid.go)
 
@@ -157,7 +157,7 @@ Syntax: `[text](fg:red,bg:blue,mod:bold)` with state-machine parser. Nested `[..
 //   leaf: x = width*XRatio, y = height*YRatio, w = width*WidthRatio
 ```
 
-**Why this matters:** Reads like declarative UI. Sugar-dash's current `Layout` is imperative (`withChild()`/`addItem()`). RatioGrid composition is cleaner for dashboard layouts that don't need flex semantics — pure float ratios that compose recursively.
+**Why this matters:** Reads like declarative UI. Sugar-dashboard's current `Layout` is imperative (`withChild()`/`addItem()`). RatioGrid composition is cleaner for dashboard layouts that don't need flex semantics — pure float ratios that compose recursively.
 
 ### 6. Cumulative-rounding sparkline scale (Homedash)
 
@@ -170,7 +170,7 @@ if ($v < 5) { use dim-style $blocks[0]; }       // visual floor
 
 Plus **left-pad with dim ░** when buffer has fewer samples than width — keeps right-edge anchored on most recent data even as history fills.
 
-**Why this matters:** Sugar-dash's existing Sparkline probably scales differently; standardize on 0–100 → idx mapping with dim-edge padding.
+**Why this matters:** Sugar-dashboard's existing Sparkline probably scales differently; standardize on 0–100 → idx mapping with dim-edge padding.
 
 ### 7. GaugeWithDetail overlay (Homedash)
 
@@ -190,7 +190,7 @@ DATA   ███████ 105G/250G ░░░░░░░░  42%
 
 Two parallel slices: `items` (active, max 20, dismissable) + `history` (max 50, append-only). `current()` returns head of `items`. `recent(n)` returns last `n` from `history` newest-first. Both buffers drop oldest when full via slice reslicing.
 
-**Why this matters:** "Show current notification + show last 5 in alert panel" is the standard dashboard pattern. Current sugar-dash `Notification.php` is single-shot.
+**Why this matters:** "Show current notification + show last 5 in alert panel" is the standard dashboard pattern. Current sugar-dashboard `Notification.php` is single-shot.
 
 ### 9. Atomic state persistence (Homedash)
 
@@ -210,7 +210,7 @@ os.Rename(tmp, path)  // atomic on POSIX
 
 `if width < 90: render single-column; else: dual-column with left=48%, right=52%, gap=2`. Disk gauges fall through to single-column body in narrow mode.
 
-**Why this matters:** TUI dashboards are routinely run in narrow tmux panes. Hard width thresholds are the simplest responsive pattern. Should be a documented convention across sugar-dash panels.
+**Why this matters:** TUI dashboards are routinely run in narrow tmux panes. Hard width thresholds are the simplest responsive pattern. Should be a documented convention across sugar-dashboard panels.
 
 ### 11. Lattice JSON plugin protocol (floatpane/lattice)
 
@@ -218,7 +218,7 @@ os.Rename(tmp, path)  // atomic on POSIX
 
 Line-delimited JSON over stdin/stdout. Three request types: `init` (returns Name/MinSize/Interval), `update` (returns Content), `view` (with Width/Height → Content). Plugin can be any executable in any language. `Interval > 0` schedules periodic update via `tea.Tick`.
 
-**Why this matters:** Lets users write dashboard modules in Bash, Python, Node, or PHP without recompiling sugar-dash. A `system-fan-speed.sh` plugin is 20 lines of bash.
+**Why this matters:** Lets users write dashboard modules in Bash, Python, Node, or PHP without recompiling sugar-dashboard. A `system-fan-speed.sh` plugin is 20 lines of bash.
 
 ### 12. teagrid GCD for column ratios (`/tmp/dash-research/src/tealeaves/teagrid_calc.go:1-15`)
 
@@ -228,7 +228,7 @@ Recursive GCD via `goto end`-style. Used when reducing column-width ratios to sm
 
 ## New plan: 0-7 phases, each shipped as a separate PR
 
-Each phase is a self-contained PR per the project's ship-as-you-go cadence (see `AGENTS.md`). Branches `ai/sugar-dash-phase-NN-<slug>`.
+Each phase is a self-contained PR per the project's ship-as-you-go cadence (see `AGENTS.md`). Branches `ai/sugar-dashboard-phase-NN-<slug>`.
 
 ### Phase 0 — Inventory + Reorganize (no behavior changes)
 
@@ -462,7 +462,7 @@ src/
 **Phase 0 deliverables (PR #1):**
 
 - New directory tree per above with all 222 files **moved** (no rewrites)
-- `composer.json` autoload remains `SugarCraft\\Dash\\` → `src/` — no change needed; nested namespaces inferred from path
+- `composer.json` autoload remains `SugarCraft\\Dashboard\\` → `src/` — no change needed; nested namespaces inferred from path
 - Every internal `use` updated (mostly relative — most code uses `Grid\Foo` which becomes `Components\Foo` or `Layout\Foo`)
 - `tests/` tree mirrors `src/`
 - Examples in `examples/` get their `use` lines updated only — no semantic changes
@@ -559,7 +559,7 @@ Goal: extensibility surface. Anyone can author a module (PHP class) or plugin (a
 - `Plugin/Request.php` + `Plugin/Response.php` — typed DTOs matching lattice JSON shape.
 - `Plugin/PluginSdk.php` — `run(callable $handler): never` — reads stdin line-by-line, dispatches to handler, writes JSON to stdout. For PHP plugin authors.
 - `Plugin/ExternalModule.php` — wraps a binary into `Module`. Spawn via `proc_open`, json-encode on stdin, json-decode on stdout, schedule next `update` via `Interval`.
-- `Plugin/Discovery.php` — scan `$XDG_CONFIG_HOME/sugar-dash/plugins/` for executable files.
+- `Plugin/Discovery.php` — scan `$XDG_CONFIG_HOME/sugar-dashboard/plugins/` for executable files.
 - `Modules/Clock/ClockModule.php` — single-line clock with optional date+timezone.
 - `Modules/System/SystemModule.php` — `/proc/cpuinfo`, `/proc/meminfo`, `/proc/mounts`, sparkline history. Wraps responsive-panel pattern.
 - `Modules/Weather/WeatherModule.php` — HTTP fetch (wttr.in or open-meteo); fall back to cached value on error.
@@ -593,15 +593,15 @@ Goal: catch up on test coverage for everything new, plus VHS demos.
   - `.vhs/boxer.tape` — split panel with three named leaves, focus rotation.
   - Add all to `.github/workflows/vhs.yml` `all=(...)` matrix.
 - **Docs**:
-  - Update `sugar-dash/README.md` with the new namespace table.
-  - `docs/lib/sugar-dash.md` — link to docs.
+  - Update `sugar-dashboard/README.md` with the new namespace table.
+  - `docs/lib/sugar-dashboard.md` — link to docs.
   - Update root `MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md`, root `docs/index.html` tile.
 
 ---
 
 ## Technical debt to fix during reorganization
 
-Per `sugar-dash/CALIBER_LEARNINGS.md` (35 entries documented), the following concrete bugs/anti-patterns should be addressed during the appropriate phase rather than after. Each fix below cites the CALIBER entry it resolves so reviewers can verify against the learnings file.
+Per `sugar-dashboard/CALIBER_LEARNINGS.md` (35 entries documented), the following concrete bugs/anti-patterns should be addressed during the appropriate phase rather than after. Each fix below cites the CALIBER entry it resolves so reviewers can verify against the learnings file.
 
 | # | Bug | Phase | Notes |
 |---|-----|-------|-------|
@@ -680,7 +680,7 @@ Plus an `Anchor(int $x, int $y)` mode for tooltip-style overlays. Position calcu
 
 ## Test coverage targets per phase
 
-Codecov flag `sugar-dash` already exists in root `codecov.yml`. Add per-component component flags during Phase 0 so coverage can be tracked sub-package-by-sub-package:
+Codecov flag `sugar-dashboard` already exists in root `codecov.yml`. Add per-component component flags during Phase 0 so coverage can be tracked sub-package-by-sub-package:
 
 | Subpackage | Target | Test types |
 |------------|--------|------------|
@@ -696,14 +696,14 @@ Coverage measured locally with pcov per CLAUDE.md instructions.
 
 ## Risks & open questions
 
-1. **`Boxer` rename collision.** Every test/example uses `Boxer::new()`. Plan to grep first (`rg -l 'Grid\\Boxer'`), rename across files in one PR titled `sugar-dash: rename current Boxer → Pad`. Keep a deprecated alias `class Boxer extends Pad {}` for one release if external users could exist (unlikely pre-1.0, but cheap).
+1. **`Boxer` rename collision.** Every test/example uses `Boxer::new()`. Plan to grep first (`rg -l 'Grid\\Boxer'`), rename across files in one PR titled `sugar-dashboard: rename current Boxer → Pad`. Keep a deprecated alias `class Boxer extends Pad {}` for one release if external users could exist (unlikely pre-1.0, but cheap).
 2. **Drawable mode interop.** Existing widgets return strings via `render()`. New Drawable-mode widgets target `Buffer`. Need a `BufferRenderer` adapter that runs old widgets and pastes their output into a Buffer region — that's the bridge during the transition. Don't force-port everything at once.
 3. **5-phase resolver vs. existing Layout flex.** Current `Layout::calculateHorizontalSizes` callers may rely on current rounding behavior (off-by-one pixel here and there). Plan: snapshot tests before swap → swap → diff snapshots → adjust thresholds. The 5-phase is strictly more correct but may shift edges by ±1px on small widths.
 4. **PHP perf on large Buffers.** 200×60 cell × 5KB style per cell = 6MB. Use `SplFixedArray` for `Cell[][]` and intern Styles (Flyweight) — most cells share defaults.
 5. **Sub-agents are ONE-AT-A-TIME** per CALIBER_LEARNINGS — Phase 0's file moves can't be parallelized across sub-agents because they all touch `composer.json` autoload + a handful of shared `use` blocks. Sequence them: Foundation moves → Layout moves → Components moves → Plot moves → docs.
-6. **`sashakoshka/termui` upstream is GPLv3.** Sugar-dash is MIT. Re-implement from the doc comments + algorithm description, **not** by copying lines. The math (BRAILLE table, BRAILLE_OFFSET, cell = (X/2, Y/4)) is not copyrightable. The state machine for ParseStyles needs a clean-room rewrite.
+6. **`sashakoshka/termui` upstream is GPLv3.** Sugar-dashboard is MIT. Re-implement from the doc comments + algorithm description, **not** by copying lines. The math (BRAILLE table, BRAILLE_OFFSET, cell = (X/2, Y/4)) is not copyrightable. The state machine for ParseStyles needs a clean-room rewrite.
 7. **VHS demos** are hand-maintained per AGENTS.md — every new demo must land in `.github/workflows/vhs.yml`'s `all=(...)` array or the GIF never re-renders.
-8. **Backward compatibility — DO NOT BUILD.** The other AI's plan suggested a `Grid\` alias namespace pointing at new locations during a deprecation window. Sugar-dash is pre-1.0 and per `feedback_audit_skip_credit_upgrade.md` the project skips upgrade-guide work pre-1.0. Just move files, update tests/examples in the same commit. If a downstream user has pinned `dev-master` they'll get the new namespaces atomically — that's fine for path-repo siblings.
+8. **Backward compatibility — DO NOT BUILD.** The other AI's plan suggested a `Grid\` alias namespace pointing at new locations during a deprecation window. Sugar-dashboard is pre-1.0 and per `feedback_audit_skip_credit_upgrade.md` the project skips upgrade-guide work pre-1.0. Just move files, update tests/examples in the same commit. If a downstream user has pinned `dev-master` they'll get the new namespaces atomically — that's fine for path-repo siblings.
 9. **Theme preset names** — standardize on `Theme::dark()`, `Theme::light()`, `Theme::adaptive()`, `Theme::default()` factories (matches teautils + Homedash). `adaptive()` reads `$_ENV['COLORFGBG']` to choose between dark/light. Document in Phase 0 `Theme.php` move.
 
 ---
@@ -712,11 +712,11 @@ Coverage measured locally with pcov per CLAUDE.md instructions.
 
 ## Guiding principles (project priorities)
 
-These are the unconditional north-star priorities for sugar-dash. Every phase must move all three forward. If a design choice trades one against another, document the trade-off in the PR body.
+These are the unconditional north-star priorities for sugar-dashboard. Every phase must move all three forward. If a design choice trades one against another, document the trade-off in the PR body.
 
 ### 1. Breadth — ship as many components and features as possible
 
-Sugar-dash already carries 222 PHP files. The plan ADDS more (GridTable, BraillePlot, ConfirmModal/ListModal/MultiselectModal/ProgressModal, DrilldownTree, ExternalModule, Module variants, FocusManager, StackLayout, etc.). The reorganization is NOT a scope-cut — it's a clean shelf so we can keep adding without drowning.
+Sugar-dashboard already carries 222 PHP files. The plan ADDS more (GridTable, BraillePlot, ConfirmModal/ListModal/MultiselectModal/ProgressModal, DrilldownTree, ExternalModule, Module variants, FocusManager, StackLayout, etc.). The reorganization is NOT a scope-cut — it's a clean shelf so we can keep adding without drowning.
 
 - Every phase MUST end with strictly more public surface than it started with. No "trim down to MVP" rationalizations.
 - When porting a reference repo, port **every** feature it surfaces — Confirm AND List AND Multiselect AND Progress modals, not just Confirm. Wide is the goal.
@@ -745,7 +745,7 @@ Wide + fast is worthless if it's buggy. Quality bar:
 - Every public method has a test. Every visual widget has a snapshot at 80×24 AND 120×40. Every interactive widget has scripted-input behavior tests.
 - Edge cases tested: zero-width, zero-height, single-char, multi-byte unicode, embedded ANSI, RTL text, emoji, narrow + wide East Asian.
 - VHS demos for everything (Phase 7) — visual regression is a real risk; the GIF in the README catches "looks right" issues that unit tests miss.
-- Docblocks on everything. The reader of `sugar-dash/src/Plot/Braille/BrailleCanvas.php` should not need to read drawille.go to understand the bit-packing — explain it in `/** ... */` above the constants.
+- Docblocks on everything. The reader of `sugar-dashboard/src/Plot/Braille/BrailleCanvas.php` should not need to read drawille.go to understand the bit-packing — explain it in `/** ... */` above the constants.
 
 ## Cross-cutting requirements (apply to EVERY phase)
 
@@ -763,7 +763,7 @@ These are non-negotiable. They apply to every PR in this plan, not just one phas
 
 ### Testing
 
-- **Every public method gets at least one test.** PHPUnit 10, namespace `SugarCraft\Dash\Tests\<Subpkg>\`, mirror `src/` tree.
+- **Every public method gets at least one test.** PHPUnit 10, namespace `SugarCraft\Dashboard\Tests\<Subpkg>\`, mirror `src/` tree.
 - Three styles per AGENTS.md:
   - **Snapshot** — assert exact byte string (ANSI SGR `\x1b[1m...` included). Store goldens under `tests/golden/<phase>/`.
   - **Behavior** — drive `update()` with scripted `KeyEvent`/`MouseEvent`, assert on returned `[Model, ?Cmd]` tuple.
@@ -772,17 +772,17 @@ These are non-negotiable. They apply to every PR in this plan, not just one phas
 - **Plot / Braille tests** — assert exact braille bytes (`mb_chr(0x2800 + bits)`) for known geometry (e.g. line `(0,0)→(7,15)` on a 4×4-cell area).
 - **Plugin tests** — fixture executable at `tests/fixtures/echo-plugin.sh`. Verify init/update/view request → response round-trip.
 - `vendor/bin/phpunit` must be GREEN before every commit, every PR.
-- Aim for ≥85% coverage per Codecov flag (`sugar-dash` flag in `codecov.yml`).
+- Aim for ≥85% coverage per Codecov flag (`sugar-dashboard` flag in `codecov.yml`).
 
 ### Documentation per phase
 
 Each phase MUST land four kinds of docs:
 
-1. **`sugar-dash/README.md`** — extend the per-subpackage section. New widgets get a code snippet (`composer require ...` then a minimal example) AND a link to the rendered `.vhs/<demo>.gif`.
-2. **`sugar-dash/examples/<feature>.php`** — runnable demo. One example per new public surface (not one per class — group related). Must work standalone with `php examples/<demo>.php`.
-3. **`sugar-dash/.vhs/<demo>.tape`** — VHS recording driving the example. Standard preamble: `Set Theme "TokyoNight"`, dimensions matching the example, `Type "php examples/<demo>.php"`, `Enter`, `Sleep 2s`, optional keystrokes. Rendered GIF lands at `https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/<demo>.gif`.
+1. **`sugar-dashboard/README.md`** — extend the per-subpackage section. New widgets get a code snippet (`composer require ...` then a minimal example) AND a link to the rendered `.vhs/<demo>.gif`.
+2. **`sugar-dashboard/examples/<feature>.php`** — runnable demo. One example per new public surface (not one per class — group related). Must work standalone with `php examples/<demo>.php`.
+3. **`sugar-dashboard/.vhs/<demo>.tape`** — VHS recording driving the example. Standard preamble: `Set Theme "TokyoNight"`, dimensions matching the example, `Type "php examples/<demo>.php"`, `Enter`, `Sleep 2s`, optional keystrokes. Rendered GIF lands at `https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/<demo>.gif`.
 4. **`.github/workflows/vhs.yml`** — add the new tape name to the hand-maintained `all=(...)` matrix or the GIF will never re-render (see AGENTS.md gotcha).
-5. **`docs/lib/sugar-dash.md` + `docs/index.html` tile** — extend the lib's docs page with new sections, link to each `.vhs/<demo>.gif` and to the relevant source files. The homepage tile description gets a brief mention of the new capability.
+5. **`docs/lib/sugar-dashboard.md` + `docs/index.html` tile** — extend the lib's docs page with new sections, link to each `.vhs/<demo>.gif` and to the relevant source files. The homepage tile description gets a brief mention of the new capability.
 
 ### Caliber sync before every commit
 
@@ -804,13 +804,13 @@ git checkout master && git pull --ff-only
 
 # 2. Branch
 
-git checkout -b ai/sugar-dash-phase-NN-<slug>
+git checkout -b ai/sugar-dashboard-phase-NN-<slug>
 
 # 3. Do the work (edits, new files, tests, docs, .vhs tapes)
 
 # 4. Verify
 
-cd sugar-dash && composer install --quiet && vendor/bin/phpunit
+cd sugar-dashboard && composer install --quiet && vendor/bin/phpunit
 cd ..
 
 # 5. Caliber sync (if hook missing)
@@ -821,7 +821,7 @@ git add <touched files>  # be explicit — never `git add -A`
 # 6. Commit as Joe Huss (NEVER skip hooks, NEVER use --no-verify)
 
 git commit -m "$(cat <<'EOF'
-sugar-dash: phase NN — <one-line summary>
+sugar-dashboard: phase NN — <one-line summary>
 
 <2-4 sentence body describing what changed and why.>
 
@@ -830,12 +830,12 @@ EOF
 
 # 7. Push
 
-git push -u origin ai/sugar-dash-phase-NN-<slug>
+git push -u origin ai/sugar-dashboard-phase-NN-<slug>
 
 # 8. Open PR — GITHUB_TOKEN must be UNSET for gh to use the user's auth
 
 unset GITHUB_TOKEN
-gh pr create --title "sugar-dash: phase NN — <summary>" --body "$(cat <<'EOF'
+gh pr create --title "sugar-dashboard: phase NN — <summary>" --body "$(cat <<'EOF'
 ## Summary
 
 - <bullet 1>
@@ -847,7 +847,7 @@ gh pr create --title "sugar-dash: phase NN — <summary>" --body "$(cat <<'EOF'
 - [x] Snapshot diffs reviewed under tests/golden/phase-NN/
 - [x] examples/<demo>.php runs cleanly (manual TUI check)
 - [x] .vhs/<demo>.tape added to .github/workflows/vhs.yml matrix
-- [x] sugar-dash/README.md + docs/lib/sugar-dash.md updated
+- [x] sugar-dashboard/README.md + docs/lib/sugar-dashboard.md updated
 
 EOF
 )"
@@ -861,7 +861,7 @@ gh pr merge $PR_NUM --merge --delete-branch
 
 git checkout master
 git pull --ff-only
-git branch -D ai/sugar-dash-phase-NN-<slug> 2>/dev/null || true
+git branch -D ai/sugar-dashboard-phase-NN-<slug> 2>/dev/null || true
 
 # 11. Immediately start next phase — DO NOT WAIT for user confirmation
 

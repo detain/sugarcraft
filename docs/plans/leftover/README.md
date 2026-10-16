@@ -113,7 +113,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 3. `step-03-candy-palette-probe.md`
 4. `step-04-module-aligns-model.md`
 
-### Phase 03 — Sugar-dash (`phase-03-sugar-dash/`)
+### Phase 03 — Sugar-dash (`phase-03-sugar-dashboard/`)
 
 1. `step-01-grid-reorg-foundation.md`
 2. `step-02-grid-reorg-charts.md`
