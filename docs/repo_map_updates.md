@@ -26,9 +26,9 @@ Files using ReactPHP (excluding vendor/):
 - `candy-core/src/ProgramOptions.php`: `LoopInterface` — **candy-async should NOT interfere** (just a config object)
 - `sugar-forms/src/Field/Input.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (debounce via Loop::addTimer, could use AsyncOps::debounce)
 - `sugar-forms/src/Field/Select.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (same debounce pattern as Input)
-- `candy-mosaic/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface)
-- `candy-mosaic/src/SyncAsyncRenderer.php`: Not read yet — likely PromiseInterface
-- `candy-mosaic/src/AdaptiveImage.php`: Not read yet — likely Loop/Promise
+- `sugar-image/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface)
+- `sugar-image/src/SyncAsyncRenderer.php`: Not read yet — likely PromiseInterface
+- `sugar-image/src/AdaptiveImage.php`: Not read yet — likely Loop/Promise
 - `candy-wish/src/Middleware/AsyncMiddleware.php`: `Loop`, `Promise` — **Would benefit from candy-async** (uses sync await with 30s timeout, could use AsyncOps::withTimeout)
 - `sugar-crush/src/Chat.php`: Not read yet
 - `sugar-crush/src/Backend/CommandBackend.php`: Not read yet
@@ -38,7 +38,7 @@ Files using ReactPHP (excluding vendor/):
 
 Existing ReactPHP versions pinned:
 - `react/event-loop: ^1.6` (candy-core, candy-pty, candy-wish)
-- `react/promise: ^3.3` (candy-core, candy-mosaic, sugar-crush, super-candy)
+- `react/promise: ^3.3` (candy-core, sugar-image, sugar-crush, super-candy)
 - `react/promise-timer: ^1.9` (candy-wish)
 
 Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async):

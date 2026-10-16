@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Render;
 
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Palette\ColorProfile;
 use SugarCraft\Palette\Probe;
 use SugarCraft\Palette\Probe\Capability;

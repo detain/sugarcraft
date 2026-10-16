@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Media;
 
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
 
 /**
  * Turns one live-preview base64 frame into drawable cells (W2.4).

@@ -9,21 +9,21 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Mosaic\Capability;
-use SugarCraft\Mosaic\Mosaic;
-use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
-use SugarCraft\Mosaic\Renderer\Renderer as MosaicRenderer;
-use SugarCraft\Mosaic\Renderer\SixelRenderer;
-use SugarCraft\Mosaic\TmuxPassthroughDecorator;
+use SugarCraft\Image\Capability;
+use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Renderer\HalfBlockRenderer;
+use SugarCraft\Image\Renderer\Renderer as MosaicRenderer;
+use SugarCraft\Image\Renderer\SixelRenderer;
+use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
  * crush_feat.md §9 E5 — tmux passthrough for image-bearing tool results.
  *
- * E5's claim is that nothing needs implementing: candy-mosaic already wraps
+ * E5's claim is that nothing needs implementing: sugar-image already wraps
  * the chosen renderer in {@see TmuxPassthroughDecorator} whenever `$TMUX` is
  * set, so sugar-crush inherits passthrough for free. This file is the
  * integration test that pins that claim down end-to-end, because the failure
- * it guards against is invisible to unit tests of either side: candy-mosaic
+ * it guards against is invisible to unit tests of either side: sugar-image
  * wrapping correctly and sugar-crush rendering correctly can still combine
  * into raw DCS bytes being handed to tmux (which swallows them, leaving a
  * blank box), if the two are composed wrongly at the seam.
@@ -62,7 +62,7 @@ final class ImageRenderingTest extends TestCase
     protected function setUp(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
     }
 
@@ -127,7 +127,7 @@ final class ImageRenderingTest extends TestCase
      * under tmux is untouched: half-block cells are ordinary SGR-styled text
      * that tmux already forwards, and they must keep going straight into the
      * frame with no image layer and no envelope. The '▀' holds post
-     * candy-mosaic e5f60c4f6 (CL-3): opaque fixture → both-opaque branch,
+     * sugar-image e5f60c4f6 (CL-3): opaque fixture → both-opaque branch,
      * unchanged by the transparency fix.
      */
     public function testInlineHalfBlockCellsAreLeftUnwrappedUnderTmux(): void
@@ -242,7 +242,7 @@ final class ImageRenderingTest extends TestCase
         );
     }
 
-    /** A real, decodable PNG — candy-mosaic rejects anything it cannot decode. */
+    /** A real, decodable PNG — sugar-image rejects anything it cannot decode. */
     private function pngBytes(int $width = 20, int $height = 10): string
     {
         $gd = imagecreatetruecolor($width, $height);
@@ -337,7 +337,7 @@ final class ImageRenderingTest extends TestCase
             imagepng(\$gd);
             \$bytes = (string) ob_get_clean();
 
-            \$mosaic = \SugarCraft\Mosaic\Mosaic::auto();
+            \$mosaic = \SugarCraft\Image\Mosaic::auto();
             \$result = new \SugarCraft\Crush\ToolResult(
                 name: 'Doctor',
                 result: 'terminal capability report',
@@ -371,7 +371,7 @@ final class ImageRenderingTest extends TestCase
      * Run the child in a detached pane on a private tmux server, so an existing
      * user/CI tmux server is neither joined nor killed.
      *
-     * stdin is /dev/null and stdout a file on purpose: that makes candy-mosaic's
+     * stdin is /dev/null and stdout a file on purpose: that makes sugar-image's
      * `Detect` treat the process as non-interactive and skip its DA1/XTWINOPS
      * TTY round-trips, which inside a pane would be answered by tmux itself and
      * make the run both slow and host-dependent. `$TMUX` is untouched.

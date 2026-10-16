@@ -10,7 +10,7 @@ use SugarCraft\Reel\Render\HalfBlockRenderer;
 use SugarCraft\Reel\Render\Mode;
 
 /**
- * Unit tests for HalfBlockRenderer — delegates to candy-mosaic.
+ * Unit tests for HalfBlockRenderer — delegates to sugar-image.
  *
  * @covers \SugarCraft\Reel\Render\HalfBlockRenderer
  */
@@ -133,11 +133,11 @@ final class HalfBlockRendererTest extends TestCase
     /**
      * @testdox a valid 3×3 RgbFrame renders without throwing and produces non-empty output
      */
-    public function testDelegatesToCandyMosaic(): void
+    public function testDelegatesToSugarImage(): void
     {
         $frame = self::makeFrame();
 
-        // This test will fail if MosaicHalfBlockRenderer is not available
+        // This test will fail if ImageHalfBlockRenderer is not available
         // or if the GD image conversion fails.
         $output = $this->getRenderer()->render($frame, Mode::HalfBlock);
 

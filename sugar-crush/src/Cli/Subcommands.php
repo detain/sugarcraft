@@ -45,7 +45,7 @@ use SugarCraft\Crush\Util\Exporter;
  * different thing entirely: {@see \SugarCraft\Crush\Tools\BuiltIn\Doctor} is
  * registered in {@see Bootstrap::tools()}, advertised to the LLM in the
  * tool-calling schema, and reports ONE fact — the terminal's detected
- * candy-mosaic image protocol — with a 16x16 PNG capability swatch attached.
+ * sugar-image image protocol — with a 16x16 PNG capability swatch attached.
  * It is called by a model mid-conversation. This one is typed by a human at a
  * shell, reports the install (PHP, extensions, config file, permission policy,
  * provider selection, session database, MCP config), takes no model, and

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SugarCraft\Crush\Media\PreviewPaint;
 use SugarCraft\Crush\Renderer;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * The preview painter's two laws (W2.4): the BUDGET (quarter-pane, capped at
@@ -50,7 +50,7 @@ final class PreviewPaintTest extends TestCase
     public function testAPngFramePaintsWithinBudgetAndRowClamp(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
         PreviewPaint::resetForTesting();
         $mosaic = $this->inlineMosaic();
@@ -67,7 +67,7 @@ final class PreviewPaintTest extends TestCase
     public function testTheMemoStaysBoundedAndNeverTouchesTheTranscriptCache(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
         PreviewPaint::resetForTesting();
         $mosaic = $this->inlineMosaic();
@@ -90,7 +90,7 @@ final class PreviewPaintTest extends TestCase
     public function testRepeatingTheSameFrameHitsTheMemoAndReturnsIdentically(): void
     {
         if (!\extension_loaded('gd')) {
-            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
         }
         PreviewPaint::resetForTesting();
         $mosaic = $this->inlineMosaic();

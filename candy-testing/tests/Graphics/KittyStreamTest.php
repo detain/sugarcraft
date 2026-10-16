@@ -189,7 +189,7 @@ final class KittyStreamTest extends TestCase
 
     public function testDecodesHeaderFollowedByWhitespace(): void
     {
-        // candy-mosaic emits no gap, but a padded `\x1b\\ m=` must not be misread
+        // sugar-image emits no gap, but a padded `\x1b\\ m=` must not be misread
         // as a bare placement: skip the whitespace and still reassemble the chunk.
         $raw = Fixture::bytes('kitty_red.kitty');
         $st = strpos($raw, "\x1b\\");
@@ -237,7 +237,7 @@ final class KittyStreamTest extends TestCase
 
     public function testChunkedApcStitchesIntoOneImage(): void
     {
-        // The shape candy-mosaic emits since the ANSI audit fix: a begin
+        // The shape sugar-image emits since the ANSI audit fix: a begin
         // frame ending in `,m=1;` (empty first data chunk), self-framed
         // `m=1;` payload chunks, and a final `m=0;` closer. All three must
         // reassemble into ONE image with the begin frame's attributes.
@@ -273,7 +273,7 @@ final class KittyStreamTest extends TestCase
         // The begin frame may carry the first payload slice, so a deep capture
         // is four frames: `m=1` begin + two `m=1` continuations + the `m=0`
         // closer. All four must collapse into ONE image. (This shape is
-        // protocol-legal lenience, not a candy-mosaic transcript — mosaic's
+        // protocol-legal lenience, not a sugar-image transcript — mosaic's
         // begin frame carries no data and spells PNG `f=100`; see
         // `testDecodesCandyCoreAnsiChunkedEmitterWithPngPassthrough`.)
         $frames = str_split(base64_encode($this->redPng()), 40);
@@ -417,7 +417,7 @@ final class KittyStreamTest extends TestCase
     public function testPngPassthroughIsNotInflatedWhenZIsOne(): void
     {
         // `z` is the kitty z-index, NOT a transmission-compression flag — the
-        // format key alone decides that. candy-mosaic's
+        // format key alone decides that. sugar-image's
         // `KittyOptions::transmit()->withZIndex(1)` emits `f=100,z=1` over a plain
         // PNG (mosaic only ever spells PNG `100`), so inflating on `z` would make
         // this decoder reject its own primary producer's wire output. The loop
@@ -477,7 +477,7 @@ final class KittyStreamTest extends TestCase
 
     public function testF100IsAcceptedAsPngPassthrough(): void
     {
-        // `f=100` is what candy-mosaic's KittyRenderer and sugar-charts' Picture
+        // `f=100` is what sugar-image's KittyRenderer and sugar-charts' Picture
         // put on the wire for a PNG — the upstream protocol's own PNG code.
         $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '100', 'i' => '11']))->image();
 
@@ -543,7 +543,7 @@ final class KittyStreamTest extends TestCase
     public function testDecodesCandyCoreAnsiChunkedEmitterWithPngPassthrough(): void
     {
         // Producer/consumer interop: the frames `Ansi::kittyGraphicsBegin()` +
-        // `kittyGraphicsChunk()` emit (exactly what candy-mosaic renders) decode
+        // `kittyGraphicsChunk()` emit (exactly what sugar-image renders) decode
         // back into the sender's PNG with the chunking flag stripped.
         $b64 = base64_encode($this->redPng());
         $cut = intdiv(strlen($b64), 2);

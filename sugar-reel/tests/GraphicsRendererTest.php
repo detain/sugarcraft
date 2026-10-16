@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Reel\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Mosaic\Renderer\ChafaRenderer;
+use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Render\GraphicsRenderer;
 use SugarCraft\Reel\Render\Mode;
 
 /**
- * Unit tests for GraphicsRenderer — delegates to candy-mosaic Sixel/Kitty/iTerm2.
+ * Unit tests for GraphicsRenderer — delegates to sugar-image Sixel/Kitty/iTerm2.
  *
  * @covers \SugarCraft\Reel\Render\GraphicsRenderer
  */

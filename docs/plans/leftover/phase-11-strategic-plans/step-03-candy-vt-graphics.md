@@ -13,10 +13,10 @@ and explicitly deferred post-1.0.
 The plan file should cover:
 
 - **Scope** — receive-side decode for Kitty + Sixel; render to
-  candy-vt Buffer or pass to candy-mosaic for display.
+  candy-vt Buffer or pass to sugar-image for display.
 - **Architecture** — how candy-vt's Parser is extended (OSC 1337 +
   APC for Kitty; DCS for Sixel).
-- **Dependencies** — candy-mosaic for the render path.
+- **Dependencies** — sugar-image for the render path.
 - **Phases**.
 - **Risks** — Sixel parsing is non-trivial; Kitty image-data chunks
   span many escape sequences.

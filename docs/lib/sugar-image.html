@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarImage · SugarCraft</title>
+<meta name="description" content="SugarImage: Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block and quarter-block.">
+<meta property="og:title" content="SugarImage · SugarCraft">
+<meta property="og:description" content="Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block and quarter-block.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-image.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-image.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-image.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-image.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-image.png" alt="SugarImage">
+      <div>
+        <h2>🍬 SugarImage</h2>
+        <p class="detail-sub">Image-to-cell renderer</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/x/tree/main/mosaic" style="color: inherit;">charmbracelet/x/mosaic</a></span>
+          <span class="tag-chip">image</span>
+          <span class="tag-chip">sixel</span>
+          <span class="tag-chip">kitty</span>
+          <span class="tag-chip">iterm2</span>
+          <span class="tag-chip">ext-gd</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-image"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-image" alt="SugarImage code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG/JPEG/static GIF decoded via ext-gd and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, Unicode half-block, or quarter-block fallback.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-image</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\ImageSource;
+
+$mosaic = Mosaic::halfBlock();
+$image  = ImageSource::fromFile('cat.png');
+$ansi   = $mosaic->render($image, width: 40, height: 20);
+echo $ansi;</code></pre>
+
+    <h3 style="margin-top: 32px;">API</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Image\Renderer\QuarterBlockRenderer;
+
+// Probe terminal once, pick best protocol
+$mosaic = Mosaic::probe();
+
+// Force a specific backend
+$mosaic = Mosaic::sixel();
+$mosaic = Mosaic::kitty();
+$mosaic = Mosaic::iterm2();
+$mosaic = Mosaic::halfBlock();
+
+// Render — returns ANSI bytes
+$ansi = $mosaic->render($image, width: 40, height: 20);
+
+// Builder for fine-grained control; withResize() sets the default cell box
+// render() uses when called without a width
+$mosaic = Mosaic::builder()
+    ->withRenderer(new QuarterBlockRenderer())
+    ->withResize(width: 40, height: 20)
+    ->build();
+$ansi = $mosaic->render($image);          // 40×20 cells
+$ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Sixel renderer</strong><span>xterm, foot, mlterm, wezterm, contour support; mlterm and foot are recognised from <code>TERM</code> alone.</span></div>
+      <div class="feature"><strong>Kitty graphics protocol</strong><span>kitty, ghostty, wezterm support.</span></div>
+      <div class="feature"><strong>iTerm2 inline images</strong><span>OSC 1337 support for iTerm2, wezterm, mintty.</span></div>
+      <div class="feature"><strong>Unicode half-block</strong><span>Universal fallback using ▀ + 24-bit fg/bg.</span></div>
+      <div class="feature"><strong>Unicode quarter-block</strong><span>Higher fidelity using ░▒▓█ 2×2 sub-pixel rendering.</span></div>
+      <div class="feature"><strong>ext-gd integration</strong><span>PNG, JPEG, static GIF via GD (imagecreatefrompng, imagecreatefromjpeg, imagecreatefromgif). <code>ImageSource::fromString()</code> also accepts anything <code>imagecreatefromstring()</code> decodes (WebP, BMP, …) with its real MIME in <code>format</code>; the Kitty/iTerm2 renderers re-encode any payload that is not PNG by signature. Animated GIF and APNG load via <code>ImageSource::fromAnimatedFile()</code>. Pixel allocations are bounded before GD is asked for them.</span></div>
+      <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and DA1 capability query. Cached per-process.</span></div>
+      <div class="feature"><strong>Kitty virtual-image placement</strong><span>Transmit once (<code>a=T</code>), then place at multiple offsets (<code>a=p</code>) to reduce bandwidth. Use <code>KittyOptions::transmit()</code> then <code>KittyOptions::place()</code>.</span></div>
+      <div class="feature"><strong>Kitty zlib compression</strong><span>Compress PNG payload with zlib (<code>f=1</code>) before base64-encoding via <code>KittyOptions::withCompression(1)</code>. Useful for large images.</span></div>
+      <div class="feature"><strong>Half-block transparency</strong><span>Transparent pixels (alpha=127) emit no SGR codes — terminal default background shows through. Enables overlay compositing on existing terminal content.</span></div>
+      <div class="feature"><strong>Sixel 256-color fallback</strong><span>Pass <code>maxColors</code> (1–256) to <code>SixelRenderer</code> constructor to limit palette size for terminals with limited truecolor support.</span></div>
+      <div class="feature"><strong>Animation support</strong><span><code>Animation</code> (immutable frame sequence) + <code>AnimationDriver</code> (Model with tick-based frame timing). Use <code>KittyRenderer::renderFrame()</code> for stable per-frame ids that support targeted redraws.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-image">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-image/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-image/tree/master/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/mosaic">charmbracelet/x mosaic</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">Key Classes</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Mosaic</td><td>probe()</td><td>Auto-detect best terminal protocol</td></tr>
+<tr><td>Mosaic</td><td>sixel(), kitty(), iterm2(), halfBlock()</td><td>Force specific renderer</td></tr>
+<tr><td>Mosaic</td><td>render(image, ?width = null, ?height = null)</td><td>Render image to ANSI string; a null width uses the builder's withResize() box</td></tr>
+<tr><td>Mosaic</td><td>builder()</td><td>Create builder for fine-grained control</td></tr>
+<tr><td>Renderer</td><td>delete(imageId)</td><td>Remove a previously rendered image (Kitty=APC delete; iTerm2=OSC 1337 Pop; others=empty)</td></tr>
+<tr><td>KittyRenderer</td><td>renderWithOptions(image, width, height, KittyOptions)</td><td>Render with Kitty protocol options (virtual-image a=p, compression f=1)</td></tr>
+<tr><td>KittyOptions</td><td>transmit(id), place(id, x, y)</td><td>Factory: transmit inline or place a previously transmitted virtual image</td></tr>
+<tr><td>KittyOptions</td><td>withZIndex(z), withCompression(f), withUseVirtual(bool)</td><td>Builder: z-index stacking, zlib compression (f=1), virtual-image mode (a=p)</td></tr>
+<tr><td>QuarterBlockRenderer</td><td>new</td><td>2×2 sub-pixel renderer via <code>Mosaic::builder()-&gt;withRenderer(new QuarterBlockRenderer())</code></td></tr>
+<tr><td>HalfBlockRenderer</td><td>new, supportsAlpha()</td><td>Unicode ▀ renderer with transparent-pixel handling (null alpha skips SGR codes, letting terminal default show through). <code>supportsAlpha()</code> returns <code>false</code> — transparency is rendered by omitting SGR, not blending.</td></tr>
+<tr><td>SixelRenderer</td><td>new(dither, maxColors), maxColors(), dither()</td><td>DEC sixel renderer with median-cut quantizer (up to 256 colors). Constructor accepts <code>maxColors</code> (1–256, default 256) to limit palette size for limited-truecolor terminals. Dither enum: <code>FloydSteinberg</code>, <code>Stucki</code>, <code>Atkinson</code>, <code>None</code>.</td></tr>
+<tr><td>ImageSource</td><td>fromFile(path)</td><td>Load image from file</td></tr>
+<tr><td>ImageSource</td><td>fromGd(image, format)</td><td>Create from GD resource; throws when the image cannot be encoded</td></tr>
+<tr><td>ImageSource</td><td>fromString(bytes) / fromAnimatedFile(path)</td><td>Decode any GD-readable bytes / load animated GIF or APNG frames</td></tr>
+<tr><td>ImageSource</td><td>isPng()</td><td>Whether the payload carries the PNG signature</td></tr>
+<tr><td>Animation</td><td>fixed(frames, delayMs)</td><td>Factory: uniform-delay animation from list of ImageSource</td></tr>
+<tr><td>Animation</td><td>withFrame(index, frame, delayMs)</td><td>Return new Animation with one replaced frame (immutable)</td></tr>
+<tr><td>Animation</td><td>frameCount(), totalDurationMs()</td><td>Frame count and total duration in ms</td></tr>
+<tr><td>AnimationDriver</td><td>new(animation, renderer, cellWidth, cellHeight?, index?, paused?, imageId?)</td><td>Model that drives Animation onto a Renderer via tick-based frame timing</td></tr>
+<tr><td>AnimationDriver</td><td>withIndex(n), withPaused(bool), withImageId(id)</td><td>Fluent state changes (each returns new instance)</td></tr>
+<tr><td>FrameTickMsg</td><td>(internal)</td><td>Internal Msg dispatched by Cmd::tick() to advance frame index</td></tr>
+<tr><td>KittyRenderer</td><td>renderFrame(image, width, height, imageId)</td><td>Render single frame with stable id for targeted delete+redraw on Kitty terminals</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-image/.vhs/inline-image.gif" alt="Inline Image">
+                <h3>Inline Image</h3>
+                <span class="demo-caption">Renders a PNG to the terminal via the best available protocol.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-image">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-image/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

@@ -203,8 +203,8 @@ flag_management:
     - name: sugar-overlay
       paths: ["sugar-overlay/src/**"]
       carryforward: true
-    - name: candy-mosaic
-      paths: ["candy-mosaic/src/**"]
+    - name: sugar-image
+      paths: ["sugar-image/src/**"]
       carryforward: true
 
 # ── Components ────────────────────────────────────────────────────────────────
@@ -559,9 +559,9 @@ component_management:
         - "sugar-overlay/src/**"
       flag_regexes:
         - "^sugar-overlay$"
-    - component_id: candy-mosaic
-      name: candy-mosaic
+    - component_id: sugar-image
+      name: sugar-image
       paths:
-        - "candy-mosaic/src/**"
+        - "sugar-image/src/**"
       flag_regexes:
-        - "^candy-mosaic$"
+        - "^sugar-image$"

@@ -7,7 +7,7 @@ namespace SugarCraft\Testing\Tests\Graphics;
 /**
  * Loads the committed graphics fixtures that drive the decoder round-trips.
  *
- * Every byte here was produced by a candy-mosaic renderer and pinned to disk, so
+ * Every byte here was produced by a sugar-image renderer and pinned to disk, so
  * the decoders are tested against real wire output rather than hand-typed
  * approximations.
  */

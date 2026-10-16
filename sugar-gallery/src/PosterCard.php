@@ -12,7 +12,7 @@ use SugarCraft\Core\Util\Width;
  * attached), a title, and an optional progress bar (e.g. continue-watching).
  *
  * Immutable and rendering-agnostic — the card holds *already-rendered* poster
- * bytes (produced however the app likes, e.g. candy-mosaic), so this widget
+ * bytes (produced however the app likes, e.g. sugar-image), so this widget
  * pulls in no image decoder. Attach the poster with {@see withPoster()} when an
  * async render resolves.
  *

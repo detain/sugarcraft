@@ -282,9 +282,9 @@ All ESC characters doubled inside tmux wrapper.
 
 ## SugarCraft Mapping
 
-### Primary Mapping: `candy-mosaic`
+### Primary Mapping: `sugar-image`
 
-The halfblocks rendering functionality directly maps to SugarCraft's `candy-mosaic` library which provides Unicode block character rendering for terminal graphics. Both:
+The halfblocks rendering functionality directly maps to SugarCraft's `sugar-image` library which provides Unicode block character rendering for terminal graphics. Both:
 - Use the Charmbracelet `x/cellbuf` and `x/mosaic` packages
 - Render images as Unicode block characters
 - Provide fallback when graphics protocols unavailable

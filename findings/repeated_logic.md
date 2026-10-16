@@ -125,7 +125,7 @@ interface Model
 - `candy-flip/src/Player.php`
 - `candy-minesweeper/src/Game.php`
 - `candy-tetris/src/Game.php`, `VsGame.php`
-- `candy-mosaic/src/AnimationDriver.php`
+- `sugar-image/src/AnimationDriver.php`
 - `candy-sql/src/App.php`
 
 **sugar-* libs (20+):**

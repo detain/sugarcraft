@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Render;
 
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer as MosaicQuarterBlockRenderer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Renderer\QuarterBlockRenderer as MosaicQuarterBlockRenderer;
 use SugarCraft\Reel\Decode\RgbFrame;
 
 /**
- * Quarter-block Unicode renderer — delegates to candy-mosaic's
+ * Quarter-block Unicode renderer — delegates to sugar-image's
  * QuarterBlockRenderer.
  *
  * Each terminal cell shows a 2×2 group of pixels via a quadrant glyph

@@ -221,7 +221,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
      * E296'S LESSON AT LIBRARY SCOPE, and it is the reason this arm exists.
      * Round 49 spent three attempts on the descriptor-0 repair; two were
      * refuted by a claim of the form "nothing reaches X" whose census scope
-     * was `sugar-crush/` — and the reader that mattered was in `candy-mosaic`.
+     * was `sugar-crush/` — and the reader that mattered was in `sugar-image`.
      * A census's ALPHABET includes the directory it is pointed at. `src` only:
      * a sibling's own `tests/` never runs in this process, so it cannot touch
      * this runner's descriptor 0.
@@ -308,7 +308,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
      * IT IS HERE BECAUSE THE ROUND-49 REPAIR WAS REFUTED TWICE BY A CENSUS
      * WHOSE SCOPE WAS A DIRECTORY. Both refutations had the form "nothing
      * reaches X", verified over `sugar-crush/`, and both times the thing that
-     * reached X was in a sibling library — `SugarCraft\Mosaic\Detect` reading
+     * reached X was in a sibling library — `SugarCraft\Image\Detect` reading
      * the `\STDIN` constant unguarded, which cost a full suite run and 107
      * errors. The shape this file scans for is a candy-core shape, so the
      * library that is most likely to grow the next instance of it is candy-core

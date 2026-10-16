@@ -477,20 +477,20 @@ NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
  * `Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`.
  * The census behind the attempt had looked in `sugar-crush/src`, `bin` and
  * `tests` for `\STDIN`, and the reader that mattered was in a SIBLING LIBRARY:
- * {@see \SugarCraft\Mosaic\Detect} resolved its probe stream as
+ * {@see \SugarCraft\Image\Detect} resolved its probe stream as
  * `self::$probeStdin ?? STDIN` and handed it on unguarded, `Mosaic::auto()`
  * caught the resulting throw, and the fallback it landed in named a
  * `Capability` case that does not exist. 107 became the price of option (a)
  * and it stalled the repair for two rounds.
  *
  * WHAT IS TRUE NOW: it was never 107 costs. It was ONE defect multiplied by
- * every test that reached it. The enum name was fixed in candy-mosaic (E302);
+ * every test that reached it. The enum name was fixed in sugar-image (E302);
  * the unguarded read underneath it was fixed in the same class (E318), whose
  * `stdinFd()` now answers null for a dead handle instead of passing it to
  * `stream_select()`. RE-MEASURED here, PHP 8.3.6, full suite, this exact
  * change alone against a green 9661/142165/1-skipped baseline at the same
  * head: `9661 tests, 1 error, 2 failures, 1 skipped` — and not one
- * candy-mosaic error of any kind. All three are in tests whose entire subject
+ * sugar-image error of any kind. All three are in tests whose entire subject
  * is this repair, and all three are rewritten alongside it. Nobody re-ran the
  * experiment for a round because 107 is a number that ends a conversation; a
  * blocking measurement has to be re-taken after anything in its causal chain

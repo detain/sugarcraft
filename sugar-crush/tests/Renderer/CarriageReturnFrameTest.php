@@ -15,7 +15,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * Audit 15b-07: no raw carriage return may reach the frame from any row.

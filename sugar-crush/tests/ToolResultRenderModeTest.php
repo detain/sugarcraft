@@ -7,8 +7,8 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Mosaic\Detect;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Detect;
+use SugarCraft\Image\Mosaic;
 
 /**
  * W2.2 (plan_crush_media, crush_media §8.7 gap-1): the mosaic probe behind
@@ -17,7 +17,7 @@ use SugarCraft\Mosaic\Mosaic;
  * The memo is keyed by the configured `ui.imageRenderMode` word, so a mode
  * switch re-derives instead of returning the stale probe of whichever mode was
  * asked for first, while `'auto'` keeps the pre-W2.2 detect-based behaviour
- * byte-identically (golden pin below). Detection is faked through candy-mosaic's
+ * byte-identically (golden pin below). Detection is faked through sugar-image's
  * own env table (`KITTY_WINDOW_ID` answers `Detect::probe()` without any TTY —
  * the DA1/`setProbeStdin` path needs an interactive ctty a piped suite never
  * has), and every test restores the process statics in tearDown — a leaked
@@ -111,7 +111,7 @@ final class ToolResultRenderModeTest extends TestCase
 
     public function testAutoUnderFakedKittyEnvironmentDetectsKitty(): void
     {
-        // The detect-based half stays detect-based: candy-mosaic's env table
+        // The detect-based half stays detect-based: sugar-image's env table
         // answers definitively for kitty without any TTY (DA1 is skipped).
         putenv('KITTY_WINDOW_ID=1');
         Detect::reset();

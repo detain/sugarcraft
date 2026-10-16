@@ -6,7 +6,7 @@ namespace SugarCraft\Crush;
 
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * Represents the result of a tool/function call.
@@ -49,7 +49,7 @@ final class ToolResult
      * Process-lifetime cache of the terminal's image-rendering capability,
      * keyed by the configured render mode (W2.2).
      *
-     * Mirrors candy-mosaic's own {@see Mosaic::auto()} contract: probe the
+     * Mirrors sugar-image's own {@see Mosaic::auto()} contract: probe the
      * terminal once (DA1 + XTWINOPS, ~100ms) and reuse the answer for every
      * subsequent image-bearing tool result instead of re-querying the TTY
      * per call. W2.2 makes that memo MODE-AWARE: one entry per render-mode
@@ -76,7 +76,7 @@ final class ToolResult
      * The launch's resolved `ui.imageRenderMode` word ('auto' until
      * {@see \SugarCraft\Crush\Cli\Bootstrap::applyMediaRenderMode()} runs).
      *
-     * THE LADDER, for the record (crush_media §8.2, candy-mosaic
+     * THE LADDER, for the record (crush_media §8.2, sugar-image
      * `Detect.php:17` precedence): the `auto` image ladder is
      * kitty > iterm2 > sixel > chafa > halfblock. sugar-reel's VIDEO
      * ladder is deliberately different (sixel-first, crush_media §8.3) --
@@ -92,7 +92,7 @@ final class ToolResult
      * @param string|null $id ID matching the corresponding ToolCall
      * @param string|null $imageBytes Raw image bytes captured by the tool (e.g. a screenshot), if any
      * @param string|null $imagePath Filesystem path the image was captured from/saved to, if any
-     * @param string|null $imageProtocol The candy-mosaic protocol ({@see Mosaic::protocol()}) detected
+     * @param string|null $imageProtocol The sugar-image protocol ({@see Mosaic::protocol()}) detected
      *                                   at capture time -- 'kitty'|'sixel'|'iterm2'|'halfblock'|'quarterblock'|'chafa'
      * @param string|null $diff Raw unified diff produced by an edit-shaped tool, kept OFF $result
      *                          so a renderer can hand it straight to a diff viewer instead of
@@ -173,7 +173,7 @@ final class ToolResult
      * later renderer (see E3, not part of this step) knows which protocol
      * to paint with without re-probing the TTY per tool call.
      *
-     * Mirrors sugar-crush's candy-mosaic wiring plan (crush_feat.md section
+     * Mirrors sugar-crush's sugar-image wiring plan (crush_feat.md section
      * 9, E1): "Extend ToolResult.php with an optional imageBytes field."
      */
     public static function okWithImage(string $name, string $result, string $imageBytes, ?string $id = null): self
@@ -440,7 +440,7 @@ final class ToolResult
     }
 
     /**
-     * Probe-once capture point for candy-mosaic's terminal capability
+     * Probe-once capture point for sugar-image's terminal capability
      * detection (crush_feat.md section 9, E2), mode-aware since W2.2
      * (crush_media §8.7 gap-1): memoized per render-mode word, so a mode
      * switch derives a fresh Mosaic instead of returning another mode's
@@ -508,7 +508,7 @@ final class ToolResult
      *   through this class.
      * - Graphics terminals may hold already-painted blobs (kitty ids,
      *   sixel rows) that no repaint clears; a /clear-class redraw cleans
-     *   the stale frames — candy-mosaic's Renderer delete-class primitives
+     *   the stale frames — sugar-image's Renderer delete-class primitives
      *   (§8.2) are the eventual in-app path.
      */
     public static function resetRenderMode(): void

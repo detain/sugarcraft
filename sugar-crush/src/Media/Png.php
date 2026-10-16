@@ -54,7 +54,7 @@ use RuntimeException;
  */
 final class Png
 {
-    /** Size ceiling both directions — sibling of candy-mosaic ImageSource::MAX_BYTES (64 MiB). */
+    /** Size ceiling both directions — sibling of sugar-image ImageSource::MAX_BYTES (64 MiB). */
     public const MAX_BYTES = 67_108_864;
 
     /**

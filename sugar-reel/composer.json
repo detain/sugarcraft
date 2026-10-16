@@ -36,7 +36,7 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-palette": "dev-master",
-        "sugarcraft/candy-mosaic": "dev-master",
+        "sugarcraft/sugar-image": "dev-master",
         "sugarcraft/candy-flip": "dev-master"
     },
     "require-dev": {

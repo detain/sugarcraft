@@ -137,7 +137,7 @@ sugar-navstack research P4 calls for "Click-region rendering". `sugar-mouse` is 
 
 ### SSOT-06 — `posix_isatty` direct calls
 
-Found in `candy-mosaic/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contract\Termios::isAtty()` (also in `plans/leftover_updates.md` as CC-LO-06).
+Found in `sugar-image/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contract\Termios::isAtty()` (also in `plans/leftover_updates.md` as CC-LO-06).
 
 **Action:** see `plans/leftover_updates.md` CC-LO-06.
 
@@ -154,7 +154,7 @@ Found in `candy-mosaic/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Cont
 **Actions:**
 
 - SSOT-08a — Pull all env-var probes into `candy-palette/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
-- SSOT-08b — `candy-log`, `candy-mosaic`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
+- SSOT-08b — `candy-log`, `sugar-image`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
 - SSOT-08c — Implement the missing candy-palette items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
 
 ### SSOT-09 — `Module\Module` contract aligns with candy-core `Model`
@@ -259,7 +259,7 @@ because research adds three items the PTY plan did not call out:)
 - `ClickCounter` for double/triple-click (Priority 3).
 - `Manager::setMotionTracking(bool)` (Priority 4).
 
-### candy-mosaic
+### sugar-image
 
 - **Quarter-block Unicode renderer** (P0 #3).
 - **`Renderer::delete()`** API (P0 #2).
@@ -366,7 +366,7 @@ because research adds three items the PTY plan did not call out:)
 - Local color tables (P5).
 - Transparency / disposal-method handling (P6).
 - Adaptive cell size from `tput cols lines` (P7) — must use `\SugarCraft\Pty\SizeIoctl::query(STDOUT)`, not shell-out.
-- Kitty/WezTerm graphics-protocol output path (P10) — overlap with candy-mosaic; pick one home. **Recommendation:** Kitty/WezTerm rendering belongs in candy-mosaic; candy-flip emits frame bytes only.
+- Kitty/WezTerm graphics-protocol output path (P10) — overlap with sugar-image; pick one home. **Recommendation:** Kitty/WezTerm rendering belongs in sugar-image; candy-flip emits frame bytes only.
 - Frame cache (P12).
 
 ### sugar-quickpick
@@ -455,7 +455,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 
 - Copy / move / rename ops (HIGH).
 - Bulk rename, progress UI (MEDIUM).
-- Preview pane (MEDIUM) — image preview delegates to candy-mosaic.
+- Preview pane (MEDIUM) — image preview delegates to sugar-image.
 - Async file ops (LOW; needs ReactPHP).
 
 ### candy-git
@@ -889,9 +889,9 @@ until a real profiler trace flags the cost.
   its own; merits a `plans/candy-git-server-tui.md` milestone doc.
 - **candy-vt P3 graphics protocols** — Kitty image, Sixel decode. Each
   is months of work. Defer post-1.0 unless a specific app needs it.
-- **candy-flip vs candy-mosaic image-output split** — animation rendering
+- **candy-flip vs sugar-image image-output split** — animation rendering
   (P10) overlaps both libs. Recommendation: candy-flip emits frame
-  bytes; candy-mosaic owns Kitty/iTerm2/WezTerm protocol output and
+  bytes; sugar-image owns Kitty/iTerm2/WezTerm protocol output and
   consumes candy-flip's frames.
 
 ---
@@ -924,7 +924,7 @@ are 1 PR each.
 - candy-prompt validators + fuzzy autocomplete.
 - candy-vt P0 items (DECSTBM, DECAWM, subparams).
 - sugar-mouse hover/drag/click-counter.
-- candy-mosaic quarter-block renderer + delete API.
+- sugar-image quarter-block renderer + delete API.
 - … (each lib's bullet list above is its own backlog.)
 
 **Group D — i18n pass (parallel one-per-lib):**

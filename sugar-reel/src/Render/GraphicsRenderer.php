@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Render;
 
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Dither;
-use SugarCraft\Mosaic\Renderer\ChafaRenderer;
-use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
-use SugarCraft\Mosaic\Renderer\KittyRenderer;
-use SugarCraft\Mosaic\Renderer\Renderer;
-use SugarCraft\Mosaic\Renderer\SixelRenderer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Dither;
+use SugarCraft\Image\Renderer\ChafaRenderer;
+use SugarCraft\Image\Renderer\Iterm2Renderer;
+use SugarCraft\Image\Renderer\KittyRenderer;
+use SugarCraft\Image\Renderer\Renderer;
+use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Reel\Decode\RgbFrame;
 
 /**
@@ -72,7 +72,7 @@ final class GraphicsRenderer implements FrameRenderer
      * Build an ImageSource from the frame without a needless re-encode: a PNG
      * frame wraps its bytes directly (we already know the dimensions); a raw
      * frame (GIF / no-ffmpeg fallback) is ingested straight from its RGB24
-     * scanline buffer via candy-mosaic's {@see ImageSource::fromRgb()} — no
+     * scanline buffer via sugar-image's {@see ImageSource::fromRgb()} — no
      * per-frame PNG round-trip. A malformed short buffer keeps the older
      * GD-clamping path rather than throwing mid-playback.
      */
@@ -95,7 +95,7 @@ final class GraphicsRenderer implements FrameRenderer
     }
 
     /**
-     * Pick the candy-mosaic renderer for the current mode. Sixel prefers the
+     * Pick the sugar-image renderer for the current mode. Sixel prefers the
      * fast `chafa` encoder and falls back to the pure-PHP encoder (constructed
      * with the real cell pixel size so its canvas matches the frame exactly).
      */

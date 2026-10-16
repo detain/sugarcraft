@@ -14,7 +14,7 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * Every row of a standalone frame fits the terminal, status bar and overlays
@@ -225,7 +225,7 @@ final class FrameWidthClipTest extends TestCase
     public function testTheImageBoxNeverExceedsThePane(): void
     {
         if (!\extension_loaded('gd')) {
-            self::markTestSkipped('candy-mosaic decodes images through ext-gd');
+            self::markTestSkipped('sugar-image decodes images through ext-gd');
         }
 
         $gd = imagecreatetruecolor(20, 10);

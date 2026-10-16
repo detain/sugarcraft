@@ -14,7 +14,7 @@ use SugarCraft\Testing\Lang;
  * (transparent), which matters for Sixel bands that stop short of the full
  * raster height. Colour triples are `[r, g, b]` in 0..255.
  *
- * Mirrors the pixel buffer a candy-mosaic renderer rasterises before encoding.
+ * Mirrors the pixel buffer a sugar-image renderer rasterises before encoding.
  */
 final class PixelGrid
 {

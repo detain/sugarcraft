@@ -758,7 +758,7 @@ human-readable description and the command it actually ran, then a
 running→done transition. `Edit`/`Write` results render a real unified diff. A
 no-op edit reports as a no-op instead of success. Denied and interrupted calls
 get their own visual state. Tool results that carry images are labelled and
-rendered inline via candy-mosaic. Successful tool bodies are hidden by default
+rendered inline via sugar-image. Successful tool bodies are hidden by default
 (`Ctrl+O` or a click opens them); an expanded call shows the invocation above
 its output — `$ <command>` for shell calls, `key: value` for other tools. The
 model's thinking streams in full while it thinks, then folds into a collapsed

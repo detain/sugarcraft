@@ -8,14 +8,14 @@ use SugarCraft\Crush\RepoMap\CtagsSymbolExtractor;
 use SugarCraft\Crush\ToolResult as BootProbe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
 use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
- * Reports the terminal's detected candy-mosaic image-rendering protocol and
+ * Reports the terminal's detected sugar-image image-rendering protocol and
  * attaches a tiny capability-swatch PNG -- a genuinely reachable, real
  * caller of an image-bearing {@see ToolResult}.
  *
@@ -87,7 +87,7 @@ final class Doctor implements Tool, BuildsFromCatalog
     public function description(): string
     {
         return 'Report the image-rendering protocol of the current terminal, as detected '
-            . 'by the candy-mosaic probe the client ran once at startup; calling it never '
+            . 'by the sugar-image probe the client ran once at startup; calling it never '
             . 're-queries the terminal. It takes no parameters, and its answer is a line of text '
             . 'naming the pixel-graphics protocol that was found (Kitty, Sixel, or iTerm2) '
             . 'or reporting that only a text-cell fallback is available, then a line saying '

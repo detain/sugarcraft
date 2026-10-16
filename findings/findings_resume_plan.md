@@ -682,16 +682,16 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 
 ### Group 2-B (3 agents)
 
-#### 2.4 🟢 candy-mosaic: Extract DRY helpers (Items 3.1-3.4)
+#### 2.4 🟢 sugar-image: Extract DRY helpers (Items 3.1-3.4)
 
-**Plan:** `findings/plan_candy-mosaic.md` — Items 3.1-3.4
+**Plan:** `findings/plan_sugar-image.md` — Items 3.1-3.4
 **Fix:**
 
 - Extract `Renderer::prepareRender()` base method (or document why not)
 - Create `candy-core/src/Util/ColorUtil.php` for `dist()` and `luma()`
 - Split `QuarterBlockRenderer::renderCell()` into 4 methods
 - Extract RLE inner loop from `emitBand()`
-**Files:** `candy-mosaic/src/QuarterBlockRenderer.php`, `candy-mosaic/src/SixelRenderer.php`, etc.
+**Files:** `sugar-image/src/QuarterBlockRenderer.php`, `sugar-image/src/SixelRenderer.php`, etc.
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 2.5 🟢 sugar-dashboard: Chart wither boilerplate (Items M-4, 6.1)
@@ -1247,20 +1247,20 @@ Same verification as previous phases.
 **Files:** `candy-mdview/tests/MdViewModelTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 5.9 🟢 candy-mosaic: ChafaRenderer pipe cleanup (Item 1.1)
+#### 5.9 🟢 sugar-image: ChafaRenderer pipe cleanup (Item 1.1)
 
-**Plan:** `findings/plan_candy-mosaic.md` — Item 1.1
+**Plan:** `findings/plan_sugar-image.md` — Item 1.1
 **Fix:** Add `testAvailableFalseCleansUpPipes()` test
-**Files:** `candy-mosaic/tests/ChafaRendererTest.php`
+**Files:** `sugar-image/tests/ChafaRendererTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 5.10 🟢 candy-mosaic: ChafaRenderer::reset() (Item 1.5)
+#### 5.10 🟢 sugar-image: ChafaRenderer::reset() (Item 1.5)
 
-**Plan:** `findings/plan_candy-mosaic.md` — Item 1.5
+**Plan:** `findings/plan_sugar-image.md` — Item 1.5
 **Fix:** Add `testAvailableResets()` test
-**Files:** `candy-mosaic/tests/ChafaRendererTest.php`
+**Files:** `sugar-image/tests/ChafaRendererTest.php`
 **Agent:** Same coder agent as 5.9 (grouped — same lib)
 
 ### Phase 5 Verification
@@ -1283,7 +1283,7 @@ Same verification as previous phases.
 | `plan_sugar-treelist.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
 | `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
 | `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
-| `plan_candy-mosaic.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
+| `plan_sugar-image.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
 | `plan_sugar-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
 | `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
 | `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Media;
 
-use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Image\ImageSource;
 
 /**
  * One mask image admitted into a generation request (crush-media W4.3).

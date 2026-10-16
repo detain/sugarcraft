@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image\Renderer;
+
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Lang;
+
+/**
+ * iTerm2 / WezTerm inline image renderer via OSC 1337.
+ *
+ * Encodes the image as base64 PNG and emits a single OSC 1337
+ * sequence. Terminals that support this protocol render the image
+ * inline without any pixel-space manipulation on our side — they
+ * handle aspect-ratio and scaling themselves.
+ */
+final class Iterm2Renderer implements Renderer
+{
+    use \SugarCraft\Image\Concerns\RenderValidationTrait;
+
+    public function render(ImageSource $image, int $width, ?int $height = null): string
+    {
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
+
+        // Use the stored bytes directly if they really are PNG (checked by
+        // signature, not by the format label), otherwise re-encode.
+        if ($image->isPng()) {
+            $pngBytes = $image->bytes;
+        } else {
+            $img = @imagecreatefromstring($image->bytes);
+            if ($img === false) {
+                throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
+            }
+            if (!imageistruecolor($img)) {
+                imagepalettetotruecolor($img);
+            }
+            try {
+                // imagepng() with no path writes to STDOUT and returns bool —
+                // capture the bytes via an output buffer instead (otherwise the
+                // raw PNG is dumped to the terminal and the image is empty).
+                ob_start();
+                $ok = imagepng($img);
+                $pngBytes = (string) ob_get_clean();
+            } finally {
+                imagedestroy($img);
+            }
+            if ($ok === false || $pngBytes === '') {
+                throw new \RuntimeException(Lang::t('renderer.gd_encode_failed'));
+            }
+        }
+
+        $base64 = base64_encode($pngBytes);
+
+        return Ansi::iterm2InlineImage($base64, [
+            'width'               => $width,
+            'height'              => $effectiveHeight,
+            'preserveAspectRatio' => true,
+        ]);
+    }
+
+    public function name(): string
+    {
+        return 'iterm2';
+    }
+
+    public function supportsAlpha(): bool
+    {
+        return true;
+    }
+
+    public function isInline(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Remove the most recently displayed iTerm2 / WezTerm image.
+     *
+     * iTerm2 does not support deleting by image id — "Pop" removes the
+     * topmost image from the stack. The `$imageId` parameter is accepted
+     * for interface compatibility but has no effect.
+     */
+    public function delete(string $imageId): string
+    {
+        return Ansi::iterm2Delete();
+    }
+}

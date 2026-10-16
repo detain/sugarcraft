@@ -16,12 +16,12 @@ use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Providers\ProviderFactory;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * The Media category's schema rows (plan_crush_media W1.8): the eight keys
  * resolve with the tiers, defaults and env bindings the plan names, the
- * render-mode vocabulary is cross-pinned against candy-mosaic's live
+ * render-mode vocabulary is cross-pinned against sugar-image's live
  * `fromModeString()` oracle, and the provider schema carries the three media
  * optionals without disturbing a single pre-existing provider block.
  */

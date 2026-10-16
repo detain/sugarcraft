@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Mosaic\ImageLayer;
+use SugarCraft\Image\ImageLayer;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\PruneAuthor;
 use SugarCraft\Crush\Context\Pruning\PruneEntry;

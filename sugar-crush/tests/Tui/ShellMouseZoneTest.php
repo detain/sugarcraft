@@ -17,7 +17,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Mouse\Zone;
 
 /**
@@ -239,7 +239,7 @@ final class ShellMouseZoneTest extends TestCase
     public function testAnImageBearingToolResultKeepsBothItsPlacementAndItsRebasedZone(): void
     {
         if (!\extension_loaded('gd')) {
-            self::markTestSkipped('candy-mosaic decodes images through ext-gd');
+            self::markTestSkipped('sugar-image decodes images through ext-gd');
         }
 
         $chat = new Chat(
@@ -305,7 +305,7 @@ final class ShellMouseZoneTest extends TestCase
         self::fail("frame does not contain '{$needle}'");
     }
 
-    /** A real, decodable 20x10 PNG — candy-mosaic rejects anything it cannot decode. */
+    /** A real, decodable 20x10 PNG — sugar-image rejects anything it cannot decode. */
     private function pngBytes(): string
     {
         $gd = imagecreatetruecolor(20, 10);

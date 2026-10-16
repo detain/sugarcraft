@@ -241,7 +241,7 @@ final class ChatTest extends TestCase
     /**
      * W1.G2/E2 fix (reviewer-reported): crush_feat.md section 9's E2
      * literally specifies `new Chat(..., mosaic: $mosaic)` exposing the
-     * probe-once candy-mosaic capability instance through Chat's
+     * probe-once sugar-image capability instance through Chat's
      * constructor, rather than leaving it a standalone static cache only
      * SugarCraft\Crush\ToolResult can reach.
      */
@@ -254,7 +254,7 @@ final class ChatTest extends TestCase
 
     public function testMosaicIsExposedWhenWiredThroughTheConstructor(): void
     {
-        $mosaic = \SugarCraft\Mosaic\Mosaic::halfBlock();
+        $mosaic = \SugarCraft\Image\Mosaic::halfBlock();
         $chat = new Chat(mosaic: $mosaic);
 
         $this->assertSame($mosaic, $chat->mosaic());
@@ -262,7 +262,7 @@ final class ChatTest extends TestCase
 
     public function testMosaicSurvivesMutateViaWithInputBuf(): void
     {
-        $mosaic = \SugarCraft\Mosaic\Mosaic::halfBlock();
+        $mosaic = \SugarCraft\Image\Mosaic::halfBlock();
         $chat = new Chat(mosaic: $mosaic);
 
         [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));

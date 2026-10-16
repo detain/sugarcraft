@@ -1,6 +1,6 @@
-# Step 07.14 — candy-mosaic Transparent HalfBlock bg + 256-color Sixel fallback
+# Step 07.14 — sugar-image Transparent HalfBlock bg + 256-color Sixel fallback
 
-**Source:** `leftover_updates_later.md` candy-mosaic P1 #6 + #7
+**Source:** `leftover_updates_later.md` sugar-image P1 #6 + #7
 **Branch:** `ai/mosaic-transparent-sixel-fallback`
 
 ## Deliverable
@@ -14,19 +14,19 @@
 
 **Modify:**
 
-- `candy-mosaic/src/Renderer/HalfBlockRenderer.php` — alpha=0 pixels
+- `sugar-image/src/Renderer/HalfBlockRenderer.php` — alpha=0 pixels
   emit no fg/bg, falling back to terminal default.
-- `candy-mosaic/src/Renderer/SixelRenderer.php` — palette negotiator
+- `sugar-image/src/Renderer/SixelRenderer.php` — palette negotiator
   picks 256 colors when truecolor isn't available.
 
 ## Tests
 
-- `candy-mosaic/tests/Renderer/HalfBlockTransparentTest.php`.
-- `candy-mosaic/tests/Renderer/Sixel256FallbackTest.php`.
+- `sugar-image/tests/Renderer/HalfBlockTransparentTest.php`.
+- `sugar-image/tests/Renderer/Sixel256FallbackTest.php`.
 
 ## Acceptance
 
-- `cd candy-mosaic && vendor/bin/phpunit --filter "HalfBlockTransparent|Sixel256"` green.
+- `cd sugar-image && vendor/bin/phpunit --filter "HalfBlockTransparent|Sixel256"` green.
 
 ---
 

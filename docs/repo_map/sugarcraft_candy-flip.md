@@ -8,7 +8,7 @@
 - **Status:** 🟢 v1 ready
 - **Upstream:** [namzug16/gifterm](https://github.com/namzug16/gifterm) (Go, 6 stars, 2024-06-15)
 - **Active Fork:** [nalediym/gifterm](https://github.com/nalediym/gifterm) (Rust, 2026) — kitty-GPU architecture
-- **Sister Ports:** `candy-mosaic` (image protocol rendering — Sixel/Kitty/iTerm2/Unicode halfblocks)
+- **Sister Ports:** `sugar-image` (image protocol rendering — Sixel/Kitty/iTerm2/Unicode halfblocks)
 - **Summary:** ASCII GIF viewer — decodes `.gif` via `ext-gd`, downsamples to cell grid, renders as ANSI-coloured Unicode block-glyphs or luminance-ramp ASCII.
 
 ---
@@ -263,11 +263,11 @@ A complete reimagining by a different author. Instead of text rendering it uses 
 
 ### blacktop/go-termimg (Go, ~57 stars)
 
-**Primary mapping:** `candy-mosaic` (image protocol rendering)
+**Primary mapping:** `sugar-image` (image protocol rendering)
 
 Renders via 4 protocols: Kitty, Sixel, iTerm2, Unicode halfblocks. Uses `charmbracelet/x/cellbuf` and `x/mosaic`. Animation partially implemented. LRU resize cache, parallel Base64 encoding, tmux passthrough. Falls back to Unicode halfblocks when protocols unavailable.
 
-**Contrast with candy-flip:** go-termimg uses binary protocols for pixel-perfect output; candy-flip uses pure text (ANSI blocks). They are complementary: candy-flip for universal fallback/text-only environments, candy-mosaic for full-featured protocol rendering.
+**Contrast with candy-flip:** go-termimg uses binary protocols for pixel-perfect output; candy-flip uses pure text (ANSI blocks). They are complementary: candy-flip for universal fallback/text-only environments, sugar-image for full-featured protocol rendering.
 
 ### Zebbeni/ansipx (Go, ~active 2026)
 
@@ -329,7 +329,7 @@ Like **jif** (Go) and **ansipx** (Go), candy-flip could support Unicode half-blo
 
 ### 5. Sixel / iTerm2 Protocol Support
 
-The **nalediym/gifterm** (Rust) and **hzeller/timg** (C++) and **blacktop/go-termimg** (Go) approaches transmit image data via terminal graphics protocols rather than text. While `candy-mosaic` handles this at the rendering layer, an extension to `candy-flip` that produces Sixel output for `ext-gd`-compatible frames would dramatically improve quality on supporting terminals (xterm, foot, mlterm).
+The **nalediym/gifterm** (Rust) and **hzeller/timg** (C++) and **blacktop/go-termimg** (Go) approaches transmit image data via terminal graphics protocols rather than text. While `sugar-image` handles this at the rendering layer, an extension to `candy-flip` that produces Sixel output for `ext-gd`-compatible frames would dramatically improve quality on supporting terminals (xterm, foot, mlterm).
 
 ### 6. WebP / APNG Input
 
@@ -371,7 +371,7 @@ For complex animated GIFs, the frame decode cost is non-trivial. A `FrameCache` 
 
 5. **GIF87a static images** — if a static GIF has no GCE block (no animation timing), the decoder falls back to delay=10 (100ms) but returns only one frame. This is correct behavior but could be configurable.
 
-6. **No Sixel/iTerm2/Kitty protocol output** — on terminals that support these, candy-flip produces text where binary protocols would look dramatically better. `candy-mosaic` handles protocol rendering but not at the `candy-flip` integration level.
+6. **No Sixel/iTerm2/Kitty protocol output** — on terminals that support these, candy-flip produces text where binary protocols would look dramatically better. `sugar-image` handles protocol rendering but not at the `candy-flip` integration level.
 
 7. **Single-threaded decoding** — frames are decoded sequentially. For a 200-frame GIF this is negligible, but larger files would benefit from parallel decoding via ReactPHP `Async` queue.
 
@@ -389,11 +389,11 @@ The port faithfully extends the upstream concept with PHP idioms:
 
 ### Extension: `candy-flip` → `nalediym/gifterm` (active fork)
 
-The Rust fork's kitty-GPU approach is architecturally different but the output use case (animated GIF in terminal) is the same. If SugarCraft were to implement protocol-aware rendering, the `Player` state machine and `TickMsg` scheduling would be the natural integration point for `candy-mosaic`.
+The Rust fork's kitty-GPU approach is architecturally different but the output use case (animated GIF in terminal) is the same. If SugarCraft were to implement protocol-aware rendering, the `Player` state machine and `TickMsg` scheduling would be the natural integration point for `sugar-image`.
 
-### Sister mapping: `candy-flip` ↔ `candy-mosaic`
+### Sister mapping: `candy-flip` ↔ `sugar-image`
 
-`candy-mosaic` provides image rendering via terminal graphics protocols (Sixel/Kitty/iTerm2/Unicode halfblocks). `candy-flip` provides text-based fallback (ANSI blocks/luminance ramp). They are complementary rendering strategies for the same input types. `FrameCache` from `candy-flip` could cache protocol-rendered frames in `candy-mosaic` to skip re-encoding identical frames.
+`sugar-image` provides image rendering via terminal graphics protocols (Sixel/Kitty/iTerm2/Unicode halfblocks). `candy-flip` provides text-based fallback (ANSI blocks/luminance ramp). They are complementary rendering strategies for the same input types. `FrameCache` from `candy-flip` could cache protocol-rendered frames in `sugar-image` to skip re-encoding identical frames.
 
 ---
 

@@ -4,7 +4,7 @@ Poster **grids** and **rails** for media TUIs — a 2-D virtualized `PosterGrid`
 for large libraries, a horizontal `Rail` carousel for browse rows, and a
 `PosterCard` tile. The widgets are **renderer-agnostic**: a card holds
 *already-rendered* poster bytes (produce them however you like — e.g.
-[candy-mosaic](https://github.com/sugarcraft/candy-mosaic)), so this lib pulls
+[sugar-image](https://github.com/sugarcraft/sugar-image)), so this lib pulls
 in no image decoder.
 
 ## Install
@@ -14,7 +14,7 @@ composer require sugarcraft/sugar-gallery
 ```
 
 The poster pipeline example and its integration tests render real images, so they
-pull [candy-mosaic](https://github.com/sugarcraft/candy-mosaic) in as a
+pull [sugar-image](https://github.com/sugarcraft/sugar-image) in as a
 *development* dependency only — the library itself never depends on it.
 
 ## PosterGrid — virtualized, sparse, owner-paged
@@ -137,14 +137,14 @@ Every card row is exactly `width` cells wide and the grid normalizes each cell
 to `cardWidth × (posterHeight + 2)`, so columns and rows always line up whether
 or not a card carries a progress bar.
 
-### Feeding it from candy-mosaic
+### Feeding it from sugar-image
 
 The card holds *already-rendered* bytes, so the widget pulls in no decoder — but
-[candy-mosaic](https://github.com/sugarcraft/candy-mosaic) is the renderer this
+[sugar-image](https://github.com/sugarcraft/sugar-image) is the renderer this
 lib is built against, and the glue is three lines:
 
 ```php
-use SugarCraft\Mosaic\{ImageSource, Mosaic, Scale};
+use SugarCraft\Image\{ImageSource, Mosaic, Scale};
 
 $image  = ImageSource::fromFile($path);                    // or fromGd()/fromUrl()
 $ansi   = Mosaic::halfBlock()->withScale(Scale::Fill)
@@ -158,7 +158,7 @@ arithmetic on your side; anything too big or too small is boxed to the cell
 anyway.
 
 Pixel-graphics protocols (`sixel`, `kitty`, `iterm2`) are not cell text — a
-`Mosaic` reports `isInline() === false` for them. Those bytes go to candy-mosaic's
+`Mosaic` reports `isInline() === false` for them. Those bytes go to sugar-image's
 `ImageLayer`, and the card carries only the marker the runtime paints over:
 
 ```php

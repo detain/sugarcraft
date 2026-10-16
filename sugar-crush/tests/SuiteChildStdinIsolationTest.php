@@ -109,12 +109,12 @@ final class SuiteChildStdinIsolationTest extends TestCase
      *
      * WHAT THIS SAID:
      * `assertTrue(is_resource(\STDIN), 'tests/bootstrap.php closed the \STDIN
-     * constant; SugarCraft\Mosaic\Detect reads it unguarded and 107 tests error
+     * constant; SugarCraft\Image\Detect reads it unguarded and 107 tests error
      * out when it is gone')` — a guard whose whole job was to forbid the change
      * that has now been made.
      *
      * WHAT IS TRUE NOW. The 107 was never 107 costs. It was ONE defect — a
-     * candy-mosaic fallback naming a `Capability` case candy-palette spells
+     * sugar-image fallback naming a `Capability` case candy-palette spells
      * differently — multiplied by every test that reached it, and the unguarded
      * read that triggered it is guarded now (E302/E318:
      * `Detect::stdinFd()` answers null for a dead handle rather than passing it
@@ -122,7 +122,7 @@ final class SuiteChildStdinIsolationTest extends TestCase
      * replacement alone against a green `9661 tests / 142165 assertions / 1
      * skipped / rc 0` baseline at the same head: ONE error and TWO failures,
      * all three in tests whose entire subject is this repair, and not one
-     * candy-mosaic error of any kind. So the assertion is inverted rather than
+     * sugar-image error of any kind. So the assertion is inverted rather than
      * deleted, and it is inverted rather than relaxed: "fd 0 is not the
      * runner's any more" is a fact worth holding, and a test that merely
      * stopped caring would let the flag repair — or nothing at all — come back

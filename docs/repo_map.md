@@ -12,7 +12,7 @@
 |---|---|---|---|
 | [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-widgets |
 | [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-widgets, candy-core |
-| [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | candy-mosaic |
+| [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | sugar-image |
 | [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, candy-kit, sugar-forms |
 | [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-widgets, sugar-forms |
 | [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-widgets, candy-scriptui |
@@ -56,7 +56,7 @@
 | [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | candy-core, candy-sprinkles, sugar-widgets |
 | [rasjonell/dashbrew](#rasjonelldashbrew) | Go | ~100 | candy-core, candy-shine, sugar-charts |
 | [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | candy-core, sugar-widgets, candy-sprinkles |
-| [ratatui/ratatui-image](#ratatuiratatui-image) | Rust | ~400 | candy-mosaic |
+| [ratatui/ratatui-image](#ratatuiratatui-image) | Rust | ~400 | sugar-image |
 | [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-widgets, candy-sprinkles |
 | [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | candy-core, candy-shine, sugar-widgets |
 | [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-widgets, candy-core |
@@ -136,7 +136,7 @@
 **Features:** 4 protocol renderers (Kitty/iTerm2/Sixel/Halfblocks), terminal detection via CSI queries, LRU resize cache, parallel Base64 encoding, tmux passthrough, image widget for TUI frameworks.
 
 **SugarCraft Mapping:**
-- `candy-mosaic` → Image rendering (primary target)
+- `sugar-image` → Image rendering (primary target)
 
 **Strengths:** Universal terminal support, automatic detection, performance optimizations.
 **Weaknesses:** Sixel slow (90ms vs 2.5ms Kitty), WebP not supported.
@@ -969,7 +969,7 @@
 **Features:** Unified Image/StatefulImage, ThreadProtocol (background resize/encode), Picker (terminal capability detection), SlicedImage (partial rendering).
 
 **SugarCraft Mapping:**
-- `candy-mosaic` → Image rendering protocols
+- `sugar-image` → Image rendering protocols
 
 ---
 

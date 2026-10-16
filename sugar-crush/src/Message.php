@@ -71,8 +71,8 @@ final class Message implements \JsonSerializable
          */
         public readonly ?string $imageBytes = null,
         /**
-         * The candy-mosaic protocol ({@see
-         * \SugarCraft\Mosaic\Mosaic::protocol()}) detected when
+         * The sugar-image protocol ({@see
+         * \SugarCraft\Image\Mosaic::protocol()}) detected when
          * $imageBytes was captured. Null whenever $imageBytes is null.
          */
         public readonly ?string $imageProtocol = null,

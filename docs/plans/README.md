@@ -34,7 +34,7 @@ in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 | [x-exp-open](./x-exp-open.md) | `x/exp/open` | `candy-core/Util/Open.php` | 2-3 h | drafted |
 | [x-editor](./x-editor.md) | `x/editor` | `candy-core/Util/Editor.php` + `sugar-widgets/TextArea` | half day | drafted |
 | [x-ansi](./x-ansi.md) | `x/ansi` | `candy-core/Util/Ansi.php` (rolling) | rolling | drafted |
-| [x-mosaic](./x-mosaic.md) | `x/mosaic` + `blacktop/go-termimg` + `ratatui/ratatui-image` | new lib `candy-mosaic` | 5 d (v1) + 5 d (v1.5) | drafted |
+| [x-mosaic](./x-mosaic.md) | `x/mosaic` + `blacktop/go-termimg` + `ratatui/ratatui-image` | new lib `sugar-image` | 5 d (v1) + 5 d (v1.5) | drafted |
 | [x-vt](./x-vt.md) | `x/vt` | new lib `candy-vt` | 1-2 w | drafted |
 | [x-vcr](./x-vcr.md) | `x/vcr` | new lib `candy-vcr` | 3-5 d | drafted |
 | [x-xpty](./x-xpty.md) | `x/xpty` | new lib `candy-pty` (Linux/macOS) | 4-6 d | drafted |
@@ -93,7 +93,7 @@ For a continuous ship-as-you-go cadence per `AGENTS.md`:
 
 When each plan ships, the following must update:
 
-- `MATCHUPS.md` — new row in the libraries table for `candy-mosaic`, `candy-vt`, `candy-vcr`, `candy-pty`
+- `MATCHUPS.md` — new row in the libraries table for `sugar-image`, `candy-vt`, `candy-vcr`, `candy-pty`
 - `PROJECT_NAMES.md` — naming-decision entry per new lib
 - `CONVERSION.md` — phase row per new lib
 - `UPSTREAM_OPPORTUNITIES.md` — flip the `x/*` row from 🔴 to 🟡/🟢/🚀 as it lands

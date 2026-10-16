@@ -1,0 +1,11 @@
+{
+    "title": "SugarImage · SugarCraft",
+    "description": "SugarImage: Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block and quarter-block.",
+    "ogTitle": "SugarImage · SugarCraft",
+    "ogDescription": "Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block and quarter-block.",
+    "emoji": "🍬",
+    "displayName": "SugarImage",
+    "tagline": "Image-to-cell renderer",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/x/tree/main/mosaic\" style=\"color: inherit;\">charmbracelet/x/mosaic</a></span>\n          <span class=\"tag-chip\">image</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>\n          <span class=\"tag-chip\">ext-gd</span>"
+}

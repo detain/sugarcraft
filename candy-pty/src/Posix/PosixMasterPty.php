@@ -327,7 +327,7 @@ final class PosixMasterPty implements MasterPty
         // here, candy-wish's InProcessTransport teardown, sugar-crush's
         // CapturesProcessOutput pty drain, and the finally-block cleanups in
         // the candy-pty, candy-flip, candy-core and sugar-crush suites
-        // (candy-mosaic never touches a pty). NONE reads the number back.
+        // (sugar-image never touches a pty). NONE reads the number back.
         // Two honest caveats on the instrument: this walk replaces the
         // `--filter Posix` measurement above for this question, because the
         // fd-holding candidates are class-named SizeIoctl* and

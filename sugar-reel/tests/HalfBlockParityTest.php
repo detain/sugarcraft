@@ -15,7 +15,7 @@ use SugarCraft\Reel\Tests\Support\HalfBlockStream;
  * Finding #9 — the HalfBlock parity contract, stated precisely.
  *
  * `Player::view()` renders HalfBlock through the inline `frameToBuffer()` Buffer
- * path; `Render\HalfBlockRenderer` (the candy-mosaic delegation) is never reached
+ * path; `Render\HalfBlockRenderer` (the sugar-image delegation) is never reached
  * by the runtime. The duplication the finding flags is therefore a *guard*, not a
  * hot path, and what has to hold is that the guard means something.
  *

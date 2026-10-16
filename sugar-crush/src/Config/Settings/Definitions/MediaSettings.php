@@ -28,9 +28,9 @@ use SugarCraft\Crush\Lang;
  * today that is what actually reads the row, env layer included; a media
  * reader replacing it is a later wave's edit, not this file's claim.
  *
- * THE RENDER-MODE VOCABULARY (`ui.imageRenderMode`) is `candy-mosaic`'s own
+ * THE RENDER-MODE VOCABULARY (`ui.imageRenderMode`) is `sugar-image`'s own
  * accepted word set plus `auto`, quoted from
- * {@see \SugarCraft\Mosaic\Mosaic::fromModeString()} (match arms, that file's
+ * {@see \SugarCraft\Image\Mosaic::fromModeString()} (match arms, that file's
  * :600-612) — the plan's Q-7 ruling keeps the aliases (`half`/`ansi`/`quarter`)
  * alongside the canonical names rather than inventing a settings-only spelling.
  * {@see \SugarCraft\Crush\Tests\Config\Settings\MediaSettingsTest} re-derives
@@ -41,7 +41,7 @@ final class MediaSettings implements SettingDefinitionSet
 {
     /**
      * `ui.imageRenderMode`'s vocabulary: `auto` plus every word
-     * {@see \SugarCraft\Mosaic\Mosaic::fromModeString()} answers non-null for,
+     * {@see \SugarCraft\Image\Mosaic::fromModeString()} answers non-null for,
      * spelled as that match spells them (already lowercase — the comparator
      * trims and lowercases on its side, the house EnumValidator does not).
      *

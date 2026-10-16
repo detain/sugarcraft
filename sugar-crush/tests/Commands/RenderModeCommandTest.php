@@ -11,7 +11,7 @@ use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Crush\Host\Commands\RenderModeHostCommand;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\Mosaic;
 
 /**
  * The W5.7 `/rendermode` door: argv coercion, the ladder/asymmetry report,

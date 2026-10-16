@@ -9,7 +9,7 @@
 
 # Overview
 
-super-candy is a dual-pane terminal file manager built on the SugarCraft TUI stack, inspired by yorukot/superfile and Midnight Commander. It provides comprehensive file navigation with two side-by-side panes, vi-style keybindings, multi-select, async file operations, undo/redo, tabs, search, and image preview via candy-mosaic.
+super-candy is a dual-pane terminal file manager built on the SugarCraft TUI stack, inspired by yorukot/superfile and Midnight Commander. It provides comprehensive file navigation with two side-by-side panes, vi-style keybindings, multi-select, async file operations, undo/redo, tabs, search, and image preview via sugar-image.
 
 **Ecosystem Positioning:** super-candy sits at the intersection of the Charmbracelet/Go ecosystem (upstream superfile) and the SugarCraft/PHP ecosystem. It is the most feature-complete TUI application in SugarCraft, demonstrating full integration of core ( TEA Model), sprinkles (styling), mosaic (image preview), and react/promise (async).
 
@@ -71,7 +71,7 @@ super-candy is a dual-pane terminal file manager built on the SugarCraft TUI sta
 6. Multiple independent tab sessions
 7. Live incremental search filtering
 8. PCRE regex bulk rename engine
-9. Image preview via candy-mosaic (Kitty/Sixel/iTerm2)
+9. Image preview via sugar-image (Kitty/Sixel/iTerm2)
 10. Delete/move/rename reversible; delete captures file content for restore
 
 ### Weaknesses (Documented)
@@ -229,7 +229,7 @@ super-candy is a dual-pane terminal file manager built on the SugarCraft TUI sta
 ### 8. Limited Preview Formats (No PDF/Video/Code Highlighting)
 
 **Title:** Preview pane only handles images via Mosaic
-**Description:** PreviewPane uses candy-mosaic for images; all other files get a metadata block. No content preview for PDFs, videos, or code.
+**Description:** PreviewPane uses sugar-image for images; all other files get a metadata block. No content preview for PDFs, videos, or code.
 **Why it matters:** superfile and ranger can preview PDFs, videos, and code files directly in the TUI.
 **Source:** `docs/repo_map/sugarcraft_super-candy.md:361`
 **Implementation ideas:**

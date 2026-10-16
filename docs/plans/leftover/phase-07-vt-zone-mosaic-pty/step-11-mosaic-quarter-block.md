@@ -1,6 +1,6 @@
-# Step 07.11 — candy-mosaic Quarter-block Unicode renderer
+# Step 07.11 — sugar-image Quarter-block Unicode renderer
 
-**Source:** `leftover_updates_later.md` candy-mosaic P0 #3
+**Source:** `leftover_updates_later.md` sugar-image P0 #3
 **Branch:** `ai/mosaic-quarter-block`
 
 ## Deliverable
@@ -13,18 +13,18 @@ fidelity than HalfBlockRenderer for terminals without Sixel/Kitty.
 
 **Create:**
 
-- `candy-mosaic/src/Renderer/QuarterBlockRenderer.php` — implements
+- `sugar-image/src/Renderer/QuarterBlockRenderer.php` — implements
   `Renderer`. For each pair of cells (2 cols × 2 rows of pixels per
   cell), look up the corresponding glyph in a 16-entry table.
 
 ## Tests
 
-- `candy-mosaic/tests/Renderer/QuarterBlockRendererTest.php` — render
+- `sugar-image/tests/Renderer/QuarterBlockRendererTest.php` — render
   a fixture 4×4 image, assert exact output bytes.
 
 ## Acceptance
 
-- `cd candy-mosaic && vendor/bin/phpunit --filter QuarterBlock` green.
+- `cd sugar-image && vendor/bin/phpunit --filter QuarterBlock` green.
 
 ---
 

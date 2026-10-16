@@ -1,0 +1,147 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Image\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\KittyOptions;
+use SugarCraft\Image\Renderer\KittyRenderer;
+
+final class KittyOptionsTest extends TestCase
+{
+    private KittyRenderer $renderer;
+
+    protected function setUp(): void
+    {
+        $this->renderer = new KittyRenderer();
+    }
+
+    public function testTransmitIncludesImageIdInBeginSequence(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(42);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        // Begin must carry i=42
+        $this->assertStringContainsString('i=42', $out);
+        // Place action must NOT be present
+        $this->assertStringNotContainsString('a=p', $out);
+    }
+
+    public function testTransmitWithZIndexIncludesZInBeginSequence(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withZIndex(5);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        $this->assertStringContainsString('z=5', $out);
+    }
+
+    public function testPlaceActionEmitsPlaceSequence(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::place(imageId: 7, x: 2, y: 1);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        // Should contain a=p (place action) and i=7 and x=2 y=1
+        $this->assertStringContainsString('a=p', $out);
+        $this->assertStringContainsString('i=7', $out);
+        $this->assertStringContainsString('x=2', $out);
+        $this->assertStringContainsString('y=1', $out);
+        // Should NOT have chunk data (no base64 data in place mode)
+        $this->assertStringNotContainsString(',PHN2', $out); // no base64 PNG header
+    }
+
+    public function testPlaceWithoutOffsetOmitsXY(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::place(3);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        // a=p and i=3 must be present, but x= and y= should not appear
+        $this->assertStringContainsString('a=p', $out);
+        $this->assertStringContainsString('i=3', $out);
+        $this->assertStringNotContainsString('x=', $out);
+        $this->assertStringNotContainsString('y=', $out);
+    }
+
+    public function testWithCompressionSetsCompression(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withCompression(1); // zlib
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        // o=z is the spec's zlib transmission-compression key; f stays 100.
+        $this->assertStringContainsString('o=z', $out);
+        $this->assertStringContainsString('f=100', $out);
+    }
+
+    public function testKittyOptionsToArrayOmitsZeroDefaults(): void
+    {
+        $opts = KittyOptions::transmit(0);
+        $arr  = $opts->toArray();
+
+        // imageId=0 should be omitted (null)
+        $this->assertNull($arr['i']);
+        // z=0 should be omitted
+        $this->assertNull($arr['z']);
+        // no compression requested → o omitted, and f never carries
+        // compression (the data format belongs to the renderer)
+        $this->assertNull($arr['o']);
+        $this->assertArrayNotHasKey('f', $arr);
+    }
+
+    public function testZIndexCanBeNegative(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withZIndex(-3);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        $this->assertStringContainsString('z=-3', $out);
+    }
+
+    public function testWithCellDimensionsEmitsSAndVParams(): void
+    {
+        // cellWidth/cellHeight had no setter, so s=/v= were never emitted.
+        // withCellDimensions() is the seam that makes them settable.
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withCellDimensions(120, 48);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        $this->assertStringContainsString('s=120', $out);
+        $this->assertStringContainsString('v=48', $out);
+    }
+
+    public function testWithCellDimensionsPopulatesToArray(): void
+    {
+        $arr = KittyOptions::transmit(1)->withCellDimensions(64, 32)->toArray();
+
+        $this->assertSame(64, $arr['s']);
+        $this->assertSame(32, $arr['v']);
+    }
+
+    public function testCellDimensionsOmittedByDefault(): void
+    {
+        // Without the setter the fields stay 0, so s=/v= must NOT appear.
+        $arr = KittyOptions::transmit(1)->toArray();
+
+        $this->assertNull($arr['s']);
+        $this->assertNull($arr['v']);
+    }
+
+    public function testWithCellDimensionsRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        KittyOptions::transmit(1)->withCellDimensions(-1, 10);
+    }
+}

@@ -143,7 +143,7 @@ candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 | Physics integration | Euler: `newPos = pos + vel * dt; newVel = vel + acc * dt` | Verlet: stores `pos(t-1)` and computes `vel = pos(t) - pos(t-1)` | Verlet is more numerically stable, no velocity storage needed, symmetric for collision | More complex to implement; Euler is sufficient at 30fps | Medium — would require new `ProjectileVerlet` class |
 | Rendering | Immediate-mode string concatenation per frame | Ratatui: buffer diffing (only changed cells written) | Buffer diffing reduces terminal I/O by 10-100× for mostly-static frames | Would require refactoring Renderer to build buffer then diff | Low — game is already fully dynamic per frame |
 | Layout algorithm | Fixed cell grid | Dashbrew: recursive flexbox with AABB bounding boxes | Flexbox adapts to any terminal size; AABB enables click-to-focus and arrow navigation | Requires significant architecture change; game is fixed-size | Low — game intentionally fixed-size for arcade feel |
-| Terminal image rendering | Unicode block characters (via candy-mosaic) | go-termimg: Kitty/Sixel/iTerm2 protocols | Modern protocols support actual images; halfblocks is fallback | Requires platform-specific protocol support; not relevant for game | None — game uses ASCII, not images |
+| Terminal image rendering | Unicode block characters (via sugar-image) | go-termimg: Kitty/Sixel/iTerm2 protocols | Modern protocols support actual images; halfblocks is fallback | Requires platform-specific protocol support; not relevant for game | None — game uses ASCII, not images |
 
 ### Key insight
 
@@ -250,13 +250,13 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 1. **Publish `candy-flappy` as a standalone Composer package**: Currently it lives in the monorepo. Publishing to packagist.org would increase visibility and allow non-monorepo PHP projects to use it as a demo/showcase for SugarCraft physics.
 
-2. **Add `candy-flappy` to SugarCraft website**: Create a demo page on sugarcraft.example.com that renders the game in a live terminal emulator (using go-termimg-style protocols or a web-based terminal). This could be powered by candy-mosaic for the fallback rendering.
+2. **Add `candy-flappy` to SugarCraft website**: Create a demo page on sugarcraft.example.com that renders the game in a live terminal emulator (using go-termimg-style protocols or a web-based terminal). This could be powered by sugar-image for the fallback rendering.
 
 3. **Create `honey-bounce` game examples package**: A new `honey-games` package (or `sugar-games`) that ports multiple physics-based games (Flappy Bird, Angry Birds-style slingshot, space invaders with gravity) demonstrating honey-bounce versatility.
 
 4. **Integrate with `sugar-charts` for score analytics**: Track session scores over time and render charts showing score distribution, high score progression, etc. This could use the existing sugar-charts library.
 
-5. **Add `candy-mosaic` integration for image rendering**: If the terminal supports it (Kitty/iTerm2/Sixel), render the bird as a small sprite image instead of a text glyph. This would use candy-mosaic's halfblocks fallback and could be extended to support protocol-specific rendering.
+5. **Add `sugar-image` integration for image rendering**: If the terminal supports it (Kitty/iTerm2/Sixel), render the bird as a small sprite image instead of a text glyph. This would use sugar-image's halfblocks fallback and could be extended to support protocol-specific rendering.
 
 ---
 
@@ -304,7 +304,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 ### Experimental
 
 1. **Multiplayer via WebSocket** — High complexity, low current priority.
-2. **Terminal image rendering** — High complexity, requires candy-mosaic protocol support.
+2. **Terminal image rendering** — High complexity, requires sugar-image protocol support.
 3. **Mobile companion app** — High complexity, separate project.
 
 ---

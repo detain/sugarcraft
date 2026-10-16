@@ -14,7 +14,7 @@ use SugarCraft\Vt\Terminal\Terminal;
  *
  * Reply byte formats follow xterm (DA1/DA2/DECRPM/CPR/XTWINOPS) and the
  * same attribute lists charmbracelet/x/vt emits. Semantics are pinned to
- * what candy-mosaic/src/Detect.php probes: DA1 without `;4` (no sixel),
+ * what sugar-image/src/Detect.php probes: DA1 without `;4` (no sixel),
  * 16t `ESC [ 6 ; h ; w t` and 18t `ESC [ 8 ; rows ; cols t`.
  *
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
@@ -72,7 +72,7 @@ final class QueryReplyTest extends TestCase
         $replies = $t->replies();
         $this->assertSame(["\x1b[?62;1;6;22c"], $replies);
 
-        // candy-mosaic Detect::parseDa1Reply sixel heuristic — the ACTUAL
+        // sugar-image Detect::parseDa1Reply sixel heuristic — the ACTUAL
         // produced reply must NOT match any of its three sixel patterns.
         $reply = $replies[0];
         $this->assertFalse(str_contains($reply, ';4;'));
@@ -220,7 +220,7 @@ final class QueryReplyTest extends TestCase
     }
 
     /**
-     * Field-order lock against candy-mosaic/src/Detect::parseXtwinoReply():
+     * Field-order lock against sugar-image/src/Detect::parseXtwinoReply():
      * it maps reply parts [id, v1, v2] to CellSize(v2, v1), so 16t must
      * be `6;height;width` and 18t `8;rows;cols` — swapped fields would
      * silently give mosaic transposed cell geometry.

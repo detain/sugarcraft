@@ -33,7 +33,7 @@ SugarCraft ports. Use this to prioritize the next port wave.
 
 | Upstream | Title | Applicability | Recommendation |
 |---|---|---|---|
-| [#163](https://github.com/charmbracelet/bubbletea/issues/163) (17c) | Displaying images | ⚪ | Covered by `candy-mosaic` plan |
+| [#163](https://github.com/charmbracelet/bubbletea/issues/163) (17c) | Displaying images | ⚪ | Covered by `sugar-image` plan |
 | [#1590](https://github.com/charmbracelet/bubbletea/issues/1590) (13c) | If tea program quits too early, garbage chars are printed | 🔴 | **Effort**: 1-2h **Benefit**: Fixes confusing terminal state on early exit **Downside**: May be renderer-specific |
 | [#573](https://github.com/charmbracelet/bubbletea/issues/573) (13c) | Altscreen: rendering artifacts when resizing window | 🟡 | Likely renderer internal — may need review |
 | [#1225](https://github.com/charmbracelet/bubbletea/issues/1225) (12c) | lipgloss styles rendered incorrectly when `.Width()` applied | ⚪ | Lipgloss issue — candy-sprinkles may have similar behavior |

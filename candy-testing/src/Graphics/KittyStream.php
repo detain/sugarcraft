@@ -11,7 +11,7 @@ use SugarCraft\Testing\Lang;
  *
  * Understands two framings and both are treated as first-class input:
  *
- *  - the standard APC form emitted by sugarcraft/candy-mosaic
+ *  - the standard APC form emitted by sugarcraft/sugar-image
  *    (`\x1b_G k=v,…,m=1; <b64> \x1b\\` per frame; begin + chunk frames
  *    stitched until the first `m=0;` closer), and
  *  - the legacy DCS-`q` form (`\x1bPq k=v,k=v \x1b\\ m=<more>,<b64>…  m=0
@@ -25,7 +25,7 @@ use SugarCraft\Testing\Lang;
  * `o=z`) yields the sender's bytes byte-for-byte. Multi-image streams
  * yield one {@see KittyImage} per transmit.
  *
- * Mirrors charmbracelet/candy-mosaic KittyRenderer (inverse).
+ * Mirrors charmbracelet/sugar-image KittyRenderer (inverse).
  */
 final class KittyStream
 {
@@ -172,7 +172,7 @@ final class KittyStream
         $params = self::parseParams(substr($stream, $paramsStart, $beginEnd - $paramsStart));
         $chunkStart = $beginEnd + strlen(self::ST);
 
-        // candy-mosaic emits no gap between the header ST and the first `m=`
+        // sugar-image emits no gap between the header ST and the first `m=`
         // chunk; skip any stray whitespace so a padded transmission is never
         // misread as a bare placement (the probe and region below both start here).
         while (in_array(substr($stream, $chunkStart, 1), [' ', "\t", "\r", "\n"], true)) {
@@ -210,7 +210,7 @@ final class KittyStream
      * keys), payloads concatenate in order, and the first `m=0` frame closes
      * the transaction and yields the image — the exact mirror of
      * `Ansi::kittyGraphicsBegin()` + `Ansi::kittyGraphicsChunk()` as
-     * candy-mosaic emits them (one self-framed APC sequence per chunk since the
+     * sugar-image emits them (one self-framed APC sequence per chunk since the
      * ANSI audit fix).
      *
      * The open transaction lives on the decoder rather than on frame adjacency,

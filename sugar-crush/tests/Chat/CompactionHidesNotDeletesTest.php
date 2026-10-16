@@ -25,7 +25,7 @@ use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Usage;
-use SugarCraft\Mosaic\ImageLayer;
+use SugarCraft\Image\ImageLayer;
 use SugarCraft\Sprinkles\Style;
 
 /**

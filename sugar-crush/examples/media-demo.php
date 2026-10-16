@@ -18,7 +18,7 @@ declare(strict_types=1);
  * The generation beat is canned on purpose. No server is dialled: the PNG is
  * rebuilt from fixed integer math on every run (no rand(), no clocks), wrapped
  * in a real MediaResponse/MediaArtifact pair so the DTO path is exercised, and
- * painted inline through candy-mosaic in halfblock truecolor. Kitty and sixel
+ * painted inline through sugar-image in halfblock truecolor. Kitty and sixel
  * are deliberately NOT demoed - VHS renders through a ttyd that does not
  * forward those passthrough protocols, so the captured frames would show
  * garbage bytes instead of the picture.
@@ -33,8 +33,8 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Forms\Field\Confirm;
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\MediaForm\MediaForm;
 use SugarCraft\Crush\Tui\MediaForm\Sections\HiresSection;
@@ -127,7 +127,7 @@ demoShow('canned generation returns through MediaResponse (no dial was made)', $
 // passthrough the capture ttyd does not offer, so they stay off the GIF.
 $painted = Mosaic::halfBlock()->render(ImageSource::fromString($picture), 64, 16);
 fwrite(STDOUT, "\033[2J\033[H");
-fwrite(STDOUT, "the bytes above painted through candy-mosaic - halfblock truecolor inline\n");
+fwrite(STDOUT, "the bytes above painted through sugar-image - halfblock truecolor inline\n");
 fwrite(STDOUT, $painted . "\n");
 usleep(DEMO_BEAT_SECONDS);
 

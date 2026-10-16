@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * PosterGrid × candy-mosaic — the real poster pipeline, no network.
+ * PosterGrid × sugar-image — the real poster pipeline, no network.
  *
  *   php examples/poster-grid-mosaic.php
  *
@@ -14,7 +14,7 @@ declare(strict_types=1);
  *                                                  → PosterGrid::withItem()
  *
  * The images are synthesised with GD in memory so the demo runs offline, and one
- * poster is pre-seeded into a candy-mosaic DiskCache so you can watch the
+ * poster is pre-seeded into a sugar-image DiskCache so you can watch the
  * promoted fetch policy (`indicesNeedingPoster()`) skip a cell whose bytes are
  * already on disk. Pixel renderers (sixel / iTerm2) are not cell text at all, so
  * the last section shows the other half of the seam: an ImageLayer placement and
@@ -26,11 +26,11 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\PosterGrid;
-use SugarCraft\Mosaic\DiskCache;
-use SugarCraft\Mosaic\ImageLayer;
-use SugarCraft\Mosaic\ImageSource;
-use SugarCraft\Mosaic\Mosaic;
-use SugarCraft\Mosaic\Scale;
+use SugarCraft\Image\DiskCache;
+use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Scale;
 
 const CARD_W = 18;
 const POSTER_H = 6;
@@ -118,7 +118,7 @@ $cache->put(
     $mosaic->render($posterFor($cachedIndex), CARD_W, POSTER_H),
 );
 
-heading('  sugar-gallery · candy-mosaic poster pipeline (' . $mosaic->protocol() . ', inline=' . var_export($mosaic->isInline(), true) . ')');
+heading('  sugar-gallery · sugar-image poster pipeline (' . $mosaic->protocol() . ', inline=' . var_export($mosaic->isInline(), true) . ')');
 dim('  ' . $grid->total() . ' items · 3×2 viewport · ▸ cursor · ░ skeleton');
 
 heading('  1 · after the range fetch — nothing rendered yet');

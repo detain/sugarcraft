@@ -212,7 +212,7 @@ This is a **full rewrite** in everything but name:
 | **Add** Post composer (content warning, visibility, media upload, character counter per network) | 3 d | |
 | **Add** vim keybindings (`j/k/g/G/r/n/c/l/b/q`) | 1 d | |
 | **Add** real-time streaming (Mastodon SSE; X / Bluesky deferred) | 4 d | requires ReactPHP |
-| **Add** image rendering for media in posts (Kitty / iTerm2 / Sixel) | 4 d | use candy-mosaic |
+| **Add** image rendering for media in posts (Kitty / iTerm2 / Sixel) | 4 d | use sugar-image |
 | **Add** scheduled-post daemon | 3 d | needs cron-like scheduler |
 | **Add** cross-posting orchestrator | 2 d | |
 | **Rewrite** the i18n surface — current locales are mail-specific keys (`mailer.no_recipient`, `cli.send_failed`); all 16 locales would need re-translation against a microblog vocabulary | 4 d | translator time, not coder time, but blocker |
@@ -469,7 +469,7 @@ src/Microblog/
         Media.php
     Schedule/
         Scheduler.php
-    Image/Renderer.php (delegates to candy-mosaic)
+    Image/Renderer.php (delegates to sugar-image)
 [plus a Tui/ tree analogous to Option A but for microblog flows]
 [delete all current candy-mail/src/* files except Lang.php]
 [rewrite all candy-mail/lang/*.php with new keys]
