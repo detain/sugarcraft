@@ -81,3 +81,14 @@ refresh-deps --mode=linked candy-scriptui OK; committed-tree path-repo guard rc=
 
 ## R9 packagist
 (pending)
+
+## R8 — push (done)
+- First push rejected (foreign vhs: regenerate demo GIFs d153743d5 landed meanwhile) → pull --rebase (clean, 4/4) → pushed. ALL CHAIN SHAS MOVED by the rebase: true R7 = 69e90ac30 (pre-rebase 468eefa6d — stale), tag-prep 40b41b7dd, notes 37c544713, hygiene 112012411, remote-done e62fbf508. Tracker MUST cite 69e90ac30.
+- Foreign commit = GIF-only; verified its blobs ride the renamed candy-scriptui/.vhs/ dir (hygiene commit tree == R7+GIFs; gen checks stay rc0 — NOT regenerated, owner lane's artifacts).
+- ls-remote peek: split sugarcraft/candy-scriptui HEAD = 9500e0aa (STALE — sync lags ~minutes; legacy-ref N/A: fast-forward syncs mint none per B2 law).
+
+## R9 — packagist (done)
+- CI-sync landed split master=afa6a66f0 (~90s after remote-done push). create → HTTP 202 clean (NO 406 — B3 sync-gate law honored: created only post-sync).
+- dev-master ABSENT across 5+5 polls → forced `scripts/packagist.sh update candy-scriptui` (BARE slug only — the script's validator rejects `vendor/name`: "not a valid package slug") → job 2254f0f99 → next check: dev-master present, source.reference afa6a66f01a38b3d0d62f5d5a5441433edb14d61 == split master EXACT.
+- Continuity peek: refs/heads/legacy/candy-shell + tag candy-shell-final at 9500e0aa (pre-rename split tip) — CI sync mints the pair on rename-syncs even though the monorepo push fast-forwarded (candy-query correction re-confirmed; B2 "FF mints none" law applies only to the monorepo push itself, not the split).
+- Abandon-checklist line appended (tagged); renames.json → packagist-done.
