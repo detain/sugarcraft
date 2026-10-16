@@ -104,16 +104,55 @@ Post-R4 sweep: zero untagged old vocab in the lib (vendor/ copies die at R5 reli
 - Consumers grep: zero `sugarcraft/sugar-glow` in any */composer.json ✓ (tool rewrote root :88). <!-- @rename-keep -->
 
 ## R6 verification
-(pending — gates run at stage point)
+- Residue `check-rename-residue --old=sugar-glow`: 0 findings at every staging point (after git add -A). <!-- @rename-keep -->
+- candy-mdview suite EXACT baseline shape: 122T/313A/0F/0E/0S/0W rc0 (watchdog harness).
+- Consumers green: candy-shine 938T/2378A, sugar-readline 336T/1076A, candy-git 326T/4638A, candy-core 1401T/28944A/28S.
+- tools/tests floor EXACT 426T/1484A; check-path-repos --no-lib-path-repos rc0 (61 libs); gen-ansi-readme --check ok.
+- DIFF AUDIT: full --stat reviewed (135 files). Fix-sets: stale GlowModel/glowmodel cites in 9 living doc files
+  outside lib → sed to MdViewModel/mdviewmodel (path cites must resolve post git-mv); capital-hyphen
+  `Sugar-glow` prose form (13 lines/4 files) survives BOTH tool rules and residue checker (R2 rule = <!-- @rename-keep -->
+  SugarGlow no-hyphen, R3 lowercase) → fixed for own living docs; B2 precedent Sugar-calendar survivors pre-exist. <!-- @rename-keep -->
+- Generic-glow corruption scan (`git diff --cached -U0` lines containing glow AND mdview): reviewed
+  line-by-line, ALL legitimate — charmbracelet/glow upstream URLs/keywords, MATCHUPS upstream row,
+  'Glow respects $PAGER' (upstream product name stays), pattern:glow tags, UPSTREAM_OPPORTUNITIES ns
+  example 'SugarCraft\GlowRenderer', crush-ledger historical bare-'glow' shorthand. Survivors sampled:
+  themes/{github,monokai,solarized}.json zero brand words; glamour.* keys + GlamourTheme untouched.
 
 ## R7 commit
-(pending)
+renames.json line 12 flipped pending→renamed by targeted sed on the unique line; gen-docs re-run minted
+the docs/lib/sugar-glow.html redirect stub (10th; redirect_stubs() skips status=pending entries) + --check <!-- @rename-keep -->
+green; commit **0ecd48255** `candy-mdview: rename from sugar-glow` (135 files) — author env, %ae/%ce=1 <!-- @rename-keep -->
+each, no trailer; `git log -1` verified.
 
 ## R8 push + remote-done
-(pending)
+`git pull --rebase` clean (no foreign pushes — chain SHAs stable: 40155b129 → 99bd7bebb → 0ecd48255).
+Push 7002ff6d4..0ecd48255 ✓. Split peek: sugarcraft/candy-mdview master=abcb7fab4 (sync fast). Gotcha:
+first remote-done commit silently no-op'd (renames.json edited but unstaged — `git log -1` verify caught
+it; law re-earned). Staged + committed 9b2b9c090 'rename: candy-mdview remote done', pushed ✓. 0/0.
 
 ## R9 packagist
-(pending)
+- create candy-mdview → HTTP 406 "sugarcraft/sugar-glow already exists" DESPITE split already synced. <!-- @rename-keep -->
+  New nuance vs candy-git-server row: not split-staleness — the OLD registration holds the repo URL (same
+  GitHub project after rename); a forced `update sugar-glow` re-crawl must COMPLETE before create passes. <!-- @rename-keep -->
+  Retry 15s after the 202 was STILL 406 (crawl job in flight); after completion (~60s) create = HTTP 202.
+- B4 first-crawl law re-proven: one forced bare-slug `update candy-mdview` (job 1ced49cb) → dev-master present.
+- Continuity: dev-master reference 63339bb050da9bf7dc26e27c90a86a41dff49db7 == split refs/heads/master EXACT
+  (split advanced past abcb7fab4 via sync-bot follow-ups; packagist tracks current tip — verify against
+  LIVE ls-remote, not a cached peek). Split-only objects absent from monorepo — expected, not an error.
+- Abandon line appended @rename-keep → rename-packagist-abandon-checklist.md. Old package stays installable.
 
 ## Tracker
-(pending)
+plan_rename.md:964 B5 entry-status line appended (after B4 @963) — commit `rename: tracker batch B5 done`.
+Final continuity: legacy/sugar-glow + tag sugar-glow-final both at abcb7fab4 on split ✓; monorepo 0/0; <!-- @rename-keep -->
+oc.7z restored to repo root (foreign, uncommitted).
+LAW REFINEMENTS minted this entry:
+1. Renamed-repo packagist 406 cure: when create 406s with "old name already exists" DESPITE the split
+   tree being synced, forced `update <old>` first AND WAIT for the crawl job to complete (~60s) before
+   retrying create — mid-job retry still 406s. (B3's split-staleness shape and this same-repo-registration
+   shape are DISTINCT 406 causes with distinct readiness signals.)
+2. dev-master==split-tip verification must use LIVE ls-remote at check time (sync bot may advance the
+   split past the peek taken minutes earlier).
+3. Capital-hyphen prose form (`Sugar-glow`) is invisible to both rename-lib and residue-checker rules — <!-- @rename-keep -->
+   own living docs fixed here; flagged for closeout generalization.
+4. rename-remote.sh topics-push can die 422 at GitHub's 20-topic cap AFTER a successful rename —
+   trim topics via `gh repo edit` and re-run (idempotent).
