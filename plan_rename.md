@@ -1001,6 +1001,8 @@ Entry status: `sugar-veil` → `sugar-overlay` ✅ **R1–R9 (batch-C R8/R9-LITE
 
 Entry status: `candy-hermit` → `sugar-quickpick` ✅ **R1–R9 (batch-C R8/R9-LITE)** — lane c5 7ec378d5f + C-weld; R8 remote verified 2026-10-16 (rename pre-landed at lane R2 — resync rc0; split master 91c9a6b71 + legacy/candy-hermit + candy-hermit-final @769d4d108); R9-LITE create fired once = HTTP 202 clean; abandon checklist line appended; commit c054322ca. Packagist indexing verification deferred to end-of-campaign batch pass.
 
+Entry status: `candy-lister` → `sugar-treelist` ✅ **R1–R9 (batch-C R8/R9-LITE)** — lane c6 5b89a1990 + C-weld; R8 remote verified 2026-10-16 (rename pre-landed at lane R2 — resync rc0; split master 12d907ccc + legacy/candy-lister + candy-lister-final @568cce18c); R9-LITE create fired once = HTTP 202 clean; abandon checklist line appended; commit 16a649470. Packagist indexing verification deferred to end-of-campaign batch pass.
+
 ## Phase 6 — Batch D (media / rendering)
 
 Order: `honey-bounce`, `candy-palette`, `candy-kit`, `candy-flip`, `candy-mosaic`, `sugar-reel`, `candy-shine`. Notes:
