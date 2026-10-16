@@ -146,7 +146,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyFlip**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). "flip" carries the frame-by-frame animation metaphor for free. |
 | **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/candy-flip`, split into its own package (rename campaign step 1.3). "view" states the app role beside the CandyFlip toolkit. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
-| **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
+| **SugarForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
 | **SugarFocus** | sugar + focus = the focus-management component. dependency-free ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here. || **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
 | **SugarFuzzy** | candy + fuzzy = fuzzy string matching with scored matched indices. extracted from sugar-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type). || **CandyBuffer** | candy + buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |
 | **CandyAsync** | candy + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across candy-core, sugar-forms, candy-wish. |
@@ -200,7 +200,7 @@ matching package turns out to be.
 |---|---|
 | **PancakeFlip** | image / video / GIF flipping (CandyFlip alternative) |
 | **PieChart** | another charts library |
-| **CookieClick** | mouse-zone tracker (CandyMouse alternative) |
+| **CookieClick** | mouse-zone tracker (SugarMouse alternative) |
 | **BentoBox** | layout (SugarPanels alternative) |
 | **BentoLauncher** | launcher / picker (CandySshLauncher alternative) |
 | **MarshmallowFilter** | fuzzy-finder (SugarQuickpick alternative) |

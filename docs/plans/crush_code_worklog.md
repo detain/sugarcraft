@@ -737,9 +737,9 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    #45 (Task), #32 (allow/deny filter). Lane T builds and tests each tool
    standalone; the registration line is applied by the supervisor at commit
    time. Lane T never edits `Bootstrap.php`.
-2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`sugar-forms`, #19
+2. **`sugar-crush/composer.json`** — #18 wants `sugar-bits`/`sugar-forms`, #19 <!-- @rename-keep historical provenance -->
    wants `candy-focus`, #21 wants `candy-kit`. `candy-sprinkles`, `sugar-veil` <!-- @rename-keep -->
-   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work.
+   and `candy-mouse` are **already required**, so #20 and #3.3 need no dep work. <!-- @rename-keep historical provenance -->
    Add all three missing deps in **one prep commit** before U or W reach them.
 3. **`README.md`** — #11 (permission bullet), #24 (env table), #34–#36. Lane D
    owns it exclusively; other lanes file requests rather than editing.
@@ -11635,7 +11635,7 @@ prose sat above an unrelated declaration.
 
 | lane | lib | tip → picks | shipped | gate |
 |---|---|---|---|---|
-| u1 `a6adc27f6`+`70d0a5e53` | sugar-dash | → `b8b702618`+`11992bf81` | E731 per-family literal-twin sweep (five traits, 17 content pins, 65-fixture render byte-identity) + COMP-2 closure half: `/proc` door-probes x4, option-(b) design paragraph, progressRing example + 2 goldens repaired | dash 5994T/10034A/1S/0W |
+| u1 `a6adc27f6`+`70d0a5e53` | sugar-dash | → `b8b702618`+`11992bf81` | E731 per-family literal-twin sweep (five traits, 17 content pins, 65-fixture render byte-identity) + COMP-2 closure half: `/proc` door-probes x4, option-(b) design paragraph, progressRing example + 2 goldens repaired | dash 5994T/10034A/1S/0W  <!-- @rename-keep historical provenance --> |
 | u2 `ef54fafb0` | sugar-forms | → `23aea4386` | E736 F1: **Confirm trait-drop bugfix** (validator + HideFunc/DynamicLabels closures died across `new self(...)`; fix = `carryNonCtorState()` sole carrier) + workerPool reserved-docs + 1.3/1.7/1.8 + Phase-4 docs | forms 1830T (+7T) |
 | u3 `2fc82e0c5` | sugar-forms | → `be0b010d6` | E736 F3: Cursor id re-key (spl_object_id REJECTED — handle recycling collides live lineages), Form valuesMemo, ViewportPan twin-law extraction, TextInput length cache, 8.4 implicit-nullable compat test | forms +21T → 1851 |
 
@@ -11645,16 +11645,16 @@ Pick order u1(2) → u2 → u3, ZERO conflicts except the ONE predicted: `TextIn
 
 ### Gates (all plain-pipe, linked vendors via refresh-deps --mode=linked, weld tree)
 
-dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · sugar-forms **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`.
+dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · sugar-forms **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`. <!-- @rename-keep historical provenance -->
 
 ### ROUND-85 WAVE-2 + CLOSE (2026-09-17) — u4 (E741 + E736 F2) + u6 (E731 COMP-2 (b)) welded; two umbrellas CLOSED; census 3 → 1 (E736 sole survivor); OPERATOR DECISION POINT
 
-**Welded 2026-09-17 on `ccb86e5fa` (NEVER pushed).** Two lanes, file-DISJOINT (sugar-forms vs sugar-dash), both reviewed APPROVE-class BEFORE merge, FIVE picks zero conflicts.
+**Welded 2026-09-17 on `ccb86e5fa` (NEVER pushed).** Two lanes, file-DISJOINT (sugar-forms vs sugar-dash), both reviewed APPROVE-class BEFORE merge, FIVE picks zero conflicts. <!-- @rename-keep historical provenance -->
 
 | lane | lib | tip → picks | shipped | gate |
 |---|---|---|---|---|
 | u4 | sugar-forms | `6029c8fb7`/`d16dd6c8f`/`2f1e145ca`/`7fb6a64be` → `ac82cf822`/`c1cebb634`/`5461ded56`/`2aba19b05` | **E741** shared-carrier family fix (`CarriesNonCtorState.php` into 6 Field classes, 25 `new self(...)` sites, fail-closed roster + 17-pin carrier-neuter proof) + **E736 F2**: Phase-2 perf (2.1 progressive-visibility DISCLOSED behavior change, single-pass validateAll, memoized caches) + Phase-6 async (opt-in `fetchTimeoutSeconds`, null⇒byte-identical wire; quiet-cancel; existence censuses) + rv fix-round (Select matcher docblock measured truth, Confirm fold seam note) | forms **1891T/3164A/0W** (1851→+40T exact) |
-| u6 | sugar-dash | `0eba02549` → `0f26082fe` | **E731(b)** COMP-2 ADOPTED-IMPLEMENTED: `ProcAvailability` probe-once memo + `'n/a'` sentinel render on /proc-absent hosts (System + Uptime), injected-probe pins, history-non-accumulation | dash **6006T/10076A/1S/0W** |
+| u6 | sugar-dash | `0eba02549` → `0f26082fe` | **E731(b)** COMP-2 ADOPTED-IMPLEMENTED: `ProcAvailability` probe-once memo + `'n/a'` sentinel render on /proc-absent hosts (System + Uptime), injected-probe pins, history-non-accumulation | dash **6006T/10076A/1S/0W**  <!-- @rename-keep historical provenance --> |
 
 **u4 death-mode evidence (10-resume law + salvage-first PROVEN):** the u4 builder died with TEN consecutive blank reports AFTER landing all four commits; the REFINED resume law (same task_id ≤10x, disk-probe between) plus salvage-first step 0 (porcelain/artifacts/tree audit before any redo) recovered a complete verified lane with ZERO redo — tip `7fb6a64be` matched the last known claim.
 
@@ -14322,4 +14322,3 @@ palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4
 - **Census = 4: E736 (umbrella tails) + E742 (ruling+build — REDO) + E743 (bits 3.1 build — REDO) + E744
   (crush host-side widget-command seam).** Round 89 only on operator direction; x1/x3/x7 scopes remain
   live re-cut candidates (artifacts + reviews carry the full design intent for each).
-

@@ -8,7 +8,7 @@ Lane: C11 (batch-C line 31, ns Mouse→Mouse UNCHANGED, type=lib, bins {}). cand
 - `CANDY_MOUSE_DEBUG` exists ONLY in historical repo_map proposal docs — never implemented in code (zero getenv in lib). Plan's "read both in code" shim is N/A: no read site exists. Deviation recorded. <!-- @rename-keep lane record, verbatim vocabulary -->
 - Lang R6: NAMESPACE already `'mouse'` (Lang.php:20) — ns unchanged → rewrite is identity; verify post-R3 (restore-protect hazard 4).
 - Glued manual sweep owed: `sugar-crush/tests/Tui/TextSelectionCandyMouseTest.php` (file+class+method `testRangeIsCandyMousesOwnSnapshot…`) + `scripts/parallel-tests-durations.tsv:138` row — invisible to R2 (letter-adjacent) and residue (same regex algebra). Will git mv + rename symbols + update durations row in-step. <!-- @rename-keep lane record, verbatim vocabulary -->
-- Merge-entry law (plan Part C notes + :990): update batch-1 candy-zone merge entry `new` field → `sugar-mouse` in renames.json in this commit (sed targeted).
+- Merge-entry law (plan Part C notes + :990): update batch-1 candy-zone merge entry `new` field → `sugar-mouse` in renames.json in this commit (sed targeted). <!-- @rename-keep historical provenance -->
 
 ## Procedure log
 
@@ -26,7 +26,7 @@ Lane: C11 (batch-C line 31, ns Mouse→Mouse UNCHANGED, type=lib, bins {}). cand
 - R3 PROJECT_NAMES.md:157 etymology flipped to retired-wordplay note (minesweeper precedent).
 - R4: README Formerly notice (tagged); keywords mouse/bubblezone kept; no bins/env/data-paths -> no shims. CANDY_MOUSE_DEBUG never implemented in code -> dual-read getenv shim N/A (deviation, R5 rewrote its 4 doc mentions). <!-- @rename-keep -->
 - R5: root composer update sugarcraft/sugar-mouse --no-install (lock diff pure sugarcraft); refresh-deps linked x7 (sugar-mouse + crush/minesweeper/bits/crumbs/veil/gallery) all ok; gen-docs + --check ok; gen-ansi --check ok.
-- R5 note: docs/lib/candy-zone.html stub lagged until batch-C status flip (resolve_final_slug skips pending) -> regenerated post-R7 to sugar-mouse.html; old-page stub count 17->18.
+- R5 note: docs/lib/candy-zone.html stub lagged until batch-C status flip (resolve_final_slug skips pending) -> regenerated post-R7 to sugar-mouse.html; old-page stub count 17->18. <!-- @rename-keep historical provenance -->
 - R6 suites EXACT vs baseline: sugar-mouse 343/916, bits 570/1246, crumbs 144/260, gallery 264/1162, veil 258/561, minesweeper 180/820/1F+4W (pre-existing catalog #1).
 - R6 crush: sharded K=8 vs suite-figure 22564/423652/2S CONSERVATION PASS on committed tip; tools/tests + child-lifetimes + path-repos + five-guard per logs below.
 - R7: renames.json L31 status->renamed; L60 batch-1 merge entry new bumped to sugar-mouse (plan :990 law). <!-- @rename-keep -->

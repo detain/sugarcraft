@@ -31,7 +31,7 @@ The mapping is specifically to `sugar-navstack` for breadcrumb rendering. Howeve
 
 | bubbleo Component | SugarCraft Mapping | Notes |
 |---|---|---|
-| `navstack.Model` | `sugar-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from CandyForms's form model |
+| `navstack.Model` | `sugar-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from CandyForms's form model  <!-- @rename-keep historical provenance --> |
 | `menu.Model` | `sugar-widgets` (list widget) | Wraps bubbles/list for menu selection |
 | `breadcrumb.Model` | `sugar-navstack` | Full mapping exists |
 | `shell.Model` | `candy-scriptui` | Composite nav + breadcrumb |

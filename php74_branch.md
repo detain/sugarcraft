@@ -417,7 +417,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **5.2** `sugar-panels`(3,low), `sugar-datepicker`(6,low), `sugar-navstack`(8,low),
   `candy-kv`(8,med), `candy-ansi-inspect`(8,med), `sugar-flexbox`(7,med), `candy-ssh-launcher`(6,med),
   `candy-mail`(7,high), `candy-git`(14,high), `sugar-table`(8,high), `sugar-toast`(9,high),
-  `sugar-veil`(7,high) — one step each (all small), in dependency order.
+  `sugar-veil`(7,high) — one step each (all small), in dependency order. <!-- @rename-keep historical provenance -->
 - **5.3** `sugar-forms`(23,low, deps incl. sugar‑bits) → **5.3a** `Field/` (8), **5.3b**
   `Validator/` (6), **5.3c** root.
 - **5.4** `candy-mdview`(10,med, core+shine+sugar‑bits), `sugar-readline`(17,med, forms+input →

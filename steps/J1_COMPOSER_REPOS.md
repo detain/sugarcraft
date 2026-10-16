@@ -29,7 +29,7 @@ For each sugarcraft/* package used:
 ## Current Repos Already Present
 
 - candy-core, candy-sprinkles, candy-layout, candy-async, candy-ansi, candy-input
-- sugar-table, sugar-toast, sugar-charts, sugar-dash, candy-buffer, sugar-forms
+- sugar-table, sugar-toast, sugar-charts, sugar-dash, candy-buffer, sugar-forms <!-- @rename-keep historical provenance -->
 - sugar-fuzzy, candy-pty, sugar-widgets, candy-kit
 
 ## Check for Missing

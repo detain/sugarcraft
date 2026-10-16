@@ -227,7 +227,7 @@ builds on it. From the same monorepo:
 
 - **CandySprinkles** — declarative styling + layout.
 - **SugarWidgets** — 14 prebuilt components.
-- **CandyForms** — multi-page form library.
+- **SugarForms** — multi-page form library.
 - **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
 - **CandyScriptui** — composer-installable CLI of 13 subcommands.
 - **CandyShine** — Markdown → ANSI renderer.

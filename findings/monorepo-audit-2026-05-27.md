@@ -139,7 +139,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-kv | 66 ✓ | REQUEST_CHANGES | 0 | 2 | 2 | 0 |
 | candy-git | 116 ⚠️ | REQUEST_CHANGES | 0 | 3 | 5 | 0 |
 
-**sugar-bits** — TUI components. 681 tests. Issue: 19 `class_alias()` entries to `SugarCraft\Forms\*` create confusing architecture where the "real" code lives elsewhere (sugar-forms).
+**sugar-bits** — TUI components. 681 tests. Issue: 19 `class_alias()` entries to `SugarCraft\Forms\*` create confusing architecture where the "real" code lives elsewhere (sugar-forms). <!-- @rename-keep historical provenance -->
 
 **sugar-charts** — Charting library. Issues: `BarChart::copy()` and `barWidthCopy()` have nearly identical 69-line bodies (DRY violation); many features documented as 🟡 "pending" in README.
 
@@ -249,7 +249,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - Architectural concern: which package "owns" the implementation?
 
 3. **candy-scriptui dependency inversion** (documented in improvements.md §2.1, partially resolved)
-   - candy-scriptui (foundation) depends on sugar-bits, sugar-forms (leaf)
+   - candy-scriptui (foundation) depends on sugar-bits, sugar-forms (leaf) <!-- @rename-keep historical provenance -->
    - Resolved via sugar-forms extraction but extraction still 🟡 in progress
 
 ### 🟠 Major Cross-Cutting Anti-Patterns
@@ -490,7 +490,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Long-Term Strategic Improvements
 
-1. **Publish sugar-forms to Packagist** — complete the extraction from sugar-bits/sugar-forms
+1. **Publish sugar-forms to Packagist** — complete the extraction from sugar-bits/sugar-forms <!-- @rename-keep historical provenance -->
 2. **Establish `sugarcraft/` Packagist namespace** — currently some packages use `sugarcore/`
 3. **PHP 8.4 adoption** — the codebase targets 8.3+ but hasn't used PHP 8.4 features
 4. **phpstan level 9** — only candy-core has phpstan configured
@@ -567,10 +567,10 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked |
 | 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass |
 | 5 | candy-pty, candy-vt, candy-vcr, candy-wish, candy-mouse | 346 | ⚠️ vcr, wish issues | <!-- @rename-keep historical provenance -->
-| 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped |
+| 6 | sugar-bits, sugar-charts, candy-kv, candy-git | 1,190 | ⚠️ stash 2 skipped  <!-- @rename-keep historical provenance --> |
 | 7 | sugar-datepicker, candy-mdview, sugar-forms, sugar-toast | 534 | ⚠️ prompt arch concern |
-| 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked |
-| 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues |
+| 8 | sugar-crush, sugar-navstack, sugar-dash, candy-mail | 5,714 | ⚠️ post blocked  <!-- @rename-keep historical provenance --> |
+| 9 | candy-ansi-inspect, sugar-flexbox, sugar-table, candy-codetime, sugar-veil | 539 | ⚠️ tick, stickers issues  <!-- @rename-keep historical provenance --> |
 | 10 | sugar-panels, sugar-readline, candy-ssh-launcher, honey-bounce, candy-flappy, super-candy | 583 | ⚠️ multiple issues |
 | **TOTAL** | **48 packages** | **7,633+** | **7,631 pass, 2 blocked** |
 

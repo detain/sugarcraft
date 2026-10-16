@@ -329,7 +329,7 @@ The matrix has **398 rows**: the 356-row taxonomy plus 42 🆕 rows for features
 | PLG-N1 | 🆕 In-process UI mods/plugins that draw panes, rewrite events, add commands/tools | ❌ No plugin/mod system; extension is file-based (hooks, commands, skills, agents, MCP); `statusLine` only feeds status-bar text | ❌ No web plugin or mod mechanism; the committed bundle is fixed and the CSP allows only same-origin scripts | ✅ in-process JS/TS plugins that draw panes, rewrite events, add commands/tools; several CC features are built-in mods | ✅ TUI plugins draw into slots, add routes/keymap commands/dialogs; server plugins rewrite messages, add tools | ✅ CLI plugins (cli.json) extend the TUI; server plugins transform registries, hook prompts/requests, add tools/commands | ✅ Native plugins run in-process: Control UI pages/widgets/view replacements, event-rewriting hooks, commands, tools, themes |
 | PLG-N2 | 🆕 Plugin evaluation / cost measurement tooling | ❌ No plugins and no eval/cost tooling for extensions; `/context` shows per-section and tool-schema token cost only | ❌ No plugin system, hence no eval or cost tooling; `/context` (server-run) prints section and tool-schema token sizes | ✅ `claude plugin eval` scores plugin effect vs a no-plugin baseline; `plugin details` shows token cost | ❌ No plugin evaluation or cost-measurement tooling | ❌ No plugin eval/cost tooling (`stats --tools` reports tool reliability only) | 🟡 Skill Workshop evaluators (`workshop evaluate`, `skill_proposal_evaluate`) and SDK test utilities; no plugin cost/eval suite |
 | **MCP** | **Model Context Protocol** |  |  |  |  |  |  |
-| MCP-01 | Client: stdio | ✅ stdio client (sugar-mcp): env credential stripping, 60 s handshake, 120 s per-call cap + notifications/cancelled | 🟡 Inherited: a trusted `.mcp.json` stdio server starts server-side; invisible in the web | ✅ stdio servers (`claude mcp add name -- cmd args`, `-e KEY=v`) | ✅ type local: command array, env, cwd; started at instance init | ✅ type local: command array, env, cwd; started at instance init | ✅ stdio servers (command/args/env/cwd) with owned process-group cleanup |
+| MCP-01 | Client: stdio | ✅ stdio client (sugar-mcp-client): env credential stripping, 60 s handshake, 120 s per-call cap + notifications/cancelled | 🟡 Inherited: a trusted `.mcp.json` stdio server starts server-side; invisible in the web | ✅ stdio servers (`claude mcp add name -- cmd args`, `-e KEY=v`) | ✅ type local: command array, env, cwd; started at instance init | ✅ type local: command array, env, cwd; started at instance init | ✅ stdio servers (command/args/env/cwd) with owned process-group cleanup |
 | MCP-02 | Client: SSE | ❌ Legacy SSE transport is not supported (`"type":"sse"` fails as an unknown MCP server type) | 🟡 Inherited; invisible | ✅ SSE transport (`--transport sse`) | ✅ Remote servers fall back to SSE transport if Streamable HTTP fails | ❌ Δ SSE transport removed: remote servers use Streamable HTTP only | ✅ SSE (the default when a URL server omits `transport`) |
 | MCP-03 | Client: Streamable HTTP | 🟡 Streamable HTTP with Mcp-Session-Id, SSE replies parsed; body buffered, no GET stream, fixed 30 s total timeout | 🟡 Inherited; invisible | ✅ Streamable HTTP (`--transport http`, headers) plus WebSocket servers | ✅ type remote: Streamable HTTP tried first, custom headers | ✅ Δ Streamable HTTP; optional MCP 2026-07-28 protocol via `protocol: auto/2026-07-28` | ✅ `transport: "streamable-http"` with headers (${ENV}), TLS/mTLS, timeouts |
 | MCP-04 | OAuth for remote MCP servers | 🟡 OAuth (discovery, DCR, PKCE, loopback) only via `sugarcrush mcp auth login`; TUI prints the command; no 401 prompt | ❓ `/mcp` is server-run; whether `/mcp auth` OAuth can complete from a browser was not verified | ✅ OAuth via `/mcp` or `claude mcp login`; pre-registered client IDs, fixed callback port, scopes, headersHelper | ✅ Auto OAuth on 401 with DCR (RFC 7591) or pre-registered client; `mcp auth/logout/debug`; tokens in mcp-auth.json | ✅ Δ OAuth with PKCE via pre-registered client, CIMD, or DCR; snake_case oauth fields; /mcps sign-in | ✅ `auth: "oauth"`; `openclaw mcp login/logout`; Control UI Settings → MCP "Sign in" |
@@ -440,7 +440,7 @@ The matrix has **398 rows**: the 356-row taxonomy plus 42 🆕 rows for features
 | UI-04 | Syntax highlighting | 🟡 Regex highlighter in code fences: 4 token classes (comment/string/number/keyword), 8 languages | ✅ Lazy 5 KB dependency-free highlighter: 7 language families (~60 aliases), text-in/escaped-out, 20,000-char cap | ✅ Syntax highlighting of code blocks (toggle with Ctrl+T inside `/theme`) | ✅ Tree-sitter syntax highlighting in code blocks and diffs | ✅ Tree-sitter syntax highlighting in code blocks and diffs | ✅ Syntax highlighting for code blocks, shell commands and diffs (Control UI); TUI markdown code highlighting |
 | UI-05 | Diff rendering (side-by-side / unified) | 🟡 Unified diff with old/new line-number gutter and +/- colour for Edit/Write results; no side-by-side; no diff in approval prompt | 🟡 Unified diff with old/new line numbers and +/− stats; no side-by-side | 🟡 Unified diffs (word-level) in edit prompts and `/diff`; side-by-side only via IDE/Desktop native diff viewers | ✅ Diffs auto split/stacked by width (`diff_style`), line numbers, add/remove backgrounds | ✅ Diffs auto split/stacked by width (`diff_style`), line numbers, add/remove backgrounds | ✅ Control UI unified and split diffs (session diff + inline edit/write diffs); TUI edit cards show diffs |
 | UI-06 | Multiline input | ✅ Multiline composer: Alt+Enter (Shift/Ctrl+Enter where reported), wraps CJK/emoji correctly, Kitty keyboard protocol negotiated | ✅ Textarea: Enter sends, Shift+Enter newline, IME-safe | ✅ Multiline via `\`+Enter, Shift+Enter (native in many terminals, `/terminal-setup` for others), Ctrl+J, Option+Enter | ✅ Multiline input (shift/ctrl/alt+enter, ctrl+j) with readline-style editing and undo/redo | ✅ Multiline input (shift/ctrl/alt+enter, ctrl+j) with readline-style editing and undo/redo | ✅ TUI Shift+Enter / Ctrl+J newline; Control UI configurable send shortcut |
-| UI-07 | Vim mode | ❌ No vim mode in the chat composer; candy-forms' Vim key handler exists only for TextInput | ❌ — | ✅ Rich vim mode (motions, text objects, visual mode, `.` repeat, `%` in 2.1.301, `jj`-style remaps) | ❌ No vim mode | ❌ No vim mode | ❌ No vim mode |
+| UI-07 | Vim mode | ❌ No vim mode in the chat composer; sugar-forms' Vim key handler exists only for TextInput | ❌ — | ✅ Rich vim mode (motions, text objects, visual mode, `.` repeat, `%` in 2.1.301, `jj`-style remaps) | ❌ No vim mode | ❌ No vim mode | ❌ No vim mode |
 | UI-08 | External editor ($EDITOR) | ✅ `/editor [text]` composes the prompt in $VISUAL/$EDITOR; the settings view's `e` opens config files there too | ❌ No external-editor hand-off (a browser cannot spawn $EDITOR) | ✅ Ctrl+G / Ctrl+X Ctrl+E opens the prompt (or plan) in $EDITOR; optional last-response context | ✅ /editor (<leader>e) composes in $EDITOR; /export opens transcript in $EDITOR | ✅ /editor (<leader>e) composes in $EDITOR; /export opens transcript in $EDITOR | ❌ No $EDITOR compose in the TUI (Ctrl+G is the agent picker) |
 | UI-09 | Input history & search (Ctrl+R) | 🟡 ↑/↓ on empty box recalls prompts across sessions (`prompt_history.jsonl`); no reverse/incremental history search | ❌ No ↑ prompt history or Ctrl+R; only a persisted per-session draft | ✅ Per-directory history (Up recalls past sessions), Ctrl+R reverse search; fullscreen dialog with session/project/all scopes | 🟡 Up/down prompt history (state/prompt-history.jsonl) and prompt stash; no Ctrl+R search | 🟡 Up/down prompt history (state/prompt-history.jsonl) and prompt stash; no Ctrl+R search | 🟡 TUI up/down input history, no Ctrl+R search; Control UI ⌘F transcript search and ⌘K thread search |
 | UI-10 | @file mention autocomplete / fuzzy file picker | 🟡 `@path` mentions with shell-style Tab completion plus `@diff`, `@session:`, `@https://`, `$skill`; no popup or fuzzy picker | 🟡 `@path` mentions are resolved server-side when sent, but there is no autocomplete or file picker | ✅ `@` fuzzy file/folder autocomplete, MCP resources, agents, and other live sessions | ✅ @ fuzzy picker (frecency) for files/dirs, subagents, MCP resources, configured references | ✅ Δ @ picker: files (with #start-end ranges), skills, agents, references | ✅ TUI `@` fuzzy file completion (fd-backed); Control UI clickable file references and Files panel |
@@ -862,7 +862,7 @@ sugar-crush builds rich state and then hides it. Each competitor shows *somethin
   - window the `/` popup (ISS-046);
   - fuzzy `@` file popup;
   - reverse history search;
-  - vim mode (candy-forms already has a Vim layer);
+  - vim mode (sugar-forms already has a Vim layer);
   - configurable keybindings through the existing `HasKeyOverrides` seam;
   - non-Alt fallbacks for macOS.
 - **Layout:**
@@ -2730,7 +2730,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>CMD-09</b> MCP prompts exposed as commands</summary>
 
-- **sugar-crush** ❌ — See MCP-07. — _Evidence:_ `docs/MCP.md`; `../sugar-mcp/src/StdioMcpServer.php:399`
+- **sugar-crush** ❌ — See MCP-07. — _Evidence:_ `docs/MCP.md`; `../sugar-mcp-client/src/StdioMcpServer.php:399`
 - **sugar-crush-web** ❌ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Prompts from a server named `anthropic-skills` are hidden. — _Evidence:_ cc:mcp#use-mcp-prompts-as-commands
 - **OpenCode 1.18.35** ✅ — `source:"mcp"`; the template is resolved lazily via `getPrompt`. — _Evidence:_ OC/command/index.ts:105-132
@@ -3059,7 +3059,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>MCP-06</b> MCP resources (@-mention / read)</summary>
 
-- **sugar-crush** ❌ — — — _Evidence:_ `../sugar-mcp/src/` (no resources/*)
+- **sugar-crush** ❌ — — — _Evidence:_ `../sugar-mcp-client/src/` (no resources/*)
 - **sugar-crush-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — MCP Apps `ui://` resources excluded from suggestions. — _Evidence:_ cc:mcp#use-mcp-resources; cc:tools-reference
 - **OpenCode 1.18.35** ✅ — Text resources are inlined as synthetic text. pdf/png/jpeg/gif/webp blobs are attached; others are omitted with a note. — _Evidence:_ TUI/component/prompt/autocomplete.tsx:372-390; OC/session/tools.ts:27-39,225-330; OC/session/prompt.ts:703-775
@@ -3079,7 +3079,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>MCP-08</b> Elicitation / sampling</summary>
 
-- **sugar-crush** ❌ — The client advertises empty capabilities. — _Evidence:_ `../sugar-mcp/src/StdioMcpServer.php:399,1143-1157`
+- **sugar-crush** ❌ — The client advertises empty capabilities. — _Evidence:_ `../sugar-mcp-client/src/StdioMcpServer.php:399,1143-1157`
 - **sugar-crush-web** ❓ — — — _Evidence:_ `sugar-crush/docs/protocol/sugarcrush.v1.schema.json`
 - **Claude Code 2.1.301** 🟡 — No mention of sampling anywhere in docs or changelog. — _Evidence:_ cc:mcp#respond-to-mcp-elicitation-requests; cc:hooks#elicitation
 - **OpenCode 1.18.35** ❌ — CLIENT_OPTIONS.capabilities has `sampling`, `elicitation` and `tasks` commented out. `roots` = project dir. — _Evidence:_ OC/mcp/index.ts:38-49,78
@@ -4067,7 +4067,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>UI-06</b> Multiline input</summary>
 
-- **sugar-crush** ✅ — The composer is candy-forms `TextArea`, with cursor motion, word motion/delete and ↑/↓ between rows. `App::init` pushes the Kitty progressive-keyboard protocol (DISAMBIGUATE) so terminals that support it report Shift+Enter distinctly. Wide-character wrapping was verified live with CJK and emoji. The box shrink-wraps its content: it starts 5 columns wide and grows as you type. It follows the transcript tail rather than being pinned to the bottom of the frame. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:450`; `src/App/App.php:2477-2501`; `src/Renderer.php:7140-7200`; live
+- **sugar-crush** ✅ — The composer is sugar-forms `TextArea`, with cursor motion, word motion/delete and ↑/↓ between rows. `App::init` pushes the Kitty progressive-keyboard protocol (DISAMBIGUATE) so terminals that support it report Shift+Enter distinctly. Wide-character wrapping was verified live with CJK and emoji. The box shrink-wraps its content: it starts 5 columns wide and grows as you type. It follows the transcript tail rather than being pinned to the bottom of the frame. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:450`; `src/App/App.php:2477-2501`; `src/Renderer.php:7140-7200`; live
 - **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:73-77`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#multiline-input; cc:terminal-config#enter-multiline-prompts
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/keybinds (input_*)
@@ -4077,7 +4077,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>UI-07</b> Vim mode</summary>
 
-- **sugar-crush** ❌ — `candy-forms/src/Vim/*` (VimKeyHandler, operators, text objects) is wired into `TextInput`, but the chat composer is `TextArea`, which has no vim layer. No setting or command toggles one. — _Evidence:_ `candy-forms/src/Vim/`; `candy-forms/src/TextInput/TextInput.php`; `src/Chat.php:16514-16515`
+- **sugar-crush** ❌ — `sugar-forms/src/Vim/*` (VimKeyHandler, operators, text objects) is wired into `TextInput`, but the chat composer is `TextArea`, which has no vim layer. No setting or command toggles one. — _Evidence:_ `sugar-forms/src/Vim/`; `sugar-forms/src/TextInput/TextInput.php`; `src/Chat.php:16514-16515`
 - **sugar-crush-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `/config` → Editor mode; remaps only from user/managed settings. — _Evidence:_ cc:interactive-mode#vim-editor-mode; CL v2.1.301
 - **OpenCode 1.18.35** ❌ — No vim keymap in TUI sources (the only “vim” hit is a parser config). — _Evidence:_ TUI/ (grep vim)
@@ -4257,7 +4257,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>UI-25</b> Keybinding customization</summary>
 
-- **sugar-crush** ❌ — The registry drives the `?` reference and the drift tests but cannot be overridden from config. candy-forms has a `HasKeyOverrides` seam (`'ctrl+u' => action`) that sugar-crush does not expose. — _Evidence:_ `src/Commands/KeyBinding.php:8-16`; `src/Commands/KeyBindingRegistry.php:440-520`; `candy-forms/src/TextArea/TextArea.php:175-179`
+- **sugar-crush** ❌ — The registry drives the `?` reference and the drift tests but cannot be overridden from config. sugar-forms has a `HasKeyOverrides` seam (`'ctrl+u' => action`) that sugar-crush does not expose. — _Evidence:_ `src/Commands/KeyBinding.php:8-16`; `src/Commands/KeyBindingRegistry.php:440-520`; `sugar-forms/src/TextArea/TextArea.php:175-179`
 - **sugar-crush-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Readline word-edit keys not remappable. — _Evidence:_ cc:keybindings
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/keybinds

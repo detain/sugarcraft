@@ -51,7 +51,7 @@ the §0-NOW-94 seam/watch roster, normalized to repo-root paths:
 
 - Bare `src/…`, `tests/…`, `docs/…` (lib docs), `bin/…`, `README.md`, `phpunit.xml` as cited → **`sugar-crush/`-prefixed** — EXCEPT where the citation names a sibling lib.
 - Citations already written monorepo-root (`sugar-crush/…`, `docs/plans/…`, `tools/…`, `.github/…`, `scripts/…`, `crush_code.md`, `docs/MATCHUPS.md`) kept as-is.
-- Sibling libs (`candy-…`, `sugar-dash`, `sugar-widgets`, …) → kept as-is.
+- Sibling libs (`candy-…`, `sugar-dash`, `sugar-widgets`, …) → kept as-is. <!-- @rename-keep historical provenance -->
 - Bare-directory citations kept with trailing `/` (e.g. `docs/plans/leftover/`).
 - `files = UNKNOWN(re-derive)` when the row cites no resolvable path.
 - `⚠`-free note: `⚠<lane>` = RETIRED lane letter — marks a file where that lane landed while the row stayed actionable.

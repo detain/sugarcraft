@@ -1,7 +1,7 @@
 {
-    "title": "SugarCraft — CandyForms",
-    "description": "CandyForms: Form library (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.",
-    "ogTitle": "SugarCraft — CandyForms",
+    "title": "SugarCraft — SugarForms",
+    "description": "SugarForms: Form library (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.",
+    "ogTitle": "SugarCraft — SugarForms",
     "ogDescription": "Form engine (port of charmbracelet/huh) plus the raw component implementations that sugar-widgets re-exports — Groups, themes, validators, fuzzy / async suggestions.",
     "emoji": "🍬",
     "displayName": "SugarForms",

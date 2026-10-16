@@ -1,7 +1,7 @@
 {
-    "title": "SugarCraft — CandyFuzzy",
-    "description": "CandyFuzzy: Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from sugar-forms; unblocks filter-highlighting UI across the ecosystem.",
-    "ogTitle": "SugarCraft — CandyFuzzy",
+    "title": "SugarCraft — SugarFuzzy",
+    "description": "SugarFuzzy: Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from sugar-forms; unblocks filter-highlighting UI across the ecosystem.",
+    "ogTitle": "SugarCraft — SugarFuzzy",
     "ogDescription": "Fuzzy string matcher that returns which characters matched and their score. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style). Enables filter-highlighting UIs impossible with score-only matchers.",
     "emoji": "",
     "displayName": "SugarFuzzy",

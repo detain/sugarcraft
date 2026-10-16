@@ -32,7 +32,7 @@ Zero libs require the package. Root composer require+repositories (R3:2) — R5 
 - [ ] R7 renames.json status=renamed + commit + push rename/c5.
 
 ## R6/R7 gates (CLOSED)
-- residue --old=candy-hermit: 0 findings (NOTES:6 tag added in-lane).
+- residue --old=candy-hermit: 0 findings (NOTES:6 tag added in-lane). <!-- @rename-keep historical provenance -->
 - lib suite EXACT vs baseline: 159T/601A/0S under PTY (`script -qec`). Pipe shape legitimately skips QuickPickSigwinchTest::testTheHandlerBody...StdinIsATerminal (needs TTY stdin, TIOCSWINSZ) → 159T/597A/1S. BASELINE WAS PTY-RUN; deviation is harness shape, not rename. Future re-runs of this lane: use PTY for exactness.
 - consumers: ZERO libs require the package. Comment-touch gates: sugar-crush --filter Renderer 1130T/151,512A rc0; candy-core --filter AtomicJsonFile 29T/79A; candy-sprinkles --filter Bar 68T/126A; candy-ssh-launcher --filter Picker 63T/195A. all rc0.
 - tools/tests 426T/1484A exact floor; check-path-repos rc0; check-child-lifetimes rc0 (60 libs, 8/8 accounted); gen-docs 79 files + --check rc0; gen-ansi-readme --check rc0 (untouched).

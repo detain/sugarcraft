@@ -10,7 +10,7 @@
 
 ## §1. Executive summary
 
-1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `sugar-forms` (leaf libs). The dep graph points the wrong way.
+1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `sugar-forms` (leaf libs). The dep graph points the wrong way. <!-- @rename-keep historical provenance -->
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
 3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
 4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`.
@@ -127,17 +127,17 @@ Never queue two phases concurrently against the same lib, and never start a new 
 
 ## §2. CRITICAL — architectural
 
-### 2.1 candy-scriptui depends on sugar-bits + sugar-forms (inverted dependency)
+### 2.1 candy-scriptui depends on sugar-bits + sugar-forms (inverted dependency) <!-- @rename-keep historical provenance -->
 
-✅ Resolved (PR #871): candy-scriptui now requires sugar-forms; sugar-bits/sugar-forms deps dropped. Spinner moved into sugar-forms in PR #870.
+✅ Resolved (PR #871): candy-scriptui now requires sugar-forms; sugar-bits/sugar-forms deps dropped. Spinner moved into sugar-forms in PR #870. <!-- @rename-keep historical provenance -->
 
-**Evidence:** `candy-scriptui/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/sugar-forms` in `require`. Eight files under `candy-scriptui/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Forms\*`. `candy-scriptui/src/Command/SpinCommand.php` does the same.
+**Evidence:** `candy-scriptui/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/sugar-forms` in `require`. Eight files under `candy-scriptui/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Forms\*`. `candy-scriptui/src/Command/SpinCommand.php` does the same. <!-- @rename-keep historical provenance -->
 
-**Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-scriptui` standalone post-1.0 and creates implicit cycles once sugar-bits or sugar-forms grows a back-reference.
+**Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-scriptui` standalone post-1.0 and creates implicit cycles once sugar-bits or sugar-forms grows a back-reference. <!-- @rename-keep historical provenance -->
 
 **Options:**
 
-- **Option A — preferred. Extract `sugar-forms` foundation lib.** Move the reusable form/input primitives (`TextInput`, `TextArea`, `ItemList`, `Viewport`, `FilePicker` from sugar-bits; `Confirm` from sugar-forms) into a new foundation lib `sugar-forms`. Then candy-scriptui, sugar-bits, and sugar-forms all depend on sugar-forms. sugar-bits and sugar-forms remain leaf libs that re-export or compose sugar-forms primitives. Effort: medium (multi-PR phased) — touches 3 libs + every consuming composer.json. No public-API break if sugar-bits and sugar-forms keep the same class names via aliasing during transition.
+- **Option A — preferred. Extract `sugar-forms` foundation lib.** Move the reusable form/input primitives (`TextInput`, `TextArea`, `ItemList`, `Viewport`, `FilePicker` from sugar-bits; `Confirm` from sugar-forms) into a new foundation lib `sugar-forms`. Then candy-scriptui, sugar-bits, and sugar-forms all depend on sugar-forms. sugar-bits and sugar-forms remain leaf libs that re-export or compose sugar-forms primitives. Effort: medium (multi-PR phased) — touches 3 libs + every consuming composer.json. No public-API break if sugar-bits and sugar-forms keep the same class names via aliasing during transition. <!-- @rename-keep historical provenance -->
 
 - **Option B — minimal. Rename `candy-scriptui` → `sugar-shell`.** Reclassify as a leaf. Cheaper but loses the framing of "gum-port-as-foundation-CLI", and renames in this repo are non-trivial (root composer.json, MATCHUPS.md, PROJECT_NAMES.md, docs/, workflows, etc. — there's a CLAUDE.md note that renames go through a separate flow).
 
@@ -156,7 +156,7 @@ Recommend Option A. Tracked separately because of size — gate the work on expl
 Same `preg_replace('/\x1b\[[0-9;]*m/', '', $str)` pattern (plus `mb_strwidth` or `mb_strlen`) appears in:
 - `sugar-dash/src/Components/Feedback/Alert.php` <!-- @rename-keep -->
 - `sugar-dash/src/Components/Nav/Scrollbar.php` <!-- @rename-keep -->
-- `sugar-veil/src/Animation/Slide.php`
+- `sugar-veil/src/Animation/Slide.php` <!-- @rename-keep historical provenance -->
 - `sugar-dash/src/Plot/Chart/OHLC.php` <!-- @rename-keep -->
 
 Replace each with `\SugarCraft\Core\Util\Ansi::strip()` followed by `\SugarCraft\Core\Util\Width::string()`. This is the lowest-risk batch in the entire audit.
@@ -206,7 +206,7 @@ Alternative shape (if static methods are a hard requirement): a `LangTrait` that
 
 The project standard is "every `with*()` returns a new instance via private `mutate()` helper" (AGENTS.md, CALIBER_LEARNINGS.md). The shape of that helper has drifted:
 
-- Named-param: `mutate(cursor: $cursor)` — used in `sugar-bits/src/TextArea/TextArea.php`
+- Named-param: `mutate(cursor: $cursor)` — used in `sugar-bits/src/TextArea/TextArea.php` <!-- @rename-keep historical provenance -->
 - Positional: `mutate(0, 0.0, null)` — used in `candy-mouse/src/ClickCounter.php` <!-- @rename-keep historical provenance -->
 - Named + sentinel bools for nullable fields: `mutate(boundString: $content, boundStringSet: true, propsAdded: ['boundString'])` — used in `candy-sprinkles/src/Style.php`
 
@@ -301,8 +301,8 @@ Each step is a self-contained PR ending with the local gate (phpunit + phpstan +
 1. **Quick wins (1 PR, ~½ day):** Delete `candy-mdview/src/WidthHelper.php`. Replace ANSI-strip regex in `sugar-dash` (Alert, Scrollbar, OHLC) and `sugar-veil` (Slide) with `Ansi::strip()` + `Width::string()`. <!-- @rename-keep -->
 2. **SGR cleanup (2 PRs):** sugar-dash batch (Foundation/Style, Foundation/Buffer, Components/System/Terminal, Plot/Braille/BrailleCanvas), then sugar-charts + candy-mdview batch. <!-- @rename-keep -->
 3. **Lang.php consolidation (1 PR):** Add `SugarCraft\Core\I18n\LangFactory` + update `scaffold-library` skill + mechanically migrate 33 libs.
-4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-panels/SugarPanels`.
-5. **`sugar-forms` extraction (multi-PR phased, gated):** Extract `sugar-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/sugar-forms during transition. Largest item — needs explicit go-ahead.
+4. **Boxer consolidation (1 PR):** sugar-dash drops `Layout/Boxer/` and adopts `sugar-panels/SugarPanels`. <!-- @rename-keep historical provenance -->
+5. **`sugar-forms` extraction (multi-PR phased, gated):** Extract `sugar-forms`; flip `candy-scriptui` requires; aliasing in sugar-bits/sugar-forms during transition. Largest item — needs explicit go-ahead. <!-- @rename-keep historical provenance -->
 6. **Polish round (1 PR):** `catalog()` methods, sugar-forms validator shortcuts, `TestCase` base, `StreamHelper` trait.
 7. **Optional / opportunistic:** shared `phpunit.xml.dist`; `candy-term` foundation lib for raw-mode.
 

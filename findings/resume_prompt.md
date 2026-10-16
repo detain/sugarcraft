@@ -93,7 +93,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 2-A | 2.1–2.3 | candy-core (Clamp migration incomplete), repeated_logic (Validation API mismatch), sugar-bits (sanitizeCell extraction) | <!-- @rename-keep historical provenance -->
-| 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), sugar-quickpick (computeWidth redundant) |
+| 2-B | 2.4–2.6 | candy-mosaic (DRY helpers), sugar-dash (Chart wither boilerplate), sugar-quickpick (computeWidth redundant)  <!-- @rename-keep historical provenance --> |
 | 2-C | 2.7–2.9 | sugar-quickpick (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) | <!-- @rename-keep historical provenance -->
 | 2-D | 2.10–2.12 | sugar-bits (AnimatedProgress spring cache), candy-buffer (DiffOptimiser array_merge, DiffEncoder state reset) | <!-- @rename-keep historical provenance -->
 | 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), candy-shine (string concat loops, Theme::fromJson issues) |
@@ -105,7 +105,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 3-A | 3.1–3.3 | candy-fuzzy (matchAllGenerator, FuzzyMatcherFactory, MatchResultSorter) | <!-- @rename-keep historical provenance -->
-| 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable) |
+| 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable)  <!-- @rename-keep historical provenance --> |
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) |
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), sugar-treelist (navigation methods, setLineOffset fluent, sort O(n) cursor) |
 | 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
@@ -117,9 +117,9 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | Group | Items | Libs |
 |-------|-------|------|
 | 4-A | 4.1–4.3 | CALIBER_LEARNINGS (new-factory-required, mutable trait, AsyncOps ADR) |
-| 4-B | 4.4–4.6 | sugar-veil (scanner state docs, RenderSession frame counter), candy-git (sync-only docs) |
+| 4-B | 4.4–4.6 | sugar-veil (scanner state docs, RenderSession frame counter), candy-git (sync-only docs)  <!-- @rename-keep historical provenance --> |
 | 4-C | 4.7–4.9 | candy-mouse (async gap, spatial index, memoization) | <!-- @rename-keep historical provenance -->
-| 4-D | 4.10–4.12 | candy-palette (async gap), sugar-bits (transitional architecture, ReactPHP/async note) |
+| 4-D | 4.10–4.12 | candy-palette (async gap), sugar-bits (transitional architecture, ReactPHP/async note)  <!-- @rename-keep historical provenance --> |
 
 ### Phase 5: Test Coverage Additions
 

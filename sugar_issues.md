@@ -1107,7 +1107,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Failure scenario:** Live: `abc` then Ctrl+U, Ctrl+E, Ctrl+B, Ctrl+F, Ctrl+Y, Ctrl+T gave `> abcuebfyt█`. A readline user's Ctrl+U corrupts the prompt instead of clearing it.
 - **Suggested fix:**
   - Drop unclaimed ctrl-chords, or hand the non-conflicting ones (Ctrl+E/U/K) to `TextArea::update()`, and update the `KeyHelpTest` pin.
-  - Expose a `keybindings` setting over `KeyBindingRegistry` ids; candy-forms already has a `HasKeyOverrides` seam.
+  - Expose a `keybindings` setting over `KeyBindingRegistry` ids; sugar-forms already has a `HasKeyOverrides` seam.
 - **Verification notes:** The live repro matched byte for byte. Ctrl+A, Ctrl+K, Ctrl+D and Ctrl+S are claimed, as stated.
 
 <a id="iss-048"></a>
@@ -1702,7 +1702,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Verdict:** CONFIRMED (a, b, d, e, f); (c) confirmed only for the dropped error text; (g) plausible (found by A2; verified by V2)
 - **Location:**
   - (a) `sugar-crush/src/Cli/Bootstrap.php:7869-7871` (disabled returns `MCP_ABSENT`), `sugar-crush/lang/en.php:620,2005`
-  - (b) no `nextCursor` handling in `sugar-crush/src/MCP/HttpMcpServer.php:119` or `sugar-mcp/src/StdioMcpServer.php`
+  - (b) no `nextCursor` handling in `sugar-crush/src/MCP/HttpMcpServer.php:119` or `sugar-mcp-client/src/StdioMcpServer.php`
   - (c) `sugar-crush/src/MCP/ClaudeCodeMcpServer.php:280-282`, `sugar-crush/src/ClaudeCodeMcpClient.php:315-318,627-636`
   - (d) `sugar-crush/src/MCP/GitMcpServer.php:46+` (no annotations)
   - (e) `sugar-crush/src/MCP/McpForeignTranslate.php:193-264`, `sugar-crush/src/MCP/McpClient.php:782-791` (`${VAR}` interpolated only when it is the whole value)
@@ -1731,7 +1731,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 ### ISS-094 · [P3] Session picker (Ctrl+R) lets transcript text bleed through its header and footer
 - **Product / area:** sugar-crush · tui (rendering)
 - **Verdict:** CONFIRMED (found by A5 as P2; verified and reproduced by V5, lowered to P3)
-- **Location:** `sugar-crush/src/Tui/SessionPicker.php:1153-1191` (`renderHeader`: title and hints clipped, rule `width-2`), `:1339-1382` (`renderFooter`); `sugar-veil/src/Veil.php:515-519` (each overlay line covers only its own visible width)
+- **Location:** `sugar-crush/src/Tui/SessionPicker.php:1153-1191` (`renderHeader`: title and hints clipped, rule `width-2`), `:1339-1382` (`renderFooter`); `sugar-overlay/src/Veil.php:515-519` (each overlay line covers only its own visible width)
 - **Problem:** Veil composites each overlay line over its visible width only. The picker's header and footer lines are clipped but not padded, so the backdrop shows to their right. `sugar-crush/src/Tui/DirectoryPicker/DirectoryPicker.php:361-363` pads with `fit(…, $width + 4)`.
 - **Failure scenario:** Over `/help` output, the hints row read `… p pin · … and show`, where "and show" is transcript text.
 - **Suggested fix:** Pad header and footer lines to the box's outer width with `Width::padRight()`, and draw the rules at the same width, as DirectoryPicker does.
