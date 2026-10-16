@@ -31,8 +31,8 @@ From `repo_map/ratatui_ratatui-image.md`:
 | Sixel protocol | N/A | No sugar-something yet |
 | Kitty protocol | N/A | No sugar-something yet |
 | iTerm2 protocol | N/A | No sugar-something yet |
-| Halfblocks (ASCII) | `sugar-bits` | Could be CharacterCell renderer |
-| Image widget | `sugar-bits` | Base widget infrastructure |
+| Halfblocks (ASCII) | `sugar-widgets` | Could be CharacterCell renderer |
+| Image widget | `sugar-widgets` | Base widget infrastructure |
 | Picker/cap detection | `candy-core` | Terminal capability detection |
 | StatefulImage | `sugar-charts`? | Dynamic resize behavior |
 | ThreadProtocol | `candy-core` | Async/thread messaging |

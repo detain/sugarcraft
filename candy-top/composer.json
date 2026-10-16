@@ -34,7 +34,7 @@
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/candy-flip": "@dev",
         "sugarcraft/candy-sprinkles": "@dev",
-        "sugarcraft/sugar-bits": "@dev",
+        "sugarcraft/sugar-widgets": "@dev",
         "sugarcraft/sugar-dash": "@dev"
     },
     "require-dev": {

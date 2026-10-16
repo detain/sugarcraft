@@ -43,14 +43,14 @@ From `repo_map/ratatui_ratatui.md`, SugarCraft maps to Ratatui as follows:
 | ratatui Component | SugarCraft Library |
 |----------------|-------------------|
 | ratatui-core (Widget/StatefulWidget traits, Buffer, Layout, Style, Text) | candy-core |
-| ratatui-widgets (Block, Paragraph, List, Table, Chart, Gauge, etc.) | sugar-bits |
+| ratatui-widgets (Block, Paragraph, List, Table, Chart, Gauge, etc.) | sugar-widgets |
 | ratatui-crossterm backend | candy-scriptui |
 | Layout + Cassowary constraints | candy-shine |
 | Stylize trait | candy-forms |
-| ratatui-macros | sugar-bits (likely) |
+| ratatui-macros | sugar-widgets (likely) |
 | Terminal::draw + Frame pattern | candy-core (Model) |
 | StatefulWidget + State types | candy-core (State) |
-| Text/Line/Span hierarchy | sugar-bits (Text rendering) |
+| Text/Line/Span hierarchy | sugar-widgets (Text rendering) |
 | Buffer diffing | candy-core (render optimization) |
 | ratatui::run() initialization | candy-scriptui (Tty initialization) |
 
@@ -100,7 +100,7 @@ From the first-stage analysis, the following gaps were identified:
   - Support for partial/viewport-based wrapping
   - Caching to avoid recomputation
 
-**Direct Risk to SugarCraft**: MEDIUM - Text wrapping in sugar-bits (Paragraph) will need similar capability. We should design for incremental/wrapped text access from the start rather than exposing internal state.
+**Direct Risk to SugarCraft**: MEDIUM - Text wrapping in sugar-widgets (Paragraph) will need similar capability. We should design for incremental/wrapped text access from the start rather than exposing internal state.
 
 ---
 
@@ -114,7 +114,7 @@ From the first-stage analysis, the following gaps were identified:
 
 **Maintainer Note**: "Wrapping is hard - much harder than you'd guess" - the wrapping code is fragile and difficult to maintain.
 
-**Direct Risk to SugarCraft**: HIGH - sugar-bits Paragraph widget will need scroll-to-content mapping. This is a known hard problem that requires pre-wrapping with `textwrap` crate and caching based on width.
+**Direct Risk to SugarCraft**: HIGH - sugar-widgets Paragraph widget will need scroll-to-content mapping. This is a known hard problem that requires pre-wrapping with `textwrap` crate and caching based on width.
 
 ---
 
@@ -152,7 +152,7 @@ terminal.swap_buffers();
 - Lower quality bar and faster iteration in separate crate
 - Similar to how tui-checkbox exists as standalone
 
-**Direct Risk to SugarCraft**: MEDIUM - We should consider whether sugar-bits should include these widgets or if they'd be better as a separate package following the Ratatui ecosystem pattern.
+**Direct Risk to SugarCraft**: MEDIUM - We should consider whether sugar-widgets should include these widgets or if they'd be better as a separate package following the Ratatui ecosystem pattern.
 
 ---
 
@@ -171,7 +171,7 @@ terminal.swap_buffers();
 - Naming and exact behavior still being worked out
 - Want to avoid releasing multiple core versions
 
-**Direct Risk to SugarCraft**: HIGH - This is exactly the architectural pattern we should follow. candy-core must be the stable foundation that other libs depend on, while sugar-bits, candy-scriptui can iterate faster.
+**Direct Risk to SugarCraft**: HIGH - This is exactly the architectural pattern we should follow. candy-core must be the stable foundation that other libs depend on, while sugar-widgets, candy-scriptui can iterate faster.
 
 ---
 
@@ -215,7 +215,7 @@ terminal.swap_buffers();
 
 **Maintainer Insight**: "If I was making my own app now that needed to wrap generally, the approach I'd take is prewrap with the textwrap crate. Cache based on width and compute based only on visible lines (plus some above/below for low latency)."
 
-**Direct Risk to SugarCraft**: HIGH - sugar-bits Table/List widgets will face same performance issues with large datasets. Virtual scrolling and dirty-flag rendering are essential patterns we must implement.
+**Direct Risk to SugarCraft**: HIGH - sugar-widgets Table/List widgets will face same performance issues with large datasets. Virtual scrolling and dirty-flag rendering are essential patterns we must implement.
 
 ---
 
@@ -254,7 +254,7 @@ Multiple issues (#2342, #2458, #293) highlight that Paragraph's wrapping is "fra
 - Pre-wrapping with external crates (textwrap) is the recommended approach
 - Virtualized/incremental wrapping is needed but complex
 
-**SugarCraft Implication**: HIGH - sugar-bits should use `textwrap` for wrapping rather than implementing our own, and should support viewport-based rendering from the start.
+**SugarCraft Implication**: HIGH - sugar-widgets should use `textwrap` for wrapping rather than implementing our own, and should support viewport-based rendering from the start.
 
 ---
 
@@ -306,7 +306,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Recommended Approach**: Implement in an app first, document missing pieces, then upstream the pattern.
 
-**SugarCraft Implication**: HIGH - rat-ui-interact (third-party) fills this gap with FocusManager and ClickRegion. We should consider whether candy-core or sugar-bits needs built-in focus/click management.
+**SugarCraft Implication**: HIGH - rat-ui-interact (third-party) fills this gap with FocusManager and ClickRegion. We should consider whether candy-core or sugar-widgets needs built-in focus/click management.
 
 ---
 
@@ -332,7 +332,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Maintainer Note**: "This gets complicated quickly when rows are not uniform in height, lol"
 
-**SugarCraft Implication**: HIGH - This is essential for performance. sugar-bits Table/List should implement virtual scrolling.
+**SugarCraft Implication**: HIGH - This is essential for performance. sugar-widgets Table/List should implement virtual scrolling.
 
 ---
 
@@ -346,7 +346,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Migration**: All existing code continues to work, but the trait hierarchy is cleaner.
 
-**SugarCraft Implication**: HIGH - This is the right pattern. We should use a similar blanket implementation for sugar-bits widgets.
+**SugarCraft Implication**: HIGH - This is the right pattern. We should use a similar blanket implementation for sugar-widgets widgets.
 
 ---
 
@@ -418,7 +418,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Still Unstable**: These traits are behind `unstable-widget-ref` feature and may still change.
 
-**SugarCraft Implication**: MEDIUM - In PHP we don't have the same dyn dispatch concerns, but the "widget as data that borrows" pattern is still worth considering for sugar-bits.
+**SugarCraft Implication**: MEDIUM - In PHP we don't have the same dyn dispatch concerns, but the "widget as data that borrows" pattern is still worth considering for sugar-widgets.
 
 ---
 
@@ -493,7 +493,7 @@ loop {
 
 **Yazi Pattern**: Pre-wrap visible viewport + buffer using textwrap, cache by width.
 
-**SugarCraft Implication**: HIGH - sugar-bits Table/List will need virtual scrolling for large datasets.
+**SugarCraft Implication**: HIGH - sugar-widgets Table/List will need virtual scrolling for large datasets.
 
 ---
 
@@ -756,7 +756,7 @@ impl Component {
 
 **Key Insight**: Ratatui core doesn't have built-in focus management, community built it externally.
 
-**SugarCraft Implication**: HIGH - Consider whether candy-core or sugar-bits needs built-in focus/click handling. The ratatui-interact pattern is worth emulating.
+**SugarCraft Implication**: HIGH - Consider whether candy-core or sugar-widgets needs built-in focus/click handling. The ratatui-interact pattern is worth emulating.
 
 ---
 
@@ -766,7 +766,7 @@ impl Component {
 
 **Key Pattern**: Calculate visible range, only render items in that range + buffer.
 
-**SugarCraft Implication**: HIGH - Essential for sugar-bits Table performance with large datasets.
+**SugarCraft Implication**: HIGH - Essential for sugar-widgets Table performance with large datasets.
 
 ---
 
@@ -879,7 +879,7 @@ impl Component {
 
 **Evidence**: Table with 15k items has 1-2 second lag on scroll.
 
-**SugarCraft Action**: sugar-bits Table/List MUST implement virtual scrolling. Only render visible range + buffer.
+**SugarCraft Action**: sugar-widgets Table/List MUST implement virtual scrolling. Only render visible range + buffer.
 
 ---
 
@@ -909,7 +909,7 @@ impl Component {
 
 **Evidence**: ratatui-interact built externally to fill gap.
 
-**SugarCraft Action**: candy-core or sugar-bits should consider built-in focus management, or ensure third-party integration is straightforward.
+**SugarCraft Action**: candy-core or sugar-widgets should consider built-in focus management, or ensure third-party integration is straightforward.
 
 ---
 
@@ -951,7 +951,7 @@ impl Component {
 ```
 candy-core (stable)
   ↓ depend
-sugar-bits, candy-scriptui, candy-shine, candy-forms
+sugar-widgets, candy-scriptui, candy-shine, candy-forms
   ↓ depend
 sugar-* (user-facing components)
 ```
@@ -988,7 +988,7 @@ sugar-* (user-facing components)
 
 **Quote**: "The problem with doing it in ratatui is that this will slow down the momentum and lock you into doing backwards compatible changes early."
 
-**SugarCraft Implementation**: sugar-bits should be lean core widgets. Advanced widgets (charts, complex tables, etc.) can be separate packages.
+**SugarCraft Implementation**: sugar-widgets should be lean core widgets. Advanced widgets (charts, complex tables, etc.) can be separate packages.
 
 ---
 
@@ -1002,7 +1002,7 @@ sugar-* (user-facing components)
 
 **Lesson**: Keep internal implementation details internal until API is truly settled.
 
-**SugarCraft**: Don't expose text wrapping internals in sugar-bits until we're confident in the API.
+**SugarCraft**: Don't expose text wrapping internals in sugar-widgets until we're confident in the API.
 
 ---
 
@@ -1182,17 +1182,17 @@ class MyComponent {
    - Cache layout computations
    - Document enabling/disabling clearly
 
-3. **Document Recommended Architecture** for sugar-bits apps
+3. **Document Recommended Architecture** for sugar-widgets apps
    - Component pattern with render + input handling
    - Clear separation of concerns
 
 ### Short-term (High Impact, Medium Effort)
 
-4. **Implement Virtual Scrolling** for sugar-bits Table/List
+4. **Implement Virtual Scrolling** for sugar-widgets Table/List
    - Essential for large datasets
    - Only render visible range + buffer
 
-5. **Use textwrap-equivalent** for text wrapping in sugar-bits
+5. **Use textwrap-equivalent** for text wrapping in sugar-widgets
    - Don't implement own wrapping
    - Cache wrapped text by width
 

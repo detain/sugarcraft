@@ -16,7 +16,7 @@
 
 sugar-boxer is a **pure layout renderer** — a recursive tree-based box-drawing layout engine that takes a tree of immutable `Node` objects and produces an ANSI string for a fixed viewport. It ports [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) from Go, adapting it from a `tea.Model` wrapper into a standalone PHP layout engine.
 
-**Ecosystem Positioning**: sugar-boxer is a foundational layout primitive at the same level as `candy-shine`'s table rendering — both are output producers that render to strings. It sits between the low-level cell-grid foundation (candy-core) and the full widget layer (sugar-bits). Unlike the upstream bubbleboxer (which wraps tea.Model instances), sugar-boxer is a pure string renderer focused purely on H/V panel composition with box-drawing borders.
+**Ecosystem Positioning**: sugar-boxer is a foundational layout primitive at the same level as `candy-shine`'s table rendering — both are output producers that render to strings. It sits between the low-level cell-grid foundation (candy-core) and the full widget layer (sugar-widgets). Unlike the upstream bubbleboxer (which wraps tea.Model instances), sugar-boxer is a pure string renderer focused purely on H/V panel composition with box-drawing borders.
 
 **Biggest Opportunity Areas**:
 
@@ -505,7 +505,7 @@ $layout = SugarBoxer::build(function($b) {
 **Opportunity**: Document how sugar-boxer integrates with other SugarCraft libs:
 
 - Using sugar-boxer with `candy-core` TTY loop
-- Composing sugar-boxer layouts inside sugar-bits Viewport
+- Composing sugar-boxer layouts inside sugar-widgets Viewport
 - Combining sugar-boxer with sugar-stickers FlexBox
 
 ## 3. Performance Tips
@@ -574,11 +574,11 @@ $node->withTitle('My Panel')
 
 **Source**: `sugarcraft_sugar-stickers.md` — "No HorizontalFlexBox: Upstream's HorizontalFlexBox (column-first layout) not implemented" and "No ContentGenerator: Upstream Go Cell.SetContentGenerator not ported"
 
-## 2. Integration with sugar-bits Viewport
+## 2. Integration with sugar-widgets Viewport
 
-**Opportunity**: sugar-bits Viewport provides scrollable regions. sugar-boxer could be rendered inside a Viewport for scrollable box layouts.
+**Opportunity**: sugar-widgets Viewport provides scrollable regions. sugar-boxer could be rendered inside a Viewport for scrollable box layouts.
 
-**Source**: `sugarcraft_sugar-bits.md` — Viewport provides "Scrollable text region with setWidth(), setHeight(), mouse wheel support"
+**Source**: `sugarcraft_sugar-widgets.md` — Viewport provides "Scrollable text region with setWidth(), setHeight(), mouse wheel support"
 
 ## 3. Integration with candy-scriptui
 

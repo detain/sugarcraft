@@ -21,7 +21,7 @@ use SugarCraft\Mouse\Zone as MouseZone;
  * plus {@see contains()}), but delegates the point-in-rect / width / height
  * math to a wrapped {@see \SugarCraft\Mouse\Zone} built from the same bounds.
  * That keeps the geometry engine in exactly one place (candy-mouse) across
- * both zone ports while consumers of candy-mouse (sugar-bits, sugar-gallery)
+ * both zone ports while consumers of candy-mouse (sugar-widgets, sugar-gallery)
  * keep reading `->id`, `->startCol`, … and passing `MouseMsg`s unchanged.
  */
 final class Zone

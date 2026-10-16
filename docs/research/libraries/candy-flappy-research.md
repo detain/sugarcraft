@@ -282,7 +282,7 @@ Add brief screen shake when bird crashes.
 
 **Reference:** Rustfinity plays wing.ogg on flap
 
-Use sugar-bits or candy-scriptui audio integration for:
+Use sugar-widgets or candy-scriptui audio integration for:
 - Wing flap sound
 - Point scored sound  
 - Crash sound

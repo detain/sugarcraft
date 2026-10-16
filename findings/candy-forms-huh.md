@@ -112,7 +112,7 @@ public function withStyle(SpinnerStyle $s): self
 }
 ```
 
-`SpinnerStyle` from `sugar-bits` is likely an immutable value object (following the project convention), so this is probably fine. But if `SpinnerStyle` has any internal mutable state (e.g., a frame counter), the cloned `Spinner` would share it with the original.
+`SpinnerStyle` from `sugar-widgets` is likely an immutable value object (following the project convention), so this is probably fine. But if `SpinnerStyle` has any internal mutable state (e.g., a frame counter), the cloned `Spinner` would share it with the original.
 
 **Recommendation:** Verify that `SpinnerStyle` is truly immutable, or call `$s = clone $s` before assignment.
 
@@ -176,8 +176,8 @@ while (true) {
 **File:** `src/Spinner.php:7-8`
 
 ```php
-use SugarCraft\Bits\Spinner\Spinner as BitsSpinner;
-use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
+use SugarCraft\Widgets\Spinner\Spinner as BitsSpinner;
+use SugarCraft\Widgets\Spinner\Style as SpinnerStyle;
 ```
 
 The import alias `BitsSpinner` is declared but never used. Either remove it or use it consistently. This appears to be leftover from a refactor.

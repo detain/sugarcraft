@@ -15,18 +15,18 @@ Pattern: `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07) is now a deprecated ali
 Anti-pattern: None identified. Do not re-implement scoring logic in candy-forms when candy-fuzzy provides it.
 Source: step-15 ai/candy-forms-shared
 
-## Spinner absorbed from sugar-bits
+## Spinner absorbed from sugar-widgets
 
 `Spinner`, `Spinner\Style`, and `Spinner\TickMsg` were moved here from
-`sugar-bits/src/Spinner/` (namespace `SugarCraft\Bits\Spinner` →
-`SugarCraft\Forms\Spinner`). The sugar-bits files are now thin
+`sugar-widgets/src/Spinner/` (namespace `SugarCraft\Widgets\Spinner` →
+`SugarCraft\Forms\Spinner`). The sugar-widgets files are now thin
 `class_alias` shims — same pattern as the other extracted primitives.
 
 ## candy-forms owns its tests; leaf libs keep alias-integration tests
 
 candy-forms now carries its own direct test suite under `tests/`
 (namespace `SugarCraft\Forms\Tests\*`) exercising the real
-`SugarCraft\Forms\*` classes. The original tests in `sugar-bits/tests/`
+`SugarCraft\Forms\*` classes. The original tests in `sugar-widgets/tests/`
 and `candy-forms/tests/` were COPIED (not moved) and stay in place — they
 exercise the same classes through the `class_alias` shims, giving us
 alias-integration coverage. Do not delete the leaf-lib copies.
@@ -35,17 +35,17 @@ alias-integration coverage. Do not delete the leaf-lib copies.
 
 A re-exporting leaf class is a 6-line file: `declare(strict_types=1);`,
 the leaf namespace, a `// @deprecated Use SugarCraft\Forms\...` comment, and
-a single `class_alias('SugarCraft\Forms\X\Y', 'SugarCraft\Bits\X\Y');`. The
+a single `class_alias('SugarCraft\Forms\X\Y', 'SugarCraft\Widgets\X\Y');`. The
 alias only fires when the autoloader loads the shim (triggered by a `use` of
 the leaf FQN), so every consuming lib must `require sugarcraft/candy-forms`
 for the alias target to resolve.
 
 ## Watch for stray leaf-namespace refs after extraction
 
-`Scrollbar\ScrollbarState` still imported `SugarCraft\Bits\Lang` after the
-extraction — invisible inside sugar-bits (where that class autoloads) but a
+`Scrollbar\ScrollbarState` still imported `SugarCraft\Widgets\Lang` after the
+extraction — invisible inside sugar-widgets (where that class autoloads) but a
 fatal `Class not found` when candy-forms runs standalone. A direct test suite
-catches these; grep `src/` for `SugarCraft\\Bits` / `SugarCraft\\Forms` after
+catches these; grep `src/` for `SugarCraft\\Widgets` / `SugarCraft\\Forms` after
 any extraction. Also keep the lang keys (`spinner.*`, `scrollbar.*`) in
 `candy-forms/lang/en.php` in sync with what `src/` references.
 
@@ -55,7 +55,7 @@ any extraction. Also keep the lang keys (`spinner.*`, `scrollbar.*`) in
 (enum VimState: Insert/Normal/Visual/VisualLine; enum VimAction: CursorLeft,
 CursorRight, CursorWord, DeleteChar, etc.). 4 libs now delegate to it:
 candy-forms TextInput, sugar-readline ViMode, candy-forms (via class_alias),
-sugar-bits (via class_alias). Add new bindings to VimAction enum + VimKeyHandler
+sugar-widgets (via class_alias). Add new bindings to VimAction enum + VimKeyHandler
 so all consumers benefit. Mirrors: `docs/repo_map_step_24.md`.
 
 Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic.
@@ -94,4 +94,4 @@ Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.
 - **[pattern:async-suggestions-debounce]** `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` on Input/Select uses `React\EventLoop\Loop::addTimer()` for debouncing, `React\Async\defer()` for async fetch wrapping, and dispatches `SugarCraft\Core\Msg\SuggestionsReadyMsg` when results arrive. The 150 ms default balances responsiveness against API call volume.
 - **[pattern:validator-short-form-methods]** Input field exposes short-form validator chains (`required()`, `email()`, `minlength(int)`, `maxlength(int)`) that delegate to `withValidator(new ValidatorType(...))`. This reduces boilerplate from `Input::new('x')->withValidator(new Required())->withValidator(new Email())` to `Input::new('x')->required()->email()`.
 - **[pattern:fuzzy-alias-repoint-with-back-compat]** The `Fuzzy\FuzzyMatcher` class was repointed to delegate to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` (the candy-fuzzy implementation) with a back-compat shim kept at the old FQN so existing call sites resolve unchanged. When repointing a class_alias, always verify the oldFQN is still loadable and add a dedicated alias-resolution test to catch accidental breakage.
-- **[anti-pattern:vim-keybindings-per-lib]** Do NOT add new vim keybindings to per-lib branching logic. Vim mode is handled by `candy-forms/src/Vim/VimKeyHandler` (shared). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-bits, candy-forms, and sugar-readline all benefit at once. Mirrors: `docs/repo_map_step_24.md`.
+- **[anti-pattern:vim-keybindings-per-lib]** Do NOT add new vim keybindings to per-lib branching logic. Vim mode is handled by `candy-forms/src/Vim/VimKeyHandler` (shared). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-widgets, candy-forms, and sugar-readline all benefit at once. Mirrors: `docs/repo_map_step_24.md`.

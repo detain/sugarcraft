@@ -1,6 +1,6 @@
-# Step 08.07 — sugar-bits Table filtering (withFilterable)
+# Step 08.07 — sugar-widgets Table filtering (withFilterable)
 
-**Source:** `leftover_updates_later.md` sugar-bits Phase 2 HIGH
+**Source:** `leftover_updates_later.md` sugar-widgets Phase 2 HIGH
 **Branch:** `ai/bits-table-filter`
 
 ## Deliverable
@@ -12,15 +12,15 @@ optional `withFilterPredicate(callable)` for custom filtering.
 
 **Modify:**
 
-- `sugar-bits/src/Table/Table.php` — filter state, indexed apply.
+- `sugar-widgets/src/Table/Table.php` — filter state, indexed apply.
 
 ## Tests
 
-- `sugar-bits/tests/Table/FilterTest.php`.
+- `sugar-widgets/tests/Table/FilterTest.php`.
 
 ## Acceptance
 
-- `cd sugar-bits && vendor/bin/phpunit --filter Filter` green.
+- `cd sugar-widgets && vendor/bin/phpunit --filter Filter` green.
 
 ---
 

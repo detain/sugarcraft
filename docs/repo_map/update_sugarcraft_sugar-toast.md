@@ -399,7 +399,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 # Architecture Improvements
 
 1. **Decouple rendering from timing**: Animation timing should be injectable, not tied to render cycle
-2. **Add Model interface**: Implement `SugarCraft\Core\Model` for TEA integration (matching sugar-bits components)
+2. **Add Model interface**: Implement `SugarCraft\Core\Model` for TEA integration (matching sugar-widgets components)
 3. **Separate display-cell utilities**: Extract `Width` and `Ansi` helpers to reusable interfaces in candy-core
 4. **Plugin system for custom alert types**: Registry pattern for user-defined ToastType extensions
 
@@ -563,7 +563,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 SugarToast represents a **significant enhancement** over its upstream bubbleup, not merely a port. The most important additions are the queue-based multi-alert system (vs single-alert in bubbleup), progress bar support, action buttons with callbacks, the history log, and the 9-position layout (vs 6 in upstream). The package is production-ready with solid test coverage and well-documented patterns.
 
-**Strategic Position**: SugarToast fills a niche in the SugarCraft ecosystem as a pure notification/rendering component that can be embedded in any TUI framework. Unlike sugar-bits components which implement full TEA models, SugarToast intentionally remains a pure renderer, making it framework-agnostic.
+**Strategic Position**: SugarToast fills a niche in the SugarCraft ecosystem as a pure notification/rendering component that can be embedded in any TUI framework. Unlike sugar-widgets components which implement full TEA models, SugarToast intentionally remains a pure renderer, making it framework-agnostic.
 
 **Key Differentiators from Competitors**:
 

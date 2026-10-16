@@ -38,7 +38,7 @@ called out in the table below.
 | **CandySprinkles** (`candy-sprinkles/`) | 🟢 ready | Declarative styling + layout. |
 | **HoneyBounce** (`honey-bounce/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
 | **CandyMouse** (`candy-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
-| **SugarBits** (`sugar-bits/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
+| **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture. |
 | **CandyForms** (`candy-forms/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color. |
 | **CandyShine** (`candy-shine/`) | 🟡 in progress | Markdown → ANSI renderer (themes, syntax, OSC 8 hyperlinks). |
@@ -112,7 +112,7 @@ package. Suffixes are short, technical, and describe the role.
 | Prefix | Meaning | Example uses |
 |---|---|---|
 | **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyScriptui), markdown (CandyShine) |
-| **Sugar-** | components / data / forms / apps | components (SugarBits), charts (SugarCharts) |
+| **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (CandyFlappy) |
 
 `Candy-` (Files) is the file manager naming. Don't mint new prefixes without a discussion in
@@ -185,7 +185,7 @@ reference projects supplied the ideas, not the code.
 | CandyWish (candy-wish/) | [wish](https://github.com/charmbracelet/wish) |
 | HoneyBounce (honey-bounce/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
-| SugarBits (sugar-bits/) | [bubbles](https://github.com/charmbracelet/bubbles) |
+| SugarWidgets (sugar-widgets/) | [bubbles](https://github.com/charmbracelet/bubbles) |
 | SugarBoxer (sugar-boxer/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
 | SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |

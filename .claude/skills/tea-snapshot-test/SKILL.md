@@ -8,11 +8,11 @@ paths:
 ---
 # TEA Snapshot Test
 
-Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes and the `candy-testing` harness. Match the exact structure in `sugar-bits/tests/GoldenRenderTest.php`, `candy-mouse/tests/Zones/ZoneHoverTrackerTest.php`, and `sugar-charts/tests/FiniteGuardTest.php`.
+Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes and the `candy-testing` harness. Match the exact structure in `sugar-widgets/tests/GoldenRenderTest.php`, `candy-mouse/tests/Zones/ZoneHoverTrackerTest.php`, and `sugar-charts/tests/FiniteGuardTest.php`.
 
 ## Critical
 
-- **Never duplicate a façade suite.** If the class under test is re-exported via `class_alias` (e.g. `sugar-bits` → `SugarCraft\Forms\*`, `candy-lister`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`), do NOT copy the canonical lib's tests. Ship ONE `AliasesTest` asserting each alias symbol resolves to its canonical FQN (`self::assertSame('SugarCraft\\Forms\\Input', (new \ReflectionClass(\SugarCraft\Bits\Input::class))->getName())`), plus tests only for genuinely lib-local behaviour. (Refs #1275/#1312/#1314 deleted ~4300 LOC of this.)
+- **Never duplicate a façade suite.** If the class under test is re-exported via `class_alias` (e.g. `sugar-widgets` → `SugarCraft\Forms\*`, `candy-lister`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`), do NOT copy the canonical lib's tests. Ship ONE `AliasesTest` asserting each alias symbol resolves to its canonical FQN (`self::assertSame('SugarCraft\\Forms\\Input', (new \ReflectionClass(\SugarCraft\Widgets\Input::class))->getName())`), plus tests only for genuinely lib-local behaviour. (Refs #1275/#1312/#1314 deleted ~4300 LOC of this.)
 - **Side effects live in `Cmd`, never `view()`.** A behaviour test asserting on a side effect must assert on the returned `Cmd`, not on `view()`.
 - **`view()` output is byte-exact.** Snapshot tests assert the raw SGR string, including every `\x1b[...m`. Do not normalize or trim.
 - **First line of every test file: `declare(strict_types=1);`** then `namespace SugarCraft\<Sub>\Tests;` (quirk: `candy-core` → `SugarCraft\Core\Tests`). Class is `final`, extends `PHPUnit\Framework\TestCase`. Every public method under test gets ≥1 test.
@@ -32,7 +32,7 @@ Map slug→namespace: `candy-shine/` → `SugarCraft\Shine\`. Grep the target `s
 A typical Model needs snapshot + behaviour + coercion. **Verify: list which modes apply before writing.**
 
 ### 3. Snapshot byte test (golden file)
-Build the immutable object with `::new()` + `with*()`, call `view()`, assert with `Assertions::assertGoldenAnsi`. Golden files live under the lib's `tests/fixtures/` directory (e.g. `sugar-bits/tests/fixtures/progress-fill-color.golden`).
+Build the immutable object with `::new()` + `with*()`, call `view()`, assert with `Assertions::assertGoldenAnsi`. Golden files live under the lib's `tests/fixtures/` directory (e.g. `sugar-widgets/tests/fixtures/progress-fill-color.golden`).
 ```php
 use SugarCraft\Testing\Snapshot\Assertions;
 // ...
@@ -103,16 +103,16 @@ Filter one test with `--filter testName`. If a red looks like a stale-dep artifa
 
 ## Examples
 
-**User says:** "Write a snapshot test for the gradient progress bar in sugar-bits."
+**User says:** "Write a snapshot test for the gradient progress bar in sugar-widgets."
 
 **Actions taken:**
-1. Slug `sugar-bits` → `SugarCraft\Bits`; grep `sugar-bits/src/Progress/Progress.php` — no `class_alias`, it's canonical.
+1. Slug `sugar-widgets` → `SugarCraft\Widgets`; grep `sugar-widgets/src/Progress/Progress.php` — no `class_alias`, it's canonical.
 2. Mode = snapshot byte (`Progress::view()` returns SGR).
-3. Add `testProgressBarWithGradientRendersAnsi()` to `sugar-bits/tests/GoldenRenderTest.php` building `Progress::new()->withWidth(5)->withGradient(Color::hex('#ff0000'), Color::hex('#00ff00'))->withPercent(1.0)`, assert via `Assertions::assertGoldenAnsi(__DIR__.'/fixtures/progress-gradient.golden', $p->view())`.
-4. `cd sugar-bits && UPDATE_GOLDENS=1 vendor/bin/phpunit --filter testProgressBarWithGradient` to seed the fixture `sugar-bits/tests/fixtures/progress-gradient.golden`; eyeball the bytes.
+3. Add `testProgressBarWithGradientRendersAnsi()` to `sugar-widgets/tests/GoldenRenderTest.php` building `Progress::new()->withWidth(5)->withGradient(Color::hex('#ff0000'), Color::hex('#00ff00'))->withPercent(1.0)`, assert via `Assertions::assertGoldenAnsi(__DIR__.'/fixtures/progress-gradient.golden', $p->view())`.
+4. `cd sugar-widgets && UPDATE_GOLDENS=1 vendor/bin/phpunit --filter testProgressBarWithGradient` to seed the fixture `sugar-widgets/tests/fixtures/progress-gradient.golden`; eyeball the bytes.
 5. Re-run without the env var → green.
 
-**Result:** New test method + `sugar-bits/tests/fixtures/progress-gradient.golden`, byte-exact regression guard, suite green.
+**Result:** New test method + `sugar-widgets/tests/fixtures/progress-gradient.golden`, byte-exact regression guard, suite green.
 
 ---
 

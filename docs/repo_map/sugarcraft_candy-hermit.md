@@ -431,7 +431,7 @@ candy-hermit is a **lighter-weight overlay** (not a full List replacement). It f
 
 candy-hermit fills a **specific niche** in the SugarCraft ecosystem: the quick-fix / type-to-filter overlay that composes over a background view without blocking it. This is distinct from:
 
-- `sugar-bits` / `candy-forms` — inline component rendering
+- `sugar-widgets` / `candy-forms` — inline component rendering
 - `sugar-veil` — general-purpose overlay compositor
 - `candy-lister` — inline list with fuzzy filtering
 

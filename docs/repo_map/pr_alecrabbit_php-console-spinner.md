@@ -19,7 +19,7 @@
 From `repo_map/alecrabbit_php-console-spinner.md`:
 
 - **candy-core**: ANSI rendering patterns (cursor management, erasure, colors) directly applicable to TTY infrastructure
-- **sugar-bits**: Spinner/progress component could be built as part of sugar-bits using patterns from this library
+- **sugar-widgets**: Spinner/progress component could be built as part of sugar-widgets using patterns from this library
 - **honey-bounce**: No direct mapping
 
 ---

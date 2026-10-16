@@ -2,7 +2,7 @@
 
 **Branch:** `ai/candy-mouse-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-14 (sugar-bits uses it), step-22 (sugar-veil/sugar-crumbs/candy-lister consume it)
+**Blocks:** step-14 (sugar-widgets uses it), step-22 (sugar-veil/sugar-crumbs/candy-lister consume it)
 
 ## Goal
 

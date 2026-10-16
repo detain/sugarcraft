@@ -22,7 +22,12 @@ Judged LIVING (rewritten by design): docs site + repo_map/research bodies, .clau
 ## Steps
 
 - (done) worktree `/home/sites/sugarcraft-c9` branch `rename/c9` @ weld `4d472bc62`; refresh-deps --mode=linked sugar-bits,candy-mdview,candy-sql,candy-top,sugar-stickers = linked=5 rc=0. <!-- @rename-keep lane work-record, as written -->
-- tag-prep: (in progress)
+- tag-prep: @commit 78+6=84 lines / 17 files (CONTEXT×13, baseline:67, worklog×7, hardening×9, RESUME×2, triage×3, improvements-2026-05×12, monorepo-audit×9, resume_prompt×4, php74×2, leftover/updates×8, C-briefs/rename-briefs×7, own NOTES×6). <!-- @rename-keep lane record, as written -->
+- R1 dry-run: 451 files / 10 paths / R1=374 R2=58 R3=1213 R6=1 (R4=0 R5=0 — compact only in ansi art bytes [content-excluded]; zero env sites tree-wide). findings/plan_sugar-bits.md AUTO path-renamed (C4 finding confirmed at this base). Glued `_sugar-bits` blindspot hits: repo_map self-pair pointers ×9, plan_sugar-bits.md cites ×8 (incl. candy-core CALIBER:56 tail), Sugar-bits cap-hyphen ×3, `.vhs/filter.tape` SugarBits escaped-\\n blindspot ×1 (NEW: R2 lookbehind defeated by literal backslash-n in tape content). /tmp/opencode/c9-dryrun.txt + -v. <!-- @rename-keep lane record, as written -->
+- R2 `rename-remote.sh sugar-bits sugar-widgets`: repo renamed + description/homepage synced (rc=0 path); **topics 422 >20 GitHub cap — topics sync declined by API, old topic set stays (owner curation, B12 #5 precedent). Deviation recorded.** Verified: sugarcraft/sugar-bits resolves to sugar-widgets. <!-- @rename-keep lane record, as written -->
+- R3 tool: rc=0 EXACT counts vs dry-run; dir moved; internal php -l/composer validate/one-type-per-file pass.
+- R4 manual: LangTest 'bits'→'widgets' ×2 (R6 domain const + raw-key passthrough expectation 'widgets.nonexistent.key'); src/Lang.php docblock; formerly+namespace notices in sugar-widgets/README.md; PROJECT_NAMES:173 strikethrough-resolution line tagged; glued sweeps 21 replacements/14 files as listed. <!-- @rename-keep lane record, as written -->
+- R5: root composer update sugarcraft/sugar-widgets --no-install → lock diff EXACTLY one package entry (86/86 all inside sugar-bits→sugar-widgets). gen-docs 78 files, --check ok (61+17 stubs; sugar-bits redirect stub NOT yet minted — status=pending; expect mint after R7 re-run). gen-ansi --check ok (3595). refresh-deps linked=5 escaping=0 after pruning 4 stale dangling vendor/sugarcraft/sugar-bits symlinks (composer update did not prune dangling path links — law for future lanes). <!-- @rename-keep lane record, as written -->
 - R1 dry-run:
 - R2 remote rename:
 - R3 tool run:

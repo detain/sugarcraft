@@ -626,9 +626,9 @@ Explicitly test ProfileWriter with a buffered writer to ensure io.Writer contrac
 
 # Ecosystem / Integration Opportunities
 
-## 1. sugar-bits Integration
+## 1. sugar-widgets Integration
 
-Ensure sugar-bits components (TextInput, etc.) use `Probe::colorProfile()` for color decisions rather than re-implementing detection.
+Ensure sugar-widgets components (TextInput, etc.) use `Probe::colorProfile()` for color decisions rather than re-implementing detection.
 
 ## 2. candy-shine Theme System
 

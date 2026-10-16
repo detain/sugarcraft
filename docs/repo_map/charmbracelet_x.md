@@ -192,8 +192,8 @@ The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `c
 
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
-| `colors` | `sugar-bits` (existing) | Color parsing and manipulation |
-| `charmtone` | `sugar-bits` | Charm color palette |
+| `colors` | `sugar-widgets` (existing) | Color parsing and manipulation |
+| `charmtone` | `sugar-widgets` | Charm color palette |
 | `toner` | None yet | Color toning (darken/lighten/saturate) |
 | `mosaic` | None yet | Image to terminal rendering |
 | `ansi/kitty` | None yet | Kitty graphics protocol |
@@ -239,6 +239,6 @@ The repository's crown jewel is the `ansi` package, which provides the most comp
 
 The `pony` package is particularly interesting as an AI-generated experiment in declarative TUI markup — it allows developers to describe terminal UIs using XML-like syntax with Go template interpolation. While marked experimental and AI-generated, it demonstrates interesting patterns for building type-safe declarative TUI frameworks that could inspire similar PHP implementations.
 
-For SugarCraft, this repository suggests several additional porting opportunities beyond the current 40+ libraries. The `wcwidth` and `termios` functionality overlaps significantly with `candy-core` and `candy-pty`, while color-related packages could enhance `sugar-bits`. The `cellbuf` concept of a cell-based terminal buffer could be particularly valuable for building terminal emulators or more sophisticated TUI components in PHP.
+For SugarCraft, this repository suggests several additional porting opportunities beyond the current 40+ libraries. The `wcwidth` and `termios` functionality overlaps significantly with `candy-core` and `candy-pty`, while color-related packages could enhance `sugar-widgets`. The `cellbuf` concept of a cell-based terminal buffer could be particularly valuable for building terminal emulators or more sophisticated TUI components in PHP.
 
 The repository's MIT license and the Charm team's commitment to open source make it a reliable reference implementation for ANSI/vt100 terminal behavior. SugarCraft implementers would benefit from studying the parser state machines and damage-tracking algorithms when building PHP terminal applications.

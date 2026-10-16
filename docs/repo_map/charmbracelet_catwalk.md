@@ -108,7 +108,7 @@ Catwalk is a **provider registry / model database**, not a TUI component. It doe
 
 | SugarCraft Lib | Relationship | Rationale |
 |---|---|---|
-| `sugar-bits` (TUI components) | **Potential consumer** | Could use catwalk model metadata to build a model picker / selector TUI component (e.g., a dropdown listing all available providers and models with context window and pricing info) |
+| `sugar-widgets` (TUI components) | **Potential consumer** | Could use catwalk model metadata to build a model picker / selector TUI component (e.g., a dropdown listing all available providers and models with context window and pricing info) |
 | `sugar-charts` (data viz) | **Potential consumer** | Could visualize pricing comparisons across models/providers using catwalk's `cost_per_1m_in/out` data |
 | `candy-log` (logging) | **Potential consumer** | The catwalk server uses `log.Printf` — a SugarCraft `CandyLog` integration would improve observability |
 | `candy-metrics` (Prometheus) | **Already aligned** | Catwalk already exposes Prometheus metrics (`catwalk_providers_requests_total`); a PHP port could use `CandyMetrics` for the same pattern |

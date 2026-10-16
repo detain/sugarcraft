@@ -6,7 +6,7 @@
 - **Namespace**: `SugarCraft\Stickers`
 - **Upstream**: [76creates/stickers](https://github.com/76creates/stickers) (Go, ~500 stars, MIT)
 - **Status**: 🟢 v1 ready
-- **Primary Mapping**: `sugar-bits` (FlexBox, Table primitives)
+- **Primary Mapping**: `sugar-widgets` (FlexBox, Table primitives)
 - **Additional Mapping**: `sugar-table` (Table component — different design)
 - **Canonical Source**: `/home/sites/sugarcraft/sugar-stickers/`
 
@@ -25,7 +25,7 @@ Sugar-stickers provides two foundational TUI components ported from the Go ecosy
 | **Viewport** | `src/Viewport.php` | 368 | Scrollable viewport with sticky headers/footers |
 | **Scrollbar** | `src/Scrollbar.php` | 65 | Scrollbar compositor |
 
-**Architecture**: sugar-stickers uses **SSOT composition** — Viewport and Scrollbar wrap `SugarCraft\Bits` counterparts rather than reimplementing scroll logic. This keeps sticker-level customization open without duplication.
+**Architecture**: sugar-stickers uses **SSOT composition** — Viewport and Scrollbar wrap `SugarCraft\Widgets` counterparts rather than reimplementing scroll logic. This keeps sticker-level customization open without duplication.
 
 ---
 
@@ -250,7 +250,7 @@ public function format(mixed $value, int $rowIndex): string
 
 ### 4.1 Viewport
 
-`src/Viewport.php` wraps `SugarCraft\Bits\Viewport\Viewport` with sticky header/footer support:
+`src/Viewport.php` wraps `SugarCraft\Widgets\Viewport\Viewport` with sticky header/footer support:
 
 ```php
 final readonly class Viewport
@@ -266,7 +266,7 @@ final readonly class Viewport
 
 ### 4.2 Scrollbar
 
-`src/Scrollbar.php` wraps `SugarCraft\Bits\Scrollbar\Scrollbar`:
+`src/Scrollbar.php` wraps `SugarCraft\Widgets\Scrollbar\Scrollbar`:
 
 ```php
 final readonly class Scrollbar
@@ -369,11 +369,11 @@ textualize's CSS flexbox is a full CSS box model with margin/padding/border, com
 
 ### 7.1 SSOT Composition (CALIBER_LEARNINGS.md)
 
-Viewport and Scrollbar are **SSOT composition wrappers** around `SugarCraft\Bits` types:
+Viewport and Scrollbar are **SSOT composition wrappers** around `SugarCraft\Widgets` types:
 
 ```
-SugarCraft\Bits\Viewport\Viewport     (inner/canonical)
-SugarCraft\Bits\Scrollbar\Scrollbar    (inner/canonical)
+SugarCraft\Widgets\Viewport\Viewport     (inner/canonical)
+SugarCraft\Widgets\Scrollbar\Scrollbar    (inner/canonical)
          ↑ wrap
 SugarCraft\Stickers\Viewport          (outer/customizable)
 SugarCraft\Stickers\Scrollbar        (outer/customizable)
@@ -409,7 +409,7 @@ FlexBox and Table both use a **measure → compute → render** pipeline:
 ### 8.1 What sugar-stickers Does Well
 
 1. **Faithful ratio-based layout**: The two-pass allocation (floor division + excess distribution) correctly handles integer rounding without floating-point errors
-2. **Lightweight**: No external dependencies beyond `sugarcraft/candy-core` and `sugarcraft/sugar-bits`
+2. **Lightweight**: No external dependencies beyond `sugarcraft/candy-core` and `sugarcraft/sugar-widgets`
 3. **SSOT composition**: Viewport/Scrollbar wrapping is a clean pattern for customization without duplication
 4. **Immutable API**: Fluent `with*()` setters return new instances
 

@@ -153,9 +153,9 @@
 
 ## SugarCraft Mapping
 
-### sugar-bits / candy-forms
+### sugar-widgets / candy-forms
 
-`charmbracelet/bubbles` maps directly to `SugarCraft\Bits` → `SugarCraft\Forms` (per MATCHUPS.md row 33)
+`charmbracelet/bubbles` maps directly to `SugarCraft\Widgets` → `SugarCraft\Forms` (per MATCHUPS.md row 33)
 
 | Bubbles Component | SugarCraft Component | Status |
 |---|---|---|

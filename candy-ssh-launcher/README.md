@@ -93,7 +93,7 @@ So a config in the directory you launch from takes precedence over your home con
 
 ## Implementation
 
-The picker is a tiny standalone widget — not a full SugarBits `List`. The lifecycle is
+The picker is a tiny standalone widget — not a full SugarWidgets `List`. The lifecycle is
 
 ```
 read config → render picker → read keys → choose → pcntl_exec(ssh, argv)

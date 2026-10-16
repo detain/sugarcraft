@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Overlay;
 
-use SugarCraft\Bits\Input\TextEdit;
-use SugarCraft\Bits\Menu\OptionRow;
+use SugarCraft\Widgets\Input\TextEdit;
+use SugarCraft\Widgets\Menu\OptionRow;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
@@ -26,7 +26,7 @@ use SugarCraft\Top\View\Surface;
 
 /**
  * btop's options menu: the banner over a 78-wide box — category tabs on
- * top, the two-row option list (sugar-bits {@see OptionRow}) on the left,
+ * top, the two-row option list (sugar-widgets {@see OptionRow}) on the left,
  * the selected option's description on the right.
  *
  * Keys (btop optionsMenu, with #1411 / #1791b applied):
@@ -41,7 +41,7 @@ use SugarCraft\Top\View\Surface;
  *    string (color_theme through the theme list, cpu_graph_* / cpu_sensor
  *    / selected_battery through what the collectors reported);
  *  - enter / e / E (or a second click on the selected row) edit an int or
- *    free-text option in a sugar-bits {@see TextEdit}: enter applies,
+ *    free-text option in a sugar-widgets {@see TextEdit}: enter applies,
  *    escape or a click cancels. A value btop would reject opens btop's
  *    `warning` box inside the menu instead of being applied.
  *

@@ -271,7 +271,7 @@ Both wrap frames in `Ansi::syncBegin()` / `Ansi::syncEnd()` (DEC 2026 synchroniz
 
 - Add `WidgetRenderer` visitor pattern for composing renderers
 
-- Port basic widgets from `sugar-bits` into core: `Block`, `Paragraph`
+- Port basic widgets from `sugar-widgets` into core: `Block`, `Paragraph`
 
 **Estimated complexity:** Medium — interface design + initial implementations
 

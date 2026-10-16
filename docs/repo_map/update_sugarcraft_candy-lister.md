@@ -528,7 +528,7 @@ Use candy-lister for `Table::Filter()` row filtering. bubble-table uses `filterF
 
 ## 3. Integration with candy-forms
 
-Expose candy-lister as `ItemList` component in candy-forms (the form primitives base). Currently `sugar-bits` ItemList is 🟡 with fuzzy filtering gaps.
+Expose candy-lister as `ItemList` component in candy-forms (the form primitives base). Currently `sugar-widgets` ItemList is 🟡 with fuzzy filtering gaps.
 
 **Source:** `docs/repo_map/sugarcraft_candy-forms.md` (ItemList), `docs/repo_map/charmbracelet_bubbles.md` (List component)
 

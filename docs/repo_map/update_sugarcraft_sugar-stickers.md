@@ -1,6 +1,6 @@
 # Overview
 
-Sugar-stickers is a foundational TUI layout library providing two primary components — FlexBox (CSS flexbox-inspired ratio-based layout engine) and Table (sortable/filterable data table) — ported from the Go library 76creates/stickers. It sits at the intersection of primitive layout (FlexBox) and self-contained widgets (Table), with additional Viewport and Scrollbar wrappers that compose sugar-bits counterparts via SSOT composition.
+Sugar-stickers is a foundational TUI layout library providing two primary components — FlexBox (CSS flexbox-inspired ratio-based layout engine) and Table (sortable/filterable data table) — ported from the Go library 76creates/stickers. It sits at the intersection of primitive layout (FlexBox) and self-contained widgets (Table), with additional Viewport and Scrollbar wrappers that compose sugar-widgets counterparts via SSOT composition.
 
 **Biggest opportunity areas:**
 
@@ -35,7 +35,7 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 
 **Key design patterns:**
 
-- SSOT composition: Viewport/Scrollbar wrap `SugarCraft\Bits` counterparts rather than reimplementing
+- SSOT composition: Viewport/Scrollbar wrap `SugarCraft\Widgets` counterparts rather than reimplementing
 - Immutable + fluent: All setters return new instances via clone-then-mutate
 - Measure → compute → render pipeline
 - Raw ANSI SGR strings for styling (no structured style object system)
@@ -43,7 +43,7 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 **Dependencies:**
 
 - `sugarcraft/candy-core` — ANSI primitives (Ansi class)
-- `sugarcraft/sugar-bits` — Viewport, Scrollbar (SSOT inner types)
+- `sugarcraft/sugar-widgets` — Viewport, Scrollbar (SSOT inner types)
 
 ## Current Features
 
@@ -82,7 +82,7 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 ## Strengths
 
 1. **Faithful ratio-based layout algorithm**: Two-pass allocation correctly handles integer rounding without floating-point errors
-2. **Lightweight**: No external dependencies beyond sugar-core and sugar-bits
+2. **Lightweight**: No external dependencies beyond sugar-core and sugar-widgets
 3. **SSOT composition**: Clean pattern for customizing scroll/viewport without duplicating logic
 4. **Immutable API**: Fluent `with*()` setters return new instances
 
@@ -707,13 +707,13 @@ final readonly class RenderContext {
 
 # Ecosystem / Integration Opportunities
 
-## 1. Integration with sugar-bits Table
+## 1. Integration with sugar-widgets Table
 
-**Current:** sugar-stickers Table and sugar-bits Table are separate implementations
+**Current:** sugar-stickers Table and sugar-widgets Table are separate implementations
 **Improvement:** Consider converging on a shared table interface or base class
 
 - sugar-stickers Table is simpler (positional access)
-- sugar-bits Table is more featureful (keyed access)
+- sugar-widgets Table is more featureful (keyed access)
 - Could share `TableInterface` with render contract
 
 ## 2. Integration with sugar-dash Layout
@@ -859,7 +859,7 @@ public function withAsyncContentGenerator(
 
 2. **ContentGenerator is the most important missing feature**: The ability to generate content dynamically based on allocated dimensions enables responsive TUI patterns that are otherwise impossible. This should be prioritized for implementation.
 
-3. **SSOT composition pattern is a model for SugarCraft**: The Viewport and Scrollbar wrappers that compose sugar-bits counterparts without reimplementing scroll logic is an elegant pattern that should be applied elsewhere. This "outer customization, inner SSOT" approach avoids duplication while enabling customization.
+3. **SSOT composition pattern is a model for SugarCraft**: The Viewport and Scrollbar wrappers that compose sugar-widgets counterparts without reimplementing scroll logic is an elegant pattern that should be applied elsewhere. This "outer customization, inner SSOT" approach avoids duplication while enabling customization.
 
 4. **Table and sugar-table should be rationalized**: The existence of two table implementations (sugar-stickers simple table + sugar-table full-featured table) creates maintenance burden and potential confusion. Consider either (a) deprecating sugar-stickers Table in favor of sugar-table, or (b) clearly differentiating them — sugar-stickers Table for simple display, sugar-table for interactive use.
 

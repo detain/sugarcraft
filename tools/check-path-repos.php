@@ -18,7 +18,7 @@ declare(strict_types=1);
  *   > consuming lib's repositories[].
  *
  * Historically this checker only validated a lib's DIRECT requires, so a
- * gap two hops deep (e.g. candy-mdview → sugar-bits → candy-forms) slipped
+ * gap two hops deep (e.g. candy-mdview → sugar-widgets → candy-forms) slipped
  * through and broke fresh installs. It now resolves the transitive set and
  * reports the dependency path that introduced each missing entry.
  *
@@ -399,7 +399,7 @@ foreach ($libs as $manifestPath) {
  * is never installed transitively.
  *
  * Returns depSlug => path-string, where the path records the first chain that
- * introduced the dep (e.g. "sugar-bits -> candy-forms", a root test edge is
+ * introduced the dep (e.g. "sugar-widgets -> candy-forms", a root test edge is
  * marked "[require-dev]") for actionable reporting. Cycles (candy-core ⇄
  * candy-pty) are handled via the visited set.
  *

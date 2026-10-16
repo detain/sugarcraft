@@ -7,7 +7,7 @@
 - **Namespace:** `SugarCraft\Forms` (re-export from `SugarCraft\Forms`)
 - **Status:** 🟢 v1 ready
 - **Upstream sources:** `charmbracelet/huh` (primary), `charmbracelet/bubbles` (widget layer)
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/candy-forms`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-bits`
+- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/candy-forms`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-widgets`
 - **PHP minimum:** `^8.3`
 
 ## Overview
@@ -306,7 +306,7 @@ All fields track focus state. `focus()` returns `[$newField, ?Cmd]` where the `C
 - `candy-forms`'s `composer.json` depends on `sugarcraft/candy-forms`
 - When `candy-forms` reaches 🟢, `candy-forms` will likely be deprecated entirely in favor of direct `SugarCraft\Forms\*` usage
 
-The naming reflects the upstream mapping: `huh` → `candy-forms` (form library) while `bubbles` → `sugar-bits` + `candy-forms` (widget primitives).
+The naming reflects the upstream mapping: `huh` → `candy-forms` (form library) while `bubbles` → `sugar-widgets` + `candy-forms` (widget primitives).
 
 ---
 

@@ -2,13 +2,13 @@
 
 ## [pattern:ssot-composition] — SSOT composition via wrapper classes
 
-Viewport and Scrollbar are composed from sugar-bits rather than reimplemented.
+Viewport and Scrollbar are composed from sugar-widgets rather than reimplemented.
 The sugar-stickers namespace (`SugarCraft\Stickers`) wraps canonical
-`SugarCraft\Bits` types as immutable value objects. This keeps sticker-level
+`SugarCraft\Widgets` types as immutable value objects. This keeps sticker-level
 customisation options open without duplicating scroll/viewport logic.
 
-- Viewport: `SugarCraft\Stickers\Viewport` wraps `SugarCraft\Bits\Viewport\Viewport`
-- Scrollbar: `SugarCraft\Stickers\Scrollbar` wraps `SugarCraft\Bits\Scrollbar\Scrollbar`
+- Viewport: `SugarCraft\Stickers\Viewport` wraps `SugarCraft\Widgets\Viewport\Viewport`
+- Scrollbar: `SugarCraft\Stickers\Scrollbar` wraps `SugarCraft\Widgets\Scrollbar\Scrollbar`
 
 Viewport sticky positioning (sticky headers/footers that appear/disappear
 as the user scrolls) is implemented in the Viewport wrapper at

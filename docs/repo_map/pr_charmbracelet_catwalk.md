@@ -19,7 +19,7 @@ From the prior analysis (`repo_map/charmbracelet_catwalk.md`):
 
 | SugarCraft Lib | Relationship | Rationale |
 |---|---|---|
-| `sugar-bits` | Potential consumer | Model picker/selector TUI component using catwalk metadata |
+| `sugar-widgets` | Potential consumer | Model picker/selector TUI component using catwalk metadata |
 | `sugar-charts` | Potential consumer | Pricing comparison visualizations |
 | `candy-log` | Potential consumer | Improved observability vs `log.Printf` |
 | `candy-metrics` | Already aligned | Same Prometheus metrics pattern |

@@ -262,7 +262,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 | `lipgloss` | `candy-sprinkles` | Declarative styling, colors, layout |
 | `harmonica` | `honey-bounce` | Spring animations for smooth motion |
 | `bubblezone` | `candy-mouse` | Mouse zone tracking for clickable regions |
-| `bubbles` | `sugar-bits` | 14 prebuilt components (TextInput, List, Table, etc.) |
+| `bubbles` | `sugar-widgets` | 14 prebuilt components (TextInput, List, Table, etc.) |
 | `ntcharts` | `sugar-charts` | Terminal charting library |
 | `huh` | `candy-forms` | Interactive form library |
 | `glamour` | `candy-shine` | Markdown rendering |

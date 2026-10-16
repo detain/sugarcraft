@@ -320,9 +320,9 @@ An empty marker interface provides minimal value beyond using a docblock tag. Ho
 
 **Impact:** High for migration — applications currently using readline have no upgrade path documented.
 
-### 2. No `sugar-bits` Compatibility
+### 2. No `sugar-widgets` Compatibility
 
-**Problem:** `sugar-bits` (component library) has no dependency on `candy-input`. The TUI component ecosystem (`sugar-bits`, `candy-scriptui`) likely needs keyboard/mouse input but there is no integration example.
+**Problem:** `sugar-widgets` (component library) has no dependency on `candy-input`. The TUI component ecosystem (`sugar-widgets`, `candy-scriptui`) likely needs keyboard/mouse input but there is no integration example.
 
 ### 3. Hard Dependency on `sugarcraft/candy-core`
 
@@ -413,7 +413,7 @@ The `readNonBlocking()` method calls `stream_set_blocking($this->stream, false)`
 | **Refactor** | DRY | Duplicate key name maps across methods | `EscapeDecoder.php` |
 | **Refactor** | DRY | Double-mapping of SGR modifier bits | `EscapeDecoder.php:311-319` |
 | **Compat** | Migration | No `sugar-readline` integration path | Architecture |
-| **Compat** | Ecosystem | No `sugar-bits` integration | Architecture |
+| **Compat** | Ecosystem | No `sugar-widgets` integration | Architecture |
 
 ---
 

@@ -31,7 +31,7 @@ From the first-stage analysis, SugarCraft maps to Bubble Tea ecosystem as:
 | `lipgloss` | `candy-sprinkles` | Declarative styling |
 | `harmonica` | `honey-bounce` | Spring animations |
 | `bubblezone` | `candy-mouse` | Mouse zone tracking |
-| `bubbles` | `sugar-bits` | 14 prebuilt components |
+| `bubbles` | `sugar-widgets` | 14 prebuilt components |
 | `huh` | `candy-forms` | Interactive forms |
 | `glamour` | `candy-shine` | Markdown rendering |
 | `colorprofile` | `candy-palette` | Color detection |
@@ -165,7 +165,7 @@ Textarea performance was dominated by `wrap()` calls during cursor position calc
 // Benchmark improvement: 325152 ns/op → 101341 ns/op (3x faster)
 ```
 
-**Direct Risk to SugarCraft:** YES - Any text input component (sugar-bits textinput) must memoize expensive operations like width calculation.
+**Direct Risk to SugarCraft:** YES - Any text input component (sugar-widgets textinput) must memoize expensive operations like width calculation.
 
 ### Issue #1673: Signal Channel Leak in suspendProcess()
 
@@ -371,7 +371,7 @@ Multiple Windows-specific issues:
 
 **Current Gap:** Bubbles components don't implement `tea.Model` interface directly.
 
-**SugarCraft Recommendation:** sugar-bits components MUST implement the `SugarCraft\Core\Model` interface directly. No wrapper required.
+**SugarCraft Recommendation:** sugar-widgets components MUST implement the `SugarCraft\Core\Model` interface directly. No wrapper required.
 
 ---
 
@@ -421,7 +421,7 @@ Merges event handling and rendering into a single loop for improved performance 
 
 Adds support for terminal-native progress bars (Windows Terminal, Ghostty).
 
-**SugarCraft Status:** Already mapped in sugar-bits as `View::progressBar`.
+**SugarCraft Status:** Already mapped in sugar-widgets as `View::progressBar`.
 
 ### PR #958: Fix Sequence/Empty Commands
 
@@ -546,7 +546,7 @@ type myModel struct {
 }
 ```
 
-**SugarCraft Requirement:** All sugar-bits components MUST implement `SugarCraft\Core\Model` interface directly. No wrappers.
+**SugarCraft Requirement:** All sugar-widgets components MUST implement `SugarCraft\Core\Model` interface directly. No wrappers.
 
 ### View Callback Refactoring
 
@@ -938,7 +938,7 @@ For complex features like text selection with mouse enabled.
    - tmux-like selection mode
 
 10. **LRU Memoization Utilities**
-    - Bundled with sugar-bits
+    - Bundled with sugar-widgets
     - For text width calculations
 
 ---
@@ -1247,7 +1247,7 @@ function suspendProcess(): void {
 8. **Text Selection Component**
    - When mouse is enabled
    - Fallback for terminals that need it
-   - Consider as sugar-bits component
+   - Consider as sugar-widgets component
 
 9. **Documentation & Examples**
    - Every example works out-of-box

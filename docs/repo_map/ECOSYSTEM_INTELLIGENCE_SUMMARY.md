@@ -24,7 +24,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos affected:** lipgloss, bubbles, ultraviolet, php-tui, phpschool/cli-menu, sequin, go-termimg, pterm
 - **Problem:** Using `mb_strlen` instead of `mb_strwidth` causes CJK/emoji to corrupt layouts
-- **SugarCraft risk:** HIGH — directly affects `candy-shine`, `candy-sprinkles`, `sugar-bits`
+- **SugarCraft risk:** HIGH — directly affects `candy-shine`, `candy-sprinkles`, `sugar-widgets`
 - **Fix required:** Use `mb_strwidth()` or grapheme cluster counting everywhere
 
 ### 2. Escape Sequence Termination (🔴 CRITICAL - Appears in 6+ repos)
@@ -84,7 +84,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos:** bubbles (List), bubble-table, pterm, gum, charmbracelet/huh, sequin
 - **What users want:** Real-time filter with matched character highlighting
-- **SugarCraft opportunity:** Port `sahilm/fuzzy` equivalent to PHP, integrate into `sugar-bits`
+- **SugarCraft opportunity:** Port `sahilm/fuzzy` equivalent to PHP, integrate into `sugar-widgets`
 - **Priority:** SHORT-TERM
 
 ### 4. Plugin/Extension Architecture (🟡 MEDIUM DEMAND - 6+ repos)
@@ -410,7 +410,7 @@ Both mods and crush were sunset in March 2026. This shows AI CLI tooling is vola
 
 ### 3. Textual's Widget Dominance
 
-With 40+ built-in widgets, Textual sets the user expectation for TUI frameworks. SugarCraft needs comprehensive widget coverage in `sugar-bits`.
+With 40+ built-in widgets, Textual sets the user expectation for TUI frameworks. SugarCraft needs comprehensive widget coverage in `sugar-widgets`.
 
 ### 4. Ratatui's Modular Architecture
 
@@ -430,7 +430,7 @@ soft-serve had multiple critical security issues found by community audit. Sugar
 
 ### 8. Documentation as Competitive Advantage
 
-Projects with poor docs (aleccrabbit, c9s/CLIFramework) have high pain points. sugar-bits and candy-core should invest heavily in docs.
+Projects with poor docs (aleccrabbit, c9s/CLIFramework) have high pain points. sugar-widgets and candy-core should invest heavily in docs.
 
 ---
 
@@ -443,10 +443,10 @@ These patterns appear across Go, Rust, Python, and PHP TUI ecosystems:
 | Elm Architecture | bubbletea | — | textual | candy-core | ✅ implemented |
 | Cell-based buffer | ultraviolet | ratatui | textual | candy-core (planned) | 🔲 planned |
 | Constraint layout | bubbleboxer | ratatui | textual | candy-shine (planned) | 🔲 planned |
-| Fuzzy filtering | bubbles | — | textual | sugar-bits (gaps) | 🔲 gaps |
+| Fuzzy filtering | bubbles | — | textual | sugar-widgets (gaps) | 🔲 gaps |
 | CSS styling | lipgloss | ratatui | textual (TCSS) | candy-sprinkles | ✅ implemented |
 | Widget trait | — | ratatui | textual | — | 🔲 not planned |
-| Snapshot testing | — | — | textual | sugar-bits | 🔲 not planned |
+| Snapshot testing | — | — | textual | sugar-widgets | 🔲 not planned |
 
 ---
 

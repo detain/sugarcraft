@@ -176,7 +176,7 @@
 | Screen erase/scroll operations | `candy-core` | Screen buffer management |
 | Terminal mode handling (mouse, bracketed paste) | `candy-core` | Terminal capability negotiation |
 | Theme support (dark/light) | `candy-shine` | Theme system for visual styling |
-| Golden file comparison for ANSI output | `sugar-bits` | Snapshot testing patterns for TUI output |
+| Golden file comparison for ANSI output | `sugar-widgets` | Snapshot testing patterns for TUI output |
 | PTY execution for command output capture | `candy-pty` (if exists) | PTY/sudo process handling |
 
 **SugarCraft Category**: `candy-*` (foundation/system/framework)

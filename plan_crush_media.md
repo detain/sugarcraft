@@ -426,7 +426,7 @@ Goal: the A1111-grade popup. **Shape A per crush_media §7.4 (recommended v1): f
 1. ratio = clamp(($x - $zoneLeft) / max(1, $zoneWidth - 1), 0, 1) — endpoint-inclusive convention documented; value = min + ratio*(max-min) → `withValue()` (normalise owns snap/clamp — reuse, never duplicate).
 2. Handle Press + DragMove + Release identically (no press-threshold subtlety in v1); ignore wheel here (Viewport routes it as Up/Down today — record divergence).
 3. Keyboard path byte-identical (existing Slider tests untouched).
-**Tests (ship in-step):** coercion (ratio edges x<0→min, ≥width→max, midpoints snap to the lattice — reuse normalise's step math as the oracle), behaviour (DragMove sequence updates monotonically; immutability: returns new instance). `cd candy-forms && vendor/bin/phpunit --filter 'Field\\SliderMouseTest'`; consumer regression at wave gate: `cd sugar-bits && vendor/bin/phpunit` + `cd candy-forms && vendor/bin/phpunit` targeted runs + crush `--filter 'Form|Input|Select|Cursor'` stay green (façade law: NO copied crush/bits tests for forms behaviour — ship only lib-local tests, campaign memory #1275/#1312/#1314).
+**Tests (ship in-step):** coercion (ratio edges x<0→min, ≥width→max, midpoints snap to the lattice — reuse normalise's step math as the oracle), behaviour (DragMove sequence updates monotonically; immutability: returns new instance). `cd candy-forms && vendor/bin/phpunit --filter 'Field\\SliderMouseTest'`; consumer regression at wave gate: `cd sugar-widgets && vendor/bin/phpunit` + `cd candy-forms && vendor/bin/phpunit` targeted runs + crush `--filter 'Form|Input|Select|Cursor'` stay green (façade law: NO copied crush/bits tests for forms behaviour — ship only lib-local tests, campaign memory #1275/#1312/#1314).
 **Definition of done:** crush can drag any param slider via the host hit-test.
 **Review brief:** mutation: invert ratio (left=max) → drag pin reds; mutation: duplicate snap-math inside handler instead of delegating → lattice-consistency pin (keyboard-set vs drag-set same value) reds; check no new composer dep slipped in (path-repos guard + rationale docblock).
 
@@ -2116,7 +2116,7 @@ Source: [forms] — full inventory of sugar-crush + candy-forms widgetry with fi
 | Setting schema/writer | `SettingsSchema::all :72` / `byKey :97` / `inCategory :115` / `layeredKeys :128`; `SettingsWriter` | sugar-crush/src/Config | `SettingsFieldFactory` builds candy-forms fields from schema; `SettingsWriter::refusal()` is the single validation authority |
 | Test harness | `ProgramSimulator :27`, `ScriptedInput :45`, `assertGoldenAnsi` (`UPDATE_GOLDENS=1`) | candy-testing | **NOT currently in crush require-dev** (G-7 decision) |
 
-**Façade law** [forms]: sugar-bits/candy-forms re-export forms classes via `class_alias` — code against the **canonical `SugarCraft\Forms\*`** namespace only (AGENTS.md #1275/#1312/#1314); canonical non-forms widgets (Tabs/Help/Paginator/Progress/Table/Tree) live in sugar-bits, which is not a crush dependency.
+**Façade law** [forms]: sugar-widgets/candy-forms re-export forms classes via `class_alias` — code against the **canonical `SugarCraft\Forms\*`** namespace only (AGENTS.md #1275/#1312/#1314); canonical non-forms widgets (Tabs/Help/Paginator/Progress/Table/Tree) live in sugar-widgets, which is not a crush dependency.
 
 ### 7.3 candy-forms deep notes [forms §3]
 
@@ -2411,7 +2411,7 @@ The `MediaRequest`/`MediaResponse` DTO pair mirrors the A1111 lesson of §4.1: *
 7. Suite figures: any added test touches `suite-figure.json`, `parallel-tests-durations.tsv`, README headline (merge-time re-pin per AGENTS.md).
 8. Tests run: `cd sugar-crush && vendor/bin/phpunit` (linked mode; check `php scripts/refresh-deps.php --status`); suites that arm timers need `LoopPin::pinStableClock()` in bootstrap — crush's `tests/bootstrap.php` already handles its loop shape.
 9. candy-forms CALIBER_LEARNINGS: golden ANSI via `SugarCraft\Testing\Snapshot\Assertions` + `UPDATE_GOLDENS=1`; don't re-implement fuzzy (use `SugarCraft\Fuzzy\SmithWatermanMatcher`); VimKeyHandler is shared by 4 libs — extend `VimAction`+`VimKeyHandler` only.
-10. Façade law: depend on `candy-forms` canonical; sugar-bits/candy-forms are alias layers; ship ONE `AliasesTest` if you ever add façade coverage.
+10. Façade law: depend on `candy-forms` canonical; sugar-widgets/candy-forms are alias layers; ship ONE `AliasesTest` if you ever add façade coverage.
 
 Plus the **async suggestion law** (candy-forms CALIBER_LEARNINGS via [forms]): store the `CancellationSource` on the model, `previous?->cancel()` before re-scheduling, accept the shared `LoopInterface`, never construct one; fetches go through candy-core `WorkerPool`. And `hydrate(array)` (`Form.php:624`) is the load-last-used-params entry point; `values()` (`:554`) the save entry point. Rendering-stack constraints (ffmpeg dep, WebP gd-build, headless probes behind `isInteractiveTty`) are itemized at §8.7-6.
 
@@ -2703,7 +2703,7 @@ candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
  ├─ candy-layout      Cassowary constraint solver (Form::withConstraints)
  ├─ candy-forms   ★ canonical widgets + Field/Form engine  ← write against this
  │    └─ candy-forms  (pure class_alias façade — do NOT target)
- ├─ sugar-bits    Tabs/Help+Key/Progress/AnimatedProgress/Paginator/Timer/Tree/Table (canonical);
+ ├─ sugar-widgets    Tabs/Help+Key/Progress/AnimatedProgress/Paginator/Timer/Tree/Table (canonical);
  │                TextInput/TextArea/ItemList/Viewport/FilePicker/Spinner/… are aliases → use Forms
  ├─ candy-mouse   Mark/Scanner/Zone/ZoneClickTracker (hit-test primitive; crush already runs it)
  │    └─ candy-zone    Manager/DragTracker/ClickCounter/HoverTracker (bubblezone layer) <!-- @rename-keep historical provenance -->

@@ -657,11 +657,11 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 #### 2.1 🟢 candy-core: Extract `Clamp.php` migration incomplete (Item 1.1)
 
 **Plan:** `findings/plan_repeated_logic.md` — Item 1.1
-**Status:** sugar-bits and candy-forms still have local `clamp()` methods
-**Fix:** Replace `sugar-bits/src/Tree/Tree.php:L317` and `candy-forms/src/Viewport/Viewport.php:L462` with `SugarCraft\Core\Util\Clamp::int()` or shared helper
-**Files:** `sugar-bits/src/Tree/Tree.php`, `candy-forms/src/Viewport/Viewport.php`
+**Status:** sugar-widgets and candy-forms still have local `clamp()` methods
+**Fix:** Replace `sugar-widgets/src/Tree/Tree.php:L317` and `candy-forms/src/Viewport/Viewport.php:L462` with `SugarCraft\Core\Util\Clamp::int()` or shared helper
+**Files:** `sugar-widgets/src/Tree/Tree.php`, `candy-forms/src/Viewport/Viewport.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
-**Note:** sugar-bits clamp() has different semantics (returns self, modifies cursor+offset) — may need custom solution
+**Note:** sugar-widgets clamp() has different semantics (returns self, modifies cursor+offset) — may need custom solution
 
 #### 2.2 🟢 repeated_logic: Validation API mismatch (Item 1.2)
 
@@ -671,11 +671,11 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `candy-core/src/Util/Validation.php`
 **Agent:** Same coder agent as 2.1 (grouped — same lib area)
 
-#### 2.3 🟢 sugar-bits: Extract sanitizeCell() to candy-core (Item 2.1)
+#### 2.3 🟢 sugar-widgets: Extract sanitizeCell() to candy-core (Item 2.1)
 
-**Plan:** `findings/plan_sugar-bits.md` — Item 2.1
+**Plan:** `findings/plan_sugar-widgets.md` — Item 2.1
 **Fix:** Create `candy-core/src/Util/Sanitize.php` with `sanitizeCell()`; update Tabs, Tree, Table to use it
-**Files:** `candy-core/src/Util/Sanitize.php` (new), `sugar-bits/src/Tabs.php`, `sugar-bits/src/Tree.php`, `sugar-bits/src/Table.php`
+**Files:** `candy-core/src/Util/Sanitize.php` (new), `sugar-widgets/src/Tabs.php`, `sugar-widgets/src/Tree.php`, `sugar-widgets/src/Table.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
@@ -726,20 +726,20 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `candy-hermit/src/Hermit.php:582-608`
 **Agent:** Same coder agent as 2.7 (grouped — same lib)
 
-#### 2.9 🟢 sugar-bits: sortedRows() single-pass (Item 2.2)
+#### 2.9 🟢 sugar-widgets: sortedRows() single-pass (Item 2.2)
 
-**Plan:** `findings/plan_sugar-bits.md` — Item 2.2
+**Plan:** `findings/plan_sugar-widgets.md` — Item 2.2
 **Fix:** Implement single-pass usort instead of loop with multiple usort passes
-**Files:** `sugar-bits/src/Table.php:506-526`
+**Files:** `sugar-widgets/src/Table.php:506-526`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 2.10 🟢 sugar-bits: AnimatedProgress spring caching (Item 3.6)
+#### 2.10 🟢 sugar-widgets: AnimatedProgress spring caching (Item 3.6)
 
-**Plan:** `findings/plan_sugar-bits.md` — Item 3.6
+**Plan:** `findings/plan_sugar-widgets.md` — Item 3.6
 **Fix:** Cache the Spring instance instead of creating new one every tick
-**Files:** `sugar-bits/src/AnimatedProgress.php:79`
+**Files:** `sugar-widgets/src/AnimatedProgress.php:79`
 **Agent:** Same coder agent as 2.9 (grouped — same lib)
 
 #### 2.11 🟢 candy-buffer: DiffOptimiser array_merge loop (Item 3.2)
@@ -1165,16 +1165,16 @@ Same verification as previous phases.
 **Files:** `candy-palette/CALIBER_LEARNINGS.md`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 4.11 🟢 CALIBER_LEARNINGS: sugar-bits transitional architecture (Item 3.4)
+#### 4.11 🟢 CALIBER_LEARNINGS: sugar-widgets transitional architecture (Item 3.4)
 
-**Plan:** `findings/plan_sugar-bits.md` — Item 3.4
+**Plan:** `findings/plan_sugar-widgets.md` — Item 3.4
 **Fix:** Document deprecated aliases and transitional architecture in CALIBER_LEARNINGS.md
 **Files:** `candy-core/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.10 (grouped — same file area)
 
-#### 4.12 🟢 CALIBER_LEARNINGS: sugar-bits ReactPHP/async note (Item 6.2)
+#### 4.12 🟢 CALIBER_LEARNINGS: sugar-widgets ReactPHP/async note (Item 6.2)
 
-**Plan:** `findings/plan_sugar-bits.md` — Item 6.2
+**Plan:** `findings/plan_sugar-widgets.md` — Item 6.2
 **Fix:** Add note about Cmd::tick() vs subscriptions() pattern
 **Files:** `candy-core/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.10 (grouped — same file area)
@@ -1301,7 +1301,7 @@ Same verification as previous phases.
 
 | Plan | Items | Summary |
 | ---- | ----- | ------- |
-| `plan_sugar-bits.md` | 2.3-2.4, 3.1-3.5, 3.7, 4.1-4.4, 5.1-5.2, 6.1-6.2, 7.1, 7.3 | Proportional width, Tabs scrollEnd, Progress layout, Tree/Table caching, C0 sanitization, input validation, ReactPHP/async docs |
+| `plan_sugar-widgets.md` | 2.3-2.4, 3.1-3.5, 3.7, 4.1-4.4, 5.1-5.2, 6.1-6.2, 7.1, 7.3 | Proportional width, Tabs scrollEnd, Progress layout, Tree/Table caching, C0 sanitization, input validation, ReactPHP/async docs |
 | `plan_sugar-dash.md` | M-1, M-2, M-3, M-4, L-1, L-3, F-2, F-4 | WeatherModule HOME fallback, FilesystemIterator, LegacyModuleAdapter msg filtering, Gauge double clamp, PluginSdk signals, EventDispatcherTest |
 | `plan_candy-mdview.md` | 2.2-2.3, 2.5 | GlamourTheme $throws, loadInput() docs, Pager empty stream |
 | `plan_candy-mail.md` | 3.1, 3.2, 4.1-4.7, 5.1, 6.1-6.2 | buildMimeMessage refactor, async transport, Resend API key, address deduplication, hasExtension parsing, CID validation, getenv consistency |

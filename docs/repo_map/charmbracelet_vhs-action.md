@@ -140,11 +140,11 @@ core.exportVariable('COLORTERM', 'truecolor')  // Enable true color
 
 ## SugarCraft Mapping
 
-The vhs-action is the **CI/CD automation layer** for the upstream `charmbracelet/vhs` CLI tool that SugarCraft ports (see `sugar-bits`, `candy-shine`, etc.). While vhs-action is not itself a TUI library, it is the **demo recording and integration-testing harness** that the Charm ecosystem uses.
+The vhs-action is the **CI/CD automation layer** for the upstream `charmbracelet/vhs` CLI tool that SugarCraft ports (see `sugar-widgets`, `candy-shine`, etc.). While vhs-action is not itself a TUI library, it is the **demo recording and integration-testing harness** that the Charm ecosystem uses.
 
 | SugarCraft Lib | Relationship |
 |---|---|
-| `sugar-bits` | The `Text`/output rendering components in SugarCraft mirror what VHS renders to GIF — the TUI component tree output |
+| `sugar-widgets` | The `Text`/output rendering components in SugarCraft mirror what VHS renders to GIF — the TUI component tree output |
 | `candy-shine` | Theme handling in SugarCraft (`Theme::ansi()`, `Theme::dracula()`) mirrors VHS's `Set Theme` command for color scheme application |
 | `candy-core` | The `Model::update()`/`Model::view()` cycle mirrors VHS's command-interpretation loop |
 | `candy-forms` | Input handling (`Type`, key events) maps to VHS's `Type`/`Enter`/`Tab` commands |

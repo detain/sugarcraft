@@ -15,7 +15,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * and pick with Enter. Returns the selected Endpoint or null on
  * Esc / Ctrl-C.
  *
- * Why not the full SugarBits `List` widget? That's overkill for a
+ * Why not the full SugarWidgets `List` widget? That's overkill for a
  * one-shot picker that we immediately replace with `pcntl_exec`.
  * This class only needs to draw a static list, read a few keys,
  * and exit fast — no event loop, no full Program lifecycle.

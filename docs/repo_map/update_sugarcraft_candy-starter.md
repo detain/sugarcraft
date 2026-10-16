@@ -6,7 +6,7 @@
 
 **Biggest opportunities:**
 
-- Add sub-component composition demonstration (Spinner from sugar-bits embedded in Counter) to mirror Go template's `spinner.Model` pattern
+- Add sub-component composition demonstration (Spinner from sugar-widgets embedded in Counter) to mirror Go template's `spinner.Model` pattern
 
 - Add a comprehensive testing infrastructure pattern (Simulator, Snapshot testing)
 
@@ -24,7 +24,7 @@
 
 - No error handling path
 
-- No composition of sugar-bits components within the demo model
+- No composition of sugar-widgets components within the demo model
 
 ---
 
@@ -96,7 +96,7 @@ final class Counter implements Model {
 
 7. **Minimal bin entry point** — No explicit error handling with `fmt.Println(err); os.Exit(1)` equivalent.
 
-8. **No sugar-bits components used** — README mentions Spinner/TextInput but scaffold uses only raw `Style`.
+8. **No sugar-widgets components used** — README mentions Spinner/TextInput but scaffold uses only raw `Style`.
 
 9. **Tests don't use data providers** — 7 explicit test methods rather than `@dataProvider` for key-type matrix.
 10. **CI is monorepo-only** — No own `.github/workflows/`. Can only be tested within monorepo context.
@@ -152,7 +152,7 @@ final class Counter implements Model {
 
 - **Description:** No `Program::withInput()` / `Program::withOutput()` for I/O redirection, no headless testing, no snapshot testing utilities.
 
-- **Why it matters:** Bubble Tea's most requested feature is a first-class testing framework. sugar-bits/sugar-bits provides `candy-vcr` for session recording but no deterministic model testing pattern.
+- **Why it matters:** Bubble Tea's most requested feature is a first-class testing framework. sugar-widgets/sugar-widgets provides `candy-vcr` for session recording but no deterministic model testing pattern.
 
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbletea.md` — "Issue #1654: Proposal: Testing Framework" and "Testing Infrastructure Gap" (Section 7.1)
 
@@ -252,15 +252,15 @@ final class Counter implements Model {
 
 ### Low
 
-**9. No sugar-bits Components Used**
+**9. No sugar-widgets Components Used**
 
-- **Description:** README's "common next steps" table mentions `sugar-bits` Spinner, `candy-forms` Group, etc., but scaffold uses only raw `Style` from `candy-sprinkles`.
+- **Description:** README's "common next steps" table mentions `sugar-widgets` Spinner, `candy-forms` Group, etc., but scaffold uses only raw `Style` from `candy-sprinkles`.
 
 - **Why it matters:** Developers might not realize how to integrate components from other packages.
 
 - **Source:** `docs/repo_map/charmbracelet_bubbletea-app-template.md` — Shows bubbles components being used
 
-- **Implementation:** Embed a `Spinner` from `sugar-bits` in the Counter to show cross-package composition.
+- **Implementation:** Embed a `Spinner` from `sugar-widgets` in the Counter to show cross-package composition.
 
 - **Complexity:** Low — just importing and using a component.
 
@@ -366,7 +366,7 @@ final class Counter implements Model {
 
 ### Immediate (v1.x)
 
-1. **Add Spinner Sub-Component** — Embed `SugarCraft\Bits\Spinner` in Counter, demonstrating component composition pattern. Show that sub-components implement `Model` directly (Issue #371 in bubbletea: "Components should implement tea.Model").
+1. **Add Spinner Sub-Component** — Embed `SugarCraft\Widgets\Spinner` in Counter, demonstrating component composition pattern. Show that sub-components implement `Model` directly (Issue #371 in bubbletea: "Components should implement tea.Model").
 
 2. **Add `init()` Command** — Return `Cmd::tick(1.0, fn() => new TickMsg())` from `init()` to demonstrate startup command pattern. Show the clock ticking on screen.
 
@@ -442,7 +442,7 @@ final class Counter implements Model {
 
 ## Ecosystem / Integration Opportunities
 
-1. **Embed sugar-bits Components** — Demonstrate Spinner, TextInput, ProgressBar from sugar-bits within Counter or sibling models.
+1. **Embed sugar-widgets Components** — Demonstrate Spinner, TextInput, ProgressBar from sugar-widgets within Counter or sibling models.
 
 2. **Demonstrate Cross-Library Composition** — Show `SugarCraft\Shine\Renderer` rendering Markdown help text alongside the counter.
 
@@ -487,7 +487,7 @@ final class Counter implements Model {
 
 - Bubbles components don't implement `tea.Model` interface, requiring wrapper types
 
-- **Lesson:** All sugar-bits components MUST implement `SugarCraft\Core\Model` directly. No wrappers required.
+- **Lesson:** All sugar-widgets components MUST implement `SugarCraft\Core\Model` directly. No wrappers required.
 
 **Issue #958: Sequence/Empty Commands Fix**
 
@@ -535,7 +535,7 @@ final class Counter implements Model {
 
 ### Medium-Term (v1.2)
 
-6. **Add Spinner sub-component** — Embed `SugarCraft\Bits\Spinner` in Counter
+6. **Add Spinner sub-component** — Embed `SugarCraft\Widgets\Spinner` in Counter
 
 7. **Add multi-screen navigation** — Counter + SettingsScreen with ScreenStack
 

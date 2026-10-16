@@ -160,24 +160,24 @@ SugarCraft ports the Charmbracelet TUI ecosystem to PHP. The `stickers` library 
 
 | stickers (Go) | SugarCraft (PHP) | Notes |
 |---|---|---|
-| `flexbox.FlexBox` | `SugarCraft\Bits\FlexBox` | Vertically-stacked responsive grid; ratio-based sizing |
-| `flexbox.HorizontalFlexBox` | `SugarCraft\Bits\HorizontalFlexBox` | Horizontally-stacked variant |
-| `flexbox.Row` | `SugarCraft\Bits\Row` | Row container for cells |
-| `flexbox.Column` | `SugarCraft\Bits\Column` | Column container for cells (used by HorizontalFlexBox) |
-| `flexbox.Cell` | `SugarCraft\Bits\Cell` | Atomic unit with ratioX/ratioY, minWidth/minHeight, content generator |
-| `flexbox/utils.go` ratio algorithms | Internal to `SugarCraft\Bits` | `calculateRatio`, `distributeToMatrix`, `distributeRemainder`, `calculateMatrixRatio`, `calculateRatioWithMinimum` |
-| `table.Table` | `SugarCraft\Bits\Table` | Responsive sortable/filterable table — built on FlexBox |
-| `table.Ordered` interface | `SugarCraft\Bits\Table::ORDERED_TYPES` | Supported types: `string`, `int`, `int8-64`, `float32/64` |
+| `flexbox.FlexBox` | `SugarCraft\Widgets\FlexBox` | Vertically-stacked responsive grid; ratio-based sizing |
+| `flexbox.HorizontalFlexBox` | `SugarCraft\Widgets\HorizontalFlexBox` | Horizontally-stacked variant |
+| `flexbox.Row` | `SugarCraft\Widgets\Row` | Row container for cells |
+| `flexbox.Column` | `SugarCraft\Widgets\Column` | Column container for cells (used by HorizontalFlexBox) |
+| `flexbox.Cell` | `SugarCraft\Widgets\Cell` | Atomic unit with ratioX/ratioY, minWidth/minHeight, content generator |
+| `flexbox/utils.go` ratio algorithms | Internal to `SugarCraft\Widgets` | `calculateRatio`, `distributeToMatrix`, `distributeRemainder`, `calculateMatrixRatio`, `calculateRatioWithMinimum` |
+| `table.Table` | `SugarCraft\Widgets\Table` | Responsive sortable/filterable table — built on FlexBox |
+| `table.Ordered` interface | `SugarCraft\Widgets\Table::ORDERED_TYPES` | Supported types: `string`, `int`, `int8-64`, `float32/64` |
 | `table/sortIndex` bubble sort | Internal to Table implementation | Replace with quicksort/mergesort in PHP port for large datasets |
-| `table/cursor.go` bitmask | `SugarCraft\Bits\TableCursorDirection` enum | 2-bit cursor direction tracking |
-| `table/error.go` typed errors | `SugarCraft\Bits\Exception\*` | `ErrorBadType`, `ErrorRowLen`, `ErrorBadCellType` |
-| `Cell.SetContentGenerator` | `SugarCraft\Bits\Cell::withContentGenerator(callable)` | PHP closure/Callable for dynamic content |
-| `StylePassing` inheritance | `SugarCraft\Bits\StyleInheritanceTrait` | FlexBox → Row → Cell style chain |
+| `table/cursor.go` bitmask | `SugarCraft\Widgets\TableCursorDirection` enum | 2-bit cursor direction tracking |
+| `table/error.go` typed errors | `SugarCraft\Widgets\Exception\*` | `ErrorBadType`, `ErrorRowLen`, `ErrorBadCellType` |
+| `Cell.SetContentGenerator` | `SugarCraft\Widgets\Cell::withContentGenerator(callable)` | PHP closure/Callable for dynamic content |
+| `StylePassing` inheritance | `SugarCraft\Widgets\StyleInheritanceTrait` | FlexBox → Row → Cell style chain |
 
 ### Mapping Rationale
 
-- `flexbox/` maps to `sugar-bits` because `Cell`, `Row`, `FlexBox`, and `HorizontalFlexBox` are foundational/primitive TUI building blocks, not app-level components.
-- `table/` maps to `sugar-bits` as a leaf component (the table is a self-contained widget, not a foundational primitive) or optionally a sibling `sugar-table` if the table widget grows large enough to warrant separation.
+- `flexbox/` maps to `sugar-widgets` because `Cell`, `Row`, `FlexBox`, and `HorizontalFlexBox` are foundational/primitive TUI building blocks, not app-level components.
+- `table/` maps to `sugar-widgets` as a leaf component (the table is a self-contained widget, not a foundational primitive) or optionally a sibling `sugar-table` if the table widget grows large enough to warrant separation.
 - The ratio-based layout algorithm in `flexbox/utils.go` is the core algorithmic contribution and must be faithfully ported — it is the mechanism that makes the CSS flexbox model work in a terminal character-cell environment.
 - The `ContentGenerator` pattern (`func(maxX, maxY int) string`) would become a PHP `Closure(int $maxX, int $maxY): string` passed to `Cell::withContentGenerator()`.
 

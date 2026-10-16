@@ -36,7 +36,7 @@ From `repo_map/erikgeiser_promptkit.md`:
 | KeyMap/keybindings | `candy-forms` | Key binding config |
 | Lipgloss styling | `candy-shine` | Style system |
 | BubbleTea Model pattern | `candy-core` | MVC pattern |
-| WrapMode (WordWrap/HardWrap/Truncate) | `sugar-bits` | Text utilities |
+| WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text utilities |
 
 ---
 

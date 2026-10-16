@@ -20,7 +20,7 @@ paths:
 
 2. **Author the example script.** Create `<slug>/examples/<demo>.php` if it does not already exist. Top of file: `<?php declare(strict_types=1); require __DIR__ . '/../vendor/autoload.php';`. The script must self-terminate in under ~3 seconds (no `while (true)` loops without a break). Run it once locally to confirm it exits cleanly: `cd <slug> && php examples/<demo>.php`. Verify the script exits with status 0 before proceeding.
 
-3. **Create the `.tape` file** at `<slug>/.vhs/<demo>.tape`. Use this canonical skeleton (mirrors existing tapes under `sugar-bits/.vhs/`, `candy-shine/.vhs/`, etc.):
+3. **Create the `.tape` file** at `<slug>/.vhs/<demo>.tape`. Use this canonical skeleton (mirrors existing tapes under `sugar-widgets/.vhs/`, `candy-shine/.vhs/`, etc.):
 
    ```
    Output <demo>.gif

@@ -112,7 +112,7 @@ Address all 25 findings from the `candy-forms` code review, covering critical cr
 
 - [ ] **3.6 Remove unused import alias `BitsSpinner`** (Finding #11)
   - **File:** `candy-forms/src/Spinner.php:7`
-  - **What:** `use SugarCraft\Bits\Spinner\Spinner as BitsSpinner;` declared but never used.
+  - **What:** `use SugarCraft\Widgets\Spinner\Spinner as BitsSpinner;` declared but never used.
   - **Why:** Dead code from refactor.
   - **Verification:** Code search confirms unused.
   - **Implementation:** Remove line 7.

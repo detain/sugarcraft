@@ -13,6 +13,6 @@ paths:
 - `.github/workflows/sync-sugarcraft.yml` — pushes each subdir to `github.com/sugarcraft/<slug>`. Run `./scripts/bootstrap-org-repos.sh` first to ensure target repos exist.
 - `.github/workflows/tests.yml` — keep SVN credentials HARDCODED (`--username "detain" --password "..."`). Do NOT refactor to `${{ secrets.SVN_USER }}` — those secrets don't exist in repo settings yet.
 
-**VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. Standard dims `FontSize 14 / Width 800 / Height 480`; compact text uses `FontSize 16 / Width 600 / Height 180`. See `sugar-bits/.vhs/spinners.tape` for the canonical shape.
+**VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. Standard dims `FontSize 14 / Width 800 / Height 480`; compact text uses `FontSize 16 / Width 600 / Height 180`. See `sugar-widgets/.vhs/spinners.tape` for the canonical shape.
 
 **Non-visual libs exempt**: FFI bindings (`candy-pty`), syscall wrappers, codecs — no `view()` to render. Skip the tape AND the `vhs.yml` matrix entry; call out the exemption in the PR body.

@@ -229,10 +229,10 @@ if ($this->submitted || $this->aborted) { return $this; }
 ### 11. Partial Block Progress Indicator
 
 - **Title:** No progress bar component in sugar-readline
-- **Description:** sugar-readline doesn't have a progress indicator. If needed, user would need to integrate `sugar-bits/Progress`.
+- **Description:** sugar-readline doesn't have a progress indicator. If needed, user would need to integrate `sugar-widgets/Progress`.
 - **Why it matters:** Some interactive prompts may need progress feedback
 - **Source repo:** `charmbracelet_bubbles.md` — Progress bar with gradient fills, half-block Unicode (▌) for 2x color resolution; `pr_charmbracelet_bubbles.md` — partial blocks requested in issue #395
-- **Implementation ideas:** Consider if sugar-readline needs its own progress or should delegate to sugar-bits
+- **Implementation ideas:** Consider if sugar-readline needs its own progress or should delegate to sugar-widgets
 - **Estimated complexity:** N/A — may not belong in readline
 
 ### 12. Undo/Redo for MultiSelect
@@ -424,7 +424,7 @@ Document how to wire up different input sources:
 
 ## 2. Loading/Spinner During Async Operations
 
-For prompts that do async work (history fetch, completion lookup), show a spinner via `sugar-bits/Spinner` integration.
+For prompts that do async work (history fetch, completion lookup), show a spinner via `sugar-widgets/Spinner` integration.
 
 ## 3. Transition Animations
 

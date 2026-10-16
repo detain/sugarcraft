@@ -174,39 +174,39 @@ SugarCraft is a PHP TUI library monorepo (40+ libs, PHP 8.3+). pterm maps to Sug
 | `Print`/`Sprint` family, `Fprint`/`Printo`, `SetDefaultOutput` | `candy-core` | Output functions, line clearing, raw output mode |
 | `GetTerminalWidth()`/`GetTerminalHeight()`/`GetTerminalSize()` | `candy-core` | Terminal dimension detection via `golang.org/x/term` (FFI in PHP) |
 | `ThemeDefault` | `candy-shine` | Default styling constants and theme preset system |
-| `ProgressbarPrinter` | `sugar-bits` | Progress bar display with title/percentage/elapsed time |
-| `SpinnerPrinter` | `sugar-bits` | Loading spinner with timer and Info/Success/Fail states |
-| `AreaPrinter` | `sugar-bits` or `honey-bounce` | Dynamic content region; `honey-bounce` if animation/tweening is added |
-| `Logger` + `SlogHandler` | `sugar-bits` | Structured logging with levels, JSON/colorful formatting |
-| `TablePrinter` | `sugar-bits` | Table rendering from 2D string array, CSV import |
-| `BoxPrinter` | `sugar-bits` | Unicode box-drawing with title, padding, 6 title positions |
-| `PanelPrinter` | `sugar-bits` | 2D grid panel layout with equalized column widths |
-| `BarChartPrinter` | `sugar-bits` (or `honey-bounce` if charts gain animation) | Vertical/horizontal bars with negative value support |
-| `BigTextPrinter` | `sugar-bits` | ASCII art big letter rendering (95-char font map) |
-| `HeaderPrinter` | `sugar-bits` | Full-width banner with background fill |
-| `SectionPrinter` | `sugar-bits` | Indented section titles with `#` indent character |
-| `TreePrinter` + `walkOverTree()` | `sugar-bits` | ASCII tree rendering from `TreeNode` recursive structure |
-| `BulletListPrinter` | `sugar-bits` | Indented bullet lists with per-level custom bullets |
-| `CenterPrinter` | `sugar-bits` | Horizontal text centering (block-level and per-line) |
-| `ParagraphPrinter` | `sugar-bits` | Auto-wrapped text to terminal width |
-| `HeatmapPrinter` | `sugar-bits` | Color-intensity grid (potential `honey-bounce` candidate) |
-| `InteractiveSelectPrinter` + `InteractiveMultiSelectPrinter` + fuzzy search | `sugar-bits` | Keyboard-navigated select/multiselect with live filtering |
-| `InteractiveConfirmPrinter`, `InteractiveContinuePrinter` | `sugar-bits` | Yes/No and Continue prompts |
-| `InteractiveTextInputPrinter` | `sugar-bits` | Line-based text entry |
-| `PrefixPrinter` (`Info`/`Success`/`Warning`/`Error`/`Debug`/`Fatal`) | `sugar-bits` | Styled prefix logging (`Info.Println("msg")` style) |
+| `ProgressbarPrinter` | `sugar-widgets` | Progress bar display with title/percentage/elapsed time |
+| `SpinnerPrinter` | `sugar-widgets` | Loading spinner with timer and Info/Success/Fail states |
+| `AreaPrinter` | `sugar-widgets` or `honey-bounce` | Dynamic content region; `honey-bounce` if animation/tweening is added |
+| `Logger` + `SlogHandler` | `sugar-widgets` | Structured logging with levels, JSON/colorful formatting |
+| `TablePrinter` | `sugar-widgets` | Table rendering from 2D string array, CSV import |
+| `BoxPrinter` | `sugar-widgets` | Unicode box-drawing with title, padding, 6 title positions |
+| `PanelPrinter` | `sugar-widgets` | 2D grid panel layout with equalized column widths |
+| `BarChartPrinter` | `sugar-widgets` (or `honey-bounce` if charts gain animation) | Vertical/horizontal bars with negative value support |
+| `BigTextPrinter` | `sugar-widgets` | ASCII art big letter rendering (95-char font map) |
+| `HeaderPrinter` | `sugar-widgets` | Full-width banner with background fill |
+| `SectionPrinter` | `sugar-widgets` | Indented section titles with `#` indent character |
+| `TreePrinter` + `walkOverTree()` | `sugar-widgets` | ASCII tree rendering from `TreeNode` recursive structure |
+| `BulletListPrinter` | `sugar-widgets` | Indented bullet lists with per-level custom bullets |
+| `CenterPrinter` | `sugar-widgets` | Horizontal text centering (block-level and per-line) |
+| `ParagraphPrinter` | `sugar-widgets` | Auto-wrapped text to terminal width |
+| `HeatmapPrinter` | `sugar-widgets` | Color-intensity grid (potential `honey-bounce` candidate) |
+| `InteractiveSelectPrinter` + `InteractiveMultiSelectPrinter` + fuzzy search | `sugar-widgets` | Keyboard-navigated select/multiselect with live filtering |
+| `InteractiveConfirmPrinter`, `InteractiveContinuePrinter` | `sugar-widgets` | Yes/No and Continue prompts |
+| `InteractiveTextInputPrinter` | `sugar-widgets` | Line-based text entry |
+| `PrefixPrinter` (`Info`/`Success`/`Warning`/`Error`/`Debug`/`Fatal`) | `sugar-widgets` | Styled prefix logging (`Info.Println("msg")` style) |
 | `MapRangeToRange()` algorithm | `honey-bounce` (math) | Linear interpolation used for bar chart scaling and progress color fades |
 | `RGB.Fade()` multi-stop color interpolation | `candy-shine` or `honey-bounce` | Gradient generation; potential standalone color utility lib |
-| `putils.LettersFromString*` utilities | `sugar-bits` | Per-character styled letter creation for `BigTextPrinter` |
-| `putils.TableDataFromCSV/StructSlice/etc` | `sugar-bits` | Data import utilities for tables |
-| `putils.DownloadWithProgressbar`, `putils.RunWithSpinner` | `sugar-bits` | Composed utility functions combining multiple printers |
+| `putils.LettersFromString*` utilities | `sugar-widgets` | Per-character styled letter creation for `BigTextPrinter` |
+| `putils.TableDataFromCSV/StructSlice/etc` | `sugar-widgets` | Data import utilities for tables |
+| `putils.DownloadWithProgressbar`, `putils.RunWithSpinner` | `sugar-widgets` | Composed utility functions combining multiple printers |
 
-**Key insight**: pterm's entire feature surface maps almost 1:1 onto `sugar-bits` (the primary SugarCraft component/data lib). The color foundation (`Color`, `Style`, `RGB`, `ThemeDefault`) maps to `candy-core` and `candy-shine`. Math utilities (`MapRangeToRange`, `Fade`) could live in `honey-bounce`. The `BigTextPrinter` font map is a unique artifact — no direct SugarCraft equivalent; would need to be re-implemented in PHP with ASCII art letter definitions.
+**Key insight**: pterm's entire feature surface maps almost 1:1 onto `sugar-widgets` (the primary SugarCraft component/data lib). The color foundation (`Color`, `Style`, `RGB`, `ThemeDefault`) maps to `candy-core` and `candy-shine`. Math utilities (`MapRangeToRange`, `Fade`) could live in `honey-bounce`. The `BigTextPrinter` font map is a unique artifact — no direct SugarCraft equivalent; would need to be re-implemented in PHP with ASCII art letter definitions.
 
 ## Analysis
 
 pterm is a remarkably comprehensive, well-tested terminal output library for Go that has matured into the de-facto standard for beautiful Go CLI tools. Its 25+ printer components cover the full spectrum from simple colored text output (`FgRed.Println("error")`) to complex interactive TUI elements (fuzzy-searching multi-select menus with keyboard navigation) to data visualization (bar charts, heatmaps, live-updating areas). The design philosophy is consistent: zero-config defaults that work out of the box, combined with a fluent `With*()` builder pattern that returns value receivers, enabling both global shortcut usage and fully customized instances without mutating shared state.
 
-The library's architecture is organized around three key interfaces: `TextPrinter` (all formatted text output), `LivePrinter` (things that update in-place via cursor manipulation), and `RenderPrinter` (things that draw to a string then output). This clean separation of concerns means each printer only implements what it needs. The `TextPrinter` interface in particular is a masterclass in API consistency — 8 formatting methods (Sprint/Sprintf/Sprintln/Sprintfln × return string vs. write output), plus `PrintOnError`/`PrintOnErrorf`, all implemented identically across 15+ types. This is the pattern SugarCraft's `sugar-bits` should emulate at the PHP level.
+The library's architecture is organized around three key interfaces: `TextPrinter` (all formatted text output), `LivePrinter` (things that update in-place via cursor manipulation), and `RenderPrinter` (things that draw to a string then output). This clean separation of concerns means each printer only implements what it needs. The `TextPrinter` interface in particular is a masterclass in API consistency — 8 formatting methods (Sprint/Sprintf/Sprintln/Sprintfln × return string vs. write output), plus `PrintOnError`/`PrintOnErrorf`, all implemented identically across 15+ types. This is the pattern SugarCraft's `sugar-widgets` should emulate at the PHP level.
 
 The most sophisticated component is the `InteractiveSelectPrinter` which combines fuzzy search ranking (`lithammer/fuzzysearch`), virtual scrolling for large option lists (only `MaxHeight` items rendered at a time), and VT100 cursor control via `atomicgo.dev/cursor`. The `ProgressbarPrinter`'s RGB gradient for percentage display (`NewRGB(255,0,0).Fade(...)`) is a particularly nice touch — the progress bar color shifts from red to yellow to green as it fills. The `MapRangeToRange` linear interpolation algorithm (used for bar chart scaling, progress percentage, and RGB fades) is a simple but critical primitive that SugarCraft should extract as a shared utility.
 

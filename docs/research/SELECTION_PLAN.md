@@ -283,31 +283,31 @@
 
 ## COMPONENT IMPROVEMENTS
 
-### sugar-bits
+### sugar-widgets
 
 ### [ ] TextInput `validate_on` timing (blur/changed/submit)
 
 - **Priority**: P1 - High
 - **Effort**: 2-3 hours
-- **Research**: `libraries/sugar-bits-research.md`
+- **Research**: `libraries/sugar-widgets-research.md`
 
 ### [ ] TextInput `restrict` regex
 
 - **Priority**: P1 - High
 - **Effort**: 1-2 hours
-- **Research**: `libraries/sugar-bits-research.md`
+- **Research**: `libraries/sugar-widgets-research.md`
 
 ### [ ] Table sorting (SortByDesc/SortByAsc)
 
 - **Priority**: P2 - Medium
 - **Effort**: 3-4 hours
-- **Research**: `libraries/sugar-bits-research.md`
+- **Research**: `libraries/sugar-widgets-research.md`
 
 ### [ ] Table filtering (WithFiltered per-column)
 
 - **Priority**: P2 - Medium
 - **Effort**: 2-3 hours
-- **Research**: `libraries/sugar-bits-research.md`
+- **Research**: `libraries/sugar-widgets-research.md`
 
 ### candy-forms
 
@@ -455,7 +455,7 @@ All 45 research documents available at:
 | candy-mouse | 14KB |
 | honey-bounce | 25KB |
 | candy-flappy | 11KB |
-| sugar-bits | 26KB |
+| sugar-widgets | 26KB |
 | sugar-boxer | 16KB |
 | sugar-datepicker | 19KB |
 | sugar-charts | 23KB |

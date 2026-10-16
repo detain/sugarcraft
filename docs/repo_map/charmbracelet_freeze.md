@@ -153,21 +153,21 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 
 | freeze Component | SugarCraft Library | Mapping Rationale |
 |-----------------|-------------------|------------------|
-| Core image generation | `sugar-bits` | Core output/rendering primitives |
+| Core image generation | `sugar-widgets` | Core output/rendering primitives |
 | ANSI escape parsing | `candy-core` | Terminal ANSI code handling (colors, styles) |
-| Chroma syntax highlighting | `sugar-bits` | Token-based rendering, syntax highlighting |
+| Chroma syntax highlighting | `sugar-widgets` | Token-based rendering, syntax highlighting |
 | SVG output generation | `candy-shine` (potential) | Vector graphics rendering |
 | Interactive TUI forms | `candy-forms` / `huh` port | Form components, file picker |
 | Config/flag parsing | `candy-core` | Command-line argument handling |
-| Window decorations | `sugar-bits` | Border rendering, rounded corners |
-| Shadow effects | `sugar-bits` / `candy-shine` | Visual effects, filters |
+| Window decorations | `sugar-widgets` | Border rendering, rounded corners |
+| Shadow effects | `sugar-widgets` / `candy-shine` | Visual effects, filters |
 | PTY execution | `candy-pty` | Pseudo-terminal control |
-| Font handling | `candy-core` / `sugar-bits` | Font metrics, text rendering |
-| Style/theming | `sugar-bits` | Theme management, style registry |
+| Font handling | `candy-core` / `sugar-widgets` | Font metrics, text rendering |
+| Style/theming | `sugar-widgets` | Theme management, style registry |
 
 ### Direct SugarCraft Equivalents
 
-- **ANSI parsing & color handling** → `SugarCraft\Core\Ansi` (if exists) or `SugarCraft\Bits\Renderer` - The 256-color palette and SGR sequence handling in `ansi.go` would map to a PHP ANSI parser
+- **ANSI parsing & color handling** → `SugarCraft\Core\Ansi` (if exists) or `SugarCraft\Widgets\Renderer` - The 256-color palette and SGR sequence handling in `ansi.go` would map to a PHP ANSI parser
 
 - **SVG manipulation** → `SugarCraft\Shine` - The etree-based SVG DOM manipulation for adding shadows, clips, corners, and positioning maps to vector graphics operations
 
@@ -175,7 +175,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 
 - **Interactive forms** → `SugarCraft\Forms` - The huh-based form with file picker, inputs, selects maps to SugarCraft's form component suite
 
-- **Theme registry** → `SugarCraft\Bits\Theme` - Chroma-style theme registry with named styles (dracula, monokai, etc.) 
+- **Theme registry** → `SugarCraft\Widgets\Theme` - Chroma-style theme registry with named styles (dracula, monokai, etc.) 
 
 - **Configuration system** → `SugarCraft\Core\Config` - Layered config with XDG paths and JSON presets maps to SugarCraft's config management
 

@@ -226,7 +226,7 @@ SugarCraft is the foundation — the rest of the SugarCraft stack
 builds on it. From the same monorepo:
 
 - **CandySprinkles** — declarative styling + layout.
-- **SugarBits** — 14 prebuilt components.
+- **SugarWidgets** — 14 prebuilt components.
 - **CandyForms** — multi-page form library.
 - **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
 - **CandyScriptui** — composer-installable CLI of 13 subcommands.

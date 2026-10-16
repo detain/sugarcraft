@@ -9,7 +9,7 @@ description: Runs the SugarCraft ship-as-you-go PR cadence for a cohesive change
 - **NEVER push to `master` directly.** Always work on a branch and merge via `gh pr merge`.
 - **NEVER `--amend` a commit that is already on a merged PR.** Create a NEW commit on a NEW branch instead.
 - **NEVER skip pre-commit hooks** (`--no-verify`). Caliber sync runs there — bypassing it desyncs agent configs.
-- **NEVER bundle unrelated work.** One PR = one cohesive change-set of 2–4 related items (e.g. "sugar-bits: i18n + snapshot tests + locale fr"). Multi-lib audit work = one PR per lib/phase, sequenced by dependency order.
+- **NEVER bundle unrelated work.** One PR = one cohesive change-set of 2–4 related items (e.g. "sugar-widgets: i18n + snapshot tests + locale fr"). Multi-lib audit work = one PR per lib/phase, sequenced by dependency order.
 - **Tests gate the ship.** Run `composer test` for every touched lib before staging. If anything is red, STOP and fix — do not ship.
 - **Commit author MUST be `Joe Huss <detain@interserver.net>`.** Verify with `git config user.email` before the first commit of a session; do NOT change `git config` globally — pass `--author` to `git commit` if the global is wrong.
 - **`unset GITHUB_TOKEN` immediately before `gh pr create`.** Project-scoped `GITHUB_TOKEN` env vars override `gh auth` and silently fail or post as the wrong identity.
@@ -27,7 +27,7 @@ git status
 git diff --stat
 ```
 
-List the libs touched (top-level dirs like `candy-core/`, `sugar-bits/`). Hold this list — Step 2 reuses it. Confirm the bundle is 2–4 related items. If it sprawls across unrelated libs, STOP and split into separate PRs (run this skill once per coherent slice). Verify: `git status` shows changes only in the intended files.
+List the libs touched (top-level dirs like `candy-core/`, `sugar-widgets/`). Hold this list — Step 2 reuses it. Confirm the bundle is 2–4 related items. If it sprawls across unrelated libs, STOP and split into separate PRs (run this skill once per coherent slice). Verify: `git status` shows changes only in the intended files.
 
 ### Step 2 — Run the test suite for every touched lib
 
@@ -37,7 +37,7 @@ For each lib `<slug>` from Step 1:
 cd <slug> && composer install --quiet && composer test
 ```
 
-Also run reverse-dependents if a foundation lib (`candy-core`, `candy-sprinkles`, `candy-scriptui`) changed — at minimum re-run `sugar-bits`, `sugar-charts`, `candy-shine`.
+Also run reverse-dependents if a foundation lib (`candy-core`, `candy-sprinkles`, `candy-scriptui`) changed — at minimum re-run `sugar-widgets`, `sugar-charts`, `candy-shine`.
 
 Verify: every suite ends with `OK (...)`. If ANY suite fails or shows warnings (PHPUnit configs use `failOnWarning="true"`), STOP. Do not proceed to commit.
 
@@ -91,7 +91,7 @@ Never run `git add -A` or `git add .` — pulls in `.env`, vendor dirs, `.phpuni
 
 ### Step 7 — Commit with the canonical author + message format
 
-Title format: `<lib>: <summary>` or `<lib>: <feature> (audit #N)` — e.g. `sugar-bits: add i18n locale fr + snapshot tests (audit #12)`.
+Title format: `<lib>: <summary>` or `<lib>: <feature> (audit #N)` — e.g. `sugar-widgets: add i18n locale fr + snapshot tests (audit #12)`.
 
 Body ends with `## Test plan` section citing test count + suite name(s).
 
@@ -161,20 +161,20 @@ git branch -d ai/<slug>-<short>
 
 ### Example 1 — single-lib bundled audit slice
 
-User says: "ship the sugar-bits i18n work"
+User says: "ship the sugar-widgets i18n work"
 
 Actions taken:
 
-1. `git status` shows `sugar-bits/src/Lang.php`, `sugar-bits/lang/fr.php`, a new sugar-bits test file, and `MATCHUPS.md`. → 4 files, 1 lib, coherent bundle ✓
-2. `cd sugar-bits && composer install --quiet && composer test` → `OK (47 tests, 112 assertions)` ✓
+1. `git status` shows `sugar-widgets/src/Lang.php`, `sugar-widgets/lang/fr.php`, a new sugar-widgets test file, and `MATCHUPS.md`. → 4 files, 1 lib, coherent bundle ✓
+2. `cd sugar-widgets && composer install --quiet && composer test` → `OK (47 tests, 112 assertions)` ✓
 3. `grep -q "caliber" .git/hooks/pre-commit` → `hook-active` ✓
-4. `git checkout -b ai/sugar-bits-i18n-fr`
-5. `git add sugar-bits/src/Lang.php sugar-bits/lang/fr.php sugar-bits/tests/ MATCHUPS.md`
-6. `git commit --author="Joe Huss <detain@interserver.net>" -m "sugar-bits: add fr locale + Lang tests (audit #18) ..."`
-7. `git push -u origin ai/sugar-bits-i18n-fr` → branch live
+4. `git checkout -b ai/sugar-widgets-i18n-fr`
+5. `git add sugar-widgets/src/Lang.php sugar-widgets/lang/fr.php sugar-widgets/tests/ MATCHUPS.md`
+6. `git commit --author="Joe Huss <detain@interserver.net>" -m "sugar-widgets: add fr locale + Lang tests (audit #18) ..."`
+7. `git push -u origin ai/sugar-widgets-i18n-fr` → branch live
 8. `unset GITHUB_TOKEN && gh pr create --title "..." --body "..."` → PR #421
 9. `gh pr merge 421 --merge --delete-branch` → MERGED
-10. `git checkout master && git pull --ff-only && git branch -d ai/sugar-bits-i18n-fr`
+10. `git checkout master && git pull --ff-only && git branch -d ai/sugar-widgets-i18n-fr`
 
 Result: PR #421 merged, master at new HEAD, ready for next change-set.
 
@@ -185,7 +185,7 @@ User says: "ship the candy-core Width util fix"
 Actions taken:
 
 1. `git status` shows changes under `candy-core/src/` + tests. Touches foundation → reverse-dep test required.
-2. `composer test` in `candy-core`, `sugar-bits`, `sugar-charts`, `candy-shine` → all green ✓
+2. `composer test` in `candy-core`, `sugar-widgets`, `sugar-charts`, `candy-shine` → all green ✓
 3. Branch `ai/candy-core-width-emoji`, commit `candy-core: fix Width on multi-codepoint emoji`, body lists all 4 suites in `## Test plan`.
 4. Steps 8–11 proceed normally. Result: PR #422 merged.
 

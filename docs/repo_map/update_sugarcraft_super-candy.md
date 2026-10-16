@@ -120,7 +120,7 @@ super-candy is a dual-pane terminal file manager built on the SugarCraft TUI sta
 **Source:** `docs/repo_map/sugarcraft_super-candy.md` (documented weakness #7)
 **Implementation ideas:**
 
-- Use bubbletea's built-in progress bar (merged PR #1499, mapped as `View::progressBar` in sugar-bits)
+- Use bubbletea's built-in progress bar (merged PR #1499, mapped as `View::progressBar` in sugar-widgets)
 - Stream file sizes upfront; calculate percentage as bytes copied/total
 - Show per-file progress for batch operations
 - Use ANSI progress bar escape sequences compatible with modern terminals
@@ -768,7 +768,7 @@ public function testUndoReversesAllDeleteActions(): void
 **Implementation:**
 
 - Use `clue/xml-react` to parse SSDP announcements
-- Browse media servers via `sugar-bits` tree component
+- Browse media servers via `sugar-widgets` tree component
 - Preview images via Mosaic
 
 ---

@@ -414,4 +414,4 @@ canScrollDown(): bool      // yOffset < contentHeight - viewportHeight
 ---
 
 *Research compiled: 2025-05-13*
-*Related: sugar-stickers (current), sugar-bits (foundation)*
+*Related: sugar-stickers (current), sugar-widgets (foundation)*

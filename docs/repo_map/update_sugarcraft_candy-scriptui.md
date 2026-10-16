@@ -542,9 +542,9 @@ Users coming from gum need a quick reference:
 
 # Ecosystem / Integration Opportunities
 
-## 1. Integration with sugar-bits
+## 1. Integration with sugar-widgets
 
-candy-scriptui currently uses candy-forms directly but could also expose sugar-bits components:
+candy-scriptui currently uses candy-forms directly but could also expose sugar-widgets components:
 
 - `TreeView` for hierarchical file picker
 - `SelectionList` with custom renderers
@@ -581,7 +581,7 @@ Could add `--theme` flag to more commands that respects terminal color profile d
 ### Grid Choose vs 1D List
 
 - gum's choose uses paginator with 2D grid layout
-- Requires `bubbles/paginator` which maps to a future sugar-bits component
+- Requires `bubbles/paginator` which maps to a future sugar-widgets component
 - **Lesson:** Some features require upstream component ports first
 
 ## p-gen/smenu Insights

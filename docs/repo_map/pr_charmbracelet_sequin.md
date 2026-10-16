@@ -35,7 +35,7 @@ From `charmbracelet_sequin.md` (first-pass analysis):
 | Screen erase/scroll operations | `candy-core` | Screen buffer management |
 | Terminal mode handling (mouse, bracketed paste) | `candy-core` | Terminal capability negotiation |
 | Theme support (dark/light) | `candy-shine` | Theme system |
-| Golden file comparison for ANSI output | `sugar-bits` | Snapshot testing patterns |
+| Golden file comparison for ANSI output | `sugar-widgets` | Snapshot testing patterns |
 | PTY execution for command output capture | `candy-pty` | PTY/sudo process handling |
 
 **Primary Mapping**: `candy-core` for ANSI parsing/rendering primitives, `candy-shine` for visual styling/color handling
@@ -676,7 +676,7 @@ defer ansi.PutParser(p)
 - Test data maps covering all sequence types
 - Compare rendered output against expected
 
-**SugarCraft Implementation**: `sugar-bits` snapshot tests should cover all ANSI sequence types SugarCraft emits
+**SugarCraft Implementation**: `sugar-widgets` snapshot tests should cover all ANSI sequence types SugarCraft emits
 
 ---
 
@@ -835,7 +835,7 @@ defer ansi.PutParser(p)
 
 **Observation**: bubbles PR #838 explores half-block implementation for smooth progress
 
-**SugarCraft Implication**: `sugar-bits` could implement partial block characters for progress bars
+**SugarCraft Implication**: `sugar-widgets` could implement partial block characters for progress bars
 
 ---
 
@@ -887,7 +887,7 @@ defer ansi.PutParser(p)
 
 **Effort**: Medium (test infrastructure)
 
-**Approach**: Mirror `x/exp/golden` pattern in `sugar-bits`
+**Approach**: Mirror `x/exp/golden` pattern in `sugar-widgets`
 
 ---
 

@@ -36,8 +36,8 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | textual Component | SugarCraft Lib | Mapping Status |
 |---|---|---|
 | App, Widget, Screen, DOMNode, MessagePump | `candy-core/` | ✅ Mapped |
-| Reactive, var(), watch_*() | `candy-core/` + `sugar-bits/` | ✅ Mapped |
-| Widget library (Button, Input, Tree, etc.) | `sugar-bits/` | ✅ Mapped |
+| Reactive, var(), watch_*() | `candy-core/` + `sugar-widgets/` | ✅ Mapped |
+| Widget library (Button, Input, Tree, etc.) | `sugar-widgets/` | ✅ Mapped |
 | TCSS Stylesheet, CSS properties | `candy-sprinkles/` | ✅ Mapped |
 | Layout, VerticalLayout, HorizontalLayout, GridLayout | `candy-sprinkles/` + `sugar-boxer/` | ✅ Mapped |
 | Color, HSL/HSV/Lab color spaces | `candy-palette/` | ✅ Mapped |
@@ -49,8 +49,8 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | DataTable | `sugar-table/` | ✅ Mapped |
 | sparkline, ProgressBar | `sugar-charts/` | ✅ Mapped |
 | Tabs, TabbedContent, TabPane | `sugar-stickers/` | ✅ Mapped |
-| Switch, Checkbox, RadioButton, RadioSet | `sugar-bits/` | ✅ Mapped |
-| Button | `sugar-bits/` | ✅ Mapped |
+| Switch, Checkbox, RadioButton, RadioSet | `sugar-widgets/` | ✅ Mapped |
+| Button | `sugar-widgets/` | ✅ Mapped |
 | Toast, Notification | `sugar-toast/` | ✅ Mapped |
 | _xterm_parser | `candy-vt/` | ✅ Mapped |
 | timer.Timer, worker.Worker | `candy-core/` | ✅ Mapped |
@@ -949,7 +949,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 ### F. Tree-sitter Integration
 
 - Textual has tree-sitter for syntax highlighting
-- **Opportunity**: sugar-bits could offer syntax highlighting via tree-sitter
+- **Opportunity**: sugar-widgets could offer syntax highlighting via tree-sitter
 - **Risk**: External dependency management overhead
 
 ### G. Performance Profiling Integration

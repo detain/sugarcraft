@@ -2,7 +2,7 @@
 
 **candy-mouse** is a complete, production-ready PHP port of lrstanley/bubblezone — providing invisible ANSI APC marker-based mouse zone tracking for TUI applications. It solves the fundamental problem of routing mouse events to the correct UI component without requiring every component to manually track its screen coordinates.
 
-**Ecosystem positioning:** candy-mouse sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `candy-sprinkles` (styling system), and `sugar-bits` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
+**Ecosystem positioning:** candy-mouse sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `candy-sprinkles` (styling system), and `sugar-widgets` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
 
 **Biggest opportunity areas:**
 
@@ -708,14 +708,14 @@ $zone = $manager->zone('my-btn')
 
 # Ecosystem / Integration Opportunities
 
-## 1. sugar-bits Integration
+## 1. sugar-widgets Integration
 
-**Current:** sugar-bits (button, list, etc. components) doesn't use candy-mouse.
+**Current:** sugar-widgets (button, list, etc. components) doesn't use candy-mouse.
 
 **Opportunity:**
 
-- Add candy-mouse as optional dependency to sugar-bits
-- sugar-bits components automatically wrap themselves in zone markers
+- Add candy-mouse as optional dependency to sugar-widgets
+- sugar-widgets components automatically wrap themselves in zone markers
 - Provide `WithZone` trait for components that want zone support
 - Simplifies building interactive components
 
@@ -918,4 +918,4 @@ candy-mouse is a **complete, production-ready port** of bubblezone that faithful
 3. **Provide opt-in sophistication** — Spatial index for scale, z-order for overlapping zones
 4. **Document prominently** — Alt-screen requirement, len() vs Width::string(), scan-on-root-frame requirement
 
-The port is ready for production use and integration with sugar-bits components. The main evolution path is adding the developer experience improvements (debug mode, strict mode) and mouse event deduplication helpers that upstream has left as an exercise for users.
+The port is ready for production use and integration with sugar-widgets components. The main evolution path is adding the developer experience improvements (debug mode, strict mode) and mouse event deduplication helpers that upstream has left as an exercise for users.

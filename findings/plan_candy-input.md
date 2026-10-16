@@ -623,15 +623,15 @@ See [sugar-readline](./sugar-readline/README.md) for the readline integration.
 
 ---
 
-### 6.2 Document sugar-bits integration example
+### 6.2 Document sugar-widgets integration example
 
 **Severity:** Compatibility  
 **File:** `README.md`  
-**What is expected:** Show example of using candy-input with sugar-bits TUI components
+**What is expected:** Show example of using candy-input with sugar-widgets TUI components
 
-**Why the change should be done:** sugar-bits (component library) likely needs keyboard/mouse input but there's no integration example.
+**Why the change should be done:** sugar-widgets (component library) likely needs keyboard/mouse input but there's no integration example.
 
-**Conditions for success:** Example code works with sugar-bits
+**Conditions for success:** Example code works with sugar-widgets
 
 **Related code locations:**
 
@@ -689,7 +689,7 @@ Or add comment if ^8.3 is intentional:
 | **Refactor** | DRY | Duplicate key name maps across methods | `EscapeDecoder.php` | PENDING |
 | **Refactor** | DRY | SGR modifier bit extraction formula | `EscapeDecoder.php:311-317` | PENDING |
 | **Compat** | Migration | sugar-readline integration path documented | `README.md` | PENDING |
-| **Compat** | Ecosystem | sugar-bits integration example | `README.md` | PENDING |
+| **Compat** | Ecosystem | sugar-widgets integration example | `README.md` | PENDING |
 | **Compat** | PHP Version | composer.json PHP constraint | `composer.json:31` | PENDING |
 
 ---

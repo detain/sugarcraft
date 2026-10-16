@@ -110,7 +110,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-tetris | 1 HIGH, 2 MED, 5 LOW | AI rotation bug, garbage overflow off-by-one |
 | candy-mouse | 0 HIGH, 2 MED, 4 LOW | current() returns null, switchTo() no bounds check |
 | candy-mouse | (see findings/candy-mouse.md) | Comprehensive mouse event handling audit |
-| sugar-bits | (see findings/sugar-bits.md) | Stopwatch/teardown patterns |
+| sugar-widgets | (see findings/sugar-widgets.md) | Stopwatch/teardown patterns |
 | sugar-dash | (see findings/sugar-dash.md) | Largest sugar-* project — 52KB findings |
 | candy-vt | (see findings/candy-vt.md) | Terminal emulation |
 | candy-kv | (see findings/candy-kv.md) | First-ever audit 2026-09-15 (E719, round 82): zero P0; two empirically-verified P1 defects + P2/P3 backlog, remediation planned |
@@ -177,7 +177,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
 - `candy-ansi.md` through `candy-mouse.md` — 34 candy-* project audits
 - `honey-bounce.md`, `candy-flappy.md` — 2 honey-* project audits
-- `sugar-bits.md` through `candy-ssh-launcher.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
+- `sugar-widgets.md` through `candy-ssh-launcher.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
 - `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08
 
 **Total: 63 findings files covering 58 projects** — the 58 project audits (2026-06-30 pass plus `candy-kv.md` and later per-lib arrivals), `repeated_logic.md`, this `README.md`, and the 3 relocated work records. The `plan.md` index, per-lib `plan_<slug>.md` remediation plans, and `findings_resume_plan.md` / `resume_prompt.md` are tracked separately.

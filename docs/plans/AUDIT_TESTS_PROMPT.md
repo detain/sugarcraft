@@ -187,7 +187,7 @@ Open a PR per lib for quality fixes.
 
 ## Workflow per PR
 
-1. Branch: `ai/<lib>-tests-<phase>` e.g. `ai/sugar-bits-tests-coverage`
+1. Branch: `ai/<lib>-tests-<phase>` e.g. `ai/sugar-widgets-tests-coverage`
 2. Stage explicit paths
 3. Commit with author `Joe Huss <detain@interserver.net>`
 4. Push, open PR with `unset GITHUB_TOKEN && gh pr create`

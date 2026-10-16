@@ -7,7 +7,7 @@
 - **Language**: Go
 - **License**: MIT
 - **Description**: TUI layout library providing CSS flexbox-inspired FlexBox and responsive Table components for Charmbracelet Bubbletea/lipgloss ecosystem
-- **Ecosystem Position**: Upstream for SugarCraft's `sugar-bits` port
+- **Ecosystem Position**: Upstream for SugarCraft's `sugar-widgets` port
 - **Maintenance Pattern**: Single maintainer (Dusan Gligoric / 76creates); sporadic commit activity with burst merged PRs
 
 ## 2. Existing SugarCraft Mapping
@@ -16,14 +16,14 @@ From `repo_map/76creates_stickers.md`:
 
 | stickers (Go) | SugarCraft (PHP) | Status |
 |---|---|---|
-| `flexbox.FlexBox` | `SugarCraft\Bits\FlexBox` | Port planned |
-| `flexbox.HorizontalFlexBox` | `SugarCraft\Bits\HorizontalFlexBox` | Port planned |
-| `flexbox.Row` / `flexbox.Column` | `SugarCraft\Bits\Row` / `Column` | Port planned |
-| `flexbox.Cell` | `SugarCraft\Bits\Cell` | Port planned |
-| `flexbox/utils.go` ratio algorithms | Internal to `SugarCraft\Bits` | Core algorithm |
-| `table.Table` | `SugarCraft\Bits\Table` | Port planned |
+| `flexbox.FlexBox` | `SugarCraft\Widgets\FlexBox` | Port planned |
+| `flexbox.HorizontalFlexBox` | `SugarCraft\Widgets\HorizontalFlexBox` | Port planned |
+| `flexbox.Row` / `flexbox.Column` | `SugarCraft\Widgets\Row` / `Column` | Port planned |
+| `flexbox.Cell` | `SugarCraft\Widgets\Cell` | Port planned |
+| `flexbox/utils.go` ratio algorithms | Internal to `SugarCraft\Widgets` | Core algorithm |
+| `table.Table` | `SugarCraft\Widgets\Table` | Port planned |
 | `table/sortIndex` bubble sort | Replace with `usort` | Performance risk |
-| `table/cursor.go` bitmask | `SugarCraft\Bits\TableCursorDirection` enum | Simple mapping |
+| `table/cursor.go` bitmask | `SugarCraft\Widgets\TableCursorDirection` enum | Simple mapping |
 | `Cell.SetContentGenerator` | `Cell::withContentGenerator(callable)` | Closure pattern |
 
 ## 3. Previously Identified Gaps
@@ -316,7 +316,7 @@ From `repo_map/76creates_stickers.md`:
 
 ## 24. Cross-Ecosystem Pattern Matches
 
-1. **CSS flexbox mental model** — Both Go stickers and SugarCraft sugar-bits target developers familiar with web flexbox; API familiarity is a selling point
+1. **CSS flexbox mental model** — Both Go stickers and SugarCraft sugar-widgets target developers familiar with web flexbox; API familiarity is a selling point
 2. **ContentGenerator closure pattern** — Mirrors React render props; powerful for dynamic content adaptation
 3. **Copy accessors for read-only inspection** — Equivalent to PHP's `with*()` returning new instance; the read-only variant avoids dirty flag trigger
 

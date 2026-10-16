@@ -33,7 +33,7 @@ use SugarCraft\Top\Panel\Proc\DetailState;
 use SugarCraft\Top\Panel\Proc\GpuUsage;
 use SugarCraft\Top\Panel\Proc\ProcGpuColumns;
 use SugarCraft\Top\Panel\Proc\ProcGpuSample;
-use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Top\Input\TextKeys;
 use SugarCraft\Top\Panel\Proc\ProcEntry;
 use SugarCraft\Top\Panel\Proc\ProcSelection;

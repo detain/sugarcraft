@@ -200,7 +200,7 @@ For any violation: fix and document in the appropriate
 
 ## Workflow per PR
 
-1. Pick a lib + category (e.g. `sugar-bits` + Category A)
+1. Pick a lib + category (e.g. `sugar-widgets` + Category A)
 2. Generate a finding list for that lib + category
 3. Triage: unambiguous fixes vs flag-for-user
 4. Open the PR with the unambiguous fixes:

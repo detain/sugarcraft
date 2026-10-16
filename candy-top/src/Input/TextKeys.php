@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Input;
 
-use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 
 /**
- * btop's `Draw::TextEdit::command(key)` over sugar-bits' {@see TextEdit}
+ * btop's `Draw::TextEdit::command(key)` over sugar-widgets' {@see TextEdit}
  * value object: the key vocabulary the proc filter bar and the options
  * menu's value editor share — left / right / home / end move the caret,
  * backspace / delete remove a cluster, space and one printable cluster

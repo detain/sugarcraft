@@ -16,7 +16,7 @@
 
 ## Architecture Overview
 
-sugar-table is a focused, standalone table component library. Unlike sugar-bits which is a multi-component monorepo, sugar-table concentrates exclusively on data table rendering with a complete feature set.
+sugar-table is a focused, standalone table component library. Unlike sugar-widgets which is a multi-component monorepo, sugar-table concentrates exclusively on data table rendering with a complete feature set.
 
 ### Package Structure
 
@@ -497,7 +497,7 @@ Order (least specific to most specific):
 
 5. **Bubble Tea integration** — Not applicable (PHP), but means sugar-table can't participate in the TEA update loop.
 
-6. **StyleFunc dynamic styling** — Unlike sugar-bits' Table which has per-cell `styleFunc(Closure)`, sugar-table relies on StyledCell for cell-level style overrides rather than a callback-based approach.
+6. **StyleFunc dynamic styling** — Unlike sugar-widgets' Table which has per-cell `styleFunc(Closure)`, sugar-table relies on StyledCell for cell-level style overrides rather than a callback-based approach.
 
 7. **Horizontal scrolling actual rendering** — `scrollX` is stored but `View()` doesn't shift column rendering based on it.
 
@@ -597,9 +597,9 @@ Order (least specific to most specific):
 
 - No UserEvent system for reactive TUI patterns
 
-- StyledCell only, no callback-based StyleFunc like sugar-bits Table has
+- StyledCell only, no callback-based StyleFunc like sugar-widgets Table has
 
-**Strategic Position:** sugar-table is the dedicated table component in SugarCraft, distinct from the Table component embedded in sugar-bits. It targets scenarios requiring a full-featured standalone table widget. The v1 status indicates readiness for production use, though the frozen column and horizontal scroll rendering gaps should be addressed for full upstream parity.
+**Strategic Position:** sugar-table is the dedicated table component in SugarCraft, distinct from the Table component embedded in sugar-widgets. It targets scenarios requiring a full-featured standalone table widget. The v1 status indicates readiness for production use, though the frozen column and horizontal scroll rendering gaps should be addressed for full upstream parity.
 
 ---
 
@@ -611,4 +611,4 @@ Order (least specific to most specific):
 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbles.md` — Charm ecosystem components (Go)
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-bits.md` — SugarCraft components including Table variant
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-widgets.md` — SugarCraft components including Table variant

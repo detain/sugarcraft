@@ -307,7 +307,7 @@ public function testAtBottomWhenContentFits(): void
 - `candy-mdview/tests/MdViewModelTest.php` (existing tests, 66 lines)
 - `candy-mdview/src/MdViewModel.php` (MdViewModel implementation)
 - `candy-forms/src/Viewport/Viewport.php:98-128` (Viewport key bindings)
-- `sugar-bits/src/Viewport/Viewport.php:8` (alias to candy-forms)
+- `sugar-widgets/src/Viewport/Viewport.php:8` (alias to candy-forms)
 
 ---
 

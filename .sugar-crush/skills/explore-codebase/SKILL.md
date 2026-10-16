@@ -68,7 +68,7 @@ From the entry class:
 Emit a brief digest (do not write files):
 
 ```
-Lib: sugar-bits (SugarCraft\Bits\)
+Lib: sugar-widgets (SugarCraft\Widgets\)
 PHP: ^8.3 | deps: candy-core
 Type: TUI component library | upstream: charmbracelet/bubbletea
 Entry: src/Stopwatch/Stopwatch.php — final class, readonly props, Model contract

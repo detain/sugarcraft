@@ -41,14 +41,14 @@ From `repo_map/charmbracelet_glow.md`:
 
 | glow Component | SugarCraft Equivalent | Notes |
 |----------------|---------------------|-------|
-| glamour markdown rendering | `sugar-bits` | Glamour is upstream for SugarCraft's markdown rendering |
+| glamour markdown rendering | `sugar-widgets` | Glamour is upstream for SugarCraft's markdown rendering |
 | lipgloss styling | `candy-shine` | Ports lipgloss for ANSI styling, colors, layout |
-| bubbletea TUI | `sugar-bits` (TUI components) | Model/Update/View pattern mirrors Bubble Tea |
+| bubbletea TUI | `sugar-widgets` (TUI components) | Model/Update/View pattern mirrors Bubble Tea |
 | File browsing/stash | `candy-forms` or `sugar-charts` | Could inspire file picker or tree-view |
 | viewport scrolling | `candy-core` | Scrollable viewport with status bar |
-| Fuzzy filtering | `sugar-bits` | Real-time fuzzy string filtering |
+| Fuzzy filtering | `sugar-widgets` | Real-time fuzzy string filtering |
 | fsnotify watching | `candy-pty` | File system notification |
-| gitcha discovery | `sugar-bits` | Git-aware file finding |
+| gitcha discovery | `sugar-widgets` | Git-aware file finding |
 | Clipboard (OSC 52) | `candy-core` | Terminal clipboard integration |
 | Viper config | `SugarCraft\Core` | YAML config with env overrides |
 

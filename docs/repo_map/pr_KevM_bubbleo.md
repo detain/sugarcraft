@@ -32,7 +32,7 @@ The mapping is specifically to `sugar-crumbs` for breadcrumb rendering. However,
 | bubbleo Component | SugarCraft Mapping | Notes |
 |---|---|---|
 | `navstack.Model` | `candy-forms` (navigation), `candy-scriptui` (composition) | Stack-based navigation is distinct from CandyForms's form model |
-| `menu.Model` | `sugar-bits` (list widget) | Wraps bubbles/list for menu selection |
+| `menu.Model` | `sugar-widgets` (list widget) | Wraps bubbles/list for menu selection |
 | `breadcrumb.Model` | `sugar-crumbs` | Full mapping exists |
 | `shell.Model` | `candy-scriptui` | Composite nav + breadcrumb |
 | `window.Model` | `candy-core` | Offset-based dimension management |
@@ -117,7 +117,7 @@ func (m *tea.Model) View() {
 | Pain Point | Evidence | Relevance to SugarCraft |
 |---|---|---|
 | **Resource cleanup timing** | Issue #5 requests `Dispose() tea.Cmd`; v0.1.5 added symmetry (close on push AND pop) | HIGH — SugarCraft's disposal patterns should handle both push and pop |
-| **Menu help visibility control** | PR #4 requests control over initial help display state | MEDIUM — sugar-bits may have similar toggle needs |
+| **Menu help visibility control** | PR #4 requests control over initial help display state | MEDIUM — sugar-widgets may have similar toggle needs |
 | **Delimiter override in Shell** | PR #6 bugfix: Shell.View() was overriding configured delimiter | MEDIUM — candy-scriptui composition must preserve child configurations |
 | **Quit-on-empty-stack behavior** | PR #2: Option to not quit when stack empties | MEDIUM — navigation models need configurable empty-state behavior |
 | **Functional options API** | PR #3: Builder pattern via functional options for Menu config | MEDIUM — SugarCraft APIs should use functional options for optional params |
@@ -161,7 +161,7 @@ func (m *tea.Model) View() {
 
 **Why it matters**: Some apps want help visible by default (e.g., CLI wizards, onboarding flows). Currently help is hidden on first keypress automatically.
 
-**SugarCraft Opportunity**: sugar-bits should support configurable help visibility state at initialization time.
+**SugarCraft Opportunity**: sugar-widgets should support configurable help visibility state at initialization time.
 
 ### PR #6: "Don't override configured delimiter in shell View" (Merged, by LaiArturs)
 
@@ -445,7 +445,7 @@ interface Option {
 }
 ```
 
-**Libraries to update**: sugar-bits (many components), candy-forms, sugar-charts.
+**Libraries to update**: sugar-widgets (many components), candy-forms, sugar-charts.
 
 ### 4. Empty-Stack Behavior Configuration (Priority: MEDIUM)
 
@@ -461,7 +461,7 @@ class NavigationOptions {
 
 ### 5. Configurable Help Visibility (Priority: LOW-MEDIUM)
 
-Similar to PR #4, sugar-bits components should allow:
+Similar to PR #4, sugar-widgets components should allow:
 - Initial help visibility state
 - Prevention of auto-hide on first keypress
 - Programmatic help toggle
@@ -596,7 +596,7 @@ trait AsyncInitializable {
 
 **Opportunity**: Ensure ALL SugarCraft APIs use functional options for optional parameters.
 
-**Recommendation**: Audit all existing SugarCraft constructors and add functional options where missing. This is especially important for `sugar-bits` components and `sugar-charts`.
+**Recommendation**: Audit all existing SugarCraft constructors and add functional options where missing. This is especially important for `sugar-widgets` components and `sugar-charts`.
 
 ---
 

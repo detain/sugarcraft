@@ -29,16 +29,16 @@ From the first-stage analysis (`repo_map/treilik_bubblelister.md`), SugarCraft's
 | List Model rendering (lines, viewport, cursor) | `candy-core` |
 | Word wrapping / text formatting | `candy-core` (StringUtil/WordWrap) |
 | tea.Model interface compliance | `candy-core` (Model trait) |
-| Line number prefixes, tree prefixes | `sugar-bits` (Border/Frameless) |
+| Line number prefixes, tree prefixes | `sugar-widgets` (Border/Frameless) |
 | Multi-line item support | `candy-forms` (TextArea) |
-| Item sorting, LessFunc/EqualsFunc | `sugar-bits` (ListModel) |
-| Current item styling (reverse video) | `sugar-bits` (CurrentItem) |
+| Item sorting, LessFunc/EqualsFunc | `sugar-widgets` (ListModel) |
+| Current item styling (reverse video) | `sugar-widgets` (CurrentItem) |
 | Prefix/Suffix interfaces | `candy-core` (Decorator pattern) |
-| Viewport cursor offset | `sugar-bits` (ScrollMargins) |
-| Concurrent item search | `sugar-bits` (parallel find) |
-| Custom sort functions | `sugar-bits` (Comparator) |
+| Viewport cursor offset | `sugar-widgets` (ScrollMargins) |
+| Concurrent item search | `sugar-widgets` (parallel find) |
+| Custom sort functions | `sugar-widgets` (Comparator) |
 
-**Primary mapping**: `sugar-bits` as target for bubblelister port, with model/viewport/wrapping infrastructure in `candy-core`.
+**Primary mapping**: `sugar-widgets` as target for bubblelister port, with model/viewport/wrapping infrastructure in `candy-core`.
 
 ---
 
@@ -290,7 +290,7 @@ Zero issues means no documented rejections. However, from the architecture we ca
 
 ## 18. Problems Likely Relevant To SugarCraft
 
-### For sugar-bits List Component
+### For sugar-widgets List Component
 
 | Problem | Relevance | Mitigation for SugarCraft |
 |---|---|---|
@@ -395,7 +395,7 @@ Zero issues means no documented rejections. However, from the architecture we ca
 
 ## 23. Strategic Opportunities
 
-### For SugarCraft's sugar-bits
+### For SugarCraft's sugar-widgets
 
 | Opportunity | Analysis |
 |---|---|
@@ -427,7 +427,7 @@ Zero issues means no documented rejections. However, from the architecture we ca
 
 | Pattern | Source | SugarCraft Action |
 |---|---|---|
-| Cursor by ID tracking | treilik/bubblelister | Implement in sugar-bits |
+| Cursor by ID tracking | treilik/bubblelister | Implement in sugar-widgets |
 | Visible-range-only rendering | treilik/bubblelister | Implement viewport tracking |
 | Error types for not-found | treilik/bubblelister | Define `ItemNotFoundException`, etc. |
 | Prefixer/Suffixer interfaces | treilik/bubblelister | Define `PrefixerInterface`, `SuffixerInterface` |
@@ -441,12 +441,12 @@ Zero issues means no documented rejections. However, from the architecture we ca
 
 #### Priority 1: Critical Foundations
 
-1. **Implement ID-based cursor tracking** in sugar-bits ListModel
+1. **Implement ID-based cursor tracking** in sugar-widgets ListModel
    - Every item gets unique ID
    - Cursor stores selected item ID, not index
    - After any mutation, restore cursor by ID
 
-2. **Add viewport-aware rendering** in sugar-bits
+2. **Add viewport-aware rendering** in sugar-widgets
    - Only compute strings for visible items + buffer
    - Track firstVisibleIndex, lastVisibleIndex
    - Defer expensive `String()` calls
@@ -459,7 +459,7 @@ Zero issues means no documented rejections. However, from the architecture we ca
 
 #### Priority 2: Key Features
 
-4. **Add keyboard navigation trait** for sugar-bits
+4. **Add keyboard navigation trait** for sugar-widgets
    - Optional `WithKeyboardNavigation` that wires common keys (up/down/home/end/page up/page down)
    - Override-able via Update override
 

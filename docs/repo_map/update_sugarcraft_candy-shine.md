@@ -605,7 +605,7 @@ Soft-serve uses Chroma lexers to detect markdown and highlight code blocks in RE
 
 ### Markdown Widget (line 72 of textual.md)
 
-Textual's `Markdown` widget renders markdown in TUI. Not directly comparable (Python, different architecture), but shows what a full markdown rendering widget API looks like. **Lesson:** Could inspire a sugar-bits component wrapping candy-shine.
+Textual's `Markdown` widget renders markdown in TUI. Not directly comparable (Python, different architecture), but shows what a full markdown rendering widget API looks like. **Lesson:** Could inspire a sugar-widgets component wrapping candy-shine.
 
 ---
 

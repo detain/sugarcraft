@@ -1,0 +1,275 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Widgets\Tests\Tree;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Widgets\Tree\Node;
+use SugarCraft\Widgets\Tree\Tree;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+
+final class TreeTest extends TestCase
+{
+    private function sample(): Tree
+    {
+        return Tree::new(
+            Node::branch('src',
+                Node::leaf('Tree.php', 'src/Tree.php'),
+                Node::leaf('Node.php', 'src/Node.php'),
+            ),
+            Node::branch('tests',
+                Node::leaf('TreeTest.php', 'tests/TreeTest.php'),
+            ),
+            Node::leaf('README.md', 'README.md'),
+        );
+    }
+
+    private function focused(Tree $t): Tree
+    {
+        [$t, ] = $t->focus();
+        return $t;
+    }
+
+    public function testNodeFactories(): void
+    {
+        $leaf = Node::leaf('readme', 'r');
+        $this->assertTrue($leaf->isLeaf());
+        $this->assertSame('r', $leaf->value);
+
+        $branch = Node::branch('src', Node::leaf('a'));
+        $this->assertFalse($branch->isLeaf());
+        $this->assertSame('src', $branch->label);
+        $this->assertCount(1, $branch->children);
+    }
+
+    public function testVisibleRowsReflectsExpandState(): void
+    {
+        $t = $this->sample();
+        // Defaults: every branch starts expanded
+        // Rows: src, src/Tree.php, src/Node.php, tests, tests/TreeTest.php, README.md = 6
+        $this->assertSame(6, $t->visibleCount());
+
+        // Collapse 'src' at cursor=0
+        $t = $t->collapseAtCursor();
+        // Now: src (collapsed), tests, tests/TreeTest.php, README.md = 4
+        $this->assertSame(4, $t->visibleCount());
+    }
+
+    public function testCursorNavigationStaysInBounds(): void
+    {
+        $t = $this->focused($this->sample());
+        $this->assertSame(0, $t->cursor);
+        $t = $t->cursorDown(20);
+        $this->assertSame($t->visibleCount() - 1, $t->cursor);
+        $t = $t->cursorUp(100);
+        $this->assertSame(0, $t->cursor);
+    }
+
+    public function testToggleAtCursorOnLeafIsNoOp(): void
+    {
+        $t = $this->focused($this->sample())->cursorDown(); // src/Tree.php
+        $before = $t->visibleCount();
+        $t = $t->toggleAtCursor();
+        $this->assertSame($before, $t->visibleCount());
+    }
+
+    public function testToggleAtCursorOnBranchFlipsExpansion(): void
+    {
+        $t = $this->focused($this->sample());
+        $this->assertSame(6, $t->visibleCount());
+        $t = $t->toggleAtCursor(); // collapse src
+        $this->assertSame(4, $t->visibleCount());
+        $t = $t->toggleAtCursor(); // re-expand src
+        $this->assertSame(6, $t->visibleCount());
+    }
+
+    public function testKeyboardDownArrowMovesCursor(): void
+    {
+        $t = $this->focused($this->sample());
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        assert($t instanceof Tree);
+        $this->assertSame(1, $t->cursor);
+    }
+
+    public function testKeyboardEnterToggles(): void
+    {
+        $t = $this->focused($this->sample());
+        [$t, ] = $t->update(new KeyMsg(KeyType::Enter));
+        assert($t instanceof Tree);
+        $this->assertSame(4, $t->visibleCount(), 'Enter on src should collapse it');
+    }
+
+    public function testKeyboardLeftCollapsesRightExpands(): void
+    {
+        $t = $this->focused($this->sample());
+        [$t, ] = $t->update(new KeyMsg(KeyType::Left));
+        assert($t instanceof Tree);
+        $this->assertSame(4, $t->visibleCount());
+        [$t, ] = $t->update(new KeyMsg(KeyType::Right));
+        assert($t instanceof Tree);
+        $this->assertSame(6, $t->visibleCount());
+    }
+
+    public function testGoToTopAndBottomViaCharKeys(): void
+    {
+        $t = $this->focused($this->sample())->cursorDown(2);
+        [$tg, ] = $t->update(new KeyMsg(KeyType::Char, 'G'));
+        assert($tg instanceof Tree);
+        $this->assertSame($tg->visibleCount() - 1, $tg->cursor);
+        [$tg, ] = $tg->update(new KeyMsg(KeyType::Char, 'g'));
+        assert($tg instanceof Tree);
+        $this->assertSame(0, $tg->cursor);
+    }
+
+    public function testSelectedValueAndNode(): void
+    {
+        $t = $this->focused($this->sample())->cursorDown(); // src/Tree.php
+        $this->assertSame('Tree.php', $t->selectedNode()?->label);
+        $this->assertSame('src/Tree.php', $t->selectedValue());
+    }
+
+    public function testViewMarksCursorAndRendersExpansionGlyph(): void
+    {
+        $t = $this->focused($this->sample());
+        $view = $t->view();
+        $lines = explode("\n", $view);
+        $this->assertStringStartsWith('> ', $lines[0],  'cursor row gets cursorPrefix');
+        $this->assertStringContainsString('▼ src', $lines[0], 'expanded branch shows ▼ glyph');
+        $this->assertStringContainsString('README.md', $view);
+    }
+
+    public function testViewCollapsedShowsArrowGlyph(): void
+    {
+        $t = $this->focused($this->sample())->collapseAtCursor();
+        $lines = explode("\n", $t->view());
+        $this->assertStringContainsString('▶ src', $lines[0], 'collapsed branch shows ▶ glyph');
+    }
+
+    public function testViewportScrollWindowsLargeTrees(): void
+    {
+        $kids = [];
+        for ($i = 0; $i < 30; $i++) {
+            $kids[] = Node::leaf("item-$i");
+        }
+        $t = Tree::new(Node::branch('group', ...$kids))->withSize(40, 5);
+        $t = $this->focused($t);
+        $view = $t->view();
+        $this->assertSame(5, substr_count($view, "\n") + 1);
+    }
+
+    public function testUnfocusedTreeIgnoresKeyboard(): void
+    {
+        $t = $this->sample(); // not focused
+        [$t2, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame($t, $t2, 'unfocused tree should not respond to keys');
+    }
+
+    public function testEmptyTreeRendersEmpty(): void
+    {
+        $t = Tree::new();
+        $this->assertSame('', $t->view());
+        $this->assertSame(0, $t->visibleCount());
+        $this->assertNull($t->selectedNode());
+    }
+
+    public function testLabelWithNewlineStaysOneLine(): void
+    {
+        // A node whose label contains a newline must not produce multiple
+        // output lines — the newline must be replaced with a space.
+        $t = Tree::new(
+            Node::leaf("a\nb"),
+        );
+        $this->assertSame(1, $t->visibleCount(), 'Single leaf node must be one visible row');
+        $view = $t->view();
+        // The output must be a single line (no embedded newlines).
+        $this->assertSame(0, substr_count($view, "\n"), 'Newline in label should not produce extra rows');
+        // The label text itself should appear with newline replaced by space.
+        $this->assertStringContainsString('a b', $view);
+        $this->assertStringNotContainsString("a\nb", $view);
+    }
+
+    public function testFromListFactory(): void
+    {
+        $roots = [
+            Node::branch('a', Node::leaf('a1')),
+            Node::leaf('b'),
+        ];
+        $t = Tree::fromList($roots);
+        $this->assertSame(3, $t->visibleCount());
+    }
+
+    public function testFocusAndBlur(): void
+    {
+        $t = $this->sample();
+        $this->assertFalse($t->isFocused());
+
+        [$t, $cmd] = $t->focus();
+        $this->assertTrue($t->isFocused());
+        $this->assertNull($cmd);
+
+        $t = $t->blur();
+        $this->assertFalse($t->isFocused());
+    }
+
+    public function testSetRoots(): void
+    {
+        $t = $this->sample()->setRoots(Node::leaf('new'));
+        $this->assertSame(1, $t->visibleCount());
+        $this->assertSame('new', $t->selectedNode()?->label);
+    }
+
+    public function testVisibleRowsReturnsFullStructure(): void
+    {
+        $t = $this->sample();
+        $rows = $t->visibleRows();
+        $this->assertCount(6, $rows);
+        $this->assertSame('src', $rows[0]['label']);
+        $this->assertSame(0, $rows[0]['depth']);
+        $this->assertFalse($rows[0]['leaf']);
+        $this->assertTrue($rows[0]['expanded']);
+        $this->assertSame('Tree.php', $rows[1]['label']);
+        $this->assertSame(1, $rows[1]['depth']);
+    }
+
+    public function testExpandAndCollapseAtCursor(): void
+    {
+        $t = $this->focused($this->sample());
+        $this->assertSame(6, $t->visibleCount());
+
+        $t = $t->expandAtCursor();
+        $this->assertSame(6, $t->visibleCount(), 'already expanded should be no-op');
+
+        $t = $t->collapseAtCursor();
+        $this->assertSame(4, $t->visibleCount());
+
+        $t = $t->collapseAtCursor();
+        $this->assertSame(4, $t->visibleCount(), 'already collapsed should be no-op');
+    }
+
+    public function testInitReturnsNull(): void
+    {
+        $t = $this->sample();
+        $this->assertNull($t->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $t = $this->sample();
+        $this->assertNull($t->subscriptions());
+    }
+
+    public function testWithSize(): void
+    {
+        $t = $this->sample()->withSize(40, 5);
+        $this->assertSame(40, $t->width);
+        $this->assertSame(5, $t->height);
+    }
+
+    public function testNegativeDimensionsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Tree::new(Node::leaf('a'))->withSize(-1, 10);
+    }
+}

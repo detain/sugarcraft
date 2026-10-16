@@ -23,7 +23,7 @@ From the first analysis, the following mappings were identified:
 | `cellbuf` | None yet | Cell-based buffer for terminal rendering |
 | `term` | `candy-core` | Raw mode, terminal size, password input |
 | `wcwidth` | `candy-core` | Wide char width calculation |
-| `colors` | `sugar-bits` (existing) | Color parsing and manipulation |
+| `colors` | `sugar-widgets` (existing) | Color parsing and manipulation |
 | `input` | `candy-core` (planned) | Terminal event input driver |
 | `input/key` | `candy-core` | Key event definitions |
 | `teatest` | `candy-core` tests | Bubble Tea testing patterns |
@@ -702,7 +702,7 @@ type Terminal interface {
 
 **Insight**: Changes in styling/rendering libraries cascade to components
 
-**SugarCraft Implication**: SugarCraft's styling (`sugar-bits`) and components (`sugar-*`) are coupled; changes need coordinated testing.
+**SugarCraft Implication**: SugarCraft's styling (`sugar-widgets`) and components (`sugar-*`) are coupled; changes need coordinated testing.
 
 ---
 

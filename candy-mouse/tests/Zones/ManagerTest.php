@@ -422,7 +422,7 @@ final class ManagerTest extends TestCase
     }
 
     /**
-     * Mimics the real consumers: sugar-bits Tabs marks `tab-{i}` and
+     * Mimics the real consumers: sugar-widgets Tabs marks `tab-{i}` and
      * sugar-gallery PosterGrid marks `cell:{i}`. Verifies the full
      * mark → scan → hit-resolution round-trip (bounds + MsgZoneInBounds id)
      * survives the APC→PUA wire-format change and the `:` in `cell:N` is a

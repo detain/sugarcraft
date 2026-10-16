@@ -2,7 +2,7 @@
 
 ## Overview
 
-**sugar-table** is a mature, production-ready PHP port of `Evertras/bubble-table` providing a full-featured interactive terminal table component. It is the **standalone dedicated table library** in SugarCraft (distinct from `sugar-bits` Table which is embedded in that monorepo). The package excels at data-table rendering with column definitions, pagination, multi-column sort, filtering, viewport virtualization, and Border family integration. The biggest opportunities are completing the frozen-column rendering pipeline, adding fuzzy filtering, expanding keyboard navigation, and implementing a reactive event system for interactive TUI use cases. No major missing capabilities — the library is well-designed but has rough edges in scroll handling and event reactivity.
+**sugar-table** is a mature, production-ready PHP port of `Evertras/bubble-table` providing a full-featured interactive terminal table component. It is the **standalone dedicated table library** in SugarCraft (distinct from `sugar-widgets` Table which is embedded in that monorepo). The package excels at data-table rendering with column definitions, pagination, multi-column sort, filtering, viewport virtualization, and Border family integration. The biggest opportunities are completing the frozen-column rendering pipeline, adding fuzzy filtering, expanding keyboard navigation, and implementing a reactive event system for interactive TUI use cases. No major missing capabilities — the library is well-designed but has rough edges in scroll handling and event reactivity.
 
 ---
 
@@ -58,7 +58,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 4. **Keyboard navigation minimal** — Only `SelectNext`/`SelectPrevious`; no vim keys, no HalfPageUp/Down, no Home/End
 5. **No UserEvent system** — Table is render-only; cannot react to highlight changes or selection events
 6. **Sort not stable** — Uses `usort` (not stable sort); equal keys in multi-column sort may reorder unpredictably
-7. **No StyleFunc callback** — sugar-bits Table has `styleFunc(Closure)` for dynamic per-cell styling; sugar-table uses StyledCell only
+7. **No StyleFunc callback** — sugar-widgets Table has `styleFunc(Closure)` for dynamic per-cell styling; sugar-table uses StyledCell only
 8. **No visible row caching** — Every `View()` call recomputes filter/sort/pagination; upstream has `visibleRowCache`
 
 ---
@@ -72,7 +72,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 | `charmbracelet/bubbles` | 🟡 Sister upstream | Table component, KeyMap, Help integration | Medium |
 | `ratatui/ratatui` | 🟡 Cross-ecosystem | Table widget (StatefulWidget), constraint layout, immediate-mode diffing | Medium |
 | `textualize/textual` | 🟡 Cross-ecosystem | DataTable widget, reactive state, CSS styling | Medium |
-| `sugarcraft/sugar-bits` | 🟢 Internal | Table variant with `styleFunc` callback, vim keybindings | High |
+| `sugarcraft/sugar-widgets` | 🟢 Internal | Table variant with `styleFunc` callback, vim keybindings | High |
 
 ---
 
@@ -129,9 +129,9 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 
 **6. StyleFunc Dynamic Per-Cell Callback**
 
-- **Description:** sugar-bits Table has `styleFunc(Closure): Style` for data-dependent styling. sugar-table uses only StyledCell for per-cell overrides.
+- **Description:** sugar-widgets Table has `styleFunc(Closure): Style` for data-dependent styling. sugar-table uses only StyledCell for per-cell overrides.
 - **Why it matters:** Conditional cell coloring (negative numbers red, alerts yellow) requires either pre-wrapping every cell in StyledCell or a callback
-- **Source:** `docs/repo_map/sugarcraft_sugar-bits.md` — `styleFunc(\Closure $fn)` at line 74
+- **Source:** `docs/repo_map/sugarcraft_sugar-widgets.md` — `styleFunc(\Closure $fn)` at line 74
 - **Implementation ideas:** Add `withStyleFunc(?Closure $fn)` to Table; call it in `renderRowLines()` before applying column/row styles
 - **Estimated complexity:** Low — 5-line method + 3-line invocation in render loop
 - **Expected impact:** Medium — simplifies common styling pattern
@@ -161,7 +161,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Description:** No `KeyMap` struct or `Help` integration for rendering keyboard shortcuts
 - **Why it matters:** Users need to know available keyboard shortcuts
 - **Source:** `docs/repo_map/charmbracelet_bubbles.md` — `KeyMap` interface with `ShortHelp()`/`FullHelp()`
-- **Implementation ideas:** Add `KeyMap` class mirroring `sugar-bits/src/Key/Binding.php`; add `Help` component rendering keybindings
+- **Implementation ideas:** Add `KeyMap` class mirroring `sugar-widgets/src/Key/Binding.php`; add `Help` component rendering keybindings
 - **Estimated complexity:** Medium — requires Help component integration
 - **Expected impact:** Medium — improves discoverability
 
@@ -179,7 +179,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 **11. Mouse Click Navigation** — No mouse event handling for placing cursor on a row
 **12. Column Resizing at Runtime** — No drag-to-resize column widths
 **13. Animated Row Highlight Transitions** — Upstream lipgloss supports smooth style transitions
-**14. Custom FilterFunc Input** — sugar-bits Table has `withFilterPredicate(Closure)`; sugar-table lacks custom filter function
+**14. Custom FilterFunc Input** — sugar-widgets Table has `withFilterPredicate(Closure)`; sugar-table lacks custom filter function
 
 ---
 
@@ -297,7 +297,7 @@ $t = $t->withConfig(TableConfig::new()
 
 ### 3. Method Chaining for Filter/Sort
 
-Current: `Filter()` and `SortBy()` return `self`. This is correct for immutable pattern, but sugar-bits Table supports chained `thenSortBy()`:
+Current: `Filter()` and `SortBy()` return `self`. This is correct for immutable pattern, but sugar-widgets Table supports chained `thenSortBy()`:
 
 ```php
 // Current
@@ -386,12 +386,12 @@ The `computeColumnWidths()` algorithm has edge cases: percent values summing >10
 
 ## Ecosystem / Integration Opportunities
 
-### 1. sugar-bits Table Parity
+### 1. sugar-widgets Table Parity
 
-sugar-bits Table has `styleFunc(Closure)` for per-cell dynamic styling. sugar-table should add this for API parity:
+sugar-widgets Table has `styleFunc(Closure)` for per-cell dynamic styling. sugar-table should add this for API parity:
 
 ```php
-// sugar-bits API (exists)
+// sugar-widgets API (exists)
 $table->styleFunc(fn(int $row, int $col): Style => ...);
 
 // sugar-table API (missing)
@@ -429,8 +429,8 @@ final class TableModel implements Model
 **Issue: #246 Per-cell styleFunc** (`docs/repo_map/Evertras_bubble-table.md`)
 
 - Long-requested feature for data-dependent cell styling
-- SugarCraft already implemented this in sugar-bits but NOT in sugar-table
-- **Lesson:** SugarCraft enhancements in sugar-bits should be ported to sugar-table
+- SugarCraft already implemented this in sugar-widgets but NOT in sugar-table
+- **Lesson:** SugarCraft enhancements in sugar-widgets should be ported to sugar-table
 
 **PR: Fuzzy filter implementation** (`docs/repo_map/Evertras_bubble-table.md`)
 
@@ -480,7 +480,7 @@ final class TableModel implements Model
 5. **Fix frozen column rendering** — Re-architect `View()` to properly handle frozen columns during horizontal scroll
 6. **Fix horizontal scroll rendering** — Apply `scrollX` offset during column rendering
 7. **Expand keyboard navigation** — Add vim keys (j/k/g/G), HalfPageUp/Down, Home/End
-8. **Add StyleFunc callback** — Mirror sugar-bits `styleFunc()` for dynamic per-cell styling
+8. **Add StyleFunc callback** — Mirror sugar-widgets `styleFunc()` for dynamic per-cell styling
 9. **Add visible row caching** — Cache filter/sort results; invalidate on state change
 
 ### Major Architectural Upgrades (3-4 weeks)
@@ -529,7 +529,7 @@ final class TableModel implements Model
 
 - **vs bubble-table:** Close to feature parity; missing fuzzy filter, UserEvent system, stable sort, proper frozen column rendering
 - **vs stickers Table:** Superior filtering (multi-column AND vs single-column), superior column width modes, has pagination (stickers doesn't)
-- **vs sugar-bits Table:** More features (4-column-width modes, 3-wrap modes, viewport virtualization), but sugar-bits has StyleFunc callback that sugar-table lacks
+- **vs sugar-widgets Table:** More features (4-column-width modes, 3-wrap modes, viewport virtualization), but sugar-widgets has StyleFunc callback that sugar-table lacks
 - **vs ratatui Table:** ratatui's constraint-solver layout and immediate-mode rendering are architecturally different; direct comparison difficult
 
 ### Key Recommendations
@@ -537,11 +537,11 @@ final class TableModel implements Model
 1. **Fix horizontal scroll and frozen column rendering immediately** — These are table-stakes features for wide tables and currently broken
 2. **Port fuzzy filtering from upstream** — Low complexity, closes major upstream feature gap
 3. **Implement stable sort** — Quick fix for multi-column sort correctness
-4. **Add StyleFunc callback** — Brings sugar-table to parity with sugar-bits Table
+4. **Add StyleFunc callback** — Brings sugar-table to parity with sugar-widgets Table
 5. **Design UserEvent system** — Enables reactive TUI use cases; important for long-term ecosystem value
 
 The library's architecture is sound and its immutability patterns are well-implemented. The main work is filling implementation gaps rather than architectural refactoring. With the horizontal scroll and frozen column fixes, sugar-table would be a best-in-class table component for PHP TUI applications.
 
 ---
 
-*Report generated from analysis of: `docs/repo_map/sugarcraft_sugar-table.md`, `sugar-table/README.md`, `sugar-table/CALIBER_LEARNINGS.md`, `sugar-table/src/Table.php`, `sugar-table/src/Column.php`, and upstream/downstream repos at `docs/repo_map/Evertras_bubble-table.md`, `docs/repo_map/76creates_stickers.md`, `docs/repo_map/charmbracelet_bubbles.md`, `docs/repo_map/ratatui_ratatui.md`, `docs/repo_map/textualize_textual.md`, `docs/repo_map/sugarcraft_sugar-bits.md`.*
+*Report generated from analysis of: `docs/repo_map/sugarcraft_sugar-table.md`, `sugar-table/README.md`, `sugar-table/CALIBER_LEARNINGS.md`, `sugar-table/src/Table.php`, `sugar-table/src/Column.php`, and upstream/downstream repos at `docs/repo_map/Evertras_bubble-table.md`, `docs/repo_map/76creates_stickers.md`, `docs/repo_map/charmbracelet_bubbles.md`, `docs/repo_map/ratatui_ratatui.md`, `docs/repo_map/textualize_textual.md`, `docs/repo_map/sugarcraft_sugar-widgets.md`.*

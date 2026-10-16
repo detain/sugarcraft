@@ -377,7 +377,7 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 
 **Source repo:** `charmbracelet/bubbletea` (Go, `View` struct with component composition)
 
-**Source discussion:** SugarCraft mapping to `candy-core` / `sugar-bits`
+**Source discussion:** SugarCraft mapping to `candy-core` / `sugar-widgets`
 
 **Implementation ideas:**
 

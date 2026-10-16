@@ -317,7 +317,7 @@ src/
 
 **Reference patterns from existing libs:**
 
-- `sugar-bits/tests/` — snapshot testing for views
+- `sugar-widgets/tests/` — snapshot testing for views
 - `candy-core/tests/` — BubbleTea component tests
 
 ---

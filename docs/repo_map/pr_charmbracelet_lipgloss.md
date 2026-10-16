@@ -25,13 +25,13 @@
 | SugarCraft Lib | Namespace | Lipgloss Sub-package/Feature |
 |---|---|---|
 | **CandySprinkles** (`candy-sprinkles/`) | `SugarCraft\Sprinkles` | **Primary mapping:** The core `Style` type and all setters (`Bold`, `Italic`, `Foreground`, `Background`, `Padding`, `Margin`, `Border*`, `Align`, etc.), color system (`Color`, `Darken`, `Lighten`, `Complementary`, `Alpha`, `Blend1D`, `Blend2D`, `AdaptiveColor`), border presets, position types, measurement utilities (`Width`, `Height`, `Size`), text wrapping/joining/placement, layer compositing (`Layer`, `Compositor`, `Canvas`), `StyleRunes` |
-| **SugarBits** (`sugar-bits/`) | `SugarCraft\Bits` | `table` sub-package → `Table.php` with `Column.php`, `SortState.php`, `Styles.php`; `list` sub-package → potential future `ItemList.php` enhancements |
+| **SugarWidgets** (`sugar-widgets/`) | `SugarCraft\Widgets` | `table` sub-package → `Table.php` with `Column.php`, `SortState.php`, `Styles.php`; `list` sub-package → potential future `ItemList.php` enhancements |
 | **CandyPalette** (`candy-palette/`) | `SugarCraft\Palette` | `charmbracelet/colorprofile` → terminal color detection (`HasDarkBackground`, `BackgroundColor`, `LightDark`, `Complete`) — SugarCraft's `candy-palette` maps directly to `colorprofile` itself |
 | **CandyShine** (`candy-shine/`) | `SugarCraft\Shine` | Adjacent: Lip Gloss handles ANSI styling; Glamour handles Markdown → these compose together in Charm apps |
 | **SugarCharts** (`sugar-charts/`) | `SugarCraft\Charts` | `Blend2D` / color gradient functions could power heatmap cell coloring |
 | **CandyForms** (`candy-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
 
-**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-bits`, `candy-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
+**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-widgets`, `candy-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
 
 ---
 
@@ -45,7 +45,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 4. **No built-in syntax highlighting** — Lip Gloss handles ANSI SGR sequences but not syntax highlighting (Glamour handles that).
 5. **No built-in markdown rendering** — Lip Gloss styles individual strings; doesn't parse markdown structure.
 6. **Color blending is 1D around border perimeter only** — True rectangular gradients require custom iteration.
-7. **Limited widget set** — No text input, scrollable viewports, progress bars, spinners, or other interactive components (those are in `bubbles` → `sugar-bits`).
+7. **Limited widget set** — No text input, scrollable viewports, progress bars, spinners, or other interactive components (those are in `bubbles` → `sugar-widgets`).
 8. **Hard dependency on Charmbracelet infrastructure** — `charmbracelet/x/ansi`, `charmbracelet/colorprofile`, `charmbracelet/ultraviolet` are all internal Charm libraries.
 
 ---
@@ -137,7 +137,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **State:** closed (completed)
 - **Summary:** Table resize logic fails on carriage return + line feed (`\r\n`) sequences, adding spaces before newlines.
 - **Root Cause:** `x/ansi.Wrap` wasn't trimming `\r` from `"\r\n"`.
-- **Direct Risk to SugarCraft:** MEDIUM — SugarCraft's `SugarBits` table implementation should handle `\r\n` correctly.
+- **Direct Risk to SugarCraft:** MEDIUM — SugarCraft's `SugarWidgets` table implementation should handle `\r\n` correctly.
 
 ### Issue #574: Table Width Doesn't Count Column Borders
 
@@ -483,7 +483,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 1. **AI Agents Moving to Terminal** — From the v2 announcement: "AI agents moved into the terminal, and suddenly the rest of the industry saw what many already knew: the terminal is the most powerful way to interface with the operating system." Lip Gloss v2 is optimized for AI tool output.
 
-2. **Coordinated Library Versions** — The v2 release coordinated across Bubble Tea, Lip Gloss, and Bubbles simultaneously. SugarCraft should coordinate releases of `candy-sprinkles`, `candy-core`, and `sugar-bits`.
+2. **Coordinated Library Versions** — The v2 release coordinated across Bubble Tea, Lip Gloss, and Bubbles simultaneously. SugarCraft should coordinate releases of `candy-sprinkles`, `candy-core`, and `sugar-widgets`.
 
 3. **Separation of Rendering and Output** — v2's architecture (render always emits full ANSI; writer handles downsampling) is the correct pattern for composability.
 
@@ -503,7 +503,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 3. **Coroutine-Friendly Architecture** — PHP's ReactPHP ecosystem can handle async terminal I/O. SugarCraft's `candy-core` can be designed for non-blocking terminal queries.
 
-4. **Coordinated Multi-Library Releases** — When releasing v2 of `candy-sprinkles`, coordinate with `candy-core` and `sugar-bits` simultaneously.
+4. **Coordinated Multi-Library Releases** — When releasing v2 of `candy-sprinkles`, coordinate with `candy-core` and `sugar-widgets` simultaneously.
 
 5. **Superior Theme System** — The upstream `charm-themes` POC exists but hasn't been merged. SugarCraft could create an official theming system that spans all libraries.
 
@@ -521,7 +521,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 4. **Writer Pattern for Output** — Java's `Writer` abstraction (abstract base for character streams) parallels lipgloss's `colorprofile.Writer`. SugarCraft should have an output abstraction that handles encoding/decoding.
 
-5. **Component Libraries Layered on Styling** — `bubbles` (interactive components) builds on `lipgloss` (styling). `sugar-bits` should build on `candy-sprinkles` the same way.
+5. **Component Libraries Layered on Styling** — `bubbles` (interactive components) builds on `lipgloss` (styling). `sugar-widgets` should build on `candy-sprinkles` the same way.
 
 6. **Snapshot Testing for Rendering** — Lipgloss's golden tests assert raw ANSI bytes. SugarCraft should use the same approach for `candy-sprinkles` snapshot tests.
 
@@ -549,7 +549,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 ### Long-Term (High Strategic Value)
 
-10. **Coordinated Multi-Library Release** — When releasing `candy-sprinkles` v2, coordinate with `candy-core` v2 and `sugar-bits` v2 simultaneously, with matching upgrade guides.
+10. **Coordinated Multi-Library Release** — When releasing `candy-sprinkles` v2, coordinate with `candy-core` v2 and `sugar-widgets` v2 simultaneously, with matching upgrade guides.
 11. **Windows Console FFI** — PHP 8.4+ FFI improvements enable direct Windows console API access. Leverage this for proper Windows support in `candy-sprinkles`.
 
 ---

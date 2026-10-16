@@ -19,7 +19,7 @@ $buildTree = static fn() => Tree::new()
     ->children(
         Tree::new()->root('candy-core/')->children('src/', 'tests/', 'examples/'),
         Tree::new()->root('candy-sprinkles/')->children('src/', 'tests/', 'examples/'),
-        Tree::new()->root('sugar-bits/')->children('src/', 'tests/', 'examples/'),
+        Tree::new()->root('sugar-widgets/')->children('src/', 'tests/', 'examples/'),
         'README.md',
         'composer.json',
     );

@@ -23,7 +23,7 @@ final class InstructionFileLoaderTest extends TestCase
         $this->repoRoot = $this->tempDir . '/repo';
         mkdir($this->repoRoot . '/candy-shine/src', 0777, true);
         mkdir($this->repoRoot . '/candy-shine/lang', 0777, true);
-        mkdir($this->repoRoot . '/sugar-bits/src', 0777, true);
+        mkdir($this->repoRoot . '/sugar-widgets/src', 0777, true);
         mkdir($this->repoRoot . '/docs', 0777, true);
     }
 

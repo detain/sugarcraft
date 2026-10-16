@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView;
 
-use SugarCraft\Bits\Viewport\Viewport;
+use SugarCraft\Widgets\Viewport\Viewport;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -19,7 +19,7 @@ use SugarCraft\Core\Msg\KeyMsg;
  *
  * File-watch auto-reload (E735 step 10.25): when armed with
  * {@see withWatch()}, the model rides a `Cmd::tick()` re-arm chain (the
- * sugar-bits Stopwatch shape) that sweeps the source file's
+ * sugar-widgets Stopwatch shape) that sweeps the source file's
  * (mtime, size) tuple once per interval through {@see FileWatcher::pollTuple()}
  * — one non-blocking stat per tick, no Generator, no sleep inside the
  * loop. A changed tuple re-reads the file, runs it through the injected

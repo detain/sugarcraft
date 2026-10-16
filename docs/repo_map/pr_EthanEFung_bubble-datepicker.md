@@ -23,12 +23,12 @@ From `repo_map/EthanEFung_bubble-datepicker.md`:
 
 | bubble-datepicker | SugarCraft Lib | Notes |
 |---|---|---|
-| Datepicker component | `sugar-bits` (foundation components) | TUI "bubble" component like textinput, list, viewport |
-| Calendar grid rendering | `sugar-bits` `View()` rendering | Snapshot testing pattern applies |
-| Focus state machine (HeaderMonth/Year/Calendar) | `sugar-bits` focus handling | Elm-style Model/Update/View |
+| Datepicker component | `sugar-widgets` (foundation components) | TUI "bubble" component like textinput, list, viewport |
+| Calendar grid rendering | `sugar-widgets` `View()` rendering | Snapshot testing pattern applies |
+| Focus state machine (HeaderMonth/Year/Calendar) | `sugar-widgets` focus handling | Elm-style Model/Update/View |
 | `KeyMap` + key bindings | `candy-core` key handling | Same pattern as Charmbracelet's `bubbles/key` |
-| `Styles` with lipgloss | `sugar-bits` styling | Lipgloss used in both ecosystems |
-| Two-way data binding example | `sugar-bits` component integration | Compositing bubbles |
+| `Styles` with lipgloss | `sugar-widgets` styling | Lipgloss used in both ecosystems |
+| Two-way data binding example | `sugar-widgets` component integration | Compositing bubbles |
 
 **Classification**: Not a direct port target — this is a user-contributed Bubbletea component, not upstream Charmbracelet. SugarCraft ports from Charmbracelet directly. This repo is a **reference implementation** for TUI component patterns.
 
@@ -430,7 +430,7 @@ func (m *Model) updateUp() {
 
 ### 18.4 Focus State Machine
 
-**Direct risk**: MEDIUM — SugarCraft's `sugar-bits` focus handling must be consistent
+**Direct risk**: MEDIUM — SugarCraft's `sugar-widgets` focus handling must be consistent
 **Specific issue**: `FocusNone` semantics must fully block interaction, not just focus zone switching
 **SugarCraft strategy**: Document focus contract explicitly; blur = fully inactive, no side effects possible
 

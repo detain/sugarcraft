@@ -92,10 +92,10 @@ This is a **tree-sitter grammar** (not a traditional class-based library). The c
 |------------------------|------------------------|-------|
 | VHS `.tape` file format | No direct equivalent | SugarCraft has no terminal recording/playback format |
 | `grammar.js` parser definition | N/A | SugarCraft uses PHP, not Go/JS |
-| `highlights.scm` syntax queries | Could use with `sugar-bits` if PHP has tree-sitter bindings | PHP tree-sitter bindings exist but not used in SugarCraft |
+| `highlights.scm` syntax queries | Could use with `sugar-widgets` if PHP has tree-sitter bindings | PHP tree-sitter bindings exist but not used in SugarCraft |
 | VHS command parsing | Potential `sugar-vhs` library | Could parse/validate .tape files in PHP, or generate them |
-| `Set FontSize`, `Set Theme` | `sugar-bits` Theme/Font handling | Similar terminal styling concepts |
-| `Type "..."`, `Enter`, `Sleep` | `sugar-bits` TUI input events | Equivalent to keyboard event simulation |
+| `Set FontSize`, `Set Theme` | `sugar-widgets` Theme/Font handling | Similar terminal styling concepts |
+| `Type "..."`, `Enter`, `Sleep` | `sugar-widgets` TUI input events | Equivalent to keyboard event simulation |
 | `Output demo.gif` | VHS renders to GIF; SugarCraft has no VHS port | Could create `sugar-vhs` to parse/generate .tape |
 
 ### Suggested SugarCraft Additions
@@ -106,7 +106,7 @@ This is a **tree-sitter grammar** (not a traditional class-based library). The c
    - Could generate `.tape` files from PHP (for VHS integration)
    - Would use `grammar.js` as reference but reimplement in PHP
 
-2. **`sugar-bits` enhancement**: If VHS support is needed, extend `sugar-bits` to understand terminal styling concepts (FontSize, Theme, etc.)
+2. **`sugar-widgets` enhancement**: If VHS support is needed, extend `sugar-widgets` to understand terminal styling concepts (FontSize, Theme, etc.)
 
 3. **VHS Integration**: SugarCraft could integrate with the actual VHS tool (Go binary) rather than reimplementing the format
 
@@ -125,4 +125,4 @@ The grammar itself is well-engineered using tree-sitter's JavaScript-based DSL (
 
 The repository exemplifies best practices in tree-sitter grammar development: comprehensive corpus tests (`test/corpus/*.txt`), multi-platform CI testing, official integrations with major editors (Neovim treesitter, Emacs tree-sitter-langs), and multi-language bindings for consumption in different ecosystems. The `highlights.scm` file demonstrates tree-sitter's semantic highlighting capabilities, mapping commands to highlight groups like `@keyword`, types to `@type`, and comments to `@comment`.
 
-For SugarCraft, this grammar has limited direct applicability since SugarCraft ports TUI libraries to PHP while tree-sitter is inherently multi-language. However, it suggests a potential `sugar-vhs` library that could parse `.tape` files in PHP, enabling PHP applications to either validate VHS scripts or generate them as output. The more practical mapping would be in styling concepts: VHS's `Set FontSize`/`Set Theme` parallels how `sugar-bits` handles terminal styling, and the keyboard simulation commands (`Type`, `Enter`, arrow keys) mirror the input event handling in `sugar-bits` TUI components.
+For SugarCraft, this grammar has limited direct applicability since SugarCraft ports TUI libraries to PHP while tree-sitter is inherently multi-language. However, it suggests a potential `sugar-vhs` library that could parse `.tape` files in PHP, enabling PHP applications to either validate VHS scripts or generate them as output. The more practical mapping would be in styling concepts: VHS's `Set FontSize`/`Set Theme` parallels how `sugar-widgets` handles terminal styling, and the keyboard simulation commands (`Type`, `Enter`, arrow keys) mirror the input event handling in `sugar-widgets` TUI components.

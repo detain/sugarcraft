@@ -1,0 +1,200 @@
+<p class="lede" style="margin-top: 28px;">TextInput, TextArea, ItemList, Table, Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-widgets</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Widgets\TextInput\TextInput;
+use SugarCraft\Widgets\Spinner\Spinner;
+use SugarCraft\Core\{Cmd, Model, Msg, Program, Subscriptions};
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\KeyType;
+
+final class Search implements Model {
+    public function __construct(
+        public readonly TextInput $ti,
+        public readonly Spinner $sp,
+    ) {}
+
+    public function init(): ?\Closure { return $this-&gt;sp-&gt;tick(); }
+    public function subscriptions(): ?Subscriptions { return null; }
+
+    public function update(Msg $msg): array {
+        if ($msg instanceof KeyMsg &amp;&amp; $msg-&gt;type === KeyType::Enter) {
+            return [$this, Cmd::quit()];
+        }
+        [$ti, $cmd]  = $this-&gt;ti-&gt;update($msg);
+        [$sp, $cmd2] = $this-&gt;sp-&gt;update($msg);
+        return [new self($ti, $sp), Cmd::batch($cmd, $cmd2)];
+    }
+
+    public function view(): string {
+        return $this-&gt;sp-&gt;view().' '.$this-&gt;ti-&gt;view();
+    }
+}
+
+[$input] = TextInput::new()-&gt;focus();   // focus() returns [TextInput, ?Cmd]
+(new Program(new Search($input, Spinner::new())))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Spinner</strong><span>12 styles — line, dot, miniDot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis.</span></div>
+      <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by HoneyBounce.</span></div>
+      <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth.</span></div>
+      <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
+      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code>, multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match on all visible columns), and pagination with <code>withPageSize()</code> / <code>paginator()</code> / <code>withPage()</code> / <code>nextPage()</code> / <code>prevPage()</code> / <code>pageFirst()</code> / <code>pageLast()</code> — integrates with sort and filter.</span></div>
+      <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump.</span></div>
+      <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
+      <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
+      <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::render()</code> draws btop's two-line options-menu row. <code>Progress::withColorFunc</code> closures also receive the bar width for position-coloured ramps.</span></div>
+      <div class="feature"><strong>Paginator + Help + Key</strong><span>Dot / arabic page indicator, key-help footer, KeyMap binding DSL.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">TextEdit + OptionRow</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Widgets\Input\TextEdit;
+use SugarCraft\Widgets\Menu\OptionRow;
+
+$edit = TextEdit::new('firefox')-&gt;home()-&gt;right()-&gt;right();
+echo $edit-&gt;view();      // "fi\e[4mr\e[24mefox" — underline caret on "r"
+
+echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
+    selected: true, editing: true, hasArrows: true, editable: true);</code></pre>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-widgets">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-widgets/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-widgets/tree/main/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbles">bubbles</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>TextInput</td><td>new()</td><td>Create a new text input instance</td></tr>
+<tr><td>TextInput</td><td>update(Msg)</td><td>Handle input events</td></tr>
+<tr><td>TextInput</td><td>withValidateOn(ValidateOn)</td><td>Set validation timing — None / Blur / Change / Submit</td></tr>
+<tr><td>TextInput</td><td>withRestrict(string $pattern)</td><td>PCRE regex filter — only matching keystrokes are accepted</td></tr>
+<tr><td>ValidateOn</td><td>enum</td><td>Cases: None / Blur / Change / Submit — controls when validation fires</td></tr>
+<tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area</td></tr>
+<tr><td>Spinner</td><td>new(Style)</td><td>Create spinner with given style</td></tr>
+<tr><td>Spinner</td><td>tick()</td><td>Return tick command for animation</td></tr>
+<tr><td>Table</td><td>new(headers, rows)</td><td>Create data table</td></tr>
+<tr><td>Table</td><td>withSort(string $column, SortDirection $dir = Asc)</td><td>Set primary sort column and direction — clears prior sort chain</td></tr>
+<tr><td>Table</td><td>thenSortBy(string $column, SortDirection $dir = Asc)</td><td>Add secondary (or further) sort tiebreaker</td></tr>
+<tr><td>Table</td><td>clearSort()</td><td>Remove all sort criteria, restoring insertion order</td></tr>
+<tr><td>Table</td><td>sortState(): SortState</td><td>Return current sort criteria (readonly)</td></tr>
+<tr><td>Table</td><td>withFilterable(bool)</td><td>Enable or disable the filter feature</td></tr>
+<tr><td>Table</td><td>withFilter(string $query)</td><td>Set filter query string — default: case-insensitive substring match on all visible columns</td></tr>
+<tr><td>Table</td><td>withFilterPredicate(?Closure(list&lt;string&gt;): bool)</td><td>Custom filter callable — null restores the default</td></tr>
+<tr><td>Table</td><td>filterable(): bool</td><td>Return whether filtering is enabled</td></tr>
+<tr><td>Table</td><td>filter(): string</td><td>Return the current filter query string</td></tr>
+<tr><td>Table</td><td>filterPredicate(): ?Closure</td><td>Return the current custom filter predicate</td></tr>
+<tr><td>SortDirection</td><td>enum</td><td>Cases: Asc / Desc — use toggle() to flip direction</td></tr>
+<tr><td>SortState</td><td>DTO</td><td>Immutable list of (column index, SortDirection) pairs</td></tr>
+<tr><td>Table</td><td>withPageSize(int $size)</td><td>Set rows per page — 0 disables pagination, ≥1 enables it</td></tr>
+<tr><td>Table</td><td>withPage(int $page)</td><td>Navigate to a zero-based page (clamps to valid range)</td></tr>
+<tr><td>Table</td><td>nextPage()</td><td>Advance one page — returns new Table</td></tr>
+<tr><td>Table</td><td>prevPage()</td><td>Retreat one page — returns new Table</td></tr>
+<tr><td>Table</td><td>pageFirst()</td><td>Jump to the first page — returns new Table</td></tr>
+<tr><td>Table</td><td>pageLast()</td><td>Jump to the last page — returns new Table</td></tr>
+<tr><td>Table</td><td>pageSize(): int</td><td>Return rows per page (0 = pagination disabled)</td></tr>
+<tr><td>Table</td><td>currentPage(): int</td><td>Return the current zero-based page</td></tr>
+<tr><td>Paginator</td><td>totalPages(): int</td><td>Return total page count (via the table's paginator)</td></tr>
+<tr><td>Table</td><td>paginator(): Paginator</td><td>Return a Paginator wired to the table's current page state</td></tr>
+<tr><td>Tree</td><td>new(root)</td><td>Create tree view</td></tr>
+<tr><td>Viewport</td><td>new(content)</td><td>Create scrollable viewport</td></tr>
+<tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar</td></tr>
+<tr><td>Progress</td><td>withColorFunc(?Closure)</td><td>Per-filled-cell colour <code>fn(int $i, int $filledCells, float $percent, int $barWidth): Color</code> — the 4th arg (true bar width) enables btop position-coloured ramps; 3-arg closures still work</td></tr>
+<tr><td>TextEdit</td><td>new(text, ?caret, numeric)</td><td>Immutable inline editor (btop <code>Draw::TextEdit</code>); underline caret, grapheme-cluster caret</td></tr>
+<tr><td>TextEdit</td><td>left() / right() / home() / end() / withCaret(int)</td><td>Caret movement (clamped)</td></tr>
+<tr><td>TextEdit</td><td>insert(string) / backspace() / delete() / clear()</td><td>Edits; numeric mode rejects non-digit input</td></tr>
+<tr><td>TextEdit</td><td>withNumeric(bool)</td><td>Digits-only mode — strips existing non-digits</td></tr>
+<tr><td>TextEdit</td><td>view(int $limit = 0)</td><td>Render with SGR 4 underline caret, windowed to $limit display cells</td></tr>
+<tr><td>OptionRow</td><td>render(name, value, selected, editing, hasArrows, …)</td><td>btop options-menu two-line row: bold centred name, <code>← value →</code> / <code>↵</code>, live TextEdit while editing</td></tr>
+<tr><td>FilePicker</td><td>new(directory)</td><td>Create file picker</td></tr>
+<tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/spinners.gif" alt="Spinner gallery">
+                <h3>Spinner gallery</h3>
+                <span class="demo-caption">All 12 spinner styles ticking in parallel.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-input.gif" alt="TextInput">
+                <h3>TextInput</h3>
+                <span class="demo-caption">Single-line input with autocomplete + placeholder.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-area.gif" alt="TextArea">
+                <h3>TextArea</h3>
+                <span class="demo-caption">Multi-line editor with line numbers + soft-wrap.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/item-list.gif" alt="ItemList">
+                <h3>ItemList</h3>
+                <span class="demo-caption">Filterable scrollable list with status messages.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/table.gif" alt="Table">
+                <h3>Table</h3>
+                <span class="demo-caption">Selectable data table with column delegates + per-cell styleFunc.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/tree.gif" alt="Tree">
+                <h3>Tree</h3>
+                <span class="demo-caption">Interactive tree — cursor, expand / collapse, scroll.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/viewport.gif" alt="Viewport">
+                <h3>Viewport</h3>
+                <span class="demo-caption">Scrollable text region with mouse wheel + scrollbar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/file-picker.gif" alt="FilePicker">
+                <h3>FilePicker</h3>
+                <span class="demo-caption">Directory browser with icons + size + sort.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/progress.gif" alt="Progress">
+                <h3>Progress</h3>
+                <span class="demo-caption">Spring-physics-animated progress bar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/cursor.gif" alt="Cursor">
+                <h3>Cursor</h3>
+                <span class="demo-caption">Animated text cursor with BlinkMsg tick.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/help.gif" alt="Help">
+                <h3>Help</h3>
+                <span class="demo-caption">Short / full key-help footer from a KeyMap.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/paginator.gif" alt="Paginator">
+                <h3>Paginator</h3>
+                <span class="demo-caption">Dot + arabic page indicator.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/stopwatch.gif" alt="Stopwatch">
+                <h3>Stopwatch</h3>
+                <span class="demo-caption">Elapsed-time counter.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/timer.gif" alt="Timer">
+                <h3>Timer</h3>
+                <span class="demo-caption">Countdown timer.</span>
+            </div>
+        </div>
+    </div>
+</section>

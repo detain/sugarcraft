@@ -21,10 +21,10 @@ From `repo_map/charmbracelet_pop.md` (first pass):
 | pop feature | SugarCraft lib | Notes |
 |---|---|---|
 | TUI sequential field navigation | `candy-forms` | Multi-step keybinding flow closest structural match |
-| Bubble Tea `Model` with `State` enum | `sugar-bits` / `candy-core` | Mirrors `Model::init/update/view` contract |
+| Bubble Tea `Model` with `State` enum | `sugar-widgets` / `candy-core` | Mirrors `Model::init/update/view` contract |
 | Lipgloss styling | `sugar-shine` | Terminal color/style wrapping |
-| File picker for attachments | `sugar-bits` | `List`/`Delegate` patterns |
-| Markdown → ANSI rendering | `sugar-bits` via `candy-shine` | Snapshot-testing SGR bytes approach |
+| File picker for attachments | `sugar-widgets` | `List`/`Delegate` patterns |
+| Markdown → ANSI rendering | `sugar-widgets` via `candy-shine` | Snapshot-testing SGR bytes approach |
 | Keymap struct with `key.Binding` fields | `candy-forms` / `candy-core` | Direct pattern reuse |
 | CLI flag parsing (Cobra) | N/A | App-level only |
 | Email sending (SMTP/Resend) | N/A | Would require net-new `sugar-mail` |

@@ -16,6 +16,6 @@ alwaysApply: false
 
 **Cache keys**: bump EVERY `-vN-` key in lockstep (`vendor-vN`, `vendor-cov-vN`, `vendor-stan-vN`, `vendor-win-vN`, `vendor-mac-vN`) — a partial bump leaves a shadowed `vendor/` re-resolving to the stale lock.
 
-**VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. See `sugar-bits/.vhs/spinners.tape` for canonical shape.
+**VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. See `sugar-widgets/.vhs/spinners.tape` for canonical shape.
 
 **Non-visual libs exempt**: `candy-pty`, FFI bindings, codecs — skip both tape AND matrix; note exemption in PR body.

@@ -2,7 +2,7 @@
 
 Form library (port of [charmbracelet/huh](https://github.com/charmbracelet/huh))
 and foundation lib for form and input primitives — the raw component
-implementations that `sugar-bits` re-exports. The former standalone prompt
+implementations that `sugar-widgets` re-exports. The former standalone prompt
 façade has been folded in here, so the full interactive form engine and its
 primitives ship as a single standalone dependency.
 
@@ -22,7 +22,7 @@ CandyForms owns the full primitive + form surface:
   MultiSelect,Note,FilePicker}`, `Form`, `Group`, `KeyMap`, `Theme`,
   `Fuzzy\FuzzyMatcher`, and `Validator\{Required,Email,MinLength,MaxLength,Pattern}`.
 
-`sugar-bits` (`SugarCraft\Bits\*`) exposes these classes as thin
+`sugar-widgets` (`SugarCraft\Widgets\*`) exposes these classes as thin
 `class_alias` shims pointing back here, so existing imports keep working
 while the canonical implementation lives in `SugarCraft\Forms\*`.
 
@@ -63,7 +63,7 @@ Select::new('theme')->withOptions('Nocturne', 'Daylight', 'Midnight')
     ->withSelected('Midnight');                            // or ->withSelectedIndex(2)
 ```
 
-Standalone spinner (now lives here, was in sugar-bits):
+Standalone spinner (now lives here, was in sugar-widgets):
 
 ```php
 <?php
@@ -103,13 +103,13 @@ $form = Form::new(
 
 | Field         | Description                                                 | Notable knobs |
 | ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarCraft\Bits\TextInput`)             | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
+| `Input`       | Single-line text (wraps `SugarCraft\Widgets\TextInput`)             | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withMaxLines`, `withShowLineNumbers`, `withValidator` |
 | `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
-| `Select`      | Single-choice list (wraps `SugarCraft\Bits\ItemList`)            | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
+| `Select`      | Single-choice list (wraps `SugarCraft\Widgets\ItemList`)            | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
 | `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
-| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Bits\FilePicker`)          | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
+| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Widgets\FilePicker`)          | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
 | `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withWidth`, `withValidator(\Closure)` |
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
 | `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)`, `withValidator` |
@@ -294,7 +294,7 @@ candy-forms is built on five shared packages:
   scheduling the next, so rapid keystrokes only fire one network request.
 - **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
   (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
-  CursorRight, DeleteChar, YankLine, …). sugar-bits and
+  CursorRight, DeleteChar, YankLine, …). sugar-widgets and
   sugar-readline delegate to it — new bindings benefit all 3 libs at once.
   Text objects (`ci"`, `da{`, `yiw`, …) resolve through
   `VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) +

@@ -12,7 +12,7 @@ Anti-pattern: Reaching for `STDIN` directly in the run loop — hard to test, co
 Source: step-21 ai/sugar-readline-input
 
 ### 2026-05-31 — Vim keybindings via shared candy-forms VimKeyHandler
-Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic (ViMode or TextInput vimMode flags). Always add new bindings to `VimAction` enum + `VimKeyHandler` so candy-forms, candy-forms, sugar-bits, and sugar-readline all benefit at once.
+Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic (ViMode or TextInput vimMode flags). Always add new bindings to `VimAction` enum + `VimKeyHandler` so candy-forms, candy-forms, sugar-widgets, and sugar-readline all benefit at once.
 Source: step-24 ai/vim-mode-shared
 
 ### 2026-06-29 — Emacs word-delete/transpose O(n) replay deferred

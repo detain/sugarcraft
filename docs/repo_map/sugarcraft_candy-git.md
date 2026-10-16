@@ -510,4 +510,4 @@ candy-git is the most **complete application** in the SugarCraft monorepo:
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-sprinkles.md` — Styling system
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-bits.md` — Component library comparison
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-widgets.md` — Component library comparison

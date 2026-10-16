@@ -36,7 +36,7 @@ paths:
 
 2. **Pick dimensions from the established convention.** Use the closest match to neighbouring tapes. Defaults observed across the repo:
 
-   - `Set FontSize 14` for most libs; `Set FontSize 16` only for sugar-bits-style component showcases.
+   - `Set FontSize 14` for most libs; `Set FontSize 16` only for sugar-widgets-style component showcases.
    - `Set Width 700` is the canonical width. Use `600` only for narrow component demos (single spinner, single status line).
    - `Set Height` scales to output: short status (`180`–`220`), medium TUI (`320`), full-screen game/board (`440`–`460`).
    - `Set TypingSpeed 60ms` whenever `Type` is used to invoke or interact (omit only for pure-display tapes that just `Type` the launch line).

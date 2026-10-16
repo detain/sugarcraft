@@ -718,7 +718,7 @@ SugarDatepicker is a well-architected PHP port that meaningfully enhances its up
 **Architectural recommendation:**
 Adopt ratatui's DateStyler trait pattern to decouple day styling from core DatePicker, enabling custom event markers and holiday highlights without modifying the calendar core. This is the highest-leverage architectural improvement.
 
-**Mouse interaction** should be pursued via the bubblezone zero-width ANSI marker pattern, implemented as a separate `candy-mouse` integration rather than modifying DatePicker directly. This keeps concerns separated and enables mouse tracking reuse across all sugar-bits components.
+**Mouse interaction** should be pursued via the bubblezone zero-width ANSI marker pattern, implemented as a separate `candy-mouse` integration rather than modifying DatePicker directly. This keeps concerns separated and enables mouse tracking reuse across all sugar-widgets components.
 
 The focus zone system from upstream Go is valuable for power users but adds complexity; implement after constraints and mouse support are stable.
 

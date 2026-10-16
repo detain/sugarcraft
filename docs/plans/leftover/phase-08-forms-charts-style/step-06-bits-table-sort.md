@@ -1,6 +1,6 @@
-# Step 08.06 — sugar-bits Table sort (sortBy / thenSortBy / clearSort)
+# Step 08.06 — sugar-widgets Table sort (sortBy / thenSortBy / clearSort)
 
-**Source:** `leftover_updates_later.md` sugar-bits Phase 2 HIGH
+**Source:** `leftover_updates_later.md` sugar-widgets Phase 2 HIGH
 **Branch:** `ai/bits-table-sort`
 
 ## Deliverable
@@ -12,20 +12,20 @@
 
 **Modify:**
 
-- `sugar-bits/src/Table/Table.php` — sort state, comparator chain.
+- `sugar-widgets/src/Table/Table.php` — sort state, comparator chain.
 
 **Create:**
 
-- `sugar-bits/src/Table/SortDirection.php` (enum).
-- `sugar-bits/src/Table/SortState.php` (DTO).
+- `sugar-widgets/src/Table/SortDirection.php` (enum).
+- `sugar-widgets/src/Table/SortState.php` (DTO).
 
 ## Tests
 
-- `sugar-bits/tests/Table/SortTest.php`.
+- `sugar-widgets/tests/Table/SortTest.php`.
 
 ## Acceptance
 
-- `cd sugar-bits && vendor/bin/phpunit --filter Sort` green.
+- `cd sugar-widgets && vendor/bin/phpunit --filter Sort` green.
 
 ---
 

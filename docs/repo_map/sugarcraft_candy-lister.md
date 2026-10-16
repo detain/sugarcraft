@@ -388,7 +388,7 @@ Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), 
 | Word wrapping | `candy-core` (Width utility) | Width::string() for ANSI-aware width |
 | ANSI styling | `candy-core` (Ansi utility) | Ansi::CSI for SGR wrapping |
 | Prefixer/Suffixer | `candy-lister` itself | Core extension hooks |
-| Fuzzy matching | `sugar-bits` (existing FuzzyMatcher) | FuzzyMatch pattern already in Prompt |
+| Fuzzy matching | `sugar-widgets` (existing FuzzyMatcher) | FuzzyMatch pattern already in Prompt |
 | Filter state machine | `candy-lister` itself | FilterState enum + withFilterFn |
 | Box-drawing chars | `candy-shine` (border primitives) | Unicode box chars |
 

@@ -1,12 +1,12 @@
 ---
 name: sugarcraft-model-pattern
-description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, a private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters that return a new instance, bare accessors (no `get`), and (for TUI roots) the candy-core `Model` contract `init()`/`update(Msg): [Model, ?Cmd]`/`view()`/`subscriptions()`. Mirror `candy-sprinkles/src/Style.php` (value object) or `sugar-bits/src/Stopwatch/Stopwatch.php` (Model). Use when the user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing an existing class (use direct Edit), tests-only changes (use write-phpunit-test), scaffolding a whole new library skeleton (use scaffold-library), or non-SugarCraft repos.
+description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, a private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters that return a new instance, bare accessors (no `get`), and (for TUI roots) the candy-core `Model` contract `init()`/`update(Msg): [Model, ?Cmd]`/`view()`/`subscriptions()`. Mirror `candy-sprinkles/src/Style.php` (value object) or `sugar-widgets/src/Stopwatch/Stopwatch.php` (Model). Use when the user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing an existing class (use direct Edit), tests-only changes (use write-phpunit-test), scaffolding a whole new library skeleton (use scaffold-library), or non-SugarCraft repos.
 paths:
   - "*/src/**/*.php"
 ---
 # SugarCraft Model / value-object pattern
 
-Scaffold a new immutable+fluent class that looks byte-identical to the rest of the monorepo. Two shapes: a **value object** (mirror `candy-sprinkles/src/Style.php`) and a **TUI root** implementing `SugarCraft\Core\Model` (mirror `sugar-bits/src/Stopwatch/Stopwatch.php`).
+Scaffold a new immutable+fluent class that looks byte-identical to the rest of the monorepo. Two shapes: a **value object** (mirror `candy-sprinkles/src/Style.php`) and a **TUI root** implementing `SugarCraft\Core\Model` (mirror `sugar-widgets/src/Stopwatch/Stopwatch.php`).
 
 ## Critical
 
@@ -14,9 +14,9 @@ Scaffold a new immutable+fluent class that looks byte-identical to the rest of t
 - **Never mutate `$this`.** Every `with*()`, `update()`, and state transition returns a **NEW instance**. State is `public readonly`.
 - **Constructor is `private`** with **promoted `public readonly` params**. Public entry is `::new()` — NEVER `::create()`, `::make()`, or `::default()`.
 - **Accessors are bare** — `elapsed()`, not `getElapsed()`.
-- **Nullable fields that a `with*()` can set need a paired `bool $XSet` sentinel** — `mutate()` cannot tell a passed `null` from an omitted arg. See `sugar-bits/src/TextInput/TextInput.php`.
+- **Nullable fields that a `with*()` can set need a paired `bool $XSet` sentinel** — `mutate()` cannot tell a passed `null` from an omitted arg. See `sugar-widgets/src/TextInput/TextInput.php`.
 - **Side effects go in a `Cmd` (a `Closure(): ?Msg`), never in `view()`.** `view()` is pure.
-- **Namespace = slug mapped**: `candy-shine/` → `SugarCraft\Shine\`; quirk: `candy-core/` → `SugarCraft\Core\`. Subdir classes nest, e.g. `sugar-bits/src/Stopwatch/Stopwatch.php` → `SugarCraft\Bits\Stopwatch\`.
+- **Namespace = slug mapped**: `candy-shine/` → `SugarCraft\Shine\`; quirk: `candy-core/` → `SugarCraft\Core\`. Subdir classes nest, e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php` → `SugarCraft\Widgets\Stopwatch\`.
 - **Doc-comment cites upstream**: `Mirrors charmbracelet/<repo>.<Method>` or `Mirror of {@see X}`. Comment WHY, not WHAT.
 - **Validation throws** `\InvalidArgumentException` (with `Lang::t('<key>')`), never returns `null` for bad input.
 
@@ -24,7 +24,7 @@ Scaffold a new immutable+fluent class that looks byte-identical to the rest of t
 
 ### Step 1 — Resolve name, path, namespace
 Given the target lib slug `<slug>` and class `<Class>`:
-- File: `<slug>/src/<Class>.php`, or `<slug>/src/<Sub>/<Class>.php` if it groups with sibling types (Msg, enums) — e.g. `sugar-bits/src/Stopwatch/Stopwatch.php`.
+- File: `<slug>/src/<Class>.php`, or `<slug>/src/<Sub>/<Class>.php` if it groups with sibling types (Msg, enums) — e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php`.
 - Namespace: kebab slug → PascalCase, drop the `candy-`/`sugar-`/`honey-` idea into `SugarCraft\<Sub>\`. Confirm against an existing file in that lib: `head -6 <slug>/src/*.php`.
 - **Verify** the namespace matches a sibling file before writing. Do not guess.
 
@@ -93,7 +93,7 @@ final class <Class>
 `mutate()` does `new static(...array_merge(get_object_vars($this), $changes))`. This ONLY works when every constructor param name matches a property name. If you have sentinel fields, set them in the `$changes` array too: `$this->mutate(['fg' => $fg, 'fgSet' => true])`.
 **Verify**: `php -l <slug>/src/<Class>.php` returns `No syntax errors`.
 
-### Step 4 — TUI Model (mirror `sugar-bits/src/Stopwatch/Stopwatch.php`)
+### Step 4 — TUI Model (mirror `sugar-widgets/src/Stopwatch/Stopwatch.php`)
 This step uses the class/namespace resolved in Step 1. Implement all four `Model` methods:
 ```php
 <?php
@@ -159,7 +159,7 @@ final class <Class> implements Model
 **Verify**: `php -l` passes AND the class has all four `Model` methods (`init`, `update`, `view`, `subscriptions`).
 
 ### Step 5 — Companion Msg types
-Each message a Model emits is its own `final` class in the same subdir (mirror `sugar-bits/src/Stopwatch/TickMsg.php`):
+Each message a Model emits is its own `final` class in the same subdir (mirror `sugar-widgets/src/Stopwatch/TickMsg.php`):
 ```php
 <?php
 
@@ -187,16 +187,16 @@ Exception messages and rendered labels go through `Lang::t('<slug>.<key>', [...]
 
 ## Examples
 
-**User says:** "Port charmbracelet/bubbles stopwatch into sugar-bits."
+**User says:** "Port charmbracelet/bubbles stopwatch into sugar-widgets."
 
 **Actions taken:**
-1. Slug `sugar-bits` → namespace `SugarCraft\Bits\Stopwatch\`; files `sugar-bits/src/Stopwatch/Stopwatch.php` + `sugar-bits/src/Stopwatch/TickMsg.php`.
+1. Slug `sugar-widgets` → namespace `SugarCraft\Widgets\Stopwatch\`; files `sugar-widgets/src/Stopwatch/Stopwatch.php` + `sugar-widgets/src/Stopwatch/TickMsg.php`.
 2. Shape = TUI Model (state changes over ticks) → Step 4.
 3. Write `final class Stopwatch implements Model`: private ctor with `public readonly float $elapsed/$interval, bool $running`; `::new(float $interval = 1.0)` throwing `\InvalidArgumentException(Lang::t('stopwatch.interval_positive'))` on `<= 0`; `update()` matches `TickMsg` by `id` and returns `[$next, $next->tick()]`; `start()` idempotent; `view()` returns `Timer::format($this->elapsed)`; `subscriptions()` returns null.
 4. Write `final class TickMsg implements Msg` with `public readonly int $id`.
 5. `php -l` both files → clean.
 
-**Result:** Two files that match `sugar-bits/src/Stopwatch/*` exactly; ready for `write-phpunit-test`.
+**Result:** Two files that match `sugar-widgets/src/Stopwatch/*` exactly; ready for `write-phpunit-test`.
 
 ## Common Issues
 

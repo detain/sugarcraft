@@ -16,7 +16,7 @@
 
 ![demo](.vhs/render.gif)
 
-candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **CandyShine** (rendering) and **SugarBits Viewport** (scrolling).
+candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **CandyShine** (rendering) and **SugarWidgets Viewport** (scrolling).
 
 ```sh
 composer require sugarcraft/candy-mdview

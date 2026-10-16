@@ -228,7 +228,7 @@ The Cassowary constraint solver integration maps to `honey-bounce`:
 ### Leaf Widget Libraries
 
 Individual widget extensions map to leaf libraries:
-- `sugar-bits`: `ParagraphWidget`, `ParagraphRenderer` (text rendering)
+- `sugar-widgets`: `ParagraphWidget`, `ParagraphRenderer` (text rendering)
 - `candy-sprinkles`: `BlockWidget` (borders, titles, padding)
 - `sugar-charts`: `ChartWidget`, `BarChartWidget`, `SparklineWidget`, `TableWidget`
 - `candy-forms`: `ListWidget`, `TabsWidget`, `ScrollbarWidget`

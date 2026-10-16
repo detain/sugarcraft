@@ -25,9 +25,9 @@ From `repo_map/rmhubbert_bubbletea-overlay.md`:
 
 | bubbletea-overlay Feature | SugarCraft Library | Status |
 |---------------------------|-------------------|--------|
-| Overlay compositing | `sugar-bits` or new `sugar-overlay` | Not yet implemented |
+| Overlay compositing | `sugar-widgets` or new `sugar-overlay` | Not yet implemented |
 | tea.Model integration | `candy-core` | Core TUI framework (hypothetical) |
-| Positioning system | `sugar-bits` | Not yet implemented |
+| Positioning system | `sugar-widgets` | Not yet implemented |
 | ANSI-aware string ops | `candy-core` | FFI/raw terminal handling |
 
 **Key Insight**: SugarCraft has no overlay/modal implementation. This library provides the reference algorithm for compositing two views.

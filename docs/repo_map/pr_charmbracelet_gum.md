@@ -39,10 +39,10 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 | `gum table` | `sugar-table` | 🟢 | Table with row selection |
 | `gum log` | `candy-log` | 🟢 | Structured logging |
 | `gum join` | `candy-shine` | 🟡 | Layout joining via lipgloss |
-| Bubbles dep | `candy-sprinkles` + `sugar-bits` | 🟢 / 🟡 | TUI component primitives |
+| Bubbles dep | `candy-sprinkles` + `sugar-widgets` | 🟢 / 🟡 | TUI component primitives |
 | Lipgloss dep | `candy-shine` / `sugar-shine` | 🟡 | Styling/rendering engine |
 
-**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `candy-forms`, `sugar-bits`) is what enables the shell commands.
+**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `candy-forms`, `sugar-widgets`) is what enables the shell commands.
 
 ---
 
@@ -1020,7 +1020,7 @@ if errors.Is(err, tea.ErrProgramKilled) {
 
 **Opportunity**: Upstream mentioned but never implemented
 **Positioning**: "Full mouse interaction for all interactive commands"
-**Execution**: Bubble Tea mouse events; sugar-bits viewport handles this
+**Execution**: Bubble Tea mouse events; sugar-widgets viewport handles this
 
 ### F. Horizontal Scrolling
 
@@ -1048,7 +1048,7 @@ if errors.Is(err, tea.ErrProgramKilled) {
 
 **Source**: gum choose/filter
 **Match**: `hjkl` / arrows for movement
-**SugarCraft**: Standard; already in sugar-bits
+**SugarCraft**: Standard; already in sugar-widgets
 
 ### Pattern: fzf Position Indicator
 

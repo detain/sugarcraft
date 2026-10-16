@@ -28,16 +28,16 @@ From the first-pass analysis (`rasjonell_dashbrew.md`), SugarCraft maps to Dashb
 |---|---|---|
 | Dashboard model (layout tree, flex routing) | `candy-core` | Not yet built |
 | Terminal rendering (lipgloss borders, styles) | `candy-core` + `candy-shine` | Partial |
-| Text/scrollable viewport | `sugar-bits` | Partial |
+| Text/scrollable viewport | `sugar-widgets` | Partial |
 | Line/area ASCII chart | `sugar-charts` | Partial |
 | Histogram/bar chart | `sugar-charts` | Partial |
-| Table (column-flex, paginated) | `sugar-bits` or `sugar-charts` | Partial |
-| Todo list (persistent, keyboard-driven) | `sugar-bits` or new `sugar-todo` | Not yet built |
+| Table (column-flex, paginated) | `sugar-widgets` or `sugar-charts` | Partial |
+| Todo list (persistent, keyboard-driven) | `sugar-widgets` or new `sugar-todo` | Not yet built |
 | Action system (shell dispatch, timeout, sticky state) | `candy-core` | Not yet built |
 | Bounding-box navigation (focus ring, neighbor finding) | `candy-core` | Partial |
 | Theme system (named palettes, auto detection) | `candy-shine` | Partial |
 | Key bindings / action palette | `candy-sprinkles` | Partial |
-| HTTP data fetching (API source, JSONPath) | `sugar-bits` | Partial |
+| HTTP data fetching (API source, JSONPath) | `sugar-widgets` | Partial |
 | Layout containers (row/column flex) | `candy-core` | Not yet built |
 
 ---

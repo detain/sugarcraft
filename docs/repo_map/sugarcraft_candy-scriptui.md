@@ -792,7 +792,7 @@ Maps to `candy-forms` (not yet fully implemented in SugarCraft). huh provides:
 
 **Stars:** ~2,000 | **Language:** Go
 
-Maps to `sugar-bits` (and indirectly to `candy-forms`). Provides:
+Maps to `sugar-widgets` (and indirectly to `candy-forms`). Provides:
 - TextInput, TextArea, Viewport, Spinner, Table, List, Progress, Timer, etc.
 
 **candy-scriptui wraps:** These exact components — `candy-forms` is the PHP port of bubbles.

@@ -165,7 +165,7 @@ Supporting classes: `NavigationItem` (title + data payload), `Closable` (onEnter
 **Implementation ideas:**
 
 - Create `SugarCraft\Crumbs\Menu` class
-- Use `SugarCraft\Bits\ItemList` as the underlying list widget
+- Use `SugarCraft\Widgets\ItemList` as the underlying list widget
 - On selection, call `Shell::withPush()` with the chosen item
 
 **Estimated complexity:** Medium
@@ -443,7 +443,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
 
 **Issue:** bubbleo's menu wrapping bubbles/list is not in sugar-crumbs
 **Relevance:** High — common navigation pattern
-**Lesson:** Need to explicitly plan Menu porting or document that `sugar-bits/ItemList` replaces it
+**Lesson:** Need to explicitly plan Menu porting or document that `sugar-widgets/ItemList` replaces it
 
 ### Closable lifecycle asymmetry
 
@@ -493,7 +493,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Medium complexity
 
 6. **Menu/selection component**
-   - Port bubbleo's Menu using `sugar-bits/ItemList`
+   - Port bubbleo's Menu using `sugar-widgets/ItemList`
    - Medium complexity
 
 7. **Shell change listener/callback**

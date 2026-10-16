@@ -6,7 +6,7 @@
 
 ## Goal
 
-Migrate `sugar-table` onto candy-buffer. sugar-table is the most table-heavy lib outside of sugar-bits' Table primitive; per-cell styleFunc (cited as a sugar-bits superiority over upstream bubbles) benefits from cell-grid rendering.
+Migrate `sugar-table` onto candy-buffer. sugar-table is the most table-heavy lib outside of sugar-widgets' Table primitive; per-cell styleFunc (cited as a sugar-widgets superiority over upstream bubbles) benefits from cell-grid rendering.
 
 Reference: §369.5 (consolidate buffer rendering).
 

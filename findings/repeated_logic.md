@@ -129,7 +129,7 @@ interface Model
 - `candy-sql/src/App.php`
 
 **sugar-* libs (20+):**
-- `sugar-bits/src/Table.php`, `Tabs.php`, `Tree.php`, `Timer.php`, `Stopwatch.php`, `Paginator.php`, `Progress/AnimatedProgress.php`
+- `sugar-widgets/src/Table.php`, `Tabs.php`, `Tree.php`, `Timer.php`, `Stopwatch.php`, `Paginator.php`, `Progress/AnimatedProgress.php`
 - `sugar-crush/src/Chat.php`
 - `sugar-reel/src/Player.php`
 - `candy-git/src/App.php`
@@ -194,7 +194,7 @@ abstract class Lang
 
 ### Per-Library Lang Facade Pattern
 
-**`sugar-bits/src/Lang.php:L18-L22`**
+**`sugar-widgets/src/Lang.php:L18-L22`**
 ```php
 final class Lang extends BaseLang
 {
@@ -214,7 +214,7 @@ final class Lang extends BaseLang
 
 ### Key Translation Pattern
 
-**`sugar-bits/lang/en.php`** structure:
+**`sugar-widgets/lang/en.php`** structure:
 ```php
 <?php
 return [
@@ -251,7 +251,7 @@ throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'));
 // sugar-charts/src/Heatmap/Heatmap.php:L55
 throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'));
 
-// sugar-bits/src/Table/Table.php:L66
+// sugar-widgets/src/Table/Table.php:L66
 throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'));
 
 // candy-minesweeper/src/Board.php:L36
@@ -402,7 +402,7 @@ public static function new(): self
 ### Examples
 
 ```php
-// sugar-bits/src/Stopwatch/Stopwatch.php:L33
+// sugar-widgets/src/Stopwatch/Stopwatch.php:L33
 public static function new(float $interval = 1.0): self
 {
     if ($interval <= 0.0) {
@@ -557,7 +557,7 @@ private static function clamp(int $v): int
 }
 ```
 
-**`sugar-bits/src/Tree/Tree.php:L317`** - Private method
+**`sugar-widgets/src/Tree/Tree.php:L317`** - Private method
 ```php
 private function clamp(): self
 {
@@ -666,7 +666,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 - `candy-forms/src/Validator/Validator.php` - Validator interface
 - `candy-forms/src/Validator/Required.php`, `Email.php`, `Pattern.php`, `MinLength.php`, `MaxLength.php`
 
-### sugar-bits
+### sugar-widgets
 
-- `sugar-bits/src/Lang.php` - Per-library Lang facade
-- `sugar-bits/src/Stopwatch/Stopwatch.php` - Model implementation example
+- `sugar-widgets/src/Lang.php` - Per-library Lang facade
+- `sugar-widgets/src/Stopwatch/Stopwatch.php` - Model implementation example

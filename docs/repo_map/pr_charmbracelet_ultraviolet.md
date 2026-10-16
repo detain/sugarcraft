@@ -36,19 +36,19 @@ From the first-pass analysis, Ultraviolet maps across multiple SugarCraft libs:
 
 | Ultraviolet Component | SugarCraft Lib | Risk Level |
 |---|---|---|
-| Cell + Style + Link (ANSI SGR) | `sugar-bits` | **HIGH** |
+| Cell + Style + Link (ANSI SGR) | `sugar-widgets` | **HIGH** |
 | Buffer/RenderBuffer/Line diffing | `candy-core` | **CRITICAL** |
 | Screen interface + TerminalScreen | `candy-core` | **CRITICAL** |
 | Terminal lifecycle | `candy-core` | **HIGH** |
-| KeyPress/Mouse/Paste/Focus events | `sugar-bits` | **HIGH** |
+| KeyPress/Mouse/Paste/Focus events | `sugar-widgets` | **HIGH** |
 | Window parent/child hierarchy | `candy-sprinkles` | MEDIUM |
 | Cassowary layout solver | `honey-bounce` | MEDIUM |
 | Border functions | `candy-scriptui` | LOW |
-| StyledString + screen.Context | `sugar-bits` | **HIGH** |
-| ProgressBar + Cursor encoding | `sugar-bits` | MEDIUM |
-| MouseMode / Kitty keyboard | `sugar-bits` | **HIGH** |
-| WcWidth / GraphemeWidth | `sugar-bits` | **HIGH** |
-| Color profile detection | `sugar-bits` | MEDIUM |
+| StyledString + screen.Context | `sugar-widgets` | **HIGH** |
+| ProgressBar + Cursor encoding | `sugar-widgets` | MEDIUM |
+| MouseMode / Kitty keyboard | `sugar-widgets` | **HIGH** |
+| WcWidth / GraphemeWidth | `sugar-widgets` | **HIGH** |
+| Color profile detection | `sugar-widgets` | MEDIUM |
 
 The highest-risk components for SugarCraft are the renderer internals (terminal_renderer.go at 1589 lines), the decoder/input system (decoder.go, key_table.go), and the Style/Color machinery.
 
@@ -74,7 +74,7 @@ The first-pass analysis identified these gaps in SugarCraft's coverage:
 - **Author**: gwenya (Mar 2, 2026)
 - **Signal**: Bug report, moderate community interest
 - **Content**: When drawing styled strings onto a Buffer, escape sequences are lost. This is a fundamental API design issue about how styled text interacts with the cell buffer model.
-- **Relevance to SugarCraft**: Directly applicable to `sugar-bits` if it implements `StyledString.Draw(buf, area)`. Must ensure escape sequences survive cell buffer round-trips.
+- **Relevance to SugarCraft**: Directly applicable to `sugar-widgets` if it implements `StyledString.Draw(buf, area)`. Must ensure escape sequences survive cell buffer round-trips.
 
 ### Issue #61: "Renderer does not correctly transform newlines into CRLF in some cases"
 
@@ -88,7 +88,7 @@ The first-pass analysis identified these gaps in SugarCraft's coverage:
 - **Author**: joeblew999 (Oct 17, 2025)
 - **Signal**: Feature request, moderate interest
 - **Content**: Request for a higher-level testing abstraction over the renderer output tests. Not about renderer bugs, but about developer ergonomics for testing TUI output.
-- **Relevance to SugarCraft**: SugarCraft should consider a snapshot testing pattern similar to what UV uses (terminal_renderer_output_test.go). This is already in the sugar-bits test conventions but could be formalized.
+- **Relevance to SugarCraft**: SugarCraft should consider a snapshot testing pattern similar to what UV uses (terminal_renderer_output_test.go). This is already in the sugar-widgets test conventions but could be formalized.
 
 ---
 
@@ -192,7 +192,7 @@ The `chars.go` PR (1020 lines added) introduces:
 
 This is the most substantial API addition in recent history. It directly addresses the lack of text wrapping at the cell level.
 
-**Relevance to SugarCraft**: If SugarCraft adds similar functionality to `sugar-bits`, the API should be compared. The UV approach uses factory methods and a `Wrapper` struct. SugarCraft might prefer a different API style (fluent setters, etc.).
+**Relevance to SugarCraft**: If SugarCraft adds similar functionality to `sugar-widgets`, the API should be compared. The UV approach uses factory methods and a `Wrapper` struct. SugarCraft might prefer a different API style (fluent setters, etc.).
 
 ### 7.3 Kitty Text-Sizing Protocol (PR #108, closed)
 
@@ -206,7 +206,7 @@ Added OSC 66 support to `StyledString` for multi-cell scaled glyphs in Kitty ter
 - Fixing UTF-8 continuation byte `0x9C` collision with C1 string terminator
 - Preventing SGR from being emitted adjacent to multicell extensions
 
-**Relevance to SugarCraft**: Kitty graphics protocols (text-sizing, images) are emerging as important terminal capabilities. SugarCraft's `sugar-bits` should consider whether to support these, but the implementation complexity is significant.
+**Relevance to SugarCraft**: Kitty graphics protocols (text-sizing, images) are emerging as important terminal capabilities. SugarCraft's `sugar-widgets` should consider whether to support these, but the implementation complexity is significant.
 
 ### 7.4 Cassowary Constraint Solver
 
@@ -439,7 +439,7 @@ A contributor attempted to add reflow tracking but the PR was closed without mer
 
 ## 18. Problems Likely Relevant To SugarCraft
 
-### CRITICAL (must address in candy-core/sugar-bits)
+### CRITICAL (must address in candy-core/sugar-widgets)
 
 1. **Infinite loops in buffer traversal** — Any loop that iterates over cells and checks `IsZero()` or `Width` must re-read from the buffer on each iteration. Classic pattern: `for n++; next = newLine.At(n+1); next != nil && next.IsZero(); n++` — the `next = newLine.At(n+1)` must be inside the loop body.
 
@@ -601,7 +601,7 @@ This is an extensible pattern that SugarCraft should adopt.
 
 ### Medium-Term Investments
 
-5. **Port Characters()/Lines()/Wrapper from PR #93** — This API is well-designed and addresses a real gap. Porting it to `sugar-bits` gives SugarCraft first-class text-to-cells conversion with word wrapping.
+5. **Port Characters()/Lines()/Wrapper from PR #93** — This API is well-designed and addresses a real gap. Porting it to `sugar-widgets` gives SugarCraft first-class text-to-cells conversion with word wrapping.
 
 6. **Build non-blocking flush architecture** — Separate diff computation from I/O. Compute diffs in the event loop; offload write+flush to a worker thread/process. This enables responsive SSH TUI applications.
 
@@ -627,7 +627,7 @@ Ultraviolet's Cassowary layout solver was derived from Ratatui. The Cell/Buffer/
 
 ### bubble tea (Go)
 
-UV is the foundational layer for Bubble Tea v2. Any breaking change in UV causes immediate breakage in Bubble Tea v2. SugarCraft's relationship to its consumer frameworks (whatever builds on candy-core/sugar-bits) will be similar. Pin UV versions until 1.0.
+UV is the foundational layer for Bubble Tea v2. Any breaking change in UV causes immediate breakage in Bubble Tea v2. SugarCraft's relationship to its consumer frameworks (whatever builds on candy-core/sugar-widgets) will be similar. Pin UV versions until 1.0.
 
 ### ncurses
 

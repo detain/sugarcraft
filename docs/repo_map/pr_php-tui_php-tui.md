@@ -22,7 +22,7 @@ From `repo_map/php-tui_php-tui.md`:
 | `candy-core` | Display, Backend, Buffer, Cell, Area, Widget/WidgetRenderer interfaces, Viewport |
 | `candy-sprinkles` | Style, Color, Modifier, Text/Line/Span, Borders, BlockWidget |
 | `honey-bounce` | Layout, Constraint, CassowaryConstraintSolver |
-| `sugar-bits` | ParagraphWidget, ParagraphRenderer |
+| `sugar-widgets` | ParagraphWidget, ParagraphRenderer |
 | `sugar-charts` | ChartWidget, BarChartWidget, SparklineWidget, TableWidget |
 | `candy-forms` | ListWidget, TabsWidget, ScrollbarWidget |
 | `candy-shine` | GaugeWidget, CanvasWidget, image rendering |
@@ -765,7 +765,7 @@ Key patterns:
 ### Short-term (High Impact, Moderate Effort)
 
 6. **Build async event loop integration** using ReactPHP
-7. **Implement word wrap foundation** in sugar-bits (Paragraph)
+7. **Implement word wrap foundation** in sugar-widgets (Paragraph)
 8. **Add widget area access API** for mouse event hit-testing
 9. **Create framework integration examples** (Laravel, Symfony)
 10. **Use tested Unicode library** for width/grapheme handling

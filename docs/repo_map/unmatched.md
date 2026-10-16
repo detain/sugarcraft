@@ -80,7 +80,7 @@
 
 - `candy-core` already implements TEA runner with `Model::init()`/`update()`/`view()` contract
 
-- `sugar-bits` provides component library equivalent to `bubbles`
+- `sugar-widgets` provides component library equivalent to `bubbles`
 
 **Strategic Value:**
 
