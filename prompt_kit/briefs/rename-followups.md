@@ -131,3 +131,11 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
 - `ansi/candy-forms/candy-forms-2-256-m-1.ansi`, `ansi/sugarcraft/sugarcraft-4-256-l-1.ansi`, <!-- @rename-keep -->
   `ansi/sugarcraft/sugarcraft-5-256-l-1.ansi` — art CONTENT carries the pre-rename `candy-fuzzy` <!-- @rename-keep -->
   wordmark (C.3 excludes *.ansi content). Redraw or leave for the ansi tagger pass. <!-- @rename-keep -->
+
+## D7 candy-palette → sugar-colorprofile (2026-10-16, lane rename/d7) <!-- @rename-keep -->
+- `ansi/sugar-colorprofile/*.ansi` (113 files) — art CONTENT still renders the pre-rename <!-- @rename-keep -->
+  `CandyPalette` wordmark (`*.ansi` content is C.3-excluded). Redraw at the ansi tagger pass. <!-- @rename-keep -->
+- `media/icons/sugar-colorprofile.png` + `docs/img/icons/sugar-colorprofile.png` — bytes unchanged <!-- @rename-keep -->
+  (old-brand artwork moved to the new path). <!-- @rename-keep -->
+- `.vhs/*.gif` recorded frames may show the pre-rename prompt; CI `vhs.yml` re-renders from the <!-- @rename-keep -->
+  already-clean `.tape` files on the next tape run. <!-- @rename-keep -->
