@@ -168,11 +168,19 @@ final class McpAuthCommand
         // that launches a server (Bootstrap::mcpLivenessSnapshot()'s whole
         // design constraint) — and E703-α's changed-since-launch verdict,
         // whose null means "no digest here, say nothing".
+        // ISS-092: the panel read the CURRENT WORKING DIRECTORY while the same
+        // command line accepts `--root` (and Chat carries its session root).
+        // `candy-code --root /repo mcp auth list`'s CLI sibling passes $args->root
+        // into the very same three accessors; `/mcp` in a TUI opened from
+        // elsewhere answered for the wrong project — the panel and `mcp list`
+        // disagreeing was the report. All three calls take the session root.
+        $root = $chat->projectRoot();
+
         echo \SugarCraft\Code\Tui\McpPanel::render(
-            \SugarCraft\Code\Cli\Bootstrap::mcpServerInventory(),
+            \SugarCraft\Code\Cli\Bootstrap::mcpServerInventory($root),
             $paneWidth,
-            \SugarCraft\Code\Cli\Bootstrap::mcpLivenessSnapshot() ?? [],
-            \SugarCraft\Code\Cli\Bootstrap::mcpConfigChangedSinceLaunch(),
+            \SugarCraft\Code\Cli\Bootstrap::mcpLivenessSnapshot($root) ?? [],
+            \SugarCraft\Code\Cli\Bootstrap::mcpConfigChangedSinceLaunch($root),
         );
 
         return $this->listServers($paneWidth);
