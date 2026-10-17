@@ -9,19 +9,20 @@ use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Support\AtomicFileWriter;
-use SugarCraft\Code\Tools\Concerns\BuildsUnifiedDiff;
-use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
-use SugarCraft\Code\Tools\PathJail;
-use SugarCraft\Code\Tools\PromptGuidance;
-use SugarCraft\Code\Tools\ReadLedger;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
-use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
-use SugarCraft\Code\Tools\Tool;
-use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
+use SugarCraft\Code\Tools\Concerns\BuildsUnifiedDiff;
+use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
+use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Code\Tools\Edit\IndentShift;
+use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Code\Tools\PromptGuidance;
+use SugarCraft\Code\Tools\ReadLedger;
+use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * Create a file (crush_code.md Phase 8 item 12).
@@ -285,6 +286,14 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
         $dir = \dirname($path);
         if (!is_dir($dir) && !@mkdir($dir, 0o755, true) && !is_dir($dir)) {
             return $this->error($args, "Error creating directory: $dir");
+        }
+
+        // ISS-062: overwriting a CRLF file with LF content silently changes
+        // every line's ending. The proven-CRLF case inherits CRLF; anything
+        // ambiguous (unread because oversized, mixed, LF) is written as
+        // given, exactly as the model spelled it.
+        if ($previous !== null) {
+            $content = IndentShift::inheritEndings($previous, $content);
         }
 
         $nestedContent = $this->instructionLoader?->loadForPath($path);

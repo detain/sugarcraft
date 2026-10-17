@@ -205,4 +205,37 @@ final class EditMatcherChainTest extends TestCase
 
         return $match;
     }
+
+    /**
+     * ISS-062: the exact stage used to hand back the model's new_string
+     * unadapted — its CRLF conversion lives in adapt(), which only the
+     * fuzzy stages consult because only they see the matched block's bytes.
+     * A one-line old_string never shows anyone a CRLF pair, so the file
+     * itself is asked: a provably-CRLF file passes its endings down.
+     */
+    public function testTheExactStageHandsAOneLineMatchTheFilesCrlf(): void
+    {
+        $match = EditMatcher::new()->match("a\r\nb\r\nc\r\n", 'b', "b\nX");
+
+        self::assertNotNull($match);
+        self::assertTrue($match->isExact());
+        self::assertSame("b\r\nX", $match->newString);
+        self::assertSame("a\r\nb\r\nX\r\nc\r\n", $match->applyTo("a\r\nb\r\nc\r\n"));
+    }
+
+    /**
+     * The same rule's polarity pair: nothing less than a PURE CRLF file
+     * converts — an LF file, a mixed file (no provable house style) and a
+     * replacement that already spells CRLF or has no newline to convert all
+     * stay byte-identical. Guessing at a mixed file is how an editor
+     * rewrites lines nobody asked it to touch.
+     */
+    public function testOnlyAProvableCrlfFileInheritsItsEndings(): void
+    {
+        self::assertSame("b\nX", EditMatcher::new()->match("a\nb\nc\n", 'b', "b\nX")?->newString);
+        self::assertSame("b\nX", EditMatcher::new()->match("a\r\nb\nc\r\n", 'b', "b\nX")?->newString);
+        self::assertSame("b\r\nX", EditMatcher::new()->match("a\r\nb\r\nc\r\n", 'b', "b\r\nX")?->newString);
+        self::assertSame('B', EditMatcher::new()->match("a\r\nb\r\nc\r\n", 'b', 'B')?->newString);
+    }
+
 }

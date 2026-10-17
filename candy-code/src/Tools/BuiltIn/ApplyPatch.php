@@ -20,6 +20,7 @@ use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\Edit\EditFailureHints;
 use SugarCraft\Code\Tools\Edit\EditMatcher;
+use SugarCraft\Code\Tools\Edit\IndentShift;
 use SugarCraft\Code\Tools\Edit\PatchAction;
 use SugarCraft\Code\Tools\Edit\PatchHunk;
 use SugarCraft\Code\Tools\Edit\PatchOperation;
@@ -377,7 +378,11 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFrom
             $work = substr($work, 0, -1);
         }
 
-        return [$work, $notes];
+        // ISS-062: hunk bodies arrive LF-only as often as not, and a pure
+        // insertion never meets the matcher chain at all — the assembled
+        // result pays the file's CRLF tax once, after every hunk matched
+        // (a hunk that fails above must not leave a converted corpse).
+        return [IndentShift::normalizeEndings($content, $work), $notes];
     }
 
     /**

@@ -104,7 +104,11 @@ final class EditMatcher
             }
 
             if ($stage->name() === self::STAGE_EXACT) {
-                return new EditMatch(self::STAGE_EXACT, $old, $new, \count($found));
+                // ISS-062: an exact match still owes the file its line
+                // endings. The fuzzy stages learn this from the matched
+                // block inside adapt(); a one-line old_string never shows
+                // them a `\r\n`, so the file itself is asked.
+                return new EditMatch(self::STAGE_EXACT, $old, IndentShift::inheritEndings($content, $new), \count($found));
             }
 
             if (\count($found) > 1) {

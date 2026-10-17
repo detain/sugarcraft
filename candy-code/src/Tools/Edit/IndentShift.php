@@ -57,6 +57,66 @@ final class IndentShift
     }
 
     /**
+     * $replacement with the FILE'S line endings (ISS-062).
+     *
+     * {@see adapt()} converts LF to CRLF when the MATCHED BLOCK carries
+     * `\r\n`; that rule cannot see a single-line `old_string` with no line
+     * break at all, a Write of whole new content, or a patch hunk that only
+     * adds lines — yet all three would strand LF islands in a CRLF file.
+     * The file-level twin of the same promise: when $fileBytes is PURELY
+     * CRLF (at least one pair, no bare `\n` anywhere) and $replacement
+     * introduces bare newlines, every bare `\n` becomes `\r\n`. Anything
+     * less unambiguous — an LF file, a mixed file, a replacement that
+     * already spells `\r\n` or has no newline to convert — is returned
+     * untouched, because guessing at a mixed file is how an editor
+     * rewrites lines nobody asked it to touch.
+     */
+    public static function inheritEndings(string $fileBytes, string $replacement): string
+    {
+        if ($fileBytes === '' || $replacement === '') {
+            return $replacement;
+        }
+
+        if (!self::isPureCrlf($fileBytes)) {
+            return $replacement; // not provably a CRLF file
+        }
+
+        if (str_contains($replacement, "\r\n") || !str_contains($replacement, "\n")) {
+            return $replacement; // model spelled them, or there is nothing to convert
+        }
+
+        return self::toCrlf($replacement);
+    }
+
+    /**
+     * The assembled-content sibling of {@see inheritEndings()} for callers
+     * whose replacement IS the whole file — a patched result, where the
+     * context lines necessarily repeat the file's own CRLF and the
+     * "the model spelled it" guard could never fire meaningfully. A purely
+     * CRLF file gets every bare `\n` of the assembly converted; every other
+     * file shape is returned untouched.
+     */
+    public static function normalizeEndings(string $fileBytes, string $assembled): string
+    {
+        if ($fileBytes === '' || $assembled === '' || !self::isPureCrlf($fileBytes)) {
+            return $assembled;
+        }
+
+        return preg_match('/(?<!\r)\n/', $assembled) === 1 ? self::toCrlf($assembled) : $assembled;
+    }
+
+    /** A file with at least one CRLF pair and no bare newline anywhere. */
+    private static function isPureCrlf(string $bytes): bool
+    {
+        return str_contains($bytes, "\r\n") && preg_match('/(?<!\r)\n/', $bytes) !== 1;
+    }
+
+    private static function toCrlf(string $text): string
+    {
+        return preg_replace('/(?<!\r)\n/', "\r\n", $text) ?? $text;
+    }
+
+    /**
      * $new with $from swapped for $to at the head of every non-blank line, or
      * null when a line does not start with $from.
      */

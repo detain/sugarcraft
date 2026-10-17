@@ -280,4 +280,35 @@ final class ApplyPatchTest extends TestCase
         }
         @unlink($path);
     }
+
+    /**
+     * ISS-062: hunk bodies arrive LF-only as often as not. A replacement
+     * hunk lands inside a CRLF file in the file's spelling, and so does a
+     * pure insertion at EOF — the one that never meets the matcher chain at
+     * all, which is why the assembled result pays the CRLF tax once here.
+     */
+    public function testAHunkIntoACrlfFileInheritsTheCrlf(): void
+    {
+        file_put_contents($this->dir . '/crlf.txt', "one\r\ntwo\r\n");
+
+        $result = (new ApplyPatch($this->dir))->execute([
+            'patch' => "*** Begin Patch\n*** Update File: crlf.txt\n one\n+extra\n two\n*** End Patch",
+        ]);
+
+        self::assertFalse($result->isError(), $result->content());
+        self::assertSame("one\r\nextra\r\ntwo\r\n", file_get_contents($this->dir . '/crlf.txt'));
+    }
+
+    public function testAPureEndOfFileInsertionIntoACrlfFileInheritsTheCrlf(): void
+    {
+        file_put_contents($this->dir . '/crlf.txt', "one\r\ntwo\r\n");
+
+        $result = (new ApplyPatch($this->dir))->execute([
+            'patch' => "*** Begin Patch\n*** Update File: crlf.txt\n+extra\n*** End of File\n*** End Patch",
+        ]);
+
+        self::assertFalse($result->isError(), $result->content());
+        self::assertSame("one\r\ntwo\r\nextra\r\n", file_get_contents($this->dir . '/crlf.txt'));
+    }
+
 }

@@ -378,4 +378,26 @@ final class EditTest extends TestCase
         rmdir($sub);
         rmdir($root);
     }
+
+    /**
+     * ISS-062 verbatim repro: a CRLF file edited with old_string "line two"
+     * and new_string "line two\nX" used to strand an LF island. The
+     * executed bytes are the proof, not the match object.
+     */
+    public function testAnExactEditIntoACrlfFileWritesCrlfBytes(): void
+    {
+        $tool = new Edit();
+        $path = $this->createTempFile("line one\r\nline two\r\nline three\r\n");
+
+        $result = $tool->execute([
+            'id' => 'call_crlf',
+            'file_path' => $path,
+            'old_string' => 'line two',
+            'new_string' => "line two\nX",
+        ]);
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame("line one\r\nline two\r\nX\r\nline three\r\n", file_get_contents($path));
+    }
+
 }

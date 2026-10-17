@@ -387,4 +387,43 @@ final class WriteTest extends TestCase
         }
         rmdir($dir);
     }
+
+    /**
+     * ISS-062: overwriting a CRLF file is a wholesale rewrite, and the
+     * model spells LF — silently flipping every line's ending. The proven
+     * house style carries through the overwrite; an LF file is NOT
+     * crlf-ified (the pair below pins both directions).
+     */
+    public function testOverwritingACrlfFileKeepsTheFileCrlf(): void
+    {
+        file_put_contents($this->root . '/notes.md', "one\r\ntwo\r\n");
+        $tool = new Write($this->root);
+
+        $result = $tool->execute([
+            'id' => 'call_crlf',
+            'file_path' => 'notes.md',
+            'content' => "one\nTWO\nthree\n",
+            'overwrite' => true,
+        ]);
+
+        self::assertFalse($result->isError(), $result->content());
+        self::assertSame("one\r\nTWO\r\nthree\r\n", file_get_contents($this->root . '/notes.md'));
+    }
+
+    public function testOverwritingAnLfFileDoesNotInventCarriageReturns(): void
+    {
+        file_put_contents($this->root . '/notes.md', "one\ntwo\n");
+        $tool = new Write($this->root);
+
+        $result = $tool->execute([
+            'id' => 'call_lf',
+            'file_path' => 'notes.md',
+            'content' => "one\nTWO\nthree\n",
+            'overwrite' => true,
+        ]);
+
+        self::assertFalse($result->isError(), $result->content());
+        self::assertSame("one\nTWO\nthree\n", file_get_contents($this->root . '/notes.md'));
+    }
+
 }
