@@ -48,16 +48,22 @@ top-level code on every call. Before the process-wide memo landed (ISS-045),
 running the same workflow twice in one session re-declared its file-scope
 functions or classes and died with a `Cannot redeclare` **compile fatal** — the
 one failure mode `Chat`'s `catch (\Throwable)` around `/workflow run` cannot
-survive. `load()` now caches each resolved path's return value for the
-lifetime of the process, so a file compiles at most once and that door is
-closed. What remains is ordinary and catchable: a file that does not *parse*
-raises a `ParseError` the command turns into a transcript line (and caches
-nothing, so fixing a typo heals on the next attempt), while a file that
-returns something other than a `Workflow` reports the same
-`WorkflowLoadException` from its cached answer — so repairing that kind of
-file takes a restart, not a re-run. The YAML path, by contrast, re-reads its
-file on every run and reports every malformed shape as a
-`WorkflowLoadException` that becomes one transcript line.
+survive. `load()` now remembers each resolved path for the lifetime of the
+process — its return value, and, in a companion failure map, the `Throwable` a
+top-level throw raised — so a file compiles at most once whether it returned,
+returned garbage, or *threw*, and that door is closed on every shape. What
+remains is ordinary and catchable: a file that does not *parse* raises a
+`ParseError` the command turns into a transcript line, and nothing is
+remembered — a file that failed to compile declared nothing, so there is
+nothing to redeclare and a typo heals on the next attempt. Every other broken
+file re-reports from memory on each later attempt: a file that returns
+something other than a `Workflow` repeats the same `WorkflowLoadException`
+from its cached answer, and a file that compiled and then threw repeats the
+original exception without the file ever being touched again (before the
+failure map, editing and re-running that second shape fatalled the CLI).
+Repairing either kind of broken file takes a restart, not a re-run. The YAML
+path, by contrast, re-reads its file on every run and reports every malformed
+shape as a `WorkflowLoadException` that becomes one transcript line.
 
 ---
 

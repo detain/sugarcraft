@@ -12,9 +12,12 @@ use SugarCraft\Code\Workflows\WorkflowBuilder;
 use SugarCraft\Code\Workflows\WorkflowLoadException;
 use SugarCraft\Code\Workflows\WorkflowNotFoundException;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
+use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
 
 final class WorkflowRegistryTest extends TestCase
 {
+    use RunsWallClockBoundedChildTrait;
+
     private string $tempDir;
     private string $originalHome;
 
@@ -2123,5 +2126,122 @@ PHP);
 
         $this->assertSame($first, $second, 'the symlinked spelling must not compile a second copy of the file');
         $this->assertSame(['alias-a', 'alias-b'], (new WorkflowRegistry($userDir))->list());
+    }
+
+    /**
+     * THE POISON ENTRY (ISS-045 review fix). A file that compiles and THEN
+     * throws has still installed its top-level declarations — PHP compiles
+     * the whole file before executing any of it — so the return-value memo
+     * alone cannot cover this shape: with nothing cached, attempt two
+     * re-required the file and died with the uncatchable `Cannot redeclare`.
+     * The failure path is now remembered and re-thrown, so the file body
+     * runs exactly once (the counter) and the user sees the SAME exception
+     * object on every attempt (the identity assertion), never a fatal.
+     */
+    public function testAWorkflowFileThatThrewAfterDeclaringIsRethrownFromThePoisonEntry(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        $counter = $this->tempDir . '/iss045-poison-count';
+
+        $this->createWorkflowFile($userDir, 'poisons', <<<PHP
+        function iss045_poison_probe(): int
+        {
+            return 1;
+        }
+
+        file_put_contents('{$counter}', (string) ((int) @file_get_contents('{$counter}') + 1));
+
+        throw new \RuntimeException('ISS-045 exploded after declaring');
+        PHP);
+
+        $caught = [];
+        foreach ([1, 2] as $attempt) {
+            try {
+                // A fresh registry per attempt mirrors WorkflowTool: the
+                // poison must live in the PROCESS-wide static, not on any
+                // one instance.
+                (new WorkflowRegistry($userDir))->load('poisons');
+                $this->fail("attempt {$attempt} must not return");
+            } catch (\RuntimeException $error) {
+                $caught[$attempt] = $error;
+            }
+        }
+
+        $this->assertSame(
+            '1',
+            file_get_contents($counter),
+            'a poisoned workflow file must execute once, not once per attempt',
+        );
+        $this->assertSame('ISS-045 exploded after declaring', $caught[1]->getMessage());
+        $this->assertSame(
+            $caught[1],
+            $caught[2],
+            'the second attempt must re-throw the remembered Throwable without touching the file again',
+        );
+    }
+
+    /**
+     * THE BIN-LEVEL DOOR THE POISON CLOSES, PROVEN IN A WHOLE PROCESS.
+     * Within one phpunit process the memo already answers attempt two, but
+     * the shipped bug was a CLI death: run 1 raised a catchable
+     * RuntimeException, and run 2's re-require raised a COMPILE fatal that
+     * no `catch (\Throwable)` survives, taking the session down with status
+     * 255. This child reproduces exactly that sequence against the real
+     * autoloaded WorkflowRegistry and must print both attempts' identical
+     * refusal, the once-only counter, and SURVIVED with status 0.
+     */
+    public function testAChildRunningTheThrowingWorkflowTwiceSurvivesTheSecondAttempt(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        $counter = $this->tempDir . '/iss045-child-count';
+
+        $this->createWorkflowFile($userDir, 'child-poisons', <<<PHP
+        function iss045_child_poison_probe(): int
+        {
+            return 1;
+        }
+
+        file_put_contents('{$counter}', (string) ((int) @file_get_contents('{$counter}') + 1));
+
+        throw new \RuntimeException('ISS-045 child boom after declaring');
+        PHP);
+
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $script = $this->tempDir . '/iss045-child-driver.php';
+        file_put_contents($script, <<<PHP
+        <?php
+        require_once '{$autoload}';
+
+        foreach ([1, 2] as \$attempt) {
+            try {
+                (new \SugarCraft\Code\Workflows\WorkflowRegistry('{$userDir}'))->load('child-poisons');
+                echo "attempt {\$attempt}: returned\\n";
+            } catch (\Throwable \$error) {
+                echo "attempt {\$attempt}: caught " . get_class(\$error) . ': ' . \$error->getMessage() . "\\n";
+            }
+        }
+
+        echo 'counter=' . trim((string) @file_get_contents('{$counter}')) . "\\n";
+        echo "SURVIVED\\n";
+        PHP);
+
+        [$status, $lines] = $this->runWallClockBoundedChild('', sprintf(
+            '%s %s 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($script),
+        ));
+
+        $output = implode("\n", $lines);
+
+        // The status FIRST: a child that never ran looks exactly like a
+        // child with nothing to say (the trait's own law). 255 here is the
+        // redeclare fatal escaping the catch — the shipped bug — and 137
+        // the wall-clock kill.
+        $this->assertSame(0, $status, 'the child must run the throwing workflow twice and survive: ' . $output);
+        $this->assertStringContainsString('attempt 1: caught RuntimeException: ISS-045 child boom after declaring', $output);
+        $this->assertStringContainsString('attempt 2: caught RuntimeException: ISS-045 child boom after declaring', $output);
+        $this->assertStringNotContainsString('Cannot redeclare', $output);
+        $this->assertStringContainsString('counter=1', $output);
+        $this->assertStringContainsString('SURVIVED', $output);
     }
 }

@@ -89,6 +89,30 @@ final class WorkflowRegistry
     private static array $phpWorkflows = [];
 
     /**
+     * The failure-side companion to {@see self::$phpWorkflows} (ISS-045).
+     *
+     * A file that compiles and then THROWS at top level has still INSTALLED
+     * its file-scope declarations — PHP compiles the whole file before
+     * executing any of it — so re-requiring it on the next attempt raises the
+     * uncatchable `Cannot redeclare` compile fatal, the very door the result
+     * memo exists to close. Such a path is therefore poisoned: the original
+     * Throwable is remembered and every later load re-throws IT without
+     * touching the file again. The user sees the same refusal twice, and a
+     * broken-then-edited file of this shape needs a restart, exactly like the
+     * non-Workflow-return case above.
+     *
+     * A {@see \ParseError} is exempt by design: a file that failed to compile
+     * declared nothing, so there is nothing to redeclare and a typo must heal
+     * on retry. The stated boundary: a ParseError thrown from an INCLUDE the
+     * file reaches at runtime has already let the outer file compile — this
+     * map chooses heal-over-poison for that shape (no fixture exercises it;
+     * the include itself keeps its own compile accounting).
+     *
+     * @var array<string, \Throwable>
+     */
+    private static array $phpWorkflowFailures = [];
+
+    /**
      * @param string      $workflowsPath        The user's own workflow directory. Both
      *        forms load from here: a `.php` file is `require`d, which is running its
      *        code, and this is the directory whose contents the user is ASSUMED to
@@ -328,8 +352,10 @@ final class WorkflowRegistry
      * EXECUTION of a file that declares anything at top level is the
      * uncatchable `Cannot redeclare` compile fatal no `catch (\Throwable)`
      * around `/workflow run` survives. That second run is exactly what
-     * {@see self::$phpWorkflows} prevents: each path compiles at most once
-     * per process (ISS-045). The YAML path, by contrast, reports every
+     * {@see self::$phpWorkflows} and its failure-side companion
+     * {@see self::$phpWorkflowFailures} together prevent: each path compiles
+     * at most once per process — whether it returned, returned garbage, or
+     * threw (ISS-045). The YAML path, by contrast, reports every
      * malformed shape as a {@see WorkflowLoadException} the command turns
      * into one transcript line.
      *
@@ -404,13 +430,33 @@ final class WorkflowRegistry
             // file to PHP's compiler, and the redeclaration this cache prevents
             // (ISS-045) is a property of the file, not of the route taken to it.
             $cacheKey = \realpath($phpPath) ?: $phpPath;
+            // A file that compiled and then THREW has still installed its
+            // top-level declarations, so it must never be re-required: the
+            // remembered Throwable answers here instead, making the two
+            // throw-shapes (cached failure, cached garbage result) one door.
+            if (isset(self::$phpWorkflowFailures[$cacheKey])) {
+                throw self::$phpWorkflowFailures[$cacheKey];
+            }
             // array_key_exists, NOT `??`: a file returning null is a cached
             // ANSWER (it fails the instanceof check below), and a null-coalesce
             // would read it as a miss and re-execute the very file the cache
             // exists to run once.
-            $workflow = \array_key_exists($cacheKey, self::$phpWorkflows)
-                ? self::$phpWorkflows[$cacheKey]
-                : require $phpPath;
+            try {
+                $workflow = \array_key_exists($cacheKey, self::$phpWorkflows)
+                    ? self::$phpWorkflows[$cacheKey]
+                    : require $phpPath;
+            } catch (\ParseError $error) {
+                // A failed compile declared NOTHING, so there is nothing to
+                // redeclare on the next attempt: no poison, and a typo heals
+                // on retry (ISS-045 boundary, see $phpWorkflowFailures).
+                throw $error;
+            } catch (\Throwable $error) {
+                // Compiled, executed, exploded: poison the path with the
+                // ORIGINAL Throwable so attempt two re-reports this exact
+                // refusal without touching the file again.
+                self::$phpWorkflowFailures[$cacheKey] = $error;
+                throw $error;
+            }
             self::$phpWorkflows[$cacheKey] = $workflow;
 
             if (!$workflow instanceof Workflow) {
