@@ -332,6 +332,67 @@ final class McpClientServerIsolationTest extends TestCase
         );
     }
 
+    /**
+     * ISS-091: THE FOURTH ROUTE, one level ABOVE the guarded call. Every row
+     * above dies INSIDE `startServer()` and is caught there. This one dies on
+     * the CALL ITSELF: `startServer(string $name, array $config)` is typed,
+     * this file declares `strict_types=1`, and json_decode hands a
+     * digit-string key back as an INT — so `{"mcpServers":{"1":{...}}}` raised
+     * `TypeError: startServer(): Argument #1 ($name) must be of type string,
+     * int given` out of the loop, before any per-entry guard could see it.
+     * MEASURED at this tree before the fix, offender first, well-formed git
+     * server second: the aggregate report never formed, the git server never
+     * started, and `mcp list` — which reads the file, not the loop — kept
+     * listing both entries, so the panel and the launch disagreed. A non-array
+     * entry value (`{"x": "y"}`) dies the same way on Argument #2.
+     */
+    public function testANumericKeyEntryIsReportedNotThrownAsATypeError(): void
+    {
+        $client = $this->rawClientFor('{"mcpServers":{"1":{"type":"git"},"good":{"type":"git"}}}');
+
+        $this->assertStartFailed($client);
+
+        $this->assertNotSame([], $client->listTools(),
+            'the well-formed git server is unreachable, so an int key aborted the loop '
+            . 'before startServer() ever ran — the shape test has to live in the caller');
+    }
+
+    /**
+     * ISS-091, Argument #2 side: `"well": "not-an-object"` is a string where a
+     * server object belongs. Reported by name, loop survives, neighbour up.
+     */
+    public function testANonObjectEntryValueIsReportedNotThrownAsATypeError(): void
+    {
+        $client = $this->rawClientFor('{"mcpServers":{"well":"not-an-object","good":{"type":"git"}}}');
+
+        try {
+            $client->startServers();
+            $this->fail('a non-array entry value must join the aggregate report');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('could not be built', $e->getMessage());
+            $this->assertStringContainsString('well (entry is string, not a named server object)', $e->getMessage());
+        }
+
+        $this->assertNotSame([], $client->listTools());
+    }
+
+    /**
+     * The report names the int key rather than dropping it silently: an
+     * operator whose `"1"` entry never started has to be able to find WHICH
+     * line of their file to fix.
+     */
+    public function testTheNumericKeyIsNamedInItsOwnFailureRow(): void
+    {
+        $client = $this->rawClientFor('{"mcpServers":{"1":{"type":"git"},"good":{"type":"git"}}}');
+
+        try {
+            $client->startServers();
+            $this->fail('expected the aggregate report');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('1 (entry is', $e->getMessage());
+        }
+    }
+
     // =========================================================================
     // Fixtures
     // =========================================================================
@@ -418,7 +479,24 @@ final class McpClientServerIsolationTest extends TestCase
             $path,
             new Client(['handler' => HandlerStack::create(new MockHandler($responses))]),
             null,
+
             true,
         );
+    }
+
+    /**
+     * The raw-JSON twin of {@see clientFor()} for the ISS-091 rows: a config
+     * whose KEY shapes cannot be built through a PHP array at all (json_decode
+     * re-materialises `"1"` as the int 1; an `array<string,...>`-typed fixture
+     * cannot hold one). These rows deliberately BYPASS the encoder so the key
+     * that reaches startServers() is the one a real file carries.
+     */
+    private function rawClientFor(string $json): McpClient
+    {
+        $path = sys_get_temp_dir() . '/r57b_mcp_raw_' . getmypid() . '_' . bin2hex(random_bytes(8)) . '.json';
+        file_put_contents($path, $json);
+        $this->configs[] = $path;
+
+        return new McpClient($path, new Client(), null, true);
     }
 }

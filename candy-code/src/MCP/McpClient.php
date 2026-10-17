@@ -168,6 +168,26 @@ final class McpClient
         $this->strippedSecretEnv = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
+            // ISS-091: the shape check rides HERE, in the loop, rather than
+            // relying on {@see startServer()}'s typed parameters. `declare
+            // (strict_types=1)` is in force: a JSON key like `"1"` arrives from
+            // json_decode as an INT key (PHP casts numeric-string keys), and a
+            // `"mcpServers": {"x": []}` whose value is not an object fails the
+            // same way — either would raise a TypeError on the call itself,
+            // BEFORE startServer()'s per-entry guard existed, aborting the loop
+            // exactly like the old `match` throw did: later servers never
+            // started, and the inventory — which reads the file, not the loop —
+            // kept listing them, so `mcp list` and the launch disagreed.
+            if (!is_string($name) || !is_array($serverConfig)) {
+                $failures[] = sprintf(
+                    '%s (entry is %s, not a named server object)',
+                    is_string($name) && $name !== '' ? $name : json_encode($name, JSON_PARTIAL_OUTPUT_ON_ERROR),
+                    get_debug_type($serverConfig),
+                );
+
+                continue;
+            }
+
             $failure = $this->startServer($name, $serverConfig);
             if ($failure !== null) {
                 $failures[] = $failure;
