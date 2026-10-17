@@ -4505,6 +4505,10 @@ final class Runtime
             $rules = (new RuleLoader(
                 $app->root ?? (getcwd() ?: ''),
                 rulesState: $app->rulesState,
+                // ISS-068 (seam closed): the session model gates each rule's
+                // `models:` frontmatter inside load(). It is already a key of
+                // this layer's memo slot, so threading it costs no refresh.
+                sessionModel: $app->model,
             ))->load();
 
             // FU5: one running budget for both standing loops, in loader order — the

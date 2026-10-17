@@ -86,13 +86,12 @@ final class FrontmatterKeyAudit
      *   conversation on the current model; nothing reads `model` or `subtask`.
      * - rule: `keywords` reaches {@see \SugarCraft\Code\Context\Rule::$models}'s
      *   sibling {@see \SugarCraft\Code\Context\Rule::$keywords} and no matcher
-     *   consults it. `models` is judged by
-     *   {@see \SugarCraft\Code\Context\RuleLoader::matchesSessionModel()} when a
-     *   session model is threaded into the loader — but no production call site
-     *   threads one yet (the seam is RuleLoader's construction in
-     *   `Runtime::buildSystemPrompt()`), so in every real launch the key is a
-     *   no-op, and the audit says so until that seam lands, at which point
-     *   `models` leaves this list with its FrontmatterKeyAuditTest pin.
+     *   consults it. `models` is LIVE (ISS-068, seam closed): the prompt
+     *   assembly in `Runtime::buildSystemPrompt()` threads the session model
+     *   into RuleLoader, where
+     *   {@see \SugarCraft\Code\Context\RuleLoader::matchesSessionModel()} gates
+     *   each rule; no session model known means every model-scoped rule is
+     *   included, so a bare embedder never loses standing guidance.
      *
      * @var array<string, array<string, list<string>>>
      */
@@ -114,7 +113,6 @@ final class FrontmatterKeyAudit
         ],
         self::RULE => [
             'keywords' => [],
-            'models' => [],
         ],
     ];
 

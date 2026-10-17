@@ -47,13 +47,14 @@ final class FrontmatterKeyAuditTest extends TestCase
             ['`allowed-tools` is not acted on', '`effort` is not acted on'],
             FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['effort' => 'high', 'allowed-tools' => 'Read']),
         );
-        // ISS-068: both rule keys the loader does not act on in a real launch
-        // — `keywords` has no matcher, and `models` has its gate but no
-        // production call site threads a session model yet (see INERT).
+        // ISS-068: `keywords` has no matcher and stays inert. `models` left
+        // INERT[RULE] when the seam closed — Runtime threads the session model
+        // into RuleLoader — so declaring it is acted on and must NOT be named.
         self::assertSame(
-            ['`keywords` is not acted on', '`models` is not acted on'],
-            FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, ['keywords' => ['a'], 'models' => ['qwen3-coder']]),
+            ['`keywords` is not acted on'],
+            FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, ['keywords' => ['a']]),
         );
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, ['models' => ['qwen3-coder']]));
     }
 
     public function testANoOpValueOfAnInertKeyIsNotReported(): void
