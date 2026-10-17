@@ -147,7 +147,7 @@ namespace SugarCraft\Code\Support;
  *     (2 — audit GIT-1: the model-supplied per-call `path` against the
  *     configured repository root, and a new worktree's parent directory
  *     against the directory holding that root).
- *   - NINE spellings remain by hand, in FIVE files, and they are a DIFFERENT
+ *   - ELEVEN spellings remain by hand, in SIX files, and they are a DIFFERENT
  *     CONTRACT rather than copies waiting to be swept up:
  *
  *     {@see \SugarCraft\Code\Tools\PathJail} (5). TWO of them —
@@ -196,6 +196,12 @@ namespace SugarCraft\Code\Support;
  *     re-derive the containment the caller's `realpath()` already answered, and
  *     the store keeps its gate local so the artifact surface has no dependency on
  *     the settings-side class.
+ *
+ *     {@see \SugarCraft\Code\Permissions\ReadOnlyCommands}'s `cd`/tilde arms (2, srvsec
+ *     ISS-055) judge an argument against $HOME and the project root with a boundary
+ *     suffix; both admission decisions ride their answer, and neither anchor is a
+ *     realpath this process already holds for another reason — routing them here would
+ *     resolve $HOME and the jail root on every read-only classification.
  *
  *     {@see \SugarCraft\Code\Agents\WorktreeManager}'s two prefix compares are
  *     NOT in this count and not omitted by oversight: they match relative paths

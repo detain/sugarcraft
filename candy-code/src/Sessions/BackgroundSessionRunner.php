@@ -414,7 +414,24 @@ final class BackgroundSessionRunner
         exit($code);
     }
 
+    
     /**
+     * A pinned chain (ISS-041 test seam, the same convention as
+     * {@see \SugarCraft\Code\Cli\NonInteractive::pinTurnHooksForTesting()}):
+     * when set, {@see self::fireTurnHooks()} runs THIS chain instead of the
+     * launch-built one. Why the daemon needs the seam at all is its answer to
+     * the same hermeticity question — a pinned manager keeps a developer's
+     * own `~/.candy-code/hooks.yaml` out of the suite, exactly as NonInteractive's
+     * twin keeps it out of the `-p` doubles. Null restores the real chain.
+     */
+    public static function pinTurnHooksForTesting(?\SugarCraft\Code\Hooks\HookManager $hooks): void
+    {
+        self::$turnHooksForTesting = $hooks;
+    }
+
+    private static ?\SugarCraft\Code\Hooks\HookManager $turnHooksForTesting = null;
+
+/**
      * Run one agent turn for this session's task, appending the answer to the
      * buffer file the supervisor restores output from.
      *
@@ -444,22 +461,6 @@ final class BackgroundSessionRunner
      *
      * @return int 0 when the turn completed, 1 when it failed
      */
-    /**
-     * A pinned chain (ISS-041 test seam, the same convention as
-     * {@see \SugarCraft\Code\Cli\NonInteractive::pinTurnHooksForTesting()}):
-     * when set, {@see self::fireTurnHooks()} runs THIS chain instead of the
-     * launch-built one. Why the daemon needs the seam at all is its answer to
-     * the same hermeticity question — a pinned manager keeps a developer's
-     * own `~/.candy-code/hooks.yaml` out of the suite, exactly as NonInteractive's
-     * twin keeps it out of the `-p` doubles. Null restores the real chain.
-     */
-    public static function pinTurnHooksForTesting(?\SugarCraft\Code\Hooks\HookManager $hooks): void
-    {
-        self::$turnHooksForTesting = $hooks;
-    }
-
-    private static ?\SugarCraft\Code\Hooks\HookManager $turnHooksForTesting = null;
-
     public function executeTask(?Backend $backend = null, ?EnhancedSessionStore $store = null, ?\SugarCraft\Code\Agents\AgentManager $agents = null): int
     {
         if ($this->workingDirectory !== '' && \is_dir($this->workingDirectory)) {

@@ -6628,8 +6628,7 @@ final class Renderer
      * only beneath it, faint, as the agent's note.
      *
      * @return list<string>
-     */
-    /**
+     *
      * The modal's subject block: the exact shell text (or full, never
      * head-cut argument line — ISS-003), decoded keystrokes, and for the
      * three file-changing tools the read-only preview diff the call would

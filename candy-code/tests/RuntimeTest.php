@@ -8231,9 +8231,9 @@ DOC;
             'TaskList.php spells its directory creation `\mkdir(...)` and its append handle `\fopen($p, \'a\')`',
         );
         $this->assertSame(
-            ['file_put_contents', 'mkdir'],
+            ['file_put_contents', 'mkdir', 'rename'],
             array_keys(self::writePrimitivesCalledIn($src . '/Hooks/BuiltIn/AuditHook.php')),
-            'AuditHook.php spells its write `@\file_put_contents(...)`',
+            'AuditHook.php spells its write `@\file_put_contents(...)` and its rotation arm `@\rename(...)`',
         );
     }
 

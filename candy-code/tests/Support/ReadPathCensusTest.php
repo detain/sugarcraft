@@ -839,9 +839,13 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Tools/BuiltIn/ApplyPatch.php|file_get_contents' => [
             'PATH_JAIL — every Update/Delete path is resolved through PathJail (or the worktree jail) before the read',
+            'PATH_JAIL — the bounded pre-application read (ISS-017): cap+1 bytes of the same already-jailed path, '
+                . 'the size guard above it and the jailed $path are shared with the arm that applies the hunk',
         ],
         'Tools/BuiltIn/Edit.php|file_get_contents' => [
             'PATH_JAIL — the model\'s path, resolved through PathJail before the read',
+            'PATH_JAIL — the bounded cap+1 head read (audit F-T2 re-measure), one statement above the byte-count '
+                . 'refusal, on the same jailed path the edit will write back',
         ],
         'Tools/BuiltIn/Glob.php|glob' => [
             'PATH_JAIL — the search root is jailed; the pattern is additionally prefix-checked here',
@@ -870,6 +874,8 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Tools/BuiltIn/Write.php|file_get_contents' => [
             'PATH_JAIL — reads the existing file to diff before writing, same jailed path',
+            'PATH_JAIL — the preview\'s bounded cap+1 head read (ISS-010): the PRE-WRITE diff the permission modal '
+                . 'shows, on the same already-jailed path and behind the same size guard as the write arm',
         ],
         'Tools/Catalog/ToolCatalog.php|glob' => [
             'PROCESS_DERIVED — lists the installation\'s own `src/Tools/BuiltIn/*.php` located from '

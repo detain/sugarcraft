@@ -1255,16 +1255,7 @@ final class LayeredSettings
         return $rows;
     }
 
-    /**
-     * The nearest key an audit can guess was meant, or null when nothing is
-     * near. {@see \SugarCraft\Code\Support\FrontmatterKeyAudit::suggestion()}'s
-     * walk — case, `-` and `_` folded away, Levenshtein within two (one for
-     * four-character keys or shorter, so `os` does not approach everything) —
-     * over a roster passed in rather than over the four frontmatter formats'
-     * fixed KNOWN table.
-     *
-     * @param list<string> $roster
-     */
+    
     /**
      * The value as the tolerant readers will hand it to the validator: a
      * numeric STRING arrives as its number (`"16"` behaves as 16 through the
@@ -1286,6 +1277,16 @@ final class LayeredSettings
         return $value;
     }
 
+/**
+     * The nearest key an audit can guess was meant, or null when nothing is
+     * near. {@see \SugarCraft\Code\Support\FrontmatterKeyAudit::suggestion()}'s
+     * walk — case, `-` and `_` folded away, Levenshtein within two (one for
+     * four-character keys or shorter, so `os` does not approach everything) —
+     * over a roster passed in rather than over the four frontmatter formats'
+     * fixed KNOWN table.
+     *
+     * @param list<string> $roster
+     */
     private static function suggestKey(array $roster, string $key): ?string
     {
         $fold = static fn (string $s): string => strtolower(str_replace(['-', '_'], '', $s));

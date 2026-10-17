@@ -804,7 +804,18 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         'id_ed25519', 'id_ed25519[_.-]*[!b]', 'id_ed25519[_.-]*[!u]b', 'id_ed25519[_.-]*[!p]ub', 'id_ed25519[_.-]*[!.]pub',
     ];
 
+    
     /**
+     * The deadline of one search: the honoured setting when one is set, the
+     * tool's own bound otherwise. Read at the moment the run is armed, the
+     * same family as the other process-wait bounds (ISS-061).
+     */
+    private static function searchTimeoutSeconds(): float
+    {
+        return ToolLimits::current()->seconds(ToolLimits::GREP_TIMEOUT_KEY) ?? (float) self::DEFAULT_TIMEOUT_SECONDS;
+    }
+
+/**
      * Flags that keep grep from ever OPENING a secret file, whatever the
      * ignore rules say (audit F-J2).
      *
@@ -843,16 +854,6 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * Hits in the CONTENT of other files that merely mention a secret are not
      * this method's business; only the files themselves are kept closed.
      */
-    /**
-     * The deadline of one search: the honoured setting when one is set, the
-     * tool's own bound otherwise. Read at the moment the run is armed, the
-     * same family as the other process-wait bounds (ISS-061).
-     */
-    private static function searchTimeoutSeconds(): float
-    {
-        return ToolLimits::current()->seconds(ToolLimits::GREP_TIMEOUT_KEY) ?? (float) self::DEFAULT_TIMEOUT_SECONDS;
-    }
-
     private static function secretExcludeFlags(string $searchRoot): string
     {
         $flags = ' --exclude=.env --exclude=.envrc --exclude=' . escapeshellarg('.env.*')

@@ -87,7 +87,6 @@ final readonly class ProviderFactory
      */
     private const CONFIG_PATH = '.candy-code/config.dev.json';
 
-    /** @var array<string, array{required: string[], optional: string[]}> */
     /**
      * Cheap per-type defaults for auxiliary calls (ISS-077): session
      * titling, `/btw`, goal judgements and prompt suggestions are a handful

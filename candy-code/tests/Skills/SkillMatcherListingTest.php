@@ -208,7 +208,7 @@ final class SkillMatcherListingTest extends TestCase
         // fixtures elsewhere all carry unreadable paths, which is exactly the
         // floor timestamp — this test gives three skills real files with three
         // different mtimes and one skill whose source file vanished.
-        $dir = \sys_get_temp_dir() . '/memctx-recency-' . getmypid() . '-' . uniqid();
+        $dir = \sys_get_temp_dir() . '/memctx-recency-' . getmypid() . '-' . uniqid('', true);
         mkdir($dir, 0700);
         $old = $dir . '/old.md';
         $new = $dir . '/new.md';

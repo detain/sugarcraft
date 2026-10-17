@@ -139,8 +139,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY
- *     of them, in TWELVE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-ONE
+ *     of them, in THIRTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -470,7 +470,7 @@ final class StderrEmitterCensusTest extends TestCase
         // P-A3 took it to twenty-four: the subcommand-scoped flag errors (a
         // switch given a value, a value flag with none or an empty one), the
         // same pre-launch exit-2 usage decision.
-        'src/Cli/ArgvParser.php' => 24,
+        'src/Cli/ArgvParser.php' => 25,
         'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // 8A: the three migration notices (env fold, running-server refusal,
@@ -639,6 +639,12 @@ final class StderrEmitterCensusTest extends TestCase
         // once-per-directory-and-reason latch, so a refusal that repeats on
         // every turn (the home directory) is one row per session.
         'src/Session/EnhancedSessionStore.php' => 1,
+        // The system-prompt skill listing cut by its byte budget. The routing
+        // decision: a listing the user did not know was cut is exactly what the
+        // notice seam is for — "this session got smaller", the same family as
+        // the fallback-provider and audit-hook notices. Latched once per
+        // process, so one row per session.
+        'src/Skills/SkillMatcher.php' => 1,
     ];
 
     /**

@@ -592,6 +592,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/RulesStateWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // the layered-settings audit walk lists the config dir the test itself wrote.
+        'Config/LayeredSettingsTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Context/EnvironmentBlockTest.php' => ['scandir($dir)'],
         // removeDir() tears down the sys_get_temp_dir() tree setUp() made.
         'Context/ImportResolverTest.php' => ['scandir($dir)'],
@@ -627,6 +629,8 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($dir)',
         ],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // the supervisor test tears down the temp root its fixtures live in.
+        'Sessions/BackgroundSupervisorTest.php' => ['scandir($tempRoot)'],
         // removeTestProject() tears down the sys_get_temp_dir() project
         // createTestProject() made.
         'Skills/SkillManagerTest.php' => ['RecursiveDirectoryIterator($dir,\RecursiveDirectoryIterator::SKIP_DOTS)'],

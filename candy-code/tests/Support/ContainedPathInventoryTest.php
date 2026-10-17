@@ -404,7 +404,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "NINE spellings remain by hand, in FIVE files" — plus the seven the
+     * "ELEVEN spellings remain by hand, in SIX files" — plus the seven the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -437,6 +437,7 @@ final class ContainedPathInventoryTest extends TestCase
                 'Chat.php' => 1,
                 'Diagnostics/TuiErrorLog.php' => 1,
                 'Hooks/BuiltIn/BashEscapeDenyHook.php' => 1,
+                'Permissions/ReadOnlyCommands.php' => 2,
                 'Renderer.php' => 1,
                 'Skills/SkillLoader.php' => 1,
                 'Support/MediaStore.php' => 1,
@@ -449,8 +450,8 @@ final class ContainedPathInventoryTest extends TestCase
         );
 
         unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php']);
-        $this->assertSame(9, array_sum($counts), 'containment spellings still by hand');
-        $this->assertCount(5, $counts, 'files still holding one');
+        $this->assertSame(11, array_sum($counts), 'containment spellings still by hand');
+        $this->assertCount(6, $counts, 'files still holding one');
     }
 
     /**
