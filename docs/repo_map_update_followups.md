@@ -27,7 +27,7 @@ The 8 shared packages:
 - **candy-input** — input decode & KeyEvent (InputDriver, KeyEvent, SymbolicKey)
 - **sugar-fuzzy** — filter/search via Smith-Waterman (Matcher, MatchResult)
 - **candy-async** — ReactPHP helpers (AsyncOps, CancellationSource, CancellationToken)
-- **candy-testing** — golden-file snapshot tests (assertGoldenAnsi, GoldenRenderTest)
+- **sugar-testing** — golden-file snapshot tests (assertGoldenAnsi, GoldenRenderTest)
 
 ---
 
@@ -37,11 +37,12 @@ The 8 shared packages:
 |------|-------------|--------------------------|
 | Step 31 | candy-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
-| Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, sugar-mouse, candy-testing |
-| Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
-| Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
-| Step 36 | sugar-animation, sugar-cli, sugar-spring, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
-| Step 37 | sugar-metrics, sugar-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing |
+| Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, sugar-mouse, sugar-testing |
+| Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, sugar-testing |
+| Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, sugar-testing |
+| Step 36 | sugar-animation, sugar-cli, sugar-spring, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, sugar-testing |
+| Step 37 | sugar-metrics, sugar-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, sugar-testing |
+
 
 ---
 
@@ -157,7 +158,7 @@ The 8 shared packages:
 |---------|---------|--------|
 | candy-buffer | DatePicker.php renders calendar grid via string — Buffer would give per-cell styling (today, selected, event) + diff | M |
 | candy-layout | DatePicker.php/Navigation.php use manual grid sizing — LayoutSolver would handle week-row layout constraints | M |
-| candy-testing | DatePicker.php lacks golden render tests — assertGoldenAnsi would pin calendar ANSI output | S |
+| sugar-testing | DatePicker.php lacks golden render tests — assertGoldenAnsi would pin calendar ANSI output | S |
 
 **Notes:** Calendar rendering is a classic grid layout problem. Buffer would allow per-day cell styling (weekend color, event indicator, selected state). LayoutSolver would handle variable-width month displays.
 
@@ -169,7 +170,7 @@ The 8 shared packages:
 |---------|---------|--------|
 | candy-buffer | Toast.php renders notification via string concat — Buffer would give per-cell positioning + diff | S |
 | candy-layout | Toast.php uses manual x/y positioning — LayoutSolver would handle multi-toast stacking constraints | M |
-| candy-testing | Toast.php lacks golden render tests — assertGoldenAnsi would pin toast ANSI output | S |
+| sugar-testing | Toast.php lacks golden render tests — assertGoldenAnsi would pin toast ANSI output | S |
 
 **Notes:** Toast notifications are positioned views with variable content width. Buffer would enable precise cell-level control; LayoutSolver would replace ad-hoc stacking logic.
 
@@ -181,7 +182,7 @@ The 8 shared packages:
 |---------|---------|--------|
 | candy-buffer | Renderer.php renders dashboard via string — Buffer would give diff-friendly dashboard redraw | M |
 | candy-async | Heartbeat.php uses Timer loops for background ping — CancellationToken would simplify worker cancellation | M |
-| candy-testing | Renderer.php lacks golden tests — assertGoldenAnsi would pin dashboard ANSI output | S |
+| sugar-testing | Renderer.php lacks golden tests — assertGoldenAnsi would pin dashboard ANSI output | S |
 
 **Notes:** candy-codetime is a time-tracking tool with a dashboard. Background heartbeat workers use manual timer loops; candy-async would provide structured cancellation. Dashboard rendering is a good candidate for Buffer-based diff.
 
@@ -192,7 +193,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-async | SmtpTransport.php + ResendTransport.php use blocking I/O — AsyncOps::withTimeout() would add async sending with cancellation | M |
-| candy-testing | Transport.php + Mailer.php lack integration tests — candy-testing would provide fixture + golden test harness | M |
+| sugar-testing | Transport.php + Mailer.php lack integration tests — sugar-testing would provide fixture + golden test harness | M |
 
 **Notes:** candy-mail is an email-sending library. Currently all I/O is synchronous. Adopting candy-async would enable non-blocking SMTP sends with proper timeout/cancellation handling.
 
@@ -204,7 +205,7 @@ The 8 shared packages:
 |---------|---------|--------|
 | candy-async | HttpSmartProtocol.php uses blocking I/O — AsyncOps would enable async HTTP handling | M |
 | candy-buffer | Repo.php renders git serve status via string — Buffer would give diff-friendly status display | S |
-| candy-testing | Repo.php/AccessControl.php lack integration tests — candy-testing fixture harness | S |
+| sugar-testing | Repo.php/AccessControl.php lack integration tests — sugar-testing fixture harness | S |
 
 **Notes:** candy-git-server is a git network serve tool. HTTP protocol handling currently uses blocking I/O. Async adoption would improve concurrency. Buffer would make status rendering diff-friendly.
 

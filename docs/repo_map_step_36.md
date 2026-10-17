@@ -1,18 +1,18 @@
-# Step 36 — sugar-animation + sugar-cli + sugar-spring + candy-flappy adopt candy-testing
+# Step 36 — sugar-animation + sugar-cli + sugar-spring + candy-flappy adopt sugar-testing
 
 **Branch:** `ai/testing-rollout`
-**Depends on:** step-04 (candy-testing), step-30 (audit)
+**Depends on:** step-04 (sugar-testing), step-30 (audit)
 **Blocks:** —
 
 ## Goal
 
-Four libs that render output (sugar-animation GIF flipbook, sugar-cli CLI presenter, sugar-spring spring physics with sample rendering, candy-flappy projectile physics with sample rendering) adopt candy-testing for snapshot coverage. None of these were named in the primary analysis but all have rendered output that benefits from golden-file pinning.
+Four libs that render output (sugar-animation GIF flipbook, sugar-cli CLI presenter, sugar-spring spring physics with sample rendering, candy-flappy projectile physics with sample rendering) adopt sugar-testing for snapshot coverage. None of these were named in the primary analysis but all have rendered output that benefits from golden-file pinning.
 
 Reference: step-30 audit. sugar-spring + sugar-cli superiority cited (§420/§446) — pinning their behavior protects that superiority during future refactors.
 
 ## Files expected to be modified
 
-- 4 composer.json — add `sugarcraft/candy-testing` (dev) via `path-repo-closure`.
+- 4 composer.json — add `sugarcraft/sugar-testing` (dev) via `path-repo-closure`.
 - Each lib's tests/ → add assertGoldenAnsi snapshots for representative renders / outputs.
 
 ## Acceptance criteria
@@ -41,15 +41,15 @@ Reference: step-30 audit. sugar-spring + sugar-cli superiority cited (§420/§44
 ## Scribe brief
 
 - READMEs add `## Snapshot tests` note.
-- CALIBER_LEARNINGS: "Use candy-testing's assertGolden* for any renderable/serializable output."
+- CALIBER_LEARNINGS: "Use sugar-testing's assertGolden* for any renderable/serializable output."
 
 ## Ship brief
 
-- **PR title**: `sugar-animation + sugar-cli + sugar-spring + candy-flappy: snapshot tests via candy-testing`
+- **PR title**: `sugar-animation + sugar-cli + sugar-spring + candy-flappy: snapshot tests via sugar-testing`
 - **PR body**:
   ```
   ## Summary
-  - Four libs gain golden-file snapshot coverage via candy-testing.
+  - Four libs gain golden-file snapshot coverage via sugar-testing.
   - Pins behavior of libs cited as superior to upstream (§420 sugar-spring, §446 sugar-cli).
   - Numeric outputs use assertGolden file equality; ANSI outputs use assertGoldenAnsi.
 
@@ -60,4 +60,4 @@ Reference: step-30 audit. sugar-spring + sugar-cli superiority cited (§420/§44
 
   Refs: docs/repo_map_step_36.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `sugar-animation + sugar-cli + sugar-spring + candy-flappy: snapshot tests via candy-testing`.
+- Commit subject: `sugar-animation + sugar-cli + sugar-spring + candy-flappy: snapshot tests via sugar-testing`.

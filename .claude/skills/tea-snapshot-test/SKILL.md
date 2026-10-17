@@ -1,14 +1,14 @@
 ---
 name: tea-snapshot-test
-description: Writes PHPUnit 10 tests for SugarCraft TEA libs in the four project modes — snapshot byte (view()→raw SGR), cell-grid (SugarCraft\Vt\Terminal / Buffer), behaviour (update()→[Model,?Cmd]), and coercion (clamp/throw edges) — plus golden-file and program-driving helpers from candy-testing (Assertions::assertGoldenAnsi/assertCellGrid/assertViewIdempotent, ProgramSimulator, ScriptedInput). Use when the user says 'write a test', 'add snapshot test', 'add golden test', 'test this Model', 'test update()', or 'test view() output' for any candy-*/sugar-*/honey-* lib. Do NOT use to duplicate a canonical lib's suite into a class_alias façade lib (ship a single AliasesTest asserting each alias resolves to its canonical FQN instead), and do NOT use for non-TUI plain-PHP unit tests that have no view()/update()/Model.
+description: Writes PHPUnit 10 tests for SugarCraft TEA libs in the four project modes — snapshot byte (view()→raw SGR), cell-grid (SugarCraft\Vt\Terminal / Buffer), behaviour (update()→[Model,?Cmd]), and coercion (clamp/throw edges) — plus golden-file and program-driving helpers from sugar-testing (Assertions::assertGoldenAnsi/assertCellGrid/assertViewIdempotent, ProgramSimulator, ScriptedInput). Use when the user says 'write a test', 'add snapshot test', 'add golden test', 'test this Model', 'test update()', or 'test view() output' for any candy-*/sugar-*/honey-* lib. Do NOT use to duplicate a canonical lib's suite into a class_alias façade lib (ship a single AliasesTest asserting each alias resolves to its canonical FQN instead), and do NOT use for non-TUI plain-PHP unit tests that have no view()/update()/Model.
 paths:
   - "**/tests/**/*Test.php"
   - "**/*Test.php"
-  - candy-testing/src/**
+  - sugar-testing/src/**
 ---
 # TEA Snapshot Test
 
-Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes and the `candy-testing` harness. Match the exact structure in `sugar-widgets/tests/GoldenRenderTest.php`, `sugar-mouse/tests/Zones/ZoneHoverTrackerTest.php`, and `sugar-charts/tests/FiniteGuardTest.php`.
+Write PHPUnit 10 tests for SugarCraft TUI libs using the four canonical modes and the `sugar-testing` harness. Match the exact structure in `sugar-widgets/tests/GoldenRenderTest.php`, `sugar-mouse/tests/Zones/ZoneHoverTrackerTest.php`, and `sugar-charts/tests/FiniteGuardTest.php`.
 
 ## Critical
 
@@ -131,4 +131,4 @@ Filter one test with `--filter testName`. If a red looks like a stale-dep artifa
 - **Test mutates original then asserts it changed** → State is `readonly`; `with*()`/`update()` return new instances. Assign the result (`$m = $m->withX()`) and assert on the new instance.
 - **Program test hangs** → `ScriptedInput` script never emits `->quit()`; `ProgramSimulator::run()` drains until a `QuitMsg`. Append `->quit()`. For PTY/FFI hangs, `timeout` won't help — use a backgrounded `pkill` watchdog.
 - **Local red, CI green** → Stale per-lib `vendor/`. `cd <slug> && composer update --quiet && vendor/bin/phpunit`.
-- **`Class "SugarCraft\Testing\..." not found`** → The lib lacks `sugarcraft/candy-testing` in `require-dev` + a path-repo. Add both, then `php tools/check-path-repos.php --fix`.
+- **`Class "SugarCraft\Testing\..." not found`** → The lib lacks `sugarcraft/sugar-testing` in `require-dev` + a path-repo. Add both, then `php tools/check-path-repos.php --fix`.

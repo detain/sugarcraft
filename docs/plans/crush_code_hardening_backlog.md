@@ -12476,7 +12476,7 @@ individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled bef
 | candy-wish | 193 / 485 | 0 |
 | candy-scriptui | 333 / 691 | 0 |
 | candy-codeshot | 315 / 619 | 0 |
-| candy-testing | 129 / 230 | 0 |
+| candy-testing | 129 / 230 | 0 | <!-- @rename-keep -->
 | candy-core | 799 / 7210 | 0 |
 | sugar-reel | 352 / 2423 | 0 | <!-- @rename-keep -->
 | sugar-dash | 5853 / 9154 | 0 | <!-- @rename-keep -->
@@ -14989,7 +14989,7 @@ no guard anywhere sees them:
 Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8.3.6.
 
 **STEP:** `ChildLifetimeScanner` is a `tests/Support/` class in sugar-crush and cannot be required by a
-lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or
+lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or <!-- @rename-keep -->
 copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that does not drift. <!-- @rename-keep -->
 
 ### E449 [NO-FIX] — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
@@ -15022,7 +15022,7 @@ paths. Both re-run at `c54172f09`.
 **STEP:** decide, once, whether "reachable" for this guard means *loadable* (today's answer, derived and
 defensible) or *executable* (which would pull in `bin/` and every `examples/`). If the first, the two
 findings above are real and belong to the libraries that own them. If the second, the walk needs a second
-root list and `E448`'s promotion of the scanner into `candy-testing` is the cheaper way to get there.
+root list and `E448`'s promotion of the scanner into `candy-testing` is the cheaper way to get there. <!-- @rename-keep -->
 This is a scope decision, not a defect, and it should not be settled inside a guard's doc-block by
 whoever next touches it.
 
@@ -15164,11 +15164,11 @@ The documented restore is `check-path-repos.php --fix --strict-closure` → `com
 left **`candy-flip` at 4/6 and `candy-pty` at 3/7** by `is_link()` + `realpath()`. Two independent gaps: <!-- @rename-keep -->
 
 1. **The tool walks the `require` graph only.** Its own `--help` says so. Every miss was a `require-dev`
-   sibling — `candy-buffer`, `candy-testing`, `candy-vcr`, `candy-vt` — so a lib whose test harness comes
+   sibling — `candy-buffer`, `candy-testing`, `candy-vcr`, `candy-vt` — so a lib whose test harness comes <!-- @rename-keep -->
    from a sibling gets a Packagist COPY of it while its runtime deps are symlinks. A suite measured in
-   that state runs the published `candy-testing` against local `src`, and nothing says so.
+   that state runs the published `candy-testing` against local `src`, and nothing says so. <!-- @rename-keep -->
 2. **Transitive-through-dev is invisible even after hand-adding the direct dev deps.** `candy-buffer`
-   reaches these libs only via `candy-testing`'s own requires, so adding the direct dev siblings fixed
+   reaches these libs only via `candy-testing`'s own requires, so adding the direct dev siblings fixed <!-- @rename-keep -->
    5/6 and 6/7 and no more.
 
 🔴 **AND THE REPAIR IS NOT IDEMPOTENT WITH THE TOOL.** `--fix` REWRITES `repositories[]` to the
@@ -16008,7 +16008,7 @@ clause — and one corpus row disagreeing with what the spec plainly said. Measu
 was reported as complete** — a wrong answer, not a refusal, which then passes the readability arm as an
 ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
 
-### E486 [CLOSED] — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
+### E486 [CLOSED] — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own <!-- @rename-keep -->
 
 **Closed ROUND-67 wave-1 (lane df — lane `1afee66ab` → master `1a4c39fc4`):** the alternative shipped instead — new `tools/check-child-lifetimes.php` REQUIRES the canonical `ChildLifetimeScanner` by path (no third copy), walks 57 libs' autoload roots, 24 sites, ACCOUNTED roster of 6 rows, fail-closed, wired as the LAST step of ci.yml's path-repo-check (SET equality couples the two CLI steps). Evidence: triage E486, worklog ROUND 67.
 
@@ -16019,11 +16019,11 @@ E448's premise reproduces exactly. Scanning all 57 non-`sugar-crush` monorepo li
 `sugar-reel/FfmpegDecoder.php::open`, `sugar-reel/AudioPlayer.php::start`. All three are `long`, all <!-- @rename-keep -->
 three spec 0,1,2 only, and no guard anywhere sees them.
 
-**E448's own suggestion — promotion into `candy-testing` — was measured and is the weaker option.**
+**E448's own suggestion — promotion into `candy-testing` — was measured and is the weaker option.** <!-- @rename-keep -->
 
 - `candy-testing` is require-dev'd by **21 of 58** libs. `sugar-reel` is one; **`sugar-dash` is not** <!-- @rename-keep -->
   (it require-devs `candy-vcr` only). So promotion reaches 1 of the 2 blind libraries.
-- **`sugar-crush` does not require-dev `candy-testing`.** Moving the harness out of this package means
+- **`sugar-crush` does not require-dev `candy-testing`.** Moving the harness out of this package means <!-- @rename-keep -->
   adding that dev dep, which means `composer update`, which every lane is forbidden to run and which
   voids the vendor closure. It is a supervisor action, exactly as `ddd9560d0` was.
 - **A scanner in a library is inert until a test in each consumer invokes it.** The harness would move;

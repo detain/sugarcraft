@@ -39,7 +39,7 @@ trait TemporaryDirectoryTrait
     protected function setUpTemporaryDirectory(): void
     {
         $suffix = $this->getTempDirSuffix();
-        $this->tmpDir = sys_get_temp_dir() . '/candy-testing-' . $suffix . '-' . getmypid();
+        $this->tmpDir = sys_get_temp_dir() . '/sugar-testing-' . $suffix . '-' . getmypid();
         mkdir($this->tmpDir, 0755, true);
     }
 

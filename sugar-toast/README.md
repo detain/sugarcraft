@@ -345,7 +345,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
   composited via `Buffer`; each toast is a sub-`Buffer` composited into the
   screen `Buffer` for per-cell positioning and overlap resolution.
 
-- **[candy-testing](https://github.com/sugarcraft/candy-testing)** — golden-file
+- **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — golden-file
 
 
 

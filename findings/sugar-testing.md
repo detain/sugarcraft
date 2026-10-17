@@ -1,6 +1,6 @@
-# Code Review: sugarcraft/candy-testing
+# Code Review: sugarcraft/sugar-testing
 
-**Library:** `sugarcraft/candy-testing`  
+**Library:** `sugarcraft/sugar-testing`  
 **Review Date:** 2026-06-30  
 **Reviewer:** Automated Code Review  
 **Files Reviewed:** 8 source files, 9 test files, 1 lang file
@@ -9,7 +9,7 @@
 
 ## Summary
 
-The candy-testing library provides a test harness for TEA (The Elm Architecture) programs in the SugarCraft ecosystem. It includes `ProgramSimulator` for deterministic program driving, `ScriptedInput` for building input sequences, `TapeRecorder` for VHS demo file generation, and snapshot assertion helpers. The code is generally well-structured and follows project conventions, but there are notable issues around Reflection use, incomplete key type coverage, async gaps, and some code quality concerns.
+The sugar-testing library provides a test harness for TEA (The Elm Architecture) programs in the SugarCraft ecosystem. It includes `ProgramSimulator` for deterministic program driving, `ScriptedInput` for building input sequences, `TapeRecorder` for VHS demo file generation, and snapshot assertion helpers. The code is generally well-structured and follows project conventions, but there are notable issues around Reflection use, incomplete key type coverage, async gaps, and some code quality concerns.
 
 ---
 
@@ -280,7 +280,7 @@ The test `testDefaultRunnerDoesNotExecuteCmds()` has a confusing name. The `with
 ```php
 protected function setUp(): void
 {
-    $this->tmpDir = sys_get_temp_dir() . '/candy-testing-assertions-' . getmypid();
+    $this->tmpDir = sys_get_temp_dir() . '/sugar-testing-assertions-' . getmypid();
     mkdir($this->tmpDir, 0755, true);
     $this->fixturesDir = $this->tmpDir . '/fixtures';
     mkdir($this->fixturesDir, 0755, true);
@@ -632,7 +632,7 @@ In a sync context this is fine. In async context, cmds could return `React\Promi
 
 ## Conclusion
 
-The candy-testing library is a well-designed test harness that correctly implements the TEA testing pattern. The code follows project conventions, uses immutable patterns appropriately, and has good test coverage for the happy paths. The main concerns are:
+The sugar-testing library is a well-designed test harness that correctly implements the TEA testing pattern. The code follows project conventions, uses immutable patterns appropriately, and has good test coverage for the happy paths. The main concerns are:
 
 1. **Critical:** The Dracula theme escaping issue and incomplete KeyType coverage in VHS recording
 2. **High:** Reflection dependency on Program internals and missing key type support

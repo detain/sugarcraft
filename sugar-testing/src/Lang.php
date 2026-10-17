@@ -7,7 +7,7 @@ namespace SugarCraft\Testing;
 use SugarCraft\Core\I18n\Lang as BaseLang;
 
 /**
- * Per-library translation facade for candy-testing.
+ * Per-library translation facade for sugar-testing.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
  * 'testing' namespace baked in. Translated strings live in

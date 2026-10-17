@@ -90,7 +90,7 @@ final class ProgramTest extends TestCase
 
     /**
      * `getModel()` is a deprecated alias kept for external consumers: it must
-     * keep forwarding to `model()`, stay tagged `@deprecated` (candy-testing's
+     * keep forwarding to `model()`, stay tagged `@deprecated` (sugar-testing's
      * DeprecatedCoreApiUsageTest derives its roster from that tag), and its
      * rationale must not cite an in-monorepo caller that no longer exists.
      */

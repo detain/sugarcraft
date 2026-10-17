@@ -1,5 +1,5 @@
 {
-    "name": "sugarcraft/candy-testing",
+    "name": "sugarcraft/sugar-testing",
     "description": "Test harness for TEA programs \u2014 ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
     "type": "library",
     "license": "MIT",
@@ -12,7 +12,7 @@
         "bubbletea",
         "sugarcraft"
     ],
-    "homepage": "https://github.com/sugarcraft/candy-testing",
+    "homepage": "https://github.com/sugarcraft/sugar-testing",
     "authors": [
         {
             "name": "Joe Huss",
@@ -21,9 +21,9 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/sugarcraft/candy-testing/issues",
-        "source": "https://github.com/sugarcraft/candy-testing",
-        "docs": "https://sugarcraft.github.io/lib/candy-testing.html"
+        "issues": "https://github.com/sugarcraft/sugar-testing/issues",
+        "source": "https://github.com/sugarcraft/sugar-testing",
+        "docs": "https://sugarcraft.github.io/lib/sugar-testing.html"
     },
     "require": {
         "php": "^8.3",

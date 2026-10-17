@@ -808,27 +808,27 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `candy-codeshot/src/AnsiParser.php:122-133`
 **Agent:** Same coder agent as 2.16 (grouped — same lib)
 
-#### 2.18 🟢 candy-testing: O(n) array_shift (Item 2.3)
+#### 2.18 🟢 sugar-testing: O(n) array_shift (Item 2.3)
 
-**Plan:** `findings/plan_candy-testing.md` — Item 2.3
+**Plan:** `findings/plan_sugar-testing.md` — Item 2.3
 **Fix:** Use `SplQueue` or index pointer instead of `array_shift()` at `ProgramSimulator.php:140`
-**Files:** `candy-testing/src/ProgramSimulator.php:140`
+**Files:** `sugar-testing/src/ProgramSimulator.php:140`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 2.19 🟢 candy-testing: escapeVhsRune addcslashes (Item 2.4)
+#### 2.19 🟢 sugar-testing: escapeVhsRune addcslashes (Item 2.4)
 
-**Plan:** `findings/plan_candy-testing.md` — Item 2.4
+**Plan:** `findings/plan_sugar-testing.md` — Item 2.4
 **Fix:** Replace manual character loop with `addcslashes($rune, '\\"')`
-**Files:** `candy-testing/src/Assertions.php:207-221`
+**Files:** `sugar-testing/src/Assertions.php:207-221`
 **Agent:** Same coder agent as 2.18 (grouped — same lib)
 
-#### 2.20 🟢 candy-testing: KeyType coverage (Items 2.1-2.2)
+#### 2.20 🟢 sugar-testing: KeyType coverage (Items 2.1-2.2)
 
-**Plan:** `findings/plan_candy-testing.md` — Items 2.1-2.2
+**Plan:** `findings/plan_sugar-testing.md` — Items 2.1-2.2
 **Fix:** Add F1-F12, Home, End, PageUp, PageDown, Delete, Insert key mappings to `keyMsgToVhs()` and tests
-**Files:** `candy-testing/src/TapeRecorder.php:175-196`, `candy-testing/tests/TapeRecorderTest.php`
+**Files:** `sugar-testing/src/TapeRecorder.php:175-196`, `sugar-testing/tests/TapeRecorderTest.php`
 **Agent:** Same coder agent as 2.18 (grouped — same lib)
 
 ### Phase 2 Verification
@@ -960,11 +960,11 @@ Same branch/PR check as Phase 0/1.
 
 ---
 
-#### 3.16 🟢 candy-testing: TemporaryDirectoryTrait (Item 4.1)
+#### 3.16 🟢 sugar-testing: TemporaryDirectoryTrait (Item 4.1)
 
-**Plan:** `findings/plan_candy-testing.md` — Item 4.1
+**Plan:** `findings/plan_sugar-testing.md` — Item 4.1
 **Fix:** Extract duplicated `setUp()`/`tearDown()` temp directory logic into `tests/Concerns/TemporaryDirectoryTrait.php`
-**Files:** `candy-testing/tests/Concerns/TemporaryDirectoryTrait.php` (new)
+**Files:** `sugar-testing/tests/Concerns/TemporaryDirectoryTrait.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 3.17 🟢 candy-input: EscapeDecoderOptions (Item 4.1)
@@ -1291,7 +1291,7 @@ Same verification as previous phases.
 | `plan_candy-scriptui.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |
 | `plan_sugar-markdown.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |
-| `plan_candy-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |
+| `plan_sugar-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |
 | `plan_candy-wish.md` | 2.1-2.4, 3.1-3.3 | Double getenv, rate limit atomicity, setTransport consistency, middleware error handling |
 | `plan_sugar-mouse-zones.md` | 2.1 | Zone::contains() implementation |
 | `plan_candy-vcr.md` | 2.3, 2.6-2.9, 3.1, 3.3-3.5 | preg_replace error handling, async defers, Glyphs O(1), formatHunk, V1ToV2Migrator |

@@ -117,7 +117,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-forms | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
 | sugar-log | P1 | 2 | Log level filtering; Handler interface consistency |
 | candy-git | P1 | 2 | Path-repo closure check (verify sugar-fuzzy is clean) |
-| candy-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
+| sugar-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
 | candy-codeshot | P1 | 2 | WeakMap for allocateColor cache (memory leak fix) |
 
 **Concurrency:** 6 libs — spawn 6 subagents in parallel.
@@ -183,7 +183,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-forms-huh.md` — Phase 1 ($pid uninitialized on fork failure)
 - `findings/plan_sugar-log.md` — Phase 1 (log level filtering, handler consistency)
 - `findings/plan_candy-git.md` — Phase 1 (path-repo closure verification)
-- `findings/plan_candy-testing.md` — Phase 1 (TapeRecorder Dracula theme bug)
+- `findings/plan_sugar-testing.md` — Phase 1 (TapeRecorder Dracula theme bug)
 - `findings/plan_candy-codeshot.md` — Phase 1 (WeakMap allocateColor cache)
 
 ### Group F Source Plans

@@ -159,7 +159,7 @@ foreach ($targets as $t) {
 /**
  * Full closure for one lib: its `require` siblings, its `require-dev` siblings,
  * and the PRODUCTION closure of both. require-dev matters because a harness
- * like candy-testing appears only there, yet `composer update` (which installs
+ * like sugar-testing appears only there, yet `composer update` (which installs
  * dev) still has to resolve it and its own production deps locally.
  */
 $closureOf = static function (string $lib) use ($manifestOf, $siblingsIn): array {

@@ -97,8 +97,8 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 2-C | 2.7–2.9 | sugar-quickpick (withItems filter, applyFilter array_filter), sugar-bits (sortedRows single-pass) | <!-- @rename-keep historical provenance -->
 | 2-D | 2.10–2.12 | sugar-bits (AnimatedProgress spring cache), candy-buffer (DiffOptimiser array_merge, DiffEncoder state reset) | <!-- @rename-keep historical provenance -->
 | 2-E | 2.13–2.15 | candy-buffer (Hyperlink equals), sugar-markdown (string concat loops, Theme::fromJson issues) |
-| 2-F | 2.16–2.18 | candy-codeshot (LayoutCalculator extraction, match expression), candy-testing (O(n) array_shift) |
-| 2-G | 2.19–2.20 | candy-testing (escapeVhsRune addcslashes, KeyType coverage) |
+| 2-F | 2.16–2.18 | candy-codeshot (LayoutCalculator extraction, match expression), candy-testing (O(n) array_shift) | <!-- @rename-keep -->
+| 2-G | 2.19–2.20 | candy-testing (escapeVhsRune addcslashes, KeyType coverage) | <!-- @rename-keep -->
 
 ### Phase 3: Missing Features and API Completeness
 
@@ -108,7 +108,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable)  <!-- @rename-keep historical provenance --> |
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) | <!-- @rename-keep historical provenance -->
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), sugar-treelist (navigation methods, setLineOffset fluent, sort O(n) cursor) |
-| 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) |
+| 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) | <!-- @rename-keep -->
 | 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), sugar-colorprofile (AsyncProbe), sugar-spring (reducedMotionOverride, Vector methods, EasingFunction interface) |
 | 3-G | 3.24–3.30 | candy-git-server (Async GitDaemon — deferred ⏭️), sugar-reel (Seeking callback — deferred ⏭️), candy-log (StreamHandler type, HookRegistry return, JsonFormatter coercion, RemoveHandler void, Styles return) | <!-- @rename-keep -->
 

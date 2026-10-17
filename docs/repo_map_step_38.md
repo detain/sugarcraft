@@ -20,7 +20,7 @@ Sweep root-level documentation files to reflect the post-refactor reality: 8 new
 ## Acceptance criteria
 
 - [ ] root README lists all 8 new libs in the appropriate table sections.
-- [ ] MATCHUPS.md has the 8 new rows + updated status for migrated consumers (🟢 → 🚀 where applicable, e.g., candy-testing is 🚀).
+- [ ] MATCHUPS.md has the 8 new rows + updated status for migrated consumers (🟢 → 🚀 where applicable, e.g., sugar-testing is 🚀).
 - [ ] PROJECT_NAMES.md Candy* table has the 8 new slug → namespace mappings.
 - [ ] CONTRIBUTING.md monorepo for-loop example includes the new foundation libs.
 - [ ] AGENTS.md "Source-of-truth files" + reconnaissance references current.
@@ -46,7 +46,7 @@ This step is mostly Scribe-driven; the Coder is a placeholder for any small file
 
 - Update each root doc per acceptance.
 - Maintain prose tone consistent with existing files (terse, technical).
-- For new lib rows in MATCHUPS, pick the right emoji per status (🚀 candy-testing/candy-input/candy-async — no upstream; 🟢 candy-ansi/candy-buffer/candy-layout/sugar-mouse/sugar-fuzzy — port of upstream).
+- For new lib rows in MATCHUPS, pick the right emoji per status (🚀 sugar-testing/candy-input/candy-async — no upstream; 🟢 candy-ansi/candy-buffer/candy-layout/sugar-mouse/sugar-fuzzy — port of upstream).
 
 ## Ship brief
 

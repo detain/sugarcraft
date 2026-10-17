@@ -752,7 +752,7 @@ Using `dev-master` for a required dependency is unstable.
 **Investigation Notes:**
 
 - Source: `composer.json:31`
-- `candy-core` is a dev dependency (used for `candy-testing` in test builds)
+- `candy-core` is a dev dependency (used for `sugar-testing` in test builds)
 - Actually looking at the output, it's in `require-dev`, not `require` — still should be pinned
 
 ---

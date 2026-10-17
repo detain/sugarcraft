@@ -35,7 +35,7 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
-        "sugarcraft/candy-testing": "dev-master"
+        "sugarcraft/sugar-testing": "dev-master"
     },
     "autoload": {
         "psr-4": {

@@ -166,9 +166,9 @@ that the split libs resolve the way an outside consumer gets them, and they do.
 `check-path-repos.php --fix --strict-closure`, `composer update`, revert the manifests — **does not
 restore the closure.** It left candy-flip at 4/6 and candy-pty at 3/7. The tool walks the `require` graph <!-- @rename-keep -->
 only (its own `--help` says so), so every miss was a `require-dev` sibling; a lib whose harness comes
-from a sibling gets a *Packagist copy* of `candy-testing` while its runtime deps are symlinks, and
+from a sibling gets a *Packagist copy* of `candy-testing` while its runtime deps are symlinks, and <!-- @rename-keep -->
 nothing announces it. `candy-buffer` was invisible even after hand-adding the direct dev deps, because it
-is reached only through `candy-testing`'s own requires.
+is reached only through `candy-testing`'s own requires. <!-- @rename-keep -->
 
 **And the repair is not idempotent with the tool.** `--fix` rewrites `repositories[]` to the require-graph
 closure, so re-running it after a manual repair deletes the hand-added entries. Measured: a state that
@@ -712,7 +712,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
 | **U** UI | `Tui/`, `Tui/Components/`, `Renderer.php`, themes, `.vhs/` | #19 #20 #21 #25 #37 #39 #40 |
 | **T** tools | `Tools/`, `Tools/BuiltIn/`, `LSP/` | #17 #41 #44 #45 #46 + #43's Grep half |
 | **P** prompt/context | `Runtime.php`, `Context/EnvironmentBlock.php`, `Context/InstructionFileLoader.php`, `App/App.php` | #27 #30 #42 + #43's loadRoot half |
-| **X** CLI + isolated + cross-lib | `Cli/ArgvParser.php`, `Cli/NonInteractive.php`, `bin/sugarcrush`, `Cli/Help.php`, `Providers/`, `Agents/WorktreeManager.php`, `Commands/ShareCommand.php`, **candy-core**, **candy-testing** | #24 #26 #48 #50 #54 #55 #56 |
+| **X** CLI + isolated + cross-lib | `Cli/ArgvParser.php`, `Cli/NonInteractive.php`, `bin/sugarcrush`, `Cli/Help.php`, `Providers/`, `Agents/WorktreeManager.php`, `Commands/ShareCommand.php`, **candy-core**, **candy-testing** | #24 #26 #48 #50 #54 #55 #56 | <!-- @rename-keep -->
 | **D** docs | `README.md`, `sugar-crush/docs/`, repo `docs/_data/`, `docs/lib/` | #34 #35 #36 |
 
 ### Hard sequencing (real, not stylistic)
@@ -1207,7 +1207,7 @@ blocked on #11 anyway. Filed rather than silently folded in.
 |---|---|---|
 | review | **#11 P1.2 round 4** | read-only + hand-restored sabotages |
 | fix | **#54** `AgentWorkerPool::executeAll()` hang | `src/Agents/AgentWorkerPool.php` + siblings only; `AgentManager.php` explicitly forbidden (P1.2 owns it) |
-| fix | **#56** ExtUvLoop stale-clock | `candy-core` + `candy-testing`; **all** of `sugar-crush/` forbidden |
+| fix | **#56** ExtUvLoop stale-clock | `candy-core` + `candy-testing`; **all** of `sugar-crush/` forbidden | <!-- @rename-keep -->
 
 Lanes were picked for **file-disjointness from P1.2's uncommitted set**, not plan
 order. #49 was the obvious third pick and was rejected on exactly that test: its
@@ -1348,7 +1348,7 @@ failing test means what it says.
 | `e1881baf` | **#57** VertexProvider — 4 defects + a 60s cap truncating completions |
 | `9d92bb5a` + `5af648a9` | **#46** PathJail unification (turned out to be a security fix) |
 | `4e10360b` | **#37** P8.1/P8.5 diff gutter + adaptive theme + tab overflow |
-| `a2606c7f` | **#56** libuv stale-clock trap documented; `LoopPin` in candy-testing |
+| `a2606c7f` | **#56** libuv stale-clock trap documented; `LoopPin` in candy-testing | <!-- @rename-keep -->
 | `69d58867` | **#54** AgentWorkerPool hang (not intermittent — 100% with a latent trigger) |
 | `df0a563b` | **#11 P1.2** permission gate as a real hook |
 | `c182a309` | **#34 P7.1/2** docs site page + `ENVIRONMENT.md` |
@@ -10500,7 +10500,7 @@ Then **re-measure everything taken since the update**. The restored run reproduc
 to the assertion (8905 + 4 tests, 101022 + 29 assertions, skips back to 1), which is what proved the
 restore rather than merely asserting it.
 
-**One residue, and it is EXPECTED rather than a defect.** After the restore, `candy-testing` (and
+**One residue, and it is EXPECTED rather than a defect.** After the restore, `candy-testing` (and <!-- @rename-keep -->
 `candy-vcr` under `sugar-dash`) remain real directories in eight libs' `vendor/sugarcraft/` while every <!-- @rename-keep -->
 other entry is a symlink. `--fix --strict-closure` walks `require`, not `require-dev`, so a test-only
 sibling resolves from Packagist — which is also what CI does. `sugar-crush` itself is **18 of 18

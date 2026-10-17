@@ -41,7 +41,7 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.65",
         "sugarcraft/candy-vt": "dev-master",
-        "sugarcraft/candy-testing": "dev-master",
+        "sugarcraft/sugar-testing": "dev-master",
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {

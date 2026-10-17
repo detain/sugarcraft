@@ -308,7 +308,7 @@ cd sugar-spring && composer install && vendor/bin/phpunit
 
 ## Snapshot tests
 
-Numeric trajectory output is pinned via `candy-testing`'s `assertGolden` golden-file
+Numeric trajectory output is pinned via `sugar-testing`'s `assertGolden` golden-file
 snapshots (JSON/CSV). Any change to the physics output must be intentional — re-record the
 fixture with `--update-golden` to accept a new canonical trajectory.
 

@@ -15,7 +15,7 @@ declare(strict_types=1);
  * long-lived exposed spawns (`sugar-dashboard` ExternalModule, `sugar-video`
  * AudioPlayer and FfmpegDecoder) sitting in libraries no sugar-crush test can
  * see, where a new one could appear, move, or multiply with nothing saying
- * so. The filed options were to promote the scanner into `candy-testing` or
+ * so. The filed options were to promote the scanner into `sugar-testing` or
  * copy the guard into each lib; E486 measured both as weaker — promotion
  * drags a test-support namespace into a published runtime package and the
  * copies multiply. What reaches 57 of 58 libraries without touching a single

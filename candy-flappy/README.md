@@ -92,7 +92,7 @@ vendor/bin/phpunit
 
 ## Snapshot tests
 
-Game frame output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
+Game frame output is pinned via `sugar-testing`'s `assertGoldenAnsi` golden-file
 snapshots. Any change to the ANSI playfield output must be intentional — re-record the
 fixture with `--update-golden` to accept a new canonical render.
 

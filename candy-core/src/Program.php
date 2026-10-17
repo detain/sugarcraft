@@ -207,7 +207,7 @@ final class Program
      *             src/Recorder.php and src/Cli/RecordCommand.php). candy-vcr's
      *             pump chains themselves ride candy-pty's
      *             PumpOptions::withRecorder, a different class, and
-     *             candy-testing's ProgramSimulator never carried the name.
+     *             sugar-testing's ProgramSimulator never carried the name.
      *             The delegating shim therefore stays for those in-tree
      *             callers and for external consumers that track dev-master;
      *             new code must call setRecorder().
@@ -281,7 +281,7 @@ final class Program
     /**
      * @deprecated since the bare-accessor naming sweep — use {@see model()}.
      *             Nothing in the monorepo calls this name any more
-     *             (candy-testing's ProgramSimulator moved to model(), and its
+     *             (sugar-testing's ProgramSimulator moved to model(), and its
      *             DeprecatedCoreApiUsageTest keeps it there). The delegating
      *             alias stays for external consumers that track dev-master
      *             and may still call it; do not remove it.
@@ -320,7 +320,7 @@ final class Program
      *
      * Measured here (ext-uv 0.3.0, PHP 8.3), arming a 5s timer after N seconds
      * of synchronous work at five different sites. **This table is the single
-     * canonical copy** — candy-testing's `LoopPin` and its README point at it
+     * canonical copy** — sugar-testing's `LoopPin` and its README point at it
      * rather than restating it, because the last time it was duplicated a wrong
      * row had to be wrong in three places at once:
      *
@@ -409,10 +409,10 @@ final class Program
      * first tick — the safety net fires instead of the work, and the test fails
      * having consumed no wall time. It presents as an unattributable flake.
      * Nothing needs to change in `src/`: a suite should pin a clock-fresh loop
-     * instead of inheriting the autodetected one. candy-testing ships
+     * instead of inheriting the autodetected one. sugar-testing ships
      * `SugarCraft\Testing\LoopPin::pinStableClock()` for a one-line
      * `tests/bootstrap.php` — named in prose rather than linked, since
-     * candy-core cannot depend on candy-testing.
+     * candy-core cannot depend on sugar-testing.
      */
     public function run(): Model
     {

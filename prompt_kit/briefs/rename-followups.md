@@ -171,3 +171,4 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   (old-brand artwork moved to the new path). <!-- @rename-keep -->
 - `.vhs/*.gif` recorded frames may show the pre-rename prompt; CI `vhs.yml` re-renders from the <!-- @rename-keep -->
   already-clean `.tape` files on the next tape run. <!-- @rename-keep -->
+- ansi/sugarcraft/sugarcraft-{2-16-l-1,2-256-l-1,3-16-l-2}.ansi — the composite repo wordmark art embeds the text `candy-testing` in its lib roster; art content is C.3-excluded, redraw deferred (human), per plan R4.9. <!-- @rename-keep -->

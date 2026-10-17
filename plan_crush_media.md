@@ -891,7 +891,7 @@ Goal: knob-parity truth, docs completeness, demo, security/perf hygiene, final f
 **Files likely touched:** `sugar-crush/.vhs/media-form.tape` (new), `sugar-crush/examples/media-demo.php` (new), `.github/workflows/vhs.yml` (edit — array entry).
 **Lane:** demo ; **Depends on:** W7.2 ; **Shared-file risk:** vhs.yml (sole)
 **Build steps (micro):**
-1. Examples script: deterministic seed, scripted key-injection via the same ProgramSimulator/ScriptedInput path IF crush dev-deps allow (G-7 decision from crush_media §7.5/§10.3: candy-testing dev-dep — if the wave schedule never adopted it, the examples script drives the FORM model headless and echoes frames through a plain ANSI out — keep simple: the demo shows RENDER STATES, not live keys; tape drives sleep/echo).
+1. Examples script: deterministic seed, scripted key-injection via the same ProgramSimulator/ScriptedInput path IF crush dev-deps allow (G-7 decision from crush_media §7.5/§10.3: sugar-testing dev-dep — if the wave schedule never adopted it, the examples script drives the FORM model headless and echoes frames through a plain ANSI out — keep simple: the demo shows RENDER STATES, not live keys; tape drives sleep/echo).
 2. Tape: open form → Params section → hires open → fake generation → painted image → /rendermode halfblock flip → close. 800×480-ish house dims per record-vhs-demo standard.
 3. Don't commit GIFs (CI renders — AGENTS.md).
 **Tests (ship in-step):** none PHPUnit; `vhs` renders locally IF installed (probe `which vhs` — CI does it regardless); examples script runs headless green (one bash assertion in review).
@@ -2114,7 +2114,7 @@ Source: [forms] — full inventory of sugar-crush + sugar-forms widgetry with fi
 | Docked panes | `DockLayout` | `toArray :673/:712`; `App.php:44-45` PaneDragController | Shape C substrate |
 | i18n | `Lang` | `candy-pty/src/Lang.php:27` pattern; crush `lang/en.php` (~2,354 lines, `tui.<area>.<name>`) | every label a Lang key |
 | Setting schema/writer | `SettingsSchema::all :72` / `byKey :97` / `inCategory :115` / `layeredKeys :128`; `SettingsWriter` | sugar-crush/src/Config | `SettingsFieldFactory` builds sugar-forms fields from schema; `SettingsWriter::refusal()` is the single validation authority |
-| Test harness | `ProgramSimulator :27`, `ScriptedInput :45`, `assertGoldenAnsi` (`UPDATE_GOLDENS=1`) | candy-testing | **NOT currently in crush require-dev** (G-7 decision) |
+| Test harness | `ProgramSimulator :27`, `ScriptedInput :45`, `assertGoldenAnsi` (`UPDATE_GOLDENS=1`) | sugar-testing | **NOT currently in crush require-dev** (G-7 decision) |
 
 **Façade law** [forms]: sugar-widgets/sugar-forms re-export forms classes via `class_alias` — code against the **canonical `SugarCraft\Forms\*`** namespace only (AGENTS.md #1275/#1312/#1314); canonical non-forms widgets (Tabs/Help/Paginator/Progress/Table/Tree) live in sugar-widgets, which is not a crush dependency.
 
@@ -2153,7 +2153,7 @@ Source: [forms] — full inventory of sugar-crush + sugar-forms widgetry with fi
 | G-4 | Thumbnail grid (gallery/extra-networks) | sugar-gallery `PosterGrid` + require bump **via path-repo-closure skill (require entry ONLY — never a per-lib repositories[] block)** |
 | G-5 | Progress meter | candy-async/`Spinner` exists; `progressToast` covers generation notices |
 | G-6 | KeyMap customization | no gap — follow the existing gate/exception rules (§7.4) |
-| G-7 | candy-testing / candy-vt dev-deps | decision needed: adding them enables ProgramSimulator/golden-ANSI tests of the modal (recommended) but changes crush dev-deps; snapshot-mode tests exist without it (§10.3) |
+| G-7 | sugar-testing / candy-vt dev-deps | decision needed: adding them enables ProgramSimulator/golden-ANSI tests of the modal (recommended) but changes crush dev-deps; snapshot-mode tests exist without it (§10.3) |
 
 ### 7.6 Command / palette / i18n / drift-guard wiring [forms §2b/§2c]
 
@@ -2419,7 +2419,7 @@ Plus the **async suggestion law** (sugar-forms CALIBER_LEARNINGS via [forms]): s
 
 - **Four project test modes** apply directly to the generation feature: **snapshot byte** (`GenForm::view()` → raw SGR golden, `UPDATE_GOLDENS=1`), **behaviour** (`update(KeyMsg)` → `[Model, ?Action]`), **coercion** (every Slider clamps at A1111 ranges — §2 tables are the edge-case spec: steps 1/150, cfg 1/30, denoise 0/1, padding 0/256, mask_blur −64/75…), **cell-grid** where needed (`SugarCraft\Vt\Terminal`).
 - **File taxonomy to clone**: `tests/Tui/Settings/SettingsEditor*Test.php` — keys/render/narrow/polish split ⇒ `tests/Tui/GenForm/{GenFormKeysTest, GenFormRenderTest, GenFormNarrowTest, GenFormSaveFlowTest}.php`. [forms §6]
-- **G-7 decision**: adding `candy-testing`/`candy-vt` to crush require-dev enables `ProgramSimulator`/`ScriptedInput` end-to-end driving of the modal; without it, follow the existing hand-rolled crush test style (both viable; recommendation: adopt the dev-deps, the modal+overlay interaction is exactly what ProgramSimulator was built for).
+- **G-7 decision**: adding `sugar-testing`/`candy-vt` to crush require-dev enables `ProgramSimulator`/`ScriptedInput` end-to-end driving of the modal; without it, follow the existing hand-rolled crush test style (both viable; recommendation: adopt the dev-deps, the modal+overlay interaction is exactly what ProgramSimulator was built for).
 - Stream-write tests: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `candy-core/tests/RendererTest.php`, AGENTS.md). Image-pipeline tests must exercise BOTH frame shapes: inline (cell renderer) and overlay-blob (graphics protocol, `isInline()==false` → `ImageLayer::place`) — §8.6-5.
 - Any new test file → `scripts/parallel-tests-durations.tsv` row (unlisted files run in zero shards) + suite-figure re-pin at closeout (AGENTS.md gotcha; current era figure 21,196T/406,402A as of the last crush re-pin).
 - Detection-path tests stay hermetic: `Detect::setProbeStdin:105`/`reset:82` seams; piped CI never blocks on the 100 ms DA1 probe (`isInteractiveTty` early-exits).
@@ -2443,7 +2443,7 @@ Plus the **async suggestion law** (sugar-forms CALIBER_LEARNINGS via [forms]): s
 | Q-9 | **ui-config.json analog** — A1111 lets users retune any widget's range/default with no code (§5.5). Worth a crush `ui-config` sidecar for the gen form? (Cheap, high-leverage, but expands settings surface.) | [wiki §6.1] |
 | Q-10 | **Flux guidance semantics on the wire** — Flux dev's guidance-distilled embedding vs true CFG (§6.1): what does the skynet2 deployment actually accept (`guidance` field? `cfg_scale` ignored?) — resolve with Q-1 re-probe. | [repo §D.1] |
 | Q-11 | **Video deliverable format** — mp4 file + sugar-video playback pane, with PNG-info-style sidecar (`<name>.json` or mkv comment) carrying the generation params? Per-frame dir only as fallback? | [repo §D.2] [wiki §11] |
-| Q-12 | **candy-testing dev-dep ruling** (G-7) — adopt for ProgramSimulator-driven modal tests? Recommendation: yes. | [forms §4] |
+| Q-12 | **sugar-testing dev-dep ruling** (G-7) — adopt for ProgramSimulator-driven modal tests? Recommendation: yes. | [forms §4] |
 
 ### 11.2 Suggested phase plan
 
@@ -2711,7 +2711,7 @@ candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
  ├─ sugar-focus   FocusRing (crush dep)
  ├─ sugar-gallery PosterGrid/Rail virtualized zone-aware grids (not a crush dep)
  ├─ sugar-toast   floating alerts w/ clickable actions (crush dep)
- └─ candy-testing ProgramSimulator/ScriptedInput/golden ANSI
+ └─ sugar-testing ProgramSimulator/ScriptedInput/golden ANSI
 ```
 
 ### 4.1 Control → class map

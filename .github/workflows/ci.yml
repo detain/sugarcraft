@@ -247,7 +247,7 @@ jobs:
       # outside that reach, where a new one could appear with nothing saying
       # so. This pass reads the declared autoload roots of all 57 other libs
       # from the same checkout — no dependency changes, which is why it lives
-      # here rather than in a per-lib suite (the promotion-to-candy-testing
+      # here rather than in a per-lib suite (the promotion-to-sugar-testing
       # option measured weaker). Fail-closed: an exposed, unclassified, or
       # unresolved proc_open appearance with no roster row exits 1 and prints
       # the exact key to judge and paste. Placed last so it reads the tree the

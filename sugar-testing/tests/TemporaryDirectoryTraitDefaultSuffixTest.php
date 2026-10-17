@@ -35,7 +35,7 @@ final class TemporaryDirectoryTraitDefaultSuffixTest extends TestCase
     {
         // The default getTempDirSuffix() returns 'test'.
         // Verify the temp directory was created with the correct suffix pattern.
-        $this->assertStringContainsString('candy-testing-test-', $this->tmpDir);
+        $this->assertStringContainsString('sugar-testing-test-', $this->tmpDir);
     }
 
     public function testTempDirectoryExists(): void

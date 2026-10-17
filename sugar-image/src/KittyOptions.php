@@ -99,7 +99,7 @@ final class KittyOptions
      * Per the kitty graphics protocol, `f` is the DATA FORMAT (100 = PNG)
      * and transmission compression travels on the separate `o` key — so a
      * compressed transmit is emitted as `f=100,o=z`. (Until M2/round-LL
-     * this pair wrongly spelled compression as `f=1`; the candy-testing
+     * this pair wrongly spelled compression as `f=1`; the sugar-testing
      * KittyStream decoder flipped in the same change.)
      *
      * @param int $compress  100 = none (default), 1 = zlib compressed (o=z).
