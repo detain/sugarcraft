@@ -6,7 +6,7 @@ Ensure all SugarCraft internal dependencies have path repository entries for loc
 ## Current composer.json Analysis
 
 Check for missing path repos:
-- `candy-metrics` — used by HistoryRecorder (optional), not in composer.json
+- `candy-metrics` — used by HistoryRecorder (optional), not in composer.json <!-- @rename-keep historical provenance -->
 - `candy-async` — in "require" but check if path repo needed
 
 ## Path Repository Convention (from AGENTS.md)

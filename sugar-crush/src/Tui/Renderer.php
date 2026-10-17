@@ -1252,7 +1252,7 @@ final class Renderer
      * had drifted to `:6478`/`:6390` — drifted again by the time you read
      * this, hence symbols now: `Chat::workflowRun()`, dispatched from the
      * 'run' arm of `Chat::handleWorkflowCommand()`. detain/sugarcraft #79 is
-     * a MERGED pull request about CandyMetrics telemetry. No open issue
+     * a MERGED pull request about CandyMetrics telemetry. No open issue // @rename-keep historical PR-title citation
      * tracked this.
      *
      * The OTHER route that would populate this map, a Task/Agent tool

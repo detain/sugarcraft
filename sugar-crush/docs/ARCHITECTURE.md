@@ -1239,7 +1239,7 @@ blank, which is why the second is worth stating separately.
 
 ⚠️ This paragraph used to close by citing "issue #79". No open issue ever
 tracked any of it — detain/sugarcraft #79 is a MERGED pull request titled
-"Phase 9+: CandyMetrics — telemetry primitives + CandyWish middleware".
+"Phase 9+: CandyMetrics — telemetry primitives + CandyWish middleware". <!-- @rename-keep historical provenance -->
 
 The live path is exercised by `tests/Workflows/WorkflowLivePaneTest.php`; the
 compositor in isolation by `tests/Tui/AgentSplitCompositorTest.php` and by an

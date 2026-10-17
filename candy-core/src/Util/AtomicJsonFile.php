@@ -6,7 +6,7 @@ namespace SugarCraft\Core\Util;
 
 /**
  * Atomic lock+tmp+rename JSON store; consolidates the durable-state save
- * pattern hand-rolled across candy-minesweeper, sugar-quickpick, candy-metrics,
+ * pattern hand-rolled across candy-minesweeper, sugar-quickpick, sugar-metrics,
  * candy-git and 5+ other libs (each with subtly different locking /
  * cleanup / decode-guard behaviour).
  *

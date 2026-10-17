@@ -450,7 +450,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 1. **sugar-overlay integration**: SugarToast toasts could render via sugar-overlay's overlay compositor for complex layouts
 2. **sugar-charts integration**: Progress toasts could display sparkline charts instead of simple bars
 3. **candy-scriptui integration**: Toast notifications for shell command completion
-4. **candy-metrics integration**: Performance metric notifications
+4. **sugar-metrics integration**: Performance metric notifications
 5. **sugar-log integration**: Log entries as toast notifications in real-time
 
 ---

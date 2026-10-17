@@ -1,6 +1,6 @@
-# Step 09.14 — candy-metrics cardinality + instrument kinds + native histograms
+# Step 09.14 — sugar-metrics cardinality + instrument kinds + native histograms
 
-**Source:** `leftover_updates_later.md` candy-metrics §3.3 + §2 table
+**Source:** `leftover_updates_later.md` sugar-metrics §3.3 + §2 table
 **Branch:** `ai/metrics-cardinality-instruments`
 
 ## Deliverable
@@ -14,12 +14,12 @@
 
 **Modify:**
 
-- `candy-metrics/src/Registry.php` — track cardinality per metric;
+- `sugar-metrics/src/Registry.php` — track cardinality per metric;
   enforce cap.
 
 **Create:**
 
-- `candy-metrics/src/Instrument/{UpDownCounter,AsyncCounter,AsyncGauge}.php`.
+- `sugar-metrics/src/Instrument/{UpDownCounter,AsyncCounter,AsyncGauge}.php`.
 
 ## Tests
 
@@ -27,7 +27,7 @@
 
 ## Acceptance
 
-- `cd candy-metrics && vendor/bin/phpunit` green.
+- `cd sugar-metrics && vendor/bin/phpunit` green.
 
 ---
 

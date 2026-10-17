@@ -208,11 +208,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/promwish → candy-metrics
+## charmbracelet/promwish → sugar-metrics
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-metrics | Notes |
+| Upstream | Title | Status in sugar-metrics | Notes |
 |---|---|:--:|---|
 | [#38](https://github.com/charmbracelet/promwish/pull/38) (2024-03-01) | feat: New, Start, Shutdown | 🟡 | Lifecycle methods — verify matches PHP pattern |
 | [#32](https://github.com/charmbracelet/promwish/pull/32) (2024-01-30) | Improve Logging | 🟡 | Logging improvements — review against sugar-log |

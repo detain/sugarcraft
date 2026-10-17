@@ -1,6 +1,6 @@
-# Step 09.13 — candy-metrics histogram buckets + descriptors
+# Step 09.13 — sugar-metrics histogram buckets + descriptors
 
-**Source:** `leftover_updates_later.md` candy-metrics §3.1-2 CRITICAL
+**Source:** `leftover_updates_later.md` sugar-metrics §3.1-2 CRITICAL
 **Branch:** `ai/metrics-histogram-descriptors`
 
 ## Deliverable
@@ -13,23 +13,23 @@
 
 **Modify:**
 
-- `candy-metrics/src/Backend/PrometheusFileBackend.php` — emit
+- `sugar-metrics/src/Backend/PrometheusFileBackend.php` — emit
   `*_bucket{le="..."}` for histogram metrics.
 
 **Create:**
 
-- `candy-metrics/src/Descriptor.php` — registration DTO with name, help,
+- `sugar-metrics/src/Descriptor.php` — registration DTO with name, help,
   type, label keys.
-- `candy-metrics/src/Registry.php` — `register(Descriptor)`.
+- `sugar-metrics/src/Registry.php` — `register(Descriptor)`.
 
 ## Tests
 
-- `candy-metrics/tests/HistogramBucketsTest.php`.
-- `candy-metrics/tests/DescriptorTest.php`.
+- `sugar-metrics/tests/HistogramBucketsTest.php`.
+- `sugar-metrics/tests/DescriptorTest.php`.
 
 ## Acceptance
 
-- `cd candy-metrics && vendor/bin/phpunit` green.
+- `cd sugar-metrics && vendor/bin/phpunit` green.
 
 ---
 

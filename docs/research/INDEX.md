@@ -71,7 +71,7 @@ To implement an item:
 | **sugar-image** | [research/libraries/sugar-image-research.md](libraries/sugar-image-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
 | **sugar-mouse** | [research/libraries/sugar-mouse-research.md](libraries/sugar-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
 | **sugar-colorprofile** | [research/libraries/sugar-colorprofile-research.md](libraries/sugar-colorprofile-research.md) | 1. CLICOLOR, 2. Terminfo Tc, 3. tmux handling |
-| **candy-metrics** | [research/libraries/candy-metrics-research.md](libraries/candy-metrics-research.md) | 1. Histogram buckets, 2. Metric describe, 3. UpDownCounter |
+| **sugar-metrics** | [research/libraries/sugar-metrics-research.md](libraries/sugar-metrics-research.md) | 1. Histogram buckets, 2. Metric describe, 3. UpDownCounter |
 
 ### Games & Fun
 

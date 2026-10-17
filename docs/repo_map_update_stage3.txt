@@ -1,16 +1,16 @@
 # SugarCraft Stage 3 Update Analysis
 
 Cross-cutting analysis of 9 update documents covering candy-ansi-inspect, candy-codeshot,
-sugar-datepicker, candy-metrics, sugar-toast, candy-kv, candy-git-server, candy-ssh-launcher,
+sugar-datepicker, sugar-metrics, sugar-toast, candy-kv, candy-git-server, candy-ssh-launcher,
 sugar-quickpick.
 
 ---
 
 ## 1. Top 3 Critical Gaps
 
-### A. No Persistent Storage Backend (candy-git-server, candy-metrics)
+### A. No Persistent Storage Backend (candy-git-server, sugar-metrics)
 candy-git-server has zero persistence — user/repo data exists only in-memory during server run.
-Upstream soft-serve uses SQLite/PostgreSQL. candy-metrics has no HTTP scrape endpoint,
+Upstream soft-serve uses SQLite/PostgreSQL. sugar-metrics has no HTTP scrape endpoint,
 requiring external components for metric collection. The Go promwish exposes `/metrics` directly.
 
 **Pattern:** Multiple packages need storage/server backends that are absent.

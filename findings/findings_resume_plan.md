@@ -255,30 +255,30 @@ For each phase:
 **Files:** `sugar-toast/src/Toast.php:430, 531`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.21 🔴 candy-metrics: SessionMetrics hard-coupled to candy-wish (Item 1.1)
+#### 0.21 🔴 sugar-metrics: SessionMetrics hard-coupled to candy-wish (Item 1.1)
 
-**Plan:** `findings/plan_candy-metrics.md` — Item 1.1
+**Plan:** `findings/plan_sugar-metrics.md` — Item 1.1
 **Issue:** `SessionMetrics.php:8-10` imports from `SugarCraft\Wish\*` directly — fatal without candy-wish
 **Fix:** Remove hard dependency; use interface or lazy resolution; or add candy-wish to `suggest` → `require`
-**Files:** `candy-metrics/src/Middleware/SessionMetrics.php:8-10`
+**Files:** `sugar-metrics/src/Middleware/SessionMetrics.php:8-10`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
 
-#### 0.22 🔴 candy-metrics: Backend interface missing flush() (Item 1.2)
+#### 0.22 🔴 sugar-metrics: Backend interface missing flush() (Item 1.2)
 
-**Plan:** `findings/plan_candy-metrics.md` — Item 1.2
+**Plan:** `findings/plan_sugar-metrics.md` — Item 1.2
 **Issue:** `Backend.php` interface has no `flush(): void` method — no way to flush metrics to persistent backends
 **Fix:** Add `flush(): void` to `Backend` interface and implement in all concrete backends (especially `PrometheusFileBackend`)
-**Files:** `candy-metrics/src/Backend.php`, `candy-metrics/src/Backend/PrometheusFileBackend.php`
+**Files:** `sugar-metrics/src/Backend.php`, `sugar-metrics/src/Backend/PrometheusFileBackend.php`
 **Agent:** Same coder agent as 0.21 (grouped — same lib)
 
-#### 0.23 🔴 candy-metrics: PrometheusFileBackend flush() re-emits all (Item 1.3)
+#### 0.23 🔴 sugar-metrics: PrometheusFileBackend flush() re-emits all (Item 1.3)
 
-**Plan:** `findings/plan_candy-metrics.md` — Item 1.3
+**Plan:** `findings/plan_sugar-metrics.md` — Item 1.3
 **Issue:** `PrometheusFileBackend.php:132-273` — every flush() re-serializes entire state, no dirty flag
 **Fix:** Add `$dirty` boolean tracking per metric; only re-emit changed metrics
-**Files:** `candy-metrics/src/Backend/PrometheusFileBackend.php:132-273`
+**Files:** `sugar-metrics/src/Backend/PrometheusFileBackend.php:132-273`
 **Agent:** Same coder agent as 0.21 (grouped — same lib)
 
 #### 0.24 🔴 candy-sql: SQLite branch still uses str_replace (Item 1.7)
@@ -1282,7 +1282,7 @@ Same verification as previous phases.
 | `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests || `plan_sugar-cli.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
 | `plan_sugar-treelist.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
 | `plan_sugar-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
-| `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
+| `plan_sugar-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
 | `plan_sugar-image.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
 | `plan_sugar-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
 | `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |

@@ -49,7 +49,7 @@
     {"batch":"E","kind":"rename","old":"candy-async","new":"sugar-async","ns_old":"Async","ns_new":"Async","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-testing","new":"sugar-testing","ns_old":"Testing","ns_new":"Testing","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-log","new":"sugar-log","ns_old":"Log","ns_new":"Log","type":"lib","bins":{},"status":"renamed"},
-    {"batch":"E","kind":"rename","old":"candy-metrics","new":"sugar-metrics","ns_old":"Metrics","ns_new":"Metrics","type":"lib","bins":{},"status":"pending"},
+    {"batch":"E","kind":"rename","old":"candy-metrics","new":"sugar-metrics","ns_old":"Metrics","ns_new":"Metrics","type":"lib","bins":{},"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-wish","new":"sugar-ssh-server","ns_old":"Wish","ns_new":"SshServer","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-pty","new":"sugar-pty","ns_old":"Pty","ns_new":"Pty","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-core","new":"sugar-core","ns_old":"Core","ns_new":"Core","type":"lib","bins":{},"status":"pending"},

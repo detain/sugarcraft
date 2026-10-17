@@ -415,7 +415,7 @@ handled by the monorepo.) Skip until someone uses it as a template.
 - ColorProfile downsampling — via `sugar-colorprofile/Probe`.
 - CallerFormatter, slog/PSR-3 handler bridge, hook system, configurable `PartsOrder`.
 
-### candy-metrics
+### sugar-metrics
 
 - **Classic histogram buckets** (§3.1, CRITICAL).
 - Metric descriptor / registration with help text (§3.2, CRITICAL).

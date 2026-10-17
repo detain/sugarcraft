@@ -55,7 +55,7 @@
         "sugarcraft/sugar-cli": "dev-master",
         "sugarcraft/sugar-treelist": "dev-master",
         "sugarcraft/sugar-log": "dev-master",
-        "sugarcraft/candy-metrics": "dev-master",
+        "sugarcraft/sugar-metrics": "dev-master",
         "sugarcraft/sugar-mouse": "dev-master",
         "sugarcraft/candy-minesweeper": "dev-master",
         "sugarcraft/candy-starter": "dev-master",
@@ -216,7 +216,7 @@
         },
         {
             "type": "path",
-            "url": "candy-metrics",
+            "url": "sugar-metrics",
             "options": {
                 "symlink": true
             }

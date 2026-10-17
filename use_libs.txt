@@ -19,7 +19,7 @@ https://sugarcraft.github.io/lib/sugar-charts.html
 https://sugarcraft.github.io/lib/sugar-forms.html
 https://sugarcraft.github.io/lib/sugar-markdown.html
 https://sugarcraft.github.io/lib/sugar-cli.html
-https://sugarcraft.github.io/lib/candy-metrics.html
+https://sugarcraft.github.io/lib/sugar-metrics.html
 https://sugarcraft.github.io/lib/sugar-image.html
 https://sugarcraft.github.io/lib/candy-pty.html
 https://sugarcraft.github.io/lib/sugar-treelist.html
