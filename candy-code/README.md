@@ -1041,7 +1041,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and nineteen keys are layered — `provider`, `models`,
+Only these one hundred and twenty keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
 `extraBody`, `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1063,20 +1063,21 @@ Only these one hundred and nineteen keys are layered — `provider`, `models`,
 `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
 `webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
 `webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
-`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `sd.baseUrl`, `sd.apiKey`,
-`sd.timeoutSeconds`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
-`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
-`instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
-`enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
-`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
-`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-`watchFiles`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`,
-`scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
-`toolOutputPreviewLines`, `sessionRetentionDays`, `sessions.autoTitle`,
-`promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
-`maxCheckpoints`, `lintCommands`, `disabledMcpServers`, `mcp.enabled`,
-`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
-`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
+`sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
+`ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
+`sd.savePattern`, `skills.pathNudges`, `instructions`, `disabledRules`,
+`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
+`subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
+`subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
+`autoCommit`, `theme`, `statusLine`, `layout`, `notify`, `watchFiles`,
+`queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
+`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
+`sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
+`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `lintCommands`,
+`disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
+`debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by

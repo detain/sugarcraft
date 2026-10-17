@@ -250,6 +250,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `bashTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn | yes |
 | `bashMaxTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn | yes |
 | `chatToolTimeoutSeconds` | `Chat::waitForToolChildrenAsync()`, as a batch starts | yes |
+| `grepTimeoutSeconds` | `Grep::searchTimeoutSeconds()` → `ToolLimits::current()`, as each search starts | yes |
 | `sd.baseUrl` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline reads it per request | **no** |
 | `sd.apiKey` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline sends it per request | **no** |
 | `sd.timeoutSeconds` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline bounds each request with it | **no** |
@@ -306,7 +307,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and nineteen, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1090,6 +1091,7 @@ project-settable.
 | `bashTimeoutSeconds` | Tools | int | `120` | P U C | — | next turn | tuning |
 | `bashMaxTimeoutSeconds` | Tools | int | `600` | P U C | — | next turn | tuning |
 | `chatToolTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
+| `grepTimeoutSeconds` | Tools | int | `60` | P U C | — | next turn | tuning |
 | `sd.baseUrl` | Media | URL | unset: no default; media generation refuses until one is set | U C | `CANDY_CODE_SD_BASE_URL` | restart | egress |
 | `sd.apiKey` | Media | secret | ${VAR} honored: `${SD_API_KEY}` reads the env var, and an unset one resolves to empty (no key sent) | U C | — | restart | security |
 | `sd.timeoutSeconds` | Media | int | `300` | U C | — | next turn | tuning |
@@ -1167,6 +1169,7 @@ project-settable.
 | `turnIdleTimeoutSeconds` | Advanced | int | `120` | C | — | next turn | tuning |
 | `connectTimeoutSeconds` | Advanced | number | `15` | P U C | `CANDY_CODE_CONNECT_TIMEOUT` | restart | tuning |
 | `streamIdleTimeoutSeconds` | Advanced | int | `3600` | C | — | next turn | tuning |
+| `streamHeaderTimeoutSeconds` | Advanced | number | `120` | C | — | next turn | tuning |
 | `providerRetryAttempts` | Advanced | int | `3` | P U C | — | next turn | tuning |
 | `providerRetryBaseBackoffMs` | Advanced | int | `500` | P U C | — | next turn | tuning |
 | `temperature` | Advanced | number | unset (`0.7`) | C | — | next turn | tuning |
@@ -1293,7 +1296,7 @@ Saved is not applied: see the next section for when each key takes effect.
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
@@ -1314,10 +1317,10 @@ Saved is not applied: see the next section for when each key takes effect.
 `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
 `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
 `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-`chatToolTimeoutSeconds`, `sd.timeoutSeconds`, `skills.pathNudges`,
-`embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`,
-`theme`, `statusLine`, `queueMode`, `terminalBackground`, `mouse`,
-`mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+`chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.timeoutSeconds`,
+`skills.pathNudges`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`,
+`subagentMaxActive`, `theme`, `statusLine`, `queueMode`, `terminalBackground`,
+`mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
 `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`,
 `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
 `maxCheckpoints`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
@@ -1438,8 +1441,8 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-two of the one hundred and nineteen layered
-  keys have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
+  They do not cover it: only twenty-two of the one hundred and twenty layered keys
+  have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
   `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
   `webSearchEndpoint`, `sd.baseUrl`, `ui.imageRenderMode`, `terminalBackground`,
   `mouse`, `mouseClicks`, `sessionRetentionDays`, `promptSuggestions`,
@@ -1463,8 +1466,9 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
   `webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
   `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-  `chatToolTimeoutSeconds`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
-  `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
+  `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.apiKey`,
+  `sd.timeoutSeconds`, `sd.defaultModel`, `sd.presets`,
+  `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
   `instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
   `enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
   `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
