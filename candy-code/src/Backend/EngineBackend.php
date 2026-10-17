@@ -754,6 +754,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * Run the clone against a memo of its own (ISS-021). Every ordinary
+     * clone shares the owner's single memo; a background turn whose history
+     * is fabricated (a {@see \SugarCraft\Code\Memory\DreamPass} pass over
+     * journal entries) must not record that history as the session's
+     * baseline, nor memoise its layers under the session — one observeTurn
+     * of a mismatched history would be read as a rewrite and re-walk the
+     * session's whole prompt. Hand such a clone a fresh memo instead.
+     */
+    public function withSessionPromptMemo(SessionPromptMemo $memo): self
+    {
+        return $this->mutate(['sessionPromptMemo' => $memo]);
+    }
+
+    /**
      * @param array<int, \SugarCraft\Code\Tools\Tool> $tools
      */
     public function withTools(array $tools): self

@@ -8,6 +8,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Commands\MemoryHistoryCommand;
+use SugarCraft\Code\Context\SessionPromptMemo;
 use SugarCraft\Code\DreamPassCompletedMsg;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
@@ -365,9 +366,12 @@ PROMPT;
     /**
      * $backend with the dream's tool set and nothing of the session's that a
      * background turn must not touch: its own hook chain of built-ins only,
-     * no session id (so the session's prompt memo and ledgers are not read
-     * against this turn), no context ledger or step observer, and at most
-     * {@see MAX_STEPS} steps. The session's permission gate and spend cap stay.
+     * no session id AND its own prompt memo (ISS-021) — every other clone of
+     * the session's backend shares the one memo, and this turn's fabricated
+     * history must not be observed as its baseline, nor its layered prime
+     * written under its session — no context ledger or step observer, and
+     * at most {@see MAX_STEPS} steps. The session's permission gate and
+     * spend cap stay.
      */
     public function restrict(EngineBackend $backend): EngineBackend
     {
@@ -387,6 +391,7 @@ PROMPT;
             ->withTools($tools)
             ->withHooks($hooks)
             ->withSessionId(null)
+            ->withSessionPromptMemo(SessionPromptMemo::new())
             ->withContextLedger(null)
             ->withStepUsageObserver(null)
             ->withSiblingSpend(null)

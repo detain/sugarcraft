@@ -11,6 +11,7 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Context\SessionPromptMemo;
 use SugarCraft\Code\DreamPassCompletedMsg;
 use SugarCraft\Code\Memory\AutoMemoryConsolidator;
 use SugarCraft\Code\Memory\CompactionJournal;
@@ -267,6 +268,37 @@ final class DreamPassTest extends TestCase
 
         [$quiet] = $settled->update(new DreamPassCompletedMsg(usage: Usage::new(5, 0.001)));
         self::assertCount(\count($settled->history), $quiet->history, 'a pass that changed nothing says nothing');
+    }
+
+    public function testARestrictedDreamEngineHoldsItsOwnPromptMemo(): void
+    {
+        // ISS-021: every clone of a session backend shares its one prompt
+        // memo, so the dream's fabricated history used to be observed against
+        // the session — and a background turn's prime wrote into the session
+        // bucket. restrict() now swaps in a memo of its own; ordinary clones
+        // keep sharing the owner's.
+        $backend = $this->engine([new CompleteResponse(content: 'z')])
+            ->withSessionId('S1');
+
+        self::assertSame(
+            $backend->sessionPromptMemo(),
+            $backend->withSessionId('S2')->sessionPromptMemo(),
+            'an ordinary clone still shares the owner\'s memo — it must warm the session, not re-read it',
+        );
+
+        $restricted = DreamPass::new(MemoryWriter::new($this->store, ''))->restrict($backend);
+
+        self::assertNotSame($backend->sessionPromptMemo(), $restricted->sessionPromptMemo(), 'the dream turn observes and primes a memo of its own');
+
+        $session = $backend->sessionPromptMemo();
+        $session->remember('S1', 'layers', static fn (): string => 'frozen');
+        $session->observeTurn('S1', ['u:a']);
+
+        $restricted->sessionPromptMemo()->observeTurn(null, ['u:dream-prompt']);
+        $restricted->sessionPromptMemo()->remember('', 'dream-layer', static fn (): string => 'background');
+
+        self::assertTrue($session->has('S1', 'layers'), 'the dream\'s history is no refresh point for the session');
+        self::assertSame('frozen', $session->remember('S1', 'layers', static fn (): string => 'rebuilt'), 'and its layers were not replaced');
     }
 
     private function pass(): DreamPass
