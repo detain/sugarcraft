@@ -30,7 +30,7 @@ export function saveTabChord(chord: TabChord): void {
 }
 
 export function nextTabChord(chord: TabChord): TabChord {
-  return TAB_CHORDS[(TAB_CHORDS.indexOf(chord) + 1) % TAB_CHORDS.length]
+  return TAB_CHORDS[(TAB_CHORDS.indexOf(chord) + 1) % TAB_CHORDS.length] ?? 'alt'
 }
 
 /** Human spelling for tooltips and the toggle button label. */

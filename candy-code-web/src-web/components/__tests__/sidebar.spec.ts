@@ -18,7 +18,7 @@ async function mountSidebar(ids: string[]) {
   await Wire.connect()
   const sessions = useSessionsStore()
   sessions.byId = Object.fromEntries(
-    ids.map((id, index) => [id, { id, name: `session ${index}`, status: 'idle', updatedAt: `2026-10-17 00:00:0${ids.length - index}`, createdAt: '', permissionMode: 'default', root: '/repo', contextTokens: 0, contextWindow: 0 }]),
+    ids.map((id, index) => [id, { id, name: `session ${index}`, status: 'idle', open: true, updatedAt: `2026-10-17 00:00:0${ids.length - index}`, createdAt: '', permissionMode: 'default', root: '/repo', contextTokens: 0, contextWindow: 0 }]),
   )
   router = createAppRouter(createMemoryHistory())
   await router.push({ name: 'session', params: { id: ids[0] ?? 'x' } })

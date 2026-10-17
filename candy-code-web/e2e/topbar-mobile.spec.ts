@@ -21,7 +21,7 @@ test.describe('top bar on a phone', () => {
       })(),
     }))
     expect(widths.document, `document scrollWidth ${widths.document} overflows ${widths.inner}`).toBeLessThanOrEqual(widths.inner)
-    expect(widths.bar.scroll, `topbar scrollWidth ${widths.bar} overflows ${widths.client}`).toBeLessThanOrEqual(widths.bar.client)
+    expect(widths.bar.scroll, `topbar scrollWidth ${widths.bar.scroll} overflows ${widths.bar.client}`).toBeLessThanOrEqual(widths.bar.client)
   })
 
   test('the wrapped bar keeps every action reachable', async ({ page, server }) => {
