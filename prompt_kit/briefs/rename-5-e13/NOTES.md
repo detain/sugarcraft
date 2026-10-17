@@ -17,15 +17,25 @@ Lane: e13 (batch-E final entry, tools/renames.json line 55: kind=rename, ns Core
 
 TAG (historical records keep old vocabulary): docs/plans/crush_code_{hardening_backlog,worklog,backlog_triage,concurrency}.md; docs/plans/leftover/updates.md; prompt_kit/briefs/** (rename-* NOTES/REPORT, candy-top-*, P4/P6 briefs, crush-roadmap, rename-1.1-zone-merge); prompt_kit/findings/** (crush-report/*, dep-surface.txt); prompt_kit/CONTEXT.md (25 dated-historical lines); findings/{monorepo-audit-2026-05-27,improvements-2026-05,resume_prompt}.md + candy-core mentions inside OTHER libs' audit files; ansi/ansi.json ×4 captions. <!-- @rename-keep historical provenance -->
 REWRITE (living, path refs stay true post-move): all code/tests/examples/READMEs/composer manifests, docs/repo_map/** (D1 disk truth: zero old-name survivors), docs/research/** (zero survivors), findings/{candy-core.md,plan_candy-core.md,plan.md,findings_resume_plan.md,repeated_logic.md,plan_repeated_logic.md} (live-subject/cross-lib planning docs; D1 rewrite policy), docs/lib/*.html (generated; reg-diff verified by gen-docs --check), .claude/.cursor/.github mirrors (sugar-pty precedent), scripts/, tools/, codecov.yml, plan_crush_media.md + other living plans, sugar-crush docs. <!-- @rename-keep historical provenance -->
-SELF-LOCK check: never tag files whose PATH auto-moves (findings/candy-core.md, findings/plan_candy-core.md, docs/research/libraries/candy-core-research.md match R3 as path segments — tagging would freeze the move). Glued `_`-prefixed repo_map filenames (sugarcraft_candy-core.md, update_sugarcraft_candy-core.md) are tool-invisible paths → manual git mv. <!-- @rename-keep historical provenance -->
+SELF-LOCK check: never tag files whose PATH auto-moves (findings/candy-core.md, findings/plan_candy-core.md, docs/research/libraries/candy-core-research.md match R3 as path segments — tagging would freeze the move). Glued `_`-prefixed repo_map filenames (sugarcraft_candy-core.md, update_sugarcraft_candy-core.md) are tool-invisible paths → manual git mv. (Execution correction: the tool DID git-mv both repo_map files — the path rule matches despite the leading underscore; only CONTENT refs of glued forms were manual.) <!-- @rename-keep historical provenance -->
 
 ## Steps
 
-- tag-prep commit: <PENDING>
-- R1 dry-run: <PENDING>
+- tag-prep commit: fb9a23e06 (306 lines / 37 files; ledger CONTEXT rename-* NOTES crush-report findings audit-snapshots).
+- R1 dry-run: plan 791 content files, 10 path renames + dir move; replacements R2=6 R3=2362 R6=1 (R1=0 R4=0 R5=0 as predicted — ns unchanged).
 - R2 remote rename: SKIPPED per brief law.
-- R3 tool run: <PENDING>
+- R3 tool run: done; sugar-core/ moved, all C.2 paths auto (incl. sugarcraft_candy-core.md pair + find/plan docs + _data + icons + docs/lib page).
 - R4 manual: README Formerly notice (no ns-changed line — ns unchanged); glued plan_candy-core.md content pointers sweep; `sugarcraft_candy-core.md` repo_map git mv ×2; CamelCase-joined test/method sites (`\w*CandyCore\w*` census); bare-`Core` census untouched (proved); followups entry for frozen ansi art captions. <!-- @rename-keep historical provenance -->
 - R5 wiring: renames.json own-line status→renamed targeted sed (ONLY my line — serial agent flips others concurrently); root composer update 'sugarcraft/*' --no-install; gen-docs (sugar-core.html + candy-core redirect stub mint); refresh-deps --mode=linked tree-wide + hand-prune dangling */vendor/sugarcraft/candy-core symlinks. <!-- @rename-keep historical provenance -->
 - R6 gates (committed tip): residue --old=candy-core 0; sugar-core suite EXACT vs R0; check-child-lifetimes rc0 with flipped row; refresh-deps linked sugar-crush+charts+forms+widgets+pty (+sugar-core); crush K=8 vs 22,564T (+0T, ±50A wobble); tools/tests 429T/1517A via sugar-core vendor bin; path-repos/gen-docs/gen-ansi rc0. <!-- @rename-keep historical provenance -->
 - R7 commit + push rename/e13 only.
+
+## Gates result (tip cf8a3eb04) <!-- @rename-keep historical provenance -->
+- residue --old=candy-core: 0. Blindspot greps (`_candy-core`, `candy-core_`, `CandyCore`-joined, Cap-Hyphen, compact, underscored): 0 after sweep (13 manual lines: repo_map/plan.md glued pointers, `_partial in candy-core_` italics ×2, Table.php comment, 5 CamelCore test identifiers+citation). <!-- @rename-keep historical provenance -->
+- ansi.json: 4 captions reworded wordmark-neutral (frozen art still shows candy-core wordmarks → followups entry); gen-ansi --check ok. <!-- @rename-keep historical provenance -->
+- own suite 1401T/28944A/28S rc0 EXACT vs base R0 (catalog row 1383/28917/25S was stale; R0 honestly re-measured). <!-- @rename-keep historical provenance -->
+- child-lifetimes rc0 (60 libs/28 sites/8 findings/8 accounted — flipped `sugar-core/src/WorkerPool.php::spawnWorker` row proven live/fail-closed). <!-- @rename-keep historical provenance -->
+- tools/tests 429T/1517A EXACT via sugar-core/vendor/bin/phpunit. path-repos rc0; gen-docs --check ok (61 pages + 50 stubs, candy-core.html stub self-tagged); gen-ansi rc0. <!-- @rename-keep historical provenance -->
+- K=8 INVOCATION LESSON: scripts/parallel-tests.sh lives at MONOREPO ROOT and self-anchors (`cd "$REPO"`, -c sugar-crush/phpunit.xml). The brief's `cd sugar-crush && bash scripts/...` = 127. Correct: repo-root `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv`. Result recorded next line.
+- crush K=8 from repo root: 8/8 shards rc=0, sums 22,564T (+0T exact) / 423,770A (+118A vs pinned figure — tree-scan census assertion wobble, tolerated by design; the lane added 1 tracked doc + rewrote docs scanned by per-file guards) / 2S matches pinned / RC=0.
+- fan-out: 56 composer.json (root + 55 libs); rename commit 1021 paths. R2/R8/R9 remotes owed by weld.
