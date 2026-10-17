@@ -1059,6 +1059,20 @@ final class SessionStore
     }
 
     /**
+     * Whether the connected database carries $table. The retention sweep
+     * reads tables only the enhanced store creates; a plain store pointed at
+     * a foreign or partial database must degrade to zero, not to an SQL error
+     * that silently zeroes the whole sweep (delete-if-zero callers).
+     */
+    private function hasTable(string $table): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
+        $stmt->execute([$table]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
      * Drop sessions untouched for `$daysOld` days, with their messages and
      * tool calls, and return how many session rows went.
      *
@@ -1070,10 +1084,16 @@ final class SessionStore
      * and old precisely because they stopped typing in it a month ago, and
      * `seedSession()` would have resumed it.
      *
-     * **Named sessions are never pruned, whatever their age.** A name only
-     * ever gets onto a row because the user typed `/rename` (or accepted an
-     * auto-generated title), which is the one unambiguous signal in this
-     * schema that a conversation was meant to be kept and found again later.
+     * **Named sessions are never pruned, whatever their age** — but only a
+     * name the USER chose counts. `/rename` stamps `title_source='user'`, and
+     * that marker is the one unambiguous "keep this, I will look for it again"
+     * signal in this schema. An auto-generated title is NOT a keep signal:
+     * the titler overwrites the placeholder name on ordinary traffic, so
+     * treating a name alone as named let the sweep's prime victims — rows
+     * old and untouched precisely because the user stopped typing in them —
+     * survive forever on a name they never chose (sugar_issues.md ISS-027).
+     * Rows predating the marker (`title_source` NULL) and a manual row
+     * carrying an empty one are still judged by the name itself.
      * Age alone cannot distinguish "abandoned scratch session" from "the
      * bisect notes I come back to twice a year", so it is only allowed to
      * delete rows the user never named. That signal is WEAK, though — the
@@ -1123,11 +1143,25 @@ final class SessionStore
         }
         $cutoff = gmdate('Y-m-d H:i:s', $cutoffTs);
 
+        // The reported message count rides the tables the app actually writes.
+        // The messages table only fills on fork copies, so the bare subquery
+        // reported zero for every production session (sugar_issues.md ISS-027).
+        // A plain store over a foreign database may lack the enhanced tables
+        // entirely — missing counts as zero rather than poisoning the sweep.
+        $transcriptCount = $this->hasTable('session_transcripts')
+            ? '(SELECT COUNT(*) FROM session_transcripts t WHERE t.session_id = s.id)'
+            : '0';
+        $checkpointCount = $this->hasTable('checkpoints')
+            ? '(SELECT (SELECT COUNT(*) FROM checkpoints c WHERE c.session_id = s.id)'
+                . ' + (SELECT COUNT(*) FROM checkpoint_blobs b WHERE b.session_id = s.id))'
+            : '0';
+
         $sql = "
             SELECT s.id, s.name, s.updated_at,
-                   (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS messages
+                   (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id)
+                     + $transcriptCount + $checkpointCount AS messages
             FROM sessions s
-            WHERE s.updated_at < ? AND (s.name IS NULL OR s.name = '')
+            WHERE s.updated_at < ? AND (s.name IS NULL OR s.name = '' OR s.title_source = 'auto')
               AND s.pinned = 0 AND s.kind <> 'subagent'
         ";
         $params = [$cutoff];
@@ -1183,7 +1217,10 @@ final class SessionStore
      * rows since audit 15b-03, so the cost is transcript clutter, not tokens),
      * so the transcript carries the aggregate and stderr carries this — the
      * complete, unclipped record, with the id, the last-used stamp and the
-     * message count the user needs to recognise what went.
+     * message count the user needs to recognise what went. Since ISS-027 that
+     * `messages` figure counts the persisted transcript and checkpoint blobs;
+     * the bare messages-table subquery it replaces reported zero for every
+     * production session.
      *
      * @return array<int, array{id: string, name: ?string, updated_at: string, messages: int}>
      */

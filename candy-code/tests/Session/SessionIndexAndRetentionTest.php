@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Session;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 
 /**
@@ -295,6 +296,56 @@ final class SessionIndexAndRetentionTest extends TestCase
         $this->assertSame('gone', $report[0]['id']);
         $this->assertSame(2, $report[0]['messages']);
         $this->assertSame('2020-01-01 00:00:00', $report[0]['updated_at']);
+    }
+
+    /**
+     * ISS-027: the auto-titler fills `name` AND `title_source='auto'`, and
+     * the old predicate read only the name — so the rows the sweep exists to
+     * clear survived on the very title it was given without being asked. A
+     * chosen name stays: `title_source='user'` by construction, and a legacy
+     * row that carries a name with no marker is presumed chosen.
+     */
+    public function testAutoTitledSessionsArePrunedAndChosenNamesSurvive(): void
+    {
+        $store = new SessionStore($this->dbPath);
+        $store->createSession('auto-titled', 'p', 'm');
+        $store->createSession('user-named', 'p', 'm');
+        $store->createSession('legacy-named', 'p', 'm', null, 'named years ago');
+        $store->createSession('never-titled', 'p', 'm');
+        $store->renameSessionIfUnnamed('auto-titled', 'a machine title');
+        $store->renameSession('user-named', 'typed by hand');
+        $this->ageSessions('2020-01-01 00:00:00');
+
+        $pruned = $store->pruneSessions(30);
+        $ids = array_column($store->pruneReport(), 'id');
+
+        $this->assertSame(2, $pruned);
+        $this->assertSame(['auto-titled', 'never-titled'], $ids);
+        $this->assertNotNull($store->getSession('user-named'), "title_source='user' keeps");
+        $this->assertNotNull($store->getSession('legacy-named'), 'a legacy name without any marker still counts as chosen');
+    }
+
+    /**
+     * ISS-027: the production store keeps its content in the transcript,
+     * checkpoint and blob tables — the messages table only ever fills on a
+     * fork copy — so the bare subquery the report used showed zero for every
+     * session the sweep actually deleted. The count now rides what was
+     * written: one transcript row, one checkpoint, two interned message
+     * bodies for the fixture below.
+     */
+    public function testThePruneReportCountsThePersistedTranscriptAndCheckpoints(): void
+    {
+        $enhanced = new EnhancedSessionStore($this->dbPath);
+        $enhanced->saveTranscript('gone', [
+            ['role' => 'user', 'content' => 'first question'],
+            ['role' => 'assistant', 'content' => 'first answer'],
+        ]);
+        $enhanced->saveCheckpoint('gone', ['messages' => [['role' => 'user', 'content' => 'first question']]]);
+        $this->ageSessions('2020-01-01 00:00:00');
+
+        $this->assertSame(1, $enhanced->pruneSessions(30));
+        $report = $enhanced->pruneReport();
+        $this->assertSame(4, $report[0]['messages'], 'one transcript + one checkpoint + two interned bodies');
     }
 
     /** A run that deletes nothing reports nothing, rather than last run's rows. */
