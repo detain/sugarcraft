@@ -1,7 +1,7 @@
 # rename-5-e11 NOTES — candy-wish → sugar-ssh-server <!-- @rename-keep -->
 
 Base 6709f44bd, branch rename/e11. Target per renames.json:53 (kind lib, ns Wish→SshServer).
-Derived B.4: pascal CandyWish→SugarSshServer; compact candywish 0 sites; env CANDY_WISH_* 0
+Derived B.4: pascal CandyWish→SugarSshServer; compact candywish 0 sites; env CANDY_WISH_* 0 <!-- @rename-keep -->
 sites → honest none, NO LegacyEnv (lib, no bin). R6 Lang domain wish→sshserver (tool). <!-- @rename-keep -->
 
 ## Flow (D1 template)
@@ -11,7 +11,7 @@ sites → honest none, NO LegacyEnv (lib, no bin). R6 Lang domain wish→sshserv
   plan_candy-pty r779, php74_branch, rename-baseline, crush-report/14, CONTEXT.md dual-mode
   learnings block (12 incl 2 invisible candy_wish underscore wikilines; :316 living-rewrite). <!-- @rename-keep -->
 - R1 dry-run: 198 files, 11 paths, R1=489 R2=79 R3=387 R6=1. Tool run identical; all php -l OK.
-- Manual: glued `_plan-candy-wish.md`-family prose refs (`_candy-wish` underscore lookbehind
+- Manual: glued `_plan-candy-wish.md`-family prose refs (`_candy-wish` underscore lookbehind <!-- @rename-keep -->
   blocks content rules): findings_resume_plan ×3 + plan.md → plan_sugar-ssh-server.md;
   update_sugarcraft_* ×2 → sugarcraft_sugar-ssh-server.md. <!-- @rename-keep -->
 - docs/repo_map/sugarcraft_candy-wish.md kept its NAME by file-level keepsItsName (a B9-era
@@ -42,7 +42,7 @@ sites → honest none, NO LegacyEnv (lib, no bin). R6 Lang domain wish→sshserv
   docs, research, findings) rewritten — D1/D7 precedent. <!-- @rename-keep -->
 
 ## Weld notes
-- Concurrent e2 (candy-metrics→sugar-metrics): I edited candy-wish-token lines in
+- Concurrent e2 (candy-metrics→sugar-metrics): I edited candy-wish-token lines in <!-- @rename-keep -->
   findings/plan_candy-metrics.md, findings/candy-metrics.md, docs/repo_map/sugarcraft_candy-metrics.md
   (+update_) — lines disjoint from metrics tokens but shared files; diff those at weld. <!-- @rename-keep -->
 - ext-ssh2 needs no matrix change: installed globally in vhs.yml setup-php (plan has no R-step here).
