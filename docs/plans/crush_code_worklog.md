@@ -10484,7 +10484,7 @@ replaced; **this round is the first time it actually fired, and it was correct.*
 
 ⚠️ **`ls -l … | grep -c '^l'` DISAGREED WITH REALITY TWICE before I believed it.** Two separate checks
 printed `18` while PHP's `is_link()` returned false for every entry and `ls -la` showed
-`drwxrwxr-x candy-ansi` dated three days earlier. Do not settle this with one `ls`. The measurement that
+`drwxrwxr-x candy-ansi` dated three days earlier. Do not settle this with one `ls`. The measurement that <!-- @rename-keep historical provenance -->
 cannot lie is PHP's own:
 `php -r 'foreach (glob("<lib>/vendor/sugarcraft/*") as $p) var_dump(is_link($p));'`, or compare file
 contents: `file_get_contents("<lib>/vendor/sugarcraft/candy-core/src/…") === file_get_contents("candy-core/src/…")`.

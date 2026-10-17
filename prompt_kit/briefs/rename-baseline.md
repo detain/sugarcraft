@@ -27,7 +27,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 
 | lib | tests | assertions | failures | errors | skipped | rc | note |
 |---|---|---|---|---|---|---|---|
-| candy-ansi | 360 | 901 | 0 | 0 | 0 | 0 |  |
+| candy-ansi | 360 | 901 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-async | 117 | 259 | 0 | 0 | 0 | 0 |  |
 | candy-buffer | 315 | 1712 | 0 | 0 | 0 | 0 |  |
 | candy-core | 1383 | 28917 | 0 | 0 | 25 | 0 |  |
