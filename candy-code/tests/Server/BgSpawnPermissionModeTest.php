@@ -10,6 +10,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
+use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 
@@ -31,6 +32,7 @@ use SugarCraft\Code\Tests\Server\Support\WireClient;
 final class BgSpawnPermissionModeTest extends TestCase
 {
     use StoppableDaemonFixtureTrait;
+    use BackendSelectionEnvSandboxTrait;
 
     /** Scratch temp root for the supervisor; short, the socket path lives inside it. */
     private string $tempRoot = '';
@@ -55,16 +57,27 @@ final class BgSpawnPermissionModeTest extends TestCase
 
         $this->savedMode = \getenv('CANDY_CODE_PERMISSION_MODE');
         putenv('CANDY_CODE_PERMISSION_MODE');
+        $this->clearBackendSelectionEnv();
     }
 
     protected function tearDown(): void
     {
-        putenv($this->savedMode === false ? 'CANDY_CODE_PERMISSION_MODE' : 'CANDY_CODE_PERMISSION_MODE=' . $this->savedMode);
         $this->fixture?->tearDown();
         if ($this->fixtureHome !== '') {
             $this->tearDownDaemonFixture();
         }
         ProtocolFixture::removeTree($this->tempRoot);
+        // RESTORE LAST, after both fixture teardowns: each of them snapshots
+        // and re-emits CANDY_CODE_BACKEND_CMD at its own arm point, and a
+        // serve() that arms the fixture only to putenv its echo probe next
+        // records the probe as the "original". The sandbox trait holds the
+        // TRUE pre-test value; anything earlier here can be walked over.
+        // The probe is process-wide, and the SuiteChildStdin* harnesses run
+        // later in path order and spawn `bin/candy-code -p` children that
+        // inherit the RUNNER's environment — a leaked probe silently
+        // replaces their stdin-echo backend and reddens their known-positive.
+        $this->restoreBackendSelectionEnv();
+        putenv($this->savedMode === false ? 'CANDY_CODE_PERMISSION_MODE' : 'CANDY_CODE_PERMISSION_MODE=' . $this->savedMode);
 
         parent::tearDown();
     }
