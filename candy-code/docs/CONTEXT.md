@@ -290,8 +290,9 @@ silent step in which only the `Memory` tool may run, to save what should
 outlive the session — a preference, a correction, a decision and its reason —
 before the summary drops it (`Context\Compaction\MemoryFlush`). It runs once
 per compaction cycle, only when a summary is really about to be written, never
-past the spend cap or a `PreCompact` refusal, and nothing about it reaches the
-transcript but the notes it saved. The host-side compactions (`/compact`, the
+past the spend cap or a `PreCompact` refusal; the flush itself leaves no row in
+the transcript — the saved notes land in the memory store (visible through
+`/memory`), and nothing announces the flush on screen. The host-side compactions (`/compact`, the
 automatic tier) flush the same way before their summary, on the same
 once-per-cycle count kept on the session's context ledger; the overflow retry
 below does not flush. `MemoryFlush::run()` now hands its caller the list of
