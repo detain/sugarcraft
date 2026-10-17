@@ -16,8 +16,8 @@ from canonical homes:
 - `Rect` → `\SugarCraft\Core\Rect`
 - `Theme` → `\SugarCraft\Style\Theme` (from step 02.01)
 - `StyleParser` → `\SugarCraft\Style\StyleParser` (from step 02.02)
-- `Buffer` → `\SugarCraft\Vt\Buffer\Buffer`
-- `Cell` → `\SugarCraft\Vt\Cell\Cell`
+- `Buffer` → `\SugarCraft\Vt\Buffer\Buffer` <!-- @rename-keep -->
+- `Cell` → `\SugarCraft\Vt\Cell\Cell` <!-- @rename-keep -->
 
 `Foundation/` shrinks to just `Drawable.php`, `Item.php`, `Sizer.php`
 (sugar-dashboard-specific interfaces).

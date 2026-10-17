@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Style\Layout;
 
-use SugarCraft\Buffer\Position;
-use SugarCraft\Buffer\Region as BufferRegion;
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Region as BufferRegion;
 use SugarCraft\Constraints\Region as ConstraintsRegion;
 
 /**

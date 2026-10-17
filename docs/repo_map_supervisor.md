@@ -72,9 +72,9 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 1 — New shared foundation packages (8)
 - [x] [Step 01 — Create sugar-ansi-parser](repo_map_step_01.md) — branch: `ai/sugar-ansi-parser-new`
-- [x] [Step 02 — Create sugar-cellbuffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
+- [x] [Step 02 — Create sugar-cellbuffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new` <!-- @rename-keep -->
 - [x] [Step 03 — Create sugar-constraints](repo_map_step_03.md) — branch: `ai/sugar-constraints-new`
-- [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
+- [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new` <!-- @rename-keep -->
 - [x] [Step 05 — Create sugar-mouse](repo_map_step_05.md) — branch: `ai/sugar-mouse-new`
 - [x] [Step 06 — Create sugar-input](repo_map_step_06.md) — branch: `ai/sugar-input-new`
 - [x] [Step 07 — Create sugar-fuzzy](repo_map_step_07.md) — branch: `ai/sugar-fuzzy-new`

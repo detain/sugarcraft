@@ -29,7 +29,7 @@ use SugarCraft\SshServer\Session;
 
 **Impact:** Silent failure at runtime if sugar-ssh-server is not installed; composer cannot catch this at `require` time.
 
-**Recommendation:** Either move `SessionMetrics` to a separate `candy-metrics-wish` bridge package, or declare `sugarcraft/sugar-ssh-server` as a hard `require` in `composer.json`.
+**Recommendation:** Either move `SessionMetrics` to a separate `candy-metrics-wish` bridge package, or declare `sugarcraft/sugar-ssh-server` as a hard `require` in `composer.json`. <!-- @rename-keep -->
 
 ---
 

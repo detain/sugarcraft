@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Style\Tests\Layout;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Layout\CassowarySolver;
-use SugarCraft\Layout\GreedySolver;
+use SugarCraft\Constraints\CassowarySolver;
+use SugarCraft\Constraints\GreedySolver;
 use SugarCraft\Style\Layout\Constraint;
 use SugarCraft\Style\Layout\Direction;
 use SugarCraft\Style\Layout\Rect;

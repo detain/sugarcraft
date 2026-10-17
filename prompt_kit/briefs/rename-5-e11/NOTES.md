@@ -21,7 +21,7 @@ sites → honest none, NO LegacyEnv (lib, no bin). R6 Lang domain wish→sshserv
   pending→renamed (own line only, python assert n==1); gen-docs minted docs/lib redirect stub
   (self-tagged, survives re-runs); gen-docs --check + gen-ansi --check rc0.
 - Vendor: git mv carried stale untracked vendor into the new dir; refresh-deps --mode=linked
-  sugar-ssh-server,candy-metrics at tip; PRUNED dangling */vendor/sugarcraft old-name symlink
+  sugar-ssh-server,candy-metrics at tip; PRUNED dangling */vendor/sugarcraft old-name symlink <!-- @rename-keep -->
   (D lesson reproduced, `escaping=1` tell). Root composer.lock untouched (C.3; weld owns lock work).
 
 ## Gates (committed tip b1695375c+NOTES)
@@ -30,7 +30,7 @@ sites → honest none, NO LegacyEnv (lib, no bin). R6 Lang domain wish→sshserv
   == baseline record. ext-ssh2 present; zero skips both sides.
 - Consumers: sugarcraft/candy-wish composer-grep 0 remaining; <!-- @rename-keep --> ns-grep 0. candy-metrics (only
   code-side consumer) 174T/464A exit0 == its base re-measure == record. Prose-side only:
-  candy-pty, candy-core, sugar-crush, candy-git-server, candy-starter, sugar-widgets example.
+  candy-pty, candy-core, sugar-crush, candy-git-server, candy-starter, sugar-widgets example. <!-- @rename-keep -->
 - tools/tests 426T/1484A OK. path-repos rc0; child-lifetimes rc0.
 
 ## Judgments
@@ -43,6 +43,6 @@ sites → honest none, NO LegacyEnv (lib, no bin). R6 Lang domain wish→sshserv
 
 ## Weld notes
 - Concurrent e2 (candy-metrics→sugar-metrics): I edited candy-wish-token lines in <!-- @rename-keep -->
-  findings/plan_candy-metrics.md, findings/candy-metrics.md, docs/repo_map/sugarcraft_candy-metrics.md
+  findings/plan_candy-metrics.md, findings/candy-metrics.md, docs/repo_map/sugarcraft_candy-metrics.md <!-- @rename-keep -->
   (+update_) — lines disjoint from metrics tokens but shared files; diff those at weld. <!-- @rename-keep -->
 - ext-ssh2 needs no matrix change: installed globally in vhs.yml setup-php (plan has no R-step here).

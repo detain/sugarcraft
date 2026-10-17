@@ -9,7 +9,7 @@ namespace SugarCraft\Constraints;
  *
  * Mirrors ratatui's `Rect` — axis-aligned rectangle within a terminal grid.
  *
- * NOTE: this is intentionally NOT the same class as {@see \SugarCraft\Buffer\Region}
+ * NOTE: this is intentionally NOT the same class as {@see \SugarCraft\CellBuffer\Region}
  * in sugar-cellbuffer — a deliberate leaf-package name collision so sugar-constraints
  * stays dependency-free. The two are converted at the boundary by
  * sugar-style' `RegionBridge`; do not conflate them.

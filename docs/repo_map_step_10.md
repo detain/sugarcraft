@@ -18,7 +18,7 @@ Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-ba
 
 - `sugar-style/composer.json` — add `sugarcraft/sugar-constraints: @dev` + path-repo via `path-repo-closure`.
 - `sugar-style/src/Layout/Solver.php` — keep class, refactor to delegate to a `LayoutSolver`. All existing public methods unchanged in signature + output.
-- `sugar-style/src/Layout/Constraint.php` — keep as facade aliasing `SugarCraft\Layout\Constraint\*` types.
+- `sugar-style/src/Layout/Constraint.php` — keep as facade aliasing `SugarCraft\Layout\Constraint\*` types. <!-- @rename-keep -->
 - `sugar-style/src/Layout/Layout.php` — internal refactor as needed; public API unchanged.
 - Existing `sugar-style/tests/Layout/*Test.php` must still pass.
 
@@ -36,7 +36,7 @@ Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-ba
 
 1. **Use `path-repo-closure`** to add `sugarcraft/sugar-constraints: @dev` to sugar-style' composer.json (and to any lib that transitively requires sugar-style).
 2. **Refactor `sugar-style/src/Layout/Solver.php`**: convert from monolithic impl to a thin facade. Its `solve()` method delegates to a `LayoutSolver` instance obtained via `SolverFactory::default()`. Preserve every public method signature.
-3. **Refactor `sugar-style/src/Layout/Constraint.php`**: if it was a single class with type discriminator, refactor so each constraint case wraps the corresponding `SugarCraft\Layout\Constraint\*` value object. Public API surface unchanged.
+3. **Refactor `sugar-style/src/Layout/Constraint.php`**: if it was a single class with type discriminator, refactor so each constraint case wraps the corresponding `SugarCraft\Layout\Constraint\*` value object. Public API surface unchanged. <!-- @rename-keep -->
 4. **SolverFactory** reads `getenv('SUGARCRAFT_LAYOUT_SOLVER')`: `greedy` → `GreedySolver`, anything else (or empty) → `CassowarySolver`.
 5. **Verify** by running `cd sugar-style && composer update --quiet && vendor/bin/phpunit`. Then with `SUGARCRAFT_LAYOUT_SOLVER=greedy vendor/bin/phpunit`. Both should pass.
 6. **Run all libs that depend on sugar-style** (use `php scripts/affected-libs.php`) to confirm no transitive breakage.

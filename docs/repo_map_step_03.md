@@ -46,7 +46,7 @@ Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver 
 1. **Spawn a Researcher FIRST** with the question:
    > "What's the minimal viable Cassowary simplex implementation for terminal-grid 1D layout (single-direction constraint solving, integer outputs)? Reference kiwisolver (Python), rhea (JS), Badros & Borning 2001 paper. Identify edit variables, stay constraints, simplex pivot rule. Estimate PHP LoC. Are there existing PHP ports?"
    Block on the Researcher's findings. If they recommend a non-trivial dependency (e.g., FFI to kiwi C++), append `Cassowary dep decision: <details>` to `docs/repo_map_updates.md` and proceed with the simplest viable hand-roll.
-2. **Invoke `scaffold-library`** with slug `sugar-constraints`, namespace `SugarCraft\Layout\`, role "Constraint-based layout solver (Cassowary + greedy fallback)".
+2. **Invoke `scaffold-library`** with slug `sugar-constraints`, namespace `SugarCraft\Layout\`, role "Constraint-based layout solver (Cassowary + greedy fallback)". <!-- @rename-keep -->
 3. **Copy sugar-style' Solver as GreedySolver**:
    ```bash
    cp sugar-style/src/Layout/Solver.php sugar-constraints/src/Solver/GreedySolver.php

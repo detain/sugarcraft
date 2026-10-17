@@ -43,7 +43,7 @@ Address all findings from the sugar-metrics code review, ranging from critical r
 - `src/Middleware/SessionMetrics.php:27-59` — full middleware implementation
 
 **Investigation Notes:**
-The imports at lines 8-10 pull in three classes from sugar-ssh-server (`Context`, `Middleware`, `Session`). The `handle()` method at line 42 is the core entry point. The `Session` type is used at line 44 to access `$session->user` and `$session->term`. Since `sugar-ssh-server` is only in `suggest`, projects using sugar-metrics without sugar-ssh-server will get a fatal error when trying to use SessionMetrics. The fix options are: (1) create a new `candy-metrics-wish` bridge package that depends on both, or (2) hard-require sugar-ssh-server. Given the middleware is specifically for "SugarSshServer session telemetry" (per the docblock), a bridge package is the cleaner architectural solution.
+The imports at lines 8-10 pull in three classes from sugar-ssh-server (`Context`, `Middleware`, `Session`). The `handle()` method at line 42 is the core entry point. The `Session` type is used at line 44 to access `$session->user` and `$session->term`. Since `sugar-ssh-server` is only in `suggest`, projects using sugar-metrics without sugar-ssh-server will get a fatal error when trying to use SessionMetrics. The fix options are: (1) create a new `candy-metrics-wish` bridge package that depends on both, or (2) hard-require sugar-ssh-server. Given the middleware is specifically for "SugarSshServer session telemetry" (per the docblock), a bridge package is the cleaner architectural solution. <!-- @rename-keep -->
 
 ---
 

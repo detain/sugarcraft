@@ -418,7 +418,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 1. **Shared `Buffer`/`Cell` rendering foundation** — Architectural investment enabling all packages to benefit from cell-level diffing, per-cell styling, and animation efficiency in one change.
 
-2. **Shared layout engine with Cassowary** — `SugarCraft\Layout` package used by sugar-style, sugar-widgets, sugar-panels, sugar-dashboard, sugar-forms.
+2. **Shared layout engine with Cassowary** — `SugarCraft\Layout` package used by sugar-style, sugar-widgets, sugar-panels, sugar-dashboard, sugar-forms. <!-- @rename-keep -->
 
 3. **Shared mouse hit-testing** — bubblezone-style Mark/Scan/Get pattern self-contained in each zone-aware package rather than external dependency.
 

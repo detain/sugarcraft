@@ -661,8 +661,8 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 | `SugarCraft\Dashboard\Foundation\Style` | `SugarCraft\Style\Style` | -- |
 | `SugarCraft\Dashboard\Foundation\Theme` | `SugarCraft\Style\Theme` | -- |
 | `SugarCraft\Dashboard\Foundation\Rect` | -- | `SugarCraft\Core\Rect` |
-| `SugarCraft\Dashboard\Foundation\Buffer` | -- | `SugarCraft\Vt\Buffer\Buffer` |
-| `SugarCraft\Dashboard\Foundation\Cell` | -- | `SugarCraft\Vt\Cell\Cell` |
+| `SugarCraft\Dashboard\Foundation\Buffer` | -- | `SugarCraft\Vt\Buffer\Buffer` | <!-- @rename-keep -->
+| `SugarCraft\Dashboard\Foundation\Cell` | -- | `SugarCraft\Vt\Cell\Cell` | <!-- @rename-keep -->
 | `SugarCraft\Dashboard\Foundation\StyleParser` | `SugarCraft\Style\StyleParser` | -- |
 
 ---

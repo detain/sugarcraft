@@ -26,8 +26,8 @@ use SugarCraft\SshServer\TransportAware;
  * end of the chain.
  *
  * **Transport compatibility.** `BubbleTea` only works under
- * {@see \SugarCraft\Wish\Transport\HostSshdTransport}. The new
- * default {@see \SugarCraft\Wish\Transport\InProcessTransport}
+ * {@see \SugarCraft\SshServer\Transport\HostSshdTransport}. The new
+ * default {@see \SugarCraft\SshServer\Transport\InProcessTransport}
  * pumps bytes between supervisor stdio and a sugar-pty master, so
  * mounting a Program inline in the supervisor process would
  * collide with the pump. Migration paths from in-process mode:

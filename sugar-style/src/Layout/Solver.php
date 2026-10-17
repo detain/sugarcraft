@@ -14,7 +14,7 @@ use SugarCraft\Constraints\Region;
  *
  * Converts {@see Rect} to {@see Region} and
  * {@see SugarCraft\Style\Layout\Constraint*} to
- * {@see SugarCraft\Layout\Constraint*} before delegation, then converts
+ * {@see SugarCraft\Constraints\Constraint*} before delegation, then converts
  * results back to {@see Rect[]}.
  *
  * Mirrors ratatui's layout solver (charmbracelet/bubbletea).

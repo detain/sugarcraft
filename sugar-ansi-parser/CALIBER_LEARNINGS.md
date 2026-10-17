@@ -36,7 +36,7 @@ forking its own copy). Four changes, all inside sugar-ansi-parser:
   and `scosc`/`scorc` (SCO save/restore `s`/`u`). Signatures match sugar-vterm's
   `CsiHandlerImpl` (count methods take `int $count = 1`) so the later sugar-vterm
   reimplementation is a drop-in. **BC-critical:** growing an interface breaks
-  every implementer — the only in-repo implementer of `SugarCraft\Ansi\Parser\CsiHandler`
+  every implementer — the only in-repo implementer of `SugarCraft\AnsiParser\Parser\CsiHandler`
   is `CsiHandlerImpl` (all dependents — sugar-pty, candy-ansi-inspect, candy-codeshot —
   implement the `Handler` interface, NOT `CsiHandler`), so only `CsiHandlerImpl`
   needed new (no-op / return-0) method bodies.

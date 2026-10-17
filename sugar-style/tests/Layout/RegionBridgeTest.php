@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Style\Tests\Layout;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Buffer\Position;
-use SugarCraft\Buffer\Region as BufferRegion;
-use SugarCraft\Layout\Region as LayoutRegion;
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Region as BufferRegion;
+use SugarCraft\Constraints\Region as LayoutRegion;
 use SugarCraft\Style\Layout\RegionBridge;
 
 final class RegionBridgeTest extends TestCase

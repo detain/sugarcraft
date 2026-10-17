@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Region;
-use SugarCraft\Buffer\Position;
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Region;
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Style as SugarStyle;

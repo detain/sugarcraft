@@ -49,12 +49,12 @@ Root README.md:59, PROJECT_NAMES.md, docs/MATCHUPS.md ×2, docs/index.html, docs
 
 ## Gate evidence at tip d7fcbad5d (main rename commit)
 
-- residue `--old=candy-metrics`: 1 entry checked, 0 findings, rc0.
+- residue `--old=candy-metrics`: 1 entry checked, 0 findings, rc0. <!-- @rename-keep -->
 - own suite `cd sugar-metrics && vendor/bin/phpunit`: OK (174 tests, 464 assertions) — EXACT vs R0.
 - tools/tests: OK (426 tests, 1484 assertions) — base floor (e6's 429 pin not in this base).
 - check-path-repos --no-lib-path-repos rc0; check-child-lifetimes 0 problems (8/8 accounted); gen-docs --check ok (61 pages + 38 stubs); gen-ansi-readme --check ok.
-- consumers: zero composer.json requires of sugarcraft/candy-metrics; zero `SugarCraft\Metrics\` refs outside lib → sugar-crush `--filter Metrics` gate vacuous (disclosed, not faked).
-- README Formerly notice per e4 shape; redirect stub docs/lib/candy-metrics.html minted by gen-docs (self-tagged by tool).
+- consumers: zero composer.json requires of sugarcraft/candy-metrics; zero `SugarCraft\Metrics\` refs outside lib → sugar-crush `--filter Metrics` gate vacuous (disclosed, not faked). <!-- @rename-keep -->
+- README Formerly notice per e4 shape; redirect stub docs/lib/candy-metrics.html minted by gen-docs (self-tagged by tool). <!-- @rename-keep -->
 - renames.json:52 flipped pending→renamed inside main commit (D1 shape).
 
 ## Deviations / disclosures

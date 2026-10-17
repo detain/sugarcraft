@@ -24,7 +24,7 @@ Own NOTES file tracked → every old-token line in it carries @rename-keep from 
 - residue `--old=candy-vt`: 0 findings. path-repos/child-lifetimes (28 sites/8 accounted/0 problems)/gen-docs --check (61 pages + 38 stubs)/gen-ansi --check: all rc=0. <!-- @rename-keep lane e7 record -->
 - sugar-vterm suite: **976T/12873A EXACT** vs base re-measure (brief-era 912/12643 stale, disclosed). tools/tests **426/1484 EXACT** (= own-base pin; 429/1517 is e6's tip figure).
 - candy-vcr full: **989T/4213A/14S EXACT** (LoopPin-before-HangWatchdog bootstrap untouched by rename — files moved, order intact). golden tapes green ⇒ freeze ruling PROVEN.
-- consumers: charts 654/1551 EXACT, animation 191/887 EXACT, image 661/14817/6S EXACT, candy-ansi 360/901 OK (no base num), candy-git-server 354/875 OK, candy-pty: full suite carries base-era hang liability (standing red family, not chased) → Ioctl/Size filter 55T/141A/3S green + VimSmoke 1S (skipped here) + `class_exists('SugarCraft\Vterm\Terminal\Terminal')` autoload probe via pty vendor = ok. sugar-dashboard **7483T/14859A/2F = standing AtomicJsonFile `.lock`-residue pair** (WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp + PersistenceTest::testSaveLeavesNoLeftoverTempFiles; campaign-known "dash 2F", vt-independent — dash's 2 consumer files were ns-token edits in Foundation/Buffer+Cell).
+- consumers: charts 654/1551 EXACT, animation 191/887 EXACT, image 661/14817/6S EXACT, candy-ansi 360/901 OK (no base num), candy-git-server 354/875 OK, candy-pty: full suite carries base-era hang liability (standing red family, not chased) → Ioctl/Size filter 55T/141A/3S green + VimSmoke 1S (skipped here) + `class_exists('SugarCraft\Vterm\Terminal\Terminal')` autoload probe via pty vendor = ok. sugar-dashboard **7483T/14859A/2F = standing AtomicJsonFile `.lock`-residue pair** (WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp + PersistenceTest::testSaveLeavesNoLeftoverTempFiles; campaign-known "dash 2F", vt-independent — dash's 2 consumer files were ns-token edits in Foundation/Buffer+Cell). <!-- @rename-keep -->
 - sugar-crush K=8 SHARDED CONSERVATION: base (pre-rename, at 6709f44bd) shard-sum **22,564T/423,770A**; tip **22,564T/423,738A, rc=0, 0 FAIL/ERROR lines**. ΔT=0 exact; ΔA=−32 = known data-provider wobble class (lane-ks precedent: gate pins T/S/E/F exact, A wobble tolerated by design).
 
 ## Deviations
@@ -32,6 +32,6 @@ Own NOTES file tracked → every old-token line in it carries @rename-keep from 
 - Own suite base = 976/12873 (brief "~912T/12643A era" stale at 6709f44bd).
 
 ## Weld-relevant seams (for closeout)
-- PROJECT_NAMES.md:135: tool rewrote the vt slug on a line that ALSO holds `**CandyAnsi**` (e6's token) → if e6 rewrote the same line, weld merge conflict same-line; content intent identical (both renames), trivial manual fuse.
+- PROJECT_NAMES.md:135: tool rewrote the vt slug on a line that ALSO holds `**CandyAnsi**` (e6's token) → if e6 rewrote the same line, weld merge conflict same-line; content intent identical (both renames), trivial manual fuse. <!-- @rename-keep -->
 - Same-file collision candidates with other lanes: sugar-crush/src/Chat.php + tests (comments only; e-crush lane F owns big crush edits).
 - R8/R9-D duty: packagist for sugarcraft/sugar-vterm is Phase-10 owner checklist (fire-and-record, not this lane).

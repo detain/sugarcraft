@@ -59,7 +59,7 @@ Reference: `docs/repo_map_update.md` §327.5 (frameworks), §336 (already partia
    ```bash
    cp sugar-vterm/src/Parser/*.php sugar-ansi-parser/src/Parser/
    ```
-3. **Rewrite namespaces** in each copied file: `SugarCraft\Vterm\Parser` → `SugarCraft\AnsiParser\Parser`, and any `use SugarCraft\Vterm\…` that the parser doesn't actually need. Use `sed -i 's|SugarCraft\\\\Vterm\\\\Parser|SugarCraft\\\\Ansi\\\\Parser|g'` then audit.
+3. **Rewrite namespaces** in each copied file: `SugarCraft\Vterm\Parser` → `SugarCraft\AnsiParser\Parser`, and any `use SugarCraft\Vterm\…` that the parser doesn't actually need. Use `sed -i 's|SugarCraft\\\\Vterm\\\\Parser|SugarCraft\\\\Ansi\\\\Parser|g'` then audit. <!-- @rename-keep -->
 4. **If any parser file imports outside of `Parser/`** (e.g., a `SugarCraft\Vterm\Cell` or `SugarCraft\Vterm\Terminal`), refactor the import so sugar-ansi-parser is self-contained. The state machine itself emits abstract Actions; cell/terminal handling lives in the *consumer*. If you discover a coupling that can't be cleanly cut, append `BLOCKING: sugar-ansi-parser cannot extract without sugar-vterm coupling: <details>` to `docs/repo_map_updates.md`.
 5. **Add a class-level docblock** to `Parser.php`: `@see Mirrors charmbracelet/x/ansi Parser (ECMA-48 state machine)`.
 6. **Write one sanity test** in `sugar-ansi-parser/tests/ParserTest.php`:

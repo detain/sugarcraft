@@ -23,9 +23,9 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **candy-core** | [research/libraries/candy-core-research.md](libraries/candy-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
-| **sugar-style** | [research/libraries/candy-sprinkles-research.md](libraries/candy-sprinkles-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing |
+| **sugar-style** | [research/libraries/candy-sprinkles-research.md](libraries/candy-sprinkles-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing | <!-- @rename-keep -->
 | **sugar-pty** | [research/libraries/sugar-pty-research.md](libraries/sugar-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
-| **sugar-vterm** | [research/libraries/candy-vt-research.md](libraries/candy-vt-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
+| **sugar-vterm** | [research/libraries/candy-vt-research.md](libraries/candy-vt-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing | <!-- @rename-keep -->
 | **candy-vcr** | [research/libraries/candy-vcr-research.md](libraries/candy-vcr-research.md) | 1. stats CLI, 2. RegexAssertion, 3. Gzip compression |
 
 ### Dashboard & Components
@@ -57,7 +57,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **candy-scriptui** | [research/libraries/candy-scriptui-research.md](libraries/candy-scriptui-research.md) | 1. Auto-discovery, 2. ValueEnum options, 3. FlagSpec trait |
-| **sugar-log** | [research/libraries/candy-log-research.md](libraries/candy-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values |
+| **sugar-log** | [research/libraries/candy-log-research.md](libraries/candy-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values | <!-- @rename-keep -->
 | **sugar-ssh-server** | [research/libraries/sugar-ssh-server-research.md](libraries/sugar-ssh-server-research.md) | 1. Context propagation, 2. Channel events, 3. Session metadata |
 | **candy-ssh-launcher** | [research/libraries/candy-ssh-launcher-research.md](libraries/candy-ssh-launcher-research.md) | 1. proxy_jump, 2. SSH config import, 3. Identity files |
 | **sugar-quickpick** | [research/libraries/sugar-quickpick-research.md](libraries/sugar-quickpick-research.md) | 1. Item interface, 2. Filter injection, 3. Persistent history |
