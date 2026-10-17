@@ -7348,10 +7348,13 @@ final class Renderer
         // rather than being appended to a row that is already full - and it is
         // a single cluster, so no break can split it.
         //
-        // Only the WIDTH is handled here. The height half needs nothing:
-        // {@see render()}'s tail clip slices to the last N lines and the input
-        // box sits at the tail, so a taller box costs history rows and stays
-        // visible on its own.
+        // Only the WIDTH used to be handled here. The height claim in the
+        // old comment below — a taller box "costs history rows and stays
+        // visible on its own" — held exactly as long as drafts stayed short,
+        // and ISS-051 is the report of what happens when one does not: a
+        // 300-line draft (or a pasted one) turned the compose area into a
+        // wall that scrolled the whole transcript away. The box is now capped
+        // at a third of the frame and windowed around the caret, below.
         $inner = max(1, $chat->cols() - self::INPUT_CHROME_COLS);
         // The prompt costs its 2 cells on row 1 only, but the continuation
         // rows pay the same indent so the draft occupies ONE text column all
@@ -7411,6 +7414,7 @@ final class Renderer
         foreach (self::wrapToPane($draft, $textWidth) as $i => $row) {
             $rows[] = ($indented ? ($i === 0 ? '> ' : '  ') : '') . $row;
         }
+        $rows = self::windowInputRows($rows, $chat, $clean, $at, $theme, $indented, $textWidth);
 
         $box = Style::new()
             ->border(Border::normal())
@@ -7425,6 +7429,75 @@ final class Renderer
 
     /** Lang key of the inline title editor's label ({@see renderTitleEditorRow()}). */
     private const TITLE_EDITOR_LABEL = 'tui.title_editor.label';
+
+    /**
+     * ISS-051: cap the compose box at roughly a third of the frame — minus
+     * the box's two border rows — and window what does not fit around the
+     * caret. The window uses the same reservation as the "/" popup's
+     * ({@see renderSlashMenu()}): each hidden edge costs one faint marker row
+     * and a marker an edge does not need is handed back to the items, so the
+     * box never exceeds its budget. The caret row is located by accumulating
+     * the widths of the rows the wrap JUST produced, minus their prompt
+     * indent, so wide cells and the '> '/'  ' column are the painted frame's
+     * own arithmetic, not a parallel implementation that can drift from it.
+     *
+     * @param list<string> $rows
+     * @param string       $clean  the sanitized draft, pre-cursor-splice
+     * @param int          $at     byte offset of the caret into $clean
+     * @param bool         $indented whether rows 0.. carry the prompt indent
+     * @param int          $textWidth the draft column every row was wrapped at
+     *
+     * @return list<string>
+     */
+    private static function windowInputRows(
+        array $rows,
+        Chat $chat,
+        string $clean,
+        int $at,
+        Theme $theme,
+        bool $indented,
+        int $textWidth,
+    ): array {
+        $cap = max(1, intdiv($chat->rows() - 4, 3));
+        $count = count($rows);
+        if ($count <= $cap) {
+            return $rows;
+        }
+
+        $caretCol = Width::of(mb_substr($clean, 0, $at, 'UTF-8'));
+        $caretRow = $count - 1;
+        $acc = 0;
+        foreach ($rows as $i => $row) {
+            $acc += Width::of($indented ? substr($row, self::INPUT_PROMPT_COLS) : $row);
+            if ($acc >= $caretCol) {
+                $caretRow = $i;
+                break;
+            }
+        }
+
+        $itemCap = max(1, $cap - 2);
+        $start = max(0, min($caretRow - intdiv($itemCap, 2), $count - $itemCap));
+        $end = $start + $itemCap;
+        if ($start === 0) {
+            $end = min($count, $end + 1);
+        } elseif ($end === $count) {
+            $start = max(0, $start - 1);
+        }
+
+        $window = array_slice($rows, $start, $end - $start);
+        $moreStyle = Style::new()->foreground($theme->systemLabel)->faint();
+        if ($start > 0) {
+            array_unshift(
+                $window,
+                ($indented ? '  ' : '') . $moreStyle->render(self::clipToWidth(Lang::t('tui.input.lines_above', ['count' => $start]), $textWidth)),
+            );
+        }
+        if ($end < $count) {
+            $window[] = ($indented ? '  ' : '') . $moreStyle->render(self::clipToWidth(Lang::t('tui.input.lines_below', ['count' => $count - $end]), $textWidth));
+        }
+
+        return $window;
+    }
 
     /** Lang key of its key hint, the first thing dropped when the row runs out of room. */
     private const TITLE_EDITOR_HINT = 'tui.title_editor.hint';

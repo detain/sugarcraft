@@ -964,6 +964,71 @@ final class RendererTest extends TestCase
         self::assertLessThanOrEqual(3, $items, 'the floor is the cap too — never more');
     }
 
+    // =========================================================================
+    // ISS-051: the compose box is capped at ~a third of the frame and
+    // windowed around the caret; a long typed draft cannot eat the chat.
+    // =========================================================================
+
+    public function testAMultiLineDraftIsCappedAndWindowedAroundTheCaret(): void
+    {
+        $draft = implode("\n", array_map(static fn (int $i): string => "row {$i}", range(1, 20)));
+        $plain = $this->stripAnsi(Renderer::render(
+            (new Chat(history: [Message::user('hi')], inputBuf: $draft))->withSize(80, 24)
+        ));
+
+        $box = [];
+        $inBox = false;
+        foreach (explode("\n", $plain) as $line) {
+            if (str_starts_with($line, '┌')) {
+                $inBox = true;
+            } elseif (str_starts_with($line, '└')) {
+                break;
+            } elseif ($inBox) {
+                $box[] = $line;
+            }
+        }
+
+        // cap = intdiv(24 - 4, 3) = 6 interior rows; the caret is on the LAST
+        // draft row, so the window hugs the bottom: five rows plus one marker.
+        self::assertLessThanOrEqual(6, count($box), 'the box pays a third of the frame, not all of it');
+        self::assertStringContainsString('row 20', $box[count($box) - 1], 'the caret row is the last row');
+        self::assertMatchesRegularExpression('/↑ \d+ lines above/', $box[0], 'the hidden head is counted');
+        self::assertStringNotContainsString('lines below', implode("\n", $box));
+        self::assertStringContainsString('█', $plain, 'ISS-047: the caret is still always painted');
+    }
+
+    public function testAnEditorInTheMiddleOfTheDraftSeesItsOwnRows(): void
+    {
+        $draft = implode("\n", array_map(static fn (int $i): string => "row {$i}", range(1, 60)));
+        $chat = (new Chat(history: [Message::user('hi')], inputBuf: $draft))->withSize(80, 24);
+        // 150 columns left of the end — the caret parks around row 39, deep in
+        // the middle of a 60-row draft, where BOTH edges of the window hide
+        // rows and the painted five must be the caret's own neighbourhood.
+        for ($i = 0; $i < 150; $i++) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Left));
+        }
+
+        $plain = $this->stripAnsi(Renderer::render($chat));
+
+        $box = [];
+        $inBox = false;
+        foreach (explode("\n", $plain) as $line) {
+            if (str_starts_with($line, '┌')) {
+                $inBox = true;
+            } elseif (str_starts_with($line, '└')) {
+                break;
+            } elseif ($inBox) {
+                $box[] = $line;
+            }
+        }
+
+        self::assertLessThanOrEqual(6, count($box));
+        self::assertMatchesRegularExpression('/↑ \d+ lines above/', $box[0], 'the head is hidden and says so');
+        self::assertMatchesRegularExpression('/↓ \d+ lines below/', $box[count($box) - 1], 'and so is the tail');
+        self::assertMatchesRegularExpression('/row 3[6-9]|row 4[0-2]/', implode("\n", $box), 'the caret row is on screen');
+        self::assertStringContainsString('█', $plain);
+    }
+
     public function testDifferentThemesProduceDifferentOutput(): void
     {
         $dark = new Chat(history: [Message::user('hi')], themeName: 'dark');

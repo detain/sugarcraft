@@ -345,6 +345,15 @@ final class Chat implements Model
     public const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
     /**
+     * ISS-051: paste sizes at/under which the text stays verbatim in the
+     * draft; beyond either, {@see withCollapsedPaste()} files it under a
+     * chip. See {@see pasteNeedsCollapse()} for the rule's rationale.
+     */
+    public const PASTE_COLLAPSE_LINES = 10;
+
+    public const PASTE_COLLAPSE_BYTES = 2048;
+
+    /**
      * How long {@see reapKilledToolChildren()} spends collecting a batch of
      * SIGKILLed tool children before giving up on whatever is left of it.
      *
@@ -872,6 +881,22 @@ final class Chat implements Model
          * actually building.
          */
         private readonly int $scrollOffset = 0,
+        /**
+         * ISS-051: payloads of pastes too big to type into a visible box,
+         * collapsed to a one-line chip IN the draft instead of the verbatim
+         * text a 300-line paste used to dump there. Keyed by the exact chip
+         * text {@see withCollapsedPaste()} inserted, valued by the payload as
+         * pasted; {@see expandPasteChips()} restores it at every reader that
+         * treats the draft as sent text (submit, queue, permission answer,
+         * scope edit, history record). A chip the user hand-edits stops
+         * matching its key and survives as literal text — the honest,
+         * visible failure, never a silently altered prompt.
+         *
+         * @var array<string, string>
+         */
+        private readonly array $pasteChips = [],
+        /** Number of chips issued; exists only to make chip texts distinct. */
+        private readonly int $pasteCounter = 0,
         /**
          * Supervisor the `/bg` and `/fork` commands dispatch onto
          * (crush_feat.md section 5 E3). Before this, `BackgroundSupervisor`
@@ -2841,6 +2866,14 @@ final class Chat implements Model
                 return [$this->withInput($this->input->insertString($this->mentionFor($imagePath) . ' ')), null];
             }
 
+            // ISS-051: pastes that would bury the box go under a chip. The
+            // check sits after the folder picker (a pasted PATH stays a path)
+            // and after the image-mention arm (a screenshot path is one
+            // short line anyway); everything else that is big gets collapsed.
+            if (self::pasteNeedsCollapse($msg->content)) {
+                return [$this->withCollapsedPaste($msg->content), null];
+            }
+
             [$pasted] = $this->input->update($msg);
             \assert($pasted instanceof TextArea);
             if ($pasted === $this->input) {
@@ -4671,7 +4704,7 @@ final class Chat implements Model
                 return [$this->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
             if ($msg->type === KeyType::Enter && !$msg->alt && !$msg->shift && !$msg->ctrl) {
-                $note = trim($this->inputBuf);
+                $note = trim($this->expandPasteChips($this->inputBuf));
                 // An `AskUser` answer in the user's own words is an ANSWER, so
                 // it goes back as `once` + the words (roadmap 5.7-2) — what a
                 // server client sends too, and what the event log records.
@@ -4698,7 +4731,7 @@ final class Chat implements Model
                 return [$this->closingScopeEditor()->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
             if ($msg->type === KeyType::Enter && !$msg->alt && !$msg->shift && !$msg->ctrl) {
-                $scope = trim($this->inputBuf);
+                $scope = trim($this->expandPasteChips($this->inputBuf));
                 $refusal = $this->permissionScopeRefusal($scope);
                 if ($refusal !== null) {
                     return [$this->mutate(['permissionScopeEdit' => [
@@ -10418,6 +10451,8 @@ final class Chat implements Model
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
             'scrollOffset' => $this->scrollOffset,
+            'pasteChips' => $this->pasteChips,
+            'pasteCounter' => $this->pasteCounter,
             'backgroundSupervisor' => $this->backgroundSupervisor,
             'backgroundStatuses' => $this->backgroundStatuses,
             'sessionPicker' => $this->sessionPicker,
@@ -11047,7 +11082,9 @@ final class Chat implements Model
      */
     private function submit(): array
     {
-        $text = trim($this->inputBuf);
+        // ISS-051: this is where the draft becomes SENT TEXT — the chip (if
+        // any) expands here and the model never sees the marker.
+        $text = trim($this->expandPasteChips($this->inputBuf));
         if ($text === '') {
             return [$this, null];
         }
@@ -11766,7 +11803,7 @@ final class Chat implements Model
      */
     private function queueDraft(): array
     {
-        return $this->enqueuePrompt(trim($this->inputBuf));
+        return $this->enqueuePrompt(trim($this->expandPasteChips($this->inputBuf)));
     }
 
     /**
@@ -16550,6 +16587,62 @@ final class Chat implements Model
         }
 
         return $this->mutate($changes);
+    }
+
+    /**
+     * ISS-051, the collapse half: a paste beyond the thresholds does not
+     * land in the draft verbatim. It is filed away under a one-line chip —
+     * `[Pasted text #N +L lines]`, the shape the issue asked for — inserted
+     * at the caret like any other paste, and {@see expandPasteChips()} puts
+     * the payload back into every reader that treats the draft as sent text.
+     * The composing frame stops scrolling 300 lines of nothing; the wire
+     * still carries the paste whole.
+     */
+    private function withCollapsedPaste(string $payload): self
+    {
+        $chip = Lang::t('tui.paste.chip', [
+            'n' => $this->pasteCounter + 1,
+            'lines' => substr_count($payload, "\n") + 1,
+        ]);
+
+        return $this->withInput($this->input->insertString($chip))->mutate([
+            // + never re-keys an existing chip: two pastes carry distinct
+            // numbers, so the map cannot lose a payload to a same-keyed one.
+            'pasteChips' => $this->pasteChips + [$chip => $payload],
+            'pasteCounter' => $this->pasteCounter + 1,
+        ]);
+    }
+
+    /**
+     * ISS-051: replace every chip in $text with the payload it filed. Called
+     * by each reader that sends the draft's text — submit, queue, the
+     * AskUser/permission answer and the scope editor, and history recording
+     * — so the model and the transcript never see the marker. Unknown or
+     * hand-edited chip text simply does not match and survives literally.
+     */
+    public function expandPasteChips(string $text): string
+    {
+        foreach ($this->pasteChips as $chip => $payload) {
+            if (str_contains($text, $chip)) {
+                $text = str_replace($chip, $payload, $text);
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * ISS-051: a paste collapses when it would dominate the visible box —
+     * more than {@see PASTE_COLLAPSE_LINES} lines or more than
+     * {@see PASTE_COLLAPSE_BYTES} bytes, either alone. Both numbers are
+     * deliberately modest: the E704 DoS note above the paste arm already
+     * treats a 4KB draft as a frame problem, and the issue's own example is
+     * the 300-line paste that "completely hijacks the box".
+     */
+    private static function pasteNeedsCollapse(string $payload): bool
+    {
+        return strlen($payload) > self::PASTE_COLLAPSE_BYTES
+            || substr_count($payload, "\n") + 1 > self::PASTE_COLLAPSE_LINES;
     }
 
     /**

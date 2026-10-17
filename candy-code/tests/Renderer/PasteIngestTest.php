@@ -287,4 +287,90 @@ final class PasteIngestTest extends TestCase
             $this->assertLessThanOrEqual(60, \SugarCraft\Core\Util\Width::string($row), 'no row wider than the pane');
         }
     }
+
+    // =========================================================================
+    // ISS-051: pastes beyond the thresholds collapse to a one-line chip in
+    // the draft and expand again at every boundary that sends the text.
+    // =========================================================================
+
+    public function testABigPasteCollapsesToAChipInTheDraft(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "line {$i}", range(1, 300)));
+
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        $this->assertSame('[Pasted text #1 +300 lines]', $chat->inputBuf);
+        $this->assertSame($payload, $chat->expandPasteChips($chat->inputBuf), 'the payload is filed, not lost');
+    }
+
+    public function testAPasteJustUnderBothThresholdsStaysVerbatim(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "l{$i}", range(1, Chat::PASTE_COLLAPSE_LINES)));
+        $this->assertLessThanOrEqual(Chat::PASTE_COLLAPSE_BYTES, strlen($payload));
+
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        $this->assertSame($payload, $chat->inputBuf);
+    }
+
+    public function testASingleLineOverTheByteThresholdStillCollapses(): void
+    {
+        $payload = str_repeat('x', Chat::PASTE_COLLAPSE_BYTES + 1);
+
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        $this->assertSame('[Pasted text #1 +1 lines]', $chat->inputBuf);
+    }
+
+    public function testTheEnterAfterAChippedPasteSubmitsTheWholePayload(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "p{$i}", range(1, 40)));
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        [$submitted] = $chat->update(new KeyMsg(KeyType::Enter));
+
+        $users = array_values(array_filter($submitted->history, static fn ($m): bool => $m->role === Role::User));
+        $this->assertCount(1, $users, 'one message, exactly as the verbatim path sends it');
+        $this->assertSame($payload, $users[0]->content, 'the model sees the paste, never the marker');
+        $this->assertSame('', $submitted->inputBuf);
+    }
+
+    public function testTwoChipsInOneDraftCarryTheirOwnPayloadsInOrder(): void
+    {
+        $first = implode("\n", array_map(static fn (int $i): string => "a{$i}", range(1, 12)));
+        $second = implode("\n", array_map(static fn (int $i): string => "b{$i}", range(1, 13)));
+
+        [$chat] = $this->pasteBox()->update(new PasteMsg($first));
+        [$chat] = $chat->update(new PasteMsg($second));
+
+        $this->assertSame(
+            '[Pasted text #1 +12 lines][Pasted text #2 +13 lines]',
+            $chat->inputBuf,
+            'the second chip is numbered distinctly and lands at the caret, after the first',
+        );
+        $this->assertSame($first . $second, $chat->expandPasteChips($chat->inputBuf));
+    }
+
+    public function testAHandTypedChipTextWithNoChipFiledSurvivesLiterally(): void
+    {
+        [$submitted] = $this->pasteBox(draft: '[Pasted text #9 +1 lines]')->update(new KeyMsg(KeyType::Enter));
+
+        $users = array_values(array_filter($submitted->history, static fn ($m): bool => $m->role === Role::User));
+        $this->assertSame('[Pasted text #9 +1 lines]', $users[0]->content, 'typing the marker is typing text');
+    }
+
+    public function testTheChipPaintsOneRowOfBoxNotThreeHundred(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "line {$i}", range(1, 300)));
+        [$chat] = $this->pasteBox(cols: 80, rows: 24)->update(new PasteMsg($payload));
+
+        $plain = (string) preg_replace(
+            '/\e\[[0-9;?]*[a-zA-Z]|\e\][^\a\e]*(\a|\e\\\\)/',
+            '',
+            is_string($view = $chat->view()) ? $view : $view->body,
+        );
+
+        $this->assertStringContainsString('[Pasted text #1 +300 lines]', $plain, 'the chip is what the user sees');
+        $this->assertLessThan(30, count(explode("\n", $plain)), 'and the frame is a frame, not a paste dump');
+    }
 }

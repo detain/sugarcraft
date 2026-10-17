@@ -252,8 +252,15 @@ final class InputWrapTest extends TestCase
      */
     public function testTheDraftSurvivesThePaneTooNarrowToAffordThePrompt(): void
     {
+        // ISS-051 re-scopes this pin: at rows=24 the box shows six interior
+        // rows, and 'hello world' wrapped at one cell a row is twelve — the
+        // window would open at the CARET's end and row 0 would be the
+        // "↑ lines above" marker, testing windowing rather than the prompt
+        // indent this method exists to pin. 'hi' is the same first-cell
+        // question at widths 5, 6 and 7 without ever tripping the cap: if it
+        // did trip, this row-0 assert would be pinning a different law.
         foreach ([5 => '', 6 => '', 7 => '> '] as $cols => $expectedPrompt) {
-            $box = $this->inputBox($this->chat('hello world', $cols));
+            $box = $this->inputBox($this->chat('hi', $cols));
             $inner = self::insideBorder($box[0]);
 
             $this->assertStringStartsWith(
