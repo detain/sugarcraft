@@ -64,6 +64,9 @@ final class ArgvParser
      * {@see NonInteractive::format()}, indistinguishably from an explicit
      * `text`, so a `| jq` consumer of `--output-format jsonl` got an empty
      * pipe at exit 0. The match is case-sensitive; see the check itself.
+     * A MISSING value (`--output-format` last) and a flag-shaped one are
+     * usage errors too (ISS-084), in the same family as `--root`/`--config`;
+     * `--output-format=<value>` remains the escape hatch.
      *
      * `configPath` is the config FILE `--config` named, whose EXISTENCE is not
      * validated here (see {@see self::configError()}), and null when the flag
@@ -301,9 +304,31 @@ final class ArgvParser
             }
 
             // --output-format <value>
+            //
+            // STRICT, like --root/--config/--model (ISS-084). It used to take
+            // `$argv[++$i]` unconditionally, so a trailing `--output-format`
+            // silently kept `text` — an invocation that explicitly asked for a
+            // machine-readable stream got prose at exit 0, and the `| jq`
+            // consumer saw an empty pipe with a success status, the exact
+            // failure this flag's contract promises never happens. A
+            // flag-shaped value was worse: `--output-format --help` made the
+            // format the literal `--help`, whose unsupported-format error then
+            // shadowed the sharper one the loop would have raised. The
+            // `=`-form stays the escape hatch for a value beginning with "-".
             if ($arg === '--output-format') {
-                $outputFormat = $argv[++$i] ?? $outputFormat;
-                ++$i;
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = 'candy-code: ' . Lang::t($next === null
+                            ? 'cli.argv.output_format.missing'
+                            : 'cli.argv.output_format.flag', ['option' => (string) $next]);
+                        $usageHint = Lang::t('cli.argv.hint.output_format_value');
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                $outputFormat = $next;
+                $i += 2;
                 continue;
             }
 

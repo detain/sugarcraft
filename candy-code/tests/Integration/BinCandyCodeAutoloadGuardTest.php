@@ -369,10 +369,12 @@ final class BinCandyCodeAutoloadGuardTest extends TestCase
         yield 'wrong case' => ['--output-format JSON -p hi'];
         yield 'the flag with no value' => ['--output-format'];
         yield 'after the POSIX end-of-options separator' => ['-- --output-format=json -p hi'];
-        // Was `--root --output-format json -p hi` until audit CLI-2 made
-        // `--root` refuse a flag-shaped value; `--output-format` is now the one
-        // flag that still swallows the token after it.
-        yield 'swallowed by --output-format' => ['--output-format --output-format json'];
+        // `--root` used to name this row until audit CLI-2 made `--root` refuse
+        // a flag-shaped value; ISS-084 moved `--output-format` to the same
+        // strict family, so the refusal case now is the flag refusing TWICE —
+        // a flag-shaped value that itself gets no value. Neither side reads a
+        // format, and the working one answers a usage error.
+        yield 'a flag-shaped value that gets no value' => ['--output-format --output-format'];
         yield 'after -- with a subcommand open' => ['session delete -- --output-format=json'];
     }
 
@@ -492,7 +494,14 @@ final class BinCandyCodeAutoloadGuardTest extends TestCase
         // Since audit CLI-2 it refuses a flag-shaped value like its siblings,
         // so the format IS read -- on both sides.
         yield 'a flag-shaped value --root refuses' => [['--root', '--output-format', 'json', '-p', 'hi']];
-        yield 'swallowed by --output-format' => [['--output-format', '--output-format', 'json']];
+        // Since ISS-084 `--output-format` refuses a flag-shaped value like its
+        // siblings, so this second occurrence is read by both sides — the
+        // refusal leaves it unconsumed for the loop, exactly as `--root` above.
+        yield 'a flag-shaped value --output-format refuses, then a real one' => [
+            ['--output-format', '--output-format', 'json'],
+        ];
+        yield 'a flag-shaped value that gets no value' => [['--output-format', '--output-format']];
+        yield 'no value before a real one' => [['--output-format', '-p', 'hi', '--output-format', 'json']];
         // REGRESSION ROW 3 (measured diverging): the same separator with a
         // subcommand open, where the tokens go to the subcommand's operands.
         yield 'after the separator with a subcommand open' => [

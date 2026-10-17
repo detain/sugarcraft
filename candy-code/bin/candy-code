@@ -135,10 +135,11 @@ ini_set('display_errors', 'stderr');
     // parser rejects `--output-format JSON` as unsupported, so treating it as
     // json here would make the broken checkout MORE permissive than the working
     // one); and the value-taking flags consume their token, in the two flavours
-    // ArgvParser gives them — `--output-format` takes the next token
-    // unconditionally, while `-p`, `--prompt`, `--root`, `--config`, `--model`,
+    // ArgvParser gives them — `-p`, `--prompt`, `--root`, `--config`, `--model`,
     // `--permission-mode` and `--resume` refuse a flag-shaped one and leave it
-    // for the loop.
+    // for the loop, and since ISS-084 `--output-format` refuses one too, with
+    // the same leave-it-for-the-loop reading plus the third case of a missing
+    // value (nothing to consume at all).
     //
     // WHAT IS NOT MIRRORED, deliberately — this is a format scan and not a
     // second parser. The `run` positional alias is not modelled, and modelling
@@ -156,10 +157,9 @@ ini_set('display_errors', 'stderr');
     // The strict set: ArgvParser refuses a flag-shaped value for each of these
     // (its looksLikeFlag() is "longer than one character and begins with -")
     // and leaves the token unconsumed for the next iteration to judge.
-    // `--root` joined it in audit CLI-2; until then it was the one lenient
-    // flag besides `--output-format`, and `--root --output-format json` made
-    // `--output-format` the ROOT on both sides. `--output-format` is now the
-    // only lenient one, handled by the branch that reads it.
+    // `--root` joined it in audit CLI-2; `--output-format` joined it in
+    // ISS-084, which is why it is handled by its own branch below rather than
+    // listed here — its consumed value is the one thing this scan reads.
     $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--resume'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
@@ -172,7 +172,14 @@ ini_set('display_errors', 'stderr');
         if (str_starts_with($arg, '--output-format=')) {
             $format = substr($arg, 16); // length of "--output-format="
         } elseif ($arg === '--output-format') {
-            $format = $rawArgv[++$i] ?? $format;
+            $next = $rawArgv[$i + 1] ?? null;
+            if (is_string($next) && strlen($next) > 1 && $next[0] !== '-') {
+                $format = $next;
+                ++$i;
+            }
+            // A missing or flag-shaped value is a usage error in the parser
+            // and carries no format on either side; a flag-shaped $next stays
+            // unconsumed for the loop, exactly as the parser leaves it.
         } elseif (in_array($arg, $strictValueFlags, true)) {
             $next = $rawArgv[$i + 1] ?? null;
             if (!is_string($next) || strlen($next) <= 1 || $next[0] !== '-') {

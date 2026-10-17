@@ -834,6 +834,57 @@ final class ArgvParserTest extends TestCase
     }
 
     /**
+     * ISS-084: `candy-code -p hi --output-format` used to keep `text` and
+     * exit 0 — the silent-empty-pipe failure this flag's validation exists to
+     * prevent, arriving by omission instead of by typo. It is now the
+     * `cli.argv.*.missing` family's own error, naming the flag.
+     */
+    public function testATrailingOutputFormatWithoutAValueIsAUsageError(): void
+    {
+        $result = ArgvParser::parse(['candy-code', '-p', 'hi', '--output-format']);
+
+        $this->assertNotNull($result->usageError, 'the missing value was silently accepted as text');
+        $this->assertStringContainsString('--output-format', $result->usageError);
+        $this->assertStringContainsString('argument list ended', $result->usageError);
+        $this->assertNotNull($result->usageHint);
+        $this->assertStringContainsString('--output-format=', $result->usageHint);
+        $this->assertSame('text', $result->outputFormat, 'a rejected value must not stain the format');
+    }
+
+    /**
+     * A flag-shaped value is refused like `--root`/`--config` refuse theirs,
+     * and the token stays unconsumed so the rest of the parse still
+     * classifies it — `--output-format --verbose` names the offending option
+     * AND records `--verbose` as the unknown flag it is.
+     */
+    public function testAFlagShapedOutputFormatValueIsRefusedAndLeftForTheLoop(): void
+    {
+        $result = ArgvParser::parse(['candy-code', '-p', 'hi', '--output-format', '--verbose']);
+
+        $this->assertNotNull($result->usageError, 'the flag was silently accepted as the format');
+        $this->assertStringContainsString('--output-format', $result->usageError);
+        $this->assertStringContainsString('--verbose', $result->usageError);
+        $this->assertContains('--verbose', $result->unknownFlags);
+        $this->assertSame('text', $result->outputFormat);
+    }
+
+    /**
+     * The escape hatch: the `=` form takes its value from the same token, so a
+     * leading dash stays literal and is never mistaken for a refusal of the
+     * missing/flag-shaped kind. `-json` is still no format anybody implements —
+     * the error that comes back is the UNSUPPORTED one, naming the literal,
+     * which is what proves the token was carried and not swallowed.
+     */
+    public function testTheEqualsFormCarriesADashShapedValueIntoTheFormatCheck(): void
+    {
+        $result = ArgvParser::parse(['candy-code', '--output-format=-json']);
+
+        $this->assertNotNull($result->usageError);
+        $this->assertStringContainsString('-json', $result->usageError);
+        $this->assertStringNotContainsString('argument list ended', $result->usageError);
+    }
+
+    /**
      * @dataProvider supportedOutputFormats
      */
     public function testEverySupportedOutputFormatParsesWithoutAUsageError(string $format): void
