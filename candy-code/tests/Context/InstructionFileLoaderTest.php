@@ -243,6 +243,88 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertSame([], $loader->loadForced());
     }
 
+    // ─── loadForced() refusal visibility and imports (ISS-067) ─────
+
+    public function testAnAbsoluteForcedPatternIsRefusedLoudlyNotSilentlySkipped(): void
+    {
+        // The wildcard is concatenated on purpose: a single glob-shaped
+        // string literal here would be harvested into the GlobDialect corpus
+        // and drift the census figure in src/Util/PathGlob.php.
+        $star = chr(42);
+        $absolute = '/etc/ssh/' . $star . '.md';
+        $loader = new InstructionFileLoader($this->repoRoot, [$absolute]);
+
+        $this->assertSame([], $loader->loadForced());
+        $this->assertArrayHasKey($absolute, $loader->refusedPaths());
+        $this->assertStringContainsString('absolute', $loader->refusedPaths()[$absolute]);
+    }
+
+    public function testAHomePrefixedForcedPatternIsRefusedLoudly(): void
+    {
+        // The old code globs `<repoRoot>/~/notes/*.md`, matches nothing, and
+        // says nothing — the operator's home notes never load either way, but
+        // until now the pattern retired in silence. (As above, the wildcard is
+        // concatenated so the literal never joins the GlobDialect corpus.)
+        $tilde = '~/notes/' . chr(42) . '.md';
+        $loader = new InstructionFileLoader($this->repoRoot, [$tilde]);
+
+        $this->assertSame([], $loader->loadForced());
+        $this->assertArrayHasKey($tilde, $loader->refusedPaths());
+        $this->assertStringContainsString('~-prefixed', $loader->refusedPaths()[$tilde]);
+    }
+
+    public function testAWildcardFreeForcedPatternThatMatchesNothingIsRefused(): void
+    {
+        $loader = new InstructionFileLoader($this->repoRoot, ['no-such-file.md']);
+
+        $this->assertSame([], $loader->loadForced());
+        $this->assertStringContainsString(
+            'matched no file',
+            $loader->refusedPaths()['no-such-file.md'] ?? '',
+        );
+    }
+
+    public function testAWildcardForcedPatternMatchingNothingStaysSilent(): void
+    {
+        // An empty result for a wildcard is a legitimate empty set — today.
+        // (Wildcard concatenated, same GlobDialect reason as above.)
+        mkdir($this->repoRoot . '/empty-dir', 0777, true);
+        $wildcard = 'empty-dir/' . chr(42) . '.md';
+        $loader = new InstructionFileLoader($this->repoRoot, [$wildcard]);
+
+        $this->assertSame([], $loader->loadForced());
+        $this->assertSame([], $loader->refusedPaths());
+    }
+
+    public function testForcedMatchesExpandTheirOwnImports(): void
+    {
+        mkdir($this->repoRoot . '/notes', 0777, true);
+        $this->touch($this->repoRoot . '/notes/forced.md', "FORCED HEAD\n@./part.md\nFORCED TAIL");
+        $this->touch($this->repoRoot . '/notes/part.md', 'PART BODY');
+
+        $loader = new InstructionFileLoader($this->repoRoot, ['notes/forced.md']);
+        $contents = $loader->loadForced();
+
+        $this->assertCount(1, $contents);
+        $this->assertStringContainsString('PART BODY', $contents[0]);
+        // The part inlined by the forced document is emitted, not re-shipped.
+        $this->assertContains($this->repoRoot . '/notes/part.md', $loader->emittedPaths());
+    }
+
+    public function testAForcedMatchCannotImportOutOfTheCheckout(): void
+    {
+        $this->touch($this->tempDir . '/outside-secret.md', 'OUTSIDE BODY');
+        mkdir($this->repoRoot . '/notes', 0777, true);
+        $this->touch($this->repoRoot . '/notes/forced.md', 'HEAD @' . $this->tempDir . '/outside-secret.md TAIL');
+
+        $loader = new InstructionFileLoader($this->repoRoot, ['notes/forced.md']);
+        $contents = $loader->loadForced();
+
+        $this->assertCount(1, $contents);
+        $this->assertStringContainsString('<import-blocked', $contents[0]);
+        $this->assertStringNotContainsString('OUTSIDE BODY', $contents[0]);
+    }
+
     // ─── loadForPath() tests ───────────────────────────────────────
 
     public function testNestedFileInjectedOnFirstTouch(): void

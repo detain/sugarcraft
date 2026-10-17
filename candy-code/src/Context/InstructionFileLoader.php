@@ -20,9 +20,11 @@ use SugarCraft\Code\Support\HomeDirectory;
  * - Per-path nested instruction files (CLAUDE.md, AGENTS.md in subdirectories)
  *   are loaded via loadForPath() and tracked internally to inject each file at most once
  *
- * `loadRoot()`/`loadForPath()` also expand `@path` import references via
- * ImportResolver, mirroring Claude Code's CLAUDE.md/AGENTS.md import syntax
- * (this repo's own root CLAUDE.md already uses `@./AGENTS.md`).
+ * `loadRoot()`, `loadForced()` and `loadForPath()` also expand `@path` import
+ * references via ImportResolver, mirroring Claude Code's CLAUDE.md/AGENTS.md
+ * import syntax (this repo's own root CLAUDE.md already uses `@./AGENTS.md`).
+ * The forced tier joined the expansion last, and silently lacked it until
+ * ISS-067 — a forced file's own imports were dead text.
  *
  * EVERY read here is bounded through {@see ContainedPath}, and the count is
  * deliberate rather than incidental: SEVEN call sites, one per read decision this
@@ -847,6 +849,22 @@ final class InstructionFileLoader
      * regardless of what the agent has touched, providing cross-cutting
      * guidance that shouldn't depend on an agent opening the right file.
      *
+     * MATCHES GET THEIR IMPORTS EXPANDED (ISS-067). A forced file's `@x.md`
+     * references are resolved exactly as {@see loadRoot()} resolves the root
+     * documents' — through {@see expandImports()}, against the checkout — so a
+     * CALIBER_LEARNINGS.md that imports its own notes no longer ships them as
+     * dead text. The old `$body = $doc . $note` here was the one read path in
+     * this class that skipped the expansion the class docblock promises.
+     *
+     * A PATTERN THAT CANNOT MATCH IS SAID SO (ISS-067), through the same
+     * {@see refusedPaths()} record the launch drain prints: an absolute
+     * pattern, a `~/` pattern, and a wildcard-free pattern whose file is
+     * absent each get a refusal keyed by the pattern as spelled. All three
+     * used to `continue` in silence — a forced instruction the operator
+     * believes is loading, quietly never loading. A pattern that DOES carry a
+     * wildcard and matches nothing is still silent: it names a class of files
+     * that may legitimately be empty today.
+     *
      * Patterns are user config but their matches land verbatim in the model's
      * system prompt, so containment is enforced twice: absolute patterns are
      * rejected outright, and every glob match is realpath()-checked against
@@ -868,9 +886,10 @@ final class InstructionFileLoader
      * line rather than its body — a glob such as `docs/*.md` reaches a generated
      * reference file as easily as a convention; see {@see loadDocuments()}.
      *
-     * @return string[] Contents of matching in-repo files (patterns with no
-     *                  matches, matches outside repoRoot, and matches already
-     *                  emitted elsewhere are skipped)
+     * @return string[] Contents of matching in-repo files (matches outside
+     *                  repoRoot, and matches already emitted elsewhere, are
+     *                  skipped; patterns that cannot match are refused, not
+     *                  skipped — see above)
      */
     public function loadForced(): array
     {
@@ -886,8 +905,26 @@ final class InstructionFileLoader
 
         $contents = [];
         foreach ($this->forcedInstructions as $pattern) {
-            // Reject absolute paths — they bypass repoRoot and are a security risk.
+            // A pattern is resolved under the checkout; the two spellings that
+            // cannot be are refused LOUDLY, keyed as spelled (ISS-067 — they
+            // used to `continue` in silence). Absolute patterns stay rejected
+            // outright, not globbed: they bypass repoRoot and are a security
+            // risk, and a `~/` pattern's intended target is outside the
+            // checkout anyway, where the per-match containment below would
+            // only refuse the matches one by one after walking a tree the
+            // loader has no business enumerating.
             if (str_starts_with($pattern, '/')) {
+                $this->refusedPaths[$pattern] = 'an absolute forced-instruction pattern; forced patterns '
+                    . 'resolve under the checkout (' . $this->repoRoot . ')';
+
+                continue;
+            }
+
+            if ($pattern === '~' || str_starts_with($pattern, '~/')) {
+                $this->refusedPaths[$pattern] = 'a ~-prefixed forced-instruction pattern; home-directory '
+                    . 'instructions belong to the personal layer, and forced patterns resolve only under '
+                    . 'the checkout (' . $this->repoRoot . ')';
+
                 continue;
             }
 
@@ -903,6 +940,15 @@ final class InstructionFileLoader
             $matches = glob($fullPattern);
 
             if ($matches === false || $matches === []) {
+                // A wildcard-free pattern that matched nothing is a typo or a
+                // deleted file — it can never match anything else either, so
+                // the operator is told (ISS-067). Wildcard patterns matching
+                // nothing legitimately describe an empty set and stay silent.
+                if (strpbrk($pattern, '*?[') === false) {
+                    $this->refusedPaths[$pattern] = 'matched no file, and carries no wildcard to match '
+                        . 'anything else with';
+                }
+
                 continue;
             }
 
@@ -943,7 +989,7 @@ final class InstructionFileLoader
                     // one invalid byte here used to fail every request
                     // (audit 15d-08) — see utf8Document().
                     [$doc, $note] = $this->utf8Document($raw, $path);
-                    $body = $doc . $note;
+                    $body = $this->expandImports($doc, \dirname($path), $this->repoRoot) . $note;
                     $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
                 }
             }
