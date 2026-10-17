@@ -365,6 +365,56 @@ final class HeadlessPermissionPrompt
     }
 
     /**
+     * Hook names whose ASK must reach a real answer even when nobody is
+     * expected to give one (ISS-040). Owner ruling 2026-10-06 keeps bypass
+     * as the standing yes for GATE asks; this roster is the per-HOOK opt-in
+     * that keeps it from swallowing a user's own exit-3 question, which
+     * HOOKS.md still promises is "asked every time".
+     *
+     * THE CONFIG PLUMBING IS A REPORTED SEAM: the entry key `unattendedAsk`
+     * must join HookConfig::ENTRY_KEYS and be registered from here during
+     * chain construction (src/Hooks/ is outside this lane, and ENTRY_KEYS is
+     * pinned by HOOKS.md's own drift arm). Until that lands this is the
+     * public API a PHP-API-registered hook calls directly, and the shape the
+     * YAML wiring will call. A name, not a closure: the roster survives
+     * chain rebuilds, and a hook renames itself at worst by editing its file.
+     *
+     * @var array<string, true>
+     */
+    private static array $mustBeAnswered = [];
+
+    public static function requireUnattendedAnswer(string ...$hookNames): void
+    {
+        foreach ($hookNames as $name) {
+            self::$mustBeAnswered[$name] = true;
+        }
+    }
+
+    /** Back to "nobody opted in" — the test-shape twin of pinTurnHooksForTesting. */
+    public static function forgetUnattendedAnswers(): void
+    {
+        self::$mustBeAnswered = [];
+    }
+
+    /**
+     * Whether $ask came (wholly or partly) from a rostered hook. Every name
+     * in {@see HookResult::$askedBy} is consulted, not just
+     * {@see HookResult::refusingHook()}'s first: the chain put the first
+     * question, but a LATER asker that demanded an answer does not consent
+     * to being auto-answered by an earlier one's silence.
+     */
+    public static function demandsUnattendedAnswer(HookResult $ask): bool
+    {
+        foreach ($ask->askedBy as $name) {
+            if (isset(self::$mustBeAnswered[$name])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Put one ASK to the console and return whether it was granted.
      *
      * The `bool` return type is load-bearing under `strict_types`: {@see
@@ -385,7 +435,7 @@ final class HeadlessPermissionPrompt
      */
     public function __invoke(ToolCall $call, HookResult $ask): bool
     {
-        if ($this->mode->isBypass()) {
+        if ($this->mode->isBypass() && !self::demandsUnattendedAnswer($ask)) {
             // BYPASS ALLOW-ALL (owner ruling 2026-10-06): the Ask-class arms
             // this class implements — the no-tty fail-closed refusal and the
             // interactive question — answer allow in `bypass-permissions`
@@ -393,6 +443,16 @@ final class HeadlessPermissionPrompt
             // rm-rf breaker never reach an approver at all (they return Deny
             // through the gate), so this early grant cannot widen them; the
             // policy-self-grant floor likewise denies ahead of any ASK.
+            //
+            // THE ISS-040 QUALIFIER: the ruling was about the GATE's asks —
+            // consent the operator gave by switching modes. A HOOK's exit-3
+            // question that its author rostered through
+            // {@see self::requireUnattendedAnswer()} is a different promise,
+            // and bypass does not own it: fall through and let the existing
+            // arms decide — no tty answers with the fail-closed refusal (the
+            // E375 `unattended` row qualifier lands), a tty puts the real
+            // question, and bypass's blanket suppression simply does not
+            // cover that one hook.
             return true;
         }
 

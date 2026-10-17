@@ -3023,7 +3023,12 @@ final class Runtime
         $kind = DenialKind::Hook;
 
         if ($hookResult->isAsk()) {
-            if ($onPermissionRequest === null && $this->bypassAnswersAsks()) {
+            // ISS-040: the allow-all below is the GATE ruling; a rostered
+            // hook's question is not the operator's to pre-answer, so the
+            // conjunct refuses to short-circuit for it and the existing
+            // fail-closed no-UI arm below decides DenialKind::Unanswered.
+            if ($onPermissionRequest === null && $this->bypassAnswersAsks()
+                && !\SugarCraft\Code\Cli\HeadlessPermissionPrompt::demandsUnattendedAnswer($hookResult)) {
                 // BYPASS ALLOW-ALL (owner ruling 2026-10-06): this is the
                 // Ask-fail-closed no-UI arm the ruling turns into an allow —
                 // in `bypass-permissions` nobody is being asked because the
