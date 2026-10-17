@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Providers;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
@@ -532,6 +533,57 @@ final class ProviderFactoryTest extends TestCase
         $this->assertInstanceOf(ClaudeCodeProvider::class, $provider);
         $this->assertInstanceOf(ProviderInterface::class, $provider);
         $this->assertSame('claude-code', $provider->name());
+    }
+
+    public function testClaudeCodeBareDefaultsToTrue(): void
+    {
+        // ISS-078: no `bare` key at all keeps the isolation default on.
+        $provider = $this->factory->create([
+            'type' => 'claude-code',
+            'claudePath' => '/usr/local/bin/claude',
+        ]);
+
+        $this->assertTrue($provider->bare());
+    }
+
+    /**
+     * @return iterable<string, array{mixed, bool}>
+     */
+    public static function bareConfigValues(): iterable
+    {
+        yield 'false drops --bare' => [false, false];
+        yield 'string false drops it' => ['false', false];
+        yield 'zero drops it' => [0, false];
+        yield 'true keeps it' => [true, true];
+        yield 'string true keeps it' => ['true', true];
+        yield 'empty string falls back to the default' => ['', true];
+    }
+
+    #[DataProvider('bareConfigValues')]
+    public function testClaudeCodeBareIsAConfigurableBlockOption(mixed $value, bool $expected): void
+    {
+        // ISS-078: `bare` is now a provider-block option; the factory
+        // normalises bool/boolish-string spellings onto the flag.
+        $provider = $this->factory->create([
+            'type' => 'claude-code',
+            'claudePath' => '/usr/local/bin/claude',
+            'bare' => $value,
+        ]);
+
+        $this->assertSame($expected, $provider->bare());
+    }
+
+    public function testClaudeCodeBareRefusesNonBooleanNonsense(): void
+    {
+        // An isolation decision is never guessed at from garbage.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('bare must be true or false');
+
+        $this->factory->create([
+            'type' => 'claude-code',
+            'claudePath' => '/usr/local/bin/claude',
+            'bare' => 'sometimes',
+        ]);
     }
 
     public function testCreateAnthropicCreatesCustomProvider(): void

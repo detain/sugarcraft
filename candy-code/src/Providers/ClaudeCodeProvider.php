@@ -27,11 +27,27 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
     public function __construct(
         private ClaudeCodeInvocation $invocation,
         private string $defaultModel = 'claude-sonnet-4-6',
+        // ISS-078: `--bare` makes the CLI skip OAuth and the keychain
+        // entirely (measured behavior documented in Claude 2.1.301's own
+        // --help), which is the isolation we want by default - but it also
+        // means a Pro/Max subscriber with no API key can never authenticate.
+        // The provider block's `bare` option turns the flag off when an
+        // operator deliberately chooses subscription login over isolation;
+        // see options() for the trade-off note.
+        private bool $bare = true,
     ) {}
 
     public function name(): string
     {
         return 'claude-code';
+    }
+
+    /**
+     * Whether this provider spawns the CLI with `--bare` (ISS-078).
+     */
+    public function bare(): bool
+    {
+        return $this->bare;
     }
 
     public function supportsStreaming(): bool
@@ -107,13 +123,22 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
     /**
      * The printModeArgs() options both paths share.
      *
+     * `bare` (ISS-078) rides the constructor flag. With it true (the
+     * default) every spawn is isolated: the CLI reads no OAuth token, no
+     * keychain entry, and no user-level state, so an API key (or
+     * `apiKeyHelper`) is REQUIRED and a subscription login is not reachable.
+     * With `bare: false` in the provider block the CLI keeps its normal
+     * setting sources, so a Pro/Max login works - at the cost of that
+     * isolation, and of the user's own usage-terms responsibility for
+     * routing this product's traffic through a subscription seat.
+     *
      * @return array<string, mixed>
      */
     private function options(string $format, CompleteRequest $request, ?string $systemPromptFile): array
     {
         $options = [
             'format' => $format,
-            'bare' => true,
+            'bare' => $this->bare,
             'systemPrompt' => $request->systemPrompt,
             'systemPromptFile' => $systemPromptFile,
         ];

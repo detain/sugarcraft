@@ -101,7 +101,7 @@ final readonly class ProviderFactory
         ],
         'claude-code' => [
             'required' => ['claudePath'],
-            'optional' => ['model', 'fallbackModels'],
+            'optional' => ['model', 'bare', 'fallbackModels'],
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
@@ -1071,7 +1071,40 @@ final readonly class ProviderFactory
 
         $invocation = new ClaudeCodeInvocation(claudePath: $claudePath);
 
-        return new ClaudeCodeProvider($invocation, $model);
+        // ISS-078: `bare` defaults to true. Turning it off is the operator's
+        // deliberate choice to let the CLI keep its normal setting sources
+        // (subscription login reachable) at the cost of the --bare isolation.
+        return new ClaudeCodeProvider($invocation, $model, self::configuredBare($config['bare'] ?? null));
+    }
+
+    /**
+     * Normalises the optional claude-code `bare` flag (ISS-078) the same way
+     * {@see configuredDiscoverServerInfo()} normalises its flag: absent or
+     * empty means the default (true here), real booleans ride through, and
+     * boolean-ish strings parse; anything else fails loudly rather than
+     * silently picking a side on an isolation decision.
+     */
+    private static function configuredBare(mixed $value): bool
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value) || is_int($value)) {
+            $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'bare must be true or false, got %s',
+            is_scalar($value) ? var_export($value, true) : get_debug_type($value),
+        ));
     }
 
     /**

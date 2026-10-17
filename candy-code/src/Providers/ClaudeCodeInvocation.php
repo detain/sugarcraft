@@ -100,6 +100,12 @@ final readonly class ClaudeCodeInvocation
      * `systemPromptFile` (a path from {@see spillSystemPrompt()}) wins over
      * `systemPrompt`; the two are never both sent.
      *
+     * `bare` (ISS-078) appends `--bare`, which makes the CLI skip OAuth and
+     * the keychain entirely - so an API key is required while it is on, and
+     * a subscription login is only reachable with it off. The provider owns
+     * the decision ({@see ClaudeCodeProvider::options()}); this method just
+     * translates the flag.
+     *
      * @param array<string, mixed> $options
      * @return array<string>
      */
