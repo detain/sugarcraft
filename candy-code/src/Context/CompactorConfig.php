@@ -73,6 +73,21 @@ final readonly class CompactorConfig
     /** The automatic-compaction tier's default absolute cap (N-P4b): min(85%, 150k). */
     public const DEFAULT_COMPACTION_TOKENS = 150_000;
 
+    /**
+     * The base trio of absolute caps, keyed by the {@see ABSOLUTE_FIELDS}
+     * property names in tier order — the ladder the tiers were designed on.
+     * A configured (or model-overridden) cap trio that breaks ascending
+     * order falls back to this whole trio, mirroring the percentage fallback
+     * and the nudge min/max door in {@see fromSettings()} (ISS-085).
+     *
+     * @var array<string, ?int>
+     */
+    private const DEFAULT_TOKEN_CAPS = [
+        'reminderTokens' => self::DEFAULT_REMINDER_TOKENS,
+        'backgroundCompactionTokens' => self::DEFAULT_COMPACTION_TOKENS,
+        'foregroundBlockingTokens' => null,
+    ];
+
     /** `compaction.*` settings keys read by {@see fromSettings()} (Appendix N §2.2). */
     public const SETTING_REMINDER_PERCENT = 'compaction.reminderPercent';
     public const SETTING_AUTO_PERCENT = 'compaction.autoPercent';
@@ -367,6 +382,16 @@ final readonly class CompactorConfig
             }
         }
 
+        // The three absolute caps form ONE ladder, not three independent figures
+        // (ISS-085): every tier fires at min(percent, cap), so as long as the
+        // caps ascend — null meaning "no cap", the far end — the effective
+        // thresholds stay ordered whatever the percentages resolved to above.
+        // A descending trio (a blockTokens under the default autoTokens refuses
+        // every prompt auto-compaction would have kept; an autoTokens under the
+        // reminderTokens kills summary prefetch) falls back whole, exactly as
+        // the percentage trio does. A field left out or malformed keeps its
+        // current figure and its not-configured sentinel.
+        $caps = [];
         foreach ([
             'reminderTokens' => self::SETTING_REMINDER_TOKENS,
             'backgroundCompactionTokens' => self::SETTING_AUTO_TOKENS,
@@ -374,7 +399,21 @@ final readonly class CompactorConfig
         ] as $field => $key) {
             $value = self::intSetting($config, $key, 0);
             if ($value !== null) {
-                $changes[$field] = $value === 0 ? null : $value;
+                $caps[$field] = $value === 0 ? null : $value;
+            }
+        }
+        if ($caps !== []) {
+            $ladder = [];
+            foreach (self::ABSOLUTE_FIELDS as $field) {
+                // array_key_exists, not ?? — an explicit null means "cap off",
+                // which must not be read as "field absent" and defaulted back.
+                $ladder[$field] = \array_key_exists($field, $caps) ? $caps[$field] : $base->{$field};
+            }
+            if (!self::orderedCaps($ladder)) {
+                $caps = self::DEFAULT_TOKEN_CAPS;
+            }
+            foreach ($caps as $field => $tokens) {
+                $changes[$field] = $tokens;
                 $changes[$field . 'Set'] = true;
             }
         }
@@ -620,7 +659,9 @@ final readonly class CompactorConfig
 
     /**
      * This config with the per-model caps for $model applied, or this same
-     * instance when no override names it.
+     * instance when no override names it — or when the override would take
+     * the cap ladder out of ascending order (ISS-085), which reads exactly
+     * like an entry that names no caps at all.
      *
      * The lookup is `"$provider/$model"` then `$model` — the more specific key
      * wins, and only one entry applies (they are not layered). Resolve from the
@@ -638,6 +679,18 @@ final readonly class CompactorConfig
         }
         $caps ??= $this->modelTokenOverrides[$model] ?? null;
         if ($caps === null) {
+            return $this;
+        }
+
+        // Validate against the figures this override would produce, naming only
+        // the fields it touched: the entry rides on top of the base (or an
+        // already-resolved) ladder, and an override that would push one step
+        // below its neighbour is dropped whole rather than half-applied.
+        $ladder = [];
+        foreach (self::ABSOLUTE_FIELDS as $field) {
+            $ladder[$field] = \array_key_exists($field, $caps) ? $caps[$field] : $this->{$field};
+        }
+        if (!self::orderedCaps($ladder)) {
             return $this;
         }
 
@@ -681,6 +734,25 @@ final readonly class CompactorConfig
         $byPercent = (int) ($tokenLimit * $percent / 100);
 
         return $cap === null ? $byPercent : min($byPercent, $cap);
+    }
+
+    /**
+     * Whether an absolute-cap ladder ascends: each step either side may be
+     * null — "no cap" is the far end of the ladder, never the near one. The
+     * trio must arrive in {@see ABSOLUTE_FIELDS} order (tier order).
+     *
+     * Each tier fires at min(percent, cap); with the percentages ordered
+     * (the fallback above) and the caps ordered (this door), the effective
+     * thresholds are ordered too — the two ladders cannot cross (ISS-085).
+     *
+     * @param array<string, ?int> $ladder
+     */
+    private static function orderedCaps(array $ladder): bool
+    {
+        [$reminder, $auto, $block] = \array_values($ladder);
+
+        return ($reminder === null || $auto === null || $reminder <= $auto)
+            && ($auto === null || $block === null || $auto <= $block);
     }
 
     /**

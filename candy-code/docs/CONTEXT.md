@@ -79,7 +79,12 @@ above about 176,000 the automatic cap does too. `compaction.modelTokenCaps`
 sets different caps per model (`{"qwen3": {"autoTokens": 300000}}`, matched as
 `provider/model` first, then the model id); a cap of `0` switches that cap
 off. The percentages must ascend (reminder < automatic <
-block), or all three fall back to their defaults. A `compaction.*` key saved
+block), or all three fall back to their defaults. The caps obey the same
+law — a trio that does not ascend (with `0`/no cap as the far end) falls
+back to all three defaults, and a per-model override that would break the
+order applies nothing, reading like an entry that names no caps (the tiers
+fire at whichever of percent and cap is lower, so ordered caps keep the
+effective thresholds ordered). A `compaction.*` key saved
 from the settings view applies to the next prompt; the full list is in
 [`SETTINGS.md`](SETTINGS.md#compaction-thresholds).
 

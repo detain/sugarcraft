@@ -242,6 +242,41 @@ final class CompactionSettingsTest extends TestCase
         $this->assertSame(4, $config->recentPreserveCount, 'the other keys still apply');
     }
 
+    public function testCapsOutOfOrderAreIgnoredAsASet(): void
+    {
+        $config = CompactorConfig::fromSettings([
+            'compaction.blockTokens' => 50_000,
+            'compaction.keepRecent' => 4,
+        ]);
+
+        $this->assertSame([100_000, 150_000, null], [$config->reminderTokens, $config->backgroundCompactionTokens, $config->foregroundBlockingTokens], 'a descending cap drags the whole trio to the base ladder (ISS-085)');
+        $this->assertTrue($config->foregroundBlockingTokensSet, 'the fallback counts as configured');
+        $this->assertSame(4, $config->recentPreserveCount, 'the other keys still apply');
+    }
+
+    public function testAZeroCapIsTheFarEndOfTheLadderNotAnOrderingViolation(): void
+    {
+        $config = CompactorConfig::fromSettings([
+            'compaction.reminderTokens' => 0,
+            'compaction.autoTokens' => 300_000,
+            'compaction.blockTokens' => 400_000,
+        ]);
+
+        $this->assertNull($config->reminderTokens, 'no cap is the far end: it never breaks the ladder');
+        $this->assertSame(300_000, $config->backgroundCompactionTokens);
+        $this->assertSame(400_000, $config->foregroundBlockingTokens);
+    }
+
+    public function testOnlyTheConfiguredCapsAreCommittedWhenTheLadderHolds(): void
+    {
+        $config = CompactorConfig::fromSettings(['compaction.autoTokens' => 180_000]);
+
+        $this->assertSame(180_000, $config->backgroundCompactionTokens);
+        $this->assertTrue($config->backgroundCompactionTokensSet);
+        $this->assertFalse($config->reminderTokensSet, 'a sibling left out keeps its figure and its not-configured sentinel');
+        $this->assertSame(100_000, $config->reminderTokens);
+    }
+
     public function testThePerModelMapOverridesTheCapsForThatModel(): void
     {
         $config = CompactorConfig::fromSettings([

@@ -110,10 +110,13 @@ final class CompactionLiveSettingsTest extends TestCase
 
     public function testThePerModelCapsStillFollowTheBackendAfterARebuild(): void
     {
-        $this->writeConfig(['compaction.modelTokenCaps' => ['echo' => ['autoTokens' => 12_345]]]);
+        // autoTokens above the base reminderTokens cap: an override that would
+        // break the ascending ladder is dropped (ISS-085), so this plumbing
+        // test uses an ordered one.
+        $this->writeConfig(['compaction.modelTokenCaps' => ['echo' => ['autoTokens' => 200_000]]]);
         [$after] = (new Chat(backend: new EngineBackend(new EchoProvider(), 'echo')))->applySettings(['compaction.modelTokenCaps'], 'cfg');
 
-        self::assertSame(12_345, self::config($after)->backgroundCompactionTokens);
+        self::assertSame(200_000, self::config($after)->backgroundCompactionTokens);
     }
 
     // ── compaction.idleOfferSeconds ─────────────────────────────────────

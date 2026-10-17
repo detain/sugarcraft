@@ -257,6 +257,29 @@ final class AbsoluteThresholdTest extends TestCase
         $this->assertSame(100_000, $resolved->backgroundCompactionTokens, 'the cap the override did not name is inherited');
     }
 
+    public function testAModelOverrideThatBreaksTheLadderAppliesNothing(): void
+    {
+        $config = CompactorConfig::new()->withModelTokenOverride('qwen3', ['backgroundCompactionTokens' => 50_000]);
+
+        $resolved = $config->forModel('qwen3');
+
+        $this->assertSame(150_000, $resolved->backgroundCompactionTokens, 'an autoTokens under the reminder cap is dropped whole, not half-applied (ISS-085)');
+        $this->assertSame(100_000, $resolved->reminderTokens);
+    }
+
+    public function testAnOverrideThatAlsoClearsTheLowerCapStaysOrderedAndApplies(): void
+    {
+        $config = CompactorConfig::new()->withModelTokenOverride('qwen3', [
+            'backgroundCompactionTokens' => 50_000,
+            'reminderTokens' => null,
+        ]);
+
+        $resolved = $config->forModel('qwen3');
+
+        $this->assertSame(50_000, $resolved->backgroundCompactionTokens, 'clearing the lower cap makes the pair ascending again — null is the far end');
+        $this->assertNull($resolved->reminderTokens);
+    }
+
     public function testAnUnknownOrEmptyModelResolvesToTheSameInstance(): void
     {
         $config = CompactorConfig::smartZone()->withModelTokenOverride('qwen3', ['reminderTokens' => 1_000]);
