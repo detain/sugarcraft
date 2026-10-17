@@ -857,7 +857,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'directly in `.candy-code/plans` (roadmap 5.7-2)',
         ],
         'Tools/BuiltIn/Read.php|fopen' => [
-            'PATH_JAIL — the read tool\'s one arm, streaming every read a page at a time (0.11)',
+            'PATH_JAIL — the read tool\'s page arm, streaming every read a page at a time (0.11)',
+            'PATH_JAIL — the binary sniff\'s bounded head read (ISS-060), on the same already-jailed '
+                . '$path: the jail resolve and the regular-file guard both sit above it',
         ],
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
+use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\LSP\LspClient;
@@ -62,6 +63,30 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * file nor skipping to a late offset ever holds more than one block.
      */
     private const SCAN_CHUNK = 64 * 1024;
+
+    /**
+     * ISS-060: bytes of the file's head the binary sniff looks at. 8 KiB is
+     * past every magic number {@see FileMentions::sniffImage()} knows and
+     * past the NUL-free prefix a text file could plausibly carry (UTF-16
+     * text hits its first NUL inside two characters), so one fread decides.
+     */
+    private const BINARY_SNIFF_BYTES = 8 * 1024;
+
+    /**
+     * ISS-060: the most bytes pass 1 of {@see readPage()} reads while
+     * counting lines. Counting is O(file): reading line 1 of a 700 MB blob
+     * used to pay a full scan first, and the offset-past-end refusal the scan
+     * exists to make needs the whole count anyway. Past the budget the count
+     * is only a lower bound, so the footer says `of ≥N`, the ledger stores a
+     * null hash (resting on the stat signature, which is what a null hash
+     * means there), and the offset refusal is skipped — refusing an offset
+     * needs knowing where the end is, and that is the one thing the budget
+     * declined to learn. 8 MiB is two orders of magnitude of slack over any
+     * file a session legitimately pages: at the shipped 64 KiB block the
+     * budget is 128 blocks, well inside a tenth of a second, while a scan
+     * without it grows with whatever junk the repository happens to hold.
+     */
+    private const LINE_SCAN_BUDGET = 8 * 1024 * 1024;
 
     /**
      * The most rows an outline lists, and the bytes it may take — whichever
@@ -239,7 +264,8 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             . number_format($this->pageLines) . ' lines and ' . number_format($this->pageBytes())
             . ' bytes; pass `offset` (the first line to return) and `limit` (how many lines) to '
             . 'read another window. When more of the file remains, the result ends with '
-            . '"[lines a-b of N — call Read with offset=b+1 to continue]", so a result without '
+            . '"[lines a-b of N — call Read with offset=b+1 to continue]" (a file too long to '
+            . 'count in full reports its floor, `of ≥N`), so a result without '
             . 'that footer reached the end of the file. A file longer than one page, read without '
             . '`offset` or `limit`, also gets an outline of its declarations and their line numbers '
             . 'after the first page, so you can read the part you need by offset. A single line longer '
@@ -387,6 +413,25 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             );
         }
 
+        // ISS-060: a binary answer is a note, not a page. Reading a PNG as
+        // text returned mojibake the model quoted back, poisoned the read
+        // ledger with an observation of garbage, and — for images — threw
+        // away the one fact that mattered, which kind of image it is. The
+        // sniff runs on a head read, so it costs nothing on the text path it
+        // never fires for. This is NOT an error: the note is the answer, and
+        // the note names the way forward. (Routing image BYTES to a vision
+        // wire is a later seam — Read's contract has only ever been lines.)
+        if (is_file($path)) {
+            $binary = self::binaryNotice($path);
+            if ($binary !== null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: $binary,
+                    isError: false,
+                );
+            }
+        }
+
         set_error_handler(static function (int $errno, string $errstr) use ($path): bool {
             throw new \RuntimeException("Error reading file {$path}: {$errstr}");
         });
@@ -410,7 +455,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             // of paging through the whole file to find it. Only then — a read
             // that already has the whole file, or that named its window, has
             // no use for a map.
-            if ($offset === null && $limit === null && preg_match('/\[lines? 1(?:-\d+)? of \d+ — call Read with offset=\d+ to continue\]$/', $content) === 1) {
+            if ($offset === null && $limit === null && preg_match('/\[lines? 1(?:-\d+)? of (?:≥)?\d+ — call Read with offset=\d+ to continue\]$/', $content) === 1) {
                 $outline = $this->outline($path);
                 if ($outline !== '') {
                     $content .= "\n\n" . $outline;
@@ -620,6 +665,52 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     }
 
     /**
+     * ISS-060: a one-line account of $path when it is binary — a magic-number
+     * image, or a NUL anywhere in the sniff head — or null when it should be
+     * read as text.
+     *
+     * NUL is the whole heuristic for the non-image arm, and the UTF-16
+     * refusal is on purpose: nothing here claims to decode it, and the
+     * alternative answer is a page of mojibake that reads like content. The
+     * note names the escape hatch instead of faking one.
+     *
+     * A failed open answers null — the read below produces the real error,
+     * with the message callers and their tests already know.
+     */
+    private static function binaryNotice(string $path): ?string
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return null;
+        }
+
+        try {
+            $head = (string) fread($handle, self::BINARY_SNIFF_BYTES);
+            if ($head === '') {
+                return null; // An empty file is legitimate text — and empty.
+            }
+            $stat = fstat($handle);
+            $shown = $stat !== false ? number_format((int) $stat['size']) . ' bytes'
+                : number_format(self::BINARY_SNIFF_BYTES) . '+ bytes';
+
+            $image = FileMentions::sniffImage($head);
+            if ($image !== null) {
+                return "Binary image ($image), $shown — not shown as text. Read answers with lines and a {$image} has none; mention the file (@...) where the wire carries attachments, or use a tool that renders images.";
+            }
+
+            if (str_contains($head, "\0")) {
+                return "Binary file, $shown — not shown as text (a NUL byte appears in the first "
+                    . number_format(self::BINARY_SNIFF_BYTES) . ' bytes). If this is UTF-16 or similar, convert it first, e.g. with Bash `iconv -f UTF-16 -t UTF-8 '
+                    . $path . '`.';
+            }
+
+            return null;
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
      * One page of $path: lines $offset onward, each as `N: text`, stopping at
      * $limit lines or {@see pageBytes()} bytes (prefixes and newlines counted),
      * whichever comes first, with a continuation footer when lines remain.
@@ -640,7 +731,11 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      *
      * $observed receives, when a ledger is wired, the file's stat signature
      * at open and the hash of every byte pass 1 read — the whole file, so the
-     * ledger's hash costs no second read (roadmap 3.I-2).
+     * ledger's hash costs no second read (roadmap 3.I-2). Past the scan
+     * budget (ISS-060) the hash is null instead: "not hashed, rests on the
+     * signature" is already the ledger's vocabulary for a prefix, and a
+     * prefix hash would false-stale every later Edit against bytes the count
+     * never saw.
      *
      * @param ?array{mtime: int, size: int, ino: int, hash: ?string} $observed
      */
@@ -666,19 +761,39 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             };
 
             // Pass 1: how many lines. A final line without a newline counts.
+            // ISS-060: counting stops at the scan budget; past it the count
+            // is a lower bound ($capped) and the three places that treat it
+            // as exact — the no-newline +1, the offset refusal, the footer —
+            // say so instead of pretending the whole file was seen.
             $total = 0;
             $lastByte = '';
+            $scanned = 0;
+            $capped = false;
             while (($chunk = $read()) !== '') {
                 $total += substr_count($chunk, "\n");
                 $lastByte = $chunk[-1];
                 if ($hash !== null) {
                     hash_update($hash, $chunk);
                 }
+                $scanned += strlen($chunk);
+                if ($scanned >= self::LINE_SCAN_BUDGET) {
+                    // One read PAST the budget tells "the cap landed the
+                    // file's end" from "the file keeps going" — the honest
+                    // answer costs one block, and a `≥` on a file that is
+                    // actually exactly N lines would be a lie of its own.
+                    $more = $read();
+                    if ($more !== '') {
+                        $capped = true;
+                        $total += substr_count($more, "\n");
+                        $lastByte = $more[-1];
+                    }
+                    break;
+                }
             }
             if ($stat !== false && $hash !== null) {
-                $observed = ['mtime' => (int) $stat['mtime'], 'size' => (int) $stat['size'], 'ino' => (int) $stat['ino'], 'hash' => hash_final($hash)];
+                $observed = ['mtime' => (int) $stat['mtime'], 'size' => (int) $stat['size'], 'ino' => (int) $stat['ino'], 'hash' => $capped ? null : hash_final($hash)];
             }
-            if ($lastByte !== '' && $lastByte !== "\n") {
+            if (!$capped && $lastByte !== '' && $lastByte !== "\n") {
                 $total++;
             }
 
@@ -688,7 +803,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
                     return '';
                 }
             }
-            if ($offset > $total) {
+            if (!$capped && $offset > $total) {
                 throw new \RuntimeException(
                     "Error: offset {$offset} is past the end of {$path}, which has {$total} "
                     . ($total === 1 ? 'line' : 'lines'),
@@ -776,9 +891,9 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
 
             $last = $lineNumber - 1;
             $page = implode("\n", $lines);
-            if ($last < $total) {
+            if ($capped || $last < $total) {
                 $span = $last === $offset ? "line {$offset}" : "lines {$offset}-{$last}";
-                $page .= "\n\n[{$span} of {$total} — call Read with offset=" . ($last + 1) . ' to continue]';
+                $page .= "\n\n[{$span} of " . ($capped ? '≥' : '') . "{$total} — call Read with offset=" . ($last + 1) . ' to continue]';
             }
 
             return $page;
