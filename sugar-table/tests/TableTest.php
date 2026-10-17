@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table\Tests;
 
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;

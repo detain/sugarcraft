@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Plot\Chart;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -161,7 +161,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
         // buffer dimensions: $diffWidth depends on the data count, so a
         // dataCount change resizes the diff buffer even when the chart area is
         // untouched — and Buffer::diff() throws on ANY dimension mismatch
-        // (candy-buffer Buffer.php:416-422). A chart-area resize always moves
+        // (sugar-cellbuffer Buffer.php:416-422). A chart-area resize always moves
         // $diffHeight (chartHeight enters it additively), so it trips this
         // gate as well; prevWidth/prevHeight mirror these same buffer dims.
         if ($this->renderContext !== null &&

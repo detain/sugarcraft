@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Region;
-use SugarCraft\Buffer\Position;
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Region;
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Style as SprinklesStyle;
@@ -39,7 +39,7 @@ use SugarCraft\Sprinkles\Style as SprinklesStyle;
  * composited beside the framed playfield with Layout::joinHorizontal().
  *
  * Mirrors Broderick-Westrope/tetrigo board/sidebar layout intent —
- * playfield through candy-buffer, chrome through candy-sprinkles and
+ * playfield through sugar-cellbuffer, chrome through candy-sprinkles and
  * candy-layout joins.
  */
 final class Renderer

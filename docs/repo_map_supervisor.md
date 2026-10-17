@@ -72,7 +72,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 1 — New shared foundation packages (8)
 - [x] [Step 01 — Create sugar-ansi-parser](repo_map_step_01.md) — branch: `ai/sugar-ansi-parser-new`
-- [x] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
+- [x] [Step 02 — Create sugar-cellbuffer](repo_map_step_02.md) — branch: `ai/sugar-cellbuffer-new`
 - [x] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
 - [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/sugar-testing-new`
 - [x] [Step 05 — Create sugar-mouse](repo_map_step_05.md) — branch: `ai/sugar-mouse-new`
@@ -91,8 +91,8 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 14 — sugar-widgets onto shared foundations](repo_map_step_14.md) — branch: `ai/sugar-widgets-shared`
 - [x] [Step 15 — sugar-forms onto shared foundations](repo_map_step_15.md) — branch: `ai/sugar-forms-shared`
 - [x] [Step 16 — sugar-forms onto shared foundations](repo_map_step_16.md) — branch: `ai/sugar-forms-shared`
-- [x] [Step 17 — sugar-charts onto candy-buffer](repo_map_step_17.md) — branch: `ai/sugar-charts-shared`
-- [x] [Step 18 — sugar-table onto candy-buffer](repo_map_step_18.md) — branch: `ai/sugar-table-shared`
+- [x] [Step 17 — sugar-charts onto sugar-cellbuffer](repo_map_step_17.md) — branch: `ai/sugar-charts-shared`
+- [x] [Step 18 — sugar-table onto sugar-cellbuffer](repo_map_step_18.md) — branch: `ai/sugar-table-shared`
 - [x] [Step 19 — candy-scriptui onto sugar-fuzzy](repo_map_step_19.md) — branch: `ai/candy-scriptui-shared`
 
 ### Phase 4 — Replace reinventions (6)
@@ -104,7 +104,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 25 — God-class refactors (super-candy + candy-sql)](repo_map_step_25.md) — branch: `ai/god-class-builders`, PR #904
 
 ### Phase 5 — Cross-cutting via shared packages (4)
-- [x] [Step 26 — candy-buffer::diff() delta ANSI](repo_map_step_26.md) — branch: `ai/buffer-diff-impl`, PR #905
+- [x] [Step 26 — sugar-cellbuffer::diff() delta ANSI](repo_map_step_26.md) — branch: `ai/buffer-diff-impl`, PR #905
 - [x] [Step 27 — Wire buffer-diff into renderers](repo_map_step_27.md) — branch: `ai/buffer-diff-consumers`, PR #906
 - [x] [Step 28 — Golden-file snapshot rollout via sugar-testing](repo_map_step_28.md) — branch: `ai/golden-file-rollout`, PR #907
 - [x] [Step 29 — Terminal-probe consumers (candy-mdview, candy-wish)](repo_map_step_29.md) — branch: `ai/probe-consumers`, PR #908
@@ -112,9 +112,9 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 ### Phase 6 — Ecosystem-wide adoption sweep (8)
 - [x] [Step 30 — Ecosystem audit (no code, produces roadmap)](repo_map_step_30.md) — branch: `ai/ecosystem-audit`, PR #909
 - [x] [Step 31 — candy-pty adopts sugar-input + sugar-ansi-parser](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
-- [x] [Step 32 — candy-tetris + candy-minesweeper adopt candy-buffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
+- [x] [Step 32 — candy-tetris + candy-minesweeper adopt sugar-cellbuffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
 - [x] [Step 33 — candy-kv + candy-ssh-launcher + candy-git adopt sugar-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
-- [x] [Step 34 — sugar-datepicker + sugar-toast adopt candy-buffer + sugar-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
+- [x] [Step 34 — sugar-datepicker + sugar-toast adopt sugar-cellbuffer + sugar-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
 - [x] [Step 35 — candy-codetime + candy-mail + candy-git-server adopt candy-async](repo_map_step_35.md) — branch: `ai/async-adopters`, PR #915 <!-- @rename-keep historical provenance -->
 - [x] [Step 36 — sugar-animation + sugar-cli + sugar-spring + candy-flappy adopt sugar-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`, PR #916
 - [x] [Step 37 — Catch-all: any remaining lib from the audit](repo_map_step_37.md) — branch: `ai/sweep-catchall`, PR #917

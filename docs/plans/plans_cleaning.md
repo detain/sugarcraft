@@ -23,7 +23,7 @@
 
 ### ⚠️ PARTIAL
 
-- W7: unused path-repos — sugar-vterm still has unused candy-buffer path-repo
+- W7: unused path-repos — sugar-vterm still has unused sugar-cellbuffer path-repo
 - W14.4/5: icons — 60 present but need size verification
 - W15: orphaned features — only candy-kv verified
 - W16: status bar SSOT exists but migration unclear
@@ -45,7 +45,7 @@
 
 - sugar-ansi-parser: OSC-8/hyperlink routing, CR/LF dispatch, CSI final methods
 - candy-async: OperationCancelledException, dead $operationPromise, retry() loop param, disposeAll throw-guard, retry bounded wall-clock <!-- @rename-keep historical provenance -->
-- candy-buffer: Region validation
+- sugar-cellbuffer: Region validation
 - candy-core: AtomicJsonFile/Json::decodeArray/Sanitize SSOT
 - sugar-fuzzy: ScoringProfile port, DoS caps
 - candy-git: rename parsing
@@ -59,7 +59,7 @@
 ### ❌ NOT DONE (2)
 
 - candy-async: debounce/throttle no disposal handle <!-- @rename-keep historical provenance -->
-- candy-buffer: no resize() method
+- sugar-cellbuffer: no resize() method
 
 ### ❓ UNCLEAR / NOT VERIFIED (40+)
 

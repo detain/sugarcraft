@@ -1,0 +1,230 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\CellBuffer;
+
+/**
+ * Minimal per-cell style record — foreground colour, background colour,
+ * and a raw attribute bitmask.
+ *
+ * This is intentionally a stripped-down cousin of
+ * {@see \SugarCraft\Sprinkles\Style}. The rich styling API (border,
+ * padding, underline, transform, etc.) lives in candy-sprinkles and
+ * builds on top of these primitives. Buffer/Cell carry only what the
+ * terminal needs to emit SGR sequences.
+ *
+ * @readonly
+ */
+final class Style implements \JsonSerializable
+{
+    /** Attribute bits: bold=1, italic=2, underline=4, strike=8, … */
+    public const ATTR_BOLD      = 1 << 0;
+    public const ATTR_ITALIC   = 1 << 1;
+    public const ATTR_UNDERLINE = 1 << 2;
+    public const ATTR_STRIKE   = 1 << 3;
+    public const ATTR_FAINT    = 1 << 4;
+    public const ATTR_BLINK    = 1 << 5;
+    public const ATTR_REVERSE  = 1 << 6;
+    public const ATTR_OVERLINE  = 1 << 7;
+    public const ATTR_INVISIBLE= 1 << 8;
+
+    public function __construct(
+        public readonly ?int $fg = null,       // 0xRRGGBB or null = default
+        public readonly ?int $bg = null,       // 0xRRGGBB or null = default
+        public readonly int $attrs = 0,       // bitmask of ATTR_* constants
+    ) {}
+
+    /**
+     * Default factory.
+     */
+    public static function new(?int $fg = null, ?int $bg = null, int $attrs = 0): self
+    {
+        return new self($fg, $bg, $attrs);
+    }
+
+    /** Factory: bold. */
+    public static function bold(): self
+    {
+        return new self(null, null, self::ATTR_BOLD);
+    }
+
+    /** Factory: reverse. */
+    public static function reverse(): self
+    {
+        return new self(null, null, self::ATTR_REVERSE);
+    }
+
+    public function fg(): ?int      { return $this->fg; }
+    public function bg(): ?int      { return $this->bg; }
+    public function attrs(): int    { return $this->attrs; }
+
+    public function hasBold(): bool      { return (bool)($this->attrs & self::ATTR_BOLD); }
+    public function hasItalic(): bool    { return (bool)($this->attrs & self::ATTR_ITALIC); }
+    public function hasUnderline(): bool  { return (bool)($this->attrs & self::ATTR_UNDERLINE); }
+    public function hasStrike(): bool     { return (bool)($this->attrs & self::ATTR_STRIKE); }
+    public function hasFaint(): bool    { return (bool)($this->attrs & self::ATTR_FAINT); }
+    public function hasBlink(): bool    { return (bool)($this->attrs & self::ATTR_BLINK); }
+    public function hasReverse(): bool   { return (bool)($this->attrs & self::ATTR_REVERSE); }
+    public function hasOverline(): bool { return (bool)($this->attrs & self::ATTR_OVERLINE); }
+    public function hasInvisible(): bool { return (bool)($this->attrs & self::ATTR_INVISIBLE); }
+
+    // ─── Fluent builders ────────────────────────────────────────────────
+
+    /**
+     * @return static
+     */
+    private function mutate(array $changes): static
+    {
+        return new static(...array_merge(
+            ['fg' => $this->fg, 'bg' => $this->bg, 'attrs' => $this->attrs],
+            $changes,
+        ));
+    }
+
+    /** Return a new Style with the given foreground colour. */
+    public function withFg(?int $fg): self
+    {
+        return $this->mutate(['fg' => $fg]);
+    }
+
+    /** Return a new Style with the given background colour. */
+    public function withBg(?int $bg): self
+    {
+        return $this->mutate(['bg' => $bg]);
+    }
+
+    /** Return a new Style with the given attribute bitmask (replaces). */
+    public function withAttrs(int $attrs): self
+    {
+        return $this->mutate(['attrs' => $attrs]);
+    }
+
+    /** Return a new Style with bold toggled on or off. */
+    public function withBold(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_BOLD)
+            : ($this->attrs & ~self::ATTR_BOLD)]);
+    }
+
+    /** Return a new Style with reverse toggled on or off. */
+    public function withReverse(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_REVERSE)
+            : ($this->attrs & ~self::ATTR_REVERSE)]);
+    }
+
+    /** Return a new Style with italic toggled on or off. */
+    public function withItalic(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_ITALIC)
+            : ($this->attrs & ~self::ATTR_ITALIC)]);
+    }
+
+    /** Return a new Style with underline toggled on or off. */
+    public function withUnderline(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_UNDERLINE)
+            : ($this->attrs & ~self::ATTR_UNDERLINE)]);
+    }
+
+    /** Return a new Style with strike toggled on or off. */
+    public function withStrike(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_STRIKE)
+            : ($this->attrs & ~self::ATTR_STRIKE)]);
+    }
+
+    /** Return a new Style with faint toggled on or off. */
+    public function withFaint(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_FAINT)
+            : ($this->attrs & ~self::ATTR_FAINT)]);
+    }
+
+    /** Return a new Style with blink toggled on or off. */
+    public function withBlink(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_BLINK)
+            : ($this->attrs & ~self::ATTR_BLINK)]);
+    }
+
+    /** Return a new Style with overline toggled on or off. */
+    public function withOverline(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_OVERLINE)
+            : ($this->attrs & ~self::ATTR_OVERLINE)]);
+    }
+
+    /** Return a new Style with invisible toggled on or off. */
+    public function withInvisible(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on === true
+            ? ($this->attrs | self::ATTR_INVISIBLE)
+            : ($this->attrs & ~self::ATTR_INVISIBLE)]);
+    }
+
+    /**
+     * Value equality: two styles are equal iff their fg, bg, and attrs
+     * values are identical.
+     */
+    public function equals(self $other): bool
+    {
+        return $this->fg === $other->fg
+            && $this->bg === $other->bg
+            && $this->attrs === $other->attrs;
+    }
+
+    /**
+     * Null-safe value equality: two optional styles are the same render
+     * state iff both are null, or both are non-null and value-equal.
+     *
+     * Canonicalizer for every style-transition decision in the encode and
+     * diff paths, so output bytes never depend on whether two equal styles
+     * happen to share a PHP instance (MAJOR: value equality, not identity).
+     */
+    public static function valuesEqual(?self $a, ?self $b): bool
+    {
+        return $a === null ? $b === null : ($b !== null && $a->equals($b));
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{fg: ?int, bg: ?int, attrs: int}
+     */
+    public function __serialize(): array
+    {
+        return ['fg' => $this->fg, 'bg' => $this->bg, 'attrs' => $this->attrs];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{fg: ?int, bg: ?int, attrs: int} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->fg = $data['fg'];
+        $this->bg = $data['bg'];
+        $this->attrs = $data['attrs'];
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{fg: ?int, bg: ?int, attrs: int}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
+    }
+}

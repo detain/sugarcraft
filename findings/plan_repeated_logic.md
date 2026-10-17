@@ -254,7 +254,7 @@ Add to `CALIBER_LEARNINGS.md`:
 **Source locations:**
 
 - Canonical trait: `candy-core/src/Concerns/Mutable.php:L27-L39`
-- 35 local implementations found via grep across: `sugar-overlay/Veil.php`, `sugar-forms/Field/Input.php`, `sugar-forms/Field/Select.php`, `candy-buffer/Style.php`, `candy-git/App.php`, etc.
+- 35 local implementations found via grep across: `sugar-overlay/Veil.php`, `sugar-forms/Field/Input.php`, `sugar-forms/Field/Select.php`, `sugar-cellbuffer/Style.php`, `candy-git/App.php`, etc.
 
 **Known reasons for local implementation:**
 

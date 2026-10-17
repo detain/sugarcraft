@@ -39,7 +39,7 @@ Reference: `docs/repo_map_update.md` §327.4 (framework), §345.4 (ProgramSimula
 - [ ] `Assertions::assertAnsiEquals(string $expected, string $actual)` — byte-exact compare with a readable diff (highlight ESC sequences).
 - [ ] `GoldenFile::load(string $path): ?string` — returns null on miss; `save(string $path, string $content): void`.
 - [ ] **Depends on candy-core**: yes — `Program`, `Model`, `Msg`, `Cmd` types come from candy-core. Add `"sugarcraft/candy-core": "@dev"` require + path-repo entry via `path-repo-closure`.
-- [ ] **Depends on candy-buffer**: yes — for `assertCellGrid`. Add via `path-repo-closure`.
+- [ ] **Depends on sugar-cellbuffer**: yes — for `assertCellGrid`. Add via `path-repo-closure`.
 - [ ] ≥95 % coverage.
 - [ ] `git status` clean on master.
 
@@ -48,7 +48,7 @@ Reference: `docs/repo_map_update.md` §327.4 (framework), §345.4 (ProgramSimula
 1. **Invoke `scaffold-library`** with slug `sugar-testing`, namespace `SugarCraft\Testing\`, role "Test harness for TEA programs (ProgramSimulator, golden file assertions)".
 2. **Add deps** with `path-repo-closure`:
    - `sugarcraft/candy-core: @dev` (Program / Msg / Model)
-   - `sugarcraft/candy-buffer: @dev` (Buffer for cellGrid asserts)
+   - `sugarcraft/sugar-cellbuffer: @dev` (Buffer for cellGrid asserts)
 3. **Implement ProgramSimulator**:
    - Construct with a Program instance.
    - `send(Msg)` enqueues; supports `Tick(seconds)` to advance virtual time.

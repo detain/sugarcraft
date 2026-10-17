@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Table;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
 
 /**
  * Stateful diff renderer for Table.
@@ -199,9 +199,9 @@ final class TableRenderer
      *   - 256-color and RGB colors are not yet supported (stored as null)
      *
      * @param string|null $sgr SGR parameter string or null for default style
-     * @return \SugarCraft\Buffer\Style|null
+     * @return \SugarCraft\CellBuffer\Style|null
      */
-    private static function sgrToStyle(?string $sgr): ?\SugarCraft\Buffer\Style
+    private static function sgrToStyle(?string $sgr): ?\SugarCraft\CellBuffer\Style
     {
         if ($sgr === null || $sgr === '' || $sgr === '0') {
             return null;
@@ -214,23 +214,23 @@ final class TableRenderer
         $codes = \array_map('intval', \explode(';', $sgr));
         foreach ($codes as $code) {
             switch ($code) {
-                case 1:  $attrs |= \SugarCraft\Buffer\Style::ATTR_BOLD;       break;
-                case 2:  $attrs |= \SugarCraft\Buffer\Style::ATTR_FAINT;      break;
-                case 3:  $attrs |= \SugarCraft\Buffer\Style::ATTR_ITALIC;     break;
-                case 4:  $attrs |= \SugarCraft\Buffer\Style::ATTR_UNDERLINE;  break;
-                case 5:  $attrs |= \SugarCraft\Buffer\Style::ATTR_BLINK;      break;
-                case 7:  $attrs |= \SugarCraft\Buffer\Style::ATTR_REVERSE;    break;
-                case 9:  $attrs |= \SugarCraft\Buffer\Style::ATTR_STRIKE;     break;
-                case 22: $attrs &= ~(\SugarCraft\Buffer\Style::ATTR_BOLD | \SugarCraft\Buffer\Style::ATTR_FAINT); break;
-                case 23: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_ITALIC;    break;
-                case 24: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_UNDERLINE; break;
-                case 25: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_BLINK;     break;
-                case 27: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_REVERSE;   break;
-                case 29: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_STRIKE;    break;
+                case 1:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_BOLD;       break;
+                case 2:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_FAINT;      break;
+                case 3:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_ITALIC;     break;
+                case 4:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_UNDERLINE;  break;
+                case 5:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_BLINK;      break;
+                case 7:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_REVERSE;    break;
+                case 9:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_STRIKE;     break;
+                case 22: $attrs &= ~(\SugarCraft\CellBuffer\Style::ATTR_BOLD | \SugarCraft\CellBuffer\Style::ATTR_FAINT); break;
+                case 23: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_ITALIC;    break;
+                case 24: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_UNDERLINE; break;
+                case 25: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_BLINK;     break;
+                case 27: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_REVERSE;   break;
+                case 29: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_STRIKE;    break;
             }
         }
 
-        return \SugarCraft\Buffer\Style::new($fg, $bg, $attrs);
+        return \SugarCraft\CellBuffer\Style::new($fg, $bg, $attrs);
     }
 
     /**

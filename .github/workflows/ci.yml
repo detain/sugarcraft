@@ -138,7 +138,7 @@ jobs:
   #   committed  no <lib>/composer.json may carry a sibling path-repo. Each lib
   #              is published standalone as sugarcraft/<lib>, and Composer's
   #              PathRepository HARD FAILS on a url that does not exist, so
-  #              `../candy-buffer` breaks `composer install` for anyone who
+  #              `../sugar-cellbuffer` breaks `composer install` for anyone who
   #              clones the split repo. (Harmless to consumers who merely
   #              `require` the package: Composer honours `repositories` only on
   #              the ROOT package and ignores a dependency's.)

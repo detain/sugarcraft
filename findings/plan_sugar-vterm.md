@@ -794,7 +794,7 @@ private function scrollUpOne(): void
 
 **Alternative approach** — since `CellGrid` is used in the vcr renderer path and `CellGrid::grid` is private, the most practical fix is to refactor `CsiHandlerImpl` to use a `Buffer`-style grid:
 
-**Better approach for vcr path:** Refactor `CsiHandlerImpl` to use `Buffer` (from `candy-buffer`) instead of `CellGrid` for the scroll operations, or add a `CellGrid::scrollRegionUp()` method that does the efficient shift.
+**Better approach for vcr path:** Refactor `CsiHandlerImpl` to use `Buffer` (from `sugar-cellbuffer`) instead of `CellGrid` for the scroll operations, or add a `CellGrid::scrollRegionUp()` method that does the efficient shift.
 
 ```php
 // In CellGrid, add:

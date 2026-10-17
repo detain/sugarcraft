@@ -1,21 +1,21 @@
 # Step 15 — sugar-forms onto shared foundations
 
 **Branch:** `ai/sugar-forms-shared`
-**Depends on:** step-02 (candy-buffer), step-03 (candy-layout), step-04 (sugar-testing), step-07 (sugar-fuzzy), step-09 (candy-core ProgressReporter — optional)
+**Depends on:** step-02 (sugar-cellbuffer), step-03 (candy-layout), step-04 (sugar-testing), step-07 (sugar-fuzzy), step-09 (candy-core ProgressReporter — optional)
 **Blocks:** step-23 (async consumers includes sugar-forms), step-24 (vim mode consolidation)
 
 ## Goal
 
-Migrate `sugar-forms` (Form + 7 field types: TextInput, TextArea, Select, MultiSelect, Confirm, Note, FilePicker) onto: candy-buffer (cell rendering), candy-layout (form/field sizing), sugar-testing (snapshot infrastructure — replace any per-test ad-hoc fixtures), sugar-fuzzy (Select / MultiSelect filter delegates to sugar-fuzzy). sugar-forms keeps its own FuzzyMatcher as the back-compat shim added in step-7.
+Migrate `sugar-forms` (Form + 7 field types: TextInput, TextArea, Select, MultiSelect, Confirm, Note, FilePicker) onto: sugar-cellbuffer (cell rendering), candy-layout (form/field sizing), sugar-testing (snapshot infrastructure — replace any per-test ad-hoc fixtures), sugar-fuzzy (Select / MultiSelect filter delegates to sugar-fuzzy). sugar-forms keeps its own FuzzyMatcher as the back-compat shim added in step-7.
 
 Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → sugar-testing), §387.1 (fuzzy reinvention).
 
 ## Files expected to be modified
 
-- `sugar-forms/composer.json` — add `sugarcraft/candy-buffer`, `sugarcraft/candy-layout`, `sugarcraft/sugar-testing` (dev-only OK), `sugarcraft/sugar-fuzzy` (production).
+- `sugar-forms/composer.json` — add `sugarcraft/sugar-cellbuffer`, `sugarcraft/candy-layout`, `sugarcraft/sugar-testing` (dev-only OK), `sugarcraft/sugar-fuzzy` (production).
 - `sugar-forms/src/Form.php` — layout fields via candy-layout when an explicit constraint set is provided.
 - `sugar-forms/src/Field/Select.php` + `MultiSelect.php` — internal filter delegates to sugar-fuzzy (the existing public API stays).
-- `sugar-forms/src/TextInput/TextInput.php` + `TextArea/TextArea.php` — render via candy-buffer (snapshot tests pin byte output for safety).
+- `sugar-forms/src/TextInput/TextInput.php` + `TextArea/TextArea.php` — render via sugar-cellbuffer (snapshot tests pin byte output for safety).
 - `sugar-forms/src/Fuzzy/FuzzyMatcher.php` — already a back-compat shim from step-7; no further edits.
 - `sugar-forms/tests/` — convert any ad-hoc fixture loading to sugar-testing's `assertGoldenAnsi` + `assertCellGrid`.
 
@@ -32,7 +32,7 @@ Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → sugar-
 
 1. **path-repo closure**: add the 4 new requires.
 2. **Migrate filters first** (lowest risk): Select / MultiSelect internal `filter()` method now uses `\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Existing public `withFilter(callable)` injection point preserved.
-3. **Migrate renderers next**: TextInput + TextArea render through candy-buffer. Build a Buffer, paint glyphs, render to ANSI via Buffer's toAnsi() (or a temporary string-render fallback if buffer toAnsi isn't there yet — append a `Need Buffer::toAnsi()` to `docs/repo_map_updates.md` for step-26 to address).
+3. **Migrate renderers next**: TextInput + TextArea render through sugar-cellbuffer. Build a Buffer, paint glyphs, render to ANSI via Buffer's toAnsi() (or a temporary string-render fallback if buffer toAnsi isn't there yet — append a `Need Buffer::toAnsi()` to `docs/repo_map_updates.md` for step-26 to address).
 4. **Convert tests**: replace ad-hoc fixture loaders with `\SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi(...)`. Goldens live in `tests/fixtures/`.
 5. **Form layout**: if a Form is built with `withConstraints([...])`, route through candy-layout's `LayoutSolver`. Otherwise keep the existing greedy-vertical default.
 6. Run phpunit in sugar-forms + sugar-forms + affected-libs.
@@ -50,7 +50,7 @@ Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → sugar-
 
 ## Ship brief
 
-- **PR title**: `sugar-forms: adopt candy-buffer + candy-layout + sugar-testing + sugar-fuzzy`
+- **PR title**: `sugar-forms: adopt sugar-cellbuffer + candy-layout + sugar-testing + sugar-fuzzy`
 - **PR body**:
   ```
   ## Summary

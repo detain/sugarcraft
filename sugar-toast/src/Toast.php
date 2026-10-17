@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Style;
-use SugarCraft\Buffer\Region;
-use SugarCraft\Buffer\Position as BufferPosition;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style;
+use SugarCraft\CellBuffer\Region;
+use SugarCraft\CellBuffer\Position as BufferPosition;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -774,7 +774,7 @@ final class Toast
 
     /**
      * Pack a candy-core {@see Color} into a 24-bit 0xRRGGBB int, the shape
-     * candy-buffer's {@see Style} stores fg/bg colours in.
+     * sugar-cellbuffer's {@see Style} stores fg/bg colours in.
      */
     private function colorToRgb(Color $color): int
     {
@@ -806,7 +806,7 @@ final class Toast
                 $seq = \substr($s, $i + 2, $j - $i - 3);
                 // Cumulative fold (audit M7): a sequence mutates only the
                 // facets it names — styles survive across sequences on the
-                // same run of cells, and a candy-buffer-emitted `\e[0;…m`
+                // same run of cells, and a sugar-cellbuffer-emitted `\e[0;…m`
                 // preamble resets then rebuilds instead of erasing everything.
                 $currentStyle = $this->applySgr($currentStyle, $seq);
                 $i = $j;

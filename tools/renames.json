@@ -42,7 +42,7 @@
 
     {"batch":"E","kind":"rename","old":"candy-sprinkles","new":"sugar-style","ns_old":"Sprinkles","ns_new":"Style","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-layout","new":"sugar-constraints","ns_old":"Layout","ns_new":"Constraints","type":"lib","bins":{},"status":"pending"},
-    {"batch":"E","kind":"rename","old":"candy-buffer","new":"sugar-cellbuffer","ns_old":"Buffer","ns_new":"CellBuffer","type":"lib","bins":{},"status":"pending"},
+    {"batch":"E","kind":"rename","old":"candy-buffer","new":"sugar-cellbuffer","ns_old":"Buffer","ns_new":"CellBuffer","type":"lib","bins":{},"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-ansi","new":"sugar-ansi-parser","ns_old":"Ansi","ns_new":"AnsiParser","type":"lib","bins":{},"protect":["candy-ansi-inspect"],"brand_protect":true,"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-vt","new":"sugar-vterm","ns_old":"Vt","ns_new":"Vterm","type":"lib","bins":{},"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-input","new":"sugar-input","ns_old":"Input","ns_new":"Input","type":"lib","bins":{},"status":"renamed"},

@@ -39,8 +39,8 @@ flag_management:
     - name: sugar-ansi-parser
       paths: ["sugar-ansi-parser/src/**"]
       carryforward: true
-    - name: candy-buffer
-      paths: ["candy-buffer/src/**"]
+    - name: sugar-cellbuffer
+      paths: ["sugar-cellbuffer/src/**"]
       carryforward: true
     - name: sugar-async
       paths: ["sugar-async/src/**"]
@@ -235,12 +235,12 @@ component_management:
         - "sugar-ansi-parser/src/**"
       flag_regexes:
         - "^sugar-ansi-parser$"
-    - component_id: candy-buffer
-      name: candy-buffer
+    - component_id: sugar-cellbuffer
+      name: sugar-cellbuffer
       paths:
-        - "candy-buffer/src/**"
+        - "sugar-cellbuffer/src/**"
       flag_regexes:
-        - "^candy-buffer$"
+        - "^sugar-cellbuffer$"
     - component_id: sugar-async
       name: sugar-async
       paths:

@@ -10891,7 +10891,7 @@ equal to `php://fd/0`. Green, confident, false. It is containment now, with nowd
 **The roster is its own dead-instrument control** (rule 15/E228): the expectation is a NON-EMPTY exact
 set of nine (file, spelling) pairs, so a scanner that matches nothing fails on the first assertion rather
 than reporting a clean tree. Reverting containment to equality KILLS it; injecting `?? STDIN` into
-`candy-buffer` — the E296 scenario itself, a reachable sibling growing a reader — KILLS it and names the
+`candy-buffer` — the E296 scenario itself, a reachable sibling growing a reader — KILLS it and names the <!-- @rename-keep historical provenance -->
 file.
 
 **Three of the nine are classified in the guard's doc-block; six deliberately are not.** Classified:
@@ -15167,7 +15167,7 @@ left **`candy-flip` at 4/6 and `candy-pty` at 3/7** by `is_link()` + `realpath()
    sibling — `candy-buffer`, `candy-testing`, `candy-vcr`, `candy-vt` — so a lib whose test harness comes <!-- @rename-keep historical provenance -->
    from a sibling gets a Packagist COPY of it while its runtime deps are symlinks. A suite measured in
    that state runs the published `candy-testing` against local `src`, and nothing says so. <!-- @rename-keep -->
-2. **Transitive-through-dev is invisible even after hand-adding the direct dev deps.** `candy-buffer`
+2. **Transitive-through-dev is invisible even after hand-adding the direct dev deps.** `candy-buffer` <!-- @rename-keep historical provenance -->
    reaches these libs only via `candy-testing`'s own requires, so adding the direct dev siblings fixed <!-- @rename-keep -->
    5/6 and 6/7 and no more.
 

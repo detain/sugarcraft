@@ -100,7 +100,7 @@ $model = $viewport;
 
 The Table renderer maintains a `?Buffer $previousFrame` across renders. On each render it
 builds the current Buffer, computes `current->diff(previous)` (from
-[candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
+[sugar-cellbuffer](https://github.com/detain/sugarcraft-sugar-cellbuffer)), and emits only
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
 `previousFrame` for the next render.
 

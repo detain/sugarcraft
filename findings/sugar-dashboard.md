@@ -38,7 +38,7 @@ if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer && $useWidth > 0) {
 
 ---
 
-### C-2: Non-Existent Package Imports in Chart.php ⏭️ r82: obsolete — false alarm: SugarCraft\Buffer\* IS the candy-buffer lib (candy-buffer/src/Buffer.php:5 namespace SugarCraft\Buffer, Cell.php, Diff/ present) which the finding itself lists in the composer closure
+### C-2: Non-Existent Package Imports in Chart.php ⏭️ r82: obsolete — false alarm: SugarCraft\CellBuffer\* IS the sugar-cellbuffer lib (sugar-cellbuffer/src/Buffer.php:5 namespace SugarCraft\CellBuffer, Cell.php, Diff/ present) which the finding itself lists in the composer closure
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Lines:** 7-9  
@@ -46,14 +46,14 @@ if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer && $useWidth > 0) {
 **Category:** Compatibility Issues / Wrong Imports
 
 ```php
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
 ```
 
-The imports reference `SugarCraft\Buffer\*` which does not exist as a package in the monorepo. Examining `sugar-dashboard/composer.json` shows the path-repository closure includes `candy-buffer`, `candy-core`, `candy-sprinkles`, `candy-pty`, `candy-vcr`, `candy-layout`, `sugar-async`, `sugar-ansi-parser`, and `sugar-input` — there is **no** `sugarcraft/buffer` package. The `Buffer`, `Cell`, and `DiffEncoder` classes at these namespaces do not exist.
+The imports reference `SugarCraft\CellBuffer\*` which does not exist as a package in the monorepo. Examining `sugar-dashboard/composer.json` shows the path-repository closure includes `sugar-cellbuffer`, `candy-core`, `candy-sprinkles`, `candy-pty`, `candy-vcr`, `candy-layout`, `sugar-async`, `sugar-ansi-parser`, and `sugar-input` — there is **no** `sugarcraft/buffer` package. The `Buffer`, `Cell`, and `DiffEncoder` classes at these namespaces do not exist.
 
-**Impact:** Any code that instantiates or renders a `Chart` object will fatal with `Class "SugarCraft\Buffer\Buffer" not found` at runtime. This is a blocking issue — `Chart` is unusable.
+**Impact:** Any code that instantiates or renders a `Chart` object will fatal with `Class "SugarCraft\CellBuffer\Buffer" not found` at runtime. This is a blocking issue — `Chart` is unusable.
 
 **CALIBER_LEARNINGS note:** Line 11 of `CALIBER_LEARNINGS.md` documents a `max(1, intdiv(...))` chart-label truncation bug but does not mention this missing import issue.
 
@@ -410,7 +410,7 @@ The code uses `JSON_THROW_ON_ERROR` flag which is correct. No issue here — thi
 
 ---
 
-### L-3: Buffer/Cell Type Duplication Between Foundations ⏭️ r82: obsolete — import resolves to candy-buffer (see C-2); dual-cell convention documented
+### L-3: Buffer/Cell Type Duplication Between Foundations ⏭️ r82: obsolete — import resolves to sugar-cellbuffer (see C-2); dual-cell convention documented
 
 **File:** Multiple files in `src/Plot/Chart/`  
 **Lines:** Various  
@@ -420,7 +420,7 @@ The code uses `JSON_THROW_ON_ERROR` flag which is correct. No issue here — thi
 The CALIBER_LEARNINGS.md lines 43-44 document the dual-cell pattern:
 > "sugar-dashboard Cell (rune + Style for inline-termui renderer) vs sugar-vterm Cell (grapheme + Sgr + continuation + hyperlink for VT emulation). Both canonical for their lib."
 
-This dual-type pattern is a known project convention. However, `Chart.php` importing from `SugarCraft\Buffer\*` (which doesn't exist) suggests there may be a third `Buffer`/`Cell` type being attempted. This creates confusion about which type to use where.
+This dual-type pattern is a known project convention. However, `Chart.php` importing from `SugarCraft\CellBuffer\*` (which doesn't exist) suggests there may be a third `Buffer`/`Cell` type being attempted. This creates confusion about which type to use where.
 
 **Fix:** Standardize on a single `Buffer`/`Cell` hierarchy and document which is used in which rendering context (inline-termui vs. VT emulation vs. diff encoding).
 
@@ -516,7 +516,7 @@ The `EventDispatcher` is tested (`tests/Events/EventTest.php` likely exists) but
 
 ---
 
-### F-5: No DiffEncoder Class Visible in Reviewed Source ⏭️ r82: obsolete — DiffEncoder present at candy-buffer/src/Diff/ (see C-2)
+### F-5: No DiffEncoder Class Visible in Reviewed Source ⏭️ r82: obsolete — DiffEncoder present at sugar-cellbuffer/src/Diff/ (see C-2)
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Line:** 171  
@@ -528,7 +528,7 @@ $encoder = new DiffEncoder();
 return $encoder->encode($ops);
 ```
 
-`DiffEncoder` is imported from `SugarCraft\Buffer\Diff\DiffEncoder` (line 9, which is among the wrong imports flagged in C-2). The class is used but does not exist in the monorepo at this path. This is a direct consequence of C-2 — fixing C-2 may or may not resolve this, depending on whether `DiffEncoder` actually exists elsewhere.
+`DiffEncoder` is imported from `SugarCraft\CellBuffer\Diff\DiffEncoder` (line 9, which is among the wrong imports flagged in C-2). The class is used but does not exist in the monorepo at this path. This is a direct consequence of C-2 — fixing C-2 may or may not resolve this, depending on whether `DiffEncoder` actually exists elsewhere.
 
 ---
 
@@ -610,7 +610,7 @@ This is an attempted atomic save but it lacks the `mkdir` directory-creation gua
 
 ## Compatibility Issues
 
-### COMP-1: Chart.php Wrong Import Namespace (src/Plot/Chart/Chart.php:7-9) ⏭️ r82: obsolete — same as C-2 (candy-buffer exists)
+### COMP-1: Chart.php Wrong Import Namespace (src/Plot/Chart/Chart.php:7-9) ⏭️ r82: obsolete — same as C-2 (sugar-cellbuffer exists)
 
 **See:** Critical Issue C-2
 
@@ -761,7 +761,7 @@ public function subscriptions(): ?\SugarCraft\Core\Subscriptions
 | ID | Severity | Category | Location | Description |
 |----|----------|----------|----------|-------------|
 | C-1 | Critical | Syntax Error | `src/Layout/Stack.php:78` | Missing space before `&&` — parse error |
-| C-2 | Critical | Compatibility | `src/Plot/Chart/Chart.php:7-9` | Non-existent `SugarCraft\Buffer\*` imports |
+| C-2 | Critical | Compatibility | `src/Plot/Chart/Chart.php:7-9` | Non-existent `SugarCraft\CellBuffer\*` imports |
 | C-3 | Critical | Immutability | `src/Events/EventDispatcher.php:112-117` | `dispatch()` mutates state in-place |
 | H-1 | High | Immutability | `src/Plot/Chart/Chart.php:129-134` | `render()` mutates diff state in-place |
 | H-2 | High | Immutability | `src/Modules/Clock/ClockModule.php:67-72` | `withTime()` cannot assign to readonly property |

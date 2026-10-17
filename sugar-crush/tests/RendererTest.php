@@ -631,7 +631,7 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * candy-buffer #1362 defense-in-depth: raw User turns reach the terminal
+     * sugar-cellbuffer #1362 defense-in-depth: raw User turns reach the terminal
      * wire verbatim, so a C0/DEL byte or a smuggled SGR sequence must be
      * neutralized before render while the visible text survives. Revert-proof:
      * dropping the Sanitize::untrusted() call in Renderer fails these asserts.

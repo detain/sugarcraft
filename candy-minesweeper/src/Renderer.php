@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Minesweeper;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
@@ -92,11 +92,11 @@ final class Renderer
      * Mark::wrap("cell:$row:$col", $glyph) so Scanner::hit() can map
      * mouse coordinates back to a cell.
      */
-    private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy, bool $mark = false): \SugarCraft\Buffer\Cell
+    private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy, bool $mark = false): \SugarCraft\CellBuffer\Cell
     {
         $cell = $b->cell($col, $row);
         if ($cell === null) {
-            return \SugarCraft\Buffer\Cell::new(' ');
+            return \SugarCraft\CellBuffer\Cell::new(' ');
         }
 
         [$glyph, $fg, $bg, $attrs] = self::cellStyleData($cell, $b, $col, $row, $cx, $cy);
@@ -104,7 +104,7 @@ final class Renderer
         $content = $mark ? Mark::zone("cell:{$row}:{$col}", $glyph) : $glyph;
         $style = Style::new($fg, $bg, $attrs);
 
-        return \SugarCraft\Buffer\Cell::new($content, $style);
+        return \SugarCraft\CellBuffer\Cell::new($content, $style);
     }
 
     /**

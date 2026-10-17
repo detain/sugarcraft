@@ -10,7 +10,7 @@ namespace SugarCraft\Video\Render;
  * Packs three 8-bit channels into a 24-bit integer using the formula:
  * (r << 16) | (g << 8) | b
  *
- * This is the standard 0xRRGGBB representation used by candy-buffer
+ * This is the standard 0xRRGGBB representation used by sugar-cellbuffer
  * and many terminal color systems.
  */
 final class Color

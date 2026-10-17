@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast\Tests;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Toast\{Alert, Position, SymbolSet, Toast, ToastType};
@@ -324,7 +324,7 @@ final class ToastRenderingTest extends TestCase
                 | Style::ATTR_INVISIBLE | Style::ATTR_STRIKE | Style::ATTR_OVERLINE,
         ]];
         yield 'bright bg 100-107' => ['100', ['fg' => null, 'bg' => 0x7F7F7F, 'attrs' => 0]];
-        // candy-buffer's emitter spells every style as an '0;…' preamble; a
+        // sugar-cellbuffer's emitter spells every style as an '0;…' preamble; a
         // re-decode of its own output must reproduce the style, not null it.
         yield 'reset preamble then bold survives' => ['0;1', ['fg' => null, 'bg' => null, 'attrs' => Style::ATTR_BOLD]];
         // Fail-soft: malformed extended payloads stop the walk without

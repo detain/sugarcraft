@@ -23,7 +23,7 @@ Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoA
 
 - `candy-core/src/ProgramOptions.php` — keep existing ctor; add `static builder(): ProgramOptionsBuilder`.
 - `candy-core/src/Program.php` — add `withLogger(LoggerInterface): self`, `withExceptionHandler(callable): self`, expose `lastFrameDuration(): float` getter.
-- `candy-core/src/Util/Width.php` — confirm `Width::of(string): int` exists; if not, add it (candy-buffer step-02 needs this).
+- `candy-core/src/Util/Width.php` — confirm `Width::of(string): int` exists; if not, add it (sugar-cellbuffer step-02 needs this).
 - `candy-core/tests/ProgramOptionsBuilderTest.php`, `ProgressReporterTest.php`, `UndoActionTypeTest.php`.
 
 ## Acceptance criteria
@@ -80,7 +80,7 @@ Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoA
   - Program::withLogger / withExceptionHandler / lastFrameDuration enable production logging + adaptive framerate.
   - New ProgressReporter interface (consumed in steps 25 + 35).
   - New UndoActionType enum (replaces string-based routing in steps 25 + 32).
-  - Width::of added/confirmed for downstream candy-buffer (step-02) use.
+  - Width::of added/confirmed for downstream sugar-cellbuffer (step-02) use.
   - Fully back-compatible: existing ctor + API surface untouched.
 
   ## Test plan

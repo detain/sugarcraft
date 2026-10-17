@@ -1,0 +1,152 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\CellBuffer;
+
+/**
+ * A single terminal cell — the atom of buffer rendering.
+ *
+ * A cell holds: a displayed rune (or grapheme cluster), an optional
+ * inline {@see Style}, an optional OSC 8 {@see Hyperlink}, and a
+ * display-cell width (1 for normal, 2 for wide chars like CJK/emoji).
+ *
+ * When width is 2 the next adjacent cell in the buffer MUST be an
+ * empty "continuation" cell (rune '', width 0). Buffer's mutating API
+ * ({@see Buffer::withCellAt()}, fill(), withRegion()) creates and sweeps
+ * that partner automatically; grids supplied through Buffer::fromGrid()
+ * remain the caller's responsibility.
+ *
+ * CONTROL-BYTE CONTRACT (security-relevant): a Cell rune is stored and
+ * emitted VERBATIM — {@see Buffer::toAnsi()} and the diff encoder write
+ * $rune straight to the terminal wire with no escaping. Unlike
+ * {@see Hyperlink}, which rejects C0/DEL at construction, Cell does NOT
+ * validate its rune: a rune is expected to be a single DISPLAY grapheme,
+ * and a raw C0 control (\x00-\x1f) or DEL (\x7f) written as a rune would
+ * be injected verbatim into the output stream. THE CALLER is responsible
+ * for stripping/replacing control bytes before building cells from
+ * untrusted text — escape sequences belong to the parser, never a cell.
+ * A hard reject was evaluated and deferred: multiple foundation
+ * consumers (sugar-treelist, sugar-crush, sugar-table) legitimately splat
+ * pre-rendered strings char-by-char into runes and rely on the
+ * pass-through behaviour, so validation has to live at those call sites.
+ *
+ * Cell is a readonly value object: rebuild via new rather than with*().
+ *
+ * Mirrors charmbracelet/lipgloss's Cell and the charmbracelet/vte
+ * terminal cell representation.
+ *
+ * @readonly
+ */
+final class Cell implements \JsonSerializable
+{
+    /**
+     * @param string      $rune   Displayed grapheme(s) — empty string for continuation cells.
+     *                            Stored verbatim and emitted unescaped; the caller must strip
+     *                            C0/DEL control bytes from untrusted text (see class docblock).
+     * @param Style|null $style  Per-cell style or null for defaults
+     * @param Hyperlink|null $link OSC 8 hyperlink or null
+     * @param int         $width  Display width in cells (1 or 2; 0 for continuation)
+     */
+    public function __construct(
+        public readonly string $rune,
+        public readonly ?Style $style,
+        public readonly ?Hyperlink $link,
+        public readonly int $width,
+    ) {}
+
+    /**
+     * Default factory — blank cell.
+     */
+    public static function new(
+        string $rune = ' ',
+        ?Style $style = null,
+        ?Hyperlink $link = null,
+        int $width = 1,
+    ): self {
+        return new self($rune, $style, $link, $width);
+    }
+
+    /**
+     * Factory: a blank continuation cell for wide-char neighbours.
+     * Continuation cells have empty rune and zero width.
+     */
+    public static function continuation(): self
+    {
+        return new self('', null, null, 0);
+    }
+
+    /**
+     * Displayed grapheme(s), returned verbatim.
+     *
+     * The value is emitted unescaped by {@see Buffer::toAnsi()} / the diff
+     * encoder, so callers rendering untrusted text must have stripped
+     * C0/DEL control bytes before the cell was built (see class docblock).
+     */
+    public function rune(): string { return $this->rune; }
+
+    /** Per-cell style (or null for default rendering). */
+    public function style(): ?Style { return $this->style; }
+
+    /** OSC 8 hyperlink anchor, or null. */
+    public function link(): ?Hyperlink { return $this->link; }
+
+    /**
+     * Display width in terminal cells.
+     * @return int 0 (continuation), 1 (normal), or 2 (wide/CJK/emoji)
+     */
+    public function width(): int { return $this->width; }
+
+    /**
+     * Structural equality: two cells are equal iff their rendered
+     * representation (rune, style, link, width) is identical.
+     *
+     * Used by Buffer::diff() for the diff hot-path and replaces the
+     * private Buffer::cellsEqual() helper.
+     */
+    public function equals(Cell $other): bool
+    {
+        return $this->rune() === $other->rune()
+            && Style::valuesEqual($this->style(), $other->style())
+            && Hyperlink::valuesEqual($this->link(), $other->link())
+            && $this->width() === $other->width();
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{rune: string, style: ?array, link: ?array, width: int}
+     */
+    public function __serialize(): array
+    {
+        return [
+            'rune' => $this->rune,
+            'style' => $this->style?->__serialize(),
+            'link' => $this->link?->__serialize(),
+            'width' => $this->width,
+        ];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{rune: string, style: ?array, link: ?array, width: int} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->rune = $data['rune'];
+        $this->style = $data['style'] !== null ? new Style($data['style']['fg'], $data['style']['bg'], $data['style']['attrs']) : null;
+        $this->link = $data['link'] !== null ? new Hyperlink($data['link']['url'], $data['link']['id']) : null;
+        $this->width = $data['width'];
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{rune: string, style: ?array, link: ?array, width: int}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
+    }
+}

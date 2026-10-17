@@ -742,29 +742,29 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Files:** `sugar-widgets/src/AnimatedProgress.php:79`
 **Agent:** Same coder agent as 2.9 (grouped — same lib)
 
-#### 2.11 🟢 candy-buffer: DiffOptimiser array_merge loop (Item 3.2)
+#### 2.11 🟢 sugar-cellbuffer: DiffOptimiser array_merge loop (Item 3.2)
 
-**Plan:** `findings/plan_candy-buffer.md` — Item 3.2
+**Plan:** `findings/plan_sugar-cellbuffer.md` — Item 3.2
 **Fix:** Use `foreach` with `$buffer[] = $cell` instead of `array_merge($buffer, $op->cells)` inside loop
-**Files:** `candy-buffer/src/DiffOptimiser.php:96`
+**Files:** `sugar-cellbuffer/src/DiffOptimiser.php:96`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 2.12 🟢 candy-buffer: DiffEncoder state reset (Item 4.1)
+#### 2.12 🟢 sugar-cellbuffer: DiffEncoder state reset (Item 4.1)
 
-**Plan:** `findings/plan_candy-buffer.md` — Item 4.1
+**Plan:** `findings/plan_sugar-cellbuffer.md` — Item 4.1
 **Fix:** Reset `cursorCol`, `cursorRow`, `currentStyle`, `currentLinkUrl`, `lastRune` at start of `encode()`
-**Files:** `candy-buffer/src/Diff/DiffEncoder.php:50-65`
+**Files:** `sugar-cellbuffer/src/Diff/DiffEncoder.php:50-65`
 **Agent:** Same coder agent as 2.11 (grouped — same lib)
 
 ---
 
 ### Group 2-D (3 agents)
 
-#### 2.13 🟢 candy-buffer: Hyperlink identity comparison (Item 2.2)
+#### 2.13 🟢 sugar-cellbuffer: Hyperlink identity comparison (Item 2.2)
 
-**Plan:** `findings/plan_candy-buffer.md` — Item 2.2
+**Plan:** `findings/plan_sugar-cellbuffer.md` — Item 2.2
 **Fix:** Add `Hyperlink::equals(Hyperlink $other): bool` method; use in `Buffer::toAnsi()`
-**Files:** `candy-buffer/src/Hyperlink.php`, `candy-buffer/src/Buffer.php:458`
+**Files:** `sugar-cellbuffer/src/Hyperlink.php`, `sugar-cellbuffer/src/Buffer.php:458`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 2.14 🟢 sugar-markdown: String concat loops (Items 2.1-2.4)
@@ -1276,7 +1276,7 @@ Same verification as previous phases.
 | Plan | Items | Summary |
 | ---- | ----- | ------- |
 | `plan_sugar-ansi-parser.md` | 3.5, 3.6, 4.1-4.3 | MAX_STRING_BUFFER constant, 65535 magic number, test coverage |
-| `plan_candy-buffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
+| `plan_sugar-cellbuffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
 | `plan_candy-codeshot.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
 | `plan_sugar-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
 | `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests || `plan_sugar-cli.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |

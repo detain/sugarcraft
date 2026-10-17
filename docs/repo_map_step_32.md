@@ -1,21 +1,21 @@
-# Step 32 — candy-tetris + candy-minesweeper adopt candy-buffer/mouse/testing
+# Step 32 — candy-tetris + candy-minesweeper adopt sugar-cellbuffer/mouse/testing
 
 **Branch:** `ai/games-shared`
-**Depends on:** step-02 (candy-buffer), step-05 (sugar-mouse), step-04 (sugar-testing), step-30 (audit)
+**Depends on:** step-02 (sugar-cellbuffer), step-05 (sugar-mouse), step-04 (sugar-testing), step-30 (audit)
 **Blocks:** —
 
 ## Goal
 
-The two flagship game libs (candy-tetris, candy-minesweeper) adopt candy-buffer for the playfield grid, sugar-mouse for click-to-flag/click-to-reveal interaction, and sugar-testing for snapshot tests of game-state renders. These libs are cited as already-superior-to-upstream (§442/§444) — bringing them onto shared foundations preserves that superiority while gaining ecosystem-wide improvements.
+The two flagship game libs (candy-tetris, candy-minesweeper) adopt sugar-cellbuffer for the playfield grid, sugar-mouse for click-to-flag/click-to-reveal interaction, and sugar-testing for snapshot tests of game-state renders. These libs are cited as already-superior-to-upstream (§442/§444) — bringing them onto shared foundations preserves that superiority while gaining ecosystem-wide improvements.
 
 Reference: step-30 audit; §442 (candy-tetris superiority), §444 (candy-minesweeper superiority), §157 (O(1) win detection only in candy-minesweeper — others need snapshot tests).
 
 ## Files expected to be modified
 
-- Each composer.json — add candy-buffer + sugar-mouse + sugar-testing (dev) via `path-repo-closure`.
-- candy-tetris playfield renderer → candy-buffer (10×20 cell grid is canonical for candy-buffer).
-- candy-tetris piece preview / score panel → candy-buffer cells.
-- candy-minesweeper minefield renderer → candy-buffer; clicks via sugar-mouse (zone per cell).
+- Each composer.json — add sugar-cellbuffer + sugar-mouse + sugar-testing (dev) via `path-repo-closure`.
+- candy-tetris playfield renderer → sugar-cellbuffer (10×20 cell grid is canonical for sugar-cellbuffer).
+- candy-tetris piece preview / score panel → sugar-cellbuffer cells.
+- candy-minesweeper minefield renderer → sugar-cellbuffer; clicks via sugar-mouse (zone per cell).
 - candy-minesweeper flag-tracking still in domain code — UndoActionType enum from step-9 can route Flag / Reveal / Chord actions if super-candy isn't already showing the way.
 - Tests for both: add assertGoldenAnsi snapshot of representative game states.
 
@@ -31,7 +31,7 @@ Reference: step-30 audit; §442 (candy-tetris superiority), §444 (candy-mineswe
 ## Coder brief
 
 1. Read step-30 audit for both libs.
-2. **path-repo closure**: candy-buffer + sugar-mouse + sugar-testing (dev) in both.
+2. **path-repo closure**: sugar-cellbuffer + sugar-mouse + sugar-testing (dev) in both.
 3. **candy-tetris**: replace ad-hoc playfield string composition with Buffer. Piece rendering = cells with style. Score panel = separate sub-buffer composited via `Buffer::withRegion`.
 4. **candy-minesweeper**: minefield as Buffer; each cell zone-tagged via `\SugarCraft\Mouse\Mark::wrap("cell:$r:$c", $glyph)`; on mouse event, `Scanner::hit($x,$y)` → zone id → cell.
 5. **Snapshot tests** in sugar-testing with golden files.
@@ -50,7 +50,7 @@ Reference: step-30 audit; §442 (candy-tetris superiority), §444 (candy-mineswe
 
 ## Ship brief
 
-- **PR title**: `candy-tetris + candy-minesweeper: adopt candy-buffer + sugar-mouse + sugar-testing`
+- **PR title**: `candy-tetris + candy-minesweeper: adopt sugar-cellbuffer + sugar-mouse + sugar-testing`
 - **PR body**:
   ```
   ## Summary
@@ -67,4 +67,4 @@ Reference: step-30 audit; §442 (candy-tetris superiority), §444 (candy-mineswe
 
   Refs: docs/repo_map_step_32.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `candy-tetris + candy-minesweeper: adopt candy-buffer + sugar-mouse + sugar-testing`.
+- Commit subject: `candy-tetris + candy-minesweeper: adopt sugar-cellbuffer + sugar-mouse + sugar-testing`.

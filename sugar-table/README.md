@@ -894,7 +894,7 @@ $t->isExpanded(5);   // depends on whether that row was expanded on page 2
 
 
 
-sugar-table adopts `candy-buffer` for all buffer-based rendering. The table's internal
+sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. The table's internal
 `Buffer` instance is constructed once per `View()` call and passed through all
 layout methods.
 

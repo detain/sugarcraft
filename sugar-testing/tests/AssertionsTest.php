@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Testing\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Subscriptions;

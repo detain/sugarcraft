@@ -51,7 +51,7 @@ enum Position
         return match ($this) {
             self::TopLeft, self::TopCenter, self::TopRight
                 => $stackedHeightBefore,
-            // WHY: candy-buffer clamps negative y but the silent disappearance
+            // WHY: sugar-cellbuffer clamps negative y but the silent disappearance
             // (toast rendering at negative y = clipped) is the real defect.
             // Pinning to top edge (y=0) makes the toast visible rather than
             // vanishing when the viewport is too short for the requested stack.

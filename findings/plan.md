@@ -86,7 +86,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-spring | P1 | 2 | SpringChain::tick() and SpringCollection::tick() must return new instances |
 | sugar-charts | P1 | 2 | Extract ChartExtras trait (DRY across BarChart/Scatter/OHLCChart ~200 lines) |
 | sugar-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to candy-core after sugar-spring |
-| candy-buffer | P1 | 2 | AsyncOps duplication (same as sugar-async) |
+| sugar-cellbuffer | P1 | 2 | AsyncOps duplication (same as sugar-async) |
 | candy-sprinkles | P1 | 1 | Style value object — finalize after candy-core foundation stable |
 | candy-mdview | P1 | 2 | Glow Renderer animation timing |
 
@@ -164,7 +164,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-spring.md` — Phase 1 (Spring tick mutates in place)
 - `findings/plan_sugar-charts.md` — Phase 1 (ChartExtras trait extraction)
 - `findings/plan_sugar-async.md` — Phase 1 (AsyncOps duplication)
-- `findings/plan_candy-buffer.md` — Phase 1 (AsyncOps duplication)
+- `findings/plan_sugar-cellbuffer.md` — Phase 1 (AsyncOps duplication)
 - `findings/plan_candy-sprinkles.md` — Phase 1 (Style immutable value object)
 - `findings/plan_candy-mdview.md` — Phase 1 (animation timing)
 
@@ -225,7 +225,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
    - **Subagent C1:** sugar-spring (SpringChain::tick() returns new instances)
    - **Subagent C2:** sugar-charts (ChartExtras trait extraction)
    - **Subagent C3:** sugar-async (AsyncOps deduplication)
-   - **Subagent C4:** candy-buffer (AsyncOps deduplication)
+   - **Subagent C4:** sugar-cellbuffer (AsyncOps deduplication)
    - **Subagent C5:** candy-sprinkles (Style immutable value object)
    - **Subagent C6:** candy-mdview (animation timing)
 2. Each subagent: review → implement → run tests → fix any issues → commit

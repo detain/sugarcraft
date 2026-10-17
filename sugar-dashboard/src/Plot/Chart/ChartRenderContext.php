@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Plot\Chart;
 
-use SugarCraft\Buffer\Buffer;
+use SugarCraft\CellBuffer\Buffer;
 
 /**
  * Render context for diff-based chart rendering.

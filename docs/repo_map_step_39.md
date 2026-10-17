@@ -37,7 +37,7 @@ This is doc-heavy; Scribe does most of the work. Coder ensures HTML validity + p
    ### §326 Shared Internal Frameworks
    - candy-core enhancements ✅ step-09
    - candy-layout ✅ step-03
-   - candy-buffer ✅ step-02
+   - sugar-cellbuffer ✅ step-02
    - sugar-testing ✅ step-04
    - sugar-ansi-parser ✅ step-01
    - sugar-mouse ✅ step-05

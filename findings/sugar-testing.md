@@ -547,7 +547,7 @@ This directly accesses the private `$model` property of `Program`. If the `Progr
 public static function assertCellGrid(array $expected, Buffer $actual): void
 ```
 
-The `Buffer` class from `sugarcraft/candy-buffer` is a specific dependency. The method assumes `Buffer` has `width()`, `height()`, and `cellAt()` methods. If `Buffer` API changes, these assertions break.
+The `Buffer` class from `sugarcraft/sugar-cellbuffer` is a specific dependency. The method assumes `Buffer` has `width()`, `height()`, and `cellAt()` methods. If `Buffer` API changes, these assertions break.
 
 ### 4. TestResult relies on Model contract
 

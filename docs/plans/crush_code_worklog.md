@@ -167,7 +167,7 @@ that the split libs resolve the way an outside consumer gets them, and they do.
 restore the closure.** It left candy-flip at 4/6 and candy-pty at 3/7. The tool walks the `require` graph <!-- @rename-keep -->
 only (its own `--help` says so), so every miss was a `require-dev` sibling; a lib whose harness comes
 from a sibling gets a *Packagist copy* of `candy-testing` while its runtime deps are symlinks, and <!-- @rename-keep -->
-nothing announces it. `candy-buffer` was invisible even after hand-adding the direct dev deps, because it
+nothing announces it. `candy-buffer` was invisible even after hand-adding the direct dev deps, because it <!-- @rename-keep historical provenance -->
 is reached only through `candy-testing`'s own requires. <!-- @rename-keep -->
 
 **And the repair is not idempotent with the tool.** `--fix` rewrites `repositories[]` to the require-graph
@@ -6267,7 +6267,7 @@ published as independent packages. **Both halves probed rather than argued:**
   carrying that same dangling entry installs clean, exit 0.
 
 So the entries were invisible to consumers who merely `require` the package, and
-fatal to anyone cloning the split `sugarcraft/<lib>` repo, where `../candy-buffer`
+fatal to anyone cloning the split `sugarcraft/<lib>` repo, where `../candy-buffer` <!-- @rename-keep historical provenance -->
 does not exist. That third case is why they had to go.
 
 `3bc5d269` first completed the **root** closure, which was genuinely broken:
@@ -10559,9 +10559,9 @@ skip-count alarm is a `sugar-crush` alarm that has no sibling equivalent** — t
 checked by content, per lib.
 
 Worse, the standard round-trip does not fix all of them: **`--fix --strict-closure` walks `require`
-only**, and `candy-buffer` carries `sugarcraft/candy-core` in **`require-dev`**, so it survived the
+only**, and `candy-buffer` carries `sugarcraft/candy-core` in **`require-dev`**, so it survived the <!-- @rename-keep historical provenance -->
 whole repair untouched. It needed a hand-injected scratch `repositories[]`, a `composer update`, and a
-`git checkout --` of that one manifest. The proof that any of this mattered: **`candy-buffer`'s
+`git checkout --` of that one manifest. The proof that any of this mattered: **`candy-buffer`'s <!-- @rename-keep historical provenance -->
 assertion count moved 1,621 → 1,661** the moment it tested the real dependency — same test files, +40
 assertions, purely from no longer running against a stale vendored copy.
 
@@ -10635,10 +10635,10 @@ then took the monorepo from **12 linked / 12 mixed / 30 fully-Packagist** to **5
 
 The sweep that followed was the first in which those 30 libs were actually testing the working tree,
 and it was green — but it also killed a claim this plan has been repeating. Round 41 cited
-`candy-buffer` moving 1,621 → 1,661 assertions as proof that linking mattered. Three runs on one
+`candy-buffer` moving 1,621 → 1,661 assertions as proof that linking mattered. Three runs on one <!-- @rename-keep historical provenance -->
 identical clean tree give 1569, 1545, 1507: `BufferTest.php` uses `rand()`, and that single file swung
 1246 → 1098 between two runs. The +40 was inside the noise. The *conclusion* survives — `--fix
---strict-closure` genuinely injects nothing for `candy-buffer`, which I re-verified by reading the
+--strict-closure` genuinely injects nothing for `candy-buffer`, which I re-verified by reading the <!-- @rename-keep historical provenance -->
 manifest after running it rather than by inferring from a total — but the evidence was never evidence.
 "A figure without its generator is not a measurement" was already a rule in the brief; it was not
 applied to the plan's own prose.

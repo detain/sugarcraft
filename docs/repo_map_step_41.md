@@ -49,7 +49,7 @@ _The shared-foundation refactor outlined above ran across <N> PRs, creating <8> 
 ### §326 Shared Internal Frameworks
 - ✅ candy-core enhancements (step-09, PR #<n>)
 - ✅ candy-layout (step-03, PR #<n>)
-- ✅ candy-buffer (step-02, PR #<n>)
+- ✅ sugar-cellbuffer (step-02, PR #<n>)
 - ✅ sugar-testing (step-04, PR #<n>)
 - ✅ sugar-ansi-parser (step-01, PR #<n>)
 - ✅ sugar-mouse (step-05, PR #<n>)

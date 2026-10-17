@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -862,7 +862,7 @@ final class Player implements Model
      * diffing inside view() would double-diff the framework's own diff and
      * corrupt the screen.
      *
-     * Ascii/TrueColor/HalfBlock render through a candy-buffer Buffer (the
+     * Ascii/TrueColor/HalfBlock render through a sugar-cellbuffer Buffer (the
      * cell grid the plan calls for); Ansi256/Sixel/Kitty/Iterm2 render
      * directly through their FrameRenderer.
      *
@@ -1122,7 +1122,7 @@ final class Player implements Model
     }
 
     /**
-     * Convert RGB to a candy-buffer Style color (0xRRGGBB) based on mode.
+     * Convert RGB to a sugar-cellbuffer Style color (0xRRGGBB) based on mode.
      *
      * Only the buffer-backed modes reach this — Ascii has no color, the rest
      * (TrueColor/HalfBlock) pack the channels into a 0xRRGGBB int. Ansi256 and

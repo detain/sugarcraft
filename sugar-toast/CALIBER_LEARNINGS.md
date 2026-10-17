@@ -211,7 +211,7 @@ cells but **150 UTF-8 bytes** (each box-drawing glyph is a 3-byte grapheme).
 continuation byte (`╭───…─<broken>`). Inline SGR escapes (`\x1b[31m…\x1b[0m`)
 also threw the byte math off.
 
-The string pipeline is gone: every row is now painted INTO a candy-buffer
+The string pipeline is gone: every row is now painted INTO a sugar-cellbuffer
 `Buffer` cell grid (`renderAlertToBuffer()` → `placeAnsiStringAt()`, one
 grapheme = one `Cell` with its measured width), the background fills a
 viewport-wide buffer, and boxes are blitted with `Buffer::withRegion()`. Byte
