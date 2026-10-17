@@ -14,7 +14,7 @@ use function React\Promise\resolve;
 
 /**
  * Guards the cooperative-cancellation semantics (plan 5.1): cancelling the
- * candy-async token must reject the caller's promise IMMEDIATELY (no loop
+ * sugar-async token must reject the caller's promise IMMEDIATELY (no loop
  * turn needed), fire the server-side abort hook exactly once, and drop — not
  * resurrect — a late-arriving driver result. A query that settles first must
  * never trigger the server-side kill.

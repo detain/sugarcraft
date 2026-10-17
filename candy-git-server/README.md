@@ -224,7 +224,7 @@ Loop::run();
 
 Both modes share the same protocol code; `shutdown()` (or a
 `SIGTERM`/`SIGINT`) tears down every loop registration — server stream,
-per-client streams, housekeeping timer — unsubscribes candy-async
+per-client streams, housekeeping timer — unsubscribes sugar-async
 `Subscriptions`, closes connections, and removes the PID file. The
 per-request work (ref advertisement, `git pack-objects`, `git
 update-ref`) is the same synchronous code the blocking mode runs; it
@@ -353,7 +353,7 @@ Collaborators are added by an admin via SSH public key.
 
 ## Shared foundations
 
-candy-git-server uses [candy-async](https://github.com/detain/sugarcraft/tree/master/candy-async) for graceful shutdown via subscriptions on Git daemon connections.
+candy-git-server uses [sugar-async](https://github.com/detain/sugarcraft/tree/master/sugar-async) for graceful shutdown via subscriptions on Git daemon connections.
 
 ## License
 

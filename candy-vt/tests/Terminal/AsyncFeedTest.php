@@ -441,7 +441,7 @@ final class AsyncFeedTest extends TestCase
         // before the subtype assertion narrows $reason, so the check stays honest
         // rather than an always-true tautology.
         $this->assertInstanceOf(RuntimeException::class, $reason, 'cancel rejects as a RuntimeException (BC)');
-        $this->assertInstanceOf(OperationCancelledException::class, $reason, '...and specifically the candy-async cancel signal');
+        $this->assertInstanceOf(OperationCancelledException::class, $reason, '...and specifically the sugar-async cancel signal');
         $this->assertSame(['reject'], $settleLog, 'the cancel was the single settlement');
         $this->assertSame([], $stream->listeners('data'), 'listeners detached — pump left no residue on the stream');
         $this->assertSame([], $stream->listeners('end'));

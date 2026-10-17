@@ -2151,7 +2151,7 @@ Source: [forms] — full inventory of sugar-crush + sugar-forms widgetry with fi
 | G-2 | **Visible pill radio** (A1111 Mask-mode/Masked-content radios) | Use `Select withHeight(3)` inline list now, **or** add a `Field\Radio` to sugar-forms (small; the Confirm/Select mechanics cover it) |
 | G-3 | Segmented button group | `Confirm` covers booleans; multi-choice → Select |
 | G-4 | Thumbnail grid (gallery/extra-networks) | sugar-gallery `PosterGrid` + require bump **via path-repo-closure skill (require entry ONLY — never a per-lib repositories[] block)** |
-| G-5 | Progress meter | candy-async/`Spinner` exists; `progressToast` covers generation notices |
+| G-5 | Progress meter | sugar-async/`Spinner` exists; `progressToast` covers generation notices |
 | G-6 | KeyMap customization | no gap — follow the existing gate/exception rules (§7.4) |
 | G-7 | candy-testing / candy-vt dev-deps | decision needed: adding them enables ProgramSimulator/golden-ANSI tests of the modal (recommended) but changes crush dev-deps; snapshot-mode tests exist without it (§10.3) |
 

@@ -22,9 +22,9 @@ OHLCChart.php:195-370  ← copy of Chart's extras logic
 
 These three classes should extend `Chart` or share a `ChartExtras` trait.
 
-### 1.2 `candy-async` in composer.json But Never Used
+### 1.2 `sugar-async` in composer.json But Never Used
 
-`sugar-charts/composer.json:80` declares `"sugarcraft/candy-async": "dev-master"` in the `repositories` path section. However, **zero source files in `src/` import anything from `candy-async`**. This dependency is dead weight — it adds to composer install time and the path-repo closure without providing any value.
+`sugar-charts/composer.json:80` declares `"sugarcraft/sugar-async": "dev-master"` in the `repositories` path section. However, **zero source files in `src/` import anything from `sugar-async`**. This dependency is dead weight — it adds to composer install time and the path-repo closure without providing any value.
 
 ### 1.3 `MarkLine` Not Integrated Into Rendering
 
@@ -166,7 +166,7 @@ Only `LineChart` extends `Chart`. `BarChart`, `Scatter`, `OHLCChart` are standal
 
 ### 7.1 No Async Streaming Infrastructure
 
-The library declares `sugarcraft/candy-async` as a dependency but provides **zero async integration**. The streaming classes (`Sparkline::push()`, `Streamline::push()`, `Heatmap::pushPoint()`) produce new instances but no signals for rendering systems to know when to re-render. No event loop integration exists.
+The library declares `sugarcraft/sugar-async` as a dependency but provides **zero async integration**. The streaming classes (`Sparkline::push()`, `Streamline::push()`, `Heatmap::pushPoint()`) produce new instances but no signals for rendering systems to know when to re-render. No event loop integration exists.
 
 ### 7.2 `Streamline` Is Not Truly Reactive
 
@@ -202,7 +202,7 @@ No significant security issues found. `Picture::detect()` reads `TERM`/`TERM_PRO
 
 ## 10. Compatibility
 
-- `candy-async` path-repo declared but not used — should be removed or implemented
+- `sugar-async` path-repo declared but not used — should be removed or implemented
 - `LineChart` extends `Chart` correctly with proper constructor chaining
 - All 30 source files declare `declare(strict_types=1)`
 - All classes are `final` unless extension is intended — consistent with AGENTS.md
@@ -224,7 +224,7 @@ No significant security issues found. `Picture::detect()` reads `TERM`/`TERM_PRO
 ### High Priority
 
 1. **Extract `ChartExtras` trait** — eliminate ~200 lines of duplication in BarChart, Scatter, OHLCChart
-2. **Remove dead `candy-async`** path-repo or implement async streaming
+2. **Remove dead `sugar-async`** path-repo or implement async streaming
 3. **Fix `BarChart::copy`** to include animation parameters or remove inherited animation methods
 4. **Unify empty-output behavior** — all chart `view()` should return `''` for empty data
 5. **Unify `Waveline::drawConnector` with `Graph::drawLine`**
@@ -243,7 +243,7 @@ No significant security issues found. `Picture::detect()` reads `TERM`/`TERM_PRO
 ### Low Priority
 
 14. Implement O(log n) palette lookup in `Sixel::nearest`
-15. Add ReactPHP animation driver using `candy-async`
+15. Add ReactPHP animation driver using `sugar-async`
 16. Add grid-line support to axis rendering
 17. Consider PHP 8.3 property hooks for `copy()` migration
 18. Add missing test coverage

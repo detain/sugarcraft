@@ -327,7 +327,7 @@ However, this would require reworking the computation logic since they're derive
 This is a physics library that operates in time-stepped loops. In a ReactPHP-based TUI application, the animation loop is the event loop itself. Currently there's no:
 
 - **Async spring**: A `Spring` variant that yields a Promise/amphp Stream of positions rather than blocking on each frame
-- **Integration with `candy-async`**: No use of `AsyncIO` or streaming primitives for batch physics updates
+- **Integration with `sugar-async`**: No use of `AsyncIO` or streaming primitives for batch physics updates
 - **Suspensive updates**: No way to schedule spring updates to happen on the next event loop tick rather than synchronously
 
 **Recommendation**: Consider adding a `AsyncSpring` class that wraps a `Spring` and yields positions via an Amp coroutine, or a `Spring::stream()` method that returns a `Generator` of positions.

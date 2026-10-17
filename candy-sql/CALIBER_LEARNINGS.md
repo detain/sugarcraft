@@ -423,7 +423,7 @@ added — nothing needed it.
 
 **Plan 5.1 — cooperative cancellation.** New pieces:
 - `AsyncConnection::query(string $sql, ?SugarCraft\Async\CancellationToken $cancellation = null)`
-  — reuses candy-async's token (already a dep), no new primitive invented.
+  — reuses sugar-async's token (already a dep), no new primitive invented.
 - `CancellableQuery::wrap($promise, $token, $onServerCancel)` — client-side
   rejection is IMMEDIATE (`QueryCancelledException`, no loop turn), late driver
   results are dropped, the server-cancel hook fires exactly once and never for

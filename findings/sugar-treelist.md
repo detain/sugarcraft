@@ -304,11 +304,11 @@ Scoring all N candidates in a single synchronous loop blocks for large lists. No
 
 ---
 
-### 23. No integration with `candy-async` cancellation tokens
+### 23. No integration with `sugar-async` cancellation tokens
 
 **File:** `src/Model.php`
 
-`candy-async` is listed as a dependency in `composer.json` but none of the rendering methods accept `CancellationToken`. Long-running renders (large lists, complex prefixers) cannot be cancelled.
+`sugar-async` is listed as a dependency in `composer.json` but none of the rendering methods accept `CancellationToken`. Long-running renders (large lists, complex prefixers) cannot be cancelled.
 
 **Recommendation:** Add optional `CancellationToken $token = null` parameters to `View()`, `lines()`, `sort()`, and `FuzzyMatch::match()`.
 

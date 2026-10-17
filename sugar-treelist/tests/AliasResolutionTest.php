@@ -10,12 +10,12 @@ use SugarCraft\TreeList\ScoringProfile;
 use SugarCraft\TreeList\StringItem;
 
 /**
- * Guards the delegation wiring to the sugar-fuzzy / candy-async SSOTs.
+ * Guards the delegation wiring to the sugar-fuzzy / sugar-async SSOTs.
  *
  * `SugarCraft\TreeList\ScoringProfile` is a class_alias re-export of
  * `SugarCraft\Fuzzy\ScoringProfile` (sugar-fuzzy's superset). These assertions
  * fail loudly if the alias file is dropped, the target namespace drifts, or the
- * candy-async dependency (referenced by Model doc-comments) goes missing.
+ * sugar-async dependency (referenced by Model doc-comments) goes missing.
  */
 final class AliasResolutionTest extends TestCase
 {
@@ -119,13 +119,13 @@ final class AliasResolutionTest extends TestCase
         $this->assertSame(19, $default->score('abc', 'abc'));
     }
 
-    public function testCandyAsyncCancellationExceptionResolves(): void
+    public function testSugarAsyncCancellationExceptionResolves(): void
     {
         // Model doc-comments reference this class as the intended cancellation
-        // signal; the candy-async dependency must make it loadable.
+        // signal; the sugar-async dependency must make it loadable.
         $this->assertTrue(
             class_exists(\SugarCraft\Async\OperationCancelledException::class),
-            'candy-async OperationCancelledException must be available as a dependency.',
+            'sugar-async OperationCancelledException must be available as a dependency.',
         );
     }
 }

@@ -461,8 +461,8 @@ final class Model
      * Cursor relocation uses O(1) identity map (Item::$id) rather than
      * O(n) object-identity foreach after the sort.
      *
-     * ## CancellationToken support (intended API — requires candy-async)
-     * When candy-async is installed, this method will accept an optional
+     * ## CancellationToken support (intended API — requires sugar-async)
+     * When sugar-async is installed, this method will accept an optional
      * `?CancellationToken $token = null` parameter. The token is checked
      * after the usort completes and before the identity map is built.
      * If cancelled, throws `SugarCraft\Async\OperationCancelledException`.
@@ -649,8 +649,8 @@ final class Model
      * @return list<string> Visible lines
      * @throws \RuntimeException If the viewport has zero dimensions or the list is empty.
      *
-     * ## CancellationToken support (intended API — requires candy-async)
-     * When candy-async is installed, this method will accept an optional
+     * ## CancellationToken support (intended API — requires sugar-async)
+     * When sugar-async is installed, this method will accept an optional
      * `?CancellationToken $token = null` parameter. The token is checked
      * at loop boundaries ($token?->isCancelled()). If cancelled, throws
      * `SugarCraft\Async\OperationCancelledException`.

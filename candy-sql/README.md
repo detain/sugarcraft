@@ -691,7 +691,7 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
 - **No prepared-statement cache.** Every query is sent as raw SQL text;
   repeated statements are re-parsed by the server each time.
 - **Async cancellation is cooperative and driver-dependent.**
-  `AsyncConnection::query()` accepts an optional candy-async
+  `AsyncConnection::query()` accepts an optional sugar-async
   `CancellationToken`; cancelling it (or hitting the configurable per-query
   timeout, default 30s, see `QueryTimeout`) rejects the caller's promise
   immediately and drops a late result. What actually stops **server-side**

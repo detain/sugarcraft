@@ -1,6 +1,6 @@
-# Code Review: candy-async
+# Code Review: sugar-async
 
-**Library:** sugarcraft/candy-async  
+**Library:** sugarcraft/sugar-async  
 **Reviewer:** Code Audit  
 **Date:** 2026-06-29  
 **Files Reviewed:** src/AsyncOps.php, src/CancellationSource.php, src/CancellationToken.php, src/Cancellable.php, src/Subscription.php, src/Subscriptions.php, src/Suspended.php, src/Lang.php, tests/ (5 test files), lang/en.php, composer.json
@@ -9,7 +9,7 @@
 
 ## Summary
 
-`candy-async` provides foundational async utilities for the SugarCraft TUI ecosystem: cancellation tokens (CancellationSource/CancellationToken/Cancellable), subscription management (Subscription/Subscriptions), and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP. The implementation is generally sound with good test coverage, but there are several issues ranging from API design concerns to missing functionality worth addressing before 1.0.
+`sugar-async` provides foundational async utilities for the SugarCraft TUI ecosystem: cancellation tokens (CancellationSource/CancellationToken/Cancellable), subscription management (Subscription/Subscriptions), and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP. The implementation is generally sound with good test coverage, but there are several issues ranging from API design concerns to missing functionality worth addressing before 1.0.
 
 ---
 
@@ -207,7 +207,7 @@ if (\preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/[^\s\n]+)\s*\n/', $cl
 
 This regex is used to parse the git protocol. While it looks correct for valid input, improper handling of malformed input could potentially cause issues in the git command construction at line 412 where `$repoPath` is passed to `escapeshellarg`.
 
-**Status:** The escaping appears correct at line 411-412. This is in the consuming library `candy-git-server`, not in `candy-async` itself.
+**Status:** The escaping appears correct at line 411-412. This is in the consuming library `candy-git-server`, not in `sugar-async` itself.
 
 ### 5.2 CancellationToken callback exceptions propagate unpredictably (MEDIUM)
 
@@ -384,7 +384,7 @@ The library correctly depends on:
 - `react/promise: ^3.3`
 - `sugarcraft/candy-core: dev-master`
 
-And several libs correctly depend on `candy-async`:
+And several libs correctly depend on `sugar-async`:
 - candy-core (i18n/Lang)
 - sugar-forms (CancellationSource for async suggestions)
 - candy-git-server (Subscription/Subscriptions for cleanup)
@@ -469,7 +469,7 @@ The library has excellent test coverage:
 
 ## Conclusion
 
-`candy-async` is a well-structured library with good test coverage and clear separation of concerns. The cancellation token pattern is well-implemented, and the AsyncOps helpers provide useful abstractions on top of ReactPHP. The main concerns are:
+`sugar-async` is a well-structured library with good test coverage and clear separation of concerns. The cancellation token pattern is well-implemented, and the AsyncOps helpers provide useful abstractions on top of ReactPHP. The main concerns are:
 
 1. **API design**: Naming collision between Async\Subscription and Core\Subscription needs resolution before more libraries adopt this
 2. **Safety**: The shared static `neverToken` in retry() is a latent bug that should be fixed

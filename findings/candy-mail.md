@@ -9,7 +9,7 @@
 
 ## Overview
 
-`candy-mail` provides an immutable `Email` value object, `Attachment` for file handling, a `Transport` interface with two implementations (SMTP and Resend API), and a `Mailer` high-level sender. The library follows PSR-12, uses strict types, immutable patterns with `with*()` builders via the `Mutable` trait, and integrates with `candy-async` for cancellation tokens.
+`candy-mail` provides an immutable `Email` value object, `Attachment` for file handling, a `Transport` interface with two implementations (SMTP and Resend API), and a `Mailer` high-level sender. The library follows PSR-12, uses strict types, immutable patterns with `with*()` builders via the `Mutable` trait, and integrates with `sugar-async` for cancellation tokens.
 
 ---
 
@@ -123,11 +123,11 @@ For modern PHP 8.3+, `$_ENV` or `getenv('VAR', false)` is preferred.
 
 ## Compatibility Issues with Other SugarCraft Libs
 
-### 16. Depends on `dev-master` of `candy-async` and `candy-core`
+### 16. Depends on `dev-master` of `sugar-async` and `candy-core`
 
 Using `dev-master` as a version constraint means the library could break if those packages make breaking changes.
 
-### 17. No `candy-async` AsyncSmtpTransport Implementation
+### 17. No `sugar-async` AsyncSmtpTransport Implementation
 
 Since the ecosystem is ReactPHP-based, an async SMTP transport returning `PromiseInterface` would be more idiomatic.
 

@@ -94,7 +94,7 @@ final class ReactMysqlConnectionTest extends TestCase
 
     /**
      * Pins the cancellation API (plan 5.1) on the AsyncConnection contract and
-     * both implementations: query() accepts an optional candy-async
+     * both implementations: query() accepts an optional sugar-async
      * CancellationToken so callers can abort in-flight queries cooperatively.
      */
     public function testQueryAcceptsAnOptionalCancellationToken(): void

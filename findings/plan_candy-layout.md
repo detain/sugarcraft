@@ -494,7 +494,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 | Location | Lines | Role |
 |----------|-------|------|
 | `candy-layout/src/LayoutSolver.php` | - | Interface (needs async variant) |
-| Need to check `candy-async` for CancellationToken implementation | - | Async patterns |
+| Need to check `sugar-async` for CancellationToken implementation | - | Async patterns |
 
 ---
 
@@ -703,6 +703,6 @@ public function testPivotEdgeCases(): void
 - The findings file indicates 116 tests, 356 assertions — all passing. Changes must not break existing tests.
 - **CassowarySolver cycling bug is the highest priority** — it affects correctness of results.
 - **Factory method removal from interface is a breaking change** for any call-sites using `LayoutSolver::greedy()` / `LayoutSolver::cassowary()`.
-- Async support requires checking `candy-async` library for CancellationToken and async patterns.
+- Async support requires checking `sugar-async` library for CancellationToken and async patterns.
 - The library is suitable for production use with `GreedySolver`, but `CassowarySolver` should be clearly marked as experimental or deprecated until the simplex implementation is fixed.
 - 2026-09-17 (r86-v2): Phase-5/6 sweep — coverage re-derived against current 12-class tree (147→157 tests, +10 edge pins); no behavior bugs found (divide-zero/clamp guards from prior rounds already pinned); 1.2 ruled STOP-class; 2.2/2.3/3.3 premise-dead with the deleted simplex.

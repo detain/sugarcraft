@@ -224,7 +224,7 @@ The `composer.json` specifies `"php": ">=8.3"` which is correct for the features
 **No async improvements applicable.**  
 This is a synchronous game logic library designed as a SugarCraft `Model`. The `Model` interface from `candy-core` uses a synchronous tick-based loop via `\Closure` return values from `init()` and `update()`. The `VsGame::scheduleTick()` properly returns `\Closure` tick handlers.
 
-If async support is needed (e.g., for network play), the tick scheduling could be converted to use `candy-async` for non-blocking delays, but this would be a new feature rather than a compatibility fix.
+If async support is needed (e.g., for network play), the tick scheduling could be converted to use `sugar-async` for non-blocking delays, but this would be a new feature rather than a compatibility fix.
 
 ---
 

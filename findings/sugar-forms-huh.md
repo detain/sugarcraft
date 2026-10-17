@@ -194,7 +194,7 @@ The `run()` method can throw `\RuntimeException` when the child action fails (li
 
 ### 13. No ReactPHP event-loop integration for Spinner
 
-The Spinner uses a blocking `usleep` animation loop (line 168), which is incompatible with ReactPHP's event loop. In a ReactPHP-based application (which `candy-async` is designed for), calling `Spinner::run()` would block the event loop and prevent other async operations from running concurrently.
+The Spinner uses a blocking `usleep` animation loop (line 168), which is incompatible with ReactPHP's event loop. In a ReactPHP-based application (which `sugar-async` is designed for), calling `Spinner::run()` would block the event loop and prevent other async operations from running concurrently.
 
 **Recommendation:** Provide an async-compatible `AsyncSpinner` variant that uses ReactPHP's event loop (`Loop::addTimer`) for animation, and `defer()` or `async()` for the action.
 

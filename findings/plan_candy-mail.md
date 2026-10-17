@@ -222,12 +222,12 @@ cd candy-mail && vendor/bin/phpunit tests/SmtpTransportTest.php
 
 - `candy-mail/src/SmtpTransport.php`
 - `candy-mail/src/Transport.php`
-- `candy-async/src/AsyncOps.php:86-102`
+- `sugar-async/src/AsyncOps.php:86-102`
 
 **Investigation Notes:**
 
 - Current `Transport` interface at line 21 returns `void` from `send()`
-- `AsyncOps::retry()` at `candy-async/src/AsyncOps.php:86-102` expects `PromiseInterface`
+- `AsyncOps::retry()` at `sugar-async/src/AsyncOps.php:86-102` expects `PromiseInterface`
 - `CancellationToken` callbacks exist but `onCancel()` is never called in SmtpTransport
 - This is a larger architectural change
 
@@ -618,7 +618,7 @@ cd candy-mail && php bin/candy-mail --help
 
 ## Phase 5: Compatibility Issues [PENDING]
 
-### 5.1 Depends on dev-master of candy-async and candy-core
+### 5.1 Depends on dev-master of sugar-async and candy-core
 
 **Severity:** Medium
 
@@ -628,13 +628,13 @@ cd candy-mail && php bin/candy-mail --help
 
 **Investigation Notes:**
 
-- Lines 28-29: `"sugarcraft/candy-async": "dev-master"`, `"sugarcraft/candy-core": "dev-master"`
+- Lines 28-29: `"sugarcraft/sugar-async": "dev-master"`, `"sugarcraft/candy-core": "dev-master"`
 - Path repositories are set up correctly for local development
 - However, if these packages publish proper releases, candy-mail should depend on versioned releases
 
 **What Is Expected:**
 
-1. Check if candy-async and candy-core have released versions
+1. Check if sugar-async and candy-core have released versions
 2. If so, update composer.json to use `^1.0` or similar versioned constraints
 3. If not, document why dev-master is necessary and add TODO comment
 
@@ -665,7 +665,7 @@ cd candy-mail && composer validate
 **Investigation Notes:**
 
 - `send()` method returns `void` and uses try/catch for error handling
-- `AsyncOps::retry()` at `candy-async/src/AsyncOps.php:86-102` expects a `callable(): PromiseInterface`
+- `AsyncOps::retry()` at `sugar-async/src/AsyncOps.php:86-102` expects a `callable(): PromiseInterface`
 - Without async rewrite, retry logic must be implemented synchronously
 
 **What Is Expected:**

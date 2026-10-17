@@ -1,10 +1,12 @@
-# candy-async
+# sugar-async
+
+> Formerly published as `sugarcraft/candy-async` (renamed 2026-10). <!-- @rename-keep -->
 
 Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers built on ReactPHP.
 
 ## Overview
 
-`candy-async` provides the foundational async vocabulary used across the SugarCraft TUI ecosystem:
+`sugar-async` provides the foundational async vocabulary used across the SugarCraft TUI ecosystem:
 
 - **Cancellation tokens** — `CancellationSource` / `CancellationToken` / `Cancellable` for coordinated cancellation across async operations
 - **Subscriptions** — `Subscription` interface and `Subscriptions::compose()` for managing subscription lifecycles in Model–Update–View apps
@@ -51,7 +53,7 @@ $debounced('c'); // only this fires, 150ms after last call
 ## Installation
 
 ```bash
-composer require sugarcraft/candy-async
+composer require sugarcraft/sugar-async
 ```
 
 ## Architecture

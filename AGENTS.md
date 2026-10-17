@@ -22,7 +22,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 Reference `sugar-widgets/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
 
-PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`. Libs whose suites arm timers on the shared ReactPHP loop point `bootstrap` at `tests/bootstrap.php` instead (`candy-async`, `sugar-image`, `candy-pty`, `candy-testing`, `sugar-crush`).
+PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`. Libs whose suites arm timers on the shared ReactPHP loop point `bootstrap` at `tests/bootstrap.php` instead (`sugar-async`, `sugar-image`, `candy-pty`, `candy-testing`, `sugar-crush`).
 
 ## Code conventions
 

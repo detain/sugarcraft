@@ -1,4 +1,4 @@
-# Implementation Plan: candy-async
+# Implementation Plan: sugar-async
 
 **Status:** not-started  
 **Phase:** 1  
@@ -8,7 +8,7 @@
 
 ## Goal
 
-Address all findings from the candy-async code review, fixing safety issues (markCancelled visibility, shared static neverToken, synchronous exception handling, callback exception propagation), completing missing features (awaitAll/awaitAny, periodicSubscription, leading/trailing edge options, flush capability), and improving API design (naming collision resolution, Subscription interface extension) before the 1.0 release.
+Address all findings from the sugar-async code review, fixing safety issues (markCancelled visibility, shared static neverToken, synchronous exception handling, callback exception propagation), completing missing features (awaitAll/awaitAny, periodicSubscription, leading/trailing edge options, flush capability), and improving API design (naming collision resolution, Subscription interface extension) before the 1.0 release.
 
 ---
 
@@ -16,14 +16,14 @@ Address all findings from the candy-async code review, fixing safety issues (mar
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| Rename `Subscription` → `SubscriptionHandle` and `Subscriptions` → `SubscriptionGroup` | Avoid naming collision with `SugarCraft\Core\Subscription` (Elm-style value object with completely different semantics) | `ref:candy-async-audit` Section 9.1 |
-| Fix `markCancelled` visibility by making it `private` | Marked `@internal` but `public` visibility allows consumers to bypass `CancellationSource::cancel()` flow and corrupt token state | `ref:candy-async-audit` Section 1.1 |
-| Remove shared static `neverToken` in retry() | A single static token shared across ALL retry() calls can be permanently corrupted if any retry is cancelled via this token | `ref:candy-async-audit` Section 1.2 |
-| Wrap `$operation()` in try-catch in retry() | Synchronous exceptions before promise return are not caught by retry logic — they propagate as unhandled exceptions | `ref:candy-async-audit` Section 1.6 |
-| Add `awaitAll` and `awaitAny` helpers | Common async patterns (`Promise::all()`, `Promise::race()`) not wrapped; consumers must use ReactPHP directly | `ref:candy-async-audit` Section 6.1 |
-| Add `periodicSubscription` helper | No utility to create Subscription from `Loop::addPeriodicTimer()`; common pattern in TEA programs | `ref:candy-async-audit` Section 6.2 |
-| Wrap onCancel callback calls in try-catch | If any callback throws, remaining callbacks won't fire and exception propagates unpredictably | `ref:candy-async-audit` Section 5.2 |
-| Add loop parameter to retry() | Currently uses `Loop::get()` directly regardless of caller's loop, causing inconsistency when caller passes different loop to withTimeout() | `ref:candy-async-audit` Section 9.2 |
+| Rename `Subscription` → `SubscriptionHandle` and `Subscriptions` → `SubscriptionGroup` | Avoid naming collision with `SugarCraft\Core\Subscription` (Elm-style value object with completely different semantics) | `ref:sugar-async-audit` Section 9.1 |
+| Fix `markCancelled` visibility by making it `private` | Marked `@internal` but `public` visibility allows consumers to bypass `CancellationSource::cancel()` flow and corrupt token state | `ref:sugar-async-audit` Section 1.1 |
+| Remove shared static `neverToken` in retry() | A single static token shared across ALL retry() calls can be permanently corrupted if any retry is cancelled via this token | `ref:sugar-async-audit` Section 1.2 |
+| Wrap `$operation()` in try-catch in retry() | Synchronous exceptions before promise return are not caught by retry logic — they propagate as unhandled exceptions | `ref:sugar-async-audit` Section 1.6 |
+| Add `awaitAll` and `awaitAny` helpers | Common async patterns (`Promise::all()`, `Promise::race()`) not wrapped; consumers must use ReactPHP directly | `ref:sugar-async-audit` Section 6.1 |
+| Add `periodicSubscription` helper | No utility to create Subscription from `Loop::addPeriodicTimer()`; common pattern in TEA programs | `ref:sugar-async-audit` Section 6.2 |
+| Wrap onCancel callback calls in try-catch | If any callback throws, remaining callbacks won't fire and exception propagates unpredictably | `ref:sugar-async-audit` Section 5.2 |
+| Add loop parameter to retry() | Currently uses `Loop::get()` directly regardless of caller's loop, causing inconsistency when caller passes different loop to withTimeout() | `ref:sugar-async-audit` Section 9.2 |
 
 ---
 
@@ -51,9 +51,9 @@ Address all findings from the candy-async code review, fixing safety issues (mar
 
 **Related code locations:**
 
-- `candy-async/src/CancellationToken.php:45` — method to change
-- `candy-async/src/CancellationSource.php:57` — existing caller
-- `candy-async/tests/CancellationTokenTest.php:176-191` — existing idempotency test
+- `sugar-async/src/CancellationToken.php:45` — method to change
+- `sugar-async/src/CancellationSource.php:57` — existing caller
+- `sugar-async/tests/CancellationTokenTest.php:176-191` — existing idempotency test
 
 **Investigation notes:**
 The method is only called by `CancellationSource::cancel()` within the same package. The token constructor receives `private CancellationSource $source`, so it has access. In PHP, `private` visibility within a package (same namespace) allows internal classes to access each other's private members — this is by design in PHP's OOP.
@@ -77,9 +77,9 @@ The method is only called by `CancellationSource::cancel()` within the same pack
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:25` — static property definition
-- `candy-async/src/AsyncOps.php:99` — static property usage
-- `candy-async/tests/AsyncOpsTest.php:163-312` — retry tests
+- `sugar-async/src/AsyncOps.php:25` — static property definition
+- `sugar-async/src/AsyncOps.php:99` — static property usage
+- `sugar-async/tests/AsyncOpsTest.php:163-312` — retry tests
 
 **Investigation notes:**
 The comment at line 24 says "Never-cancelled sentinel token shared across retry() calls with no explicit token." This is the problematic design. Each `retry()` call that doesn't pass a token should get its own fresh token that is never cancelled — a simple `CancellationSource::new()->token()` per call achieves this without shared state.
@@ -103,8 +103,8 @@ The comment at line 24 says "Never-cancelled sentinel token shared across retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:118` — direct `$operation()` call
-- `candy-async/src/AsyncOps.php:107-148` — retryAttempt method
+- `sugar-async/src/AsyncOps.php:118` — direct `$operation()` call
+- `sugar-async/src/AsyncOps.php:107-148` — retryAttempt method
 
 **Investigation notes:**
 The fix should look like:
@@ -137,9 +137,9 @@ return $operationPromise->then(/* ... */);
 
 **Related code locations:**
 
-- `candy-async/src/CancellationToken.php:76-78` — callback invocation loop
-- `candy-async/src/CancellationToken.php:70-80` — fireCallbacks method
-- `candy-async/tests/CancellationTokenTest.php` — existing callback tests
+- `sugar-async/src/CancellationToken.php:76-78` — callback invocation loop
+- `sugar-async/src/CancellationToken.php:70-80` — fireCallbacks method
+- `sugar-async/tests/CancellationTokenTest.php` — existing callback tests
 
 **Investigation notes:**
 This is a common pattern issue. The implementation should probably collect exceptions and rethrow after all callbacks have been invoked, or log them. For now, continuing to call remaining callbacks is the priority. A simple approach:
@@ -189,10 +189,10 @@ Libraries that use both namespaces (like `candy-git-server` using `SugarCraft\As
 
 **Related code locations:**
 
-- `candy-async/src/Subscription.php` — interface file to rename
-- `candy-async/src/Subscriptions.php:16` — implements `Subscription`
-- `candy-async/src/Subscriptions.php:42` — `add(Subscription $subscription)`
-- `candy-async/tests/SubscriptionsTest.php:8,23,137` — test usages
+- `sugar-async/src/Subscription.php` — interface file to rename
+- `sugar-async/src/Subscriptions.php:16` — implements `Subscription`
+- `sugar-async/src/Subscriptions.php:42` — `add(Subscription $subscription)`
+- `sugar-async/tests/SubscriptionsTest.php:8,23,137` — test usages
 - `candy-git-server/src/Git/GitDaemon.php:7-8` — consumer usage
 
 **Investigation notes:**
@@ -219,8 +219,8 @@ Also need to rename `Subscriptions` to `SubscriptionGroup` (see 2.2).
 
 **Related code locations:**
 
-- `candy-async/src/Subscriptions.php` — file to rename (and class inside)
-- `candy-async/tests/SubscriptionsTest.php:9,21` — test usages
+- `sugar-async/src/Subscriptions.php` — file to rename (and class inside)
+- `sugar-async/tests/SubscriptionsTest.php:9,21` — test usages
 - `candy-git-server/src/Git/GitDaemon.php:8` — consumer usage
 
 ---
@@ -242,8 +242,8 @@ Also need to rename `Subscriptions` to `SubscriptionGroup` (see 2.2).
 
 **Related code locations:**
 
-- `candy-async/src/Subscription.php` — interface to extend
-- `candy-async/src/Subscriptions.php:70-78` — methods on implementation
+- `sugar-async/src/Subscription.php` — interface to extend
+- `sugar-async/src/Subscriptions.php:70-78` — methods on implementation
 
 **Investigation notes:**
 The cleaner approach is likely a separate `SubscriptionGroup` interface that extends `Subscription` since not all subscriptions are groups (singular subscriptions don't need `add()`).
@@ -265,7 +265,7 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 
 **Related code locations:**
 
-- `candy-async/src/Subscriptions.php:80-91` — `disposeAll()` method
+- `sugar-async/src/Subscriptions.php:80-91` — `disposeAll()` method
 
 ---
 
@@ -295,8 +295,8 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php` — add method here
-- `candy-async/tests/AsyncOpsTest.php` — add tests
+- `sugar-async/src/AsyncOps.php` — add method here
+- `sugar-async/tests/AsyncOpsTest.php` — add tests
 
 ---
 
@@ -317,8 +317,8 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php` — add method here
-- `candy-async/tests/AsyncOpsTest.php` — add tests
+- `sugar-async/src/AsyncOps.php` — add method here
+- `sugar-async/tests/AsyncOpsTest.php` — add tests
 
 ---
 
@@ -347,9 +347,9 @@ public static function periodicSubscription(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php` — add method here
-- `candy-async/tests/AsyncOpsTest.php` — add tests
-- `candy-async/src/Subscription.php` — return type
+- `sugar-async/src/AsyncOps.php` — add method here
+- `sugar-async/tests/AsyncOpsTest.php` — add tests
+- `sugar-async/src/Subscription.php` — return type
 
 **Investigation notes:**
 The implementation should use a private implementation class or an anonymous class that implements `Subscription` and holds the timer reference. On `unsubscribe()`, cancel the timer.
@@ -388,9 +388,9 @@ This library only supports trailing edge for debounce and leading edge for throt
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:159-175` — debounce method
-- `candy-async/src/AsyncOps.php:186-204` — throttle method
-- `candy-async/tests/AsyncOpsTest.php` — add tests
+- `sugar-async/src/AsyncOps.php:159-175` — debounce method
+- `sugar-async/src/AsyncOps.php:186-204` — throttle method
+- `sugar-async/tests/AsyncOpsTest.php` — add tests
 
 ---
 
@@ -420,8 +420,8 @@ public static function debounceWithFlush(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php` — add method here
-- `candy-async/tests/AsyncOpsTest.php` — add tests
+- `sugar-async/src/AsyncOps.php` — add method here
+- `sugar-async/tests/AsyncOpsTest.php` — add tests
 
 ---
 
@@ -450,9 +450,9 @@ public static function debounceWithFlush(
 
 **Related code locations:**
 
-- `candy-async/lang/en.php` — empty array
-- `candy-async/src/Lang.php` — translation facade
-- `candy-async/tests/LangTest.php` — existing tests
+- `sugar-async/lang/en.php` — empty array
+- `sugar-async/src/Lang.php` — translation facade
+- `sugar-async/tests/LangTest.php` — existing tests
 
 ---
 
@@ -482,8 +482,8 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:86-102` — retry method signature
-- `candy-async/src/AsyncOps.php:129-133` — where backoff is used
+- `sugar-async/src/AsyncOps.php:86-102` — retry method signature
+- `sugar-async/src/AsyncOps.php:129-133` — where backoff is used
 
 ---
 
@@ -503,8 +503,8 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:22` — final class
-- `candy-async/src/AsyncOpsInterface.php` — new file
+- `sugar-async/src/AsyncOps.php:22` — final class
+- `sugar-async/src/AsyncOpsInterface.php` — new file
 
 ---
 
@@ -524,8 +524,8 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/CancellationToken.php` — class to potentially modify
-- `candy-async/tests/CancellationTokenTest.php` — add tests
+- `sugar-async/src/CancellationToken.php` — class to potentially modify
+- `sugar-async/tests/CancellationTokenTest.php` — add tests
 
 ---
 
@@ -544,8 +544,8 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:150-175` — debounce method
-- `candy-async/src/AsyncOps.php:177-204` — throttle method
+- `sugar-async/src/AsyncOps.php:150-175` — debounce method
+- `sugar-async/src/AsyncOps.php:177-204` — throttle method
 
 ---
 
@@ -564,8 +564,8 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/CancellationSource.php:63-66` — onCancel delegation
-- `candy-async/src/CancellationToken.php:57-65` — onCancel method
+- `sugar-async/src/CancellationSource.php:63-66` — onCancel delegation
+- `sugar-async/src/CancellationToken.php:57-65` — onCancel method
 
 ---
 
@@ -590,8 +590,8 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:86-102` — retry method signature
-- `candy-async/src/AsyncOps.php:131` — `Loop::get()->addTimer(...)`
+- `sugar-async/src/AsyncOps.php:86-102` — retry method signature
+- `sugar-async/src/AsyncOps.php:131` — `Loop::get()->addTimer(...)`
 
 ---
 
@@ -618,9 +618,9 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:150-175` — debounce
-- `candy-async/src/AsyncOps.php:104-148` — retryAttempt
-- `candy-async/src/Subscriptions.php:85-91` — disposeAll
+- `sugar-async/src/AsyncOps.php:150-175` — debounce
+- `sugar-async/src/AsyncOps.php:104-148` — retryAttempt
+- `sugar-async/src/Subscriptions.php:85-91` — disposeAll
 
 ---
 
@@ -638,7 +638,7 @@ public static function retry(
 
 **Related code locations:**
 
-- `candy-async/src/AsyncOps.php:104-148` — retryAttempt
+- `sugar-async/src/AsyncOps.php:104-148` — retryAttempt
 
 ---
 
@@ -646,7 +646,7 @@ public static function retry(
 
 After implementation, verify:
 
-1. All existing tests pass: `cd candy-async && vendor/bin/phpunit`
+1. All existing tests pass: `cd sugar-async && vendor/bin/phpunit`
 2. `composer validate` passes (without --strict since dev deps are expected)
 3. `tools/check-path-repos.php` runs clean if dependencies changed
 4. No import conflicts between `SugarCraft\Async\SubscriptionHandle` and `SugarCraft\Core\Subscription` in consuming libs
@@ -655,6 +655,6 @@ After implementation, verify:
 
 ## Notes
 
-- 2026-06-30: Implementation plan created based on code review findings in `findings/candy-async.md`
+- 2026-06-30: Implementation plan created based on code review findings in `findings/sugar-async.md`
 - Renaming Async\Subscription to SubscriptionHandle and Subscriptions to SubscriptionGroup requires updates across all consuming libraries
 - All HIGH priority items should be completed before 1.0 release

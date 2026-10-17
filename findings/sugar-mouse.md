@@ -220,13 +220,13 @@ Both compute `col - 1` as the last column of the previous content. This is not a
 ```json
 "repositories": [
     {"type": "path", "url": "../candy-core", ...},
-    {"type": "path", "url": "../candy-async", ...},   // not in require
+    {"type": "path", "url": "../sugar-async", ...},   // not in require
     {"type": "path", "url": "../candy-ansi", ...},    // not in require
     {"type": "path", "url": "../candy-input", ...}   // not in require
 ]
 ```
 
-Only `candy-core` is in the `require` section. The other three path repositories (`candy-async`, `candy-ansi`, `candy-input`) are listed but not required.
+Only `candy-core` is in the `require` section. The other three path repositories (`sugar-async`, `candy-ansi`, `candy-input`) are listed but not required.
 
 **Recommendation:** Remove unused repository entries or add a comment explaining why they are present.
 
@@ -286,11 +286,11 @@ The CSI and OSC pass-through logic is specific to the scanner's column-tracking 
 
 ## Compatibility Issues
 
-### 1. candy-async in repositories but not in require
+### 1. sugar-async in repositories but not in require
 
 **File:** `composer.json:41-45`
 
-`candy-async` is listed as a path repository but is not in the `require` section. This means sugar-mouse does not actually depend on candy-async at runtime. The repository entry may be leftover from an earlier design.
+`sugar-async` is listed as a path repository but is not in the `require` section. This means sugar-mouse does not actually depend on sugar-async at runtime. The repository entry may be leftover from an earlier design.
 
 ### 2. No known compatibility issues with other SugarCraft libs
 
@@ -302,7 +302,7 @@ The library uses only `candy-core` (for `Width::string()`) and has no other exte
 
 ### 1. ZoneClickTracker is purely synchronous
 
-The `track()` method processes events immediately and returns results synchronously. In an async TUI (e.g., one using `candy-async` event loops), mouse events arrive asynchronously, but the tracker must still be called synchronously to update state.
+The `track()` method processes events immediately and returns results synchronously. In an async TUI (e.g., one using `sugar-async` event loops), mouse events arrive asynchronously, but the tracker must still be called synchronously to update state.
 
 **Potential async alternative:**
 ```php
@@ -334,7 +334,7 @@ sugar-mouse has no async patterns at all — no `Generator`-based coroutines, no
 | **LOW**      | Fragile OSC bounds check                                                             | `Scan.php:133`                     | Add explicit `$j + 1 < $len` guard                                                                                                                             |
 | **LOW**      | nextGrapheme combining-character edge case not well documented                       | `Scan.php:168-174`                 | Document when grapheme_extract returns empty string                                                                                                              |
 | **LOW**      | No streaming/chunked parsing for large inputs                                        | `Scan.php`                         | Consider `ScanIterator` implementing `IteratorAggregate`                                                                                                          |
-| **LOW**      | Unused repository entries in composer.json                                           | `composer.json:41-58`              | Remove or document why candy-async/ansi/input are present                                                                                                      |
+| **LOW**      | Unused repository entries in composer.json                                           | `composer.json:41-58`              | Remove or document why sugar-async/ansi/input are present                                                                                                      |
 | **LOW**      | No async/ReactPHP integration                                                        | Library-wide                     | Consider async event handling patterns if async TUI use cases emerge                                                                                              |
 | **LOW**      | Sentinel definitions duplicated (Unicode vs UTF-8)                                   | `Mark.php:28-31` vs `Scan.php:24-25` | Extract to shared `Sentinel` class                                                                                                                               |
 

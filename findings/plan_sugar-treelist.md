@@ -16,7 +16,7 @@ The fix wave additionally landed the 4 MAJORs (#1 viewport-follow tail duplicati
 re-apply clobber, #3 quadratic `bufferFromOutput`, #4 immutable-setter docs/examples), the 4
 MEDIUMs (#5 cell-budgeted split, #6 prefix column width, #7 private config + accessors,
 #8 area guard) and the LOW cluster. Remaining open intent (deferred, not defects): the
-candy-async `CancellationToken` parameters documented as intended API on `sort()`/`lines()`/
+sugar-async `CancellationToken` parameters documented as intended API on `sort()`/`lines()`/
 `match()`.
 
 ## Goal
@@ -554,7 +554,7 @@ The `lineOffset` property is described as "how many lines before cursor to show"
 **What is expected:**
 Add optional `CancellationToken $token = null` parameters to `View()`, `lines()`, `sort()`, and `FuzzyMatch::match()`. Check `$token?->isCancelled()` at loop boundaries and throw if cancelled.
 
-**Why:** `candy-async` is listed as a dependency but none of the rendering methods accept `CancellationToken`. Long-running renders (large lists, complex prefixers) cannot be cancelled.
+**Why:** `sugar-async` is listed as a dependency but none of the rendering methods accept `CancellationToken`. Long-running renders (large lists, complex prefixers) cannot be cancelled.
 
 **Severity:** low
 
@@ -569,8 +569,8 @@ Add optional `CancellationToken $token = null` parameters to `View()`, `lines()`
 
 **Related code:**
 
-- `composer.json:70-73` — `"sugarcraft/candy-async"` in repositories
-- `candy-async/src/CancellationToken.php:37-40` — `isCancelled()` method
+- `composer.json:70-73` — `"sugarcraft/sugar-async"` in repositories
+- `sugar-async/src/CancellationToken.php:37-40` — `isCancelled()` method
 - `src/Model.php:371-439` — `lines()` — long-running loops at lines 384-393, 403-410, 426-434
 - `src/FuzzyMatch.php:99-117` — `match()` — synchronous loop at lines 105-111
 
@@ -895,7 +895,7 @@ cd /home/sites/sugarcraft && php tools/check-path-repos.php
 
 ## Notes
 
-- **2026-06-30:** Plan created from code review findings (`findings/sugar-treelist.md`). Investigation covered: `src/Model.php`, `src/FilterState.php`, `src/FuzzyMatch.php`, `src/DefaultPrefixer.php`, `src/DefaultSuffixer.php`, `src/Item.php`, `src/StringItem.php`, `src/Prefixer.php`, `src/Suffixer.php`, `src/Lang.php`, `tests/ModelTest.php`, `composer.json`, `CALIBER_LEARNINGS.md`, `candy-core/src/Util/Width.php`, `candy-async/src/CancellationToken.php`, `lang/en.php`.
+- **2026-06-30:** Plan created from code review findings (`findings/sugar-treelist.md`). Investigation covered: `src/Model.php`, `src/FilterState.php`, `src/FuzzyMatch.php`, `src/DefaultPrefixer.php`, `src/DefaultSuffixer.php`, `src/Item.php`, `src/StringItem.php`, `src/Prefixer.php`, `src/Suffixer.php`, `src/Lang.php`, `tests/ModelTest.php`, `composer.json`, `CALIBER_LEARNINGS.md`, `candy-core/src/Util/Width.php`, `sugar-async/src/CancellationToken.php`, `lang/en.php`.
 - **Finding #17 (no mouse interaction)** is tracked as a `sugar-mouse` integration concern per CALIBER_LEARNINGS.md: "Mouse hit-testing self-contained via sugar-mouse. Don't pass Managers around for new code." This is a separate library integration, not an in-lib implementation item.
 - **Finding #4 is a duplicate of finding #1** (both about exception handling in `View()`). They are consolidated in Phase 1, task 1.1.
 - **Finding #33 is a duplicate of finding #6** (`splitOverWidth()` UTF-8). They are consolidated in Phase 1, task 1.4.

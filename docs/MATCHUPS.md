@@ -33,7 +33,7 @@ called out in the table below.
 
 | Library | Status | Notes |
 |---|:---:|---|
-| **CandyAsync** (`candy-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
+| **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
 | **SugarCraft** (`candy-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
 | **CandySprinkles** (`candy-sprinkles/`) | 🟢 ready | Declarative styling + layout. |
 | **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
@@ -152,7 +152,7 @@ reference projects supplied the ideas, not the code.
 | SugarCraft package | Ideas sparked by |
 |---|---|
 | CandyAnsi (candy-ansi/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
-| CandyAsync (candy-async/) | none — first-party |
+| SugarAsync (sugar-async/) | none — first-party |
 | CandyBuffer (candy-buffer/) | [vte](https://github.com/charmbracelet/vte) |
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
 | CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |

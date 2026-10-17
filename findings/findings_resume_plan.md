@@ -316,12 +316,12 @@ For each phase:
 **Files:** `sugar-animation/src/Player.php:119-122`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.28 🔴 candy-async: markCancelled() visibility (Item 1.1) — PHP LANGUAGE ERROR
+#### 0.28 🔴 sugar-async: markCancelled() visibility (Item 1.1) — PHP LANGUAGE ERROR
 
-**Plan:** `findings/plan_candy-async.md` — Item 1.1
+**Plan:** `findings/plan_sugar-async.md` — Item 1.1
 **Issue:** Plan says make `markCancelled()` "private" — but PHP `private` means same CLASS only. `CancellationSource::cancel()` is a separate class. Cannot implement as specified.
 **Fix:** Alternative: make `markCancelled()` `protected` AND move cancellation logic into `CancellationSource`, OR inline the cancellation into `CancellationSource` directly. **Do NOT make it private** (would break `CancellationSource::cancel()`).
-**Files:** `candy-async/src/CancellationToken.php:46`, `candy-async/src/CancellationSource.php:57`
+**Files:** `sugar-async/src/CancellationToken.php:46`, `sugar-async/src/CancellationSource.php:57`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
@@ -1104,7 +1104,7 @@ Same verification as previous phases.
 #### 4.3 🟢 CALIBER_LEARNINGS: AsyncOps ADR (Item 4.2)
 
 **Plan:** `findings/plan_repeated_logic.md` — Item 4.2
-**Fix:** Create `docs/adr/001-asyncops-consolidation.md` documenting decision on candy-async vs candy-files AsyncOps
+**Fix:** Create `docs/adr/001-asyncops-consolidation.md` documenting decision on sugar-async vs candy-files AsyncOps
 **Files:** `docs/adr/001-asyncops-consolidation.md` (new)
 **Agent:** Same coder agent as 4.1 (grouped — same file)
 
@@ -1222,11 +1222,11 @@ Same verification as previous phases.
 **Files:** `candy-input/tests/EscapeDecoderTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 5.6 🟢 candy-async: markCancelled visibility test (Item 1.1)
+#### 5.6 🟢 sugar-async: markCancelled visibility test (Item 1.1)
 
-**Plan:** `findings/plan_candy-async.md` — Item 1.1
+**Plan:** `findings/plan_sugar-async.md` — Item 1.1
 **Fix:** After fixing visibility, add test that CancellationSource::cancel() properly sets token cancelled state
-**Files:** `candy-async/tests/CancellationTokenTest.php`
+**Files:** `sugar-async/tests/CancellationTokenTest.php`
 **Agent:** Same coder agent as 5.5 (grouped — same lib)
 
 ---

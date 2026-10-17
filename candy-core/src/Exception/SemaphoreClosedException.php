@@ -22,7 +22,7 @@ namespace SugarCraft\Core\Exception;
  * {@see RuntimeException} on purpose: that one descends from `\Exception`, so
  * promoting it would silently drop shutdown rejections out of every caller's
  * existing `catch (\RuntimeException)` — the same BC argument that makes
- * `candy-async`'s `OperationCancelledException` extend `\RuntimeException`.
+ * `sugar-async`'s `OperationCancelledException` extend `\RuntimeException`.
  *
  * A caller who asks an *already* closed pool for a permit gets
  * `\LogicException` instead: that call is a programming error at the call site,

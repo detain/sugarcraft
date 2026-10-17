@@ -8,7 +8,7 @@ paths:
 
 - Tests at `<slug>/tests/<Class>Test.php`, namespace `<NS>\<Sub>\Tests\…`.
 - `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` — see `candy-core/phpunit.xml`. Every public method needs ≥1 test.
-- **Loop-pinning bootstrap**: a suite that bounds waits with timers on the shared `Loop::get()` sets `bootstrap="tests/bootstrap.php"` and calls `\SugarCraft\Testing\LoopPin::pinStableClock()` there (`candy-async`, `sugar-image`, `candy-pty`, `candy-testing`, `sugar-crush`). Under ext-uv, timer deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue and fires on the first tick; `StreamSelectLoop` refreshes at arm time. Mechanism in `candy-testing/src/LoopPin.php`, measurements on `candy-core/src/Program.php`.
+- **Loop-pinning bootstrap**: a suite that bounds waits with timers on the shared `Loop::get()` sets `bootstrap="tests/bootstrap.php"` and calls `\SugarCraft\Testing\LoopPin::pinStableClock()` there (`sugar-async`, `sugar-image`, `candy-pty`, `candy-testing`, `sugar-crush`). Under ext-uv, timer deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue and fires on the first tick; `StreamSelectLoop` refreshes at arm time. Mechanism in `candy-testing/src/LoopPin.php`, measurements on `candy-core/src/Program.php`.
 
 **Patterns** (`sugar-widgets/tests/`, `candy-core/tests/`, `candy-vt/tests/`):
 - **Snapshot byte** — call `view()`, assert raw `\x1b[1m`-style SGR strings. Don't abstract.

@@ -17,7 +17,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 | Extract shared `clamp()` utility to `candy-core/src/Util/Clamp.php` | 4 divergent implementations found; a simple utility eliminates duplication | `ref:repeated_logic.md` Finding #9 |
 | Audit Mutable trait adoption gap via delegation | 35 classes re-implement `mutate()` locally instead of using the `candy-core` trait; need to understand root cause before prescribing migration | `ref:repeated_logic.md` Finding #1 |
 | Create shared validation utilities in `candy-core` | 131 identical error-throwing patterns using `Lang::t()` can be centralized via `validateNonNeg()`, `validatePositive()` helpers | `ref:repeated_logic.md` Finding #4 |
-| Merge `candy-files/src/AsyncOps` into `candy-async/src/AsyncOps` | Both implement the same `Deferred` + `futureTick` pattern; file operations could reuse async utilities | `ref:repeated_logic.md` Finding #5 |
+| Merge `candy-files/src/AsyncOps` into `sugar-async/src/AsyncOps` | Both implement the same `Deferred` + `futureTick` pattern; file operations could reuse async utilities | `ref:repeated_logic.md` Finding #5 |
 | Document `::new()` factory as required pattern | 3,042 call sites = de facto standard; CALIBER_LEARNINGS.md should explicitly require it for all new classes | `ref:repeated_logic.md` Finding #6 |
 | Keep Model interface, i18n, Width, Ansi as-is | Already well-centralized with 92/41/736/700+ lines of well-tested code; no duplication detected | `ref:repeated_logic.md` Findings #2, #3, #7, #10 |
 | Keep Validator interface in sugar-forms | Already well-structured and re-exported from sugar-forms; only low duplication outside forms context | `ref:repeated_logic.md` Finding #8 |
@@ -207,17 +207,17 @@ Add to `CALIBER_LEARNINGS.md`:
 
 ## Phase 2: AsyncOps Consolidation [PENDING]
 
-### 2.1 Audit candy-async vs candy-files AsyncOps Overlap [PENDING]
+### 2.1 Audit sugar-async vs candy-files AsyncOps Overlap [PENDING]
 
-**What:** Investigate the overlap between `candy-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php` to determine if consolidation is feasible.
+**What:** Investigate the overlap between `sugar-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php` to determine if consolidation is feasible.
 
-**Why:** Both implement the same `Deferred` + `futureTick` pattern. The file operations in `candy-files` could potentially reuse `candy-async`'s utilities, reducing code duplication.
+**Why:** Both implement the same `Deferred` + `futureTick` pattern. The file operations in `candy-files` could potentially reuse `sugar-async`'s utilities, reducing code duplication.
 
 **Severity:** Medium
 
 **Investigation notes:**
 
-**candy-async/AsyncOps (212 lines):**
+**sugar-async/AsyncOps (212 lines):**
 
 - `withTimeout(LoopInterface, PromiseInterface, float)` — wraps promise with timeout
 - `retry(callable, int, float, ?CancellationToken)` — retry with exponential backoff
@@ -232,12 +232,12 @@ Add to `CALIBER_LEARNINGS.md`:
 - `copyManyAsync(array $map): PromiseInterface<array<string, bool>>`
 - `moveManyAsync(array $map): PromiseInterface<array<string, bool>>`
 
-**Key insight:** These are distinct operations — candy-async handles generic async patterns (timeout, retry, debounce, throttle), while candy-files handles file-specific I/O. They don't directly overlap but could share the underlying `Deferred` + `futureTick` pattern. Recommend keeping separate but extracting shared pattern to `candy-core` if needed.
+**Key insight:** These are distinct operations — sugar-async handles generic async patterns (timeout, retry, debounce, throttle), while candy-files handles file-specific I/O. They don't directly overlap but could share the underlying `Deferred` + `futureTick` pattern. Recommend keeping separate but extracting shared pattern to `candy-core` if needed.
 
 **Verification:**
 
 - Document findings in a separate ADR (Architecture Decision Record)
-- Determine if `candy-files` could use `candy-async` utilities
+- Determine if `candy-files` could use `sugar-async` utilities
 
 ---
 
@@ -385,7 +385,7 @@ If evaluation recommends keeping as-is:
 | High | 3.1 Mutable trait gap audit | Delegation to researcher | All 35 implementation files |
 | Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, sugar-colorprofile, sugar-widgets, sugar-forms |
 | Medium | 1.2 Validation utilities | Create new utility + migrate callers | candy-core, + 5-10 calling libs |
-| Medium | 2.1 AsyncOps audit | Delegation/investigation | candy-async, candy-files |
+| Medium | 2.1 AsyncOps audit | Delegation/investigation | sugar-async, candy-files |
 | Medium | 4.1 Mutable trait guidance | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 1.3 ::new() factory contract | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 4.2 AsyncOps ADR | Create ADR document | docs/adr/001-asyncops-consolidation.md |

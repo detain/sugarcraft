@@ -454,11 +454,11 @@ Both `Theme` and `Cell/Cell` define `ATTR_BOLD = 1`, `ATTR_ITALIC = 2`, `ATTR_UN
 
 ## Compatibility Issues
 
-### 26. `candy-vt` has no `candy-async` dependency but is async ecosystem ⏭️ r82: obsolete — pre-1.0 async-adapter idea, not a defect; sync core by design
+### 26. `candy-vt` has no `sugar-async` dependency but is async ecosystem ⏭️ r82: obsolete — pre-1.0 async-adapter idea, not a defect; sync core by design
 
 **File:** `candy-vt/composer.json`
 
-The library is part of a ReactPHP-based ecosystem (`candy-async` is in the monorepo) but `candy-vt` has no async dependencies. The `feed()` → parse → snapshot pipeline is entirely synchronous. For use in an async ReactPHP event loop with PTY input streaming, the current architecture would need to be wrapped in async primitives.
+The library is part of a ReactPHP-based ecosystem (`sugar-async` is in the monorepo) but `candy-vt` has no async dependencies. The `feed()` → parse → snapshot pipeline is entirely synchronous. For use in an async ReactPHP event loop with PTY input streaming, the current architecture would need to be wrapped in async primitives.
 
 **Impact:** No immediate compatibility issue, but `candy-vt` cannot currently be used in a streaming async PTY pipeline without additional async wrapping.
 
@@ -589,7 +589,7 @@ The static `$table` is cached, so subsequent `Terminal` instances in the same pr
 | 23 | Missing | Scope | DCS dispatch | Not implemented | Document as deferred to v2 |
 | 24 | Duplication | Maintenance | `Sgr`, `Mode`, `Cursor` | Repeated with*() boilerplate | Extract `mutate()` helper (already done in root classes) |
 | 25 | Duplication | Maintenance | `Theme`/`Cell` attrs | Duplicated constants | Extract shared constants class |
-| 26 | Compatibility | Async | `candy-vt` | No async deps | Consider adding `candy-async` dep or async adapter |
+| 26 | Compatibility | Async | `candy-vt` | No async deps | Consider adding `sugar-async` dep or async adapter |
 | 27 | Compatibility | API | Dual `Cell` classes | Two classes with different fields | Better naming or shared interface |
 | 28 | Compatibility | API | `CellGrid` vs `Buffer` | Overlapping grid types | Unify or better document when to use which |
 | 29 | Async | Design | `feed()` | Sync-only | Add async streaming API |
