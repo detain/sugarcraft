@@ -927,6 +927,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The prompt skills every turn's sessionApp() is spliced onto (ISS-035):
+     * the read pair of {@see withSkills()}, public because the palette's
+     * Ctrl+S enablement must dedupe against what is already shipped — a
+     * skill enabled mid-session belongs to this list, not only to the
+     * launch filter's.
+     *
+     * @return array<int, \SugarCraft\Code\Skills\Skill>
+     */
+    public function skills(): array
+    {
+        return $this->skills;
+    }
+
+    /**
      * Attach the discovered {@see SkillRegistry} (built-in + user + project +
      * foreign-imported skills, see {@see \SugarCraft\Code\Skills\SkillManager::loadAll()})
      * so it reaches {@see App::$availableSkills} on every {@see complete()}

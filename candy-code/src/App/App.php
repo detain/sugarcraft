@@ -24,6 +24,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Context\CompactorConfig;
@@ -4418,7 +4419,40 @@ final class App implements Model
             error: null,
         );
 
-        return [$next, null];
+        // ISS-035: enabling a skill at the palette has to reach the MODEL.
+        // Every turn's sessionApp() splices EngineBackend::$skills — fixed at
+        // launch — into the prompt, so the picked skill is carried onto the
+        // chat's engine beside the shell-side set. Without this the status
+        // line said "Enabled" and the prompt never changed.
+        return [$this->carrySelectedSkill($skill, $next), null];
+    }
+
+    /**
+     * Carry a palette-enabled skill onto the chat's {@see EngineBackend} so
+     * the next turn ships its prompt (ISS-035). The shell-side enabledSkills
+     * list alone never reached the model: Runtime splices the backend's own
+     * skills into sessionApp(), and that list was written once by Bootstrap's
+     * launch filter. A chat-less App, or a backend without a prompt-skill
+     * list (RemoteBackend), keeps the shell-only behaviour the picker had
+     * before — no skill registry crosses that boundary from this side.
+     */
+    private function carrySelectedSkill(Skill $skill, self $next): self
+    {
+        $chat = $this->chat;
+        if ($chat === null) {
+            return $next;
+        }
+        $backend = $chat->backend();
+        if (!$backend instanceof EngineBackend) {
+            return $next;
+        }
+        foreach ($backend->skills() as $carried) {
+            if ($carried->name === $skill->name) {
+                return $next;
+            }
+        }
+
+        return $next->withChat($chat->withBackend($backend->withSkills([...$backend->skills(), $skill])));
     }
 
     /**

@@ -14,7 +14,10 @@ use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\OpenSkillPickerMsg;
 use SugarCraft\Code\App\SelectSkillMsg;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillRegistry;
@@ -151,6 +154,46 @@ final class AppSkillDispatchTest extends TestCase
         $names = array_map(fn(Skill $s) => $s->name, $next->enabledSkills);
         $this->assertContains('palette-skill', $names);
         $this->assertNull($next->error);
+    }
+
+    public function testSelectingASkillCarriesItOntoTheChatEngineBackendForTheNextTurn(): void
+    {
+        // ISS-035: the palette's enablement must reach the MODEL, not just the
+        // shell's status line. sessionApp() splices the backend's prompt-skill
+        // list into every turn, so selecting forwards the skill there.
+        $registry = new SkillRegistry();
+        $palette = $this->skillFromYaml("description: Palette skill\nuser-invocable: true", 'palette-skill');
+        $registry->register(['palette-skill' => $palette]);
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withSkillPickerOptions([$palette])
+            ->withChat(new Chat(backend: EngineBackend::new(new ScriptedProvider([]), 'm')));
+
+        [$next] = $app->update(new SelectSkillMsg('palette-skill'));
+        $carried = array_map(fn (Skill $s): string => $s->name, $next->chat->backend()->skills());
+        $this->assertSame(['palette-skill'], $carried, 'the next turn ships the prompt skill');
+
+        [$again] = $next->update(new SelectSkillMsg('palette-skill'));
+        $twice = array_map(fn (Skill $s): string => $s->name, $again->chat->backend()->skills());
+        $this->assertCount(1, $twice, 're-selecting the same skill does not duplicate the layer');
+    }
+
+    public function testAChatlessAppKeepsSkillEnablementShellOnlyAndNeverFatals(): void
+    {
+        // The headless shell (no chat wired) still moves its enabled set —
+        // the carry guard exits early where there is no backend to carry to.
+        $registry = new SkillRegistry();
+        $palette = $this->skillFromYaml("description: Palette skill\nuser-invocable: true", 'palette-skill');
+        $registry->register(['palette-skill' => $palette]);
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withSkillPickerOptions([$palette]);
+
+        [$next] = $app->update(new SelectSkillMsg('palette-skill'));
+
+        $names = array_map(fn (Skill $s): string => $s->name, $next->enabledSkills);
+        $this->assertContains('palette-skill', $names);
+        $this->assertNull($next->chat);
     }
 
     public function testSelectSkillMsgRejectsANonUserInvocableSkillEvenIfNamedDirectly(): void
