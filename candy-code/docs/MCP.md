@@ -110,7 +110,7 @@ whose entries `proc_open()` arbitrary commands. Its absence is a decision.
     },
     "issues": {
       "type": "http",
-      "url": "https://mcp.example.com/sse",
+      "url": "https://mcp.example.com/mcp",
       "headers": { "Authorization": "${ISSUES_TOKEN:-}" }
     },
     "repo": {
@@ -149,8 +149,8 @@ entry runs as once it is read:
 
 | Spelling seen | Read as | Rule |
 |---|---|---|
-| `"type": "local"` | `stdio` | alias map `McpClient::TYPE_ALIASES` |
-| `"type": "remote"` | `http` | alias map `McpClient::TYPE_ALIASES` |
+| `"type": "local"` | `stdio` | alias map `McpForeignTranslate::TYPE_ALIASES` |
+| `"type": "remote"` | `http` | alias map `McpForeignTranslate::TYPE_ALIASES` |
 | `"command": ["npx", "-y", "pkg"]` | `command: "npx"` plus `args` | the head is the program and the tail joins ahead of any `args` already present; a non-empty list of strings is required |
 | `"environment": { … }` | `env` | used only when `env` is absent — when both are present, `env` wins |
 | `"enabled": false` | not started | the entry is skipped and named in the launch report; `true` or absent starts it |
@@ -618,9 +618,12 @@ refresh ahead of, and a server's 401 does not trigger a refresh yet.
 
 ## Serving MCP
 
-`src/MCP/` also contains the *server* halves — `McpServer`, `GitMcpServer` with
-`GitCommandHandlers`, `HttpMcpServer`, `StdioMcpServer`. `GitMcpServer` is
-reachable as a `type: git` entry in your own `.mcp.json`, i.e. CandyCode
+`McpServer` is the interface for any tool provider a session can call, and
+most of its implementations are CLIENT transports: `StdioMcpServer` and
+`HttpMcpServer` talk to servers some OTHER program hosts. What CandyCode
+serves itself is `GitMcpServer` (with `GitCommandHandlers`) — pure-PHP git
+tools that run in-process. It
+is reachable as a `type: git` entry in your own `.mcp.json`, i.e. CandyCode
 serving git operations to itself. `candy-code serve` is not one of them: it is
 the WebSocket server the web UI drives ([SERVER.md](SERVER.md)), and nothing in
 it speaks MCP.
@@ -673,7 +676,7 @@ Git itself, hooks included, runs under three guarantees:
   the contained root.
 
 `candy-code --help` lists exactly eight under its **Subcommands** heading —
-`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|import`, `serve`,
+`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import`, `serve`,
 `attach`, `acp`, `completion bash|zsh|fish` — and none of those but `attach`
 and `acp` needs a provider, an API key or a terminal; five answer and exit, and
 `serve` runs until it is stopped. `attach` runs the TUI on a session of a
