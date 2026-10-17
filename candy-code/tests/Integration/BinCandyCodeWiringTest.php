@@ -502,7 +502,9 @@ final class BinCandyCodeWiringTest extends TestCase
         $reply = $next->history[array_key_last($next->history)]->content;
 
         $this->assertStringNotContainsString('Agent manager not configured', $reply);
-        $this->assertStringContainsString('agent(s) registered and idle', $reply);
+        // ISS-034: the idle `/agents` renders the roster table, not a count.
+        $this->assertStringContainsString('Agents:', $reply);
+        $this->assertStringContainsString('coder', $reply);
     }
 
     /**

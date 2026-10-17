@@ -421,7 +421,9 @@ final class AgentManagerWiringTest extends TestCase
         $this->assertStringContainsString('Bug investigation and fixing', $detail);
 
         $typed = $this->submit($chat, '/agents');
-        $this->assertStringContainsString('agent(s) registered and idle', $typed);
+        // ISS-034: the idle `/agents` renders the roster table, not a count.
+        $this->assertStringContainsString('Agents:', $typed);
+        $this->assertStringContainsString('debugger', $typed);
         // The two lines the user reads have to agree: the reply used to open
         // "No active agents configured." and then immediately report N agents
         // registered, which reads as a contradiction on a launch whose roster
@@ -431,7 +433,8 @@ final class AgentManagerWiringTest extends TestCase
 
         [$next, ] = $chat->update(new KeyMsg(KeyType::Char, 'a', ctrl: true));
         $chorded = $next->history[array_key_last($next->history)]->content;
-        $this->assertStringContainsString('agent(s) registered and idle', $chorded);
+        $this->assertStringContainsString('Agents:', $chorded);
+        $this->assertStringContainsString('architect', $chorded);
         $this->assertStringNotContainsString('No active agents configured', $chorded);
     }
 
@@ -514,7 +517,7 @@ final class AgentManagerWiringTest extends TestCase
         try {
             $reply = $this->submit($this->chat(), '/agents');
 
-            $this->assertStringContainsString('Active Agents', $reply);
+            $this->assertStringContainsString('Agents:', $reply);
             $this->assertStringContainsString('tester', $reply);
         } finally {
             $manager->removeSubAgent($subAgent->id);

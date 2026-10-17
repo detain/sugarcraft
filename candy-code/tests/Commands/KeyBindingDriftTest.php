@@ -1143,12 +1143,12 @@ final class KeyBindingDriftTest extends TestCase
             // asserted only that a Cmd came back, so an arm that ignored
             // selectedIndex and always ran match 0 passed.
             'palette.run' => function (array $k): void {
-                [$chat, $at] = $this->paletteHighlightedOnSwitchModel();
+                [$chat, $at] = $this->paletteHighlightedOnTheSwitchThemeRow();
 
                 $this->assertGreaterThan(0, $at, 'fixture: the row must not be the first match');
                 [$ran] = $chat->update($k[0]);
                 $this->assertSame(
-                    'providers',
+                    self::PALETTE_ROW_EFFECT_MODE,
                     $ran->palette()?->mode,
                     'Enter must run the row the highlight is on, not the first match',
                 );
@@ -2284,7 +2284,7 @@ final class KeyBindingDriftTest extends TestCase
 
                 $after = $this->clickZone($chat, Renderer::PALETTE_ITEM_ZONE_PREFIX . $at);
                 $this->assertSame(
-                    'providers',
+                    self::PALETTE_ROW_EFFECT_MODE,
                     $after->palette()?->mode,
                     'clicking a row must RUN it, not merely highlight it',
                 );
@@ -2527,7 +2527,17 @@ final class KeyBindingDriftTest extends TestCase
      * changed. Its index is looked up in the live match list every time, never
      * hardcoded: the order is a scoring decision, not a declaration order.
      */
-    private const PALETTE_ROW_WITH_AN_EFFECT = 'Switch model';
+    /**
+     * The row the palette fixtures highlight and run. ISS-034 renamed the
+     * `/agents` palette row from 'Switch agent' to the honest 'List agents',
+     * which dropped it from the 'switch'-filtered match list and moved
+     * 'Switch model' to index zero — the fixture needs a row that is NOT the
+     * first match, and 'Switch theme' sorts last among the switchers.
+     */
+    private const PALETTE_ROW_WITH_AN_EFFECT = 'Switch theme';
+
+    /** The palette mode running {@see PALETTE_ROW_WITH_AN_EFFECT} opens. */
+    private const PALETTE_ROW_EFFECT_MODE = 'themes';
 
     /**
      * A Chat with the palette open, filtered so the list has several rows, and
@@ -2538,7 +2548,7 @@ final class KeyBindingDriftTest extends TestCase
      *
      * @return array{0: Chat, 1: int}
      */
-    private function paletteHighlightedOnSwitchModel(): array
+    private function paletteHighlightedOnTheSwitchThemeRow(): array
     {
         $chat = $this->chatWithPalette();
         foreach (['s', 'w', 'i', 't', 'c', 'h'] as $char) {

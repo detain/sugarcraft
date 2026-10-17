@@ -14,7 +14,7 @@ use SugarCraft\Code\Lang;
  * Implements the /agents and /agent commands for listing and inspecting agents.
  *
  * Usage:
- *   /agents        — list the agents currently working, or the idle roster count
+ *   /agents        — render the roster (working agents first) as a table
  *   /agent <name>  — show details for a specific agent
  *
  * @mirrors charmbracelet/crush AgentsCommand
@@ -22,7 +22,7 @@ use SugarCraft\Code\Lang;
 final class AgentsCommand
 {
     /**
-     * The `/agents` list table: header text => cell budget, in cells.
+     * The `/agents` roster table: header text => cell budget, in cells.
      *
      * Budgets rather than the old `str_repeat(" ", max(1, 20 - $nameLen))`
      * and `40 - strlen($agent->name)`, which had two separate defects. They
@@ -33,30 +33,34 @@ final class AgentsCommand
      * cut by `substr()` at a BYTE offset that could land inside a UTF-8
      * sequence and emit a broken rune.
      *
-     * They sum — with {@see TranscriptTable::maxCells()}'s border overhead —
-     * to 76 cells. `Status` is 10 because `○ inactive` is the longer of the
-     * two labels this command emits.
+     * They sum to 72 cells; with {@see TranscriptTable::maxCells()}'s border
+     * and padding overhead the dressed box wants 88. `Status` is 10 because
+     * `○ inactive` is the longer of the two labels this command emits, and
+     * `Tier` is 10 because `opencode` is the longest source a native-plus-
+     * foreign roster names in everyday use (`agent-skills-spec` clips, and
+     * clips honestly).
      *
-     * 76 IS A STARTING POINT, NOT A CEILING, and the number it is NOT is
-     * worth writing down because two drafts of this doc-block got it wrong.
+     * THESE ARE A STARTING POINT, NOT A CEILING, and the number they are NOT
+     * is worth writing down because two drafts of this doc-block got it wrong.
      * The transcript pane is `max(20, cols() - 6)`
      * ({@see TranscriptTable::CHROME_COLS}), so an 80-column terminal gives
-     * this box **74** cells, not 76 or 80 — a 76-cell table does not fit an
-     * 80-column terminal, and a row wider than the pane is hard-wrapped by the
-     * Markdown pass, which shreds the box.
+     * this box **74** cells, not 80 — an 88-cell table does not fit an
+     * 80-column terminal, and a row wider than the pane is hard-wrapped by
+     * the Markdown pass, which shreds the box.
      *
      * {@see listAgents()} therefore runs these through
      * {@see TranscriptTable::fit()} against the live pane width taken off the
-     * `Chat` `execute()` is handed: at 80 columns `Agent` and `Description`
-     * each give up one cell, and at 60 they give up considerably more, rather
-     * than the box being shredded at either. An earlier revision said the pane
-     * width was unknowable here; it is not —
+     * `Chat` `execute()` is handed: a narrow pane shrinks `Agent` and
+     * `Description` rather than the box being shredded. An earlier revision
+     * said the pane width was unknowable here; it is not —
      * {@see \SugarCraft\Code\Chat::cols()} has always exposed it, and
      * {@see \SugarCraft\Code\Chat::handleHelpCommand()} has always used it.
      */
     private const COLUMNS = [
-        'Agent' => 20,
-        'Description' => 36,
+        'Agent' => 16,
+        'Description' => 24,
+        'Model' => 12,
+        'Tier' => 10,
         'Status' => 10,
     ];
 
@@ -64,9 +68,8 @@ final class AgentsCommand
      * The one column {@see TranscriptTable::fit()} may not shrink.
      *
      * `Status` holds one of two literals this class writes itself, and
-     * `○ inactiv…` is a wrong status rather than a short one. `Agent` and
-     * `Description` carry on-disk preset text, where `…` reads as the
-     * abbreviation it is, so they absorb the whole loss on a narrow pane.
+     * `○ inactiv…` is a wrong status rather than a short one. The other four
+     * carry on-disk preset text, where `…` reads as the abbreviation it is.
      */
     private const COLUMN_FLOORS = ['Status' => 10];
 
@@ -96,41 +99,46 @@ final class AgentsCommand
     }
 
     /**
-     * List the agents that are currently WORKING, falling back to a count of
-     * the registered-but-idle roster when none of them is.
+     * Render the full roster as a table: working agents first, then the rest
+     * by name, with an explicit "nothing is working" line when only idle
+     * agents exist.
      *
      * "Active" on {@see AgentManager::active()} means *currently doing work*,
-     * not *configured*, so an empty result is the normal state of a healthy
-     * launch rather than an empty manager — which is why the two no-work
-     * branches below have to say different things.
+     * not *configured*. Before ISS-034 the idle state answered with a bare
+     * count — a roster the user could neither see nor discover — and the
+     * paired `/agent <unknown>` hint sent them back to this count, closing the
+     * loop. The table IS the roster now, so every agent in the session is
+     * named on the surface that advertises them, alongside the model it runs
+     * and the convention tier (native/claude/opencode/…) it arrived from.
      */
     private function listAgents(int $paneWidth): int
     {
-        $agents = $this->agentManager->active();
+        $roster = $this->agentManager->all();
 
-        if ($agents === []) {
-            // "Active" means *currently working* (see AgentManager::active()),
-            // so on a real launch this is the normal idle state, not an empty
-            // manager -- Bootstrap::agentRoster() registers six built-in agents
-            // plus any on-disk preset. The two branches are worded apart on
-            // purpose: pairing "No active agents configured." with "9 agent(s)
-            // registered and idle" read as a self-contradiction, when what is
-            // true is that nine agents exist and none is busy. The names are
-            // reachable through `/agent <name>`, which does not filter on
-            // active.
-            $idle = count($this->agentManager->all());
-            if ($idle > 0) {
-                echo "\n  " . Lang::t('cmd.agents.none-working') . "\n";
-                echo '  ' . Lang::t('cmd.agents.idle', ['count' => $idle]) . "\n\n";
-
-                return 0;
-            }
-
+        if ($roster === []) {
+            // The genuinely-empty case: there is no roster to render. The hint
+            // names the real directories (ISS-034) — "the agents configuration
+            // file" described a file no reader could find, and the directory
+            // spellings here are the ones Bootstrap::agentPresetTiers() walks.
             echo "\n  " . Lang::t('cmd.agents.none-configured') . "\n";
             echo '  ' . Lang::t('cmd.agents.none-configured-hint') . "\n\n";
 
             return 0;
         }
+
+        $working = $this->agentManager->active();
+        $workingNames = [];
+        foreach ($working as $agent) {
+            $workingNames[$agent->name] = true;
+        }
+
+        $idle = [];
+        foreach ($roster as $agent) {
+            if (!isset($workingNames[$agent->name])) {
+                $idle[] = $agent;
+            }
+        }
+        usort($idle, static fn(Agent $a, Agent $b): int => strcmp($a->name, $b->name));
 
         // COLUMNS is the budget at a comfortable width; fit() is what makes it
         // true at the width this pane actually has. Both the header row and
@@ -144,10 +152,17 @@ final class AgentsCommand
         );
         $table = TranscriptTable::headed($columns);
 
-        foreach ($agents as $agent) {
+        foreach ([...$working, ...$idle] as $agent) {
             $table = $table->row(
                 TranscriptTable::cell($agent->name, $columns[$labels['Agent']]),
                 TranscriptTable::cell($agent->description, $columns[$labels['Description']]),
+                TranscriptTable::cell(
+                    $agent->inheritsModel || trim($agent->model) === ''
+                        ? Lang::t('cmd.agents.cell.session')
+                        : $agent->model,
+                    $columns[$labels['Model']],
+                ),
+                TranscriptTable::cell($agent->source->value, $columns[$labels['Tier']]),
                 // Through cell() like its neighbours even though this class
                 // writes the string itself: what keeps the table's natural
                 // width under TranscriptTable's derived cap — and so keeps the
@@ -157,8 +172,11 @@ final class AgentsCommand
             );
         }
 
-        echo "\n  " . Lang::t('cmd.agents.heading') . "\n\n";
-        echo $table->render() . "\n\n";
+        echo "\n  " . Lang::t('cmd.agents.heading') . "\n";
+        if ($working === []) {
+            echo '  ' . Lang::t('cmd.agents.none-working') . "\n";
+        }
+        echo "\n" . $table->render() . "\n\n";
 
         return 0;
     }
@@ -221,7 +239,9 @@ final class AgentsCommand
         return [
             'Agent' => Lang::t('cmd.agents.column.agent'),
             'Description' => Lang::t('cmd.agents.column.description'),
+            'Model' => Lang::t('cmd.agents.column.model'),
             'Status' => Lang::t('cmd.agents.column.status'),
+            'Tier' => Lang::t('cmd.agents.column.tier'),
         ];
     }
 }

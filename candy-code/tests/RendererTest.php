@@ -137,7 +137,7 @@ final class RendererTest extends TestCase
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         // The plain-text /agents command output is still in history, as before.
-        $this->assertStringContainsString('Active Agents', $next->history[1]->content);
+        $this->assertStringContainsString('Agents', $next->history[1]->content);
 
         $out = Renderer::render($next);
 

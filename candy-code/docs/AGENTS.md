@@ -246,7 +246,10 @@ then the turn, which cancels a running `Task` the same way.
 
 ### The Agents pane
 
-`Ctrl+A` (or `/agents`) lists the runs that are working. Docked, the **Agents**
+`Ctrl+A` (or `/agents`) renders the roster as a table — working runs first,
+then every idle agent by name, each row naming its description, model, tier
+and status; `/agent <name>` prints one agent's full detail including the file
+it came from. Docked, the **Agents**
 pane is a dashboard of every run: `↑`/`↓` move, `Enter` or `Space` peeks
 (and `Enter` in the peek opens the Agent View), `Alt+1…9` jump to a row, `c` cancels the selected run (again within
 3 s to stop it now), `r` resumes a paused run or continues a finished one, `s`

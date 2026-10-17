@@ -111,7 +111,7 @@ final class AgentsCommandTest extends TestCase
                 name: 'test-agent',
                 description: 'A test agent for unit testing',
                 prompt: 'You are a test agent.',
-                model: 'claude-sonnet-4-6',
+                model: 'opus-4.1',
                 provider: 'anthropic',
                 tools: [],
                 skillNames: [],
@@ -128,8 +128,10 @@ final class AgentsCommandTest extends TestCase
         $output = ob_get_clean();
 
         $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Active Agents', $output);
+        $this->assertStringContainsString('Agents:', $output);
         $this->assertStringContainsString('test-agent', $output);
+        // ISS-034: the roster table names the model each agent runs.
+        $this->assertStringContainsString('opus-4.1', $output);
     }
 
     public function testExecuteShowKnownAgent(): void
@@ -175,7 +177,10 @@ final class AgentsCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Unknown agent: nonexistent', $output);
-        $this->assertStringContainsString('Use /agents to see available agents', $output);
+        // ISS-034: the hint is no longer circular — it names the roster
+        // command AND the real directories a preset file can arrive from.
+        $this->assertStringContainsString('Use /agents to list the roster', $output);
+        $this->assertStringContainsString('.candy-code/agents', $output);
     }
 
     public function testExecuteWithNoArgsFallsBackToListAgents(): void
@@ -203,11 +208,11 @@ final class AgentsCommandTest extends TestCase
         $output = ob_get_clean();
 
         $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Active Agents', $output);
+        $this->assertStringContainsString('Agents:', $output);
         $this->assertStringContainsString('reviewer', $output);
     }
 
-    public function testExecuteWithInactiveAgentNotShownInList(): void
+    public function testTheIdleRosterIsRenderedNotCounted(): void
     {
         $agents = [
             new Agent(
@@ -231,21 +236,74 @@ final class AgentsCommandTest extends TestCase
         $output = ob_get_clean();
 
         $this->assertSame(0, $exitCode);
-        $this->assertStringNotContainsString('inactive-agent', $output);
-        // "Active" means currently working, so on a real launch this branch is
-        // the normal idle state rather than an empty manager: Bootstrap
-        // registers six built-in agents plus any on-disk preset. Reporting the
-        // idle count keeps the message from reading as "delegation is
-        // unavailable" when the roster is in fact fully wired.
+        // ISS-034 reversed the old contract: `/agents` used to hide agents
+        // that are not currently working and print only a count. The roster
+        // IS the table now, with an honest status column doing the work the
+        // hidden rows used to (mis)do.
+        $this->assertStringContainsString('inactive-agent', $output);
         $this->assertStringContainsString('No agents are working right now', $output);
-        $this->assertStringContainsString('1 agent(s) registered and idle', $output);
-        $this->assertStringContainsString('/agent <name>', $output);
-        // The two lines have to agree with each other. "No active agents
-        // CONFIGURED" immediately above "1 agent(s) registered" was a
-        // self-contradiction, and belongs only to the genuinely-empty branch
-        // asserted by testExecuteWithAnEmptyManagerStillPointsAtTheConfigurationFile().
+        $this->assertStringContainsString('Agents:', $output);
+        // The heading dropped its "Active" qualifier with ISS-034: the table
+        // is the roster, not only the working subset.
+        $this->assertStringNotContainsString('Active Agents', $output);
         $this->assertStringNotContainsString('No active agents configured', $output);
-        $this->assertStringNotContainsString('agents configuration file', $output);
+        $this->assertStringNotContainsString('registered and idle', $output);
+    }
+
+    public function testTheRosterTablePutsWorkingAgentsFirstAndNamesTheirTier(): void
+    {
+        $working = new Agent(
+            name: 'z-working',
+            description: 'Busy now',
+            prompt: 'x',
+            model: 'gpt-5.2',
+            provider: 'openai',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+        $idleClaude = new Agent(
+            name: 'a-idle',
+            description: 'Idle foreign',
+            prompt: 'x',
+            model: '',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: false,
+            source: \SugarCraft\Code\Skills\SkillSource::Claude,
+        );
+        $idleNative = new Agent(
+            name: 'm-idle',
+            description: 'Idle native',
+            prompt: 'x',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: false,
+        );
+        $agentManager = $this->createAgentManagerWithAgents([$idleClaude, $working, $idleNative]);
+        $command = new AgentsCommand($agentManager);
+
+        ob_start();
+        $agentManager2 = $agentManager;
+        unset($agentManager2);
+        $exitCode = $command->execute(new Chat([]), []);
+        $output = ob_get_clean();
+
+        $this->assertSame(0, $exitCode);
+        $posWorking = strpos($output, 'z-working');
+        $posIdleA = strpos($output, 'a-idle');
+        $posIdleM = strpos($output, 'm-idle');
+        $this->assertLessThan($posIdleA, $posWorking, 'working agents ride above the idle ones');
+        $this->assertLessThan($posIdleM, $posIdleA, 'idle agents sort by name below them');
+        $this->assertStringContainsString('claude', $output, 'the foreign tier is named per row');
+        $this->assertStringContainsString('native', $output);
+        $this->assertStringContainsString('session', $output, "a model-less preset reads as the session's model, not blank");
     }
 
     public function testExecuteWithAnEmptyManagerStillPointsAtTheConfigurationFile(): void
@@ -261,7 +319,7 @@ final class AgentsCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('No active agents configured', $output);
-        $this->assertStringContainsString('agents configuration file', $output);
+        $this->assertStringContainsString('~/.candy-code/agents', $output);
         $this->assertStringNotContainsString('registered and idle', $output);
     }
 

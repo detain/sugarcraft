@@ -115,7 +115,7 @@ final class CommandTableRenderingTest extends TestCase
     {
         $output = $this->runAgents([$this->agent('coder', 'writes code')]);
 
-        $this->assertStringContainsString('Active Agents', $output);
+        $this->assertStringContainsString('Agents', $output);
         $this->assertStringContainsString('coder', $output);
         $this->assertStringContainsString('writes code', $output);
         $this->assertStringContainsString('● active', $output);
@@ -129,7 +129,7 @@ final class CommandTableRenderingTest extends TestCase
      */
     public function testTheDeclaredBudgetsSumToTheWidthsTheDocBlocksClaim(): void
     {
-        $this->assertSame(76, TranscriptTable::maxCells($this->columnsOf(AgentsCommand::class)));
+        $this->assertSame(88, TranscriptTable::maxCells($this->columnsOf(AgentsCommand::class)));
         $this->assertSame(88, TranscriptTable::maxCells($this->columnsOf(McpAuthCommand::class)));
     }
 

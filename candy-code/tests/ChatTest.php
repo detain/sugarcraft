@@ -2151,7 +2151,7 @@ final class ChatTest extends TestCase
         $this->assertCount(2, $next->history);
         $this->assertSame(Role::Assistant, $next->history[1]->role);
         $response = $next->history[1]->content;
-        $this->assertStringContainsString('Active Agents', $response);
+        $this->assertStringContainsString('Agents', $response);
         $this->assertStringContainsString('reviewer', $response);
         $this->assertStringNotContainsString('Unknown agent', $response);
     }
@@ -2217,7 +2217,7 @@ final class ChatTest extends TestCase
         $this->assertSame(Role::User, $next->history[0]->role);
         $this->assertSame('/agents', $next->history[0]->content);
         $this->assertSame(Role::Assistant, $next->history[1]->role);
-        $this->assertStringContainsString('Active Agents', $next->history[1]->content);
+        $this->assertStringContainsString('Agents', $next->history[1]->content);
         $this->assertStringContainsString('reviewer', $next->history[1]->content);
     }
 
