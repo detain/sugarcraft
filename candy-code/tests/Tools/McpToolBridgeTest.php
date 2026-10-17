@@ -337,7 +337,9 @@ final class McpToolBridgeTest extends TestCase
     /**
      * A non-text part is ANNOUNCED, not dropped: a tool whose whole answer was
      * one image would otherwise return the empty string, which reads to the model
-     * as a successful call that produced nothing.
+     * as a successful call that produced nothing. Since ISS-044 the announce
+     * carries the mime type and byte count too — `[image]` said nothing about
+     * what the server had actually attached.
      */
     public function testANonTextPartIsAnnouncedByTypeRatherThanDropped(): void
     {
@@ -349,7 +351,131 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame("[image]\ncaption", $result->content());
+        $this->assertSame("[image: unknown mime, 4 base64 bytes not shown]\ncaption", $result->content());
+    }
+
+    /** ISS-044: image bytes are COUNTED, never shown, and a stated mime survives. */
+    public function testAnImagePartNamesItsMimeAndSizeWithoutDumpingBase64(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'image', 'mimeType' => 'image/png', 'data' => str_repeat('A', 5000)],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame('[image: image/png, 5000 base64 bytes not shown]', $result->content());
+        $this->assertFalse($result->isError());
+    }
+
+    /** An attached part whose data never arrived says so instead of sizing `''`. */
+    public function testAnImagePartWithoutDataSaysNoDataAttached(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'audio', 'mimeType' => 'audio/wav'],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame('[audio: audio/wav, no data attached]', $result->content());
+    }
+
+    /**
+     * ISS-044'S WHOLE POINT: an embedded resource's TEXT is readable by any
+     * model, and used to render to the literal string `[resource]`.
+     */
+    public function testAnEmbeddedResourceCarriesItsTextInline(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'resource', 'resource' => ['uri' => 'file:///note.md', 'text' => '# hi']],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame("[resource: file:///note.md]\n# hi", $result->content());
+    }
+
+    /** Long text excerpts at the named budget, with the true size announced. */
+    public function testALongEmbeddedResourceIsCappedWithAnAnnouncedMarker(): void
+    {
+        $server = $this->fakeServer();
+        $text = str_repeat('x', McpToolBridge::MAX_RESOURCE_TEXT_BYTES + 7);
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'resource', 'resource' => ['uri' => 'r://big', 'text' => $text]],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertStringStartsWith(
+            "[resource: r://big]\n" . str_repeat('x', McpToolBridge::MAX_RESOURCE_TEXT_BYTES),
+            $result->content(),
+        );
+        $this->assertStringEndsWith(
+            sprintf(' … [resource text capped at %d of %d bytes]', McpToolBridge::MAX_RESOURCE_TEXT_BYTES, strlen($text)),
+            $result->content(),
+        );
+    }
+
+    /** A BLOB resource is binary — counted like inline image bytes, never shown. */
+    public function testABlobEmbeddedResourceIsCountedNotDumped(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'resource', 'resource' => [
+                'uri' => 'r://img', 'mimeType' => 'image/jpeg', 'blob' => 'QUJD',
+            ]],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame('[resource: r://img: image/jpeg, 4 base64 bytes not shown]', $result->content());
+    }
+
+    /** Text wins when a server sends both; a bare resource still names its uri. */
+    public function testEmbeddedResourceEdgesFallToTextFirstThenUriThenBrackets(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'resource', 'resource' => ['uri' => 'r://a', 'text' => 'T', 'blob' => 'Q']],
+            ['type' => 'resource', 'resource' => ['uri' => 'r://b']],
+            ['type' => 'resource', 'resource' => 'nonsense'],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame("[resource: r://a]\nT\n[resource: r://b]\n[resource]", $result->content());
+    }
+
+    /** `resource_link` references are name/uri — the useful half of the part. */
+    public function testAResourceLinkRendersNameAndUri(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'resource_link', 'name' => 'spec', 'uri' => 'file:///spec.md'],
+            ['type' => 'resource_link', 'uri' => 'file:///only-uri.md'],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame(
+            "[resource link: spec -> file:///spec.md]\n[resource link: file:///only-uri.md]",
+            $result->content(),
+        );
+    }
+
+    /** An UNKNOWN type still gets the old bracketed announce — the fallback stays. */
+    public function testAnUnknownPartTypeStillRendersTheBracketedFallback(): void
+    {
+        $server = $this->fakeServer();
+        $server->method('callTool')->willReturn(['content' => [
+            ['type' => 'terminal', 'data' => 'whatever'],
+        ]]);
+
+        $result = $this->bridgeOver($server)->execute([]);
+
+        $this->assertSame('[terminal]', $result->content());
     }
 
     /**

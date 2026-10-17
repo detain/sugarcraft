@@ -100,6 +100,17 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
     public const NAME_PREFIX = 'mcp__';
 
     /**
+     * Inline excerpt budget for one embedded resource's text (ISS-044).
+     *
+     * An eighth of the 64 KiB per-tool default above: a resource part is one
+     * piece of one answer, and several may ride the same result — the outer
+     * {@see DEFAULT_MAX_OUTPUT_BYTES} clip still bounds the whole render, but
+     * a single 60 KiB file should not silently evict the rest of the answer
+     * to a marker before that outer clip announces anything.
+     */
+    public const MAX_RESOURCE_TEXT_BYTES = 8192;
+
+    /**
      * $maxOutputBytes bounds what one server answer can push into the context
      * window (item 0.5): the same 64 KiB default the built-in open-ended
      * tools take, clipped with the trait's announced marker. Before it, an
@@ -660,10 +671,13 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
      * An MCP `tools/call` result rendered as the text a model reads.
      *
      * The spec's shape is `content: [{type: "text", text: …}, …]`, so the text
-     * parts are joined. A non-text part (an image, an embedded resource) is
-     * announced by TYPE rather than dropped: a tool whose whole answer was one
-     * image would otherwise return the empty string, which reads as success with
-     * no output. Anything that is not the spec shape at all is JSON-encoded, on
+     * parts are joined. A non-text part is announced rather than dropped — and
+     * since ISS-044 it is announced with the SUMMARIES it actually carries
+     * ({@see renderPart()}), not by type alone: an embedded resource's text is
+     * readable by any model, and an image's mime type and byte count say what
+     * `[image]` never did. The older hazard stands either way: a tool whose
+     * whole answer was one image would otherwise return the empty string, which
+     * reads as success with no output. Anything that is not the spec shape at all is JSON-encoded, on
      * the principle that showing the model the raw envelope beats inventing a
      * summary of it.
      *
@@ -723,12 +737,131 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
                 continue;
             }
 
-            $parts[] = sprintf('[%s]', is_string($part['type'] ?? null) ? $part['type'] : 'unknown');
+            $parts[] = self::renderPart($part);
         }
 
         $rendered = implode("\n", $parts);
 
         return $rendered === '' ? '[empty content]' : $rendered;
+    }
+
+    /**
+     * A non-text content part rendered as the summary a model can actually use.
+     *
+     * (ISS-044) The arm this replaced announced every non-text part by type
+     * alone — `[image]`, `[resource]` — which discarded exactly the payload the
+     * part carries: an embedded file's TEXT is a string any model reads, and a
+     * base64 blob dumped inline would burn the context window while rendering
+     * to nothing the model can see. So binary payloads are announced by mime
+     * type and byte count and left UNDECODING-FREE, an embedded resource's text
+     * rides inline under {@see MAX_RESOURCE_TEXT_BYTES}, and the whole answer
+     * still passes through the per-tool output cap at {@see call()}, which
+     * clips this render with the trait's announced marker as its outer bound.
+     *
+     * A vision-attachment path (handing the bytes to a capable provider as an
+     * actual image) would have to thread provider capability through surfaces
+     * outside this class's contract; the size line keeps the answer honest
+     * about what it saw until that exists.
+     *
+     * @param array<string, mixed> $part
+     */
+    private static function renderPart(array $part): string
+    {
+        $type = is_string($part['type'] ?? null) ? $part['type'] : 'unknown';
+
+        return match ($type) {
+            'image', 'audio' => self::renderInlineBytes($type, $part),
+            'resource' => self::renderResource($part),
+            'resource_link' => self::renderResourceLink($part),
+            default => '[' . $type . ']',
+        };
+    }
+
+    /**
+     * An `image`/`audio` part: mime and size named, base64 never dumped.
+     *
+     * @param array<string, mixed> $part
+     */
+    private static function renderInlineBytes(string $type, array $part): string
+    {
+        $mime = is_string($part['mimeType'] ?? null) && $part['mimeType'] !== ''
+            ? $part['mimeType']
+            : 'unknown mime';
+        $data = $part['data'] ?? null;
+
+        if (!is_string($data) || $data === '') {
+            return '[' . $type . ': ' . $mime . ', no data attached]';
+        }
+
+        return sprintf('[%s: %s, %d base64 bytes not shown]', $type, $mime, strlen($data));
+    }
+
+    /**
+     * An MCP `resource` (embeddedResource) part: `resource: {uri, text?, blob?, mimeType?}`.
+     *
+     * TEXT is the case ISS-044 was filed for — a server returning a file's
+     * contents as an embedded resource used to render to the literal string
+     * `[resource]`. The excerpt is capped because one resource can be a whole
+     * dump; the marker states the cap and the true size so the model knows
+     * exactly what it did not get. BLOB is binary and behaves like the inline
+     * image bytes: counted, never shown. Neither, and the uri still names what
+     * the server attached.
+     *
+     * @param array<string, mixed> $part
+     */
+    private static function renderResource(array $part): string
+    {
+        $resource = $part['resource'] ?? null;
+
+        if (!is_array($resource)) {
+            return '[resource]';
+        }
+
+        $uri = is_string($resource['uri'] ?? null) && $resource['uri'] !== ''
+            ? $resource['uri']
+            : 'unknown uri';
+
+        $text = $resource['text'] ?? null;
+        if (is_string($text) && $text !== '') {
+            if (strlen($text) > self::MAX_RESOURCE_TEXT_BYTES) {
+                $text = substr($text, 0, self::MAX_RESOURCE_TEXT_BYTES) . sprintf(
+                    ' … [resource text capped at %d of %d bytes]',
+                    self::MAX_RESOURCE_TEXT_BYTES,
+                    strlen($text),
+                );
+            }
+
+            return '[resource: ' . $uri . "]\n" . $text;
+        }
+
+        $blob = $resource['blob'] ?? null;
+        if (is_string($blob) && $blob !== '') {
+            $mime = is_string($resource['mimeType'] ?? null) && $resource['mimeType'] !== ''
+                ? $resource['mimeType']
+                : 'unknown mime';
+
+            return sprintf('[resource: %s: %s, %d base64 bytes not shown]', $uri, $mime, strlen($blob));
+        }
+
+        return '[resource: ' . $uri . ']';
+    }
+
+    /**
+     * A `resource_link` part: a reference the server expects the client to
+     * fetch elsewhere, so name and uri are the whole useful payload.
+     *
+     * @param array<string, mixed> $part
+     */
+    private static function renderResourceLink(array $part): string
+    {
+        $uri = is_string($part['uri'] ?? null) ? $part['uri'] : '';
+        $name = is_string($part['name'] ?? null) && $part['name'] !== '' ? $part['name'] : '';
+
+        if ($name === '' || $name === $uri) {
+            return '[resource link: ' . ($uri !== '' ? $uri : 'unidentified') . ']';
+        }
+
+        return '[resource link: ' . $name . ' -> ' . $uri . ']';
     }
 
     private static function encode(mixed $value): string

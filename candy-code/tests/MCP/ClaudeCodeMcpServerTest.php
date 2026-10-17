@@ -378,6 +378,49 @@ final class ClaudeCodeMcpServerTest extends TestCase
         }
     }
 
+    /**
+     * ISS-044: the three failure shapes of a claude-mcp `tools/call` must read
+     * differently, because they MEAN differently. A JSON-RPC error is the
+     * server's own answer — its words are the diagnosis and must survive to
+     * the model (the ISS-093(c) discipline this method previously violated by
+     * masking every failure to the flat 'Tool call failed'). An error object
+     * with no readable message keeps the generic sentence, and a hollow
+     * envelope fails the exchange one layer down with the client's own
+     * diagnosis — each shape pinned to the words the model will actually see.
+     */
+    public function testEachFailureShapeOfACallKeepsItsOwnDiagnosis(): void
+    {
+        $server = $this->ocGrantServer($this->ocErrorScript());
+
+        $server->start();
+        try {
+            $words = $server->callTool('demo', ['case' => 'words']);
+            self::assertSame(['error' => 'the repo is not clean'], $words,
+                'the server-chosen words were masked — the model cannot act on a wall');
+
+            $faceless = $server->callTool('demo', ['case' => 'faceless']);
+            self::assertSame(['error' => 'Tool call failed'], $faceless);
+
+            // The neither-result-nor-error envelope never even reaches this
+            // method's own no-result sentence: the client refuses it on the
+            // exchange with its own diagnosis, which the bridge's catch
+            // passthrough then delivers. Pinned so the two layers' claims —
+            // the server-side sentence as last line of defense, the client
+            // message as the live path — stay the documented shapes.
+            try {
+                $server->callTool('demo', ['case' => 'hollow']);
+                self::fail('the hollow envelope reached the server layer instead of failing the exchange');
+            } catch (\RuntimeException $e) {
+                self::assertStringContainsString(
+                    'the server answered with neither a result nor an error',
+                    $e->getMessage(),
+                );
+            }
+        } finally {
+            $server->stop();
+        }
+    }
+
     /** A grant-shaped adapter over PHP_BINARY running the given script. */
     private function ocGrantServer(string $script, array $argvTail = []): ClaudeCodeMcpServer
     {
@@ -412,6 +455,43 @@ final class ClaudeCodeMcpServerTest extends TestCase
                     echo json_encode(['jsonrpc' => '2.0', 'id' => $id, 'result' => ['content' => [
                         ['type' => 'text', 'text' => 'demo said hi'],
                     ]]]), "\n";
+                }
+                fflush(STDOUT);
+            }
+            PHP);
+    }
+
+    /** Handshake-competent responder whose `tools/call` answers by `case` argument. */
+    private function ocErrorScript(): string
+    {
+        return $this->ocWritePhpScript('errorer', <<<'PHP'
+            <?php
+            while (($line = fgets(STDIN)) !== false) {
+                $msg = json_decode($line, true);
+                if (!is_array($msg)) { continue; }
+                $id = $msg['id'] ?? 0;
+                $method = $msg['method'] ?? '';
+                if ($method === 'initialize') {
+                    echo json_encode(['jsonrpc' => '2.0', 'id' => $id, 'result' => [
+                        'protocolVersion' => '2024-11-05',
+                        'capabilities' => ['tools' => new \stdClass()],
+                        'serverInfo' => ['name' => 'fake-claude-mcp', 'version' => '0'],
+                    ]]), "\n";
+                } elseif ($method === 'tools/list') {
+                    echo json_encode(['jsonrpc' => '2.0', 'id' => $id, 'result' => ['tools' => [
+                        ['name' => 'demo', 'description' => 'A fake demo tool', 'inputSchema' => ['type' => 'object']],
+                    ]]]), "\n";
+                } elseif ($method === 'tools/call') {
+                    $case = $msg['params']['arguments']['case'] ?? 'words';
+                    if ($case === 'words') {
+                        echo json_encode(['jsonrpc' => '2.0', 'id' => $id, 'error' => [
+                            'code' => -32603, 'message' => 'the repo is not clean',
+                        ]]), "\n";
+                    } elseif ($case === 'faceless') {
+                        echo json_encode(['jsonrpc' => '2.0', 'id' => $id, 'error' => ['code' => -32603]]), "\n";
+                    } else {
+                        echo json_encode(['jsonrpc' => '2.0', 'id' => $id]), "\n";
+                    }
                 }
                 fflush(STDOUT);
             }

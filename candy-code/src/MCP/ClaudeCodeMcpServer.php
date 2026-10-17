@@ -331,8 +331,23 @@ final class ClaudeCodeMcpServer implements McpServer
         // here, where the start-time tool table holds the schema (audit MCP-9).
         $response = $this->client->callTool($toolName, ArgumentShape::conform($args, $this->inputSchemaOf($toolName)));
 
-        if ($response->error !== null || !$response->resultSet) {
-            return ['error' => 'Tool call failed'];
+        // (ISS-044) A JSON-RPC ERROR IS THE SERVER'S ANSWER, not a transport
+        // failure — the words it chose are the diagnosis, and masking them to a
+        // flat 'Tool call failed' left the model arguing with a wall. Same
+        // keep-the-server's-words discipline {@see HttpMcpServer::callTool()}
+        // shipped for ISS-093(c). The no-result branch keeps its own sentence
+        // because it means something different: a reply that was neither a
+        // result nor an error is a broken envelope, and nothing truer can be
+        // said. A DEADLINE here stays deliberately absent (E646 blanket-timeout
+        // ban): the bounded timeout shape for abandoned calls rides the
+        // exchange() failure, whose message this method now preserves on its
+        // way through the bridge's catch passthrough.
+        if ($response->error !== null) {
+            return ['error' => $response->errorMessage() ?? 'Tool call failed'];
+        }
+
+        if (!$response->resultSet) {
+            return ['error' => 'Tool call failed — the answer carried no result'];
         }
 
         if (!is_array($response->result)) {
