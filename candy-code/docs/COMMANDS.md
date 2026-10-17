@@ -59,10 +59,13 @@ refusals, whose keys are paths a reader prints for you to go and open.
 unbuilt — "not a row in `CommandRegistry::all()`", "typing `/permissions` today
 does nothing". That is no longer the shipped state: the name now has both, and
 typing it prints the session's permission mode, where that mode came from, and
-every rule the gate decides by, in evaluation order. The argument is not parsed
-— the report is total, so each spelling gets a superset of what it asked for
-rather than a "no such subcommand", which is why `permissions` sits below the
-bare-name commands in `Chat::dispatchCommand()` and not with them. The
+every rule the gate decides by, in evaluation order. Two subcommands parse
+their argument — `mode <name>` switches the session's mode for later turns and
+`revoke <n>|all` takes numbered "always" grants back — and any other argument
+is ignored: the report is total, so a spelling that is not a subcommand gets a
+superset of what it asked for rather than a "no such subcommand", which is why
+`permissions` sits below the bare-name commands in `Chat::dispatchCommand()`
+and not with them. The
 reservation earns its keep now for exactly the reason it was made: that report
 is how you check what a cloned repository has made possible, and a file that
 could replace it could falsify the check.
@@ -324,7 +327,7 @@ edit it by hand.
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |
 | `/settings` | ✓ | ✓ | `[search]` | Show every setting, its value, where it came from and when it applies |
-| `/agents` | ✓ | | — | List active agents, inspect one by name, or open a running one's Agent View |
+| `/agents` | ✓ | | — | List the agent roster, inspect one by name, or open a running one's Agent View |
 | `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |

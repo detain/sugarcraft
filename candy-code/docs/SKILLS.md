@@ -553,12 +553,15 @@ arguments come from the model, which passed them for the skill to act on.
 instance, so a skill disabled on one is not reachable through the other.
 
 The parallel carrier is the sub-agent path: an agent definition may list
-`skillNames` (`Agent::$skillNames`) and `AgentManager::executeSubAgent()` would
-apply them — but nothing in `src/` or `bin/` calls `executeSubAgent()`, so that
-carrier is a seam with no production caller, in the same standing as
-`App::applySkillsToSystemPrompt()` and `App::dispatchSkill()` above. On today's
-binary the on-demand body arrives through the `Skill` tool when the model asks
-for it, or through a `$name` mention (below) when you do; the standing body only
+`skillNames` (`Agent::$skillNames`), and the live carrier is
+`AgentManager::systemPromptFor()` — the per-agent assembly `TaskTool` asks for
+when it launches a sub-agent, which splices the granted skills into the agent's
+own prompt (fail-closed on a granted skill this session's registry does not
+resolve). The older `AgentManager::executeSubAgent()` is dormant — nothing in
+`src/` or `bin/` calls it — so a preset's `skills:` apply through the
+`systemPromptFor()` batch path, never through that method. On today's binary
+the on-demand body arrives through the `Skill` tool when the model asks for it,
+or through a `$name` mention (below) when you do; the standing body only
 through the canonical `enabledSkills` path.
 
 ### `$name` in a prompt: one skill for one turn
