@@ -19,7 +19,12 @@ use SugarCraft\Code\Tools\PathJail;
  *     {"lintCommands": {"php": "vendor/bin/phpstan analyse --no-progress --error-format=raw", "py": "flake8 --select=E9,F63,F7,F82", "js": false}}
  *
  * A command gets the file as its last argument, or wherever it writes
- * `{file}` ({@see FILE_PLACEHOLDER}); the path is shell-quoted either way.
+ * `{file}` ({@see FILE_PLACEHOLDER}); the path is shell-quoted either way —
+ * so the placeholder must NOT be quoted. A `"{file}"` or `'{file}'` would
+ * drop the real path inside the writer's own quotes, where double quotes
+ * re-expand `$(…)` in a file name; {@see unquotePlaceholder()} collapses the
+ * wrapped forms back to the bare placeholder and lets the single quoting
+ * escapeshellarg already applied stand alone.
  * `false`, `null` or `""` switches an extension off, the default `php` one
  * included. Anything unusable — a list, a non-string command — is ignored
  * rather than refused, the {@see \SugarCraft\Code\Config\StatusLineCommand}
@@ -139,6 +144,26 @@ final class LintRunner
         return $this->timeoutSeconds;
     }
 
+    /**
+     * Collapse a placeholder the settings author wrapped in quotes —
+     * `"{file}"`, `'{file}'`, or nestings of those — back to bare `{file}`
+     * (ISS-011). The quoting the wrapper carries is the quoting escapeshellarg
+     * supplies; leaving the wrapper on re-enables expansion inside double
+     * quotes, and the file name is model-influenced: a file called
+     * `$(id).php` executed `id` through `php -l "{file}"`. A placeholder glued
+     * into a longer quoted word (`"{file}:%l"`) is a FORMAT string, not a
+     * wrapped path, and stays exactly as written.
+     */
+    private static function unquotePlaceholder(string $command): string
+    {
+        $pattern = '/(["\'])' . \preg_quote(self::FILE_PLACEHOLDER, '/') . '\1/';
+        while (\preg_match($pattern, $command) === 1) {
+            $command = (string) \preg_replace($pattern, self::FILE_PLACEHOLDER, $command);
+        }
+
+        return $command;
+    }
+
     /** The command that lints $path, or null when its extension has none. */
     public function commandFor(string $path): ?string
     {
@@ -187,7 +212,7 @@ final class LintRunner
         $display = substr($absolute, strlen($rootReal) + 1);
 
         $line = str_contains($command, self::FILE_PLACEHOLDER)
-            ? str_replace(self::FILE_PLACEHOLDER, escapeshellarg($display), $command)
+            ? str_replace(self::FILE_PLACEHOLDER, escapeshellarg($display), self::unquotePlaceholder($command))
             : $command . ' ' . escapeshellarg($display);
 
         $run = $this->runCaptured(

@@ -175,6 +175,36 @@ final class PostEditLintHookTest extends TestCase
         $this->assertStringContainsString('1█x', $note);
     }
 
+    public function testAQuotedPlaceholderCannotReOpenExpansionInTheFileName(): void
+    {
+        // ISS-011: the placeholder is quoted BY US. A settings author who
+        // writes "{file}" would otherwise put the model-influenced path
+        // inside double quotes, where $(id) in a file NAME runs.
+        $this->put('src/$(whoami).txt', "x\n");
+        $runner = LintRunner::new()->withCommands(['txt' => 'printf "%s:1: lit\n" "{file}" >&2; exit 3']);
+
+        $note = (new PostEditLintHook($runner))->execute($this->context('Write', 'src/$(whoami).txt'))->additionalContext;
+
+        $this->assertIsString($note);
+        $this->assertStringContainsString('src/$(whoami).txt:1: lit', $note, 'the name reaches printf literally, never expanded');
+        $this->assertStringNotContainsString(\get_current_user() . '.txt', $note, 'if id/whoami HAD run the substitution would be visible');
+    }
+
+    public function testWrappedPlaceholderFormsCollapseToTheSingleQuotingWeApply(): void
+    {
+        // After collapsing, the composed command carries escapeshellarg's
+        // quoting and nothing else — for plain, double- and nested-wrapped
+        // spellings alike.
+        foreach (['"{file}"', "'{file}'", "\"'{file}'\""] as $wrapped) {
+            $this->put('src/a.txt', "x\n");
+            $runner = LintRunner::new()->withCommands(['txt' => 'printf "%s:1: placed\n" ' . $wrapped . ' >&2; exit 3']);
+
+            $note = (new PostEditLintHook($runner))->execute($this->context('Write', 'src/a.txt'))->additionalContext;
+
+            $this->assertStringContainsString('printf "%s:1: placed\\n" \'src/a.txt\' >&2; exit 3', $note, $wrapped);
+        }
+    }
+
     public function testTheBuiltInPhpEntryCanBeSwitchedOffOrReplaced(): void
     {
         $this->put('src/Bad.php', "<?php\n}\n");
