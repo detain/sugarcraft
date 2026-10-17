@@ -135,6 +135,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withSessionId('other-session'),
                 ['sessionId'],
             ],
+            // ISS-021: the prompt memo a restricted background turn swaps out.
+            'withSessionPromptMemo' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withSessionPromptMemo(\SugarCraft\Code\Context\SessionPromptMemo::new()),
+                ['sessionPromptMemo'],
+            ],
             // Roadmap 2.4-2: the launch-time model every summary goes to.
             'withSummaryModel' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withSummaryModel('other-summary-model'),

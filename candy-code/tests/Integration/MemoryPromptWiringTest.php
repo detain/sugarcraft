@@ -13,6 +13,7 @@ use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\MemoryBlock;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Context\RulesState;
+use SugarCraft\Code\Context\SessionPromptMemo;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Hooks\HookManager;
@@ -447,6 +448,7 @@ final class MemoryPromptWiringTest extends TestCase
             'withSubAgentGrant' => fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(null),
             'withMaxConcurrentDelegations' => fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(2),
             'withSessionId' => fn(EngineBackend $b): EngineBackend => $b->withSessionId('memory-session'),
+            'withSessionPromptMemo' => fn(EngineBackend $b): EngineBackend => $b->withSessionPromptMemo(SessionPromptMemo::new()),
             'withReasoningEffort' => fn(EngineBackend $b): EngineBackend => $b->withReasoningEffort('low'),
             'withSummaryModel' => fn(EngineBackend $b): EngineBackend => $b->withSummaryModel('memory-summary-model'),
             'withContextLedger' => fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Code\Context\Pruning\ContextLedger::new()),
