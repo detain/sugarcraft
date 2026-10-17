@@ -688,6 +688,23 @@ final class Bootstrap
     public const SESSION_RETENTION_DETAIL_FORMAT = "candy-code:   %s (last used %s UTC, %d %s)\n";
 
     /**
+     * Notice for a `--continue` launch that fell back to a session from another
+     * project: same-cwd sessions win, and when none exist the newest session
+     * anywhere is resumed — work the user asked to come back, even if it comes
+     * from the wrong directory. Announced stderr-alone, like the retention
+     * detail lines beside it, not through the transcript launch-notice seam:
+     * the seam call-site census lives in docs this lane may not edit, and the
+     * notice is a one-line operational tell, not conversation content.
+     *
+     * Not (yet) in {@see LAUNCH_NOTICE_CATALOGUE()} nor lang/en.php, so
+     * translated() passes the English through verbatim; promoting it to the
+     * catalogue is closeout's i18n call.
+     *
+     * `%s` the cwd the resumed session was recorded under.
+     */
+    public const SESSION_RESUME_CROSS_PROJECT_FORMAT = "candy-code: --continue resumed a session from another project (%s); pass --resume to pick deliberately\n";
+
+    /**
      * The envelope {@see reportProjectTierRefusals()} wraps every refused
      * project directory in — the path this launch would not read, and the
      * reason, joined by an em dash.
@@ -4343,13 +4360,27 @@ final class Bootstrap
         }
 
         if (self::$sessionLaunchMode === 'continue') {
-            // The newest session WITH a conversation, not the newest row: a
-            // launch quit without typing is newer than the work the user wants
-            // back. seedSession() answers only when nothing has content yet.
-            $row = $store instanceof EnhancedSessionStore ? $store->latestResumableSession() : null;
-            if ($row !== null) {
+            // The newest session WITH a conversation, not the newest row — and,
+            // in this order, the newest one recorded under this cwd before any
+            // other project's (ISS-026). A launch quit without typing is newer
+            // than the work the user wants back, so "with a conversation" is
+            // the predicate; crossing into another project is allowed only
+            // when nothing local has content, and says so on stderr.
+            // seedSession() answers only when nothing has content anywhere.
+            $cwd = \getcwd();
+            $pick = $store instanceof EnhancedSessionStore
+                ? $store->latestResumableSessionFromCwd(\is_string($cwd) && $cwd !== '' ? $cwd : null)
+                : null;
+            if ($pick !== null) {
+                [$row, $crossed] = $pick;
                 $id = (string) $row['id'];
                 $name = \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null;
+                if ($crossed) {
+                    fwrite(STDERR, sprintf(
+                        self::translated(self::SESSION_RESUME_CROSS_PROJECT_FORMAT),
+                        \is_string($row['cwd'] ?? null) && $row['cwd'] !== '' ? $row['cwd'] : 'unknown',
+                    ));
+                }
             } else {
                 [$id, $name] = self::seedSession($store, $provider, $model);
             }

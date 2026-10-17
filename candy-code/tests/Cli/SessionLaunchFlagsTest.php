@@ -182,6 +182,67 @@ final class SessionLaunchFlagsTest extends TestCase
         $this->assertSame(['the real work'], array_map(static fn(Message $m): string => $m->content, $opened['history']));
     }
 
+    /**
+     * ISS-026: a conversation from another checkout used to hijack every
+     * `--continue` launched elsewhere. This checkout's newest conversation
+     * wins even when it is older than the other project's.
+     */
+    public function testContinuePrefersThisCheckoutOverANewerSessionElsewhere(): void
+    {
+        $here = realpath($this->tmpHome) . '/here';
+        $there = realpath($this->tmpHome) . '/there';
+        mkdir($here, 0700, true);
+        mkdir($there, 0700, true);
+        $store = $this->store();
+        $store->createSession('here', 'p', 'm', null, 'Local work', $here);
+        $store->saveTranscript('here', [Message::user('this project')]);
+        // Created last, so the global newest is the OTHER project's row: the
+        // pick below can only come from the cwd scoping, not from ordering.
+        $store->createSession('there', 'p', 'm', null, 'Elsewhere work', $there);
+        $store->saveTranscript('there', [Message::user('not your project')]);
+        Bootstrap::useSessionLaunch(true);
+
+        $previous = getcwd();
+        chdir($here);
+        try {
+            $opened = Bootstrap::openSession($store);
+        } finally {
+            chdir((string) $previous);
+        }
+
+        $this->assertSame('here', $opened['id'], '--continue resumed another project\'s session while this one had its own.');
+        $this->assertSame(['this project'], array_map(static fn(Message $m): string => $m->content, $opened['history']));
+    }
+
+    /**
+     * ISS-026's lenient rung: nothing local has content, so the other
+     * project's conversation comes back — the cross-project stderr notice
+     * rides this path (stderr is not captured by PHPUnit; the crossed flag
+     * behind it is pinned in LatestResumableSessionCwdTest).
+     */
+    public function testContinueResumesAnotherProjectWhenNothingHereHasContent(): void
+    {
+        $here = realpath($this->tmpHome) . '/here';
+        $there = realpath($this->tmpHome) . '/there';
+        mkdir($here, 0700, true);
+        mkdir($there, 0700, true);
+        $store = $this->store();
+        $store->createSession('quit-straight-away', 'p', 'm', null, null, $here);
+        $store->createSession('there', 'p', 'm', null, 'Elsewhere work', $there);
+        $store->saveTranscript('there', [Message::user('salvage me')]);
+        Bootstrap::useSessionLaunch(true);
+
+        $previous = getcwd();
+        chdir($here);
+        try {
+            $opened = Bootstrap::openSession($store);
+        } finally {
+            chdir((string) $previous);
+        }
+
+        $this->assertSame('there', $opened['id']);
+    }
+
     public function testContinueWithNothingToContinueFallsBackToTheNewestRow(): void
     {
         $store = $this->store();

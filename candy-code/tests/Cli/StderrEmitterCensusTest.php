@@ -57,7 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-four sites (ISS-080 2026-10-17: +1 in
+ *  1. `fwrite(STDERR, …)` — twenty-five sites (ISS-026 2026-10-17: +1 in
+ *     `Bootstrap::openSession()` for the cross-project `--continue` notice,
+ *     stderr-alone by the same decision as the retention rows; ISS-080 2026-10-17: +1 in
  *     `NonInteractive` for the stdin-silent grace line; f-app-launch 2026-10-14: +2 in
  *     `bin/candy-code` — the rv-qa-1 TTY-guard refusal line and the rv-tui-1
  *     recovery line, both stderr-alone by decision: neither names a lost
@@ -221,8 +223,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * it — THIRTY-SEVEN call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row), each producing a
- * distinct `candy-code: ` line, against a channel-4 credit of six for that
- * file. Off by roughly five times, in the blind direction.
+ * distinct `candy-code: ` line, against a channel-4 credit of seven for that
+ * file (ISS-026's envelope-carrying resume notice joined the six as a raw
+ * fwrite line). Off by roughly five times, in the blind direction.
  *
  * IT WAS NOT A THEORY. Round 45's review added one
  * `self::warnPermissionConfigOnce('a brand new user visible warning nobody
@@ -305,7 +308,12 @@ final class StderrEmitterCensusTest extends TestCase
         // a server. Stderr alone: it is written before any TUI or session
         // exists, and the verb then exits 1.
         'src/Cli/Attach.php' => 1,
-        'src/Cli/Bootstrap.php' => 2,
+        // +1 in ISS-026: the cross-project --continue notice. Stderr alone,
+        // the same decision as the retention detail line beside it: the launch
+        // succeeded, there is nothing the session can no longer DO, and the
+        // transcript seam's call-site census lives in docs this writes may
+        // not touch.
+        'src/Cli/Bootstrap.php' => 3,
         // +1 in wave 11 (audit 15b-15 residual): noticeAttachment(), the
         // headless twin of the TUI's UI-only attachment notices - a `-p`
         // mention that matched nothing, a refused file, an image the model
@@ -471,7 +479,9 @@ final class StderrEmitterCensusTest extends TestCase
         // switch given a value, a value flag with none or an empty one), the
         // same pre-launch exit-2 usage decision.
         'src/Cli/ArgvParser.php' => 25,
-        'src/Cli/Bootstrap.php' => 6,
+        // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
+        // `candy-code: ` envelope, like the retention detail line.
+        'src/Cli/Bootstrap.php' => 7,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // 8A: the three migration notices (env fold, running-server refusal,
         // per-directory move), all stderr-alone — see INDIRECT_SITES' row for

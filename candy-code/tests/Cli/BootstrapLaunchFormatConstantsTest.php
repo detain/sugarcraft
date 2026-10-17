@@ -232,6 +232,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
+        // ISS-026's cross-project resume notice. Quoted on no page (stderr
+        // alone, and this lane may not edit docs), so no PAGE_QUOTES row —
+        // the PROMPT_ATTRIBUTION precedent.
+        'SESSION_RESUME_CROSS_PROJECT_FORMAT' => ['method' => 'openSession', 'conversions' => 1],
         'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
         'MCP_PARTIAL_START_LOG_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
         'MCP_PARTIAL_START_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
@@ -496,6 +500,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // Both halves of the retention report are named, so what is left here
         // is the plural pair and the four `$row` keys the detail line reads.
         'reportPrunedSessions' => ["'session'", "'sessions'", "'id'", "'updated_at'", "'messages'", "'message'"],
+        // ISS-026: the only format is named; the rest are the return-shape
+        // keys, the two launch-mode words the body compares against, and the
+        // cwd fallback ternary's empty-string probe and fallback word.
+        'openSession' => ["'id'", "'name'", "'history'", "'picker'", "'continue'", "''", "'cwd'", "'unknown'", "'resume'"],
         // The full stop rtrim()ed off the reason, because STDERR_LINE_FORMAT
         // adds one of its own and two would read as a typo.
         'reportProjectTierRefusals' => ["'.'"],
@@ -838,7 +846,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            30,
+            31,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

@@ -2145,14 +2145,72 @@ final class EnhancedSessionStore
      */
     public function latestResumableSession(): ?array
     {
-        $stmt = $this->pdo->query('
+        return $this->latestResumableSessionScoped(null);
+    }
+
+    /**
+     * The `--continue` pick for THIS checkout (sugar_issues.md ISS-026).
+     *
+     * `--continue` is a project-scoped verb in spirit — the conversation you
+     * were having HERE — but the row's `cwd` is only written by launches
+     * since audit B1, so a strict filter would strand exactly the old history
+     * the flag exists to restore, and rows seeded through seedSession() carry
+     * no cwd either. The ladder therefore asks this checkout first, falls
+     * back to the global newest, and reports whether the answer crossed
+     * projects so the caller can say so out loud. The fallback is deliberate
+     * leniency, not an oversight: silently resuming nothing when there is
+     * something resumable is the worse failure.
+     *
+     * @return array{0: array<string, mixed>, 1: bool}|null the row, and
+     *         whether it came from a different working directory than $cwd;
+     *         null when nothing is resumable at all
+     */
+    public function latestResumableSessionFromCwd(?string $cwd): ?array
+    {
+        $scoped = $cwd === null || $cwd === '' ? null : $this->latestResumableSessionScoped($cwd);
+        if ($scoped !== null) {
+            return [$scoped, false];
+        }
+
+        $global = $this->latestResumableSession();
+        if ($global === null) {
+            return null;
+        }
+
+        // Crossing only "counts" when the row demonstrably lives elsewhere:
+        // rows with no recorded cwd (seeded rows, pre-B1 history) name no
+        // other project, and announcing a crossing we cannot see would
+        // blame a provenance gap on the user's own checkout.
+        $rowCwd = \is_string($global['cwd'] ?? null) ? $global['cwd'] : '';
+
+        return [$global, $cwd !== null && $cwd !== '' && $rowCwd !== '' && $rowCwd !== $cwd];
+    }
+
+    /**
+     * Shared query behind {@see latestResumableSession()} and the scoped
+     * first rung of {@see latestResumableSessionFromCwd()}. One SQL body on
+     * purpose: a second copy of the resumable-row predicate would drift the
+     * two rungs apart, and the whole ladder is only sound because both rungs
+     * mean "resumable" identically.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function latestResumableSessionScoped(?string $cwd): ?array
+    {
+        $sql = '
             SELECT s.* FROM sessions s
-            WHERE s.kind <> \'subagent\' AND s.archived_at IS NULL
+            WHERE s.kind <> \'subagent\' AND s.archived_at IS NULL';
+        if ($cwd !== null) {
+            $sql .= ' AND s.cwd = ?';
+        }
+        $sql .= '
               AND (EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)
                 OR EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = s.id))
             ORDER BY s.updated_at DESC, s.rowid DESC
             LIMIT 1
-        ');
+        ';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($cwd === null ? [] : [$cwd]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         $stmt->closeCursor();
 
