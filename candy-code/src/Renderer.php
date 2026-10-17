@@ -2683,6 +2683,17 @@ final class Renderer
      * with no turn in flight clears them. {@see AgentLiveRegistry}'s stored
      * clock is the ONLY time source — the view still never reads a wall
      * clock of its own.
+     *
+     * WHY MEMOS HERE AND NOT {@see \SugarCraft\Code\Tui\StallDetector}: the
+     * thinking row measures a per-turn SILENCE GAP — seconds since streaming
+     * text last grew — which is only observable at paint time, against the
+     * tail the previous frame saw. StallDetector is the other shape: a
+     * mutable per-agent token-RATE service (thresholdSeconds beside
+     * minTokensPerSecond) that BackgroundSupervisor feeds as roster events
+     * arrive. Reusing it would force rate semantics onto a gap measurement,
+     * and Chat — an immutable TEA model — has no field where such a service
+     * could live anyway; frame-to-frame observation belongs to the renderer,
+     * which already keeps its side-channel memos keyed the same loose way.
      */
     private static ?int $turnClockOwner = null;
 
