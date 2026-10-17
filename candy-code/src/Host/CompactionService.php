@@ -2359,6 +2359,9 @@ final class CompactionService
             userVisible: $message->userVisible,
             turnTranscript: $message->turnTranscript,
             contextLedger: $message->contextLedger,
+            // ISS-097: the failure paint is a property of the row, not of its
+            // length - truncating the content must not re-label an error.
+            error: $message->error,
             // O-2b: the live-row identity token, so the store sees the same
             // row and does not spend a fresh ref on the truncated copy.
             rowKey: $message->rowKey(),

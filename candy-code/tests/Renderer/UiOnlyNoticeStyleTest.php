@@ -99,4 +99,82 @@ final class UiOnlyNoticeStyleTest extends TestCase
         $this->assertGreaterThan($at('notice: /budget'), $at('notice: Queued'));
         $this->assertGreaterThan($at('notice: Queued'), $at('ANSWER-ONE'), 'not reordered after the answer');
     }
+
+    /**
+     * ISS-097: a UI-only ASSISTANT row - the reply a slash command writes into
+     * the history, a background echo - is the app talking, not the model. It
+     * used to wear the same bold `assistant` label as model output.
+     */
+    public function testALocalCommandReplyWearsTheLocalLabelNotAssistant(): void
+    {
+        $plain = implode("\n", array_map(self::withoutSgr(...), self::rows(new Chat(history: [
+            Message::user('/skills'),
+            Message::assistant('SKILLS-LISTING')->withUiOnly(),
+            Message::assistant('MODEL-REPLY'),
+        ]))));
+
+        $this->assertStringContainsString("local\nSKILLS-LISTING", $plain);
+        $this->assertStringNotContainsString("assistant\nSKILLS-LISTING", $plain);
+        $this->assertStringContainsString("assistant\nMODEL-REPLY", $plain, 'the model reply keeps its own label');
+    }
+
+    /**
+     * ISS-097: an error-flagged row opens with an error-coloured `error`
+     * label and closes with the recall hint - never under `assistant`, and
+     * never by sniffing the message text (an unflagged row that happens to
+     * contain the word error is a plain local/assistant row).
+     */
+    public function testAnErrorRowWearsTheErrorLabelAndTheRetryHint(): void
+    {
+        $rows = self::rows(new Chat(history: [
+            Message::user('go'),
+            Message::assistant('_[error: SGLANG request failed: Connection refused]_')->withUiOnly()->withError(),
+            Message::assistant('an answer that merely mentions an error'),
+        ]));
+
+        $plain = implode("\n", array_map(self::withoutSgr(...), $rows));
+
+        $this->assertStringContainsString("error\n[error: SGLANG request failed: Connection refused]", $plain);
+        $this->assertStringContainsString('retry: ↑ then Enter', $plain);
+        $this->assertStringNotContainsString("assistant\n[error:", $plain, 'a provider error is not painted as the assistant speaking');
+
+        $errorRow = self::rowContaining($rows, 'error');
+        $hintRow = self::rowContaining($rows, 'retry: ↑');
+        $this->assertNotSame([], (array) preg_match('/\e\[38;[0-9;]+m/', (string) $errorRow), 'the label carries a colour');
+        $this->assertNotSame([], (array) preg_match('/\e\[38;[0-9;]+m/', (string) $hintRow), 'the hint carries a colour');
+
+        $unflagged = self::rowContaining($rows, 'an answer that merely mentions');
+        $this->assertNotNull($unflagged);
+        $block = implode("\n", array_map(self::withoutSgr(...), array_slice($rows, 0, (int) array_search($unflagged, $rows, true) + 1)));
+        $this->assertStringContainsString("assistant\nan answer that merely mentions an error", $block, 'text alone never earns the error paint');
+    }
+
+    /**
+     * The error label must not be the assistant label recoloured by accident:
+     * the two foreground sequences differ on the same frame.
+     */
+    public function testTheErrorLabelColourDiffersFromTheAssistantLabel(): void
+    {
+        $rows = self::rows(new Chat(history: [
+            Message::assistant('MODEL-REPLY'),
+            Message::assistant('_[error: boom]_')->withUiOnly()->withError(),
+        ]));
+
+        $colourOf = static function (string $label) use ($rows): array {
+            foreach ($rows as $row) {
+                if (self::withoutSgr($row) === $label && preg_match('/\e\[38;[0-9;]+m/', $row, $m) === 1) {
+                    return $m;
+                }
+            }
+
+            return [];
+        };
+
+        $assistant = $colourOf('assistant');
+        $error = $colourOf('error');
+
+        $this->assertNotSame([], $assistant);
+        $this->assertNotSame([], $error);
+        $this->assertNotSame($assistant, $error, 'errors read as errors at a glance');
+    }
 }

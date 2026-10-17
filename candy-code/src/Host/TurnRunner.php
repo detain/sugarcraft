@@ -591,7 +591,7 @@ final class TurnRunner
                 // those tools did — otherwise the placeholders queued for
                 // them would be the only trace and they never even render.
                 static fn (\Throwable $e): Msg => $settle(
-                    Message::assistant('_[error: ' . $e->getMessage() . ']_')->withUiOnly(),
+                    Message::assistant('_[error: ' . $e->getMessage() . ']_')->withUiOnly()->withError(),
                     true,
                 ),
             );

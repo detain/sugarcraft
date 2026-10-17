@@ -4139,6 +4139,13 @@ final class Renderer
         // of a long transcript (audit 15b-10).
         $userLabel = Style::new()->foreground($theme->userLabel)->bold()->render(Lang::t('tui.chat.user_label'));
         $assistantLabel = Style::new()->foreground($theme->assistantLabel)->bold()->render(Lang::t('tui.chat.assistant_label'));
+        // ISS-097: a UI-only assistant row is the app talking, not the model -
+        // a slash command's reply, a background notice, a queued-prompt echo.
+        // Painting those under the same bold `assistant` as real model output
+        // made the transcript lie about who said what; they now wear `local`.
+        // Error rows (Message::$error) wear the error colour outright.
+        $localLabel = Style::new()->foreground($theme->systemLabel)->bold()->render(Lang::t(self::LOCAL_ROW_LABEL));
+        $errorLabel = Style::new()->foreground($theme->shellError)->bold()->render(Lang::t(self::ERROR_ROW_LABEL));
         // Roadmap 1.B-3: compaction hides the rows it condensed from the model
         // and leaves them here, with a boundary row where they end
         // ({@see Chat::COMPACTION_BOUNDARY}). The boundary is painted as a rule
@@ -4202,7 +4209,13 @@ final class Renderer
             $blocks[] = match ($msg->role) {
                 Role::User      => ($condensed ? $condensedUserLabel : $userLabel) . " " . self::untrusted($msg->content)
                     . self::attachmentChip($msg, $theme, $width),
-                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded),
+                Role::Assistant => match (true) {
+                    // Flag-driven (withError at the producer), never text-sniffed:
+                    // an assistant reply that merely discusses errors is not one.
+                    $msg->error => self::renderErrorTurn($msg, $theme, $md, $width, $errorLabel, $expanded),
+                    $msg->uiOnly => self::renderAssistantTurn($msg, $theme, $md, $width, $localLabel, $expanded),
+                    default => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded),
+                },
                 Role::System    => $msg->uiOnly
                     ? self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content))
                     : self::dim($theme)->render(Lang::t('tui.chat.system_label') . ' ' . self::untrusted($msg->content)),
@@ -4346,6 +4359,27 @@ final class Renderer
         $thought = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
 
         return $label . "\n" . $thought . ($body === '' ? '' : "\n" . $body);
+    }
+
+    /**
+     * An error row (ISS-097): the producer's `error` flag decides, painted
+     * with the theme's error colour instead of any `assistant` label, and
+     * closed by a muted retry hint - the prompt that produced the failure is
+     * one `↑` and `Enter` away ({@see Chat::$inputHistory}).
+     *
+     * The body rides the same Markdown pipeline as any assistant turn: error
+     * content is composed as markdown by its producers (`_[error: …]_`, a
+     * fenced stderr tail) and an outer colour would not survive the body's
+     * own SGR resets - the very reason the compaction path styles only
+     * labels. The error colour therefore frames the row: label above, retry
+     * hint below, the message itself readable in markdown between them.
+     */
+    private static function renderErrorTurn(Message $msg, Theme $theme, Markdown $md, int $width, string $label, array $expanded): string
+    {
+        $body = self::settledMarkdown($md, $theme, $width, Sanitize::stripZoneSentinels($msg->content));
+        $hint = Style::new()->foreground($theme->shellError)->italic()->render(Lang::t(self::ERROR_RETRY_HINT));
+
+        return $label . "\n" . $body . "\n" . $hint;
     }
 
     /**
@@ -5295,6 +5329,21 @@ final class Renderer
      * the `system: ` an agent-visible system row carries - see {@see notice()}.
      */
     private const NOTICE_ROW_LABEL = 'tui.chat.notice_label';
+
+    /**
+     * The label a UI-only ASSISTANT row opens with (ISS-097) - the local
+     * half of a conversation the model never sees: a slash command's reply,
+     * a background notice echo. Sits beside {@see NOTICE_ROW_LABEL}'s System
+     * counterpart; anything before was painted under the model's own
+     * `assistant` label.
+     */
+    private const LOCAL_ROW_LABEL = 'tui.chat.local_label';
+
+    /** The label an error-flagged row (Message::$error) opens with (ISS-097). */
+    private const ERROR_ROW_LABEL = 'tui.chat.error_label';
+
+    /** The recall hint closed under every error row (ISS-097). */
+    private const ERROR_RETRY_HINT = 'tui.chat.error_retry_hint';
 
     /**
      * The style of a UI-only system row - a queued or refused prompt, a

@@ -111,7 +111,7 @@ final class CommandBackend implements Backend
         if ($payload === null) {
             // UI-only (audit 15b-03), like every error string below: the
             // model never said it, so it must not be replayed as its words.
-            return Message::assistant('_[error: failed to encode history]_')->withUiOnly();
+            return Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError();
         }
 
         $spawned = $this->spawn();
@@ -283,7 +283,7 @@ final class CommandBackend implements Backend
 
         $payload = self::encodeHistory($history);
         if ($payload === null) {
-            $deferred->resolve(Message::assistant('_[error: failed to encode history]_')->withUiOnly());
+            $deferred->resolve(Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError());
 
             return $deferred->promise();
         }
@@ -482,7 +482,7 @@ final class CommandBackend implements Backend
             ProcessContainment::env()
         );
         if (!is_resource($proc)) {
-            return Message::assistant('_[error: failed to spawn backend command]_')->withUiOnly();
+            return Message::assistant('_[error: failed to spawn backend command]_')->withUiOnly()->withError();
         }
 
         return [$proc, $pipes];
@@ -502,7 +502,7 @@ final class CommandBackend implements Backend
             $tail = trim($stderr);
             $hint = $tail === '' ? '' : "\n\n```\n{$tail}\n```";
 
-            return Message::assistant("_[error: backend exited {$exit}]_{$hint}")->withUiOnly();
+            return Message::assistant("_[error: backend exited {$exit}]_{$hint}")->withUiOnly()->withError();
         }
 
         return Message::assistant(trim($stdout));

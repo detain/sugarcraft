@@ -222,7 +222,7 @@ final class StreamingCommandBackend implements Backend
         if ($payload === null) {
             // UI-only (audit 15b-03), like every bodiless error string below:
             // the model never said it, so it must not be replayed as its words.
-            return Message::assistant('_[error: failed to encode history]_')->withUiOnly();
+            return Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError();
         }
 
         $descriptor = [
@@ -260,7 +260,7 @@ final class StreamingCommandBackend implements Backend
             ProcessContainment::env()
         );
         if (!is_resource($proc)) {
-            return Message::assistant('_[error: failed to spawn streaming backend command]_')->withUiOnly();
+            return Message::assistant('_[error: failed to spawn streaming backend command]_')->withUiOnly()->withError();
         }
 
         // ALL THREE non-blocking, stdin included. stdout and stderr so bytes
@@ -478,14 +478,14 @@ final class StreamingCommandBackend implements Backend
             // exited, and the command exiting does not end that silence.
             return Message::assistant(
                 "_[error: no output on the streaming backend's pipes for more than {$this->idleTimeout}s]_",
-            )->withUiOnly();
+            )->withUiOnly()->withError();
         }
 
         if ($exit !== 0) {
             $tail = trim($state['stderr']);
             $hint = $tail === '' ? '' : "\n\n```\n{$tail}\n```";
 
-            return Message::assistant("_[error: streaming backend exited {$exit}]_{$hint}")->withUiOnly();
+            return Message::assistant("_[error: streaming backend exited {$exit}]_{$hint}")->withUiOnly()->withError();
         }
 
         if ($state['abandoned']) {

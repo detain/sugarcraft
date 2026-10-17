@@ -264,6 +264,20 @@ final class Message implements \JsonSerializable
          */
         public readonly ?\SugarCraft\Code\Context\Pruning\ContextLedger $contextLedger = null,
         /**
+         * Whether this UI-only row carries a FAILURE the operator must see
+         * styled as one (ISS-097): a provider error, a backend that exited
+         * non-zero, a command that could not be spawned. The transcript
+         * renderer paints such a row with the theme's error colour instead
+         * of the `assistant` label it would otherwise wear. Stated by the
+         * producer ({@see withError()}) — the renderer never sniffs the
+         * message text for an `error` substring, so an assistant reply that
+         * merely talks about errors keeps its normal label. Persisted by
+         * {@see jsonSerialize()} so a resumed session still paints it red;
+         * rows saved before this flag revive unstylised, exactly as they
+         * rendered the day they were written. Never part of {@see toWire()}.
+         */
+        public readonly bool $error = false,
+        /**
          * The row-identity token {@see rowKey()} returns. Never pass one:
          * null mints a fresh token, which is what a new row is, and
          * {@see mutate()} passes the original's on so a wither's copy stays
@@ -633,6 +647,18 @@ final class Message implements \JsonSerializable
     }
 
     /**
+     * Mark (or clear, via false) this row as a failure the renderer must
+     * paint as one — see $error's docblock. Implies nothing about $uiOnly:
+     * every producer that flags an error today also marks it uiOnly, but
+     * the two axes stay orthogonal so a future agent-visible error notice
+     * need not leak its styling into the model's history.
+     */
+    public function withError(bool $error = true): self
+    {
+        return $this->mutate(['error' => $error]);
+    }
+
+    /**
      * Attach (or clear, via null) the loop guard's "this turn was ended"
      * verdict — see $loopGuardStoppedBy's docblock. Written at
      * {@see \SugarCraft\Code\Backend\EngineBackend}'s loop-exit seam
@@ -857,6 +883,7 @@ final class Message implements \JsonSerializable
             'userVisible' => $this->userVisible,
             'turnTranscript' => $this->turnTranscript,
             'contextLedger' => $this->contextLedger,
+            'error' => $this->error,
             'rowKey' => $this->rowKey,
         ], $changes));
     }
@@ -990,6 +1017,7 @@ final class Message implements \JsonSerializable
             // Only when set, so every agent-visible row - i.e. every row a
             // pre-flag transcript holds - serialises byte-for-byte as before.
             ...($this->uiOnly ? ['uiOnly' => true] : []),
+            ...($this->error ? ['error' => true] : []),
             ...($this->pendingToolName !== null ? ['pendingToolName' => $this->pendingToolName] : []),
             // Identity (1.B-1) on the same only-when-set rule: an id-less row
             // encodes exactly as it did before, so the checkpoint blobs it
@@ -1101,6 +1129,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
             pendingToolName: $string($row['pendingToolName'] ?? null),
             uiOnly: ($row['uiOnly'] ?? false) === true,
+            error: ($row['error'] ?? false) === true,
             loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
             id: ($string($row['id'] ?? null) ?? '') === '' ? null : $row['id'],
             ref: \is_int($row['ref'] ?? null) && $row['ref'] >= 1 ? $row['ref'] : null,

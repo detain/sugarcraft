@@ -359,6 +359,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
             'userVisible' => false,
             'turnTranscript' => [Message::assistant('row')],
             'contextLedger' => \SugarCraft\Code\Context\Pruning\ContextLedger::new(),
+            'error' => true,
             'rowKey' => new \stdClass(),
         ];
         $parameters = array_map(

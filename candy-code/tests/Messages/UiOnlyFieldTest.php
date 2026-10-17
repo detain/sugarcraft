@@ -102,4 +102,64 @@ final class UiOnlyFieldTest extends TestCase
         $this->assertSame(['real', 'answer'], array_map(static fn(Message $m): string => $m->content, $visible));
         $this->assertSame([], Message::agentVisible([]));
     }
+
+    /**
+     * ISS-097 sibling pin: {@see Message::$error} marks the row the renderer
+     * must paint as a failure. Like $uiOnly its value is its survival - a
+     * dropped flag puts a provider error back under the `assistant` label.
+     */
+    public function testWithErrorSetsAndClearsTheFlagAndKeepsEverythingElse(): void
+    {
+        $message = Message::assistant('a', 5, 'thought');
+        $flagged = $message->withUiOnly()->withError();
+
+        $this->assertTrue($flagged->error);
+        $this->assertFalse($message->error, 'immutable: the original is untouched');
+        $this->assertSame([Role::Assistant, 'a', 5, 'thought'], [$flagged->role, $flagged->content, $flagged->createdAt, $flagged->reasoning]);
+        $this->assertTrue($flagged->uiOnly, 'the two axes are independent: flagging error does not clear uiOnly');
+        $this->assertFalse($flagged->withError(false)->error);
+    }
+
+    public function testEveryWitherPreservesTheErrorFlag(): void
+    {
+        $flagged = Message::assistant('a')->withError();
+
+        $rebuilt = [
+            'attachFile' => $flagged->attachFile('/tmp/x'),
+            'attachImage' => $flagged->attachImage('/tmp/x.png'),
+            'withToolCalls' => $flagged->withToolCalls([new ToolCall('bash', [], 'c1')]),
+            'withToolResults' => $flagged->withToolResults([ToolResult::ok('bash', 'ok', 'c1')]),
+            'withReasoning' => $flagged->withReasoning('r'),
+            'withImage' => $flagged->withImage('bytes', 'kitty'),
+            'withUsage' => $flagged->withUsage(Usage::reported(1, 0.0, 1, 0)),
+            'withLengthStopped' => $flagged->withLengthStopped(true),
+            'withStepsTruncated' => $flagged->withStepsTruncated(true),
+            'withUiOnly' => $flagged->withUiOnly(true),
+        ];
+
+        foreach ($rebuilt as $wither => $message) {
+            $this->assertTrue($message->error, "{$wither}() dropped the flag");
+        }
+    }
+
+    public function testTheErrorFlagRoundTripsThroughThePersistedShape(): void
+    {
+        $row = Message::assistant('_[error: boom]_')->withUiOnly()->withError()->jsonSerialize();
+
+        $this->assertTrue($row['error']);
+        $back = Message::fromArray(json_decode((string) json_encode($row), true));
+        $this->assertTrue($back->error);
+        $this->assertTrue($back->uiOnly);
+    }
+
+    public function testAnUnflaggedRowSerialisesWithoutTheErrorKey(): void
+    {
+        $this->assertArrayNotHasKey('error', Message::assistant('fine')->jsonSerialize(), 'a clean row - and every pre-ISS-097 transcript - encodes exactly as before');
+        $this->assertFalse(Message::fromArray(['role' => 'assistant', 'content' => 'x', 'error' => 'yes'])->error, 'only a real true counts');
+    }
+
+    public function testTheErrorFlagNeverReachesTheWireShape(): void
+    {
+        $this->assertSame(['role' => 'assistant', 'content' => 'x'], Message::assistant('x')->withError()->toWire());
+    }
 }
