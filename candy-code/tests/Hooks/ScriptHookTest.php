@@ -1740,6 +1740,166 @@ final class ScriptHookTest extends TestCase
         $this->assertSame('{"command":"ls -l --safe"}', $result->modifiedInput);
     }
 
+    // =========================================================================
+    // ISS-038: stdin contract
+    // =========================================================================
+
+    /**
+     * The six keys Claude Code's hook contract names, in order, on every
+     * event: a script that runs `jq -r .tool_response` must not care whether
+     * the event is Pre or Post.
+     */
+    public function testTheHookChildReceivesTheDocumentedJsonOnStdin(): void
+    {
+        $hook = new ScriptHook(
+            name: 'stdin_shape',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: "php -r '\$d=json_decode(stream_get_contents(STDIN),true); echo implode(\",\",array_keys(\$d)).\"|\".\$d[\"hook_event_name\"].\"|\".\$d[\"tool_name\"].\"|\".\$d[\"session_id\"];'",
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext());
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+        $this->assertSame(
+            'session_id,cwd,hook_event_name,tool_name,tool_input,tool_response|PreToolUse|TestTool|test_session_123',
+            $result->additionalContext,
+        );
+    }
+
+    /**
+     * `tool_input` is the argument OBJECT, not the quoted display text, and
+     * empty args still encode as `{}` — a `jq .tool_input.command` that has to
+     * guess whether the field is null or an object is not a contract.
+     */
+    public function testToolInputRidesTheArgumentObjectNotTheInputText(): void
+    {
+        $hook = new ScriptHook(
+            name: 'stdin_args',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: "php -r '\$d=json_decode(file_get_contents(\"php://stdin\")); echo \$d->tool_input instanceof stdClass ? json_encode(\$d->tool_input,JSON_UNESCAPED_SLASHES) : (\"OBJ:\".gettype(\$d->tool_input));'",
+            description: '',
+        );
+
+        $context = new HookContext(
+            sessionId: 's',
+            toolName: 'Bash',
+            toolArgs: ['command' => 'ls -l'],
+            toolInput: '{"command":"ls -l"}',
+            toolOutput: '',
+            model: 'm',
+            provider: 'p',
+            projectRoot: '/tmp',
+        );
+
+        $result = $hook->execute($context);
+        $this->assertSame('{"command":"ls -l"}', $result->additionalContext, 'args must arrive as their JSON object');
+
+        $bare = $hook->execute($this->createContext());
+        $this->assertSame('{}', $bare->additionalContext, 'empty args must encode as {} too, never []');
+    }
+
+    /**
+     * THE DEADLOCK KEYSTONE. The old code closed stdin before reading a byte
+     * of output; the pump now interleaves the write with the drain. A child
+     * that dumps 200 KB to stdout BEFORE touching stdin fills its output pipe
+     * while a parent blocking on `fwrite(STDIN)` fills the input pipe - each
+     * waiting on the other, resolved only by the timeout the fix must not
+     * depend on. An eight-second bound turns a regression into a fast DENY
+     * naming the timeout, never a minute of frozen CLI.
+     */
+    public function testALargeStdinPayloadIsFlushedWithoutDeadlockingATalkativeChild(): void
+    {
+        $hook = new ScriptHook(
+            name: 'stdin_big',
+            event: HookEvent::PostToolUse,
+            matcher: '.*',
+            command: "php -r 'fwrite(STDERR,str_repeat(\"x\",200000)); \$in=file_get_contents(\"php://stdin\"); echo strlen(\$in);'",
+            description: '',
+            timeoutSeconds: 8.0,
+        );
+
+        $context = $this->createContext()->withToolOutput(str_repeat('r', 200000));
+        $started = microtime(true);
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+        $payload = (new \ReflectionMethod($hook, 'stdinPayload'))->invoke($hook, $context);
+        $this->assertSame(
+            (string) strlen($payload),
+            $result->additionalContext,
+            'the child must have read the WHOLE payload after its own flood',
+        );
+        $this->assertLessThan(
+            7.0,
+            microtime(true) - $started,
+            'the run must land well inside its bound, not on it',
+        );
+    }
+
+    /**
+     * THE LOOP CONDITION HAS ITS OWN CASE, and M1 taught this test its
+     * reason: a child that hangs up BOTH output pipes before reading stdin
+     * empties the pump's read set while the payload is still pending. Ending
+     * on the read set alone would close stdin in that moment and hand the
+     * child an EOF-shaped lie; the write end keeps the loop alive until the
+     * last byte lands (or the deadline says otherwise). Verdict rides the
+     * exit code: 0 only when the child counted more than a kilobyte.
+     */
+    public function testAChildThatClosesItsPipesFirstStillReceivesTheWholePayload(): void
+    {
+        $hook = new ScriptHook(
+            name: 'stdin_pipes_first',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            // The half-second sleep is not padding: it lets the pump fill the
+            // 64 KiB kernel pipe buffer BEFORE the child hangs up its output,
+            // so a real remainder is pending at the exact moment the read set
+            // empties. The threshold is 190000, not a round half: M1 (ending on
+            // the read set) still flushes ONE more writable round when the EOF
+            // lands - roughly buffer plus one drain, under 130 KiB measured -
+            // and a threshold inside that dead zone scores the mutation green.
+            command: "php -r 'usleep(500000); fclose(STDOUT); fclose(STDERR); \$in=stream_get_contents(STDIN); file_put_contents(\"/tmp/doc01-strlen.txt\",strlen(\$in)); exit(strlen(\$in) > 190000 ? 0 : 7);'",
+            description: '',
+            timeoutSeconds: 8.0,
+        );
+
+        $context = $this->createContext()->withToolOutput(str_repeat('p', 200000));
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+    }
+
+    /**
+     * The other polarity: `exit 0` without reading stdin is the ORDINARY
+     * permissive one-liner. Its write must fail soft (EPIPE is expected here,
+     * and `failOnWarning="true"` makes an unsilenced one a suite red) and the
+     * verdict must ride the exit code as before.
+     */
+    public function testAChildThatNeverReadsStdinStillVerdictsOnItsExitCode(): void
+    {
+        $hook = new ScriptHook(
+            name: 'stdin_ignored',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: "php -r 'echo getenv(\"CRUSH_SESSION_ID\"); exit(0);'",
+            description: '',
+            timeoutSeconds: 5.0,
+        );
+
+        $context = $this->createContext()->withToolOutput(str_repeat('n', 200000));
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isAllowed(), $result->message);
+        $this->assertSame(
+            'test_session_123',
+            $result->additionalContext,
+            'the CRUSH_* env channel survives the new stdin channel',
+        );
+    }
+
     private function createContext(string $projectRoot = '/tmp'): HookContext
     {
         return new HookContext(

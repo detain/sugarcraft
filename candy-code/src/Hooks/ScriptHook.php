@@ -678,8 +678,6 @@ final readonly class ScriptHook implements BoundedHookInterface
             return HookResult::deny($this->execRefused($context, $payload['unbacked']));
         }
 
-        fclose($pipes[0]);
-
         // ONE DEADLINE FOR THE WHOLE RUN, started before the drain and still
         // in force after it, because the wait is in two halves and bounding
         // either one alone bounds nothing. See {@see DEFAULT_TIMEOUT_SECONDS}
@@ -687,7 +685,22 @@ final readonly class ScriptHook implements BoundedHookInterface
         $budget = $this->timeoutSeconds();
         $deadline = ($this->clock)() + $budget;
 
-        [$output, $errors, $timedOut] = $this->drain($pipes[1], $pipes[2], $deadline);
+        // ISS-038: the child's stdin is no longer closed on sight. It carries
+        // the {@see stdinPayload()} JSON — the Claude-Code-shaped contract most
+        // hook scripts are written against — and it is FLUSHED FROM INSIDE THE
+        // DRAIN PUMP below rather than written here. A blocking write at this
+        // point deadlocks the CLI on exactly the hook shape the payloads
+        // already assume is large: a 200 KB tool output does not fit the
+        // 64 KiB pipe buffer, so the write parks the parent while a child that
+        // talks first (a verbose deny, a debug banner) parks on its own full
+        // stdout. The pump only ever offers what a ready pipe will take.
+        [$output, $errors, $timedOut] = $this->drain(
+            $pipes[1],
+            $pipes[2],
+            $deadline,
+            $pipes[0],
+            $this->stdinPayload($context),
+        );
 
         // THE DRAIN CAN END WITH THE CHILD STILL RUNNING and `proc_close()`
         // WAITS for it. A hook that redirects its own output — `hook.sh
@@ -995,6 +1008,45 @@ final readonly class ScriptHook implements BoundedHookInterface
     }
 
     /**
+     * The JSON this hook's child receives on STDIN (ISS-038).
+     *
+     * THE CLAUDE-CODE-SHAPED CONTRACT, made literal: `session_id`, `cwd`,
+     * `hook_event_name`, `tool_name`, `tool_input`, `tool_response`. Hook
+     * scripts in the wild are written against these six keys — this class
+     * already speaks Claude Code's exit-code dialect (0/1/2, plus ASK/MODIFY),
+     * and a script pointed at sugar-crush that found its stdin a closed pipe
+     * and an empty object in `$CRUSH_TOOL_INPUT_FILE` had ONE honest reading:
+     * the guard saw nothing. The `CRUSH_*` environment variables all stay —
+     * this adds the portable channel, it does not subtract the native one.
+     *
+     * `tool_input` rides {@see HookContext::$toolArgs} rather than re-decoding
+     * the `toolInput` text because $toolArgs is what the gates themselves read:
+     * after a MODIFY the rewritten arguments ARE the call, and the two fields
+     * were built to move together ({@see HookContext::withRewrittenArgs()}).
+     * A pre-event context has run nothing, so `tool_response` is its empty
+     * string, and the KEY IS STILL THERE — a fixed six-key shape is what makes
+     * `jq -r .tool_response` safe on every event instead of an exercise in
+     * null-guessing per event.
+     *
+     * INVALID UTF-8 in a tool output becomes U+FFFD rather than a `false`
+     * encode: a payload that silently stops existing is the fail-open this
+     * class refuses everywhere else.
+     */
+    private function stdinPayload(HookContext $context): string
+    {
+        $payload = \json_encode([
+            'session_id' => $context->sessionId,
+            'cwd' => $context->projectRoot,
+            'hook_event_name' => $this->event->value,
+            'tool_name' => $context->toolName,
+            'tool_input' => $context->toolArgs === [] ? new \stdClass() : $context->toolArgs,
+            'tool_response' => $context->toolOutput,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        return $payload === false ? '{}' : $payload;
+    }
+
+    /**
      * Read both pipes to EOF without letting either one wedge the other.
      *
      * `stream_get_contents($stdout)` followed by `stream_get_contents($stderr)`
@@ -1035,53 +1087,41 @@ final readonly class ScriptHook implements BoundedHookInterface
      * @param resource $stderr
      * @param float $deadline instant on this hook's clock (see {@see self::$clock})
      *        past which the drain gives up on whatever the hook has not written yet
+     * @param resource|null $stdin the child's stdin, flushed from inside the
+     *        pump when given — see {@see stdinPayload()} for WHAT rides it and
+     *        this method's loop for why the write has to be interleaved
      * @return array{0: string, 1: string, 2: bool} stdout, stderr, timed-out
      */
-    private function drain($stdout, $stderr, float $deadline): array
+    private function drain($stdout, $stderr, float $deadline, $stdin = null, string $stdinData = ''): array
     {
         stream_set_blocking($stdout, false);
         stream_set_blocking($stderr, false);
 
-        $buffers = ['', ''];
-        $open = [0 => $stdout, 1 => $stderr];
-        $failures = 0;
+        $pending = $stdinData;
+        $stdinOpen = $stdin !== null;
 
-        while ($open !== []) {
-            $remaining = $deadline - ($this->clock)();
-            if ($remaining <= 0.0) {
-                // Sweep what is already buffered on the way out, the same as
-                // the give-up branch below: the pipes are non-blocking, so
-                // this cannot park, and a partial deny reason beats none.
-                foreach ($open as $slot => $pipe) {
-                    $rest = @stream_get_contents($pipe);
-                    if (is_string($rest)) {
-                        $buffers[$slot] .= $rest;
-                    }
-                }
+        if ($stdinOpen) {
+            stream_set_blocking($stdin, false);
+        }
 
-                return [$buffers[0], $buffers[1], true];
-            }
+        try {
+            $buffers = ['', ''];
+            $open = [0 => $stdout, 1 => $stderr];
+            $failures = 0;
 
-            $read = array_values($open);
-            $write = null;
-            $except = null;
-
-            // Waits for one of the pipes to become readable — which includes
-            // the readable-at-EOF a closing child produces — or for the slice
-            // to run out, whichever is first. The slice is what makes the
-            // deadline above reachable: nothing wakes a select when the only
-            // thing that has changed is the clock.
-            $slice = min($remaining, self::DRAIN_SLICE_SECONDS);
-            $seconds = (int) $slice;
-            $micros = (int) round(($slice - $seconds) * 1_000_000);
-
-            if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
-                if (++$failures > self::DRAIN_SELECT_RETRIES) {
-                    // Not a signal, then: something is wrong with the
-                    // descriptors themselves and retrying forever would wedge
-                    // the CLI harder than the deadlock this method replaced.
-                    // Sweep whatever is already buffered before letting go —
-                    // the pipes are non-blocking, so this cannot park.
+            // The read set IS the child's lifetime, and that is load-bearing
+            // for the write branch below: spawnSpec wraps the command in
+            // `setsid -w sh -c`, so the WRAPPER keeps both output pipes' write
+            // ends open until the whole run exits — a child hanging up its own
+            // STDOUT/STDERR cannot empty this set early. The loop therefore
+            // stays alive exactly as long as the child can still take stdin,
+            // and the finally below owns the EOF on every exit path.
+            while ($open !== []) {
+                $remaining = $deadline - ($this->clock)();
+                if ($remaining <= 0.0) {
+                    // Sweep what is already buffered on the way out, the same as
+                    // the give-up branch below: the pipes are non-blocking, so
+                    // this cannot park, and a partial deny reason beats none.
                     foreach ($open as $slot => $pipe) {
                         $rest = @stream_get_contents($pipe);
                         if (is_string($rest)) {
@@ -1089,36 +1129,105 @@ final readonly class ScriptHook implements BoundedHookInterface
                         }
                     }
 
-                    break;
+                    return [$buffers[0], $buffers[1], true];
                 }
 
-                continue;
-            }
+                $read = array_values($open);
+                $write = $pending !== '' && $stdinOpen ? [$stdin] : null;
+                $except = null;
 
-            $failures = 0;
+                // Waits for one of the pipes to become readable — which includes
+                // the readable-at-EOF a closing child produces — or, while the
+                // payload still has bytes to give, for stdin to become writable
+                // — or for the slice to run out, whichever is first. The slice is
+                // what makes the deadline above reachable: nothing wakes a
+                // select when the only thing that has changed is the clock.
+                $slice = min($remaining, self::DRAIN_SLICE_SECONDS);
+                $seconds = (int) $slice;
+                $micros = (int) round(($slice - $seconds) * 1_000_000);
 
-            foreach ($open as $slot => $pipe) {
-                if (!in_array($pipe, $read, true)) {
-                    continue;
-                }
+                if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
+                    if (++$failures > self::DRAIN_SELECT_RETRIES) {
+                        // Not a signal, then: something is wrong with the
+                        // descriptors themselves and retrying forever would wedge
+                        // the CLI harder than the deadlock this method replaced.
+                        // Sweep whatever is already buffered before letting go —
+                        // the pipes are non-blocking, so this cannot park.
+                        foreach ($open as $slot => $pipe) {
+                            $rest = @stream_get_contents($pipe);
+                            if (is_string($rest)) {
+                                $buffers[$slot] .= $rest;
+                            }
+                        }
 
-                $chunk = fread($pipe, 8192);
-                if ($chunk === false || $chunk === '') {
-                    // feof() is the EOF test, not the empty read: a
-                    // non-blocking pipe legitimately returns '' when the child
-                    // has written nothing YET.
-                    if (feof($pipe)) {
-                        unset($open[$slot]);
+                        break;
                     }
 
                     continue;
                 }
 
-                $buffers[$slot] .= $chunk;
+                $failures = 0;
+
+                // THE WRITE BRANCH RUNS BEFORE THE READS: bytes the child takes
+                // this round free the buffer it reads into, so feeding first
+                // keeps a talk-then-read hook moving in one iteration instead of
+                // alternating two.
+                //
+                // `@` because a child that never reads stdin and exits (the
+                // ordinary `exit 0` of a one-line permissive hook) turns the
+                // next write into EPIPE — a diagnostic this pump EXPECTS, and
+                // one that would otherwise trip `failOnWarning="true"`. The
+                // payload had one offer; the child declined; the CRUSH_* env
+                // still carries everything the hook could have read here.
+                if ($pending !== '' && \is_array($write) && \in_array($stdin, $write, true)) {
+                    $written = @fwrite($stdin, substr($pending, 0, 65536));
+
+                    if ($written === false) {
+                        $pending = '';
+                    } elseif ($written > 0) {
+                        $pending = substr($pending, $written);
+                    }
+
+                    if ($pending === '') {
+                        // THE CLOSE IS THE CONTRACT: a hook that reads stdin to
+                        // EOF hangs forever without it, and the deadline would
+                        // answer it with a DENY it never earned.
+                        fclose($stdin);
+                        $stdinOpen = false;
+                    }
+                }
+
+                foreach ($open as $slot => $pipe) {
+                    if (!\in_array($pipe, $read, true)) {
+                        continue;
+                    }
+
+                    $chunk = fread($pipe, 8192);
+                    if ($chunk === false || $chunk === '') {
+                        // feof() is the EOF test, not the empty read: a
+                        // non-blocking pipe legitimately returns '' when the
+                        // child has written nothing YET.
+                        if (feof($pipe)) {
+                            unset($open[$slot]);
+                        }
+
+                        continue;
+                    }
+
+                    $buffers[$slot] .= $chunk;
+                }
+            }
+
+            return [$buffers[0], $buffers[1], false];
+        } finally {
+            // Every way out of this method — the deadline sweep, the retry
+            // give-up, the normal fall-through, a throw — leaves the child's
+            // stdin CLOSED. The pump owns that EOF; nothing downstream may
+            // assume the pipe is still theirs to touch.
+            if ($stdinOpen && $stdin !== null && \is_resource($stdin)) {
+                fclose($stdin);
             }
         }
-
-        return [$buffers[0], $buffers[1], false];
     }
 
     /**
