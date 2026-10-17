@@ -10,6 +10,7 @@ use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
+use SugarCraft\Code\Tools\BuiltIn\PtyRun;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 
 /**
@@ -361,6 +362,30 @@ final class BashSandboxTest extends TestCase
             }
         }
         self::fail('Bootstrap::tools() wired no Bash');
+    }
+
+    public function testTheSameSettingReachesTheWiredPtyRun(): void
+    {
+        // ISS-002: the pty honours bashSandbox through the same catalog door;
+        // a jail decided for Bash only is a jail the other shell tool skips.
+        self::assertNull($this->wiredPtySandbox(), 'unset is off');
+
+        $this->writeUserSettings(['bashSandbox' => 'no-network']);
+        self::assertSame('no-network', $this->wiredPtySandbox()?->mode());
+
+        $this->writeUserSettings(['bashSandbox' => 'on']);
+        self::assertSame('on', $this->wiredPtySandbox()?->mode());
+    }
+
+    /** The sandbox of the one PtyRun the launch's tool feed wires. */
+    private function wiredPtySandbox(): ?Bubblewrap
+    {
+        foreach (Bootstrap::tools($this->root) as $tool) {
+            if ($tool instanceof PtyRun) {
+                return $tool->sandbox();
+            }
+        }
+        self::fail('Bootstrap::tools() wired no PtyRun');
     }
 
     /** @param array<string, mixed> $data */

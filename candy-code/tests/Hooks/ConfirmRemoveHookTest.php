@@ -43,7 +43,38 @@ final class ConfirmRemoveHookTest extends TestCase
     {
         $hook = new ConfirmRemoveHook();
 
-        $this->assertSame('^Bash$', $hook->matcher());
+        // ISS-002: derived from the shell-subject roster, never a hard-named
+        // `^Bash$` — a PtyRun session runs the same /bin/sh -c and typed
+        // keystrokes can spell the same rm -rf.
+        $this->assertSame('^(?:' . implode('|', \SugarCraft\Code\Permissions\ShellSubjectTools::NAMES) . ')$', $hook->matcher());
+        foreach (\SugarCraft\Code\Permissions\ShellSubjectTools::NAMES as $tool) {
+            $this->assertSame(1, preg_match('/' . $hook->matcher() . '/i', $tool), 'matcher must arm for ' . $tool);
+        }
+        $this->assertSame(0, preg_match('/' . $hook->matcher() . '/i', 'Edit'));
+    }
+
+    public function testTypedStepSpellingRmRfDeniesLikeTheCommandField(): void
+    {
+        $hook = new ConfirmRemoveHook();
+
+        $deny = $hook->execute($this->createPtyContext('sh', [['send' => 'rm -rf / <Enter>'] ]));
+        $this->assertFalse($deny->isAllowed(), 'a destructive line typed as keystrokes is the same call as one in command position');
+        $this->assertStringContainsString('recursive/force rm', $deny->message);
+
+        $allow = $hook->execute($this->createPtyContext('sh', [['send' => 'ls <Enter>'] ]));
+        $this->assertTrue($allow->isAllowed(), 'benign keystrokes stay through');
+    }
+
+    public function testBypassStillWaivesTheHookForTypedSteps(): void
+    {
+        $bypassing = new ConfirmRemoveHook(
+            modeReader: static fn(): PermissionMode => PermissionMode::BypassPermissions,
+        );
+
+        $this->assertTrue(
+            $bypassing->execute($this->createPtyContext('sh', [['send' => 'rm -rf /'] ]))->isAllowed(),
+            'bypass waives this hook for shell calls exactly as it does for Bash',
+        );
     }
 
     // =========================================================================
@@ -352,6 +383,23 @@ final class ConfirmRemoveHookTest extends TestCase
     // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    /** @param list<array{send: string}> $steps */
+    private function createPtyContext(string $command, array $steps): HookContext
+    {
+        $args = ['command' => $command, 'steps' => $steps];
+
+        return new HookContext(
+            sessionId: 'test-session-456',
+            toolName: 'PtyRun',
+            toolArgs: $args,
+            toolInput: json_encode($args),
+            toolOutput: '',
+            model: 'test-model',
+            provider: 'test-provider',
+            projectRoot: '/tmp/test-project',
+        );
+    }
 
     private function createContext(string $command): HookContext
     {

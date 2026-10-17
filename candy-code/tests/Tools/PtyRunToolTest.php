@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\BuiltIn\PtyRun;
+use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 
 /**
  * The PtyRun tool: a real pseudo-terminal a model can TYPE at.
@@ -243,6 +244,88 @@ final class PtyRunToolTest extends TestCase
             'timeout' => $timeout,
             'harvest' => $harvest,
         ]);
+    }
+
+    public function testTheSandboxProbeRefusesTheSessionWhenTheJailCannotStart(): void
+    {
+        $broken = $this->writeBinary(
+            'broken-bwrap-' . bin2hex(random_bytes(4)),
+            "#!/bin/sh\necho \"bwrap: setting up uid map: Permission denied\" >&2\nexit 1\n",
+        );
+        $started = microtime(true);
+        $result = (new PtyRun())->withSandbox(Bubblewrap::new($broken))->execute([
+            'command' => 'printf SHOULD-NOT-RUN',
+            'description' => 'Jailed session that cannot jail',
+            'timeout' => 15,
+        ]);
+
+        // The probe refuses on EVERY host: a jail that cannot produce exit 0
+        // through the pty path is a refusal, whether that path paints the
+        // bwrap error frame or cannot allocate a pty at all. Never a skip.
+        self::assertTrue($result->isError(), 'a configured jail that cannot start must refuse, not run unconfined');
+        self::assertStringContainsString('cannot start on this host', $result->content());
+        self::assertStringContainsString('bashSandbox', $result->content());
+        self::assertStringNotContainsString('SHOULD-NOT-RUN', $result->content());
+        if (ProcessContainment::interactiveAvailable()) {
+            self::assertStringContainsString('uid map', $result->content(), 'the jail failure frame rides the refusal');
+        }
+        self::assertLessThan(20.0, microtime(true) - $started, 'the probe is bounded');
+    }
+
+    public function testTheJailArgvRidesTheSpawnAheadOfTheShell(): void
+    {
+        $log = sys_get_temp_dir() . '/ptyrun-jail-' . bin2hex(random_bytes(4)) . '.log';
+        $shim = $this->writeBinary(
+            'shim-bwrap-' . bin2hex(random_bytes(4)),
+            "#!/bin/sh\nprintf '%s\\n' \"\$@\" > " . escapeshellarg($log) . "\n"
+            . "while [ \"\$#\" -gt 0 ] && [ \"\$1\" != \"--\" ]; do shift; done\nshift\nexec \"\$@\"\n",
+        );
+        $result = (new PtyRun(root: sys_get_temp_dir()))->withSandbox(Bubblewrap::new($shim))->execute([
+            'command' => 'true',
+            'description' => 'Jail argv census',
+            'timeout' => 10,
+        ]);
+
+        $argv = array_values(array_filter(explode("\n", (string) @file_get_contents($log))));
+        @unlink($log);
+
+        if (!ProcessContainment::interactiveAvailable()) {
+            // No pty: the probe cannot reach exit 0 through the jail, so the
+            // honest answer is a refusal and the spawn never happened.
+            self::assertTrue($result->isError());
+            self::assertSame([], $argv, 'no pty means the jail was never reached');
+
+            return;
+        }
+
+        self::assertFalse($result->isError(), $result->content());
+        self::assertContains('--ro-bind', $argv, 'the jail flags must ride the spawn argv, not a shell string');
+        self::assertContains('--chdir', $argv);
+        self::assertNotContains('--new-session', $argv, 'interactive argv keeps the pty controlling');
+        $sep = array_search('--', $argv, true);
+        self::assertIsInt($sep, 'the argv must end at the jail separator');
+        self::assertSame(['/bin/sh', '-c'], array_slice($argv, $sep + 1, 2));
+    }
+
+    public function testTheDescriptionAdvertisesTheConfiguredJail(): void
+    {
+        $root = sys_get_temp_dir();
+        $plain = (new PtyRun(root: $root))->description();
+        $jailed = (new PtyRun(root: $root))->withSandbox(Bubblewrap::new())->description();
+
+        self::assertStringStartsWith($plain, $jailed, 'the jail clause appends; the base text stays byte-stable');
+        self::assertStringContainsString('bubblewrap sandbox', $jailed);
+        self::assertStringNotContainsString('bubblewrap', $plain);
+    }
+
+    /** @return non-empty-string */
+    private function writeBinary(string $name, string $contents): string
+    {
+        $path = sys_get_temp_dir() . '/' . $name;
+        file_put_contents($path, $contents);
+        chmod($path, 0o755);
+
+        return $path;
     }
 
     /**

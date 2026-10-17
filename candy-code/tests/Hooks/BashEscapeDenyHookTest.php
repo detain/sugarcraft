@@ -48,7 +48,45 @@ final class BashEscapeDenyHookTest extends TestCase
 
     public function testMatcher(): void
     {
-        $this->assertSame('^Bash$', (new BashEscapeDenyHook($this->root))->matcher());
+        // ISS-002: derived from the shell-subject roster — PtyRun drives the
+        // same /bin/sh -c and its typed steps can spell the same escapes.
+        $matcher = (new BashEscapeDenyHook($this->root))->matcher();
+        $this->assertSame('^(?:' . implode('|', \SugarCraft\Code\Permissions\ShellSubjectTools::NAMES) . ')$', $matcher);
+        foreach (\SugarCraft\Code\Permissions\ShellSubjectTools::NAMES as $tool) {
+            $this->assertSame(1, preg_match('/' . $matcher . '/i', $tool), 'matcher must arm for ' . $tool);
+        }
+    }
+
+    public function testATypedStepEscapingTheWorktreeDeniesLikeABashCommand(): void
+    {
+        $outside = \dirname($this->root) . '/outside-target-' . bin2hex(random_bytes(4));
+        $hook = new BashEscapeDenyHook($this->root);
+        $args = ['command' => 'sh', 'steps' => [['send' => 'echo written > ' . $outside] ] ];
+
+        $deny = $hook->execute(new HookContext(
+            sessionId: 'test-session',
+            toolName: 'PtyRun',
+            toolArgs: $args,
+            toolInput: json_encode($args),
+            toolOutput: '',
+            model: 'test-model',
+            provider: 'test-provider',
+            projectRoot: $this->root,
+        ));
+        $this->assertFalse($deny->isAllowed(), 'a step redirect outside the jail must deny as the same Bash line would');
+        $this->assertStringContainsString($outside, $deny->message);
+
+        $inside = new HookContext(
+            sessionId: 'test-session',
+            toolName: 'PtyRun',
+            toolArgs: ['command' => 'sh', 'steps' => [['send' => 'echo written > ./inside'] ] ],
+            toolInput: '',
+            toolOutput: '',
+            model: 'test-model',
+            provider: 'test-provider',
+            projectRoot: $this->root,
+        );
+        $this->assertTrue($hook->execute($inside)->isAllowed(), 'steps inside the root stay through');
     }
 
     // =========================================================================

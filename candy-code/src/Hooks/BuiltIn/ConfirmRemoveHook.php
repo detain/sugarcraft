@@ -9,6 +9,7 @@ use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\ShellSubjectTools;
 use SugarCraft\Code\Permissions\ShellWords;
 
 /**
@@ -91,7 +92,12 @@ final readonly class ConfirmRemoveHook implements HookInterface
 
     public function matcher(): string
     {
-        return '^Bash$';
+        // ISS-002: the roster IS the matcher. `PtyRun` runs the same `/bin/sh -c`
+        // command and TYPES more shell text at the live prompt it spawns, so an
+        // `^Bash$` matcher let the interactive driver step around this
+        // guard-rail wholesale. ShellSubjectToolsCompletenessTest pins the
+        // construction against the roster.
+        return '^(?:' . implode('|', ShellSubjectTools::NAMES) . ')$';
     }
 
     public function execute(HookContext $context): HookResult
@@ -104,24 +110,24 @@ final readonly class ConfirmRemoveHook implements HookInterface
             return HookResult::allow();
         }
 
-        $command = $context->toolArgs['command'] ?? '';
-        if (!is_string($command)) {
-            $command = '';
-        }
+        // Every text the call puts through the shell: `command`, and for PtyRun
+        // each decoded step (ISS-002). A `rm -rf build` typed at a spawned
+        // prompt is the same footgun as one spawned directly.
+        foreach (ShellSubjectTools::judgedShellTexts($context->toolName, $context->toolArgs) as $command) {
+            $parsed = ShellWords::parse($command);
+            $candidates = [
+                $command,
+                $parsed->complete ? $parsed->dequoted() : str_replace(["'", '"', '\\'], '', $command),
+            ];
 
-        $parsed = ShellWords::parse($command);
-        $candidates = [
-            $command,
-            $parsed->complete ? $parsed->dequoted() : str_replace(["'", '"', '\\'], '', $command),
-        ];
-
-        foreach (self::DANGEROUS_PATTERNS as $pattern) {
-            if (preg_grep($pattern, $candidates) !== []) {
-                return HookResult::deny(
-                    'This hook prevents recursive/force rm and other destructive '
-                    . 'commands (find -delete, shred, dd of=). It is a best-effort '
-                    . 'heuristic, not a security boundary. Use interactive rm instead.'
-                );
+            foreach (self::DANGEROUS_PATTERNS as $pattern) {
+                if (preg_grep($pattern, $candidates) !== []) {
+                    return HookResult::deny(
+                        'This hook prevents recursive/force rm and other destructive '
+                        . 'commands (find -delete, shred, dd of=). It is a best-effort '
+                        . 'heuristic, not a security boundary. Use interactive rm instead.'
+                    );
+                }
             }
         }
 

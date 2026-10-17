@@ -6681,6 +6681,18 @@ final class DocFigureProseDriftTest extends TestCase
      */
     private static function hookMethodLiteral(string $fileText, string $class, string $method): string
     {
+        // ISS-002: three guard-rail matchers are DERIVED from the shell-subject
+        // roster (`'<prefix>' . implode('|', ShellSubjectTools::NAMES) . '<suffix>'`)
+        // so a roster addition arms every shell door at once. The table cell is
+        // still the code — it is just the roster's live value, not a literal.
+        if (preg_match(
+            '#function ' . $method . '\(\)[^;{]*\{(?:\s*(?://[^\n]*)+)*\s*return \'([^\']*)\' \. implode\(.\|., ShellSubjectTools::NAMES\) \. \'([^\']*)\';#',
+            $fileText,
+            $roster,
+        ) === 1) {
+            return $roster[1] . implode('|', \SugarCraft\Code\Permissions\ShellSubjectTools::NAMES) . $roster[2];
+        }
+
         self::assertSame(
             1,
             preg_match('/function ' . $method . '\(\)[^;{]*\{\s*return (?:self::([A-Z_]+)|HookEvent::(\w+)|\'([^\']*)\');/', $fileText, $m),

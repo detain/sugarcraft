@@ -1168,7 +1168,11 @@ The gate decides *whether* a `Bash` call runs; it cannot bound what the shell
 text does once it is allowed, because `Bash` is deliberately not path-jailed
 (a free-form command cannot be jailed by rewriting its string). On Linux the
 user-tier `bashSandbox` setting adds that bound underneath the gate by running
-every command inside [bubblewrap](https://github.com/containers/bubblewrap):
+every command inside [bubblewrap](https://github.com/containers/bubblewrap)
+— and since ISS-002 the same setting jails `PtyRun` too: the jail flags ride
+the pseudo-terminal's spawn argv (the interactive argv form keeps the pty as
+the child's controlling terminal), so the terminal program is born inside the
+same write jail:
 
 ```json
 { "bashSandbox": "on" }
@@ -1200,9 +1204,9 @@ What it holds and what it does not:
   Ubuntu 24.04 AppArmor restricts unprivileged user namespaces and every call
   dies with `setting up uid map: Permission denied`. The tool probes the exact
   flag set once per process; when the sandbox cannot start (or `bwrap` is
-  missing, or the host is not Linux), every `Bash` call is **refused** with the
-  reason, and nothing runs unsandboxed. An unrecognised value is read as
-  `no-network`, never as `off`.
+  missing, or the host is not Linux), every `Bash` and every `PtyRun` call is
+  **refused** with the reason, and nothing runs unsandboxed. An unrecognised
+  value is read as `no-network`, never as `off`.
 - **User tier only.** `off` is the direction that widens, so a project file
   can never set it — not even a trusted one.
 

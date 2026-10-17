@@ -61,6 +61,19 @@ final class InteractiveSpawnCdGuardTest extends TestCase
         self::assertSame(['/bin/sh', '-c', 'echo hi'], ProcessContainment::interactiveSpawnCommand('echo hi', ''));
     }
 
+    public function testAJailArgvPrefixRidesTheSpawnAheadOfTheShell(): void
+    {
+        $argv = ProcessContainment::interactiveSpawnCommand('echo hi', null, ['bwrap', '--ro-bind', '/', '/', '--']);
+
+        self::assertSame(
+            ['bwrap', '--ro-bind', '/', '/', '--', '/bin/sh', '-c', 'echo hi'],
+            $argv,
+            'ISS-002: the bubblewrap argv must lead the spawn so the pty child is born inside the jail',
+        );
+        // The default stays byte-identical to the pre-jail shape.
+        self::assertSame(['/bin/sh', '-c', 'echo hi'], ProcessContainment::interactiveSpawnCommand('echo hi', null, []));
+    }
+
     /**
      * ONE spelling for both shell entry points, so they cannot drift apart
      * again the way F-E5 did after F-E3.

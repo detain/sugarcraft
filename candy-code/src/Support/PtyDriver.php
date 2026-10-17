@@ -78,6 +78,7 @@ final class PtyDriver
      *
      * @param list<array{send: string, windowSeconds: float, regex: ?string}> $steps
      * @param (\Closure(): void)|null $heartbeat fired once per read pass
+     * @param list<string> $spawnArgvPrefix jail argv (ISS-002) prefixed onto the spawn argv
      * @return array{
      *     refusal: ?string,
      *     pid: int,
@@ -98,6 +99,7 @@ final class PtyDriver
         int $maxBytes,
         array $steps,
         ?\Closure $heartbeat = null,
+        array $spawnArgvPrefix = [],
     ): array {
         $empty = self::result(refusal: null, pid: -1, ran: [], retained: 0, dropped: 0, exitCode: null, exited: false, killed: false);
 
@@ -113,7 +115,7 @@ final class PtyDriver
             // winsize is set before the child's first draw (class docblock).
             $pty = \SugarCraft\Pty\Pty::open($cols, $rows);
             $child = $pty->spawn(
-                ProcessContainment::interactiveSpawnCommand($command, $cwd),
+                ProcessContainment::interactiveSpawnCommand($command, $cwd, $spawnArgvPrefix),
                 // Scrubbed for the same reason as every other capture path:
                 // the pty transcript is the model's to read (audit F-E1), and
                 // NONINTERACTIVE_ENV's fail-fast prompts keep a driven program

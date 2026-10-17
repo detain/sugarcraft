@@ -912,8 +912,8 @@ it runs only once the rest of the chain has permitted that output — see
 
 | Hook | Event | What it does |
 |---|---|---|
-| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|ApplyPatch\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files; asks for the rest — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
-| `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
+| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|PtyRun\|Edit\|Write\|ApplyPatch\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files; asks for the rest — the shell half is derived from `ShellSubjectTools::NAMES`, and a `PtyRun` step is judged from its DECODED keystrokes as well as its raw bytes — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
+| `ConfirmRemoveHook` | `PreToolUse` on `^(?:Bash\|PtyRun)$` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) — typed keystrokes count as shell text here too |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
 Eleven more exist and are **not** registered by default:

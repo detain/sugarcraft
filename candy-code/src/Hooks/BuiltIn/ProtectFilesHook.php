@@ -9,6 +9,7 @@ use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\ShellSubjectTools;
 use SugarCraft\Code\Permissions\ShellWords;
 use SugarCraft\Code\Tools\Catalog\ToolCatalog;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
@@ -397,7 +398,11 @@ final readonly class ProtectFilesHook implements HookInterface
      */
     public function matcher(): string
     {
-        return '^(Bash|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$';
+        // The shell half is derived from the roster (ISS-002): `PtyRun` reads
+        // files exactly as `Bash` does — through the shell it spawns AND
+        // through the keystrokes it types — so it was never allowed to be
+        // absent here. ShellSubjectToolsCompletenessTest pins the union.
+        return '^(' . implode('|', ShellSubjectTools::NAMES) . '|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$';
     }
 
     /**
@@ -553,6 +558,10 @@ final readonly class ProtectFilesHook implements HookInterface
 
         return match ($toolName) {
             'Bash' => self::shellSpellings($args['command'] ?? ''),
+            // ISS-002: the raw leaves (command AND every `send` as written) via
+            // the generic walk, PLUS each step's DECODED text — what the driver
+            // actually types — through the shell spelling reader.
+            'Ptyrun' => [...self::leafSpellings($args), ...self::stepSpellings($args)],
             'Edit', 'Write', 'Read' => self::pathSpellings($args['file_path'] ?? null),
             'Grep' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['include'] ?? null)],
             'Glob' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['pattern'] ?? null)],
@@ -613,6 +622,26 @@ final readonly class ProtectFilesHook implements HookInterface
             if ($redirection['target'] !== null) {
                 $spellings[] = $redirection['target'];
             }
+        }
+
+        return array_values(array_unique($spellings));
+    }
+
+    /**
+     * The decoded text of every `PtyRun` step — what the driver will actually
+     * type — each through {@see shellSpellings()}. The raw `send` strings reach
+     * the patterns via {@see leafSpellings()}; this closes the encoded-token
+     * gap (`\x2e\x65nv` decodes to `.env`, which the driver sends and bash
+     * reads).
+     *
+     * @param array<array-key, mixed> $args
+     * @return list<string>
+     */
+    private static function stepSpellings(array $args): array
+    {
+        $spellings = [];
+        foreach (ShellSubjectTools::stepTexts('PtyRun', $args) as $text) {
+            array_push($spellings, ...self::shellSpellings($text));
         }
 
         return array_values(array_unique($spellings));

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\PtyDriver;
+use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
@@ -38,9 +40,12 @@ use SugarCraft\Code\Tools\ToolResult;
  * deadline, output is byte-budgeted across ALL steps together, sends are
  * size-refused before anything spawns, and the child leaves through the
  * reaper's TERM→KILL ladder on every exit path — including a mid-script
- * throw. The sandbox (roadmap 5.12) is NOT applied to this path yet: the
- * bubblewrap wrapper speaks pipe-shaped argv to runCaptured() and wiring a
- * pty through it is a separate slice (disclosed seam).
+ * throw. The sandbox (roadmap 5.12) applies here too (ISS-002): a configured
+ * `bashSandbox` prefixes the bubblewrap argv onto the spawn — the interactive
+ * argv form drops `--new-session` so the pty stays controlling, and a jail
+ * that cannot start REFUSES the session with nothing run, exactly as under
+ * Bash. Before this the pty path ran every command unconfined while Bash's
+ * honoured the setting.
  */
 #[BuiltInTool(
     name: 'PtyRun',
@@ -146,6 +151,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         private int $defaultTimeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\SugarCraft\Code\Agents\PathJail $worktreeJail = null,
+        private ?Bubblewrap $sandbox = null,
     ) {
         // The wall ceiling is what the turn waits on. Same purpose as Bash's —
         // so no single call can hold the loop forever — but deliberately
@@ -162,11 +168,33 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        // No sandbox wiring yet — see the class docblock's disclosed seam:
-        // Bubblewrap::wrap() prefixes a pipe-shaped shell string, and the pty
-        // spawn path needs its own jail contract before this line can honour
-        // bashSandbox honestly.
-        return new self($context->root);
+        // ISS-002: the pty honours the same `bashSandbox` setting as Bash, read
+        // through this catalog entry exactly like Bash does — a jail decided
+        // anywhere else is a jail one of the two shell tools skips.
+        return new self(
+            $context->root,
+            sandbox: Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
+        );
+    }
+
+    /**
+     * This tool with its sandbox replaced (null runs unconfined), every other
+     * knob carried over — the twin of {@see Bash::withSandbox()}.
+     */
+    public function withSandbox(?Bubblewrap $sandbox): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['sandbox' => $sandbox]));
+    }
+
+    public function sandbox(): ?Bubblewrap
+    {
+        return $this->sandbox;
+    }
+
+    /** The directory the jail leaves writable — same rule as Bash's. */
+    private function writableRoot(): string
+    {
+        return $this->worktreeJail?->root() ?? $this->root ?? (string) \getcwd();
     }
 
     public function name(): string
@@ -176,7 +204,8 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
 
     public function description(): string
     {
-        return 'Runs a terminal program on a real pseudo-terminal and drives it interactively: each step sends keystrokes and captures the screen bytes that follow, with an optional expectation that fails loudly when the frame does not change as predicted. Use it to exercise TUI software — menus, prompts, editors, a second agent session — the way a keyboard user would. The terminal has no human at it and no password is ever accepted: a program that blocks waiting for input the plan never sends is terminated at the wall deadline, with everything it painted returned as the transcript.';
+        return 'Runs a terminal program on a real pseudo-terminal and drives it interactively: each step sends keystrokes and captures the screen bytes that follow, with an optional expectation that fails loudly when the frame does not change as predicted. Use it to exercise TUI software — menus, prompts, editors, a second agent session — the way a keyboard user would. The terminal has no human at it and no password is ever accepted: a program that blocks waiting for input the plan never sends is terminated at the wall deadline, with everything it painted returned as the transcript.'
+            . ($this->sandbox === null ? '' : ' ' . $this->sandbox->describe($this->writableRoot()));
     }
 
     public function inputSchema(): array
@@ -355,6 +384,40 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
 
         $cwd = $this->worktreeJail?->root() ?? $this->root;
 
+        // ISS-002: the same jail contract Bash enforces. The probe runs the
+        // wrapped /bin/true through the pty itself (no raw spawn: the
+        // child-lifetime census owns every other way a process is born here),
+        // and a jail that cannot start refuses the whole session — running
+        // unconfined because the jail failed is the promise this tool does
+        // not make. The frame the failed jail paints stands in for stderr.
+        if ($this->sandbox !== null) {
+            $refusal = $this->sandbox->probe(function (string $probe): array {
+                $verdict = PtyDriver::run(
+                    command: $probe,
+                    cwd: null,
+                    cols: 80,
+                    rows: 24,
+                    wallSeconds: 10.0,
+                    maxBytes: 4096,
+                    steps: [],
+                );
+
+                return [
+                    'exitCode' => $verdict['refusal'] === null ? $verdict['exitCode'] : 1,
+                    'stderr' => (string) ($verdict['steps'][0]['output'] ?? ''),
+                ];
+            });
+            if ($refusal !== null) {
+                return $this->refusal($toolCallId, sprintf(
+                    'Not run: the bashSandbox setting is "%s" but the bubblewrap sandbox cannot start on this host (%s). '
+                    . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix bwrap '
+                    . '(on Ubuntu, unprivileged user namespaces are restricted by AppArmor) or set bashSandbox to "off".',
+                    $this->sandbox->mode(),
+                    $refusal,
+                ));
+            }
+        }
+
         $run = PtyDriver::run(
             command: $command,
             cwd: $cwd,
@@ -364,6 +427,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
             maxBytes: $maxBytes,
             steps: $parsed,
             heartbeat: $heartbeat,
+            spawnArgvPrefix: $this->sandbox?->argv($this->writableRoot(), interactive: true) ?? [],
         );
 
         if ($run['refusal'] !== null) {

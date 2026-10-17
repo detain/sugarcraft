@@ -8,6 +8,7 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Permissions\ShellSubjectTools;
 use SugarCraft\Code\Permissions\ShellWords;
 
 /**
@@ -100,21 +101,30 @@ final readonly class BashEscapeDenyHook implements HookInterface
 
     public function matcher(): string
     {
-        return '^Bash$';
+        // ISS-002: the shell roster IS the matcher. `PtyRun` types the same
+        // paths at a live prompt that `Bash` spawns them from, so `^Bash$`
+        // left the interactive driver outside the jail check entirely.
+        // ShellSubjectToolsCompletenessTest pins the construction.
+        return '^(?:' . implode('|', ShellSubjectTools::NAMES) . ')$';
     }
 
     public function execute(HookContext $context): HookResult
     {
-        $command = $context->toolArgs['command'] ?? '';
-        if (!is_string($command) || trim($command) === '') {
-            return HookResult::allow();
-        }
+        // Every text the call puts through the shell — `command`, and for
+        // PtyRun each decoded keystroke step (ISS-002): a `cat /etc/shadow`
+        // TYPED at a spawned root shell escapes the workspace just as hard
+        // as one spawned directly.
+        foreach (ShellSubjectTools::judgedShellTexts($context->toolName, $context->toolArgs) as $command) {
+            if (trim($command) === '') {
+                continue;
+            }
 
-        $offender = $this->scanLine($command, 0);
-        if ($offender !== null) {
-            return HookResult::deny(
-                "This hook denies Bash paths outside the workspace root: $offender"
-            );
+            $offender = $this->scanLine($command, 0);
+            if ($offender !== null) {
+                return HookResult::deny(
+                    "This hook denies Bash paths outside the workspace root: $offender"
+                );
+            }
         }
 
         return HookResult::allow();

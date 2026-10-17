@@ -559,13 +559,21 @@ final class ProcessContainment
      * $cwd ran every command after the first `;` in the PHP process's own
      * directory.
      *
+     * $jailArgvPrefix (ISS-002) threads a bubblewrap jail onto the pty path:
+     * the argv-form prefix from {@see \SugarCraft\Code\Tools\Sandbox\Bubblewrap::argv()}
+     * with `interactive: true` — that mode drops `--new-session` on purpose so
+     * the pty stays the child's controlling terminal, while `--die-with-parent`
+     * keeps the reaper contract the spawn docblock above already relies on.
+     * The empty default leaves the ungated spawn byte-identical.
+     *
+     * @param list<string> $jailArgvPrefix
      * @return non-empty-list<string>
      */
-    public static function interactiveSpawnCommand(string $command, ?string $cwd = null): array
+    public static function interactiveSpawnCommand(string $command, ?string $cwd = null, array $jailArgvPrefix = []): array
     {
         $script = ($cwd === null || $cwd === '' ? '' : self::cdGuard($cwd)) . $command;
 
-        return ['/bin/sh', '-c', $script];
+        return [...$jailArgvPrefix, '/bin/sh', '-c', $script];
     }
 
     /**

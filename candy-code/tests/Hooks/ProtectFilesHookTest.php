@@ -42,7 +42,44 @@ final class ProtectFilesHookTest extends TestCase
     {
         $hook = new ProtectFilesHook();
 
-        $this->assertSame('^(Bash|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$', $hook->matcher());
+        // ISS-002: the shell names are derived from the roster — a PtyRun
+        // session types the same `cat .env` a Bash command would carry.
+        $this->assertSame(
+            '^(' . implode('|', \SugarCraft\Code\Permissions\ShellSubjectTools::NAMES) . '|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$',
+            $hook->matcher(),
+        );
+    }
+
+    public function testDecodedStepTextFeedsTheGuardWhereRawBytesAreInvisible(): void
+    {
+        // \x2e\x65\x6e\x76 decodes to ".env" — a scan of the RAW send string
+        // never sees a dot before "env", only the decoded keystrokes do.
+        $args = ['command' => 'sh', 'steps' => [['send' => 'cat \\x2e\\x65\\x6e\\x76 <Enter>'] ] ];
+        $deny = (new ProtectFilesHook())->execute(new HookContext(
+            sessionId: 'test-session-123',
+            toolName: 'PtyRun',
+            toolArgs: $args,
+            toolInput: json_encode($args),
+            toolOutput: '',
+            model: 'test-model',
+            provider: 'test-provider',
+            projectRoot: '/tmp/test-project',
+        ));
+        $this->assertFalse($deny->isAllowed(), 'the decoded keystrokes must be guarded like a Bash line');
+        $this->assertStringContainsString('files matching', $deny->message);
+
+        $benignArgs = ['command' => 'sh', 'steps' => [['send' => 'cat README.md <Enter>'] ] ];
+        $allow = (new ProtectFilesHook())->execute(new HookContext(
+            sessionId: 'test-session-123',
+            toolName: 'PtyRun',
+            toolArgs: $benignArgs,
+            toolInput: json_encode($benignArgs),
+            toolOutput: '',
+            model: 'test-model',
+            provider: 'test-provider',
+            projectRoot: '/tmp/test-project',
+        ));
+        $this->assertTrue($allow->isAllowed(), 'ordinary keystrokes stay through');
     }
 
     // =========================================================================
