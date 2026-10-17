@@ -320,6 +320,21 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Wall-clock budget of a batch of tool calls the chat-native (`command` provider) path forks; stragglers are killed.')
                 ->withReaderSymbol(Chat::class . '::waitForToolChildrenAsync')
                 ->withReadBy('`Chat::waitForToolChildrenAsync()`, as a batch starts'),
+            // A search's deadline is time, not spend — like the Bash bounds
+            // above — so a trusted project may set it. The reader is not the
+            // turn-time rebind: `Grep::searchTimeoutSeconds()` reads the bound
+            // at the moment each run is armed (ISS-061).
+            SettingDefinition::new(ToolLimits::GREP_TIMEOUT_KEY, SettingType::Int, Grep::DEFAULT_TIMEOUT_SECONDS)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1, 3600)
+                ->withLabel(Lang::t('settings.grepTimeoutSeconds.label'))
+                ->withHelp('Seconds one Grep search may run before it is killed; hits found up to the deadline come back as a partial result.')
+                ->withReaderSymbol(Grep::class . '::searchTimeoutSeconds')
+                ->withReadBy('`Grep::searchTimeoutSeconds()` → `ToolLimits::current()`, as each search starts'),
         ];
     }
 }

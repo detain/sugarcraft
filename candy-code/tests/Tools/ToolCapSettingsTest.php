@@ -102,6 +102,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::BASH_TIMEOUT_KEY => Bash::DEFAULT_TIMEOUT_SECONDS,
             ToolLimits::BASH_MAX_TIMEOUT_KEY => Bash::MAX_TIMEOUT_SECONDS,
             ToolLimits::PARALLEL_TIMEOUT_KEY => Chat::PARALLEL_TOOL_TIMEOUT_SECONDS,
+            ToolLimits::GREP_TIMEOUT_KEY => Grep::DEFAULT_TIMEOUT_SECONDS,
         ];
         self::assertSame(ToolLimits::KEYS, array_keys($expected));
         foreach ($expected as $key => $default) {
@@ -299,6 +300,24 @@ final class ToolCapSettingsTest extends TestCase
 
         self::assertSame(1.5, ToolLimits::current()->seconds(ToolLimits::INTERACTIVE_IDLE_KEY));
         self::assertSame(90, ToolLimits::current()->int(ToolLimits::PARALLEL_TIMEOUT_KEY));
+    }
+
+    /**
+     * The grep deadline (ISS-061) obeys the parsing law like every other key:
+     * only a whole number its own schema accepts is honoured; anything else
+     * leaves the tool at its shipped bound.
+     */
+    public function testTheGrepDeadlineIsHonouredOnlyWhenTheSchemaAcceptsIt(): void
+    {
+        self::assertSame(5, ToolLimits::fromConfig([ToolLimits::GREP_TIMEOUT_KEY => 5])->int(ToolLimits::GREP_TIMEOUT_KEY));
+        self::assertSame(2.0, ToolLimits::fromConfig([ToolLimits::GREP_TIMEOUT_KEY => 2.0])->seconds(ToolLimits::GREP_TIMEOUT_KEY));
+
+        foreach ([0, -1, 3601, 1.5, '60', true, [5]] as $rejected) {
+            self::assertNull(
+                ToolLimits::fromConfig([ToolLimits::GREP_TIMEOUT_KEY => $rejected])->seconds(ToolLimits::GREP_TIMEOUT_KEY),
+                is_scalar($rejected) ? var_export($rejected, true) : 'a list',
+            );
+        }
     }
 
     /** The idle ceiling really is the setting: a silent program ends at 1 s, not the shipped 8. */

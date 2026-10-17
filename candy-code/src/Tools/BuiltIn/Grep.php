@@ -17,6 +17,7 @@ use SugarCraft\Code\Tools\ParallelSafe;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolLimits;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Tools\PathJail;
@@ -31,6 +32,18 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
     use TruncatesOutput;
+
+    /**
+     * Wall-clock budget of one search (ISS-061). `grep -rn` has no ceiling of
+     * its own on the clock either: a sparse giant of a file, a stalled mount,
+     * or a pattern with enormous back-reference churn can keep the child
+     * reading long after the turn has moved on. The bound is read at the
+     * moment the run is armed through {@see ToolLimits::current()} — not
+     * rebound per turn — so a session's `grepTimeoutSeconds` covers every
+     * Grep instance, including the ones built per use outside
+     * `Bootstrap::tools()`.
+     */
+    public const DEFAULT_TIMEOUT_SECONDS = 60;
 
     /**
      * $maxOutputBytes bounds the hit list. `grep -rn` over a real tree has no
@@ -192,8 +205,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * `ToolDescriptionGuidanceTest`.
      *
      * The no-matches clause names the scoring rule `execute()` actually
-     * applies (`isError: exitCode > 1`), which the model cannot otherwise
-     * distinguish from a failed search.
+     * applies (`isError: exitCode > 1`, with a run killed at the deadline
+     * (ISS-061) counted as a partial answer rather than a failure), which
+     * the model cannot otherwise distinguish from a failed search.
      *
      * The `rg` clause is claimed only by an instance built with the capability
      * true, on {@see Read::description()}'s rule that a tool may advertise
@@ -381,7 +395,10 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // is a normal outcome rather than an error.
         // Captured past the cap when a spill can keep the overflow (roadmap
         // 2.8): bytes the capture drops are bytes no saved file can hold.
-        $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), null, [], $heartbeat);
+        // ISS-061: armed with a wall-clock deadline so a pathological search
+        // returns partial hits rather than pinning the turn forever.
+        $timeout = self::searchTimeoutSeconds();
+        $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), $timeout, [], $heartbeat);
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
 
@@ -677,10 +694,20 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             $content = self::separated($content);
             $content .= $ruleNudge;
         }
+        // A run killed at the deadline is a partial answer, not a failure:
+        // whatever it found before the kill is real, and exit 124 is the
+        // killer's code rather than grep's verdict on the pattern (ISS-061).
+        if (($run['timedOut'] ?? false) === true) {
+            $content = self::separated($content);
+            $content .= sprintf(
+                '[timed out after %d s: only results found before the deadline are listed; narrow the pattern or path, or raise grepTimeoutSeconds]',
+                (int) $timeout,
+            );
+        }
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: $content,
-            isError: $run['exitCode'] > 1,
+            isError: $run['exitCode'] > 1 && ($run['timedOut'] ?? false) !== true,
         );
     }
 
@@ -816,6 +843,16 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * Hits in the CONTENT of other files that merely mention a secret are not
      * this method's business; only the files themselves are kept closed.
      */
+    /**
+     * The deadline of one search: the honoured setting when one is set, the
+     * tool's own bound otherwise. Read at the moment the run is armed, the
+     * same family as the other process-wait bounds (ISS-061).
+     */
+    private static function searchTimeoutSeconds(): float
+    {
+        return ToolLimits::current()->seconds(ToolLimits::GREP_TIMEOUT_KEY) ?? (float) self::DEFAULT_TIMEOUT_SECONDS;
+    }
+
     private static function secretExcludeFlags(string $searchRoot): string
     {
         $flags = ' --exclude=.env --exclude=.envrc --exclude=' . escapeshellarg('.env.*')

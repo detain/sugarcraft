@@ -42,7 +42,7 @@ use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
  * many may run at once.
  *
  * Bounds read where a turn-time rebind cannot reach — the search tool's,
- * built per use by `/websearch` too, the two process-wait bounds read
+ * built per use by `/websearch` too, the three process-wait bounds read
  * at the moment they are armed, and the trait-level instruction cap and spill
  * capture bounds, which belong to no one tool's constructor — are read
  * through {@see current()} at their use site instead, from the same
@@ -115,6 +115,14 @@ final readonly class ToolLimits
     public const PARALLEL_TIMEOUT_KEY = 'chatToolTimeoutSeconds';
 
     /**
+     * Wall-clock budget of one Grep search (ISS-061). A search costs time, not
+     * money, so it belongs to the process-wait family read at the moment the
+     * run is armed rather than rebound per turn — every Grep instance, the
+     * ones built per use included, pays the same deadline.
+     */
+    public const GREP_TIMEOUT_KEY = 'grepTimeoutSeconds';
+
+    /**
      * How many levels below the session a delegated run may be (roadmap
      * N-P4f) — {@see TaskTool::MAX_DELEGATION_DEPTH}.
      */
@@ -147,6 +155,7 @@ final readonly class ToolLimits
         self::BASH_TIMEOUT_KEY,
         self::BASH_MAX_TIMEOUT_KEY,
         self::PARALLEL_TIMEOUT_KEY,
+        self::GREP_TIMEOUT_KEY,
     ];
 
     /** The delegation caps {@see applyTo()} hands the session's `Task` (roadmap N-P4f). */
