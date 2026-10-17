@@ -47,3 +47,4 @@ codacy-coverage-reporter
 # sub-directory project `.mcp.json` files stay committable per-project config (the hazard is the
 # operator file sitting at the monorepo root, not the filename).
 /.mcp.json
+__pycache__/
