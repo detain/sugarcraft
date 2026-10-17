@@ -84,8 +84,10 @@ final class SessionSnapshot
 
     /**
      * The wire shape with the `messages` window paged (ISS-058): the newest
-     * $limit rows not newer than $beforeIndex, still oldest-row-first inside
-     * the page. Null $limit answers exactly {@see toArray()}. A paged answer
+     * $limit rows strictly OLDER than $beforeIndex — the row AT that index is
+     * excluded, the bound is exclusive-upper — still oldest-row-first inside
+     * the page. Null $beforeIndex windows over the whole history. Null $limit
+     * answers exactly {@see toArray()}. A paged answer
      * says where its window sits — `totalMessages`, the `oldestIndex` of its
      * first row in the full history, and `hasMoreOlder` — so a client that
      * wants the beginning pages older with `beforeIndex = oldestIndex`
