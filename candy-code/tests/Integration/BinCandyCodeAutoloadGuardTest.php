@@ -26,7 +26,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-FIVE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-SIX:
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, ten —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
@@ -41,11 +41,13 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    `fireSessionEnd()`, one line when a SessionEnd hook refuses or throws. And
  *    — added by ISS-080 — the second line inside `readStdinIfPiped()`: the
  *    stdin-silent grace notice, stdout staying the answer alone.
- *  - {@see \SugarCraft\Code\Cli\Subcommands}, four — `sessionDelete()`'s "no
+ *  - {@see \SugarCraft\Code\Cli\Subcommands}, five — `sessionDelete()`'s "no
  *    such session", `mcp()`'s inventory error, — added by E710 —
- *    `mcpImportLine()`, the single funnel for the import verb's notes, and —
+ *    `mcpImportLine()`, the single funnel for the import verb's notes, —
  *    added by audit MCP-5 — `mcpTrust()`'s one failure line (the config
- *    unreadable, or the grant or trust record not written).
+ *    unreadable, or the grant or trust record not written), and — added by
+ *    N-2 — `warnSkippedMcpEntries()`, one line naming each `.mcp.json` entry
+ *    the inventory skipped.
  *  - {@see \SugarCraft\Code\Cli\Serve}, one — `stderr()`, the `serve` verb's
  *    single funnel for its startup lines, request log and stop notice (O-3a).
  *  - {@see \SugarCraft\Code\Cli\Attach}, one — `fail()`, the line saying why

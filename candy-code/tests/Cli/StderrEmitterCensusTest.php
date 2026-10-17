@@ -57,10 +57,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-five sites (ISS-026 2026-10-17: +1 in
+ *  1. `fwrite(STDERR, …)` — twenty-six sites (ISS-026 2026-10-17: +1 in
  *     `Bootstrap::openSession()` for the cross-project `--continue` notice,
  *     stderr-alone by the same decision as the retention rows; ISS-080 2026-10-17: +1 in
- *     `NonInteractive` for the stdin-silent grace line; f-app-launch 2026-10-14: +2 in
+ *     `NonInteractive` for the stdin-silent grace line; N-2 2026-10-17: +1 in
+ *     `Subcommands::warnSkippedMcpEntries()` — `mcp list` naming each entry it
+ *     skips, stderr-alone like the launch warning it quotes; f-app-launch 2026-10-14: +2 in
  *     `bin/candy-code` — the rv-qa-1 TTY-guard refusal line and the rv-tui-1
  *     recovery line, both stderr-alone by decision: neither names a lost
  *     capability and both must land on a channel the dying process still
@@ -330,7 +332,9 @@ final class StderrEmitterCensusTest extends TestCase
         // carry a transcript notice, and the terminal running the server is
         // its log.
         'src/Cli/Serve.php' => 1,
-        'src/Cli/Subcommands.php' => 4,
+        // N-2 2026-10-17: +1 — `mcp list` names each skipped .mcp.json entry on
+        // stderr, the same sentence the launch loop has printed since ISS-091.
+        'src/Cli/Subcommands.php' => 5,
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -507,7 +511,8 @@ final class StderrEmitterCensusTest extends TestCase
         // +1 in ISS-079: refuseLiveLockedSession()'s envelope-carrying
         // refusal line (usage channel, stderr + JSON document both via
         // NonInteractive::failUsage).
-        'src/Cli/Subcommands.php' => 29,
+        // +1 in N-2: warnSkippedMcpEntries()'s per-entry 'candy-code: ' skip line.
+        'src/Cli/Subcommands.php' => 30,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
