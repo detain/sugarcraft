@@ -869,10 +869,15 @@ YAML;
     }
 
     /**
-     * ONLY a leading `./` is rewritten. `bash ./x.sh` hides the relative
-     * path behind an interpreter this rewrite would have to parse around;
-     * `../x.sh` walks out of whatever base either reading could claim;
-     * `x.sh` is a PATH lookup in every shell's eyes. Guessing at those is
+     * FIRST TOKENS THAT MEAN SOMETHING ELSE ARE NEVER REWRITTEN, NAKED OR
+     * BEHIND `./`. `bash ./x.sh` hides the relative path behind an
+     * interpreter this rewrite would have to parse around; `../x.sh` walks
+     * out of whatever base either reading could claim; `x.sh` is a PATH
+     * lookup in every shell's eyes. A bare token with a slash - `hooks/x.sh`
+     * - stays untouched HERE for the third reason: no such file exists under
+     * the config directory in this fixture (ISS-039's review fix widened the
+     * rule to rewrite a bare token ONLY when it names a real contained file;
+     * that positive polarity has its own test below). Guessing beyond that is
      * how a config rewrite starts running things the user did not name.
      */
     public function testTheRewriteTouchesOnlyALeadingDotSlashAndNothingElse(): void
@@ -928,6 +933,103 @@ YAML;
             $this->assertSame('./hooks/x.sh', $entries[0]['command']);
         } finally {
             $this->restoreHomeSandbox();
+        }
+    }
+
+    /**
+     * THE BARE SPELLING THE ORIGINAL RULE LEFT BEHIND (ISS-039 review fix).
+     * `hooks/guard.sh` names the user's own script as surely as
+     * `./hooks/guard.sh` does, and when that file really exists under the
+     * config directory the rewrite must claim it - otherwise a cloned
+     * repository that plants its own hooks/guard.sh runs the stranger's
+     * script under the user's guard's authority, the same hijack class the
+     * `./` arm closed. Both spellings anchor to the same path; the name
+     * fallback still sees the raw text the user typed.
+     */
+    public function testABareRelativeCommandWithAConfigDirFileResolvesToIt(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/home039b');
+        mkdir($home . '/.candy-code/hooks', 0o700, true);
+        $guard = $home . '/.candy-code/hooks/guard.sh';
+        file_put_contents($guard, "#!/bin/sh\nexit 0\n");
+        $file = $home . '/.candy-code/hooks.yaml';
+        file_put_contents($file, "hooks: {}\n");
+        try {
+            $entries = HookConfig::parse(
+                "hooks:\n  PreToolUse:\n    - command: 'hooks/guard.sh --strict'\n",
+                $file,
+            );
+
+            $this->assertSame($home . '/.candy-code/hooks/guard.sh --strict', $entries[0]['command']);
+            $this->assertSame(
+                'hooks/guard.sh --strict',
+                $entries[0]['name'],
+                'the chain label stays the text the user wrote',
+            );
+
+            // The `./` arm keeps rewriting unconditionally - widened, not
+            // replaced: same anchor either way, dot or no dot.
+            $dotted = HookConfig::parse(
+                "hooks:\n  PreToolUse:\n    - name: n\n      command: './hooks/guard.sh --strict'\n",
+                $file,
+            );
+            $this->assertSame($home . '/.candy-code/hooks/guard.sh --strict', $dotted[0]['command']);
+        } finally {
+            $this->restoreHomeSandbox();
+            unlink($guard);
+            rmdir($home . '/.candy-code/hooks');
+            unlink($file);
+            rmdir($home . '/.candy-code');
+            rmdir($home);
+        }
+    }
+
+    /**
+     * THE GATE IS EXISTENCE PLUS CONTAINMENT, AND THE PASS-THROUGHS ARE THE
+     * POINT. A bare relative token naming NOTHING under the config directory
+     * keeps the pre-039 behaviour of running as typed - the rewrite never
+     * invents a path. `../escape.sh` here DOES name a real file, one level
+     * OUTSIDE the base, and must still pass through: existence alone is not
+     * the gate, or `../` would re-root the guard into the parent. The
+     * remaining shapes are refused by the token's own face - an absolute
+     * path is already resolved, `sh hooks/x.sh` looks up `sh`, and `~` is
+     * the shell's home expansion, not this directory.
+     */
+    public function testABareRelativeCommandWithoutAConfigDirFileRunsUnchanged(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/home039m');
+        mkdir($home . '/.candy-code', 0o700, true);
+        $file = $home . '/.candy-code/hooks.yaml';
+        file_put_contents($file, "hooks: {}\n");
+        file_put_contents($home . '/escape.sh', "#!/bin/sh\nexit 0\n");
+        // A DIRECTORY named `hooks/sub` resolves inside the base, so only
+        // the is_file() half of the gate refuses it - the rewrite must not
+        // anchor onto a directory any more than onto an escaping file.
+        mkdir($home . '/.candy-code/hooks/sub', 0o700, true);
+        try {
+            $cases = [
+                'hooks/missing.sh' => 'hooks/missing.sh',
+                'hooks/sub' => 'hooks/sub',
+                '../escape.sh' => '../escape.sh',
+                '/opt/tools/hooks/x.sh' => '/opt/tools/hooks/x.sh',
+                'sh hooks/x.sh' => 'sh hooks/x.sh',
+                '~/hooks/escape.sh' => '~/hooks/escape.sh',
+            ];
+            foreach ($cases as $typed => $expected) {
+                $entries = HookConfig::parse(
+                    "hooks:\n  PreToolUse:\n    - name: n\n      command: '" . $typed . "'\n",
+                    $file,
+                );
+                $this->assertSame($expected, $entries[0]['command'], $typed);
+            }
+        } finally {
+            $this->restoreHomeSandbox();
+            rmdir($home . '/.candy-code/hooks/sub');
+            rmdir($home . '/.candy-code/hooks');
+            unlink($home . '/escape.sh');
+            unlink($file);
+            rmdir($home . '/.candy-code');
+            rmdir($home);
         }
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use Symfony\Component\Yaml\Yaml;
 
@@ -227,13 +228,16 @@ final class HookConfig
 
         // ISS-039: the user's own hook file is the ONE tier whose script files
         // travel with the config rather than with any repository, and today a
-        // command starting `./` executes with cwd = whatever project is open -
+        // RELATIVE FIRST TOKEN executes with cwd = whatever project is open -
         // so `./hooks/confirm-deploy.sh`, the exact shape the documented
-        // example uses, silently reaches for a script in a stranger's tree.
-        // Resolving against the file's own directory makes the example mean
-        // what it looks like it means. REFUSE-was-the-alternative, and it lost:
-        // dropping an entry silently UNINSTALLS a guard, which is the
-        // fail-open this class spends its whole existence declining.
+        // example uses, and its bare twin `hooks/confirm-deploy.sh`, silently
+        // reach for a script in a stranger's tree. Resolving against the
+        // file's own directory makes the example mean what it looks like it
+        // means - see {@see anchorToUserTier()} for which spellings are
+        // rewritten and which are left exactly as typed. REFUSE-was-the-
+        // alternative, and it lost: dropping an entry silently UNINSTALLS a
+        // guard, which is the fail-open this class spends its whole existence
+        // declining.
         $userTierBase = self::userTierBase($source);
 
         $hooks = [];
@@ -304,14 +308,19 @@ final class HookConfig
                     );
                 }
 
-                // THE FIRST TOKEN ONLY, and only when it opens `./`: `bash
-                // ./x.sh`, `../x.sh` and `x.sh` each carry an intent this
-                // rewrite must not guess at. The name fallback above saw the
-                // RAW command, so the chain label stays the text the user
-                // typed even though the RUN text is now absolute.
-                if ($userTierBase !== null && str_starts_with($command, './')) {
-                    $command = $userTierBase . substr($command, 1);
-                }
+                // THE FIRST TOKEN ONLY. `./` opens are rewritten
+                // unconditionally (ISS-039 as first shipped); a bare relative
+                // token is rewritten ONLY when it names a real file inside
+                // the config directory - `bash ./x.sh`, a PATH lookup, an
+                // escaping `../x.sh` and a token naming nothing all keep
+                // running exactly as typed. See {@see anchorToUserTier()}
+                // for the gate and why each refused spelling stays refused.
+                // The name fallback above saw the RAW command, so the chain
+                // label stays the text the user typed even though the RUN
+                // text is now absolute.
+                $command = $userTierBase !== null
+                    ? self::anchorToUserTier($command, $userTierBase)
+                    : $command;
 
                 $matcher = $config['matcher'] ?? '.*';
                 // Rejected HERE rather than at match time, where
@@ -465,5 +474,69 @@ final class HookConfig
         return $canonical !== false && $userFile !== false && $canonical === $userFile
             ? $home . '/.candy-code'
             : null;
+    }
+
+    /**
+     * The ISS-039 rewrite, widened by review: which user-tier first tokens
+     * get anchored to the config directory, and which are left exactly as
+     * typed.
+     *
+     * WHY THE BARE SPELLING HAD TO JOIN THE `./` ONE. The original rule
+     * rewrote only commands opening `./`, but the hijack it closed did not
+     * care about the dot: a user who writes `hooks/guard.sh` means the
+     * guard beside their own hooks.yaml, and until this widened, that token
+     * resolved against the cwd of whatever repository was open — so cloning
+     * a stranger's tree that plants its own `hooks/guard.sh` ran the
+     * stranger's script with the user's guard's authority. The exact
+     * fail-open this rewrite exists to decline.
+     *
+     * THE GATE IS EXISTENCE PLUS CONTAINMENT, AND BOTH HALVES PULL WEIGHT.
+     * A bare relative token is rewritten ONLY when `$base/<token>` is a
+     * real file ({@see is_file()}, so directories and dangling routes are
+     * not) AND stays inside the base ({@see ContainedPath::within()}, so an
+     * escaping `../escape.sh` whose target exists OUTSIDE the base never
+     * wins). Guess-free by construction: a token naming nothing keeps the
+     * pre-039 behaviour of running as typed against the repo cwd, so the
+     * rewrite can never invent a path the user did not write, and PATH
+     * lookups (`x.sh`, no slash at all), interpreted commands
+     * (`bash ./x.sh`, `echo …`), absolute paths and `~`/URL spellings are
+     * each refused by the token's own shape.
+     *
+     * The `./` arm stays unconditional — it can only mean "this directory",
+     * and a missing file there reports loudly at run time, which is the
+     * documented ISS-039 behaviour pinned by the pre-widening tests.
+     */
+    private static function anchorToUserTier(string $command, string $base): string
+    {
+        if (str_starts_with($command, './')) {
+            return $base . substr($command, 1);
+        }
+
+        // The token must START the command; anything after whitespace belongs
+        // to whoever interprets the line, not to this rewrite.
+        if (preg_match('/^([^\s]+)/', $command, $matches) !== 1) {
+            return $command;
+        }
+        $first = $matches[1];
+
+        // Shape refusals, each a spelling with a DIFFERENT intent than
+        // "the script beside my config": no slash is a PATH lookup, a
+        // leading slash is already absolute, `~` is the shell's home
+        // expansion, and a scheme (`ssh://`, `https://`) is nobody's file.
+        if (
+            !str_contains($first, '/')
+            || str_starts_with($first, '/')
+            || str_starts_with($first, '~')
+            || str_contains($first, '://')
+        ) {
+            return $command;
+        }
+
+        $candidate = $base . '/' . $first;
+        if (!is_file($candidate) || !ContainedPath::within($candidate, $base)) {
+            return $command;
+        }
+
+        return $candidate . substr($command, strlen($first));
     }
 }

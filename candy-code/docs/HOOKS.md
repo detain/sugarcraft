@@ -59,7 +59,10 @@ hooks:
 Those seven are the **only** keys an entry may carry. An unrecognised key is
 refused rather than ignored. A user-tier file's relative `./hooks/...` command
 resolves against `~/.candy-code/` — the file's own directory — not the repo you
-open; project-tier files keep repo-relative commands (ISS-039).
+open; so does a bare `hooks/...` spelling, but only when a real file exists
+under `~/.candy-code/` (the existence gate means a cloned repo cannot plant the
+script and take over the guard, and a command naming nothing keeps running
+exactly as typed). Project-tier files keep repo-relative commands (ISS-039).
 
 `name` matters because `HookRegistry` keys hooks by name: without it, two
 entries sharing a command on one event silently collapse into a single
