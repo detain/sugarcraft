@@ -187,7 +187,7 @@ Use `withAutoSize(bool $enabled = true)` to compute veil dimensions from content
 
 ```php
 use SugarCraft\Overlay\Veil;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Overlay\Position;
 
 $veil = Veil::new()
@@ -201,12 +201,12 @@ Accessor: `autoSize(): bool`
 
 ## Border Chrome
 
-Use `withBorder(Border $border)` to wrap veil content in a terminal border rendered by candy-sprinkles `Style`. The `applyBorderChrome(string $content)` method applies the border to arbitrary content.
+Use `withBorder(Border $border)` to wrap veil content in a terminal border rendered by sugar-style `Style`. The `applyBorderChrome(string $content)` method applies the border to arbitrary content.
 
 ```php
 use SugarCraft\Overlay\Veil;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 $veil = Veil::new()
     ->withBorder(Border::new()->style(Border::STYLE_ROUND));

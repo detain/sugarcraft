@@ -27,7 +27,7 @@ PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning=
 ## Code conventions
 
 - `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
-- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `candy-sprinkles/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`). Nullable fields use a paired `bool $XSet` sentinel.
+- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `sugar-style/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`). Nullable fields use a paired `bool $XSet` sentinel.
 - Bare accessors (no `get`). Factories mirror upstream — `::new()` default, `Theme::ansi()`, `Spinner::line()`; never `::create()`/`::make()`/`::default()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.
 - i18n: `Lang::t($key,$params)` over `SugarCraft\Core\I18n\T`; lookup exact → base → `en` → raw.

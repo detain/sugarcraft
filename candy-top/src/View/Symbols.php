@@ -6,7 +6,7 @@ namespace SugarCraft\Top\View;
 
 /**
  * The glyphs btop's chrome draws with that are not border runes (those come
- * from candy-sprinkles {@see \SugarCraft\Sprinkles\Border}).
+ * from sugar-style {@see \SugarCraft\Style\Border}).
  *
  * Mirrors aristocratos/btop Symbols (src/btop_draw.cpp).
  */

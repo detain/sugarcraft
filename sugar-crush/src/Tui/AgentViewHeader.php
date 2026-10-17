@@ -12,7 +12,7 @@ use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Crush\Util\TokenCount;
 use SugarCraft\Mouse\Mark;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The one row pinned above the read-only Agent View (roadmap P-C2, Appendix P

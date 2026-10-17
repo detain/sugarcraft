@@ -94,7 +94,7 @@ final class SplitLayout
      * Create a new instance with the given changes merged in.
      *
      * Mirrors the repo-wide immutable+fluent `mutate()` convention (see
-     * candy-sprinkles/src/Style.php, candy-buffer/src/Style.php) so every
+     * sugar-style/src/Style.php, candy-buffer/src/Style.php) so every
      * `with*()` builds through a single point instead of hand-listing all
      * constructor params.
      *

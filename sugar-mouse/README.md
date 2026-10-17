@@ -124,7 +124,7 @@ let SugarMouse discover their bounding boxes, then ask zones whether a
 {@see \SugarCraft\Core\Msg\MouseMsg} fell inside them.
 ```php
 use SugarCraft\Mouse\Zones\Manager;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 $z = Manager::newGlobal();
 
@@ -335,7 +335,7 @@ text-processing component that produces the raw CSI sequence.
   shadow each other's ids.
 - Run `scan()` once on the **full root frame**, not per sub-tree —
   nested zone bounds depend on the outer layout.
-- `lipgloss.Width()` (CandySprinkles) and SugarMouse interact cleanly:
+- `lipgloss.Width()` (SugarStyle) and SugarMouse interact cleanly:
   `scan()` strips markers before measurement.
 - `Zone::isZero()` distinguishes "never rendered" from "rendered but
   empty bounding box".

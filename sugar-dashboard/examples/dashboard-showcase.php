@@ -8,7 +8,7 @@ use SugarCraft\Dashboard\Components\Card\{Text, Card, MetricsGrid, MetricCard};
 use SugarCraft\Dashboard\Components\Nav\Breadcrumb;
 use SugarCraft\Dashboard\Components\Tree\Timeline;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 
 /**
  * Production Server Dashboard - Real Multi-Column Dashboard

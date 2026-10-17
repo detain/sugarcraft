@@ -27,7 +27,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 ## Phase 1: Critical Issues [PENDING]
 
 - [x] ✅ **1.1 CassowarySolver Cycling Bug — Deprecate Simplex Path** (landed pre-r86: solve() emits E_USER_DEPRECATED and delegates wholly to GreedySolver; pinned by CassowarySolverTest)
-- [ ] ⏭️ 1.2 LayoutSolver Interface — Remove Factory Methods — ruled: STOP-class public-API change (4 consumers incl sugar-forms/candy-sprinkles → crush chain), orchestrator decision (r86-v2)
+- [ ] ⏭️ 1.2 LayoutSolver Interface — Remove Factory Methods — ruled: STOP-class public-API change (4 consumers incl sugar-forms/sugar-style → crush chain), orchestrator decision (r86-v2)
 
 ### 1.1: CassowarySolver Cycling Bug
 

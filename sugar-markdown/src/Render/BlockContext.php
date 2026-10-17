@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Markdown\Render;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Immutable context record pushed onto the BlockStack when entering a block.

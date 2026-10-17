@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors the long-requested upstream charmbracelet/bubbles `Tree`
  * (issue #233). The static (non-interactive) tree renderer stays at
- * `\SugarCraft\Sprinkles\Tree\Tree`; this component is the
+ * `\SugarCraft\Style\Tree\Tree`; this component is the
  * Bubble-Tea-shaped Model wrapper.
  *
  * Usage

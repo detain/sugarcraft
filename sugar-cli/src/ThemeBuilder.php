@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Fluent builder for custom {@see Theme} instances.

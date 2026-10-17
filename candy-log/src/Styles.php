@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Log;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Styles for log level rendering in text output.

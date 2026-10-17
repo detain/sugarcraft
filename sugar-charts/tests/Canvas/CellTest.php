@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Tests\Canvas;
 
 use SugarCraft\Charts\Canvas\Cell;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 /**

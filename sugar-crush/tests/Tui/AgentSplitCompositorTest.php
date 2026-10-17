@@ -71,7 +71,7 @@ use SugarCraft\Crush\Tui\SplitDirection;
  */
 final class AgentSplitCompositorTest extends TestCase
 {
-    /** Rounded border top-right corner, {@see \SugarCraft\Sprinkles\Border::rounded()}. */
+    /** Rounded border top-right corner, {@see \SugarCraft\Style\Border::rounded()}. */
     private const CORNER_TOP_RIGHT = "\u{256E}";
 
     /** Rounded border top-left corner. */

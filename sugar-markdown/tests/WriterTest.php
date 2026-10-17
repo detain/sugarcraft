@@ -13,7 +13,7 @@ use SugarCraft\Markdown\StreamSink;
 use SugarCraft\Markdown\Tests\Support\ProbeStreamWrapper;
 use SugarCraft\Markdown\Theme;
 use SugarCraft\Markdown\Writer;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 use function fclose;
 use function dirname;

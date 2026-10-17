@@ -14,7 +14,7 @@ namespace SugarCraft\Tetris;
  * class adds the global board offset on top.
  *
  * Colours are returned as ANSI 256-color codes for consistency
- * across terminals; a CandySprinkles `Style` background does the
+ * across terminals; a SugarStyle `Style` background does the
  * actual painting.
  */
 enum Tetromino: string

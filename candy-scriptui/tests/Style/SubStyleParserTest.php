@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Style;
 
 use SugarCraft\ScriptUi\Style\SubStyleParser;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class SubStyleParserTest extends TestCase

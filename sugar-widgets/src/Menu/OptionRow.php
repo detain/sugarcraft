@@ -6,7 +6,7 @@ namespace SugarCraft\Widgets\Menu;
 
 use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * btop's two-line options-menu row, as a convention helper so every

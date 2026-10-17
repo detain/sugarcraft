@@ -38,7 +38,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  *   coordinates — the "text ends up in the status bar" family.
  * - HOSTED (`bin/sugarcrush` → `App::view()` → `Tui\Renderer::renderView()` →
  *   `ChatPane::renderView()`): the over-wide row instead meets
- *   `Style::width()`, which in candy-sprinkles TRUNCATES rather than wraps, so
+ *   `Style::width()`, which in sugar-style TRUNCATES rather than wraps, so
  *   the reply is silently cut off mid-sentence. That is the reported symptom,
  *   verbatim: "long response lines … are not wrapped but cut off … at the end
  *   its clearly got more to say but the next line is blank and the line

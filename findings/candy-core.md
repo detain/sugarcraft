@@ -2,7 +2,7 @@
 
 ## Overview
 
-candy-core (`SugarCraft\Core`) is the foundational Elm-architecture TUI runtime for the SugarCraft monorepo. It provides the core `Model`/`Msg`/`Cmd` lifecycle, `Program` runner, `Renderer`, `InputReader`, and essential utilities (TTY, ANSI, i18n). Other libs (candy-sprinkles, sugar-widgets, candy-scriptui, etc.) depend on this for their TUI infrastructure.
+candy-core (`SugarCraft\Core`) is the foundational Elm-architecture TUI runtime for the SugarCraft monorepo. It provides the core `Model`/`Msg`/`Cmd` lifecycle, `Program` runner, `Renderer`, `InputReader`, and essential utilities (TTY, ANSI, i18n). Other libs (sugar-style, sugar-widgets, candy-scriptui, etc.) depend on this for their TUI infrastructure.
 
 ---
 

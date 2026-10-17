@@ -58,7 +58,7 @@ sugar-widgets employs a **stratified alias pattern** where many components are r
 {
   "sugarcraft/candy-core": "dev-master",      // TUI framework foundation
   "sugarcraft/sugar-forms": "dev-master",        // Form primitives (most aliases)
-  "sugarcraft/candy-sprinkles": "dev-master",   // Styling system
+  "sugarcraft/sugar-style": "dev-master",   // Styling system
   "sugarcraft/sugar-mouse": "dev-master",          // Zone/mouse handling
   "sugarcraft/sugar-spring": "dev-master"     // Spring physics (AnimatedProgress)
 }
@@ -669,11 +669,11 @@ $t = $table->styleFunc(fn(int $row, int $col): Style => match true {
 });
 ```
 
-### candy-sprinkles Style
+### sugar-style Style
 
-Components use `SugarCraft\Sprinkles\Style` for ANSI rendering:
+Components use `SugarCraft\Style\Style` for ANSI rendering:
 ```php
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 $style = Style::new()->bold()->foreground(Color::cyan());
 $output = $style->render('Hello');

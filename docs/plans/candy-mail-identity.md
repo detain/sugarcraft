@@ -143,9 +143,9 @@ interactive TUI.
 | **Form fields** (from / to / subject / body textarea) using `sugar-forms` TextInput + Textarea | 1 d | textarea component already in sugar-forms; check coverage |
 | **CC/BCC toggle** (show on user request — matches Pop) | ½ d | keybinding `c` to reveal |
 | **Filepicker** for attachments | 1 d | use existing `super-candy` Picker, or build a thin wrapper |
-| **Send spinner** during transport | ½ d | candy-sprinkles Spinner already available |
+| **Send spinner** during transport | ½ d | sugar-style Spinner already available |
 | **Markdown body → HTML** preview & send | 1 d | use `candy-mdview` for render |
-| **Help bar** with key hints | ½ d | candy-sprinkles HelpBar or sugar-forms help |
+| **Help bar** with key hints | ½ d | sugar-style HelpBar or sugar-forms help |
 | **TUI tests** — model snapshot + scripted-input view tests | 1 d | follow `sugar-forms/tests/` pattern |
 | **VHS tape** for README GIF | ½ d | `.vhs/compose.tape` |
 | **Docs** (README, `docs/lib/candy-mail.html`, end-user docs feature grid) | 1 d | — |
@@ -181,7 +181,7 @@ roadmap).
 - `MATCHUPS.md` row stays 🟢; only sub-status moves from "library
   surface complete" to "library surface + TUI complete."
 - No dependency churn — candy-mail stays on `candy-core` and gains
-  `sugar-forms` / `candy-mdview` / `candy-sprinkles` (all already
+  `sugar-forms` / `candy-mdview` / `sugar-style` (all already
   monorepo siblings).
 
 ### Risks

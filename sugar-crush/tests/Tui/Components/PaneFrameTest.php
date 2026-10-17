@@ -12,8 +12,8 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneFrame;
 use SugarCraft\Crush\Tui\TerminalBackground;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 /**
  * The 256-colour side-frame gradient ({@see PaneFrame}). Pins, in the order

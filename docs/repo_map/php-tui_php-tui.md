@@ -211,9 +211,9 @@ Key classes to port:
 - `Viewport`, `Viewport\Fullscreen`, `Viewport\Inline`, `Viewport\Fixed`
 - `ClearType`, `ViewportType`
 
-### candy-sprinkles (Styling & Decoration)
+### sugar-style (Styling & Decoration)
 
-The style system maps to `candy-sprinkles`:
+The style system maps to `sugar-style`:
 - `Style`, `Styleable` trait, `Color` hierarchy (`AnsiColor`, `RgbColor`, `LinearGradient`)
 - `Modifier` bitmask constants
 - Text styling (`Text`, `Line`, `Span`, `SpanParser`, `Title`)
@@ -229,7 +229,7 @@ The Cassowary constraint solver integration maps to `sugar-spring`:
 
 Individual widget extensions map to leaf libraries:
 - `sugar-widgets`: `ParagraphWidget`, `ParagraphRenderer` (text rendering)
-- `candy-sprinkles`: `BlockWidget` (borders, titles, padding)
+- `sugar-style`: `BlockWidget` (borders, titles, padding)
 - `sugar-charts`: `ChartWidget`, `BarChartWidget`, `SparklineWidget`, `TableWidget`
 - `sugar-forms`: `ListWidget`, `TabsWidget`, `ScrollbarWidget`
 - `sugar-markdown`: `GaugeWidget`, `CanvasWidget`, image rendering
@@ -240,4 +240,4 @@ php-tui is a comprehensive, production-quality port of Rust's Ratatui library fo
 
 The architecture follows a clean separation of concerns: the `Backend` interface abstracts terminal control (currently implemented via `php-tui/term`), the `Display` class manages the render loop and double-buffering, `WidgetRenderer` implementations handle drawing each widget type to a `Buffer`, and the `Buffer` class provides cell-level manipulation with Unicode-aware text operations. The extension system allows the core to remain lean while adding optional functionality like BDF fonts and image support.
 
-The library is well-suited for building rich interactive CLI applications in PHP, competing with solutions like `psy/psysh` (which also builds TUIs) but offering a more general-purpose, widget-based approach. For SugarCraft, the port would involve mapping each component to the appropriate sub-package: core display/buffer infrastructure to `candy-core`, styling to `candy-sprinkles`, layout to `sugar-spring`, and individual widget groups to leaf libraries. The Cassowary algorithm is particularly notable as it's the same algorithm used by Apple's Auto Layout, enabling truly responsive terminal layouts that adapt gracefully to terminal resizing.
+The library is well-suited for building rich interactive CLI applications in PHP, competing with solutions like `psy/psysh` (which also builds TUIs) but offering a more general-purpose, widget-based approach. For SugarCraft, the port would involve mapping each component to the appropriate sub-package: core display/buffer infrastructure to `candy-core`, styling to `sugar-style`, layout to `sugar-spring`, and individual widget groups to leaf libraries. The Cassowary algorithm is particularly notable as it's the same algorithm used by Apple's Auto Layout, enabling truly responsive terminal layouts that adapt gracefully to terminal resizing.

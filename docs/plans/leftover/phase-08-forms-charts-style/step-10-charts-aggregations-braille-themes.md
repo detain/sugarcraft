@@ -10,10 +10,10 @@ Three features:
 - Data aggregation helpers: `bucketByTime`, `movingAverage`,
   `resample` on series data.
 - Optional `BrailleCanvas` rendering mode (depend on
-  candy-sprinkles after StyleParser move; braille canvas itself
+  sugar-style after StyleParser move; braille canvas itself
   lives in sugar-dashboard's `Plot/Braille/` — consume it).
 - Named themes (`Theme::dracula()`, `oneDark()`, etc.) — consume from
-  candy-sprinkles per step 02.01.
+  sugar-style per step 02.01.
 
 ## Files
 
@@ -27,7 +27,7 @@ Three features:
 
 - `sugar-charts/src/LineChart.php` and `Chart.php` — `withCanvas(BrailleCanvas)`
   alternative mode.
-- `sugar-charts/composer.json` — add `sugarcraft/candy-sprinkles` (for
+- `sugar-charts/composer.json` — add `sugarcraft/sugar-style` (for
   themes) and `sugarcraft/sugar-dashboard` (for braille canvas) if not
   already.
 

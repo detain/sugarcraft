@@ -7,7 +7,7 @@ namespace SugarCraft\Markdown\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\SyntaxHighlighter;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Comprehensive tests for the SyntaxHighlighter class.

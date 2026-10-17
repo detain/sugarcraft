@@ -7,7 +7,7 @@ namespace SugarCraft\Gallery\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\PosterGrid;
-use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Style\Layout;
 use SugarCraft\Mouse\Zones\Manager as ZoneManager;
 
 final class PosterGridTest extends TestCase

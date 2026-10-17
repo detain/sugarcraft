@@ -11,7 +11,7 @@ use SugarCraft\Sql\Explain\ExplainProviderInterface;
 use SugarCraft\Sql\Explain\SqliteExplainProvider;
 use SugarCraft\Sql\Explain\MysqlExplainProvider;
 use SugarCraft\Sql\Explain\PostgresExplainProvider;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Renders the output of database EXPLAIN commands as a

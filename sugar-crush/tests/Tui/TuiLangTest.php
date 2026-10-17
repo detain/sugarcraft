@@ -20,7 +20,7 @@ use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
 use SugarCraft\Crush\Tui\Settings\SettingsSavedMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The TUI's own slice of the `crush` catalogue (audit 15b-14, step 15b-14-4b):

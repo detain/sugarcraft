@@ -50,7 +50,7 @@ candy-codetime/
 │   │   └── IcalExporter.php   # RFC 5545 iCalendar
 │   ├── Storage/
 │   │   └── SqliteBackend.php  # Optional SQLite with indexed queries
-│   ├── Theme.php              # Dark/light theming via candy-sprinkles
+│   ├── Theme.php              # Dark/light theming via sugar-style
 │   └── Lang.php               # i18n facade (16 locales)
 └── bin/candy-codetime             # CLI: push <project> <language> <file> [duration]
 ```

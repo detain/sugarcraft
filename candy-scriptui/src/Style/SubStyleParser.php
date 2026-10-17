@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Style;
 
 use SugarCraft\ScriptUi\Lang;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Parses gum-style per-element style sub-flags into a map of

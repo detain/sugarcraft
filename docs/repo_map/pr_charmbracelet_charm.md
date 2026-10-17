@@ -37,7 +37,7 @@ From `repo_map/charmbracelet_charm.md`:
 | `fs/` package | `sugar-markdown` or `sugar-widgets` | Filesystem FS interface |
 | `crypt/` package | (none) | No encryption port yet |
 | `client/` package | `candy-scriptui` | Shell/env config management |
-| `ui/` (Bubble Tea) | `candy-sprinkles` | TUI component patterns |
+| `ui/` (Bubble Tea) | `sugar-style` | TUI component patterns |
 | `server/` package | (none) | Server-side, not applicable |
 | `cmd/` package | `candy-scriptui` | CLI primitives |
 | Overall architecture | `candy-core` | Elm-style MVC TUI pattern |

@@ -22,7 +22,7 @@ maps each package back to the Go projects that sparked its design.
 
 Each row shows the package's subdir; the Composer name is always
 `sugarcraft/<subdir>` and the namespace follows the naming rulebook
-(`candy-sprinkles/` → `sugarcraft/candy-sprinkles` → `SugarCraft\Sprinkles\`).
+(`sugar-style/` → `sugarcraft/sugar-style` → `SugarCraft\Style\`).
 Two namespaces intentionally don't read off their slug — `candy-core/`
 ships as `SugarCraft\Core\`, and `candy-starter/` ships as `App\` — both are
 called out in the table below.
@@ -35,7 +35,7 @@ called out in the table below.
 |---|:---:|---|
 | **CandyAsync** (`candy-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
 | **SugarCraft** (`candy-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
-| **CandySprinkles** (`candy-sprinkles/`) | 🟢 ready | Declarative styling + layout. |
+| **SugarStyle** (`sugar-style/`) | 🟢 ready | Declarative styling + layout. |
 | **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
 | **SugarMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
 | **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | Seventeen prebuilt components (TextInput, ItemList, Table, …). |
@@ -176,7 +176,7 @@ reference projects supplied the ideas, not the code.
 | CandyGitServer (candy-git-server/) | [soft-serve](https://github.com/charmbracelet/soft-serve) |
 | CandyScriptui (candy-scriptui/) | [gum](https://github.com/charmbracelet/gum) |
 | SugarMarkdown (sugar-markdown/) | [glamour](https://github.com/charmbracelet/glamour) |
-| CandySprinkles (candy-sprinkles/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
+| SugarStyle (sugar-style/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
 | CandyTesting (candy-testing/) | none — first-party |
 | CandyTetris (candy-tetris/) | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) |
 | CandyTop (candy-top/) | [btop](https://github.com/aristocratos/btop) |

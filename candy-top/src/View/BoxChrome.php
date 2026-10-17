@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\View;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 
 /**
  * btop's box primitive: outline, optional fill, embedded titles.
  *
- * Runes come from a candy-sprinkles {@see Border} (rounded or square), the
+ * Runes come from a sugar-style {@see Border} (rounded or square), the
  * title junctions from {@see Border::embedJunctions()} — `┐title┌` on the
  * top edge, `┘title└` on the bottom, square even on a rounded box, exactly
  * as btop's Symbols::title_left/right(_down).

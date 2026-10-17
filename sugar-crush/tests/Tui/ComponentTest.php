@@ -14,7 +14,7 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
 use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * @see MenuBar

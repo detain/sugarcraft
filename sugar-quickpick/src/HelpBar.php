@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\QuickPick;
 
 use SugarCraft\QuickPick\Concerns\Visible;
-use SugarCraft\Sprinkles\Bar\HelpBar as BarHelpBar;
+use SugarCraft\Style\Bar\HelpBar as BarHelpBar;
 
 /**
  * HelpBar — renders a single-line keyboard shortcut summary for the QuickPick overlay.

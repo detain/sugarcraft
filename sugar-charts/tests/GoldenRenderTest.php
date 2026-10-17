@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Tests;
 
 use SugarCraft\Charts\Sparkline\Sparkline;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Testing\Snapshot\Assertions;
 use PHPUnit\Framework\TestCase;
 

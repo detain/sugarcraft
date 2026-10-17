@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Overlay\{Position, Veil, VeilStack};
 use PHPUnit\Framework\TestCase;
 

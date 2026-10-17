@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Tests;
 
 use SugarCraft\Forms\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeErrorSummaryTest extends TestCase

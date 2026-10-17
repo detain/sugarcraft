@@ -11,7 +11,7 @@ use SugarCraft\Charts\Support\Range;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style as BufferStyle;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Compact single-row chart drawn with the eight Unicode block-bar

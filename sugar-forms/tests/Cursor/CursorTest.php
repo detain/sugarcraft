@@ -8,7 +8,7 @@ use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
 use SugarCraft\Forms\Cursor\Mode;
 use SugarCraft\Core\TickRequest;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class CursorTest extends TestCase

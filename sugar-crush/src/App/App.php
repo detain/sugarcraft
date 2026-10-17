@@ -107,7 +107,7 @@ use DateTimeImmutable;
 
 /**
  * Main application state - immutable with*() builders.
- * Mirrors the canonical candy-sprinkles/src/Style.php pattern.
+ * Mirrors the canonical sugar-style/src/Style.php pattern.
  *
  * Also the root {@see Model} of the pane shell (crush_feat.md §5 E7, the
  * MERGE branch). §5 E7 offers two ways out of the two-parallel-UI-systems

@@ -8,7 +8,7 @@ use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Palettes;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Per-status palette used by {@see StatusLine} and {@see Banner}.
@@ -157,7 +157,7 @@ final class Theme
     public function withColorProfile(ColorProfile $profile): self
     {
         // Why the NoTty branch still unsets every attribute by hand, now that
-        // candy-sprinkles strips every escape under NoTty itself (3a463ad16):
+        // sugar-style strips every escape under NoTty itself (3a463ad16):
         // for a direct `render()` the two are byte-identical at every profile
         // (pinned by DefaultThemeTest), but sprinkles' stripping keys off the
         // style's *current* profile, while these unsets change the style's
@@ -253,7 +253,7 @@ final class Theme
      * {@see Palettes::DRACULA} single-source-of-truth so they no longer
      * drift as they are hand-copied around the monorepo.
      *
-     * `accent` binds Dracula's `pink` (matching candy-sprinkles' accent
+     * `accent` binds Dracula's `pink` (matching sugar-style' accent
      * slot), not `purple`; before W5 it had diverged to `purple` #bd93f9.
      */
     public static function dracula(): self

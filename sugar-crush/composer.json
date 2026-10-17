@@ -48,7 +48,7 @@
         "symfony/yaml": "^7.4",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-markdown": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
         "sugarcraft/sugar-overlay": "dev-master",

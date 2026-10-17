@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\StyleGuide;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Pins for {@see StyleGuide} — the E736 7.1 glamour STYLE JSON decoder.

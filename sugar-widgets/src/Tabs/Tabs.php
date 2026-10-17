@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\MsgZoneInBounds;
 

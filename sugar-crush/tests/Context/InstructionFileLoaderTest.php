@@ -112,9 +112,9 @@ final class InstructionFileLoaderTest extends TestCase
     public function testForcedInstructionsResolveGlobs(): void
     {
         // Create CALIBER_LEARNINGS.md files in multiple candy-* libs
-        mkdir($this->repoRoot . '/candy-sprinkles', 0777, true);
+        mkdir($this->repoRoot . '/candy-sprinkles', 0777, true); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
         $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# Candy Shine Learnings'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
-        $this->touch($this->repoRoot . '/candy-sprinkles/CALIBER_LEARNINGS.md', '# Candy Sprinkles Learnings');
+        $this->touch($this->repoRoot . '/candy-sprinkles/CALIBER_LEARNINGS.md', '# Candy Sprinkles Learnings'); // @rename-keep functional synthetic-tree fixture: dir name coupled to the test's own untagged `candy-*/CALIBER_LEARNINGS.md` input pattern
 
         $loader = new InstructionFileLoader($this->repoRoot, ['candy-*/CALIBER_LEARNINGS.md']);
         $contents = $loader->loadForced();

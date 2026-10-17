@@ -6,7 +6,7 @@ namespace SugarCraft\Charts\Canvas;
 
 use SugarCraft\Charts\Lang;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Fixed-size 2D grid of {@see Cell}s. Charts draw onto the canvas and

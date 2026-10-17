@@ -755,7 +755,7 @@ Implement webhook-driven notifications:
 
 **Potential adaptations for candy-git-server:**
 
-- Implement CSS-like styling system using `candy-sprinkles`
+- Implement CSS-like styling system using `sugar-style`
 - Use reactive state pattern for TUI updates
 - Build spatial map for mouse event routing
 

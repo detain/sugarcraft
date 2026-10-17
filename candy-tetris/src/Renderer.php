@@ -9,9 +9,9 @@ use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Region;
 use SugarCraft\Buffer\Position;
 use SugarCraft\Buffer\Style;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Style as SprinklesStyle;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Style as SugarStyle;
 
 /**
  * Pure view function for {@see Game}. Returns the rendered frame
@@ -39,7 +39,7 @@ use SugarCraft\Sprinkles\Style as SprinklesStyle;
  * composited beside the framed playfield with Layout::joinHorizontal().
  *
  * Mirrors Broderick-Westrope/tetrigo board/sidebar layout intent —
- * playfield through candy-buffer, chrome through candy-sprinkles and
+ * playfield through candy-buffer, chrome through sugar-style and
  * candy-layout joins.
  */
 final class Renderer
@@ -62,7 +62,7 @@ final class Renderer
         $body = Layout::joinHorizontal(0.0, $playfield, '  ', $sidebar);
 
         if ($game->over === true) {
-            $banner = SprinklesStyle::new()
+            $banner = SugarStyle::new()
                 ->border(Border::rounded())
                 ->padding(1, 3)
                 ->render("GAME OVER\nfinal score: {$game->score->points}\npress q to quit");
@@ -110,7 +110,7 @@ final class Renderer
 
         // Frame the Buffer interior with Sprinkles border.
         $interior = $boardBuf->toAnsi();
-        return SprinklesStyle::new()
+        return SugarStyle::new()
             ->border(Border::rounded())
             ->padding(0, 1)
             ->render($interior);
@@ -137,13 +137,13 @@ final class Renderer
         if ($game->hold !== null) {
             $hold = "hold:\n" . self::renderMini($game->hold);
             if ($game->canHold === false) {
-                $hold = SprinklesStyle::new()->dim(true)->render($hold);
+                $hold = SugarStyle::new()->dim(true)->render($hold);
             }
         } else {
             $hold = "hold:\n" . self::renderMiniPlaceholder();
         }
 
-        $card = static fn(string $body): string => SprinklesStyle::new()
+        $card = static fn(string $body): string => SugarStyle::new()
             ->border(Border::normal())
             ->padding(0, 1)
             ->width(20)

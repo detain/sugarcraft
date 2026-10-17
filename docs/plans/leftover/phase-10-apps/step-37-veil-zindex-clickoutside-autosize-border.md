@@ -8,7 +8,7 @@
 - Z-index / stacking (multiple veils, ordered).
 - Click-outside-to-dismiss (consume sugar-mouse for hit testing).
 - Auto-sizing / content-aware dimensions.
-- Border chrome (consume candy-sprinkles Border family).
+- Border chrome (consume sugar-style Border family).
 
 ## Files
 
@@ -16,7 +16,7 @@
 `withClickOutsideDismiss(bool)`, `withAutoSize(bool)`,
 `withBorder(Border)`.
 
-**Modify:** `sugar-overlay/composer.json` — add sugar-mouse + candy-sprinkles.
+**Modify:** `sugar-overlay/composer.json` — add sugar-mouse + sugar-style.
 
 ## Tests
 

@@ -464,7 +464,7 @@ candy-git is the most **complete application** in the SugarCraft monorepo:
 ```json
 {
   "sugarcraft/candy-core": "dev-master",      // TUI framework (Model, Msg, KeyType, Program)
-  "sugarcraft/candy-sprinkles": "dev-master"    // Styling system (Style, Border, Layout, Color)
+  "sugarcraft/sugar-style": "dev-master"    // Styling system (Style, Border, Layout, Color)
 }
 ```
 
@@ -508,6 +508,6 @@ candy-git is the most **complete application** in the SugarCraft monorepo:
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-core.md` — TUI framework foundation
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-sprinkles.md` — Styling system
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-style.md` — Styling system
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-widgets.md` — Component library comparison

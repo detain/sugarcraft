@@ -21,7 +21,7 @@ SugarCraft\Overlay\Veil (final class, readonly props)
 ├── zIndex: int (stacking order)
 ├── clickOutsideDismiss: bool
 ├── autoSize: bool
-├── border: ?Border (candy-sprinkles)
+├── border: ?Border (sugar-style)
 ├── manager: ?Manager (sugar-mouse)
 └── methods: withBackdrop(), withAnimation(), withZIndex(),
             withClickOutsideDismiss(), withAutoSize(),
@@ -41,7 +41,7 @@ SugarCraft\Overlay\VeilStack (immutable stack)
 - **Animation**: SLIDE (offset deltas from anchor), FADE (easing available, terminal-limited), SCALE (center-out line reveal)
 - **Backdrop dimming**: 0-100 maps to 0-3 ANSI SGR `\x1b[2m` passes via `Ansi::FAINT`
 - **Auto-size**: Computes dimensions from border-wrapped content before measuring
-- **Border chrome**: Wraps content via `candy-sprinkles` `Style::border()`
+- **Border chrome**: Wraps content via `sugar-style` `Style::border()`
 - **Click-outside dismiss**: Delegates to `sugar-mouse` `Manager::anyInBounds()`
 - **UTF-8 handling**: Byte-level replacement with column tracking for multibyte chars
 - **Framework-agnostic**: `composite(fg, bg, v, h, xOff, yOff)` accepts raw strings
@@ -178,7 +178,7 @@ SugarCraft\Overlay\VeilStack (immutable stack)
 **Source:** `docs/repo_map/pr_charmbracelet_lipgloss.md` Issue #85
 **Implementation ideas:**
 
-- Integrate `candy-sprinkles` Style wrapping with `mb_substr`/word-wrap logic
+- Integrate `sugar-style` Style wrapping with `mb_substr`/word-wrap logic
 - Track active style state across line breaks, reapply after wrapping
 - Use `mb_strwidth()` for width measurement (potentially more correct than Go's uniseg per issue #666)
 
@@ -265,7 +265,7 @@ interface Renderable {
 ### 12. No Border Gradient / Color Blend Support
 
 **Title:** lipgloss v2 has BorderForegroundBlend with CIELAB interpolation
-**Description:** lipgloss v2's `BorderForegroundBlend(...)` uses CIELAB-interpolated colors around all four sides. sugar-overlay's border is a simple candy-sprinkles Border.
+**Description:** lipgloss v2's `BorderForegroundBlend(...)` uses CIELAB-interpolated colors around all four sides. sugar-overlay's border is a simple sugar-style Border.
 **Source:** `docs/repo_map/charmbracelet_lipgloss.md`
 **Implementation ideas:**
 
@@ -291,11 +291,11 @@ interface Renderable {
 ### 14. No Multi-Character Border Corners
 
 **Title:** lipgloss v2 allows multi-character border corners
-**Description:** lipgloss v2 Issue #605 requests multi-character corner support. sugar-overlay relies on candy-sprinkles Border which may have similar limitations.
+**Description:** lipgloss v2 Issue #605 requests multi-character corner support. sugar-overlay relies on sugar-style Border which may have similar limitations.
 **Source:** `docs/repo_map/pr_charmbracelet_lipgloss.md` Issue #605
 **Implementation ideas:**
 
-- Audit candy-sprinkles Border implementation for corner width handling
+- Audit sugar-style Border implementation for corner width handling
 - Add multi-corner support if missing
 
 **Complexity:** Low
@@ -553,7 +553,7 @@ Uses ANSI shadow characters or offset rendering.
 
 ## 3. Rounded Corner Rendering
 
-Current border uses candy-sprinkles Border characters. Add `BorderStyle::ROUND` variant with proper corner joining for overlays.
+Current border uses sugar-style Border characters. Add `BorderStyle::ROUND` variant with proper corner joining for overlays.
 
 ## 4. Backdrop Blur Simulation
 
@@ -660,9 +660,9 @@ case TickMsg $msg:
     return $this->tick($msg); // drives animation progress
 ```
 
-## 3. candy-sprinkles Style Integration
+## 3. sugar-style Style Integration
 
-Deepen integration with candy-sprinkles:
+Deepen integration with sugar-style:
 
 - `Veil::withStyle(Style)` that applies style to foreground before compositing
 - `Veil::withBackgroundStyle(Style)` that applies style to background region

@@ -17,7 +17,7 @@ use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;

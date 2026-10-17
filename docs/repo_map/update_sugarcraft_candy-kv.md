@@ -656,7 +656,7 @@ Using `candy-core` (TUI framework), implement `candy-kv browse [db]`:
 
 ## 2. Colorized CLI Output
 
-Add optional colorized output via `candy-sprinkles`:
+Add optional colorized output via `sugar-style`:
 
 - Colorized key-value display in list
 - Expiry warnings (red for soon-to-expire)

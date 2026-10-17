@@ -282,7 +282,7 @@ final class SessionTabTest extends TestCase
     /**
      * Regression pin for R26: SessionTab's with*() methods must delegate
      * through a private mutate() helper (repo-wide immutable+fluent
-     * convention, see candy-sprinkles/src/Style.php) instead of hand-rolling
+     * convention, see sugar-style/src/Style.php) instead of hand-rolling
      * `new self(...)` in each setter. Source-inspects each with*() method
      * body via reflection so a revert back to hand-rolled `new self(...)`
      * fails this test even though the resulting behaviour is identical.

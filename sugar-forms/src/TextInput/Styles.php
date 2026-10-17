@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\TextInput;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Styles for {@see TextInput}: one slot per visible element. All

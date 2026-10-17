@@ -36,7 +36,7 @@ final class TerminalBackgroundTest extends TestCase
 
     /**
      * The two system white slots are light and bright-black is dark - the pair
-     * SprinklesTheme::adaptive()'s old `>= 8` rule got backwards. Sprinkles now
+     * StyleTheme::adaptive()'s old `>= 8` rule got backwards. Sprinkles now
      * runs the same luminance test (pinned by TerminalBackgroundSprinklesAgreementTest).
      * (7 is #e5e5e5, 15 is #ffffff, 8 is #7f7f7f at luminance 0.21.)
      */

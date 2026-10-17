@@ -24,7 +24,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos affected:** lipgloss, bubbles, ultraviolet, php-tui, phpschool/cli-menu, sequin, go-termimg, pterm
 - **Problem:** Using `mb_strlen` instead of `mb_strwidth` causes CJK/emoji to corrupt layouts
-- **SugarCraft risk:** HIGH — directly affects `sugar-markdown`, `candy-sprinkles`, `sugar-widgets`
+- **SugarCraft risk:** HIGH — directly affects `sugar-markdown`, `sugar-style`, `sugar-widgets`
 - **Fix required:** Use `mb_strwidth()` or grapheme cluster counting everywhere
 
 ### 2. Escape Sequence Termination (🔴 CRITICAL - Appears in 6+ repos)
@@ -444,7 +444,7 @@ These patterns appear across Go, Rust, Python, and PHP TUI ecosystems:
 | Cell-based buffer | ultraviolet | ratatui | textual | candy-core (planned) | 🔲 planned |
 | Constraint layout | bubbleboxer | ratatui | textual | sugar-markdown (planned) | 🔲 planned |
 | Fuzzy filtering | bubbles | — | textual | sugar-widgets (gaps) | 🔲 gaps |
-| CSS styling | lipgloss | ratatui | textual (TCSS) | candy-sprinkles | ✅ implemented |
+| CSS styling | lipgloss | ratatui | textual (TCSS) | sugar-style | ✅ implemented |
 | Widget trait | — | ratatui | textual | — | 🔲 not planned |
 | Snapshot testing | — | — | textual | sugar-widgets | 🔲 not planned |
 
@@ -458,7 +458,7 @@ Second-stage analysis confirms `charmbracelet/bubbletea` is the most analyzed re
 
 ### Confirmed: lipgloss v2 Architecture is Correct
 
-lipgloss v2's shift to pure Style type and writer functions is the correct direction for `candy-sprinkles`.
+lipgloss v2's shift to pure Style type and writer functions is the correct direction for `sugar-style`.
 
 ### Confirmed: Textual is Python State-of-the-Art
 

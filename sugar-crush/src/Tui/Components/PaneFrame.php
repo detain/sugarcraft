@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\TerminalBackground;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The 256-colour side-frame gradient for docked pane boxes (L3 of the
@@ -19,7 +19,7 @@ use SugarCraft\Sprinkles\Style;
  * rather than a hard two-tone seam).
  *
  * HOW IT WORKS ON THE BYTES. The pane components paint their frame through
- * the candy-sprinkles border walk, which resolves ONE flat SGR per side for
+ * the sugar-style border walk, which resolves ONE flat SGR per side for
  * the whole run of a border — a flat colour per side is the most that
  * public API expresses. So the fade is composed after the walk: the frame is
  * rendered exactly as before, each body row is verified to carry the walk's

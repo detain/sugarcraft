@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\View;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\GpuPanels;
 use SugarCraft\Top\Collect\ContainerEngine;

@@ -17,9 +17,9 @@ use SugarCraft\Sql\Admin\Sampler;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sql\Renderer;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
+use SugarCraft\Style\Style;
 
 /**
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.

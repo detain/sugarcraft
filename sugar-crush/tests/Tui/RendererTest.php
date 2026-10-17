@@ -11,9 +11,9 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
-use SugarCraft\Sprinkles\Bar\Segment;
-use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Bar\Segment;
+use SugarCraft\Style\Bar\StatusBar as BarStatusBar;
+use SugarCraft\Style\Style;
 
 /**
  * @see Renderer
@@ -353,7 +353,7 @@ final class RendererTest extends TestCase
     // Renderer::statusBar() migration onto Sprinkles\Bar\StatusBar
     //
     // The live status bar was migrated off a hand-rolled string concat onto the
-    // shared SugarCraft\Sprinkles\Bar\StatusBar primitive (the same one behind
+    // shared SugarCraft\Style\Bar\StatusBar primitive (the same one behind
     // sugar-dashboard / sugar-quickpick). These tests lock BOTH facets: (1) byte-parity
     // with the previous hand-rolled output for every populated case, and (2)
     // that the bytes are genuinely produced by the primitive with the expected

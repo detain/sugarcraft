@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Tetris;
 
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Style;
 
 /**
  * Split-screen renderer for VS Computer mode.

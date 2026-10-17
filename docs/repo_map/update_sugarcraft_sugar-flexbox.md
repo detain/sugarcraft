@@ -272,10 +272,10 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 **Title:** Implement proper border rendering with multiple border styles
 **Description:** sugar-flexbox Table uses a simple separator string (` │ `). sugar-table has a full 13-character Border object with multiple border styles (normal, rounded, thick, double, block, ascii, hidden, markdown).
 **Why it matters:** Essential for professional-looking table presentation.
-**Source:** `docs/repo_map/sugarcraft_sugar-table.md` — "Border chars (13 characters), Border family from candy-sprinkles"
+**Source:** `docs/repo_map/sugarcraft_sugar-table.md` — "Border chars (13 characters), Border family from sugar-style"
 **Implementation ideas:**
 
-- Add `Border` class or import from `SugarCraft\Sprinkles\Border`
+- Add `Border` class or import from `SugarCraft\Style\Border`
 - Add `withBorderStyle(string $style): self` or `withBorder(Border $border): self`
 - Update render loop to build border lines from Border characters
 - Support multiple border families (normal, rounded, thick, double, etc.)
@@ -727,10 +727,10 @@ final readonly class RenderContext {
 
 **Source:** `docs/repo_map/sugarcraft_sugar-dashboard.md` — "StackedGrid multi-column stacked grid"
 
-## 3. Integration with candy-sprinkles Style System
+## 3. Integration with sugar-style Style System
 
 **Current:** sugar-flexbox uses raw ANSI strings for styling
-**Improvement:** Support `SugarCraft\Sprinkles\Style` objects as alternative to raw ANSI strings
+**Improvement:** Support `SugarCraft\Style\Style` objects as alternative to raw ANSI strings
 
 - Style objects provide structured styling API
 - Automatically convert to ANSI strings during render

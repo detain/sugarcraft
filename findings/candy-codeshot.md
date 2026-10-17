@@ -441,7 +441,7 @@ The test `testAnsiForegroundBecomesTspanFill` only verifies that a red foregroun
 
 **File:** `src/Segment.php:23-33`
 
-SugarCraft conventions (per `candy-sprinkles/src/Style.php`) use a private `mutate()` method that takes an array of changed fields and returns a new instance. `Segment` only has `withBg()` — if the API grows to support `withFg()`, `withBold()`, etc., each would need a separate method. The `mutate()` pattern is more extensible.
+SugarCraft conventions (per `sugar-style/src/Style.php`) use a private `mutate()` method that takes an array of changed fields and returns a new instance. `Segment` only has `withBg()` — if the API grows to support `withFg()`, `withBold()`, etc., each would need a separate method. The `mutate()` pattern is more extensible.
 
 **Recommendation:** Either replace `withBg()` with `with(array $changes)` using the standard `mutate()` trait, or document why `withBg()` is the only needed mutation for the current use case.
 

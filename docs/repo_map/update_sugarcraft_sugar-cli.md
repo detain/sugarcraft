@@ -1,6 +1,6 @@
 # Overview
 
-SugarCli (`sugar-cli`) is a PHP port of `charmbracelet/fang` providing opinionated CLI presentation helpers (StatusLine, Banner, Section, Stage, HelpText, Logo, Theme) that turn ordinary command-line output into branded terminal output. It's library-only, framework-agnostic, and integrates with the SugarCraft ecosystem via `candy-sprinkles` (styling) and `candy-core` (utilities).
+SugarCli (`sugar-cli`) is a PHP port of `charmbracelet/fang` providing opinionated CLI presentation helpers (StatusLine, Banner, Section, Stage, HelpText, Logo, Theme) that turn ordinary command-line output into branded terminal output. It's library-only, framework-agnostic, and integrates with the SugarCraft ecosystem via `sugar-style` (styling) and `candy-core` (utilities).
 
 **Biggest opportunity areas:**
 
@@ -37,7 +37,7 @@ SugarCli (`sugar-cli`) is a PHP port of `charmbracelet/fang` providing opinionat
 ```
 sugar-cli/
 ├── depends on: candy-core (Width utility, Color utilities)
-├── depends on: candy-sprinkles (Style, Border)
+├── depends on: sugar-style (Style, Border)
 └── provides: CLI presentation helpers
 ```
 
@@ -208,7 +208,7 @@ foreach (array_keys($rows) as $k) {
 
 - Use lipgloss-style border title pattern
 
-- Reuse `candy-sprinkles` BorderTitle system
+- Reuse `sugar-style` BorderTitle system
 
 **Estimated complexity:** Medium
 
@@ -536,7 +536,7 @@ Show sugar-cli integration with:
 
 - `candy-log` (logging integration)
 
-- `candy-sprinkles` (advanced styling)
+- `sugar-style` (advanced styling)
 
 ---
 

@@ -14,7 +14,7 @@ Address all 25 findings from the `sugar-forms` code review, covering critical cr
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| Use `mutate()` helper from `candy-core/src/Concerns/Mutable.php` for wither pattern consistency | Canonical pattern in codebase; reduces boilerplate and centralizes clone logic | `candy-sprinkles/src/Style.php:260-264` |
+| Use `mutate()` helper from `candy-core/src/Concerns/Mutable.php` for wither pattern consistency | Canonical pattern in codebase; reduces boilerplate and centralizes clone logic | `sugar-style/src/Style.php:260-264` |
 | `SpinnerStyle` is immutable (readonly props, no setters) | Confirmed via `sugar-forms/src/Spinner/Style.php:17-30` — defensive cloning in `withStyle()` is unnecessary | `sugar-forms/src/Spinner/Style.php:L17-30` |
 | Fork-based spinner in `sugar-forms` is separate from Bubble Tea `Spinner` in `sugar-forms` | `sugar-forms/src/Spinner/Spinner.php` is a TEA Model; `sugar-forms/src/Spinner.php` is a blocking fork-and-spin driver | `sugar-forms/src/Spinner.php:11-21` vs `sugar-forms/src/Spinner/Spinner.php:11-29` |
 | `$waitStatus` is properly initialized before use | `$waitStatus = 0` at line 169 before signal handlers capture it by reference; signal is only fired after waitpid sets it | `sugar-forms/src/Spinner.php:169` investigation |

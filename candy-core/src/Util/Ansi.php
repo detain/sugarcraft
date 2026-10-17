@@ -11,7 +11,7 @@ use SugarCraft\Core\Lang;
  *
  * Higher-level callers (Style, Renderer, Cursor) compose the strings
  * here to build their final output. Direct use is uncommon — prefer
- * the typed APIs in candy-sprinkles wherever possible.
+ * the typed APIs in sugar-style wherever possible.
  */
 final class Ansi
 {

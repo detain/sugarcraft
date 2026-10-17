@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Canvas;
 
 use SugarCraft\Charts\Lang;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Sub-cell Braille buffer.

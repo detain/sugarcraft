@@ -238,19 +238,19 @@ None currently. Theme loading could be formalized as a `ThemeLoaderInterface` fo
 
 ### 3. Interactive TUI Configuration Mode
 
-**Title**: Add `--interactive` TUI mode using candy-sprinkles
+**Title**: Add `--interactive` TUI mode using sugar-style
 **Description**: Upstream freeze has a full interactive configuration via `huh` (Bubble Tea form library). candy-codeshot is CLI-only with all options as flags.
 **Why it matters**: Interactive configuration with live preview is significantly more user-friendly than memorizing flag combinations.
 **Source repo**: `charmbracelet/freeze` (interactive.go using huh)
 **Source PR/issue**: freeze issues #174, #135 (interactive mode missing features)
 **Implementation ideas**:
 
-- Build form using `candy-sprinkles` TextInput, Select, Confirm components
+- Build form using `sugar-style` TextInput, Select, Confirm components
 
 - Show live SVG preview as settings change
 
 - Persist final config to `$XDG_CONFIG_HOME/candy-codeshot/user.json`
-**Estimated complexity**: Medium — requires candy-sprinkles integration
+**Estimated complexity**: Medium — requires sugar-style integration
 **Expected impact**: Major UX improvement; feature parity with upstream
 
 ### 4. User Config Persistence
@@ -525,7 +525,7 @@ Explain when to use SVG (CI, git diffs, no extensions) vs PNG (transparency, wid
 
 ## 1. Interactive TUI with Live Preview
 
-Build `--interactive` using `candy-sprinkles` with live SVG preview as options change.
+Build `--interactive` using `sugar-style` with live SVG preview as options change.
 **Source**: `docs/repo_map/pr_charmbracelet_freeze.md` — issues #174, #135
 
 ## 2. Fuzzy Theme Matching
@@ -670,7 +670,7 @@ Port the VHS `.tape` format as a SugarCraft library for scripted terminal demos
 
 6. **Add user config persistence** — `$XDG_CONFIG_HOME/candy-codeshot/user.json`
 
-7. **Build interactive TUI** — `--interactive` using candy-sprinkles with live preview
+7. **Build interactive TUI** — `--interactive` using sugar-style with live preview
 
 8. **Create `ThemeLoaderInterface`** — formalize theme loading for extensibility
 
@@ -728,7 +728,7 @@ The most impactful improvements would be:
 
 1. **Syntax highlighting integration** — Creating a `SyntaxHighlighterInterface` with adapters for popular PHP highlighters (Geshi, or a Python bridge to pygments) would close the single largest capability gap. This is high effort but transforms the tool from "ANSI-to-image" to "code-to-image".
 
-2. **Interactive TUI mode** — Building `--interactive` using `candy-sprinkles` with live SVG preview would be a major UX differentiator. Upstream's interactive mode (via huh/Bubble Tea) doesn't include live preview — SugarCraft could exceed upstream here.
+2. **Interactive TUI mode** — Building `--interactive` using `sugar-style` with live SVG preview would be a major UX differentiator. Upstream's interactive mode (via huh/Bubble Tea) doesn't include live preview — SugarCraft could exceed upstream here.
 
 3. **PNG quality improvements** — The GD bitmap font limitation means PNG loses per-segment background colors. Implementing `imagettftext()`-based rendering would close this gap and also enable CJK support.
 

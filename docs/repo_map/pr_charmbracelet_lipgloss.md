@@ -24,14 +24,14 @@
 
 | SugarCraft Lib | Namespace | Lipgloss Sub-package/Feature |
 |---|---|---|
-| **CandySprinkles** (`candy-sprinkles/`) | `SugarCraft\Sprinkles` | **Primary mapping:** The core `Style` type and all setters (`Bold`, `Italic`, `Foreground`, `Background`, `Padding`, `Margin`, `Border*`, `Align`, etc.), color system (`Color`, `Darken`, `Lighten`, `Complementary`, `Alpha`, `Blend1D`, `Blend2D`, `AdaptiveColor`), border presets, position types, measurement utilities (`Width`, `Height`, `Size`), text wrapping/joining/placement, layer compositing (`Layer`, `Compositor`, `Canvas`), `StyleRunes` |
+| **SugarStyle** (`sugar-style/`) | `SugarCraft\Style` | **Primary mapping:** The core `Style` type and all setters (`Bold`, `Italic`, `Foreground`, `Background`, `Padding`, `Margin`, `Border*`, `Align`, etc.), color system (`Color`, `Darken`, `Lighten`, `Complementary`, `Alpha`, `Blend1D`, `Blend2D`, `AdaptiveColor`), border presets, position types, measurement utilities (`Width`, `Height`, `Size`), text wrapping/joining/placement, layer compositing (`Layer`, `Compositor`, `Canvas`), `StyleRunes` |
 | **SugarWidgets** (`sugar-widgets/`) | `SugarCraft\Widgets` | `table` sub-package → `Table.php` with `Column.php`, `SortState.php`, `Styles.php`; `list` sub-package → potential future `ItemList.php` enhancements |
 | **SugarColorprofile** (`sugar-colorprofile/`) | `SugarCraft\ColorProfile` | `charmbracelet/colorprofile` → terminal color detection (`HasDarkBackground`, `BackgroundColor`, `LightDark`, `Complete`) — SugarCraft's `sugar-colorprofile` maps directly to `colorprofile` itself |
 | **SugarMarkdown** (`sugar-markdown/`) | `SugarCraft\Markdown` | Adjacent: Lip Gloss handles ANSI styling; Glamour handles Markdown → these compose together in Charm apps |
 | **SugarCharts** (`sugar-charts/`) | `SugarCraft\Charts` | `Blend2D` / color gradient functions could power heatmap cell coloring |
 | **SugarForms** (`sugar-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
 
-**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **CandySprinkles** (`candy-sprinkles/`) is the equivalent foundation layer that everything else (`sugar-widgets`, `sugar-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `candy-sprinkles` (styling) in the same way Bubble Tea pairs with Lip Gloss.
+**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **SugarStyle** (`sugar-style/`) is the equivalent foundation layer that everything else (`sugar-widgets`, `sugar-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `sugar-style` (styling) in the same way Bubble Tea pairs with Lip Gloss.
 
 ---
 
@@ -58,7 +58,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Reactions:** Active community interest
 - **Summary:** Building complex TUI layouts with lipgloss requires manual calculations. `JoinHorizontal` and `JoinVertical` don't support proportional sizing. No way to say "sidebar 30%, main 70%". Terminal resize requires manual recalculation. No grid system for dashboard-style layouts.
 - **Proposed Solution:** `charm-layout` — CSS Flexbox-inspired layout engine built on lipgloss with `Flex` (Row/Column direction, proportional ratios, configurable gap), `Grid` (N columns, auto-row distribution), `Responsive` (SetSize() recalculates everything), `Composable` (flex inside grid, grid inside flex).
-- **Direct Risk to SugarCraft:** HIGH — If SugarCraft doesn't implement a proper layout system, users will face the same pain points. The `candy-sprinkles` library needs proportional/grid layout primitives.
+- **Direct Risk to SugarCraft:** HIGH — If SugarCraft doesn't implement a proper layout system, users will face the same pain points. The `sugar-style` library needs proportional/grid layout primitives.
 - **Strategic Opportunity:** SugarCraft could implement a superior layout system from the start, avoiding the "every Bubble Tea app invents layout logic" problem.
 
 ### Issue #85: Formatting Lost on Linewrap
@@ -71,7 +71,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Summary:** When rendering a long string with styles applied in a "box", text formatting is lost when lines wrap. The border resets the previous wrapped line style.
 - **Workaround (from community):** Wrap the text _before_ styling it, instead of after.
 - **Fix progress:** Maintainers indicate `cellbuf.Wrap` could fix this (refs: charmbracelet/x#350, lipgloss#479).
-- **Direct Risk to SugarCraft:** HIGH — This is a core rendering bug that affects any styled text that wraps. `CandySprinkles` will need to implement proper wrapping that preserves style state across line breaks.
+- **Direct Risk to SugarCraft:** HIGH — This is a core rendering bug that affects any styled text that wraps. `SugarStyle` will need to implement proper wrapping that preserves style state across line breaks.
 - **Strategic Opportunity:** Implementing proper style-preserving text wrap in PHP from the start is a chance to avoid this 3-year-old bug.
 
 ### Issue #194: BorderTop(false) Disappears Entire Border
@@ -88,21 +88,21 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Author:** kolkov (2025-09-04)
 - **Summary:** The library incorrectly calculates display width of emoji, Unicode grapheme clusters, CJK characters, and ZWJ sequences, causing misaligned TUI layouts.
 - **Maintainer response:** Claims this is a terminal emulator issue (referencing jeffquast.com, mitchellh.com writing on grapheme clusters). However, users have reproduced across multiple terminals (bash, fish, konsole) and claim ghostty (which handles graphemes correctly natively) still shows the issue in TUIOS.
-- **Direct Risk to SugarCraft:** HIGH — Unicode width calculation is a fundamental issue. SugarCraft's `candy-sprinkles` uses `Width()` and `Height()` for layout; incorrect width measurement breaks all constrained layouts with international content.
+- **Direct Risk to SugarCraft:** HIGH — Unicode width calculation is a fundamental issue. SugarCraft's `sugar-style` uses `Width()` and `Height()` for layout; incorrect width measurement breaks all constrained layouts with international content.
 - **Strategic Opportunity:** PHP's `mb_strwidth()` and `grapheme_strlen()` functions may handle this better than Go's `uniseg` — worth investigating.
 
 ### Issue #666: V2 Lipgloss.Width Does Not Match Output Width In Some Cases
 
 - **Author:** pjkaufman (2026-04-15)
 - **Summary:** `lipgloss.Width()` returns one value for a string, but rendering that many dashes produces different output length. Affects strings with certain Unicode characters (ﾟ Д etc.). This bubbles up from `ansi.StringWidth`, `runewidth-go`, and `uniseg` — all agree on the wrong value.
-- **Direct Risk to SugarCraft:** HIGH — `CandySprinkles` uses width measurement for `MaxWidth`, text truncation, and table column sizing.
+- **Direct Risk to SugarCraft:** HIGH — `SugarStyle` uses width measurement for `MaxWidth`, text truncation, and table column sizing.
 
 ### Issue #605: Allow Multi-Character Corners on Borders
 
 - **Author:** Grantmartin2002 (2026-02-02)
 - **Labels:** enhancement
 - **Summary:** `Border` struct truncates corners to 1 rune, but users want multi-character corners for custom border styles.
-- **Direct Risk to SugarCraft:** LOW — Border customization is an edge case, but worth supporting in `CandySprinkles` if it doesn't complicate the API significantly.
+- **Direct Risk to SugarCraft:** LOW — Border customization is an edge case, but worth supporting in `SugarStyle` if it doesn't complicate the API significantly.
 
 ### Issue #564: Dynamic Layout Not Behaving Like React-Style Flex
 
@@ -297,7 +297,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
   ```
 - **Outcome:** This was implemented in v2 (Renderer removed, Style is pure value type).
 
-**Direct Risk to SugarCraft:** This v2 design aligns with how SugarCraft's `CandySprinkles` should be designed — pure value types, no hidden global state, explicit color profile passing at output time.
+**Direct Risk to SugarCraft:** This v2 design aligns with how SugarCraft's `SugarStyle` should be designed — pure value types, no hidden global state, explicit color profile passing at output time.
 
 ### Issue #502: Border Manual Coloring with ANSI Colors
 
@@ -317,7 +317,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
   ```
 - **Maintainer Note:** "The easiest way to do this is to simply make sure all your styles have the same background."
 - **Related:** Likely related to #144.
-- **Direct Risk to SugarCraft:** HIGH — Style composition in `CandySprinkles` must ensure child styles inherit parent background unless explicitly overridden.
+- **Direct Risk to SugarCraft:** HIGH — Style composition in `SugarStyle` must ensure child styles inherit parent background unless explicitly overridden.
 
 ---
 
@@ -425,7 +425,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 ## 18. Problems Likely Relevant To SugarCraft
 
-1. **Width Measurement for International Content** — PHP's `mb_strwidth()` handles some cases better than Go's `uniseg`. `CandySprinkles` must get this right.
+1. **Width Measurement for International Content** — PHP's `mb_strwidth()` handles some cases better than Go's `uniseg`. `SugarStyle` must get this right.
 2. **Style Composition with Inheritance** — The "bold resets background" problem (#531) will affect any styling library. Implement style inheritance properly.
 3. **TTY Detection at Output Time** — SugarCraft needs writer functions that detect TTY and strip ANSI when needed (CI, pipes, redirect).
 4. **Text Wrapping Preserving Style State** — Issue #85 is a 3-year-old bug. SugarCraft must implement wrapping that tracks and restores style state across line breaks.
@@ -483,7 +483,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 1. **AI Agents Moving to Terminal** — From the v2 announcement: "AI agents moved into the terminal, and suddenly the rest of the industry saw what many already knew: the terminal is the most powerful way to interface with the operating system." Lip Gloss v2 is optimized for AI tool output.
 
-2. **Coordinated Library Versions** — The v2 release coordinated across Bubble Tea, Lip Gloss, and Bubbles simultaneously. SugarCraft should coordinate releases of `candy-sprinkles`, `candy-core`, and `sugar-widgets`.
+2. **Coordinated Library Versions** — The v2 release coordinated across Bubble Tea, Lip Gloss, and Bubbles simultaneously. SugarCraft should coordinate releases of `sugar-style`, `candy-core`, and `sugar-widgets`.
 
 3. **Separation of Rendering and Output** — v2's architecture (render always emits full ANSI; writer handles downsampling) is the correct pattern for composability.
 
@@ -503,7 +503,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 3. **Coroutine-Friendly Architecture** — PHP's ReactPHP ecosystem can handle async terminal I/O. SugarCraft's `candy-core` can be designed for non-blocking terminal queries.
 
-4. **Coordinated Multi-Library Releases** — When releasing v2 of `candy-sprinkles`, coordinate with `candy-core` and `sugar-widgets` simultaneously.
+4. **Coordinated Multi-Library Releases** — When releasing v2 of `sugar-style`, coordinate with `candy-core` and `sugar-widgets` simultaneously.
 
 5. **Superior Theme System** — The upstream `charm-themes` POC exists but hasn't been merged. SugarCraft could create an official theming system that spans all libraries.
 
@@ -521,9 +521,9 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 4. **Writer Pattern for Output** — Java's `Writer` abstraction (abstract base for character streams) parallels lipgloss's `colorprofile.Writer`. SugarCraft should have an output abstraction that handles encoding/decoding.
 
-5. **Component Libraries Layered on Styling** — `bubbles` (interactive components) builds on `lipgloss` (styling). `sugar-widgets` should build on `candy-sprinkles` the same way.
+5. **Component Libraries Layered on Styling** — `bubbles` (interactive components) builds on `lipgloss` (styling). `sugar-widgets` should build on `sugar-style` the same way.
 
-6. **Snapshot Testing for Rendering** — Lipgloss's golden tests assert raw ANSI bytes. SugarCraft should use the same approach for `candy-sprinkles` snapshot tests.
+6. **Snapshot Testing for Rendering** — Lipgloss's golden tests assert raw ANSI bytes. SugarCraft should use the same approach for `sugar-style` snapshot tests.
 
 ---
 
@@ -531,7 +531,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 ### Immediate (High Impact, Low Effort)
 
-1. **Implement Writer Functions in CandySprinkles** — `Print()`, `Sprint()`, `Fprint()` that detect TTY and strip ANSI. This addresses the #1 user confusion point from v2 migration.
+1. **Implement Writer Functions in SugarStyle** — `Print()`, `Sprint()`, `Fprint()` that detect TTY and strip ANSI. This addresses the #1 user confusion point from v2 migration.
 2. **Guard TTY Queries** — Before any `HasDarkBackground` call, check `isatty()`. Never hang on non-TTY input.
 3. **Add Explicit Width Validation** — For CJK/emoji content, add fallback width calculation using PHP's `grapheme_strlen()`.
 
@@ -543,20 +543,20 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 ### Medium-Term (High Impact, Higher Effort)
 
-7. **Flexbox/Grid Layout System** — Create `candy-layout` or extend `candy-sprinkles` with proportional sizing (`30%`, `70%`), flex direction, gap, and responsive `SetSize()`.
-8. **Unified Theming** — Create a `Theme` class that defines semantic colors once and derives `SugarCraft\Sprinkles\Style` objects for each library.
+7. **Flexbox/Grid Layout System** — Create `candy-layout` or extend `sugar-style` with proportional sizing (`30%`, `70%`), flex direction, gap, and responsive `SetSize()`.
+8. **Unified Theming** — Create a `Theme` class that defines semantic colors once and derives `SugarCraft\Style\Style` objects for each library.
 9. **Performance Optimization** — Short-circuit width calculation for ASCII-only strings; cache width for static strings.
 
 ### Long-Term (High Strategic Value)
 
-10. **Coordinated Multi-Library Release** — When releasing `candy-sprinkles` v2, coordinate with `candy-core` v2 and `sugar-widgets` v2 simultaneously, with matching upgrade guides.
-11. **Windows Console FFI** — PHP 8.4+ FFI improvements enable direct Windows console API access. Leverage this for proper Windows support in `candy-sprinkles`.
+10. **Coordinated Multi-Library Release** — When releasing `sugar-style` v2, coordinate with `candy-core` v2 and `sugar-widgets` v2 simultaneously, with matching upgrade guides.
+11. **Windows Console FFI** — PHP 8.4+ FFI improvements enable direct Windows console API access. Leverage this for proper Windows support in `sugar-style`.
 
 ---
 
 ## Summary
 
-Lip Gloss v2 represents a mature, well-tested terminal styling library whose architectural decisions (pure value types, separate render from output, explicit over implicit) provide a clear blueprint for SugarCraft's `candy-sprinkles`. The ecosystem intelligence gathered shows that the most significant pain points are:
+Lip Gloss v2 represents a mature, well-tested terminal styling library whose architectural decisions (pure value types, separate render from output, explicit over implicit) provide a clear blueprint for SugarCraft's `sugar-style`. The ecosystem intelligence gathered shows that the most significant pain points are:
 
 1. **Unicode width calculation** (affects international content)
 2. **Layout system inadequacy** (flexbox/grid request)

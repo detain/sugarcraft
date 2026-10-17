@@ -9,7 +9,7 @@ namespace SugarCraft\Core;
  *
  * Mirrors ratatui's `Rect` — top-left corner (x,y) plus width/height.
  * Defined here in candy-core to keep it self-contained; consumers that
- * need more geometry helpers may use {@see \SugarCraft\Sprinkles\Layout\Rect}
+ * need more geometry helpers may use {@see \SugarCraft\Style\Layout\Rect}
  * which extends this type.
  */
 final readonly class Rect

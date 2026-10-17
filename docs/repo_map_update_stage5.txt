@@ -58,7 +58,7 @@ cited for signal leaks, data races, nested model routing bugs, and the
 famous issue #1654 (testing framework) that has been open 6+ years.
 This is the most-analyzed repo in the ecosystem.
 
-### B. charmbracelet/lipgloss → candy-sprinkles — 5 citations
+### B. charmbracelet/lipgloss → sugar-style — 5 citations
 Styling foundation for all visual packages. Its CSS shorthand resolution,
 adaptive color system, and BorderTitle pattern are the reference
 implementations. The `Width::string()` for Unicode width is the canonical
@@ -68,7 +68,7 @@ fix for the HelpText alignment bug in sugar-cli.
 Sister TUI framework providing reactive state patterns, CSS layout, widget
 composition, command palette, and web rendering (textual-web). Its GC
 stuttering issues (#6381) and weakref DOM are cautionary tales for
-candy-sprinkles-style object reference management.
+sugar-style-style object reference management.
 
 ---
 

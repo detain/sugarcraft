@@ -20,7 +20,7 @@ use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Input;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The full-band settings view (roadmap N-P1): every key in

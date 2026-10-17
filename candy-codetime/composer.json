@@ -33,7 +33,7 @@
         "ext-sqlite3": "*",
         "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-charts": "dev-master"
     },
     "require-dev": {

@@ -9,11 +9,11 @@ use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Crush\Lang;
-use SugarCraft\Sprinkles\Bar\Segment;
-use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Bar\Segment;
+use SugarCraft\Style\Bar\StatusBar as BarStatusBar;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Providers\ReportsServedModel;
@@ -2000,7 +2000,7 @@ final class Renderer
      * The live bottom status bar.
      *
      * Delegates segment joining, the `' | '` separator and the leading-space
-     * edge cap to the shared {@see BarStatusBar} (candy-sprinkles) primitive —
+     * edge cap to the shared {@see BarStatusBar} (sugar-style) primitive —
      * the same primitive sugar-dashboard and sugar-quickpick's status bars sit on top
      * of — so there is a single status-bar implementation. This class only
      * supplies the crush theme (per-segment colours) and the segment set,

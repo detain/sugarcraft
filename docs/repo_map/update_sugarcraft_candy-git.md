@@ -1,6 +1,6 @@
 # Overview
 
-**candy-git** is the SugarCraft monorepo's most complete application — a three-pane git TUI port of `jesseduffield/lazygit` built on the SugarCraft stack (candy-core + candy-sprinkles). It shells out to the system `git` binary, preserving user aliases, hooks, and signing config, while implementing an Elm-architecture state machine with comprehensive git operations (stage/unstage/commit/amend/branch/merge/stash/rebase/worktrees/cherry-pick).
+**candy-git** is the SugarCraft monorepo's most complete application — a three-pane git TUI port of `jesseduffield/lazygit` built on the SugarCraft stack (candy-core + sugar-style). It shells out to the system `git` binary, preserving user aliases, hooks, and signing config, while implementing an Elm-architecture state machine with comprehensive git operations (stage/unstage/commit/amend/branch/merge/stash/rebase/worktrees/cherry-pick).
 
 **Biggest opportunity areas:**
 
@@ -124,7 +124,7 @@
 
 - Parse `git log --graph --oneline --decorate --all --format="%h%d%s"` 
 - Render graph characters (`*`, `|`, `/`, `\`, `m`) with branch name highlighting
-- Use candy-sprinkles Color for commit hash/branch coloring
+- Use sugar-style Color for commit hash/branch coloring
 - Add `--all` flag toggle for showing remote branches  
 
 **Estimated complexity:** Medium (parsing and rendering ASCII graph)  
@@ -468,7 +468,7 @@
 
 1. **bubbletea ANSI 2026 Synchronized Output:** `charmbracelet/bubbletea` added synchronized output mode (ANSI 2026) for flicker-free rendering. Source: `docs/repo_map/charmbracelet_bubbletea.md` (lines 185-201). This is applicable to candy-git via candy-core's renderer.
 
-2. **lipgloss Layer Compositing:** `charmbracelet/lipgloss` layer system (`Layer`/`Compositor`/`Canvas`) enables overlay UIs and mouse hit-testing. Source: `docs/repo_map/charmbracelet_lipgloss.md` (lines 58-62, 217-218). SugarCraft's candy-sprinkles could adopt this pattern.
+2. **lipgloss Layer Compositing:** `charmbracelet/lipgloss` layer system (`Layer`/`Compositor`/`Canvas`) enables overlay UIs and mouse hit-testing. Source: `docs/repo_map/charmbracelet_lipgloss.md` (lines 58-62, 217-218). SugarCraft's sugar-style could adopt this pattern.
 
 3. **gum Fuzzy Filter:** `charmbracelet/gum` filter uses `sahilm/fuzzy` with matched ranges for highlighting. Source: `docs/repo_map/charmbracelet_gum.md` (line 60). PHP port of this library would benefit candy-git and other SugarCraft libs.
 

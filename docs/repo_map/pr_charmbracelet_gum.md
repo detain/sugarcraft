@@ -39,10 +39,10 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 | `gum table` | `sugar-table` | 🟢 | Table with row selection |
 | `gum log` | `candy-log` | 🟢 | Structured logging |
 | `gum join` | `sugar-markdown` | 🟡 | Layout joining via lipgloss |
-| Bubbles dep | `candy-sprinkles` + `sugar-widgets` | 🟢 / 🟡 | TUI component primitives |
+| Bubbles dep | `sugar-style` + `sugar-widgets` | 🟢 / 🟡 | TUI component primitives |
 | Lipgloss dep | `sugar-markdown` | 🟡 | Styling/rendering engine |
 
-**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`candy-sprinkles`, `sugar-forms`, `sugar-widgets`) is what enables the shell commands.
+**Key insight from MATCHUPS.md**: `candy-scriptui` (the gum port) is 🟡 in progress. The underlying foundation (`sugar-style`, `sugar-forms`, `sugar-widgets`) is what enables the shell commands.
 
 ---
 

@@ -132,7 +132,7 @@ final class Model
     /**
      * Create a new instance by cloning and applying changes via $fn.
      *
-     * Mirrors the candy-sprinkles/Style.php mutate() pattern.
+     * Mirrors the sugar-style/Style.php mutate() pattern.
      *
      * @param callable(self): void $fn
      */

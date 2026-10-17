@@ -237,19 +237,19 @@
 - **Effort**: 3-4 sessions
 - **Research**: `libraries/candy-core-research.md`
 
-### candy-sprinkles
+### sugar-style
 
 ### [ ] Theme class (Rich-style named style registry)
 
 - **Priority**: P1 - High
 - **Effort**: 6-8 hours
-- **Research**: `libraries/candy-sprinkles-research.md`
+- **Research**: `libraries/sugar-style-research.md`
 
 ### [ ] String color parsing (`Color::parse("cyan")`)
 
 - **Priority**: P1 - High
 - **Effort**: 2-3 hours
-- **Research**: `libraries/candy-sprinkles-research.md`
+- **Research**: `libraries/sugar-style-research.md`
 
 ### candy-pty
 
@@ -447,7 +447,7 @@ All 45 research documents available at:
 | candy-sql | 11KB |
 | candy-git-server | 12KB |
 | candy-scriptui | 18KB |
-| candy-sprinkles | 15KB |
+| sugar-style | 15KB |
 | candy-tetris | 18KB |
 | candy-vcr | 23KB |
 | candy-vt | 26KB |

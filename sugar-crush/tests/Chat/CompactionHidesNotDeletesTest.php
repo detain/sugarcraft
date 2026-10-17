@@ -26,7 +26,7 @@ use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Usage;
 use SugarCraft\Image\ImageLayer;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Roadmap 1.B-3: compaction FLAGS the rows it condenses as hidden from the

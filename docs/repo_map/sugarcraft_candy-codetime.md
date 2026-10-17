@@ -68,7 +68,7 @@
 
 - **Sparkline integration** (`SugarCraft\Charts\Sparkline\Sparkline`) — minutes-per-day as ANSI bar chart
 
-- Uses `candy-sprinkles` for styling: `Border::rounded()`, `Color::hex()`, `Style::new()->bold()->foreground()`
+- Uses `sugar-style` for styling: `Border::rounded()`, `Color::hex()`, `Style::new()->bold()->foreground()`
 
 ### Export
 
@@ -290,7 +290,7 @@ The research doc (`docs/research/libraries/candy-codetime-research.md`) recommen
 | **Editor Plugins** | Yes (Neovim plugin sends to `taka-upload` daemon) | JSONL append protocol (any tool can `>>`) |
 | **Dashboard** | Bubble Tea TUI | SugarCraft TUI (Bubble Tea port) |
 | **Reports** | `taka-report` (GitHub README stats) | Built-in dashboard + CSV/JSON/iCal export |
-| **Themes** | 7 built-in (dark/light/dracula/nord/gruvbox/monokai/cyberpunk) | Configurable via `candy-sprinkles` Theme |
+| **Themes** | 7 built-in (dark/light/dracula/nord/gruvbox/monokai/cyberpunk) | Configurable via `sugar-style` Theme |
 | **Privacy** | Self-hosted MongoDB (data leaves machine) | Local-only JSONL (no network) |
 | **GitHub Actions** | Yes (`taka-report` integration) | Future (see roadmap) |
 | **Tags** | Yes (`+TAG` syntax) | Yes (`tags[]` array on Heartbeat) |
@@ -382,7 +382,7 @@ The research doc (`docs/research/libraries/candy-codetime-research.md`) recommen
   "require": {
     "php": ">=8.3",
     "sugarcraft/candy-core": "dev-master",
-    "sugarcraft/candy-sprinkles": "dev-master",
+    "sugarcraft/sugar-style": "dev-master",
     "sugarcraft/sugar-charts": "dev-master"
   }
 }
@@ -395,8 +395,8 @@ The research doc (`docs/research/libraries/candy-codetime-research.md`) recommen
 | `Dashboard` | `SugarCraft\Core\Model` | TEA pattern (init/update/view) |
 | `Dashboard::view()` | `Renderer` | Pure static function |
 | `Renderer::timeline()` | `SugarCraft\Charts\Sparkline\Sparkline` | ANSI sparkline chart |
-| `Renderer` styling | `SugarCraft\Sprinkles\{Border,Color,Layout,Position,Style}` | Fluent style builders |
-| `Theme` | `SugarCraft\Sprinkles\Theme` | Dark/light theme wrapper |
+| `Renderer` styling | `SugarCraft\Style\{Border,Color,Layout,Position,Style}` | Fluent style builders |
+| `Theme` | `SugarCraft\Style\Theme` | Dark/light theme wrapper |
 | `Lang` | `SugarCraft\Core\I18n\T` | i18n namespace `'tick'` |
 
 ---
@@ -481,8 +481,8 @@ Future roadmap items from research:
 |---|---|---|
 | TUI Dashboard | `candy-core` | `Model` interface, `Program` runner |
 | Sparkline chart | `sugar-charts` | `Sparkline` component |
-| Styling | `candy-sprinkles` | `Border`, `Color`, `Style`, `Layout` |
-| Theming | `candy-sprinkles` | `Theme::dark()` / `Theme::light()` |
+| Styling | `sugar-style` | `Border`, `Color`, `Style`, `Layout` |
+| Theming | `sugar-style` | `Theme::dark()` / `Theme::light()` |
 | i18n | `candy-core` | `Core\I18n\T` with per-namespace facade |
 
 ### Not Mapped (external ecosystem)

@@ -7,7 +7,7 @@ namespace SugarCraft\Widgets\Tests\Table;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Widgets\Table\Table;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Tests for {@see Table::styleFunc()} — per-cell styling closure

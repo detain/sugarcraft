@@ -194,7 +194,7 @@ final class MsgBox implements Overlay
         string $leftBold,
         string $labelSgr,
         string $rightBold,
-        \SugarCraft\Sprinkles\Border $border,
+        \SugarCraft\Style\Border $border,
     ): void {
         $h = str_repeat($border->top, 6);
         $left = $frame . $leftBold;

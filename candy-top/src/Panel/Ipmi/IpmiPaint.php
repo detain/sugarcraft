@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Ipmi;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\Collect\Ipmi\SensorStatus;
 use SugarCraft\Top\Panel\Gfx\Just;
 use SugarCraft\Top\View\Ink;

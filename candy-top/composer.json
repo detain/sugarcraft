@@ -33,7 +33,7 @@
         "react/promise": "^3.3",
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/sugar-animation": "@dev",
-        "sugarcraft/candy-sprinkles": "@dev",
+        "sugarcraft/sugar-style": "@dev",
         "sugarcraft/sugar-widgets": "@dev",
         "sugarcraft/sugar-dashboard": "@dev"
     },

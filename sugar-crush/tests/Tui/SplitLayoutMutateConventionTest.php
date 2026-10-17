@@ -13,7 +13,7 @@ use SugarCraft\Crush\Tui\SplitLayout;
  *
  * Regression pin for R26: SplitLayout's with*() methods must delegate
  * through a private mutate() helper (repo-wide immutable+fluent
- * convention, see candy-sprinkles/src/Style.php and
+ * convention, see sugar-style/src/Style.php and
  * candy-buffer/src/Style.php) instead of hand-rolling `new self(...)` in
  * each setter. Source-inspects each with*() method body via reflection so
  * a revert back to hand-rolled `new self(...)` fails this test even though

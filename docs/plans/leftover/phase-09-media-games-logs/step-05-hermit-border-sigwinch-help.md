@@ -5,7 +5,7 @@
 
 ## Deliverable
 
-- Border/Style — consume candy-sprinkles, **don't** reinvent.
+- Border/Style — consume sugar-style, **don't** reinvent.
 - Window auto-resize on SIGWINCH — route through
   `\SugarCraft\Pty\SignalForwarder`, **not** `stty`.
 - Help / status bar.
@@ -15,10 +15,10 @@
 **Modify:**
 
 - `sugar-quickpick/src/Hermit.php` — accept
-  `\SugarCraft\Sprinkles\Border\Border` and `Style`.
+  `\SugarCraft\Style\Border\Border` and `Style`.
 - `sugar-quickpick/src/Hermit.php` — SIGWINCH handler attaches via
   `SignalForwarder::attachSigwinch`.
-- `sugar-quickpick/composer.json` — add `candy-sprinkles` + `candy-pty`.
+- `sugar-quickpick/composer.json` — add `sugar-style` + `candy-pty`.
 
 **Create:**
 

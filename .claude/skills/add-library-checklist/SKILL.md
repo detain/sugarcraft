@@ -69,7 +69,7 @@ Exact copy, only the testsuite `name` changes (from `sugar-panels/phpunit.xml`):
 This file's presence is the marker `scripts/affected-libs.php` uses to discover the lib. **Verify** it exists.
 
 ### Step 4 — `<slug>/src/<Class>.php`
-`declare(strict_types=1);` first line, `final` class, immutable+fluent via `mutate()` (see `candy-sprinkles/src/Style.php`), `::new()` root factory (never `::create()`/`::make()`/`::default()`), bare accessors (no `get`). Doc-comment the class with `Mirrors <owner>/<repo>`. For a TUI Model, implement `init()` / `update(Msg): [Model, ?Cmd]` / `view()` per `candy-core/src/Model.php` — side effects go in `Cmd`, never `view()`. Add `tests/<Class>Test.php` under `SugarCraft\<Sub>\Tests\` with ≥1 test per public method. **Verify:** `cd <slug> && vendor/bin/phpunit` is green.
+`declare(strict_types=1);` first line, `final` class, immutable+fluent via `mutate()` (see `sugar-style/src/Style.php`), `::new()` root factory (never `::create()`/`::make()`/`::default()`), bare accessors (no `get`). Doc-comment the class with `Mirrors <owner>/<repo>`. For a TUI Model, implement `init()` / `update(Msg): [Model, ?Cmd]` / `view()` per `candy-core/src/Model.php` — side effects go in `Cmd`, never `view()`. Add `tests/<Class>Test.php` under `SugarCraft\<Sub>\Tests\` with ≥1 test per public method. **Verify:** `cd <slug> && vendor/bin/phpunit` is green.
 
 ### Step 5 — `<slug>/README.md` + `<slug>/CALIBER_LEARNINGS.md`
 README: `composer require sugarcraft/<slug>` + quickstart + codecov badge (flag=`<slug>`). Copy a sibling README and swap identity. CALIBER_LEARNINGS.md may start as a stub heading.

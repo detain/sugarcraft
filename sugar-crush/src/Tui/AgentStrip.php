@@ -11,7 +11,7 @@ use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Mouse\Mark;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The live agents strip: ONE faint row above the input box while delegated

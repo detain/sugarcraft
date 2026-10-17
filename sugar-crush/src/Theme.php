@@ -7,7 +7,7 @@ namespace SugarCraft\Crush;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Markdown\Theme as MarkdownTheme;
-use SugarCraft\Sprinkles\Theme as SprinklesTheme;
+use SugarCraft\Style\Theme as StyleTheme;
 
 /**
  * A named color theme for {@see Renderer}'s chrome (borders, user/assistant/
@@ -16,7 +16,7 @@ use SugarCraft\Sprinkles\Theme as SprinklesTheme;
  * resolved from the two theme classes that already exist elsewhere in the
  * monorepo rather than inventing a third color system:
  *
- *   - {@see SprinklesTheme} supplies the chrome colors (border/labels/`shell*`).
+ *   - {@see StyleTheme} supplies the chrome colors (border/labels/`shell*`).
  *   - {@see MarkdownTheme} supplies the markdown-rendering theme.
  *
  * The `shell*` tokens exist because `src/Tui/` used to be theme-blind: 14 files
@@ -36,7 +36,7 @@ use SugarCraft\Sprinkles\Theme as SprinklesTheme;
  *
  * The offered name list ({@see names()}) is deliberately restricted to the
  * intersection of presets both classes support by the same name
- * (`dark`/`light`/`dracula`/`tokyoNight`/`ansi`) - SprinklesTheme also has
+ * (`dark`/`light`/`dracula`/`tokyoNight`/`ansi`) - StyleTheme also has
  * `oneDark`/`githubDark`/`solarizedDark`/`solarizedLight` and MarkdownTheme also
  * has `pink`/`plain`/`notty`/`ascii`, but offering a name only one side
  * recognizes would silently mismatch chrome and markdown colors, so those
@@ -65,7 +65,7 @@ final class Theme
      *
      * Deliberately ONE tier, not WCAG's two. The obvious split — 4.5:1 for text
      * and 3.0:1 for shapes (box lines, dividers, status dots) — is not
-     * assertable on this shell, because candy-sprinkles paints a box's TITLE in
+     * assertable on this shell, because sugar-style paints a box's TITLE in
      * the border colour: an unfocused pane's `border` token is what draws both
      * the `─` run and the word `chat` sitting in it, and the dropdown's `border`
      * draws `│ ` and ` │` around item rows. There is no colour here that is only
@@ -169,11 +169,11 @@ final class Theme
         }
 
         $sprinkles = match ($canonical) {
-            'dark' => SprinklesTheme::dark(),
-            'light' => SprinklesTheme::light(),
-            'dracula' => SprinklesTheme::dracula(),
-            'tokyoNight' => SprinklesTheme::tokyoNight(),
-            'ansi' => SprinklesTheme::ansi(),
+            'dark' => StyleTheme::dark(),
+            'light' => StyleTheme::light(),
+            'dracula' => StyleTheme::dracula(),
+            'tokyoNight' => StyleTheme::tokyoNight(),
+            'ansi' => StyleTheme::ansi(),
         };
 
         return self::pair($canonical, $sprinkles, MarkdownTheme::byName($canonical) ?? MarkdownTheme::ansi());
@@ -184,8 +184,8 @@ final class Theme
      * under the name `adaptive` so the choice re-resolves on every read (and on
      * every launch) instead of being frozen at pick time.
      *
-     * {@see SprinklesTheme::adaptive()} is deliberately NOT used. Its
-     * `COLORFGBG` rule is no longer the objection — since candy-sprinkles
+     * {@see StyleTheme::adaptive()} is deliberately NOT used. Its
+     * `COLORFGBG` rule is no longer the objection — since sugar-style
      * 1845eebf9 it reads the last field through the same luminance test and
      * agrees with {@see TerminalBackground::detect()} on every value with a
      * `;` (see that method). What it cannot do is see the two sources that
@@ -210,12 +210,12 @@ final class Theme
     public static function adaptive(): self
     {
         return TerminalBackground::isDark()
-            ? self::pair('adaptive', SprinklesTheme::dark(), MarkdownTheme::dark())
-            : self::pair('adaptive', SprinklesTheme::light(), MarkdownTheme::light());
+            ? self::pair('adaptive', StyleTheme::dark(), MarkdownTheme::dark())
+            : self::pair('adaptive', StyleTheme::light(), MarkdownTheme::light());
     }
 
     /**
-     * Project a {@see SprinklesTheme} onto the tokens this app paints with,
+     * Project a {@see StyleTheme} onto the tokens this app paints with,
      * every one of them checked for legibility against the colour the terminal
      * ACTUALLY paints behind the frame ({@see TerminalBackground::color()}).
      *
@@ -234,7 +234,7 @@ final class Theme
      * One threshold for every token, not a text/chrome split — see
      * {@see CONTRAST_MIN} for the measurement that ruled the split out.
      */
-    private static function pair(string $name, SprinklesTheme $sprinkles, MarkdownTheme $markdown): self
+    private static function pair(string $name, StyleTheme $sprinkles, MarkdownTheme $markdown): self
     {
         // Every token is measured against BOTH surfaces it can be seen on: the
         // bare terminal background and the row-highlight fill. Neither one
@@ -264,7 +264,7 @@ final class Theme
         // each — so ~8.6 ms of a frame that has 16 ms to make 60fps, against
         // 0.165 ms on a hit. The 0.165 is NOT this memo: it is
         // `MarkdownTheme::byName()` building the markdown half, which sits upstream
-        // of here (`SprinklesTheme::dracula()` alone is 0.009 ms). Memoising
+        // of here (`StyleTheme::dracula()` alone is 0.009 ms). Memoising
         // that too belongs in sugar-markdown.
         //
         // The key is every input the result depends on: the palette by its own

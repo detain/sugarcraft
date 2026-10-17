@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Sprinkles\Theme as SprinklesTheme;
+use SugarCraft\Style\Theme as StyleTheme;
 use SugarCraft\CodeTime\Theme;
 
 final class ThemeTest extends TestCase
@@ -14,25 +14,25 @@ final class ThemeTest extends TestCase
     {
         $theme = Theme::dark();
         $inner = $theme->inner();
-        $this->assertInstanceOf(SprinklesTheme::class, $inner);
+        $this->assertInstanceOf(StyleTheme::class, $inner);
     }
 
     public function testLight(): void
     {
         $theme = Theme::light();
         $inner = $theme->inner();
-        $this->assertInstanceOf(SprinklesTheme::class, $inner);
+        $this->assertInstanceOf(StyleTheme::class, $inner);
     }
 
     public function testDefaultIsDark(): void
     {
         $theme = new Theme();
-        $this->assertInstanceOf(SprinklesTheme::class, $theme->inner());
+        $this->assertInstanceOf(StyleTheme::class, $theme->inner());
     }
 
     public function testInnerMethod(): void
     {
-        $sprinklesTheme = SprinklesTheme::dracula();
+        $sprinklesTheme = StyleTheme::dracula();
         $theme = new Theme($sprinklesTheme);
         $this->assertSame($sprinklesTheme, $theme->inner());
     }
@@ -53,7 +53,7 @@ final class ThemeTest extends TestCase
 
     public function testInnerIsConsumedFromSprinkles(): void
     {
-        $sprinkles = SprinklesTheme::tokyoNight();
+        $sprinkles = StyleTheme::tokyoNight();
         $theme = new Theme($sprinkles);
         $this->assertSame($sprinkles, $theme->inner());
     }

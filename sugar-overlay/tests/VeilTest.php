@@ -6,7 +6,7 @@ namespace SugarCraft\Overlay\Tests;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Overlay\{Position, Veil};
 use PHPUnit\Framework\TestCase;
 

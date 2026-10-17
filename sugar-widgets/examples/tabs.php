@@ -21,7 +21,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 $labels = ['Home', 'Profile', 'Settings', 'About'];
 

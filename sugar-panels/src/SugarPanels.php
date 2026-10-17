@@ -12,10 +12,10 @@ use SugarCraft\Layout\Constraint\Constraint;
 use SugarCraft\Layout\Direction;
 use SugarCraft\Layout\GreedySolver;
 use SugarCraft\Layout\Region as LayoutRegion;
-use SugarCraft\Sprinkles\Align;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Style\Align;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\VAlign;
 
 /**
  * Box-drawing layout renderer.
@@ -431,7 +431,7 @@ final class SugarPanels
     /**
      * Render text content within a content region with word-wrap.
      *
-     * @param Style|null  $style   Optional SGR style prefix (fg/bg/attrs from candy-sprinkles)
+     * @param Style|null  $style   Optional SGR style prefix (fg/bg/attrs from sugar-style)
      * @param Align|null $alignH  Horizontal text alignment
      * @param VAlign|null $alignV Vertical text alignment
      */

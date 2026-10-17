@@ -21,7 +21,7 @@ use SugarCraft\Buffer\Style;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Table\Lang;
 
 final class Table
@@ -452,7 +452,7 @@ final class Table
     /**
      * Set the border character family for the table.
      *
-     * @param Border $border Any Border from \SugarCraft\Sprinkles\Border
+     * @param Border $border Any Border from \SugarCraft\Style\Border
      *                      (normal/rounded/thick/double/block/ascii/hidden/markdownBorder)
      */
     public function withBorder(Border $border): self

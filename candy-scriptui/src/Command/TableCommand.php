@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
-use SugarCraft\Sprinkles\Align;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Table\Table;
+use SugarCraft\Style\Align;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Table\Table;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -16,7 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Render CSV / TSV from a file or stdin as a styled
- * {@see \SugarCraft\Sprinkles\Table\Table}.
+ * {@see \SugarCraft\Style\Table\Table}.
  *
  *   $ ps -axo pid,comm | candy-scriptui table --header --separator $'\t'
  *

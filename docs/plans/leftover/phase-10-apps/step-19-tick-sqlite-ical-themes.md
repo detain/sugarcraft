@@ -9,14 +9,14 @@
 - Milestones (named time-points; "shipped v1.0 here").
 - iCal export.
 - Auto-backups (daily rotation).
-- Theme system (consume candy-sprinkles Theme from step 02.01).
+- Theme system (consume sugar-style Theme from step 02.01).
 
 ## Files
 
 **Create:** `candy-codetime/src/Storage/SqliteBackend.php`,
 `Milestone.php`, `Export/IcalExporter.php`, `Backup/AutoBackup.php`.
 
-**Modify:** add candy-sprinkles dep.
+**Modify:** add sugar-style dep.
 
 ## Tests
 

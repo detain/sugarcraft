@@ -60,7 +60,7 @@ $markdown
             ├─ renderFencedCode() → SyntaxHighlighter::highlight() or codeBlock style
             ├─ renderBlockQuote() → ▎ prefix per line → blockquote style
             ├─ renderList()         → ordered/unordered distinction, nested indent, marker → listMarker style
-            ├─ renderTable()       → SprinklesTable with rounded border, cell renderChildren
+            ├─ renderTable()       → StyleTable with rounded border, cell renderChildren
             ├─ renderLink()        → linkText style + Ansi::hyperlink() + (url) suffix
             ├─ renderImage()       → image/imageText style + (url) suffix
             ├─ renderStrike()      → strike style (SGR 9) or plain
@@ -176,7 +176,7 @@ Uses `SugarCraft\Core\Util\Width::wrapAnsi()` — a custom ANSI-aware word wrapp
 
 ### 1.8 Table Rendering
 
-Delegates to `SugarCraft\Sprinkles\Table\Table` (Sprinkles border system):
+Delegates to `SugarCraft\Style\Table\Table` (Sprinkles border system):
 - `border(Border::rounded())` — `╭` `─` `┬` `├` `┼` `┤` `┴` `╰` `╯` characters
 
 - Header row via `->headers(...$headers)` — rendered in bold (default) or `tableHeader` style if set
@@ -282,7 +282,7 @@ Maps to sugar-markdown only for the **theme system** concept:
 No direct markdown rendering. However:
 - `pterm.ThemeDefault` maps to `sugar-markdown` + `candy-core` as the SugarCraft theme defaults
 
-- The `Style` chain pattern (`color.go:L263-L396`) is functionally similar to `SugarCraft\Sprinkles\Style` — both use fluent builders returning new instances
+- The `Style` chain pattern (`color.go:L263-L396`) is functionally similar to `SugarCraft\Style\Style` — both use fluent builders returning new instances
 
 **Key insight**: pterm's 25+ printers cover the full spectrum from colored text to interactive TUI. sugar-markdown's scope is narrower — markdown-to-ANSI only — but the styling primitives it uses (`Style`, `Color`) are shared infrastructure used by all SugarCraft libs.
 
@@ -321,7 +321,7 @@ No direct markdown rendering. However:
 | Indented code blocks | ✅ | `codeBlock` style |
 | Bullet/ordered/nested lists | ✅ | `renderList()` with indent calculation |
 | Blockquotes | ✅ | `▎ ` prefix per line |
-| GFM tables | ✅ | SprinklesTable with rounded border |
+| GFM tables | ✅ | StyleTable with rounded border |
 | Task lists | ✅ | `☑`/`☐` glyphs via `listMarker` style |
 | OSC 8 hyperlinks | ✅ | `Ansi::hyperlink()` |
 | Link suffix `(url)` | ✅ | Inline or suppressed in tables |
@@ -350,7 +350,7 @@ No direct markdown rendering. However:
 | HTML sanitisation | ❌ | Raw HTML passes through |
 | FNV link ID hashing | ❌ | Null ID for all links |
 | Chroma/high-quality syntax highlighting | ❌ | Custom regex only |
-| Per-column table width constraints | ❌ | SprinklesTable handles natively |
+| Per-column table width constraints | ❌ | StyleTable handles natively |
 | MarginWriter/PaddingWriter abstraction | ❌ | Simple string prefix/suffix |
 
 ### 4.2 What Remains Incomplete
@@ -417,15 +417,15 @@ This allows nested blockquotes at any depth to correctly compute their available
 
 ### Dependencies
 
-- `/home/sites/sugarcraft/sugar-markdown/composer.json` — `league/commonmark:^2.4`, `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`
+- `/home/sites/sugarcraft/sugar-markdown/composer.json` — `league/commonmark:^2.4`, `sugarcraft/candy-core`, `sugarcraft/sugar-style`
 
 - `/home/sites/sugarcraft/candy-core/src/Util/Width.php` — Word wrap + ANSI-aware utilities
 
 - `/home/sites/sugarcraft/candy-core/src/Util/Ansi.php` — OSC 8 hyperlink primitives (lines 269-303)
 
-- `/home/sites/sugarcraft/candy-sprinkles/src/Style.php` — ANSI styling primitives
+- `/home/sites/sugarcraft/sugar-style/src/Style.php` — ANSI styling primitives
 
-- `/home/sites/sugarcraft/candy-sprinkles/src/Border.php` + `Table/Table.php` — Table rendering
+- `/home/sites/sugarcraft/sugar-style/src/Border.php` + `Table/Table.php` — Table rendering
 
 ### Consumer
 

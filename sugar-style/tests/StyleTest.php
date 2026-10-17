@@ -1,0 +1,1603 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Style\Tests;
+
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\AdaptiveColor;
+use SugarCraft\Style\Align;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Border\BorderTitle;
+use SugarCraft\Style\Border\TitleAnchor;
+use SugarCraft\Style\CompleteAdaptiveColor;
+use SugarCraft\Style\CompleteColor;
+use SugarCraft\Style\LightDark;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\UnderlineStyle;
+use SugarCraft\Style\VAlign;
+use PHPUnit\Framework\TestCase;
+
+final class StyleTest extends TestCase
+{
+    public function testPlainStyleRendersUnchanged(): void
+    {
+        $this->assertSame('hello', Style::new()->render('hello'));
+    }
+
+    public function testBoldEmitsSgr1(): void
+    {
+        $this->assertSame("\x1b[1mhello\x1b[0m", Style::new()->bold()->render('hello'));
+    }
+
+    public function testForegroundTrueColor(): void
+    {
+        $out = Style::new()
+            ->foreground(Color::hex('#ff8000'))
+            ->render('hi');
+        $this->assertSame("\x1b[38;2;255;128;0mhi\x1b[0m", $out);
+    }
+
+    public function testForegroundDownsamplesToAnsi16(): void
+    {
+        $out = Style::new()
+            ->colorProfile(ColorProfile::Ansi)
+            ->foreground(Color::hex('#ff0000'))
+            ->render('hi');
+        $this->assertSame("\x1b[91mhi\x1b[0m", $out);
+    }
+
+    public function testNoColorProfileEmitsNoSgrEvenWithColor(): void
+    {
+        $out = Style::new()
+            ->colorProfile(ColorProfile::Ascii)
+            ->foreground(Color::hex('#ff0000'))
+            ->render('hi');
+        $this->assertSame('hi', $out);
+    }
+
+    public function testCombinedAttributesAndColor(): void
+    {
+        $out = Style::new()
+            ->bold()
+            ->underline()
+            ->foreground(Color::hex('#00ff00'))
+            ->render('x');
+        $this->assertSame("\x1b[1;4m\x1b[38;2;0;255;0mx\x1b[0m", $out);
+    }
+
+    public function testImmutability(): void
+    {
+        $a = Style::new();
+        $b = $a->bold();
+        $this->assertNotSame($a, $b);
+        $this->assertSame('hello', $a->render('hello'));
+        $this->assertSame("\x1b[1mhello\x1b[0m", $b->render('hello'));
+    }
+
+    public function testInvokeIsAlias(): void
+    {
+        $s = Style::new()->bold();
+        $this->assertSame($s->render('x'), $s('x'));
+    }
+
+    public function testHorizontalPadding(): void
+    {
+        $out = Style::new()->padding(0, 2)->render('hi');
+        $this->assertSame('  hi  ', $out);
+    }
+
+    public function testVerticalPaddingProducesBlankLines(): void
+    {
+        $out = Style::new()->padding(1, 0)->render('hi');
+        $this->assertSame("  \nhi\n  ", $out);
+    }
+
+    public function testPaddingAlignsToMaxLineWidth(): void
+    {
+        $out = Style::new()->padding(0, 1)->render("ab\nfoobar");
+        $expected = " ab     \n foobar ";
+        $this->assertSame($expected, $out);
+    }
+
+    public function testPaddingFourSides(): void
+    {
+        $out = Style::new()->padding(1, 2, 1, 2)->render('hi');
+        $expected = "      \n  hi  \n      ";
+        $this->assertSame($expected, $out);
+    }
+
+    public function testPaddingArityValidated(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->padding(1, 2, 3);
+    }
+
+    public function testPaddingNegativeRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->padding(-1);
+    }
+
+    public function testPerSideSetters(): void
+    {
+        $out = Style::new()
+            ->paddingTop(1)
+            ->paddingLeft(2)
+            ->render('x');
+        $this->assertSame("   \n  x", $out);
+    }
+
+    public function testRenderWithColorAndPaddingWrapsEachLine(): void
+    {
+        $out = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->padding(0, 1)
+            ->render('hi');
+        $this->assertSame("\x1b[38;2;255;0;0m hi \x1b[0m", $out);
+    }
+
+    public function testEmptyStringStillRendersWithPadding(): void
+    {
+        $out = Style::new()->padding(1, 1)->render('');
+        $expected = "  \n  \n  ";
+        $this->assertSame($expected, $out);
+    }
+
+    // ---- width / alignment ------------------------------------------------
+
+    public function testWidthRightPadsLine(): void
+    {
+        $this->assertSame('hi   ', Style::new()->width(5)->render('hi'));
+    }
+
+    public function testWidthTruncatesOverflow(): void
+    {
+        $this->assertSame('hel', Style::new()->width(3)->render('hello'));
+    }
+
+    public function testAlignRight(): void
+    {
+        $this->assertSame('   hi', Style::new()->width(5)->align(Align::Right)->render('hi'));
+    }
+
+    public function testAlignCenterEvenExtra(): void
+    {
+        $this->assertSame(' hi ', Style::new()->width(4)->align(Align::Center)->render('hi'));
+    }
+
+    public function testAlignCenterOddExtra(): void
+    {
+        $this->assertSame(' hi  ', Style::new()->width(5)->align(Align::Center)->render('hi'));
+    }
+
+    public function testWidthZeroEmpties(): void
+    {
+        $this->assertSame('', Style::new()->width(0)->render('hello'));
+    }
+
+    public function testWidthRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->width(-1);
+    }
+
+    // ---- height -----------------------------------------------------------
+
+    public function testHeightPadsBelow(): void
+    {
+        $this->assertSame("hi\n  \n  ", Style::new()->height(3)->render('hi'));
+    }
+
+    public function testHeightTruncatesExtraLines(): void
+    {
+        $this->assertSame("a\nb", Style::new()->height(2)->render("a\nb\nc\nd"));
+    }
+
+    // ---- margin -----------------------------------------------------------
+
+    public function testMarginAroundContent(): void
+    {
+        $expected = "      \n  hi  \n      ";
+        $this->assertSame($expected, Style::new()->margin(1, 2)->render('hi'));
+    }
+
+    public function testMarginIsUnstyled(): void
+    {
+        $out = Style::new()
+            ->background(Color::hex('#ff0000'))
+            ->margin(0, 2)
+            ->render('hi');
+        $this->assertSame("  \x1b[48;2;255;0;0mhi\x1b[0m  ", $out);
+    }
+
+    // ---- borders ----------------------------------------------------------
+
+    public function testNormalBorderAroundContent(): void
+    {
+        $expected = "┌──┐\n│hi│\n└──┘";
+        $this->assertSame($expected, Style::new()->border(Border::normal())->render('hi'));
+    }
+
+    public function testRoundedBorderWithPadding(): void
+    {
+        $expected = "╭────╮\n│ hi │\n╰────╯";
+        $this->assertSame(
+            $expected,
+            Style::new()->border(Border::rounded())->padding(0, 1)->render('hi'),
+        );
+    }
+
+    public function testBorderTopOnly(): void
+    {
+        $expected = "──\nhi";
+        $this->assertSame(
+            $expected,
+            Style::new()->border(Border::normal(), true, false, false, false)->render('hi'),
+        );
+    }
+
+    public function testBorderTwoArgShorthand(): void
+    {
+        // border(b, vertical=true, horizontal=false) → top+bottom only
+        $expected = "──\nhi\n──";
+        $this->assertSame(
+            $expected,
+            Style::new()->border(Border::normal(), true, false)->render('hi'),
+        );
+    }
+
+    public function testBorderColored(): void
+    {
+        $out = Style::new()
+            ->border(Border::normal())
+            ->borderForeground(Color::hex('#ff0000'))
+            ->render('x');
+        $expected =
+            "\x1b[38;2;255;0;0m┌─┐\x1b[0m\n"
+          . "\x1b[38;2;255;0;0m│\x1b[0mx\x1b[38;2;255;0;0m│\x1b[0m\n"
+          . "\x1b[38;2;255;0;0m└─┘\x1b[0m";
+        $this->assertSame($expected, $out);
+    }
+
+    public function testBorderWithMargin(): void
+    {
+        $expected =
+            "      \n"
+          . " ┌──┐ \n"
+          . " │hi│ \n"
+          . " └──┘ \n"
+          . "      ";
+        $out = Style::new()
+            ->border(Border::normal())
+            ->margin(1, 1)
+            ->render('hi');
+        $this->assertSame($expected, $out);
+    }
+
+    public function testBorderRemoval(): void
+    {
+        $a = Style::new()->border(Border::normal());
+        $b = $a->border(null);
+        $this->assertSame('hi', $b->render('hi'));
+    }
+
+    public function testAsciiBorder(): void
+    {
+        $expected = "+-+\n|x|\n+-+";
+        $this->assertSame($expected, Style::new()->border(Border::ascii())->render('x'));
+    }
+
+    // ---- vertical alignment ----------------------------------------------
+
+    public function testHeightTopAlignDefault(): void
+    {
+        $this->assertSame("hi\n  \n  ", Style::new()->height(3)->render('hi'));
+    }
+
+    public function testHeightBottomAlign(): void
+    {
+        $out = Style::new()->height(3)->verticalAlign(VAlign::Bottom)->render('hi');
+        $this->assertSame("  \n  \nhi", $out);
+    }
+
+    public function testHeightMiddleAlignEvenExtra(): void
+    {
+        $out = Style::new()->height(4)->verticalAlign(VAlign::Middle)->render('hi');
+        // 2 lines of fill split evenly: 1 above, 1 below.
+        $this->assertSame("  \nhi\n  \n  ", $out);
+    }
+
+    public function testHeightMiddleAlignOddExtra(): void
+    {
+        $out = Style::new()->height(3)->verticalAlign(VAlign::Middle)->render('hi');
+        $this->assertSame("  \nhi\n  ", $out);
+    }
+
+    public function testHeightTruncatesFromBottomWhenTopAligned(): void
+    {
+        $out = Style::new()->height(2)->render("a\nb\nc\nd");
+        $this->assertSame("a\nb", $out);
+    }
+
+    public function testHeightTruncatesFromTopWhenBottomAligned(): void
+    {
+        $out = Style::new()->height(2)->verticalAlign(VAlign::Bottom)->render("a\nb\nc\nd");
+        $this->assertSame("c\nd", $out);
+    }
+
+    // ---- inherit ----------------------------------------------------------
+
+    public function testInheritCopiesParentForUnsetChildProps(): void
+    {
+        $parent = Style::new()->bold()->foreground(Color::hex('#ff0000'));
+        $child  = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame("\x1b[1m\x1b[38;2;255;0;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testInheritChildOverridesParent(): void
+    {
+        $parent = Style::new()->bold()->foreground(Color::hex('#ff0000'));
+        $child  = Style::new()->foreground(Color::hex('#00ff00'));
+        $merged = $child->inherit($parent);
+        // Parent's bold survives; child's green fg wins.
+        $this->assertSame("\x1b[1m\x1b[38;2;0;255;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testInheritExplicitOffWinsOverParentOn(): void
+    {
+        $parent = Style::new()->bold(true);
+        $child  = Style::new()->bold(false);
+        $merged = $child->inherit($parent);
+        $this->assertSame('hi', $merged->render('hi'));
+    }
+
+    public function testInheritMergesPaddingAndBorder(): void
+    {
+        $parent = Style::new()->padding(1)->border(Border::normal());
+        $child  = Style::new()->padding(0, 1);
+        $merged = $child->inherit($parent);
+        // Child padding (0,1) wins; parent border survives.
+        $expected = "┌────┐\n│ hi │\n└────┘";
+        $this->assertSame($expected, $merged->render('hi'));
+    }
+
+    public function testChainedInheritLetsLaterParentSupplyDefaults(): void
+    {
+        // First inherit pulls bold + red from $a; that should leave the
+        // intermediate's *explicit* propsSet empty, so the second inherit
+        // can fully replace those values with $b's.
+        $a = Style::new()->bold()->foreground(Color::hex('#ff0000'));
+        $b = Style::new()->italic()->foreground(Color::hex('#00ff00'));
+
+        $merged = Style::new()->inherit($a)->inherit($b);
+
+        // $b's italic + green fg now apply; $a's bold should NOT linger.
+        $this->assertSame("\x1b[3m\x1b[38;2;0;255;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testForegroundNullClearsColor(): void
+    {
+        $s = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->foreground(null);
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testWidthPreservesInlineAnsi(): void
+    {
+        // Truncating styled content via width() must keep the inline SGR
+        // codes — the user's red 'hello' should still be red, just clipped.
+        $out = Style::new()->width(3)->render("\x1b[31mhello\x1b[0m");
+        $this->assertSame("\x1b[31mhel\x1b[0m", $out);
+    }
+
+    // ---- adaptive colour ------------------------------------------------
+
+    public function testForegroundAdaptiveDoesNotRenderUntilResolved(): void
+    {
+        // Adaptive without a concrete `foreground()` shouldn't paint
+        // anything yet — the call is deferred until resolveAdaptive().
+        $s = Style::new()->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'));
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testResolveAdaptivePicksDarkForDarkBackground(): void
+    {
+        $s = Style::new()
+            ->foregroundAdaptive(Color::hex('#000000'), Color::hex('#ffffff'))
+            ->resolveAdaptive(isDark: true);
+        // Dark mode → "dark" colour (white) → SGR 38;2;255;255;255.
+        $this->assertSame("\x1b[38;2;255;255;255mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testResolveAdaptivePicksLightForLightBackground(): void
+    {
+        $s = Style::new()
+            ->foregroundAdaptive(Color::hex('#000000'), Color::hex('#ffffff'))
+            ->resolveAdaptive(isDark: false);
+        $this->assertSame("\x1b[38;2;0;0;0mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testExplicitForegroundWinsOverAdaptive(): void
+    {
+        // Concrete `foreground()` always beats adaptive — same precedence
+        // as lipgloss.
+        $s = Style::new()
+            ->foreground(Color::hex('#ff00ff'))
+            ->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'))
+            ->resolveAdaptive(isDark: true);
+        $this->assertSame("\x1b[38;2;255;0;255mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testBackgroundAdaptiveResolves(): void
+    {
+        $s = Style::new()
+            ->backgroundAdaptive(Color::hex('#eeeeee'), Color::hex('#111111'))
+            ->resolveAdaptive(isDark: true);
+        $this->assertSame("\x1b[48;2;17;17;17mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testInheritPropagatesAdaptive(): void
+    {
+        $parent = Style::new()->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'));
+        $child  = Style::new()->bold();
+        $merged = $child->inherit($parent)->resolveAdaptive(isDark: false);
+        $this->assertSame("\x1b[1m\x1b[38;2;0;0;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    // ---- AdaptiveColor + LightDark helpers ------------------------------
+
+    public function testAdaptiveColorPick(): void
+    {
+        $light = Color::hex('#aaaaaa');
+        $dark  = Color::hex('#222222');
+        $a = new AdaptiveColor($light, $dark);
+        $this->assertSame($light, $a->pick(false));
+        $this->assertSame($dark,  $a->pick(true));
+    }
+
+    public function testLightDarkPickStatic(): void
+    {
+        $light = Color::hex('#aaaaaa');
+        $dark  = Color::hex('#222222');
+        $this->assertSame($light, LightDark::pick(false, $light, $dark));
+        $this->assertSame($dark,  LightDark::pick(true,  $light, $dark));
+    }
+
+    public function testLightDarkPickerClosure(): void
+    {
+        $pick = LightDark::picker(true);
+        $light = Color::hex('#aaaaaa');
+        $dark  = Color::hex('#222222');
+        $this->assertSame($dark, $pick($light, $dark));
+    }
+
+    // ---- CompleteColor (profile-aware fill) ------------------------------
+
+    public function testCompleteColorPicksTrueColor(): void
+    {
+        $true   = Color::hex('#aabbcc');
+        $a256   = Color::hex('#aabbcc');
+        $ansi   = Color::ansi(4);
+        $c = new CompleteColor($true, $a256, $ansi);
+        $this->assertSame($true, $c->pick(ColorProfile::TrueColor));
+    }
+
+    public function testCompleteColorPicksAnsi256ForMidTier(): void
+    {
+        $true   = Color::hex('#aabbcc');
+        $a256   = Color::ansi256(67);
+        $ansi   = Color::ansi(4);
+        $c = new CompleteColor($true, $a256, $ansi);
+        $this->assertSame($a256, $c->pick(ColorProfile::Ansi256));
+    }
+
+    public function testCompleteColorPicksAnsiForBasicTier(): void
+    {
+        $true   = Color::hex('#aabbcc');
+        $a256   = Color::ansi256(67);
+        $ansi   = Color::ansi(4);
+        $c = new CompleteColor($true, $a256, $ansi);
+        $this->assertSame($ansi, $c->pick(ColorProfile::Ansi));
+    }
+
+    public function testForegroundCompleteResolvesByProfile(): void
+    {
+        // 256-tier picks the second leg of the triple.
+        $s = Style::new()
+            ->colorProfile(ColorProfile::Ansi256)
+            ->foregroundComplete(
+                Color::hex('#ff0000'),
+                Color::ansi256(202),
+                Color::ansi(1),
+            )
+            ->resolveProfile();
+        // SGR 38;5;202 from ansi256.
+        $this->assertSame("\x1b[38;5;202mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testExplicitForegroundWinsOverComplete(): void
+    {
+        $s = Style::new()
+            ->foreground(Color::hex('#00ff00'))
+            ->foregroundComplete(
+                Color::hex('#ff0000'),
+                Color::ansi256(202),
+                Color::ansi(1),
+            )
+            ->resolveProfile();
+        $this->assertSame("\x1b[38;2;0;255;0mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testCompleteAdaptiveColorPicksByBgAndProfile(): void
+    {
+        $light = new CompleteColor(
+            Color::hex('#ff0000'), Color::ansi256(196), Color::ansi(1),
+        );
+        $dark = new CompleteColor(
+            Color::hex('#0000ff'), Color::ansi256(21), Color::ansi(4),
+        );
+        $cad = new CompleteAdaptiveColor($light, $dark);
+
+        // Dark bg + 256 tier → dark.ansi256.
+        $picked = $cad->pick(true, ColorProfile::Ansi256);
+        $this->assertSame(21, $picked->r === 0 && $picked->b === 255 ? 21 : -1);
+
+        // Light bg + truecolor → light.trueColor.
+        $picked = $cad->pick(false, ColorProfile::TrueColor);
+        $this->assertSame(255, $picked->r);
+        $this->assertSame(0,   $picked->g);
+        $this->assertSame(0,   $picked->b);
+    }
+
+    // ---- Style writers (lipgloss v2 Sprint/Fprint/...) -----------------
+
+    public function testSprintConcatenatesWithSpaces(): void
+    {
+        $bold = Style::new()->bold();
+        $this->assertSame("\x1b[1mhello world\x1b[0m", $bold->sprint('hello', 'world'));
+    }
+
+    public function testPrintfSprintFormatsFirst(): void
+    {
+        $bold = Style::new()->bold();
+        $this->assertSame("\x1b[1m42 things\x1b[0m", $bold->printfSprint('%d %s', 42, 'things'));
+    }
+
+    public function testFprintWritesToStream(): void
+    {
+        $stream = fopen('php://memory', 'w+');
+        Style::new()->bold()->fprint($stream, 'hi');
+        rewind($stream);
+        $this->assertSame("\x1b[1mhi\x1b[0m", stream_get_contents($stream));
+        fclose($stream);
+    }
+
+    public function testInheritPropagatesCompleteColor(): void
+    {
+        $parent = Style::new()->foregroundComplete(
+            Color::hex('#0000ff'),
+            Color::ansi256(21),
+            Color::ansi(4),
+        );
+        $child  = Style::new()->bold();
+        $merged = $child->inherit($parent)
+            ->colorProfile(ColorProfile::TrueColor)
+            ->resolveProfile();
+        $this->assertSame("\x1b[1m\x1b[38;2;0;0;255mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testInlineCollapsesNewlines(): void
+    {
+        $out = Style::new()->inline()->render("a\nb\nc");
+        $this->assertSame('a b c', $out);
+    }
+
+    public function testInlineZeroesVerticalPadding(): void
+    {
+        $out = Style::new()->inline()->padding(2, 1)->render('hi');
+        // Vertical padding zeroed; horizontal still applies (1 space each side).
+        $this->assertSame(' hi ', $out);
+    }
+
+    public function testMaxWidthTruncates(): void
+    {
+        $out = Style::new()->maxWidth(3)->render('hello');
+        $this->assertSame('hel', $out);
+    }
+
+    public function testMaxWidthDoesNotPad(): void
+    {
+        $out = Style::new()->maxWidth(10)->render('hi');
+        $this->assertSame('hi', $out);
+    }
+
+    public function testMaxHeightTruncates(): void
+    {
+        $out = Style::new()->maxHeight(2)->render("a\nb\nc\nd");
+        $this->assertSame("a\nb", $out);
+    }
+
+    public function testTransformAppliesToPlainContent(): void
+    {
+        $out = Style::new()->transform(static fn(string $s) => strtoupper($s))->render('hi');
+        $this->assertSame('HI', $out);
+    }
+
+    /**
+     * The transform runs on the undecorated body, before the border is drawn
+     * (crush_libs finding #1, harmonized with lipgloss, whose Render() applies
+     * `transform(str)` at its top, ahead of applyBorder/applyMargins).
+     *
+     * Ordered the other way round the callback would receive "│hi│" and
+     * strtoupper would be handed the box-drawing runes — the name of this test
+     * used to be `testTransformAppliesAfterRender` while the code really did
+     * run it after the border, with only the docblock promising otherwise.
+     */
+    public function testTransformRunsBeforeTheBorderIsApplied(): void
+    {
+        $seen = null;
+        $out = Style::new()
+            ->border(Border::normal())
+            ->transform(static function (string $s) use (&$seen): string {
+                $seen = $s;
+                return strtoupper($s);
+            })
+            ->render('hi');
+
+        $this->assertSame('hi', $seen, 'the callback must see the body, not the bordered rows');
+        $this->assertStringNotContainsString('│', $seen ?? '');
+        // The border is still added afterwards, around the transformed body.
+        $this->assertStringContainsString('│HI│', $out);
+    }
+
+    public function testTabWidthExpands(): void
+    {
+        $out = Style::new()->tabWidth(2)->render("a\tb");
+        $this->assertSame('a  b', $out);
+    }
+
+    public function testTabWidthZeroPreserves(): void
+    {
+        $out = Style::new()->tabWidth(0)->render("a\tb");
+        $this->assertSame("a\tb", $out);
+    }
+
+    public function testMarginBackgroundPaintsMargin(): void
+    {
+        $out = Style::new()
+            ->margin(0, 1)
+            ->marginBackground(Color::rgb(255, 0, 0))
+            ->colorProfile(ColorProfile::TrueColor)
+            ->render('x');
+        $this->assertStringContainsString("\x1b[48;2;255;0;0m", $out);
+    }
+
+    public function testCopyReturnsEqualInstance(): void
+    {
+        $a = Style::new()->bold();
+        $b = $a->copy();
+        $this->assertNotSame($a, $b);
+        $this->assertSame($a->render('x'), $b->render('x'));
+    }
+
+    public function testGetters(): void
+    {
+        $s = Style::new()
+            ->foreground(Color::ansi(1))
+            ->bold()
+            ->width(20)
+            ->maxHeight(5)
+            ->align(Align::Center)
+            ->tabWidth(2);
+        $this->assertSame(Color::ansi(1)->toHex(), $s->getForeground()->toHex());
+        $this->assertTrue($s->isBold());
+        $this->assertSame(20, $s->getWidth());
+        $this->assertSame(5,  $s->getMaxHeight());
+        $this->assertSame(Align::Center, $s->getAlign());
+        $this->assertSame(2,  $s->getTabWidth());
+        $this->assertTrue($s->isSet('bold'));
+        $this->assertFalse($s->isSet('italic'));
+    }
+
+    public function testUnsetClearsProp(): void
+    {
+        $s = Style::new()->bold()->italic();
+        $cleared = $s->unsetBold();
+        $this->assertFalse($cleared->isBold());
+        $this->assertTrue($cleared->isItalic());
+        $this->assertFalse($cleared->isSet('bold'));
+    }
+
+    public function testPerSideBorderForeground(): void
+    {
+        $s = Style::new()
+            ->border(Border::normal())
+            ->borderForeground(Color::ansi(1))      // default red
+            ->borderTopForeground(Color::ansi(2))    // top green
+            ->colorProfile(ColorProfile::Ansi);
+        $out = $s->render('hi');
+        $lines = explode("\n", $out);
+        // Top line uses green (32); side lines use red (31).
+        $this->assertStringContainsString("\x1b[32m", $lines[0]);
+        $this->assertStringContainsString("\x1b[31m", $lines[1]);
+    }
+
+    public function testHyperlinkWrapsRenderedOutputInOsc8(): void
+    {
+        $s = Style::new()->hyperlink('https://example.com');
+        $out = $s->render('docs');
+        $this->assertStringContainsString("\x1b]8;;https://example.com\x1b\\", $out);
+        $this->assertStringContainsString('docs', $out);
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $out);
+    }
+
+    public function testHyperlinkWithIdEmbedsId(): void
+    {
+        $s = Style::new()->hyperlink('https://example.com', 'mygroup-1');
+        $out = $s->render('x');
+        $this->assertStringContainsString("\x1b]8;id=mygroup-1;https://example.com\x1b\\", $out);
+    }
+
+    public function testGetHyperlinkRoundTrips(): void
+    {
+        $this->assertNull(Style::new()->getHyperlink());
+        $this->assertSame('https://x.com', Style::new()->hyperlink('https://x.com')->getHyperlink());
+    }
+
+    public function testEmptyUrlIsAliasForUnset(): void
+    {
+        $s = Style::new()->hyperlink('https://x.com')->hyperlink('');
+        $this->assertNull($s->getHyperlink());
+        $out = $s->render('plain');
+        $this->assertStringNotContainsString("\x1b]8", $out);
+    }
+
+    public function testUnsetHyperlinkClearsLink(): void
+    {
+        $s = Style::new()->hyperlink('https://x.com')->unsetHyperlink();
+        $this->assertNull($s->getHyperlink());
+        $this->assertStringNotContainsString("\x1b]8", $s->render('hello'));
+    }
+
+    public function testHyperlinkComposesWithStylingAndContent(): void
+    {
+        $s = Style::new()->bold()->hyperlink('https://x.com');
+        $out = $s->render('hello');
+        $this->assertStringContainsString("\x1b[1m", $out);          // bold SGR
+        $this->assertStringContainsString("\x1b]8;;https://x.com", $out); // OSC 8 prefix
+    }
+
+    public function testUnsetPaddingZeroesAllSides(): void
+    {
+        $s = Style::new()->padding(2, 3)->unsetPadding();
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testUnsetMarginZeroesAllSides(): void
+    {
+        $s = Style::new()->margin(1)->unsetMargin();
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testUnsetTabWidthRevertsToFour(): void
+    {
+        $s = Style::new()->tabWidth(8)->unsetTabWidth();
+        // 4 spaces from the default tabWidth, not 8.
+        $this->assertSame('a    b', $s->render("a\tb"));
+    }
+
+    public function testUnsetAlignRevertsToLeft(): void
+    {
+        $s = Style::new()->align(Align::Right)->width(5)->unsetAlign();
+        // Left-aligned 'hi' in a 5-wide field is 'hi   '.
+        $this->assertSame('hi   ', $s->render('hi'));
+    }
+
+    public function testUnsetInlineRevertsToFalse(): void
+    {
+        $s = Style::new()->inline(true)->unsetInline();
+        $this->assertSame("a\nb", $s->render("a\nb"));
+    }
+
+    public function testSetStringRendersWithNoArg(): void
+    {
+        $s = Style::new()->bold()->setString('hello');
+        $this->assertSame("\x1b[1mhello\x1b[0m", $s->render());
+        $this->assertSame('hello', $s->value());
+    }
+
+    public function testSetStringIsOverriddenByExplicitArg(): void
+    {
+        $s = Style::new()->setString('default');
+        $this->assertSame('explicit', $s->render('explicit'));
+    }
+
+    public function testValueReturnsNullWhenUnbound(): void
+    {
+        $this->assertNull(Style::new()->value());
+    }
+
+    public function testUnderlineColorEmitsSgr58(): void
+    {
+        $s = Style::new()->underline()->underlineColor(Color::rgb(255, 0, 0));
+        $out = $s->render('hi');
+        $this->assertStringContainsString("\x1b[4m",            $out);
+        $this->assertStringContainsString("\x1b[58;2;255;0;0m", $out);
+    }
+
+    public function testUnderlineColorIgnoredWithoutUnderline(): void
+    {
+        $s = Style::new()->underlineColor(Color::rgb(255, 0, 0));
+        $out = $s->render('hi');
+        $this->assertStringNotContainsString("58;2", $out);
+    }
+
+    public function testGetUnderlineColorRoundTrips(): void
+    {
+        $c = Color::rgb(0, 100, 200);
+        $s = Style::new()->underlineColor($c);
+        $this->assertSame($c, $s->getUnderlineColor());
+        $this->assertNull(Style::new()->getUnderlineColor());
+    }
+
+    public function testUnsetBorderPerSideClearsSide(): void
+    {
+        $s = Style::new()->border(Border::normal());
+        $out = $s->unsetBorderTop()->render('x');
+        $rows = explode("\n", $out);
+        $this->assertSame('│x│', $rows[0]);
+        $this->assertSame('└─┘', $rows[1]);
+    }
+
+    public function testUnsetBorderRightLeavesOtherSides(): void
+    {
+        $s = Style::new()->border(Border::normal())->unsetBorderRight();
+        $out = $s->render('x');
+        $this->assertStringStartsWith('┌', $out);
+        $this->assertStringNotContainsString('┐', $out);
+        $this->assertStringNotContainsString('┘', $out);
+    }
+
+    public function testMarkdownBorderUsesAsciiPipesAndDashes(): void
+    {
+        $b = Border::markdownBorder();
+        $this->assertSame('-', $b->top);
+        $this->assertSame('|', $b->left);
+        $this->assertSame('|', $b->topLeft);
+        $this->assertSame('|', $b->middle);
+    }
+
+    // ─── overline / invisible ─────────────────────────────────────────
+
+    public function testOverlineEmitsSgr53(): void
+    {
+        $this->assertSame("\x1b[53mhello\x1b[0m", Style::new()->overline()->render('hello'));
+    }
+
+    public function testInvisibleEmitsSgr8(): void
+    {
+        $this->assertSame("\x1b[8mhello\x1b[0m", Style::new()->invisible()->render('hello'));
+    }
+
+    public function testOverlineCombinesWithOtherAttributes(): void
+    {
+        $out = Style::new()->bold()->overline()->italic()->render('x');
+        // Bold (1) + Italic (3) + Overline (53) combined into one SGR
+        $this->assertStringContainsString("\x1b[1;3;53m", $out);
+    }
+
+    public function testUnsetOverlineClearsOverline(): void
+    {
+        $s = Style::new()->overline();
+        $cleared = $s->unsetOverline();
+        $this->assertFalse($cleared->isOverline());
+        $this->assertSame('hello', $cleared->render('hello'));
+    }
+
+    public function testUnsetInvisibleClearsInvisible(): void
+    {
+        $s = Style::new()->invisible();
+        $cleared = $s->unsetInvisible();
+        $this->assertFalse($cleared->isInvisible());
+        $this->assertSame('hello', $cleared->render('hello'));
+    }
+
+    public function testOverlineAndInvisibleGetters(): void
+    {
+        $s = Style::new()->overline()->invisible();
+        $this->assertTrue($s->isOverline());
+        $this->assertTrue($s->isInvisible());
+        $this->assertFalse(Style::new()->isOverline());
+        $this->assertFalse(Style::new()->isInvisible());
+    }
+
+    public function testOverlineAndInvisibleImmutability(): void
+    {
+        $a = Style::new();
+        $b = $a->overline();
+        $c = $b->invisible();
+        $this->assertFalse($a->isOverline());
+        $this->assertFalse($a->isInvisible());
+        $this->assertTrue($b->isOverline());
+        $this->assertFalse($b->isInvisible());
+        $this->assertTrue($c->isOverline());
+        $this->assertTrue($c->isInvisible());
+    }
+
+    // ─── Rapid blink tests ─────────────────────────────────────────────
+
+    public function testRapidBlinkEmitsSgr6(): void
+    {
+        $this->assertSame("\x1b[6mhello\x1b[0m", Style::new()->rapidBlink()->render('hello'));
+    }
+
+    public function testRapidBlinkGetterDefaultFalse(): void
+    {
+        $this->assertFalse(Style::new()->isRapidBlink());
+    }
+
+    public function testRapidBlinkChaining(): void
+    {
+        $s = Style::new()->bold()->rapidBlink()->italic();
+        $this->assertTrue($s->isBold());
+        $this->assertTrue($s->isRapidBlink());
+        $this->assertTrue($s->isItalic());
+    }
+
+    public function testRapidBlinkImmutability(): void
+    {
+        $a = Style::new();
+        $b = $a->rapidBlink();
+        $this->assertNotSame($a, $b);
+        $this->assertFalse($a->isRapidBlink());
+        $this->assertTrue($b->isRapidBlink());
+    }
+
+    public function testRapidBlinkFalseClearsRapidBlink(): void
+    {
+        $s = Style::new()->rapidBlink();
+        $cleared = $s->rapidBlink(false);
+        $this->assertFalse($cleared->isRapidBlink());
+    }
+
+    // ─── patch() tests ─────────────────────────────────────────────────
+
+    public function testPatchAppliesNonNullProperties(): void
+    {
+        $base = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->bold();
+        $patch = Style::new()
+            ->background(Color::hex('#0000ff'))
+            ->italic();
+
+        $merged = $base->patch($patch);
+
+        // patch should have applied the bg and italic from $patch
+        $this->assertEquals(Color::hex('#ff0000'), $merged->getForeground());
+        $this->assertEquals(Color::hex('#0000ff'), $merged->getBackground());
+        $this->assertTrue($merged->isBold());
+        $this->assertTrue($merged->isItalic());
+    }
+
+    public function testPatchPreservesBaseProperties(): void
+    {
+        $base = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->bold();
+        $patch = Style::new()
+            ->background(Color::hex('#0000ff'));
+
+        $merged = $base->patch($patch);
+
+        // Base's fg and bold should be preserved
+        $this->assertEquals(Color::hex('#ff0000'), $merged->getForeground());
+        $this->assertTrue($merged->isBold());
+    }
+
+    public function testPatchNullPropertiesIgnored(): void
+    {
+        $base = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->bold();
+        $patch = Style::new()
+            ->foreground(null); // explicitly null should not override
+
+        $merged = $base->patch($patch);
+
+        $this->assertEquals(Color::hex('#ff0000'), $merged->getForeground());
+        $this->assertTrue($merged->isBold());
+    }
+
+    public function testPatchIsImmutable(): void
+    {
+        $a = Style::new()->foreground(Color::hex('#ff0000'));
+        $b = $a->patch(Style::new()->background(Color::hex('#0000ff')));
+        $this->assertNotSame($a, $b);
+        $this->assertNull($a->getBackground());
+        $this->assertEquals(Color::hex('#0000ff'), $b->getBackground());
+    }
+
+    // ---- inherit() field-completeness regression tests --------------------
+
+    public function testInheritPreservesRapidBlink(): void
+    {
+        $child = Style::new()->rapidBlink();
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        // Rapid blink SGR 6 should survive the inherit. SGR 6 may be combined with others.
+        $this->assertStringContainsString("6m", $merged->render('x'));
+    }
+
+    public function testInheritPreservesHyperlink(): void
+    {
+        $child = Style::new()->hyperlink('https://example.com');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('https://example.com', $merged->getHyperlink());
+    }
+
+    public function testInheritPreservesUnderlineColorAndStyle(): void
+    {
+        $child = Style::new()
+            ->underlineColor(Color::rgb(255, 0, 0))
+            ->underlineStyle(UnderlineStyle::Curly);
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertEquals(Color::rgb(255, 0, 0), $merged->getUnderlineColor());
+        $this->assertSame(UnderlineStyle::Curly, $merged->getUnderlineStyle());
+    }
+
+    public function testInheritPreservesPaddingAndMarginChar(): void
+    {
+        $child = Style::new()->paddingChar('*')->marginChar('.');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('*', $merged->getPaddingChar());
+        $this->assertSame('.', $merged->getMarginChar());
+    }
+
+    public function testInheritPreservesBoundString(): void
+    {
+        $child = Style::new()->setString('bound');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('bound', $merged->value());
+    }
+
+    public function testInheritPreservesHyperlinkId(): void
+    {
+        $child = Style::new()->hyperlink('https://example.com', 'my-id');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('https://example.com', $merged->getHyperlink());
+        // hyperlinkId accessor if it exists; render output should contain OSC 8 with id.
+        $rendered = $merged->render('x');
+        // OSC 8 format: \x1b]8;id=<id>;<url>\x1b\\
+        $this->assertStringContainsString("\x1b]8;id=my-id;https://example.com", $rendered);
+    }
+
+    // ---- patch() field-completeness regression tests ----------------------
+
+    public function testPatchPreservesRapidBlink(): void
+    {
+        $base = Style::new()->rapidBlink();
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        // base's rapidBlink should survive when patcher doesn't set it.
+        $this->assertStringContainsString("6m", $merged->render('x'));
+    }
+
+    public function testPatchAppliesHyperlinkFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()->hyperlink('https://example.com');
+        $merged = $base->patch($patcher);
+        $this->assertSame('https://example.com', $merged->getHyperlink());
+    }
+
+    public function testPatchPreservesHyperlinkWhenOtherHasNone(): void
+    {
+        $base = Style::new()->hyperlink('https://base.com');
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertSame('https://base.com', $merged->getHyperlink());
+    }
+
+    public function testPatchAppliesUnderlineColorAndStyleFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()
+            ->underlineColor(Color::rgb(0, 255, 0))
+            ->underlineStyle(UnderlineStyle::Double);
+        $merged = $base->patch($patcher);
+        $this->assertEquals(Color::rgb(0, 255, 0), $merged->getUnderlineColor());
+        $this->assertSame(UnderlineStyle::Double, $merged->getUnderlineStyle());
+    }
+
+    public function testPatchPreservesUnderlineColorWhenOtherHasNone(): void
+    {
+        $base = Style::new()
+            ->underlineColor(Color::rgb(255, 0, 0))
+            ->underlineStyle(UnderlineStyle::Curly);
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertEquals(Color::rgb(255, 0, 0), $merged->getUnderlineColor());
+        $this->assertSame(UnderlineStyle::Curly, $merged->getUnderlineStyle());
+    }
+
+    public function testPatchAppliesPaddingAndMarginCharFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()->paddingChar('*')->marginChar('.');
+        $merged = $base->patch($patcher);
+        $this->assertSame('*', $merged->getPaddingChar());
+        $this->assertSame('.', $merged->getMarginChar());
+    }
+
+    public function testPatchPreservesPaddingAndMarginCharWhenOtherHasNone(): void
+    {
+        $base = Style::new()->paddingChar('X')->marginChar('Y');
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertSame('X', $merged->getPaddingChar());
+        $this->assertSame('Y', $merged->getMarginChar());
+    }
+
+    public function testPatchAppliesBoundStringFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()->setString('patched');
+        $merged = $base->patch($patcher);
+        $this->assertSame('patched', $merged->value());
+    }
+
+    public function testPatchPreservesBoundStringWhenOtherHasNone(): void
+    {
+        $base = Style::new()->setString('original');
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertSame('original', $merged->value());
+    }
+
+    // Array-shaped props (padding, margin, borderSides, per-side border
+    // colours) ALWAYS hold a fixed-shape array — even the never-touched
+    // constructor default — so patch() must consult propsSet for them
+    // instead of probing the value; otherwise a patcher that never set the
+    // prop squashes the receiver's array with its default.
+
+    public function testPatchPreservesPaddingWhenOtherNeverSetIt(): void
+    {
+        $base = Style::new()->padding(2, 3, 4, 5);
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertSame([2, 3, 4, 5], $merged->getPadding());
+    }
+
+    public function testPatchPreservesMarginWhenOtherNeverSetIt(): void
+    {
+        $base = Style::new()->margin(1, 2, 3, 4);
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertSame([1, 2, 3, 4], $merged->getMargin());
+    }
+
+    public function testPatchPreservesBorderSidesWhenOtherNeverSetThem(): void
+    {
+        $base = Style::new()->borderTop(false);
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertSame([false, true, true, true], $merged->getBorderSides());
+    }
+
+    public function testPatchPreservesPerSideBorderColorsWhenOtherNeverSetThem(): void
+    {
+        $base = Style::new()->border(Border::rounded())->borderLeftForeground(Color::rgb(255, 0, 0));
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertStringContainsString('38;2;255;0;0', $merged->render('x'));
+    }
+
+    public function testPatchAppliesArrayPropsExplicitlySetInOther(): void
+    {
+        $base    = Style::new()->padding(9, 9, 9, 9)->borderTop(false);
+        $patcher = Style::new()->padding(1, 1, 1, 1)->borderBottom(false);
+        $merged  = $base->patch($patcher);
+        $this->assertSame([1, 1, 1, 1], $merged->getPadding());
+        // Array props merge at whole-array granularity (mirrors lipgloss):
+        // the patcher's fully-set borderSides replaces the receiver's.
+        $this->assertSame([true, true, false, true], $merged->getBorderSides());
+    }
+
+    // ---- border title row width regressions (bottom vs top alignment) ----
+
+    public function testBottomBorderRowWithLeftTitleMatchesTopWidth(): void
+    {
+        $border = Border::rounded()
+            ->withTitle('Hi', TitleAnchor::TopLeft)
+            ->withTitle('Lo', TitleAnchor::BottomLeft);
+        $out = Style::new()->width(10)->border($border)->render('x');
+        [$top, , $bottom] = explode("\n", $out);
+        $this->assertSame('╭Hi────────╮', $top);
+        $this->assertSame('╰Lo────────╯', $bottom);
+    }
+
+    public function testTopAndBottomBorderRowsKeepEqualWidthForEveryTitleCombination(): void
+    {
+        // The defect: a bottom row with a left title, right side enabled and
+        // no right title was one cell short of its top twin. Sweep every
+        // combination of title positions against both side toggles.
+        foreach ([[], ['L'], ['C'], ['R'], ['L', 'R'], ['L', 'C'], ['C', 'R'], ['L', 'C', 'R']] as $positions) {
+            foreach ([false, true] as $leftSide) {
+                foreach ([false, true] as $rightSide) {
+                    $border = Border::rounded();
+                    $anchors = [
+                        'L' => [TitleAnchor::TopLeft, TitleAnchor::BottomLeft, 'L'],
+                        'C' => [TitleAnchor::TopCenter, TitleAnchor::BottomCenter, 'C'],
+                        'R' => [TitleAnchor::TopRight, TitleAnchor::BottomRight, 'R'],
+                    ];
+                    foreach ($positions as $p) {
+                        [$topAnchor, $bottomAnchor] = $anchors[$p];
+                        $border = $border
+                            ->withTitle($p, $topAnchor)
+                            ->withTitle($p, $bottomAnchor);
+                    }
+                    $style = Style::new()->width(14)->border($border)
+                        ->borderLeft($leftSide)->borderRight($rightSide);
+                    [$top, , $bottom] = explode("\n", $style->render('x'));
+                    $expected = 14 + ($leftSide ? 1 : 0) + ($rightSide ? 1 : 0);
+                    $label = sprintf('titles=[%s] left=%d right=%d', implode(',', $positions), $leftSide, $rightSide);
+                    $this->assertSame($expected, Width::string($top), "top width — $label");
+                    $this->assertSame($expected, Width::string($bottom), "bottom width — $label");
+                }
+            }
+        }
+    }
+
+    // ---- multi-title anchor separators ------------------------------------
+
+    public function testMultiTitleAnchorGluesEachGapWithThePrecedingTitlesSeparator(): void
+    {
+        $titles = [
+            TitleAnchor::TopLeft->name => [
+                new BorderTitle('A', TitleAnchor::TopLeft, separator: ' - '),
+                new BorderTitle('B', TitleAnchor::TopLeft, separator: ' + '),
+                new BorderTitle('C', TitleAnchor::TopLeft),
+            ],
+        ];
+        $border = new Border('─', '─', '│', '│', '╭', '╮', '╰', '╯', titles: $titles);
+        [$top] = explode("\n", Style::new()->width(20)->border($border)->render('x'));
+        $this->assertStringContainsString('A - B + C', $top);
+    }
+
+    public function testMultiTitleAnchorDefaultsToSingleSpaceSeparator(): void
+    {
+        $border = Border::rounded()
+            ->withTitle('A', TitleAnchor::TopLeft)
+            ->withTitle('B', TitleAnchor::TopLeft);
+        [$top] = explode("\n", Style::new()->width(20)->border($border)->render('x'));
+        $this->assertStringContainsString('A B', $top);
+    }
+
+    /**
+     * E69. `render()` rewrites content — it expands every `\t` to
+     * `str_repeat(' ', $tabWidth)` — *before* any of its own width
+     * measurements. `Width::string()` used to score a `\t` **0**, so a caller
+     * that budgeted with `Width` and laid out with `Style` was using two
+     * measures 4 cells apart per tab, and the gap was invisible to every
+     * assertion in the repo stated in terms of `Width`.
+     *
+     * The property below is the one that was false: rendering through a
+     * default `Style` must not change how many cells `Width` says the content
+     * occupies. `Width::TAB_WIDTH` is now the single number both sides read.
+     *
+     * **Domain, and it is not "all tabbed content".** Measured over 4,797
+     * tab-bearing random strings: at `8add627b` `render()` moved the width of
+     * **4,797 of 4,797 (100%)**; it now moves **568 of 4,797 (11.84%)**, and
+     * every single one of those 568 is the shape pinned in
+     * {@see self::testExpandingATabCanStillReclusterAFollowingCombiningMark()}
+     * — 0 unexplained. That residue is not a tab-WIDTH problem and no choice
+     * of `TAB_WIDTH` closes it; see that test for why.
+     *
+     * **WHAT THAT PARAGRAPH SAID vs WHAT IS TRUE.** "0 unexplained" held over
+     * the alphabet that census was drawn from, and that alphabet had no ZWJ in
+     * it. Over an alphabet that DOES include U+200D the residue splits two
+     * ways, and one of the two is a direction the original census never looked
+     * for.
+     *
+     * **The re-census, stated so it can be re-run.** Generator: the alphabet
+     * declared inside
+     * {@see self::testRenderingThroughADefaultStyleNeverLaysOutMoreCellsThanWidthPromised()}
+     * below, verbatim; `mt_srand(20260822)`; length `1 + mt_rand(0, 5)`
+     * symbols; 200,000 trials; `Width::string($s)` compared against
+     * `Width::string(Style::new()->render($s))`. Measured on PHP 8.3.6,
+     * ext-intl ICU 74.2 / Unicode 15.1. That is the SAME generator the test
+     * below runs, differing only in trial count (200,000 here, 20,000 there).
+     *
+     * | at commit | over-runs | under-runs |
+     * |---|---|---|
+     * | `ae30fee5` (pre-E73) | **461**, worst 8 cells | 1,669, worst 4 cells |
+     * | E73 fixed | **0** | 1,670, worst 4 cells |
+     *
+     * Every string in both buckets, in both directions, at both commits,
+     * contains a `\t` — the no-tab count is 0 in all four cells of that table.
+     * The worst over-run the census drew is `\t ZWJ U+1F4BB U+1F4BB`, measured
+     * 0 cells and laid out 8; the `Z \t ZWJ U+1F469 U+1F44D` case pinned as an
+     * exact value in the test below is the same magnitude (1 measured, 9 laid
+     * out).
+     *
+     * **WHAT THIS PARAGRAPH ITSELF USED TO SAY:** "3,862 under-runs" and "989
+     * OVER-runs". Neither is reproducible from any generator this file
+     * defines — re-running the committed generator yields 1,669 and 461 — and
+     * the paragraph recorded no seed and no length bound, so a reader could
+     * only guess at the corpus. That is the same defect the paragraph above it
+     * is warning about, committed in the act of warning about it. The figures
+     * are replaced with measured ones and the generator is now named.
+     *
+     * WHY THE PARAGRAPH STAYS: the tab-WIDTH conclusion is still correct and
+     * still the reason `TAB_WIDTH` is shared. What decayed was the word
+     * "unexplained", which was a property of one sample's alphabet reported as
+     * a property of the residue.
+     *
+     * **Domain: the DEFAULT tab width only.** A `Style` given a non-default
+     * `tabWidth()` re-opens the gap on purpose; that is asserted separately
+     * below rather than left as an unstated exception.
+     */
+    public function testRenderingThroughADefaultStyleDoesNotChangeTheWidthOfTabbedContent(): void
+    {
+        $this->assertSame(Width::TAB_WIDTH, Width::string("\t"));
+
+        foreach (["\t", "a\tb", "\ta", "a\t", "\t\t", "a\tb\tc", "日\t本", "\t\u{1F44D}", "a\t日\tb"] as $input) {
+            $rendered = Style::new()->render($input);
+            $this->assertSame(
+                Width::string($input),
+                Width::string($rendered),
+                sprintf('Style::render() moved the width of %s', bin2hex($input)),
+            );
+        }
+    }
+
+    /**
+     * The residue E69's fix cannot reach, pinned with its mechanism so nobody
+     * re-derives it as a new finding — and so the claim "Style and Width now
+     * agree on tabs" is never made without this exception attached.
+     *
+     * `render()` does not merely re-MEASURE content, it REWRITES it, and
+     * substituting spaces for a tab changes GRAPHEME CLUSTERING downstream of
+     * the substitution. A tab is a Control character, which by UAX #29 GB4/GB5
+     * never joins a following Extend; a space is not, and does. So in
+     * `"\t" . U+1F3FD` the skin-tone modifier is its own 2-cell cluster, while
+     * in the rendered `"    " . U+1F3FD` it attaches to the final space and
+     * contributes 0 — 6 cells in, 4 cells out.
+     *
+     * This is the same two-codepoint input the E69 write-up delta-debugged,
+     * and it shows the finding's proposed remedy is incomplete by construction:
+     * no per-tab cell charge can fix a reclustering. Only not rewriting the
+     * content would, and that is `Style::tabWidth(0)`.
+     */
+    public function testExpandingATabCanStillReclusterAFollowingCombiningMark(): void
+    {
+        $input = "\t\u{1F3FD}";
+
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string($input));
+        $this->assertSame(Width::TAB_WIDTH, Width::string(Style::new()->render($input)));
+
+        // The mechanism, isolated from tabs entirely: an Extend after a SPACE
+        // joins it, an Extend after a CONTROL does not.
+        $this->assertSame(1, Width::string(" \u{1F3FD}"));
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string("\t\u{1F3FD}"));
+
+        // Not rewriting the content is what actually preserves the width.
+        $this->assertSame(
+            Width::string($input),
+            Width::string(Style::new()->tabWidth(0)->render($input)),
+        );
+    }
+
+    /**
+     * The residue E69's fix deliberately leaves, pinned so it is a documented
+     * limit rather than a surprise: a non-default `tabWidth` makes `Style`'s
+     * layout and `Width::string()` disagree again, by
+     * `abs($tabWidth - Width::TAB_WIDTH)` cells per tab.
+     */
+    public function testANonDefaultTabWidthReopensTheGapWithWidthByDesign(): void
+    {
+        // 2 spaces laid out where Width::string() charges 4.
+        $this->assertSame(1 + 2 + 1, Width::string(Style::new()->tabWidth(2)->render("a\tb")));
+        $this->assertSame(1 + Width::TAB_WIDTH + 1, Width::string("a\tb"));
+        // tabWidth(0) keeps the literal tab, which Width::string() still
+        // charges TAB_WIDTH — the one case where the rendered string carries a
+        // tab the terminal, not Style, will resolve.
+        $this->assertStringContainsString("\t", Style::new()->tabWidth(0)->render("a\tb"));
+    }
+
+    /**
+     * The SIGN of the residual disagreement between `Width::string()` and
+     * `Style::render()`, asserted separately from its magnitude — because the
+     * two directions have opposite consequences.
+     *
+     * An UNDER-run (`render()` narrower than `Width` promised) wastes cells.
+     * An OVER-run (`render()` WIDER than `Width` promised) is frame
+     * corruption: candy-core's diff renderer paints one line per terminal
+     * row, so a caller that budgeted with `Width` and laid out with `Style`
+     * writes past the row. E73 was an over-run of up to 8 cells.
+     *
+     * Over-runs must be ZERO. Under-runs are allowed and counted, because
+     * they are all the reclustering shape pinned in
+     * {@see self::testExpandingATabCanStillReclusterAFollowingCombiningMark()}
+     * — this test asserts that too, by requiring every under-run to contain a
+     * `\t`, which is the only transform a default `Style` applies to content.
+     *
+     * Corpus: 20,000 deterministic strings (seed 20260822) of 1-6 symbols over
+     * an emoji-heavy alphabet — controls, ZWJ/ZWNJ, skin-tone modifiers,
+     * regional indicators, Hangul jamo, an Indic conjunct, combining marks,
+     * variation selectors. Measured on PHP 8.3.6, ext-intl ICU 74.2 /
+     * Unicode 15.1; a different ICU can move which inputs land in the
+     * under-run bucket, which is why the count is not asserted, only the sign
+     * and the mechanism.
+     */
+    public function testRenderingThroughADefaultStyleNeverLaysOutMoreCellsThanWidthPromised(): void
+    {
+        // The E73 reproductions first, as exact values.
+        foreach (["\t\u{200d}\u{1F44D}", "a\t\u{200d}\u{1F44D}", "Z\t\u{200d}\u{1F469}\u{1F44D}"] as $input) {
+            $this->assertSame(
+                Width::string($input),
+                Width::string(Style::new()->render($input)),
+                sprintf('render() moved the width of %s', bin2hex($input)),
+            );
+        }
+
+        $alphabet = [
+            'a', 'Z', ' ', "\t", "\x01", "\x07", "\x0b", "\x7f",
+            "\u{200d}", "\u{200c}", "\u{200b}", "\u{feff}",
+            "\u{1F44D}", "\u{1F469}", "\u{1F4BB}", "\u{1F3C3}", "\u{2600}",
+            "\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}",
+            "\u{1F1FA}", "\u{1F1F8}", "\u{1F1EF}", "\u{1F1F5}",
+            "\u{1100}", "\u{1161}", "\u{11A8}",
+            "\u{0915}", "\u{094D}", "\u{0937}",
+            "\u{0301}", "\u{FE0F}", "\u{FE0E}", "\u{4E00}",
+        ];
+        $n = \count($alphabet);
+        $style = Style::new();
+        \mt_srand(20260822);
+        $overRuns = [];
+        $unexplained = [];
+        $underRuns = 0;
+        for ($t = 0; $t < 20000; $t++) {
+            $len = 1 + \mt_rand(0, 5);
+            $s = '';
+            for ($k = 0; $k < $len; $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            $promised = Width::string($s);
+            $laidOut = Width::string($style->render($s));
+            if ($laidOut > $promised) {
+                if (\count($overRuns) < 5) {
+                    $overRuns[] = sprintf('%s measured %d cells, render() laid out %d', bin2hex($s), $promised, $laidOut);
+                }
+                continue;
+            }
+            if ($laidOut < $promised) {
+                $underRuns++;
+                // Every under-run must be the tab-reclustering shape: a
+                // default Style rewrites nothing else in a single-line input.
+                if (!\str_contains($s, "\t") && \count($unexplained) < 5) {
+                    $unexplained[] = sprintf('%s: %d -> %d with no tab to explain it', bin2hex($s), $promised, $laidOut);
+                }
+            }
+        }
+        $this->assertSame([], $overRuns, 'render() laid out more cells than Width::string() promised');
+        $this->assertSame([], $unexplained, 'an under-run that is not the tab-reclustering shape');
+        // NOT an over-run assertion, despite this test's name. It is a canary
+        // on the UNDER-run residue documented in
+        // testExpandingATabCanStillReclusterAFollowingCombiningMark(): the
+        // residue is real and non-zero, so a change that drives it to zero has
+        // changed tab reclustering and must say so deliberately.
+        //
+        // If you are reading this because it went red: nothing is corrupting
+        // the frame. Over-runs are asserted above and they are still []. You
+        // have most likely CLOSED the reclustering under-run family — which is
+        // a welcome change — and the fix is to delete this canary and the
+        // paragraph in this test's docblock that calls the residue permanent,
+        // not to re-open the gap.
+        $this->assertGreaterThan(
+            0,
+            $underRuns,
+            'the documented tab-reclustering UNDER-run residue is now zero (this is not an over-run; see the comment at this assertion)',
+        );
+    }
+
+    // ─── colorWhitespace(false) ────────────────────────────────────────
+
+    public function testColorWhitespaceFalseLeavesAlignmentFillUnstyled(): void
+    {
+        $blue = "\x1b[48;2;0;0;255m";
+        $base = Style::new()->bg('#0000ff')->width(8)->colorWhitespace(false);
+
+        $this->assertSame($blue . "x\x1b[0m       ", $base->render('x'));
+        $this->assertSame("       " . $blue . "x\x1b[0m", $base->align(Align::Right)->render('x'));
+        $this->assertSame("   " . $blue . "x\x1b[0m    ", $base->align(Align::Center)->render('x'));
+        // Padding stays unstyled too, around the unstyled fill.
+        $this->assertSame(" " . $blue . "x\x1b[0m        ", $base->padding(0, 1)->render('x'));
+    }
+
+    public function testColorWhitespaceFalseEmptyLineEmitsNoSgr(): void
+    {
+        $out = Style::new()->bg('#0000ff')->width(3)->colorWhitespace(false)->render("a\n\nb");
+        $this->assertSame(
+            "\x1b[48;2;0;0;255ma\x1b[0m  \n   \n\x1b[48;2;0;0;255mb\x1b[0m  ",
+            $out,
+        );
+    }
+
+    public function testColorWhitespaceDefaultStillStylesAlignmentFill(): void
+    {
+        $this->assertSame(
+            "\x1b[48;2;0;0;255mx       \x1b[0m",
+            Style::new()->bg('#0000ff')->width(8)->render('x'),
+        );
+    }
+
+    // ─── patch() sentinel hygiene ──────────────────────────────────────
+
+    public function testPatchSkippedNullDoesNotLeakSentinel(): void
+    {
+        $red = Color::hex('#ff0000');
+        $base = Style::new()->foreground($red);
+        $merged = Style::new()->patch(Style::new()->foreground(null));
+        $this->assertFalse($merged->isSet('fg'));
+
+        // Receiver's own sentinel survives a skipped null.
+        $kept = $base->patch(Style::new()->foreground(null));
+        $this->assertSame('#ff0000', $kept->getForeground()?->toHex());
+        $this->assertTrue($kept->isSet('fg'));
+    }
+
+    public function testPatchSkippedNullStillLetsInheritSupplyParentValue(): void
+    {
+        $parentFg = Color::hex('#00ff00');
+        $patched = Style::new()->patch(Style::new()->foreground(null)->width(null)->border(null));
+        $this->assertFalse($patched->isSet('width'));
+        $this->assertFalse($patched->isSet('border'));
+
+        $inherited = $patched->inherit(Style::new()->foreground($parentFg)->width(5));
+        $this->assertSame('#00ff00', $inherited->getForeground()?->toHex());
+        $this->assertSame(5, $inherited->getWidth());
+    }
+
+    public function testPatchAppliesZeroValuesAndRecordsThem(): void
+    {
+        $merged = Style::new()->height(3)->patch(Style::new()->height(0));
+        $this->assertSame(0, $merged->getHeight());
+        $this->assertTrue($merged->isSet('height'));
+    }
+
+    // ─── unsetBorder() ─────────────────────────────────────────────────
+
+    public function testUnsetBorderAlsoClearsBorderSides(): void
+    {
+        $s = Style::new()->border(Border::normal(), true, true, false, false)->unsetBorder();
+        $this->assertNull($s->getBorder());
+        $this->assertFalse($s->isSet('border'));
+        $this->assertFalse($s->isSet('borderSides'));
+        $this->assertSame([true, true, true, true], $s->getBorderSides());
+
+        // The next inherit() re-inherits the parent's side flags.
+        $parent = Style::new()->border(Border::rounded(), false, true, false, true);
+        $child = $s->inherit($parent);
+        $this->assertSame([false, true, false, true], $child->getBorderSides());
+    }
+
+    // ─── docblock example (fg/bg/on accept hex, not names) ─────────────
+
+    public function testOnAcceptsHexAndRejectsColourNames(): void
+    {
+        $this->assertSame(
+            "\x1b[48;2;0;0;128mx\x1b[0m",
+            Style::new()->on('#000080')->render('x'),
+        );
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->on('navy');
+    }
+}

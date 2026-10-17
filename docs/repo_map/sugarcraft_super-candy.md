@@ -76,7 +76,7 @@
 
 - **i18n support** — `Lang::t()` facade wrapping `SugarCraft\Core\I18n\T` with `supercandy` namespace; `lang/en.php` with 40+ translation keys
 
-- **Theming** — Uses `candy-sprinkles` (`Style`, `Border`, `Layout`) for ANSI rendering
+- **Theming** — Uses `sugar-style` (`Style`, `Border`, `Layout`) for ANSI rendering
 
 ---
 
@@ -267,7 +267,7 @@ Pane::open($cwd, fn(string $path): list<Entry> => $fakeEntries);
 | Component | SugarCraft Dependency | Role |
 |-----------|----------------------|------|
 | Manager (TEA Model) | `candy-core` | Implements `Model` interface, uses `KeyMsg`, `Cmd`, `KeyType`, `Subscriptions` |
-| Rendering | `candy-sprinkles` | `Style`, `Border`, `Layout` for pane boxes and status bar |
+| Rendering | `sugar-style` | `Style`, `Border`, `Layout` for pane boxes and status bar |
 | Image preview | `sugar-image` | `Mosaic::probe()`, `ImageSource::fromFile()` for Kitty/Sixel/iTerm2 rendering |
 | i18n | `candy-core` | `SugarCraft\Core\I18n\Lang` base class |
 | Async ops | `react/promise` | `React\Promise\Deferred`, `React\EventLoop\Loop` |
@@ -527,7 +527,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
   "require": {
     "php": ">=8.3",
     "sugarcraft/candy-core": "dev-master",
-    "sugarcraft/candy-sprinkles": "dev-master",
+    "sugarcraft/sugar-style": "dev-master",
     "sugarcraft/sugar-image": "dev-master",
     "react/promise": "^3.3"
   }
@@ -537,7 +537,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
 | Dependency | Purpose |
 |-------------|---------|
 | `candy-core` | TEA Model, KeyMsg, Cmd, Program, Ansi utilities |
-| `candy-sprinkles` | Style, Border, Layout for pane rendering |
+| `sugar-style` | Style, Border, Layout for pane rendering |
 | `sugar-image` | Image preview rendering (Kitty/Sixel/iTerm2 protocols) |
 | `react/promise` | Async file operations via promises |
 

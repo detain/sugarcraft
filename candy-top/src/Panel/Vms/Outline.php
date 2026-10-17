@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Vms;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\View\BorderFlow;
 use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\Rect;

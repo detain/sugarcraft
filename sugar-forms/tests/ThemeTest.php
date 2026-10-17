@@ -6,7 +6,7 @@ namespace SugarCraft\Forms\Tests;
 
 use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Forms\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeTest extends TestCase

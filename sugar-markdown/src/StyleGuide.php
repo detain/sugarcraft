@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Markdown;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Parser + producer for Glamour STYLE JSON documents (E736 sugar-markdown 7.1).

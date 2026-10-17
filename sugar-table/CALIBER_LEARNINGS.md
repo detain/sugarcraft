@@ -66,13 +66,13 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   fires before any object construction. See `Column.php` lines 100–105.
 
 - **[pattern:border-from-sprinkles]** `Table::withBorder(Border)` consumes
-  `\SugarCraft\Sprinkles\Border\Border` — the 13-rune box border family from
-  candy-sprinkles. Available factories: `Border::normal()`, `rounded()`,
+  `\SugarCraft\Style\Border\Border` — the 13-rune box border family from
+  sugar-style. Available factories: `Border::normal()`, `rounded()`,
   `thick()`, `double()`, `block()`, `ascii()`, `hidden()`, `markdownBorder()`.
   Border getter methods (`borderTopLeft()`, etc.) fall back to existing
   `$borderStyle` string property for backward compatibility via null-coalescing.
   `middleLeft` maps to column separators in header/row separator lines. See
-  `Table.php` lines 234–246 and `candy-sprinkles/src/Border.php`.
+  `Table.php` lines 234–246 and `sugar-style/src/Border.php`.
 
 - **[pattern:multilineMode-row-height]** when `multilineMode=true`, row height
   equals the maximum cell height across all columns; `fillDataRowLines()` iterates

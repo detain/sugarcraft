@@ -76,7 +76,7 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugarcraft/16-sugarcraft-banner.ansi` | 64x15 | 203 | Rainbow gradient SUGAR over CRAFT half-block wordmark with contour shadow and candy sprinkles in a rounded frame, italic caption below |
 | `sugarcraft/17-rainbow-swirl.ansi` | 64x12 | 427 | Truecolor half-block lollipop spiral over a twinkling starfield with cream stick, sparkles and gradient caption |
 | `sugarcraft/17-sugarcraft-wordmark.ansi` | 62x16 | 660 | Rainbow block-font SUGAR/CRAFT stacked wordmark with violet drop shadow and sprinkles on dark cocoa, dual captions |
-| `sugarcraft/18-candy-sprinkles-frame.ansi` | 44x17 | 107 | multicoloured confectionery box framing a stacked SUGAR/CRAFT block logo with a sprinkle garland and mauve tagline |
+| `sugarcraft/18-sugar-style-frame.ansi` | 44x17 | 107 | multicoloured confectionery box framing a stacked SUGAR/CRAFT block logo with a sprinkle garland and mauve tagline |
 | `sugarcraft/18-sugarcraft-splash.ansi` | 61x20 | 141 | rainbow block SUGARCRAFT wordmark under a spiralling pink-violet truecolor lollipop, gradient rule and tagline |
 | `sugarcraft/19-candy-cosmos.ansi` | 68x20 | 418 | two-armed candy galaxy of pink-to-cyan stars around a white sugar-crystal core with striped bonbon planets and a comet, SugarCraft x sugar-crush banner above |
 | `sugarcraft/19-candy-forge.ansi` | 66x20 | 461 | molten-candy cauldron on a live ember fire with steam, glow and a candy-striped stir paddle beside the SugarCraft forge wordmark |
@@ -1860,181 +1860,181 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-sql-9-tc-s-2.ansi` | 64x12 | truecolor | 26 | row biopsy slide: eosin-stained tissue disc under ground glass edges |
 <!-- END candy-sql SLOTS -->
 
-<!-- BEGIN candy-sprinkles SLOTS -->
-### candy-sprinkles — slot series
+<!-- BEGIN sugar-style SLOTS -->
+### sugar-style — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-sprinkles-1-16-l-1.ansi` | 124x30 | 16 | 12 | Neon marquee: double-frame storefront, giant scaled CANDY/SPRINKLES letters, border-family and verb counters, reverse-video marquee strip |
-| `candy-sprinkles-1-16-l-2.ansi` | 120x30 | 16 | 12 | Sunset service: ANSI block-density dusk sky with half-block sun, layout-guide grid, styled Table card and roman ItemList card |
-| `candy-sprinkles-1-16-m-1.ansi` | 78x19 | 16 | 10 | Terminal bakery storefront: striped awning, pixel CANDY/SPRINKLES sign, style-verb menu board and a pixel cupcake |
-| `candy-sprinkles-1-16-m-2.ansi` | 76x18 | 16 | 10 | Style verb catalog: ->bold()/faint/italic/underline/strikethrough/reverse/blink chips rendered, plus per-side border demo box |
-| `candy-sprinkles-1-16-s-1.ansi` | 56x9 | 16 | 8 | Markup playground: Rich-style [tag] source lines rendering into bold/colored/underlined candy words |
-| `candy-sprinkles-1-16-s-2.ansi` | 66x14 | 16 | 8 | Border::catalog shelf: six mini framed boxes (rounded/normal/thick/double/block/ascii) each in its own ANSI hue |
-| `candy-sprinkles-1-256-l-1.ansi` | 140x30 | 256 | 26 | Constraint-solver dashboard: length/min/fill regions rendered as framed panes with style table, gradient showcase and project tree |
-| `candy-sprinkles-1-256-l-2.ansi` | 140x30 | 256 | 276 | Ansi256 pantry wall: all 256 color slots as framed swatch tiles above a rainbow pixel CANDY SPRINKLES banner |
-| `candy-sprinkles-1-256-m-1.ansi` | 84x22 | 256 | 16 | Border galaxy: nested block/rounded/thick/double rings around a pixel CANDY core on a starfield, family glyph row below |
-| `candy-sprinkles-1-256-m-2.ansi` | 84x18 | 256 | 45 | Theme wall: eight framed tiles (dracula, tokyoNight, oneDark, ...) each with its authentic palette swatches over a rainbow ramp |
-| `candy-sprinkles-1-256-s-1.ansi` | 53x8 | 256 | 10 | Syntax-highlighted Style::new() candy chain with its rendered pink-on-dark pane and pad(0,2) annotation |
-| `candy-sprinkles-1-256-s-2.ansi` | 66x13 | 256 | 28 | Gradient sweep: pixel GRADIENT title above five xterm256 blend bars (linear/hsl/blend/2D/rainbow) with fading tails |
-| `candy-sprinkles-1-tc-l-1.ansi` | 156x32 | truecolor | 373 | Grand shower: giant sx2 CANDY/SPRINKLES wordmark under a truecolor sprinkle storm with border/theme/code panels on three cards |
-| `candy-sprinkles-1-tc-l-2.ansi` | 148x30 | truecolor | 196 | Border cosmos: nebula veils, drifting border-family satellites and a comet framing a glowing double-wordmark panel |
-| `candy-sprinkles-1-tc-m-1.ansi` | 82x22 | truecolor | 122 | Dracula-syntax Style chain inside a rainbow rounded frame with the rendered double-border pane beside it |
-| `candy-sprinkles-1-tc-m-2.ansi` | 80x21 | truecolor | 749 | Color::blend2D patch of four candy corners next to an 12-step gradient waterfall curtain over a rainbow SPRINKLES wordmark |
-| `candy-sprinkles-1-tc-s-1.ansi` | 60x13 | truecolor | 44 | Truecolor donut with gradient icing band, candy sprinkles on the ring and a sprinkle shower raining from above onto a shade plate |
-| `candy-sprinkles-1-tc-s-2.ansi` | 58x9 | truecolor | 85 | Gradient ramp bar pouring sprinkles down onto a rainbow pixel CANDY with ->gradient() callout |
-| `candy-sprinkles-10-16-l-1.ansi` | 150x31 | 16 | 7 | Grand paper-chain arch: three swags, attribute medallions, pixel wordmark and punch list |
-| `candy-sprinkles-10-16-l-2.ansi` | 160x32 | 16 | 7 | Weight tower entrance: seven-step border stair with pennants and a gram-per-glyph ledger |
-| `candy-sprinkles-10-16-m-1.ansi` | 84x24 | 16 | 7 | Spiral stair of border weights: seven landings on a center post, each a Border:: house frame |
-| `candy-sprinkles-10-16-m-2.ansi` | 90x20 | 16 | 7 | Party garland drape: paper-chain swag with five attribute medallions over a pixel wordmark |
-| `candy-sprinkles-10-16-s-1.ansi` | 66x12 | 16 | 7 | Paper-chain party garland: six style-link loops bld/fnt/ita/uli/rev/blk over a verb chain line |
-| `candy-sprinkles-10-256-l-1.ansi` | 172x34 | 256 | 53 | Silkscreen studio panorama: twelve prints on two rack rows, press bench and wash line |
-| `candy-sprinkles-10-256-l-2.ansi` | 168x32 | 256 | 44 | Grand wind-sock calibration tunnel: six courses with flow arrows and gauge panel |
-| `candy-sprinkles-10-256-m-1.ansi` | 86x24 | 256 | 40 | Wind-sock tunnel: five nested hue-cycled courses with flow arrows toward a lit wordmark |
-| `candy-sprinkles-10-256-m-2.ansi` | 84x22 | 256 | 26 | Silkscreen rack wall: six hinged mesh frames of border motifs above squeegee and ink pairs |
-| `candy-sprinkles-10-256-s-1.ansi` | 64x13 | 256 | 23 | Silkscreen rail: three mesh frames printing rounded/double/thick motifs, squeegee and ink blobs |
-| `candy-sprinkles-10-256-s-2.ansi` | 62x12 | 256 | 29 | Wind-sock trio: banded conical socks on masts reading the xterm breeze |
-| `candy-sprinkles-10-tc-l-1.ansi` | 176x38 | truecolor | 84 | Crystal chandelier ballroom: gold chain, three tiers, hanging gradient drops and light pool |
-| `candy-sprinkles-10-tc-l-2.ansi` | 180x36 | truecolor | 300 | Brush atelier panorama: wall of twenty-four hue-brushes, easel canvas and palette bench |
-| `candy-sprinkles-10-tc-m-1.ansi` | 86x24 | truecolor | 151 | Ferrule and brush rack: two shelves of hue-graduated brushes dripping, sweep bar below |
-| `candy-sprinkles-10-tc-m-2.ansi` | 84x22 | truecolor | 54 | Zoetrope drum: seven slits with bouncing sprinkle and border glyph per frame, strip unrolled |
-| `candy-sprinkles-10-tc-s-1.ansi` | 58x14 | truecolor | 15 | Brush jar: five gradient-handled brushes resting ferrule-down in tinted water, label band |
-| `candy-sprinkles-10-tc-s-2.ansi` | 56x12 | truecolor | 31 | Crystal pendant lamp: one hanging drop cluster casting a warm gradient pool |
-| `candy-sprinkles-2-16-l-2.ansi` | 144x28 | 16 | 7 | Border menagerie: six framed cards (rounded to block) with unique sprinkle textures over a spaced wordmark banner |
-| `candy-sprinkles-2-16-m-2.ansi` | 78x19 | 16 | 9 | Sweet-shop beam with three hanging price tags above a CandySprinkles & Co. storefront panel |
-| `candy-sprinkles-2-16-s-1.ansi` | 58x13 | 16 | 7 | Sprinkle shaker pouring a 16-colour candy storm above a swatch triptych and the wordmark chain |
-| `candy-sprinkles-2-16-s-2.ansi` | 66x9 | 16 | 7 | Style ladder: six SGR verbs (bold..reverse) climbing in shaded bars inside a double frame |
-| `candy-sprinkles-2-256-l-1.ansi` | 150x32 | 256 | 58 | Layer compositor dashboard: five stacking paint-layer panes feeding a finished candy card with deck and chain |
-| `candy-sprinkles-2-256-l-2.ansi` | 158x34 | 256 | 24 | Candy constellation: cupcake asterism, comets and a banded wordmark over a nine-step xterm sunset horizon |
-| `candy-sprinkles-2-256-m-1.ansi` | 84x24 | 256 | 23 | Ice-cream sundae bar: cherry-topped glass, drizzle layers, twin cones and a per-letter PARLOUR sign |
-| `candy-sprinkles-2-256-m-2.ansi` | 80x22 | 256 | 10 | Sprinkle DNA helix: two orbiting xterm strands rung-stitched around a framed xterm-rainbow wordmark core |
-| `candy-sprinkles-2-256-s-1.ansi` | 61x10 | 256 | 30 | 24-hue xterm sugar ramp with a dipped CANDY-SPRINKLES wordmark and three stacked blend layers |
-| `candy-sprinkles-2-256-s-2.ansi` | 66x9 | 256 | 7 | Confection ledger: magenta double-framed table of six xterm candy columns with fill textures |
-| `candy-sprinkles-2-tc-l-1.ansi` | 166x36 | truecolor | 431 | Rainbow-road horizon: tc dusk sky, setting sun, seven-lane candy motorway with a wordmark exit sign |
-| `candy-sprinkles-2-tc-l-2.ansi` | 150x40 | truecolor | 106 | Sprinkle-storm vortex: four hue-cycled spiral arms around a wordmark eye in a truecolour cyclone |
-| `candy-sprinkles-2-tc-m-1.ansi` | 82x24 | truecolor | 262 | HSL candy wheel: truecolour hue spokes and lightness rings around a sugar hub, spectrum foot |
-| `candy-sprinkles-2-tc-m-2.ansi` | 84x22 | truecolor | 204 | Glamour-style markdown sheet in a gradient frame: H1, blockquote, syntax php fence, bullets, OSC-8 link |
-| `candy-sprinkles-2-tc-s-1.ansi` | 62x11 | truecolor | 489 | Truecolour half-cell sprinkle storm over a hue-cycled wordmark with two blend-bar callouts |
-| `candy-sprinkles-2-tc-s-2.ansi` | 53x16 | truecolor | 31 | Truecolour layer-cake slice: gradient frosting lid, six flavour bands and a sugar edge |
-| `candy-sprinkles-3-16-l-1.ansi` | 132x31 | 16 | 14 | Type broadsheet: block-mould CANDY SPRINKLES over glyph galleries and verb parade |
-| `candy-sprinkles-3-16-l-2.ansi` | 128x28 | 16 | 16 | Legibility ledger: 8x8 ANSI contrast matrix with per-row pass blocks and ratio bar |
-| `candy-sprinkles-3-16-m-1.ansi` | 80x24 | 16 | 16 | Typographic specimen sheet: SGR verb parade, rainbow range rows, eight-colour ink assay |
-| `candy-sprinkles-3-256-l-1.ansi` | 158x28 | 256 | 59 | Gradient foundry epic: furnace, crucible pour, CANDY mould and ingot shelving |
-| `candy-sprinkles-3-256-l-2.ansi` | 152x28 | 256 | 19 | Style factory: conveyor of six SGR machines stamping a token into a bordered crate |
-| `candy-sprinkles-3-256-m-1.ansi` | 84x26 | 256 | 11 | Border pedigree tree: eight houses grafted onto Border::catalog() with mottos |
-| `candy-sprinkles-3-256-m-2.ansi` | 86x21 | 256 | 9 | Confectionery menu: roman-enumerated pastries, tree sub-items, dotted price leaders |
-| `candy-sprinkles-3-256-m-3.ansi` | 88x18 | 256 | 33 | Colour-profile triplet: TrueColor/256/Ansi panes under the env detect chain |
-| `candy-sprinkles-3-256-s-1.ansi` | 58x13 | 256 | 22 | Foundry ingot tray: three xterm256 blend bars cast in a double-frame mould |
-| `candy-sprinkles-3-256-s-2.ansi` | 62x12 | 256 | 10 | Recipe chip: glazed-style ingredient ticket with measures and one baked result pane |
-| `candy-sprinkles-3-tc-l-1.ansi` | 176x30 | truecolor | 353 | Patisserie showpiece: sprinkle shower, six labelled gradient strata, plated result card |
-| `candy-sprinkles-3-tc-l-2.ansi` | 162x31 | truecolor | 114 | Contrast cathedral: hue rose window, luminance vitrine, WCAG stained-glass lancets |
-| `candy-sprinkles-3-tc-m-1.ansi` | 86x26 | truecolor | 215 | Exploded layer pastry: five gradient slabs with leader labels feeding one plated composite |
-| `candy-sprinkles-3-tc-m-2.ansi` | 86x18 | truecolor | 22 | Recipe sheet: annotated style-DSL code column beside the baked result card |
-| `candy-sprinkles-3-tc-s-1.ansi` | 62x10 | truecolor | 64 | HSL chip: hsl(200,80,50) poured as a rounded swatch with a one-stop-per-cell hue ramp |
-| `candy-sprinkles-3-tc-s-2.ansi` | 52x14 | truecolor | 10 | Macaron cross-section: gradient shells and cream filling on a half-block plate |
-| `candy-sprinkles-3-tc-s-3.ansi` | 51x11 | truecolor | 57 | BorderGradientBlend box: each border side hue-interpolated between its two corner colours |
-| `candy-sprinkles-4-16-l-1.ansi` | 147x29 | 16 | 7 | Style-inheritance family tree — pedigree of with*() forks across four generations |
-| `candy-sprinkles-4-16-l-2.ansi` | 159x30 | 16 | 8 | Margin-collapse car crash — incident sketch of two colliding blocks with police tape |
-| `candy-sprinkles-4-16-m-1.ansi` | 81x22 | 16 | 6 | Box-model anatomy as a medical plate — margin/border/padding/content rings, annotated |
-| `candy-sprinkles-4-16-m-2.ansi` | 86x21 | 16 | 7 | Colour-blind-safe pattern library — eight texture swatches that never rely on hue |
-| `candy-sprinkles-4-16-s-2.ansi` | 58x12 | 16 | 9 | Immutable style-chain conveyor: new-bold-fg-bg-pad-out with source/output notes |
-| `candy-sprinkles-4-256-l-1.ansi` | 180x30 | 256 | 21 | Panoramic styled year — four season panels side by side on one wide canvas |
-| `candy-sprinkles-4-256-l-2.ansi` | 166x28 | 256 | 11 | Constraint solver anatomy — ruler, length/percentage/fill segments, worked maths |
-| `candy-sprinkles-4-256-m-1.ansi` | 87x26 | 256 | 19 | The styled year — four-panel seasonal grid: blossom, sunflower, maple, snowy pine |
-| `candy-sprinkles-4-256-m-2.ansi` | 83x23 | 256 | 11 | Z-index tower — staggered glass floors, ladder, render-order notes, floating top layer |
-| `candy-sprinkles-4-256-m-3.ansi` | 82x20 | 256 | 10 | Inline markup cheat-card — raw markdown arrows to styled word outcomes |
-| `candy-sprinkles-4-256-s-1.ansi` | 55x14 | 256 | 8 | Mini temple of vertical centering — pediment, columns, centred wordmark, blank rails |
-| `candy-sprinkles-4-256-s-2.ansi` | 52x10 | 256 | 122 | Four 256-palette sprinkle ramp bars — gray, warm, cool and candy gradients |
-| `candy-sprinkles-4-tc-l-1.ansi` | 176x32 | truecolor | 811 | Glass tower of z-index — gradient floors, mullions, floating modal, starfield, reflection |
-| `candy-sprinkles-4-tc-l-2.ansi` | 176x34 | truecolor | 48 | Codex of inheritance — gilded family tree of Style with*() branches, illuminated |
-| `candy-sprinkles-4-tc-m-1.ansi` | 84x22 | truecolor | 570 | Temple of vertical centering under an aurora sky — columns, measured rails, glowing centre |
-| `candy-sprinkles-4-tc-m-2.ansi` | 87x26 | truecolor | 29 | Aurora year — four seasonal panels behind truecolor gradient skies |
-| `candy-sprinkles-4-tc-s-1.ansi` | 57x8 | truecolor | 74 | CandySprinkles wordmark on a truecolor candy ramp with confetti and gradient bar |
-| `candy-sprinkles-4-tc-s-2.ansi` | 52x12 | truecolor | 193 | HSL colour factory fan — hue-wheel gradient chips with blend note |
-| `candy-sprinkles-4-tc-s-3.ansi` | 61x13 | truecolor | 14 | Four border corner sets — classic, rounded, double, heavy lit in truecolor hues |
-| `candy-sprinkles-5-16-l-1.ansi` | 162x34 | 16 | 7 | upholstery workshop: hanging rolls of border fabrics |
-| `candy-sprinkles-5-16-m-2.ansi` | 84x22 | 16 | 8 | night-sky fireworks, one shell per border style |
-| `candy-sprinkles-5-16-s-2.ansi` | 50x14 | 16 | 5 | barber pole of SGR attributes with spinning stripes |
-| `candy-sprinkles-5-256-l-1.ansi` | 158x40 | 256 | 152 | terraced gradient waterfall down rock basins |
-| `candy-sprinkles-5-256-l-2.ansi` | 172x38 | 256 | 33 | box-model skyline under border-shell fireworks |
-| `candy-sprinkles-5-256-m-1.ansi` | 78x25 | 256 | 25 | sprinkle rain gauge collecting grained hues |
-| `candy-sprinkles-5-256-m-2.ansi` | 80x26 | 256 | 13 | embroidery-hoop sampler of cross-stitched borders |
-| `candy-sprinkles-5-256-s-1.ansi` | 62x15 | 256 | 10 | fountain jet of gradient droplets into a basin |
-| `candy-sprinkles-5-256-s-2.ansi` | 64x13 | 256 | 10 | kiln shelf of pots dipped in xterm glaze ramps |
-| `candy-sprinkles-5-tc-l-1.ansi` | 182x44 | truecolor | 612 | grand three-tier fountain, hue-curtain cascade |
-| `candy-sprinkles-5-tc-l-2.ansi` | 172x42 | truecolor | 242 | ice palace towers swept by RGB spotlight beams |
-| `candy-sprinkles-5-tc-m-1.ansi` | 84x22 | truecolor | 1021 | aurora wallpaper sheet tacked to the wall |
-| `candy-sprinkles-5-tc-m-2.ansi` | 88x24 | truecolor | 142 | kiln chamber glow, radial heat gradient on pots |
-| `candy-sprinkles-5-tc-s-1.ansi` | 54x16 | truecolor | 138 | truecolor barber helix, smooth RGB spiral bands |
-| `candy-sprinkles-5-tc-s-2.ansi` | 58x14 | truecolor | 40 | glassblower's molten gradient gather on the pipe |
-| `candy-sprinkles-6-16-l-1.ansi` | 176x28 | 16 | 7 | textile mill floor — three looms weaving plain, double and rounded cloth under one shaft |
-| `candy-sprinkles-6-16-l-2.ansi` | 148x28 | 16 | 7 | apiary of nested supers — border-weight hive frames with bee flight paths and smoker |
-| `candy-sprinkles-6-16-m-1.ansi` | 86x20 | 16 | 7 | jacquard style-card head — SGR attributes punched as lettered cards above the weft |
-| `candy-sprinkles-6-16-m-2.ansi` | 83x18 | 16 | 7 | mail sort wall — attribute parcels shelved in numbered plain-ink pigeonholes |
-| `candy-sprinkles-6-16-s-1.ansi` | 59x10 | 16 | 7 | shuttle pass on a 16-colour warp — six border styles woven as sample strips |
-| `candy-sprinkles-6-16-s-2.ansi` | 62x11 | 16 | 7 | glazier's cutting bench — leaded pane grid with 16-hue glass shards and tools |
-| `candy-sprinkles-6-256-l-1.ansi` | 184x33 | 256 | 21 | grand ice salon — four gradient sculptures on pedestals judged under a frost banner |
-| `candy-sprinkles-6-256-l-2.ansi` | 172x30 | 256 | 13 | night-shift mail chute floor — attribute parcels hooked, sorted and binned by code |
-| `candy-sprinkles-6-256-m-1.ansi` | 86x18 | 256 | 13 | fireworks assembly bench — shells packed per border house, powder cones keyed |
-| `candy-sprinkles-6-256-m-2.ansi` | 84x22 | 256 | 29 | leaded SGR window mid-assembly — arch of 256-hue panes with keystone and tools |
-| `candy-sprinkles-6-256-s-1.ansi` | 63x12 | 256 | 13 | contest ice block — chisel marks and a 256 frost gradient on a plinth |
-| `candy-sprinkles-6-256-s-2.ansi` | 60x11 | 256 | 15 | rounded-rim bowl on the wheel head — terracotta 256 ramp and splash pan |
-| `candy-sprinkles-6-tc-l-1.ansi` | 200x40 | truecolor | 333 | shell test hall — three truecolour bursts proofed behind observer glass, lots benched |
-| `candy-sprinkles-6-tc-l-2.ansi` | 188x36 | truecolor | 572 | glaze studio — drying rack of gradient rounds, the rounder's wheel and a dip tank |
-| `candy-sprinkles-6-tc-m-1.ansi` | 72x18 | truecolor | 267 | honeycomb close-up — gradient wax cells with nested-layout supers and a bee trail |
-| `candy-sprinkles-6-tc-m-2.ansi` | 88x20 | truecolor | 350 | iridescent jacquard — hue-cycling weft below punched letter-cards in truecolour |
-| `candy-sprinkles-6-tc-s-1.ansi` | 61x9 | truecolor | 160 | dipped glaze bowl — hue-cycled truecolour rim under drifting kiln sparks |
-| `candy-sprinkles-6-tc-s-2.ansi` | 60x13 | truecolor | 223 | shell QC burst map — concentric star rings keyed by hue and bearing |
-| `candy-sprinkles-7-256-l-1.ansi` | 144x34 | 256 | 44 | Stained-glass studio window throwing light onto a workbench |
-| `candy-sprinkles-7-256-l-2.ansi` | 132x32 | 256 | 19 | Carousel canopy and painted horses glowing at dusk |
-| `candy-sprinkles-7-256-m-1.ansi` | 84x22 | 256 | 30 | Ice-cream truck rolling home under a tangerine sunset |
-| `candy-sprinkles-7-256-m-2.ansi` | 80x20 | 256 | 20 | Fan deck of numbered color chips splayed from a rivet |
-| `candy-sprinkles-7-256-s-1.ansi` | 60x13 | 256 | 20 | Sunset tide pools banded in warm dusk hues |
-| `candy-sprinkles-7-256-s-2.ansi` | 54x15 | 256 | 19 | Ferris wheel studded with gondola lights at dusk |
-| `candy-sprinkles-7-tc-l-1.ansi` | 156x36 | truecolor | 3236 | Quilter's frame of diagonal-gradient fabric squares |
-| `candy-sprinkles-7-tc-l-2.ansi` | 170x42 | truecolor | 110 | Fireworks finale blooming over a bay with reflections |
-| `candy-sprinkles-7-tc-m-1.ansi` | 86x24 | truecolor | 76 | Fountain show arcing gradient jets over a lit basin |
-| `candy-sprinkles-7-tc-m-2.ansi` | 82x20 | truecolor | 441 | Sampler of six gradient quilt blocks in stitched sashing |
-| `candy-sprinkles-7-tc-s-1.ansi` | 58x12 | truecolor | 26 | Paper lanterns drifting on a night river with reflections |
-| `candy-sprinkles-7-tc-s-2.ansi` | 52x10 | truecolor | 57 | Sprinkle shaker casting a rainbow of confection dust |
-| `candy-sprinkles-8-16-l-1.ansi` | 168x32 | 16 | 11 | Archery butts: three graded faces at 18/25/35 m, arrows in the gold, ledger on the post |
-| `candy-sprinkles-8-16-l-2.ansi` | 172x30 | 16 | 9 | Marionette control bar: seven pegs, strings down to a styled figure on a lit stage |
-| `candy-sprinkles-8-16-m-1.ansi` | 84x26 | 16 | 9 | Stamp album leaf: nine perforated specimens, one per Border:: house, hinged and cancelled |
-| `candy-sprinkles-8-16-m-2.ansi` | 86x22 | 16 | 8 | Weathervane ridge: six rooftop vanes in six ANSI hues under a running east wind |
-| `candy-sprinkles-8-16-s-2.ansi` | 62x13 | 16 | 9 | Press-proof chip: trim marks, four registration targets, step wedge and eight-plate bar |
-| `candy-sprinkles-8-256-l-1.ansi` | 176x44 | 256 | 68 | Pinball playfield: backglass, rollover lanes, three pop bumpers, ramps, flippers, plunger |
-| `candy-sprinkles-8-256-l-2.ansi` | 170x34 | 256 | 50 | Wardian case: brass glass house on a plinth, strata below, planted declarations |
-| `candy-sprinkles-8-256-m-1.ansi` | 88x25 | 256 | 48 | Kite festival: four kites running gradient tails down to a single spool |
-| `candy-sprinkles-8-256-m-2.ansi` | 84x24 | 256 | 59 | Fly-tying bench: vise, hook in the jaws, four dressed flies and a tackle tray |
-| `candy-sprinkles-8-256-s-1.ansi` | 64x15 | 256 | 47 | Postcard shelf: five leaning cards, each picture plate cast in a fresh gradient |
-| `candy-sprinkles-8-256-s-2.ansi` | 66x14 | 256 | 53 | Ink blotter: five wells wicked into graded blots keyed by hex, wipe stroke below |
-| `candy-sprinkles-8-tc-l-1.ansi` | 190x40 | truecolor | 505 | Sail loft: chalk mould floor, three cut panels with battens, finished sails on the rail |
-| `candy-sprinkles-8-tc-l-2.ansi` | 184x38 | truecolor | 1667 | Bubble raft: nine thin-film spheres draining colour downward, foam along the foot |
-| `candy-sprinkles-8-tc-m-1.ansi` | 88x25 | truecolor | 162 | Kaleidoscope tube: twelve mirrored wedges of gradient chips over a bead chamber |
-| `candy-sprinkles-8-tc-m-2.ansi` | 86x24 | truecolor | 110 | Balloon-animal twists: dog, giraffe and sword beside the hand pump |
-| `candy-sprinkles-8-tc-s-1.ansi` | 68x11 | truecolor | 300 | Marbled endpaper slip: combed float in a tray beside a gilt spine tape |
-| `candy-sprinkles-8-tc-s-2.ansi` | 60x15 | truecolor | 184 | Carved soap loaf: twin-swirl cut face with shavings and a slicing knife |
-| `candy-sprinkles-9-16-l-1.ansi` | 150x30 | 16 | 7 | Border-rotation clock tower: twelve houses around a dial, stage table and one-turn strip |
-| `candy-sprinkles-9-16-l-2.ansi` | 158x29 | 16 | 8 | Panoramic sprinkle QA line: hopper, belt, hue/size/sheen gates, divider drum, five bins |
-| `candy-sprinkles-9-16-m-1.ansi` | 84x22 | 16 | 8 | Rug knot-density study: plan grid, pile section loops, KPI ruler and attribute census |
-| `candy-sprinkles-9-16-m-2.ansi` | 82x20 | 16 | 7 | Feather-barb plate: twelve SGR barbs off the rachis with hook ticks and assay table |
-| `candy-sprinkles-9-16-m-3.ansi` | 80x20 | 16 | 7 | Attribute anemometer: three spinning cups, gust arrows, counter box and RPM ledger |
-| `candy-sprinkles-9-16-s-1.ansi` | 60x13 | 16 | 7 | Border-rotation clockface: corner glyphs turn through four stages around a tick dial |
-| `candy-sprinkles-9-16-s-2.ansi` | 62x12 | 16 | 6 | SGR calligraphy copybook: slant rails, oval and arch drills, nib-weight dots |
-| `candy-sprinkles-9-256-l-1.ansi` | 168x34 | 256 | 36 | Great medallion knot census: radial pile plan, density samples, gauge and weft section |
-| `candy-sprinkles-9-256-l-2.ansi` | 172x32 | 256 | 42 | Ribbon-candy hall: kettle, extruder head, six graded twists, portioning wheel and crate |
-| `candy-sprinkles-9-256-m-1.ansi` | 86x22 | 256 | 28 | Teleprinter ribbon cartridge cutaway: wound spools, guide pins, type-guide and ink gauge |
-| `candy-sprinkles-9-256-m-2.ansi` | 88x24 | 256 | 19 | Copybook page: six stroke drills on slant rails beside a labelled ink well column |
-| `candy-sprinkles-9-256-s-1.ansi` | 64x11 | 256 | 20 | Candle-dipping rack: six tapers hung wet, each coat a deeper xterm wax stop |
-| `candy-sprinkles-9-256-s-2.ansi` | 66x12 | 256 | 23 | Sprinkle QA conveyor: hopper, hue-gate arch, belt pellets, pass/warn/reject bins |
-| `candy-sprinkles-9-tc-l-1.ansi` | 185x38 | truecolor | 329 | Teleprinter cartridge engineering sheet: sectioned spools, fork, type-guide, weave inset, key |
-| `candy-sprinkles-9-tc-l-2.ansi` | 176x36 | truecolor | 607 | Style shingle field: nine iridescent courses in paint order with scale anatomy inset |
-| `candy-sprinkles-9-tc-m-1.ansi` | 84x22 | truecolor | 30 | Ribbon-candy twisting machine: hopper, rollers, three braided ropes and pitch gauge |
-| `candy-sprinkles-9-tc-m-2.ansi` | 82x20 | truecolor | 133 | Grand dipping rack: nine tapers in truecolour wax stops over a bead-scattered pan |
-| `candy-sprinkles-9-tc-m-3.ansi` | 86x24 | truecolor | 94 | Ammonite septa study: logarithmic whorls taking one gradient stop per chamber |
-| `candy-sprinkles-9-tc-s-1.ansi` | 58x12 | truecolor | 20 | Feather-barb hue plate: structural colour drifting blue->rose along the vane |
-| `candy-sprinkles-9-tc-s-2.ansi` | 56x12 | truecolor | 155 | Fish-scale shingling swatch: three iridescent courses stacked z0..z2 |
-<!-- END candy-sprinkles SLOTS -->
+| `sugar-style-1-16-l-1.ansi` | 124x30 | 16 | 12 | Neon marquee: double-frame storefront, giant scaled CANDY/SPRINKLES letters, border-family and verb counters, reverse-video marquee strip |
+| `sugar-style-1-16-l-2.ansi` | 120x30 | 16 | 12 | Sunset service: ANSI block-density dusk sky with half-block sun, layout-guide grid, styled Table card and roman ItemList card |
+| `sugar-style-1-16-m-1.ansi` | 78x19 | 16 | 10 | Terminal bakery storefront: striped awning, pixel CANDY/SPRINKLES sign, style-verb menu board and a pixel cupcake |
+| `sugar-style-1-16-m-2.ansi` | 76x18 | 16 | 10 | Style verb catalog: ->bold()/faint/italic/underline/strikethrough/reverse/blink chips rendered, plus per-side border demo box |
+| `sugar-style-1-16-s-1.ansi` | 56x9 | 16 | 8 | Markup playground: Rich-style [tag] source lines rendering into bold/colored/underlined candy words |
+| `sugar-style-1-16-s-2.ansi` | 66x14 | 16 | 8 | Border::catalog shelf: six mini framed boxes (rounded/normal/thick/double/block/ascii) each in its own ANSI hue |
+| `sugar-style-1-256-l-1.ansi` | 140x30 | 256 | 26 | Constraint-solver dashboard: length/min/fill regions rendered as framed panes with style table, gradient showcase and project tree |
+| `sugar-style-1-256-l-2.ansi` | 140x30 | 256 | 276 | Ansi256 pantry wall: all 256 color slots as framed swatch tiles above a rainbow pixel CANDY SPRINKLES banner |
+| `sugar-style-1-256-m-1.ansi` | 84x22 | 256 | 16 | Border galaxy: nested block/rounded/thick/double rings around a pixel CANDY core on a starfield, family glyph row below |
+| `sugar-style-1-256-m-2.ansi` | 84x18 | 256 | 45 | Theme wall: eight framed tiles (dracula, tokyoNight, oneDark, ...) each with its authentic palette swatches over a rainbow ramp |
+| `sugar-style-1-256-s-1.ansi` | 53x8 | 256 | 10 | Syntax-highlighted Style::new() candy chain with its rendered pink-on-dark pane and pad(0,2) annotation |
+| `sugar-style-1-256-s-2.ansi` | 66x13 | 256 | 28 | Gradient sweep: pixel GRADIENT title above five xterm256 blend bars (linear/hsl/blend/2D/rainbow) with fading tails |
+| `sugar-style-1-tc-l-1.ansi` | 156x32 | truecolor | 373 | Grand shower: giant sx2 CANDY/SPRINKLES wordmark under a truecolor sprinkle storm with border/theme/code panels on three cards |
+| `sugar-style-1-tc-l-2.ansi` | 148x30 | truecolor | 196 | Border cosmos: nebula veils, drifting border-family satellites and a comet framing a glowing double-wordmark panel |
+| `sugar-style-1-tc-m-1.ansi` | 82x22 | truecolor | 122 | Dracula-syntax Style chain inside a rainbow rounded frame with the rendered double-border pane beside it |
+| `sugar-style-1-tc-m-2.ansi` | 80x21 | truecolor | 749 | Color::blend2D patch of four candy corners next to an 12-step gradient waterfall curtain over a rainbow SPRINKLES wordmark |
+| `sugar-style-1-tc-s-1.ansi` | 60x13 | truecolor | 44 | Truecolor donut with gradient icing band, candy sprinkles on the ring and a sprinkle shower raining from above onto a shade plate |
+| `sugar-style-1-tc-s-2.ansi` | 58x9 | truecolor | 85 | Gradient ramp bar pouring sprinkles down onto a rainbow pixel CANDY with ->gradient() callout |
+| `sugar-style-10-16-l-1.ansi` | 150x31 | 16 | 7 | Grand paper-chain arch: three swags, attribute medallions, pixel wordmark and punch list |
+| `sugar-style-10-16-l-2.ansi` | 160x32 | 16 | 7 | Weight tower entrance: seven-step border stair with pennants and a gram-per-glyph ledger |
+| `sugar-style-10-16-m-1.ansi` | 84x24 | 16 | 7 | Spiral stair of border weights: seven landings on a center post, each a Border:: house frame |
+| `sugar-style-10-16-m-2.ansi` | 90x20 | 16 | 7 | Party garland drape: paper-chain swag with five attribute medallions over a pixel wordmark |
+| `sugar-style-10-16-s-1.ansi` | 66x12 | 16 | 7 | Paper-chain party garland: six style-link loops bld/fnt/ita/uli/rev/blk over a verb chain line |
+| `sugar-style-10-256-l-1.ansi` | 172x34 | 256 | 53 | Silkscreen studio panorama: twelve prints on two rack rows, press bench and wash line |
+| `sugar-style-10-256-l-2.ansi` | 168x32 | 256 | 44 | Grand wind-sock calibration tunnel: six courses with flow arrows and gauge panel |
+| `sugar-style-10-256-m-1.ansi` | 86x24 | 256 | 40 | Wind-sock tunnel: five nested hue-cycled courses with flow arrows toward a lit wordmark |
+| `sugar-style-10-256-m-2.ansi` | 84x22 | 256 | 26 | Silkscreen rack wall: six hinged mesh frames of border motifs above squeegee and ink pairs |
+| `sugar-style-10-256-s-1.ansi` | 64x13 | 256 | 23 | Silkscreen rail: three mesh frames printing rounded/double/thick motifs, squeegee and ink blobs |
+| `sugar-style-10-256-s-2.ansi` | 62x12 | 256 | 29 | Wind-sock trio: banded conical socks on masts reading the xterm breeze |
+| `sugar-style-10-tc-l-1.ansi` | 176x38 | truecolor | 84 | Crystal chandelier ballroom: gold chain, three tiers, hanging gradient drops and light pool |
+| `sugar-style-10-tc-l-2.ansi` | 180x36 | truecolor | 300 | Brush atelier panorama: wall of twenty-four hue-brushes, easel canvas and palette bench |
+| `sugar-style-10-tc-m-1.ansi` | 86x24 | truecolor | 151 | Ferrule and brush rack: two shelves of hue-graduated brushes dripping, sweep bar below |
+| `sugar-style-10-tc-m-2.ansi` | 84x22 | truecolor | 54 | Zoetrope drum: seven slits with bouncing sprinkle and border glyph per frame, strip unrolled |
+| `sugar-style-10-tc-s-1.ansi` | 58x14 | truecolor | 15 | Brush jar: five gradient-handled brushes resting ferrule-down in tinted water, label band |
+| `sugar-style-10-tc-s-2.ansi` | 56x12 | truecolor | 31 | Crystal pendant lamp: one hanging drop cluster casting a warm gradient pool |
+| `sugar-style-2-16-l-2.ansi` | 144x28 | 16 | 7 | Border menagerie: six framed cards (rounded to block) with unique sprinkle textures over a spaced wordmark banner |
+| `sugar-style-2-16-m-2.ansi` | 78x19 | 16 | 9 | Sweet-shop beam with three hanging price tags above a SugarStyle & Co. storefront panel |
+| `sugar-style-2-16-s-1.ansi` | 58x13 | 16 | 7 | Sprinkle shaker pouring a 16-colour candy storm above a swatch triptych and the wordmark chain |
+| `sugar-style-2-16-s-2.ansi` | 66x9 | 16 | 7 | Style ladder: six SGR verbs (bold..reverse) climbing in shaded bars inside a double frame |
+| `sugar-style-2-256-l-1.ansi` | 150x32 | 256 | 58 | Layer compositor dashboard: five stacking paint-layer panes feeding a finished candy card with deck and chain |
+| `sugar-style-2-256-l-2.ansi` | 158x34 | 256 | 24 | Candy constellation: cupcake asterism, comets and a banded wordmark over a nine-step xterm sunset horizon |
+| `sugar-style-2-256-m-1.ansi` | 84x24 | 256 | 23 | Ice-cream sundae bar: cherry-topped glass, drizzle layers, twin cones and a per-letter PARLOUR sign |
+| `sugar-style-2-256-m-2.ansi` | 80x22 | 256 | 10 | Sprinkle DNA helix: two orbiting xterm strands rung-stitched around a framed xterm-rainbow wordmark core |
+| `sugar-style-2-256-s-1.ansi` | 61x10 | 256 | 30 | 24-hue xterm sugar ramp with a dipped CANDY-SPRINKLES wordmark and three stacked blend layers |
+| `sugar-style-2-256-s-2.ansi` | 66x9 | 256 | 7 | Confection ledger: magenta double-framed table of six xterm candy columns with fill textures |
+| `sugar-style-2-tc-l-1.ansi` | 166x36 | truecolor | 431 | Rainbow-road horizon: tc dusk sky, setting sun, seven-lane candy motorway with a wordmark exit sign |
+| `sugar-style-2-tc-l-2.ansi` | 150x40 | truecolor | 106 | Sprinkle-storm vortex: four hue-cycled spiral arms around a wordmark eye in a truecolour cyclone |
+| `sugar-style-2-tc-m-1.ansi` | 82x24 | truecolor | 262 | HSL candy wheel: truecolour hue spokes and lightness rings around a sugar hub, spectrum foot |
+| `sugar-style-2-tc-m-2.ansi` | 84x22 | truecolor | 204 | Glamour-style markdown sheet in a gradient frame: H1, blockquote, syntax php fence, bullets, OSC-8 link |
+| `sugar-style-2-tc-s-1.ansi` | 62x11 | truecolor | 489 | Truecolour half-cell sprinkle storm over a hue-cycled wordmark with two blend-bar callouts |
+| `sugar-style-2-tc-s-2.ansi` | 53x16 | truecolor | 31 | Truecolour layer-cake slice: gradient frosting lid, six flavour bands and a sugar edge |
+| `sugar-style-3-16-l-1.ansi` | 132x31 | 16 | 14 | Type broadsheet: block-mould CANDY SPRINKLES over glyph galleries and verb parade |
+| `sugar-style-3-16-l-2.ansi` | 128x28 | 16 | 16 | Legibility ledger: 8x8 ANSI contrast matrix with per-row pass blocks and ratio bar |
+| `sugar-style-3-16-m-1.ansi` | 80x24 | 16 | 16 | Typographic specimen sheet: SGR verb parade, rainbow range rows, eight-colour ink assay |
+| `sugar-style-3-256-l-1.ansi` | 158x28 | 256 | 59 | Gradient foundry epic: furnace, crucible pour, CANDY mould and ingot shelving |
+| `sugar-style-3-256-l-2.ansi` | 152x28 | 256 | 19 | Style factory: conveyor of six SGR machines stamping a token into a bordered crate |
+| `sugar-style-3-256-m-1.ansi` | 84x26 | 256 | 11 | Border pedigree tree: eight houses grafted onto Border::catalog() with mottos |
+| `sugar-style-3-256-m-2.ansi` | 86x21 | 256 | 9 | Confectionery menu: roman-enumerated pastries, tree sub-items, dotted price leaders |
+| `sugar-style-3-256-m-3.ansi` | 88x18 | 256 | 33 | Colour-profile triplet: TrueColor/256/Ansi panes under the env detect chain |
+| `sugar-style-3-256-s-1.ansi` | 58x13 | 256 | 22 | Foundry ingot tray: three xterm256 blend bars cast in a double-frame mould |
+| `sugar-style-3-256-s-2.ansi` | 62x12 | 256 | 10 | Recipe chip: glazed-style ingredient ticket with measures and one baked result pane |
+| `sugar-style-3-tc-l-1.ansi` | 176x30 | truecolor | 353 | Patisserie showpiece: sprinkle shower, six labelled gradient strata, plated result card |
+| `sugar-style-3-tc-l-2.ansi` | 162x31 | truecolor | 114 | Contrast cathedral: hue rose window, luminance vitrine, WCAG stained-glass lancets |
+| `sugar-style-3-tc-m-1.ansi` | 86x26 | truecolor | 215 | Exploded layer pastry: five gradient slabs with leader labels feeding one plated composite |
+| `sugar-style-3-tc-m-2.ansi` | 86x18 | truecolor | 22 | Recipe sheet: annotated style-DSL code column beside the baked result card |
+| `sugar-style-3-tc-s-1.ansi` | 62x10 | truecolor | 64 | HSL chip: hsl(200,80,50) poured as a rounded swatch with a one-stop-per-cell hue ramp |
+| `sugar-style-3-tc-s-2.ansi` | 52x14 | truecolor | 10 | Macaron cross-section: gradient shells and cream filling on a half-block plate |
+| `sugar-style-3-tc-s-3.ansi` | 51x11 | truecolor | 57 | BorderGradientBlend box: each border side hue-interpolated between its two corner colours |
+| `sugar-style-4-16-l-1.ansi` | 147x29 | 16 | 7 | Style-inheritance family tree — pedigree of with*() forks across four generations |
+| `sugar-style-4-16-l-2.ansi` | 159x30 | 16 | 8 | Margin-collapse car crash — incident sketch of two colliding blocks with police tape |
+| `sugar-style-4-16-m-1.ansi` | 81x22 | 16 | 6 | Box-model anatomy as a medical plate — margin/border/padding/content rings, annotated |
+| `sugar-style-4-16-m-2.ansi` | 86x21 | 16 | 7 | Colour-blind-safe pattern library — eight texture swatches that never rely on hue |
+| `sugar-style-4-16-s-2.ansi` | 58x12 | 16 | 9 | Immutable style-chain conveyor: new-bold-fg-bg-pad-out with source/output notes |
+| `sugar-style-4-256-l-1.ansi` | 180x30 | 256 | 21 | Panoramic styled year — four season panels side by side on one wide canvas |
+| `sugar-style-4-256-l-2.ansi` | 166x28 | 256 | 11 | Constraint solver anatomy — ruler, length/percentage/fill segments, worked maths |
+| `sugar-style-4-256-m-1.ansi` | 87x26 | 256 | 19 | The styled year — four-panel seasonal grid: blossom, sunflower, maple, snowy pine |
+| `sugar-style-4-256-m-2.ansi` | 83x23 | 256 | 11 | Z-index tower — staggered glass floors, ladder, render-order notes, floating top layer |
+| `sugar-style-4-256-m-3.ansi` | 82x20 | 256 | 10 | Inline markup cheat-card — raw markdown arrows to styled word outcomes |
+| `sugar-style-4-256-s-1.ansi` | 55x14 | 256 | 8 | Mini temple of vertical centering — pediment, columns, centred wordmark, blank rails |
+| `sugar-style-4-256-s-2.ansi` | 52x10 | 256 | 122 | Four 256-palette sprinkle ramp bars — gray, warm, cool and candy gradients |
+| `sugar-style-4-tc-l-1.ansi` | 176x32 | truecolor | 811 | Glass tower of z-index — gradient floors, mullions, floating modal, starfield, reflection |
+| `sugar-style-4-tc-l-2.ansi` | 176x34 | truecolor | 48 | Codex of inheritance — gilded family tree of Style with*() branches, illuminated |
+| `sugar-style-4-tc-m-1.ansi` | 84x22 | truecolor | 570 | Temple of vertical centering under an aurora sky — columns, measured rails, glowing centre |
+| `sugar-style-4-tc-m-2.ansi` | 87x26 | truecolor | 29 | Aurora year — four seasonal panels behind truecolor gradient skies |
+| `sugar-style-4-tc-s-1.ansi` | 57x8 | truecolor | 74 | SugarStyle wordmark on a truecolor candy ramp with confetti and gradient bar |
+| `sugar-style-4-tc-s-2.ansi` | 52x12 | truecolor | 193 | HSL colour factory fan — hue-wheel gradient chips with blend note |
+| `sugar-style-4-tc-s-3.ansi` | 61x13 | truecolor | 14 | Four border corner sets — classic, rounded, double, heavy lit in truecolor hues |
+| `sugar-style-5-16-l-1.ansi` | 162x34 | 16 | 7 | upholstery workshop: hanging rolls of border fabrics |
+| `sugar-style-5-16-m-2.ansi` | 84x22 | 16 | 8 | night-sky fireworks, one shell per border style |
+| `sugar-style-5-16-s-2.ansi` | 50x14 | 16 | 5 | barber pole of SGR attributes with spinning stripes |
+| `sugar-style-5-256-l-1.ansi` | 158x40 | 256 | 152 | terraced gradient waterfall down rock basins |
+| `sugar-style-5-256-l-2.ansi` | 172x38 | 256 | 33 | box-model skyline under border-shell fireworks |
+| `sugar-style-5-256-m-1.ansi` | 78x25 | 256 | 25 | sprinkle rain gauge collecting grained hues |
+| `sugar-style-5-256-m-2.ansi` | 80x26 | 256 | 13 | embroidery-hoop sampler of cross-stitched borders |
+| `sugar-style-5-256-s-1.ansi` | 62x15 | 256 | 10 | fountain jet of gradient droplets into a basin |
+| `sugar-style-5-256-s-2.ansi` | 64x13 | 256 | 10 | kiln shelf of pots dipped in xterm glaze ramps |
+| `sugar-style-5-tc-l-1.ansi` | 182x44 | truecolor | 612 | grand three-tier fountain, hue-curtain cascade |
+| `sugar-style-5-tc-l-2.ansi` | 172x42 | truecolor | 242 | ice palace towers swept by RGB spotlight beams |
+| `sugar-style-5-tc-m-1.ansi` | 84x22 | truecolor | 1021 | aurora wallpaper sheet tacked to the wall |
+| `sugar-style-5-tc-m-2.ansi` | 88x24 | truecolor | 142 | kiln chamber glow, radial heat gradient on pots |
+| `sugar-style-5-tc-s-1.ansi` | 54x16 | truecolor | 138 | truecolor barber helix, smooth RGB spiral bands |
+| `sugar-style-5-tc-s-2.ansi` | 58x14 | truecolor | 40 | glassblower's molten gradient gather on the pipe |
+| `sugar-style-6-16-l-1.ansi` | 176x28 | 16 | 7 | textile mill floor — three looms weaving plain, double and rounded cloth under one shaft |
+| `sugar-style-6-16-l-2.ansi` | 148x28 | 16 | 7 | apiary of nested supers — border-weight hive frames with bee flight paths and smoker |
+| `sugar-style-6-16-m-1.ansi` | 86x20 | 16 | 7 | jacquard style-card head — SGR attributes punched as lettered cards above the weft |
+| `sugar-style-6-16-m-2.ansi` | 83x18 | 16 | 7 | mail sort wall — attribute parcels shelved in numbered plain-ink pigeonholes |
+| `sugar-style-6-16-s-1.ansi` | 59x10 | 16 | 7 | shuttle pass on a 16-colour warp — six border styles woven as sample strips |
+| `sugar-style-6-16-s-2.ansi` | 62x11 | 16 | 7 | glazier's cutting bench — leaded pane grid with 16-hue glass shards and tools |
+| `sugar-style-6-256-l-1.ansi` | 184x33 | 256 | 21 | grand ice salon — four gradient sculptures on pedestals judged under a frost banner |
+| `sugar-style-6-256-l-2.ansi` | 172x30 | 256 | 13 | night-shift mail chute floor — attribute parcels hooked, sorted and binned by code |
+| `sugar-style-6-256-m-1.ansi` | 86x18 | 256 | 13 | fireworks assembly bench — shells packed per border house, powder cones keyed |
+| `sugar-style-6-256-m-2.ansi` | 84x22 | 256 | 29 | leaded SGR window mid-assembly — arch of 256-hue panes with keystone and tools |
+| `sugar-style-6-256-s-1.ansi` | 63x12 | 256 | 13 | contest ice block — chisel marks and a 256 frost gradient on a plinth |
+| `sugar-style-6-256-s-2.ansi` | 60x11 | 256 | 15 | rounded-rim bowl on the wheel head — terracotta 256 ramp and splash pan |
+| `sugar-style-6-tc-l-1.ansi` | 200x40 | truecolor | 333 | shell test hall — three truecolour bursts proofed behind observer glass, lots benched |
+| `sugar-style-6-tc-l-2.ansi` | 188x36 | truecolor | 572 | glaze studio — drying rack of gradient rounds, the rounder's wheel and a dip tank |
+| `sugar-style-6-tc-m-1.ansi` | 72x18 | truecolor | 267 | honeycomb close-up — gradient wax cells with nested-layout supers and a bee trail |
+| `sugar-style-6-tc-m-2.ansi` | 88x20 | truecolor | 350 | iridescent jacquard — hue-cycling weft below punched letter-cards in truecolour |
+| `sugar-style-6-tc-s-1.ansi` | 61x9 | truecolor | 160 | dipped glaze bowl — hue-cycled truecolour rim under drifting kiln sparks |
+| `sugar-style-6-tc-s-2.ansi` | 60x13 | truecolor | 223 | shell QC burst map — concentric star rings keyed by hue and bearing |
+| `sugar-style-7-256-l-1.ansi` | 144x34 | 256 | 44 | Stained-glass studio window throwing light onto a workbench |
+| `sugar-style-7-256-l-2.ansi` | 132x32 | 256 | 19 | Carousel canopy and painted horses glowing at dusk |
+| `sugar-style-7-256-m-1.ansi` | 84x22 | 256 | 30 | Ice-cream truck rolling home under a tangerine sunset |
+| `sugar-style-7-256-m-2.ansi` | 80x20 | 256 | 20 | Fan deck of numbered color chips splayed from a rivet |
+| `sugar-style-7-256-s-1.ansi` | 60x13 | 256 | 20 | Sunset tide pools banded in warm dusk hues |
+| `sugar-style-7-256-s-2.ansi` | 54x15 | 256 | 19 | Ferris wheel studded with gondola lights at dusk |
+| `sugar-style-7-tc-l-1.ansi` | 156x36 | truecolor | 3236 | Quilter's frame of diagonal-gradient fabric squares |
+| `sugar-style-7-tc-l-2.ansi` | 170x42 | truecolor | 110 | Fireworks finale blooming over a bay with reflections |
+| `sugar-style-7-tc-m-1.ansi` | 86x24 | truecolor | 76 | Fountain show arcing gradient jets over a lit basin |
+| `sugar-style-7-tc-m-2.ansi` | 82x20 | truecolor | 441 | Sampler of six gradient quilt blocks in stitched sashing |
+| `sugar-style-7-tc-s-1.ansi` | 58x12 | truecolor | 26 | Paper lanterns drifting on a night river with reflections |
+| `sugar-style-7-tc-s-2.ansi` | 52x10 | truecolor | 57 | Sprinkle shaker casting a rainbow of confection dust |
+| `sugar-style-8-16-l-1.ansi` | 168x32 | 16 | 11 | Archery butts: three graded faces at 18/25/35 m, arrows in the gold, ledger on the post |
+| `sugar-style-8-16-l-2.ansi` | 172x30 | 16 | 9 | Marionette control bar: seven pegs, strings down to a styled figure on a lit stage |
+| `sugar-style-8-16-m-1.ansi` | 84x26 | 16 | 9 | Stamp album leaf: nine perforated specimens, one per Border:: house, hinged and cancelled |
+| `sugar-style-8-16-m-2.ansi` | 86x22 | 16 | 8 | Weathervane ridge: six rooftop vanes in six ANSI hues under a running east wind |
+| `sugar-style-8-16-s-2.ansi` | 62x13 | 16 | 9 | Press-proof chip: trim marks, four registration targets, step wedge and eight-plate bar |
+| `sugar-style-8-256-l-1.ansi` | 176x44 | 256 | 68 | Pinball playfield: backglass, rollover lanes, three pop bumpers, ramps, flippers, plunger |
+| `sugar-style-8-256-l-2.ansi` | 170x34 | 256 | 50 | Wardian case: brass glass house on a plinth, strata below, planted declarations |
+| `sugar-style-8-256-m-1.ansi` | 88x25 | 256 | 48 | Kite festival: four kites running gradient tails down to a single spool |
+| `sugar-style-8-256-m-2.ansi` | 84x24 | 256 | 59 | Fly-tying bench: vise, hook in the jaws, four dressed flies and a tackle tray |
+| `sugar-style-8-256-s-1.ansi` | 64x15 | 256 | 47 | Postcard shelf: five leaning cards, each picture plate cast in a fresh gradient |
+| `sugar-style-8-256-s-2.ansi` | 66x14 | 256 | 53 | Ink blotter: five wells wicked into graded blots keyed by hex, wipe stroke below |
+| `sugar-style-8-tc-l-1.ansi` | 190x40 | truecolor | 505 | Sail loft: chalk mould floor, three cut panels with battens, finished sails on the rail |
+| `sugar-style-8-tc-l-2.ansi` | 184x38 | truecolor | 1667 | Bubble raft: nine thin-film spheres draining colour downward, foam along the foot |
+| `sugar-style-8-tc-m-1.ansi` | 88x25 | truecolor | 162 | Kaleidoscope tube: twelve mirrored wedges of gradient chips over a bead chamber |
+| `sugar-style-8-tc-m-2.ansi` | 86x24 | truecolor | 110 | Balloon-animal twists: dog, giraffe and sword beside the hand pump |
+| `sugar-style-8-tc-s-1.ansi` | 68x11 | truecolor | 300 | Marbled endpaper slip: combed float in a tray beside a gilt spine tape |
+| `sugar-style-8-tc-s-2.ansi` | 60x15 | truecolor | 184 | Carved soap loaf: twin-swirl cut face with shavings and a slicing knife |
+| `sugar-style-9-16-l-1.ansi` | 150x30 | 16 | 7 | Border-rotation clock tower: twelve houses around a dial, stage table and one-turn strip |
+| `sugar-style-9-16-l-2.ansi` | 158x29 | 16 | 8 | Panoramic sprinkle QA line: hopper, belt, hue/size/sheen gates, divider drum, five bins |
+| `sugar-style-9-16-m-1.ansi` | 84x22 | 16 | 8 | Rug knot-density study: plan grid, pile section loops, KPI ruler and attribute census |
+| `sugar-style-9-16-m-2.ansi` | 82x20 | 16 | 7 | Feather-barb plate: twelve SGR barbs off the rachis with hook ticks and assay table |
+| `sugar-style-9-16-m-3.ansi` | 80x20 | 16 | 7 | Attribute anemometer: three spinning cups, gust arrows, counter box and RPM ledger |
+| `sugar-style-9-16-s-1.ansi` | 60x13 | 16 | 7 | Border-rotation clockface: corner glyphs turn through four stages around a tick dial |
+| `sugar-style-9-16-s-2.ansi` | 62x12 | 16 | 6 | SGR calligraphy copybook: slant rails, oval and arch drills, nib-weight dots |
+| `sugar-style-9-256-l-1.ansi` | 168x34 | 256 | 36 | Great medallion knot census: radial pile plan, density samples, gauge and weft section |
+| `sugar-style-9-256-l-2.ansi` | 172x32 | 256 | 42 | Ribbon-candy hall: kettle, extruder head, six graded twists, portioning wheel and crate |
+| `sugar-style-9-256-m-1.ansi` | 86x22 | 256 | 28 | Teleprinter ribbon cartridge cutaway: wound spools, guide pins, type-guide and ink gauge |
+| `sugar-style-9-256-m-2.ansi` | 88x24 | 256 | 19 | Copybook page: six stroke drills on slant rails beside a labelled ink well column |
+| `sugar-style-9-256-s-1.ansi` | 64x11 | 256 | 20 | Candle-dipping rack: six tapers hung wet, each coat a deeper xterm wax stop |
+| `sugar-style-9-256-s-2.ansi` | 66x12 | 256 | 23 | Sprinkle QA conveyor: hopper, hue-gate arch, belt pellets, pass/warn/reject bins |
+| `sugar-style-9-tc-l-1.ansi` | 185x38 | truecolor | 329 | Teleprinter cartridge engineering sheet: sectioned spools, fork, type-guide, weave inset, key |
+| `sugar-style-9-tc-l-2.ansi` | 176x36 | truecolor | 607 | Style shingle field: nine iridescent courses in paint order with scale anatomy inset |
+| `sugar-style-9-tc-m-1.ansi` | 84x22 | truecolor | 30 | Ribbon-candy twisting machine: hopper, rollers, three braided ropes and pitch gauge |
+| `sugar-style-9-tc-m-2.ansi` | 82x20 | truecolor | 133 | Grand dipping rack: nine tapers in truecolour wax stops over a bead-scattered pan |
+| `sugar-style-9-tc-m-3.ansi` | 86x24 | truecolor | 94 | Ammonite septa study: logarithmic whorls taking one gradient stop per chamber |
+| `sugar-style-9-tc-s-1.ansi` | 58x12 | truecolor | 20 | Feather-barb hue plate: structural colour drifting blue->rose along the vane |
+| `sugar-style-9-tc-s-2.ansi` | 56x12 | truecolor | 155 | Fish-scale shingling swatch: three iridescent courses stacked z0..z2 |
+<!-- END sugar-style SLOTS -->
 
 <!-- BEGIN candy-tetris SLOTS -->
 ### candy-tetris — slot series

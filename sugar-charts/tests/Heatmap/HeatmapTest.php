@@ -156,7 +156,7 @@ final class HeatmapTest extends TestCase
 
     public function testWithCellStyleAppliesAdditionalAttributes(): void
     {
-        $bold = \SugarCraft\Sprinkles\Style::new()->bold();
+        $bold = \SugarCraft\Style\Style::new()->bold();
         $h = Heatmap::new([[0.5]])->withCellStyle($bold);
         $this->assertSame($bold, $h->getCellStyle());
         // Bold ANSI escape (\e[1m) should appear in rendered output.
@@ -165,7 +165,7 @@ final class HeatmapTest extends TestCase
 
     public function testWithCellStyleNullClears(): void
     {
-        $bold = \SugarCraft\Sprinkles\Style::new()->bold();
+        $bold = \SugarCraft\Style\Style::new()->bold();
         $h = Heatmap::new([[0.5]])->withCellStyle($bold)->withCellStyle(null);
         $this->assertNull($h->getCellStyle());
     }

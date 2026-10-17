@@ -33,7 +33,7 @@ namespace SugarCraft\Core\Util;
  * The parser does NOT decode CSI parameters into bubbletea-style
  * Msg objects — that's `InputReader`'s job. Parser stays neutral
  * so the same tokens can power InputReader (input side), output
- * stripping (CandySprinkles), and OSC-reply handlers
+ * stripping (SugarStyle), and OSC-reply handlers
  * (SugarMarkdown).
  */
 final class Parser

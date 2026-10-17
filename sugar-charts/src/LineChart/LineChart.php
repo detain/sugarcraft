@@ -16,8 +16,8 @@ use SugarCraft\Charts\Canvas\BrailleGrid;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\Theme;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\Theme;
 
 /**
  * Single-series line plot drawn onto a {@see Canvas}. Each data point

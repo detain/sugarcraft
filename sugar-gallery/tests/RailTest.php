@@ -124,7 +124,7 @@ final class RailTest extends TestCase
 
         // Extract card body rows (skip the head "● R (1/2)" line at index 0).
         $cardLines = array_slice($lines, 1);
-        $widths = array_map(static fn (string $l): int => \SugarCraft\Sprinkles\Layout::width($l), $cardLines);
+        $widths = array_map(static fn (string $l): int => \SugarCraft\Style\Layout::width($l), $cardLines);
         self::assertCount(1, array_unique($widths), 'all card body rows have the same width');
     }
 

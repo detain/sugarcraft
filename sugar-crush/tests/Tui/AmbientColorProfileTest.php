@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\Renderer;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * rv-devops-1 / rv-a11y-M1: the NO_COLOR / TERM=dumb / CLICOLOR_FORCE family

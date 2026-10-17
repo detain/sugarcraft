@@ -112,7 +112,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
 | **Custom filter predicates** | `setFilterFn()` lets you filter items by arbitrary criteria |
-| **Border & Style composition** | `withBorder()` and `withStyle()` compose `candy-sprinkles` `Border` and `Style` for window decoration |
+| **Border & Style composition** | `withBorder()` and `withStyle()` compose `sugar-style` `Border` and `Style` for window decoration |
 | **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
 | **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
 
@@ -170,11 +170,11 @@ public function setFilterFn(\Closure $fn): self
 // subsequence matching) and highlighting follows the scored indices.
 public function setRanker(?\SugarCraft\Fuzzy\FuzzyMatcher $matcher): self
 
-// Apply a candy-sprinkles Border to the overlay window
-public function withBorder(?\SugarCraft\Sprinkles\Border $border): self
+// Apply a sugar-style Border to the overlay window
+public function withBorder(?\SugarCraft\Style\Border $border): self
 
-// Apply a candy-sprinkles Style to the overlay window
-public function withStyle(?\SugarCraft\Sprinkles\Style $style): self
+// Apply a sugar-style Style to the overlay window
+public function withStyle(?\SugarCraft\Style\Style $style): self
 
 // Attach a HelpBar (keyboard shortcut summary) below the filter list
 public function withHelpBar(?HelpBar $helpBar): self
@@ -230,8 +230,8 @@ public function selected(): ?Item   // Currently selected Item (or null)
 public function items(): array       // Filtered items (list<Item>)
 public function itemCount(): int      // Number of visible (filtered) items
 public function allCount(): int      // Total number of items
-public function border(): ?\SugarCraft\Sprinkles\Border
-public function style(): ?\SugarCraft\Sprinkles\Style
+public function border(): ?\SugarCraft\Style\Border
+public function style(): ?\SugarCraft\Style\Style
 public function helpBar(): ?HelpBar
 public function statusBar(): ?StatusBar
 public function onResize(): ?\Closure  // Registered resize callback (cols, rows)

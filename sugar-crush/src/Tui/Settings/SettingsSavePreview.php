@@ -13,7 +13,7 @@ use SugarCraft\Crush\Theme;
 use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\LineKind;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * What a settings save will do, shown before it does it (roadmap N-P2,

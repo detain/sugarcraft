@@ -38,7 +38,7 @@ $allItems = $history->all();</code></pre>
             <div class="feature"><strong>Item interface</strong><span>Structured Item objects with number() + value() instead of raw strings.</span></div>
             <div class="feature"><strong>Custom filter predicates</strong><span>setFilterFn() applies arbitrary Closure(Item): bool logic.</span></div>
             <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL lines, one item per line.</span></div>
-            <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() / withStyle() compose candy-sprinkles Border and Style objects.</span></div>
+            <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() / withStyle() compose sugar-style Border and Style objects.</span></div>
             <div class="feature"><strong>HelpBar / StatusBar</strong><span>Keyboard-shortcut summary and status message rendered below the overlay.</span></div>
             <div class="feature"><strong>SIGWINCH resize</strong><span>withOnResize() + attachSigwinch() forward terminal resize events via SignalForwarder.</span></div>
     </div>
@@ -70,8 +70,8 @@ $allItems = $history->all();</code></pre>
 <tr><td>QuickPick</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
 <tr><td>QuickPick</td><td>selected()</td><td>Get currently selected Item</td></tr>
 <tr><td>QuickPick</td><td>items() / itemCount() / allCount()</td><td>Query filtered/all item state</td></tr>
-<tr><td>QuickPick</td><td>withBorder(?Border)</td><td>Apply candy-sprinkles Border to overlay window</td></tr>
-<tr><td>QuickPick</td><td>withStyle(?Style)</td><td>Apply candy-sprinkles Style to overlay window</td></tr>
+<tr><td>QuickPick</td><td>withBorder(?Border)</td><td>Apply sugar-style Border to overlay window</td></tr>
+<tr><td>QuickPick</td><td>withStyle(?Style)</td><td>Apply sugar-style Style to overlay window</td></tr>
 <tr><td>QuickPick</td><td>withHelpBar(?HelpBar)</td><td>Attach keyboard-shortcut summary below filter list</td></tr>
 <tr><td>QuickPick</td><td>withStatusBar(?StatusBar)</td><td>Attach status message line at overlay bottom</td></tr>
 <tr><td>QuickPick</td><td>withOnResize(Closure)</td><td>Register callback invoked on SIGWINCH (cols, rows)</td></tr>

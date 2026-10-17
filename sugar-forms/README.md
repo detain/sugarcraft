@@ -312,7 +312,7 @@ with no behavioural divergence.
 ## Dependencies
 
 - `sugarcraft/candy-core` — Model–Update–View TUI runtime
-- `sugarcraft/candy-sprinkles` — Declarative styling
+- `sugarcraft/sugar-style` — Declarative styling
 
 ### Versioning
 

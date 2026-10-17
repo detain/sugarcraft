@@ -288,7 +288,7 @@ final class InputWrapTest extends TestCase
      *
      * WHAT THIS SAID: that the box is located by its `╭` corner.
      * WHAT IS TRUE NOW: it never was. The walk below matches `└` and then
-     * `┌`, which is what {@see \SugarCraft\Sprinkles\Border::normal()} — the
+     * `┌`, which is what {@see \SugarCraft\Style\Border::normal()} — the
      * border {@see \SugarCraft\Crush\Renderer::renderInput()} actually asks for
      * — paints; `╭` belongs to the ROUNDED border, which this box does not
      * use. Checked against `Border::normal()` rather than assumed.

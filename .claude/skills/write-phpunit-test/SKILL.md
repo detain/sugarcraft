@@ -19,7 +19,7 @@ paths:
 
 ## Instructions
 
-1. **Locate the lib root and namespace.** From the class to test (e.g. `SugarCraft\Sprinkles\Style`), the lib root is `candy-sprinkles`. Confirm by reading `candy-sprinkles/composer.json` — the `autoload.psr-4` key (`"SugarCraft\\Sprinkles\\": "src/"`) gives you the source namespace; the test namespace is the same with `\Tests` appended (`autoload-dev.psr-4` confirms: `"SugarCraft\\Sprinkles\\Tests\\": "tests/"`). Verify both keys exist before writing the file.
+1. **Locate the lib root and namespace.** From the class to test (e.g. `SugarCraft\Style\Style`), the lib root is `sugar-style`. Confirm by reading `sugar-style/composer.json` — the `autoload.psr-4` key (`"SugarCraft\\Style\\": "src/"`) gives you the source namespace; the test namespace is the same with `\Tests` appended (`autoload-dev.psr-4` confirms: `"SugarCraft\\Style\\Tests\\": "tests/"`). Verify both keys exist before writing the file.
 
 2. **Decide the test category.** Pick whichever applies — many classes need two:
    - **Snapshot** — class produces ANSI/string output via `render()`/`view()`/`toString()`. Assert exact bytes.
@@ -27,16 +27,16 @@ paths:
    - **Coercion** — fluent setters (`with*()`, `foreground()`, `padding()`). Feed negative/oversized/empty/null and assert the silent clamp/no-op upstream uses.
    - **Immutability** — for every `with*()` family, one test that asserts `assertNotSame($a, $b)` and that `$a`'s output is unchanged after `$b = $a->with*()`.
 
-3. **Create the test file** alongside existing tests in the lib's tests dir, using this exact skeleton (replace `Sprinkles`/`Style`):
+3. **Create the test file** alongside existing tests in the lib's tests dir, using this exact skeleton (replace the lib namespace and class name):
 
    ```php
    <?php
 
    declare(strict_types=1);
 
-   namespace SugarCraft\Sprinkles\Tests;
+   namespace SugarCraft\Style\Tests;
 
-   use SugarCraft\Sprinkles\Style;
+   use SugarCraft\Style\Style;
    use PHPUnit\Framework\TestCase;
 
    final class StyleTest extends TestCase
@@ -104,7 +104,7 @@ paths:
 
    Don't expect exceptions for bad fluent input — the project uses silent no-op to mirror upstream Go behaviour. Throwing is reserved for value APIs explicitly documented to throw.
 
-7. **Add an immutability test for every `with*()` family** the class exposes. Pattern from `candy-sprinkles/tests/StyleTest.php:67`:
+7. **Add an immutability test for every `with*()` family** the class exposes. Pattern from `sugar-style/tests/StyleTest.php:67`:
 
    ```php
    public function testImmutability(): void
@@ -122,16 +122,16 @@ paths:
 9. **Run the suite** from the lib root. Verify green before reporting done:
 
    ```sh
-   cd candy-sprinkles && composer install --quiet && vendor/bin/phpunit
+   cd sugar-style && composer install --quiet && vendor/bin/phpunit
    ```
 
    To run only your new class:
 
    ```sh
-   cd candy-sprinkles && vendor/bin/phpunit --filter StyleTest
+   cd sugar-style && vendor/bin/phpunit --filter StyleTest
    ```
 
-   PR test-plan should cite the count, e.g. `candy-sprinkles full suite green (42/42)`.
+   PR test-plan should cite the count, e.g. `sugar-style full suite green (42/42)`.
 
 ## Examples
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Canvas;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * One cell of a {@see Canvas}: a single visible rune plus an optional

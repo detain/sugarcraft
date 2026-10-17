@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table\Tests;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 use PHPUnit\Framework\TestCase;
 

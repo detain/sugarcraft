@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 declare -A DESCRIPTIONS=(
     [candy-core]="Elm-architecture TUI runtime — port of charmbracelet/bubbletea on the SugarCraft stack."
-    [candy-sprinkles]="Declarative styling + layout — port of charmbracelet/lipgloss on the SugarCraft stack."
+    [sugar-style]="Declarative styling + layout — port of charmbracelet/lipgloss on the SugarCraft stack."
     [sugar-spring]="Damped spring physics + Newtonian projectile sim — port of charmbracelet/harmonica."
     [sugar-mouse]="Mouse-zone tracker — port of lrstanley/bubblezone on the SugarCraft stack."
     [sugar-widgets]="Seventeen pre-built TUI components — port of charmbracelet/bubbles on the SugarCraft stack."

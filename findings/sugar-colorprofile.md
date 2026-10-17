@@ -234,11 +234,11 @@ No `.php-cs-fixer.dist.php` or similar code style enforcement, despite being men
 "require": {
     "php": "^8.3",
     "sugarcraft/candy-core": "dev-master",
-    "sugarcraft/candy-sprinkles": "dev-master"
+    "sugarcraft/sugar-style": "dev-master"
 }
 ```
 
-For a terminal color detection library, having two internal dependencies (candy-core for i18n Lang facade, candy-sprinkles for what appears to be theming) may be heavier than necessary. A color profile library should ideally have minimal dependencies.
+For a terminal color detection library, having two internal dependencies (candy-core for i18n Lang facade, sugar-style for what appears to be theming) may be heavier than necessary. A color profile library should ideally have minimal dependencies.
 
 ---
 
@@ -459,4 +459,4 @@ In a ReactPHP ecosystem, a library doing terminal detection should ideally:
 - `tests/Probe/ProbeReportTest.php` — ProbeReport value object tests
 - `tests/Probe/TerminalProbeTest.php` — TerminalProbe integration tests
 
-**Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles` (both dev-master path repos)
+**Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style` (both dev-master path repos)

@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Tetris built on the SugarCraft stack. SugarCraft runtime, CandySprinkles for the rounded borders and per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, line-clear scoring.
+Tetris built on the SugarCraft stack. SugarCraft runtime, SugarStyle for the rounded borders and per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, line-clear scoring.
 
 ## Run it
 
@@ -131,4 +131,4 @@ When all lines are cleared at once and the board becomes completely empty, an ad
 
 ## Shared foundations
 
-The single-player playfield is painted into a canonical [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are CandySprinkles cards joined with CandyLayout (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (starting board, T-spin completion, pause overlay).
+The single-player playfield is painted into a canonical [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are SugarStyle cards joined with CandyLayout (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (starting board, T-spin completion, pause overlay).

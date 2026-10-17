@@ -188,14 +188,14 @@ final class Validation
 **Source locations:**
 
 - `sugar-widgets/src/Stopwatch/Stopwatch.php:L382` — example with validation
-- `candy-sprinkles/src/Style.php:L103` — simple factory
+- `sugar-style/src/Style.php:L103` — simple factory
 
 **Implementation:**
 
 Add to `CALIBER_LEARNINGS.md`:
 
 ```markdown
-- **[pattern:new-factory-required]** All new SugarCraft classes MUST provide a `::new(): self` factory method. This is a de facto standard with 3,000+ uses across the monorepo. The factory MAY include validation (e.g., `Stopwatch::new()` validates interval > 0), but MUST return `new self()` for no-arg construction. Canonical: `candy-sprinkles/src/Style.php::new()`, `sugar-widgets/src/Stopwatch/Stopwatch.php::new()`.
+- **[pattern:new-factory-required]** All new SugarCraft classes MUST provide a `::new(): self` factory method. This is a de facto standard with 3,000+ uses across the monorepo. The factory MAY include validation (e.g., `Stopwatch::new()` validates interval > 0), but MUST return `new self()` for no-arg construction. Canonical: `sugar-style/src/Style.php::new()`, `sugar-widgets/src/Stopwatch/Stopwatch.php::new()`.
 ```
 
 **Verification:**

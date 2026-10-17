@@ -5,7 +5,7 @@
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Panels\SugarPanels;
-use SugarCraft\Sprinkles\{Align, Border};
+use SugarCraft\Style\{Align, Border};
 
 $panels = SugarPanels::new();
 
@@ -60,8 +60,8 @@ echo $panels-&gt;render($layout, 60, 20);</code></pre>
 <tr><td>Node</td><td>withPadding(int)</td><td>Inner padding (cells)</td></tr>
 <tr><td>Node</td><td>withBorder(bool)</td><td>Show/hide box border</td></tr>
 <tr><td>Node</td><td>withSpacing(int)</td><td>Gap between children (cells)</td></tr>
-<tr><td>Node</td><td>withBorderStyle(?Border)</td><td>Border char set from candy-sprinkles</td></tr>
-<tr><td>Node</td><td>withStyle(?Style)</td><td>Style (color, attributes) from candy-sprinkles</td></tr>
+<tr><td>Node</td><td>withBorderStyle(?Border)</td><td>Border char set from sugar-style</td></tr>
+<tr><td>Node</td><td>withStyle(?Style)</td><td>Style (color, attributes) from sugar-style</td></tr>
 <tr><td>Node</td><td>withTitle(string)</td><td>Box title text</td></tr>
 <tr><td>Node</td><td>withMargin(int $top, ...)</td><td>Outer margin (top/right/bottom/left)</td></tr>
 <tr><td>Node</td><td>withAlignH(Align)</td><td>Horizontal text alignment</td></tr>

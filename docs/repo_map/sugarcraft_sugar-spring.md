@@ -262,7 +262,7 @@ candy-core (TUI runtime)
 
 candy-flappy (Flappy Bird game)
     └── candy-core
-    └── candy-sprinkles
+    └── sugar-style
     └── sugar-spring ← Bird uses Projectile for vertical motion
 ```
 

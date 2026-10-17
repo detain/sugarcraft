@@ -9,8 +9,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 /**
  * Demo Model — a counter you can drive with ↑ / ↓ and quit with `q`.
@@ -18,7 +18,7 @@ use SugarCraft\Sprinkles\Style;
  * Picked deliberately as the "hello, world" of TUI development: small
  * enough to read in one screen, but exercises every piece of the
  * runtime: Model immutability, Msg dispatch, Cmd::quit() shutdown,
- * keyboard handling, and CandySprinkles styling in view().
+ * keyboard handling, and SugarStyle styling in view().
  *
  * The Model is immutable — `update()` returns a *new* Counter
  * rather than mutating $n. This is the Elm-architecture pattern

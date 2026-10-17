@@ -342,7 +342,7 @@ Use the existing mutable trait pattern from `candy-core` (`SugarCraft\Core\Conce
 ### Compatible
 
 - Uses `SugarCraft\Fuzzy\FuzzyMatcher` interface correctly
-- Uses `SugarCraft\Sprinkles\Border` and `Style` composition correctly
+- Uses `SugarCraft\Style\Border` and `Style` composition correctly
 - Uses `SugarCraft\Pty\SignalForwarder` correctly
 - Uses `SugarCraft\Core\Util\Width`, `Tty`, `Ansi` correctly
 - `composer.json` has correct path repos for all sugarcraft dependencies

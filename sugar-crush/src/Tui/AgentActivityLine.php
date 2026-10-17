@@ -14,7 +14,7 @@ use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Crush\Util\TokenCount;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The one row a delegated run gets under its Task row in the transcript

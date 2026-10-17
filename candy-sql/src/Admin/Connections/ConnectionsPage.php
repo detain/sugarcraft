@@ -14,7 +14,7 @@ use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Admin\StatusSnapshot;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 
 /**

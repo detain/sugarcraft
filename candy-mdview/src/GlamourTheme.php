@@ -6,7 +6,7 @@ namespace SugarCraft\MdView;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Parser + adapter for Glamour STYLE JSON documents (E735 step 10.25).

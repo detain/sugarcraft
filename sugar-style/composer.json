@@ -1,0 +1,54 @@
+{
+    "name": "sugarcraft/sugar-style",
+    "description": "PHP port of charmbracelet/lipgloss \u2014 declarative terminal styling and layout.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "cli",
+        "lipgloss",
+        "ansi",
+        "styling",
+        "layout",
+        "borders",
+        "tables",
+        "tree",
+        "list",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-style",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-style/issues",
+        "source": "https://github.com/sugarcraft/sugar-style",
+        "docs": "https://sugarcraft.github.io/lib/sugar-style.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-layout": "dev-master",
+        "sugarcraft/candy-buffer": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Style\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Style\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

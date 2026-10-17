@@ -14,7 +14,7 @@ use SugarCraft\Image\ImageLayer;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Scale;
-use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Style\Layout;
 use SugarCraft\Mouse\Zones\Manager as ZoneManager;
 
 /**

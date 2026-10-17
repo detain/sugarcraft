@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Markdown\Style;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * CSS-like cascade helper for merging parent and child styles.

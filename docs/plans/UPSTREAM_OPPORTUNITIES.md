@@ -36,15 +36,15 @@ SugarCraft ports. Use this to prioritize the next port wave.
 | [#163](https://github.com/charmbracelet/bubbletea/issues/163) (17c) | Displaying images | ⚪ | Covered by `sugar-image` plan |
 | [#1590](https://github.com/charmbracelet/bubbletea/issues/1590) (13c) | If tea program quits too early, garbage chars are printed | 🔴 | **Effort**: 1-2h **Benefit**: Fixes confusing terminal state on early exit **Downside**: May be renderer-specific |
 | [#573](https://github.com/charmbracelet/bubbletea/issues/573) (13c) | Altscreen: rendering artifacts when resizing window | 🟡 | Likely renderer internal — may need review |
-| [#1225](https://github.com/charmbracelet/bubbletea/issues/1225) (12c) | lipgloss styles rendered incorrectly when `.Width()` applied | ⚪ | Lipgloss issue — candy-sprinkles may have similar behavior |
+| [#1225](https://github.com/charmbracelet/bubbletea/issues/1225) (12c) | lipgloss styles rendered incorrectly when `.Width()` applied | ⚪ | Lipgloss issue — sugar-style may have similar behavior |
 
 ---
 
-## charmbracelet/lipgloss → candy-sprinkles
+## charmbracelet/lipgloss → sugar-style
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-sprinkles | Notes |
+| Upstream | Title | Status in sugar-style | Notes |
 |---|---|:--:|---|
 | [#636](https://github.com/charmbracelet/lipgloss/pull/636) (2026-04-13) | fix: Avoid background color query hang | 🟡 |确认 PHP `queryTerminal()` 实现没有相同问题 |
 | [#592](https://github.com/charmbracelet/lipgloss/pull/592) (2026-01-05) | perf: improve performance of maxRuneWidth | 🟡 | Width 计算性能改进 — 确认 PHP 实现相似 |
@@ -383,7 +383,7 @@ No high-comment open issues.
    - **Effort**: 2-3h **Benefit**: Medium — better key detection for special keys
    - **Downside**: May interact with existing key handling
 
-5. **lipgloss flexbox layout** → candy-sprinkles
+5. **lipgloss flexbox layout** → sugar-style
    - **Effort**: 4-6h **Benefit**: High — CSS-like flex for TUIs is powerful
    - **Downside**: Significant API addition, could be backward compatible
 

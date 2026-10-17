@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Cli;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Render ASCII-art logos with optional color theming.

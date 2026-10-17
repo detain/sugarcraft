@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Settings;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\Theme;
 
 /**

@@ -52,9 +52,9 @@
 
 ## Border Chrome
 
-- Uses `SugarCraft\Sprinkles\Style::new()->border($border)->render($content)` to wrap content
+- Uses `SugarCraft\Style\Style::new()->border($border)->render($content)` to wrap content
 - `applyBorderChrome()` returns content unchanged when `$this->border === null`
-- `withBorder()` accepts a `SugarCraft\Sprinkles\Border` instance (not a raw value)
+- `withBorder()` accepts a `SugarCraft\Style\Border` instance (not a raw value)
 
 ## Click-Outside Dismiss
 

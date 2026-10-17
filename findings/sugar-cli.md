@@ -2,7 +2,7 @@
 
 **Library:** `sugarcraft/sugar-cli`  
 **Review scope:** `src/` (8 classes) + `tests/` (9 test files)  
-**Dependencies:** `candy-core`, `candy-sprinkles`, `candy-async`, `candy-layout`, `candy-ansi`, `candy-input`, `candy-buffer`
+**Dependencies:** `candy-core`, `sugar-style`, `candy-async`, `candy-layout`, `candy-ansi`, `candy-input`, `candy-buffer`
 
 ---
 
@@ -219,7 +219,7 @@ The `repositories` array includes:
 - `../candy-buffer` — no buffer usage
 - `../candy-input` — no input handling
 
-These add maintenance burden and CI closure-checking noise without providing any value to sugar-cli. Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed.
+These add maintenance burden and CI closure-checking noise without providing any value to sugar-cli. Unless they are transitive dependencies of `sugar-style` or `candy-core`, they should be removed.
 
 ---
 

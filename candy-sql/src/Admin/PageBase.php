@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Admin;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Base class for admin dashboard pages.

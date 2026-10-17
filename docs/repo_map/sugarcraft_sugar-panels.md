@@ -7,7 +7,7 @@
 - **Status**: v1 ready
 - **Language**: PHP 8.3+
 - **Files**: 3 source files (Boxer.php 408L, Node.php 359L, Lang.php 22L), 26 unit tests, 3 examples
-- **Dependencies**: `candy-core` (Width::string), `candy-sprinkles` (Border, Style, Align, VAlign)
+- **Dependencies**: `candy-core` (Width::string), `sugar-style` (Border, Style, Align, VAlign)
 - **Key Innovation**: Recursive tree-based box-drawing layout engine with immutable Node composition and ANSI-aware width calculation
 
 ---
@@ -54,8 +54,8 @@ final class Node
     public readonly int $padding;         // inner padding (cells)
     public readonly bool $border;          // show/hide box border
     public readonly int $spacing;         // gap between children (cells)
-    public readonly ?Border $borderStyle;  // from candy-sprinkles
-    public readonly ?Style $style;         // from candy-sprinkles
+    public readonly ?Border $borderStyle;  // from sugar-style
+    public readonly ?Style $style;         // from sugar-style
     public readonly string $title;         // box title text
     /** @var array<int,int,int,int> */
     public readonly array $margin;         // outer spacing (top/right/bottom/left)
@@ -429,7 +429,7 @@ sugar-panels, being a PHP port without the BubbleTea runtime, takes a simpler ap
 | Aspect | lipgloss (Go) | sugar-panels (PHP) |
 |--------|--------------|------------------|
 | **Purpose** | Style definitions for terminal layouts | Box-drawing layout engine |
-| **Style model** | Fluent pure-value `Style` type | Delegates to `candy-sprinkles` Style/Border |
+| **Style model** | Fluent pure-value `Style` type | Delegates to `sugar-style` Style/Border |
 | **Borders** | `Style.Border()` with 10 presets | `Node.withBorderStyle()` using same presets |
 | **Layout** | Width/Height constraints, margins, padding | Tree-based H/V composition |
 | **Text rendering** | `Style.Render()` applies ANSI to strings | `renderContent()` word-wraps into cells |
@@ -437,7 +437,7 @@ sugar-panels, being a PHP port without the BubbleTea runtime, takes a simpler ap
 | **Layout algorithm** | None — position text manually | Recursive tree distribution |
 | **Text alignment** | `Align()` via Style | `withAlignH()`/`withAlignV()` on Node |
 
-**Relationship**: lipgloss is the **styling foundation** that bubbleboxer builds upon. sugar-panels similarly uses `candy-sprinkles` (the lipgloss port) for `Border`, `Style`, `Align`, and `VAlign` types. sugar-panels does NOT depend on the full styling system — it only references the border character set.
+**Relationship**: lipgloss is the **styling foundation** that bubbleboxer builds upon. sugar-panels similarly uses `sugar-style` (the lipgloss port) for `Border`, `Style`, `Align`, and `VAlign` types. sugar-panels does NOT depend on the full styling system — it only references the border character set.
 
 **Key insight**: lipgloss does not have a built-in layout algorithm. It provides tools to style things that are already laid out. sugar-panels provides the layout algorithm (tree-based H/V distribution) and uses lipgloss-style border characters.
 
@@ -479,7 +479,7 @@ private function distribute(int $available, array $weights, int $totalWeight, in
 | **Cell model** | `Cell` struct (char + style + link + width) | Char-cell grid (`array[y][x]`) |
 | **Diffing** | Touched-line tracking + minimal ANSI sequences | Full re-render on each `render()` call |
 | **Layout** | Cassowary constraint solver (`layout.Layout`) | Tree-based recursive distribution |
-| **Borders** | `Border()` functions (Normal, Rounded, etc.) | Delegates to `candy-sprinkles` Border |
+| **Borders** | `Border()` functions (Normal, Rounded, etc.) | Delegates to `sugar-style` Border |
 | **Width measurement** | `WcWidth()`, `GraphemeWidth()` | Delegates to `candy-core` Width |
 | **Output** | Optimized ANSI escape sequences | Raw box-drawing strings |
 
@@ -490,7 +490,7 @@ private function distribute(int $available, array $weights, int $totalWeight, in
 - Cassowary constraint layout
 - Border character presets
 
-sugar-panels sits **above** this layer. It uses ultraviolet's border character sets (via candy-sprinkles) and its width measurement utilities, but implements its own tree-based layout algorithm rather than the Cassowary constraint solver.
+sugar-panels sits **above** this layer. It uses ultraviolet's border character sets (via sugar-style) and its width measurement utilities, but implements its own tree-based layout algorithm rather than the Cassowary constraint solver.
 
 **SugarCraft architectural note**: In SugarCraft, `candy-core` provides the termbox-cell model and width utilities that ultraviolet provides in Go. sugar-panels depends on `candy-core` for `Width::string()`.
 
@@ -500,7 +500,7 @@ sugar-panels sits **above** this layer. It uses ultraviolet's border character s
 |--------|----------------|------------------|
 | **Type** | Full TUI framework with 40+ widgets | Pure layout renderer |
 | **Layout** | CSS flexbox/grid via stylesheet | Tree-based H/V composition |
-| **Styling** | TCSS (Textual CSS) with full property set | Delegates to `candy-sprinkles` |
+| **Styling** | TCSS (Textual CSS) with full property set | Delegates to `sugar-style` |
 | **State** | Reactive `var()` + watchers + message pump | Immutable nodes (no runtime state) |
 | **Widget system** | 40+ built-in widgets with inheritance | None (pure renderer) |
 | **Rendering** | Compositor with dirty-region tracking | Full re-render per `render()` call |
@@ -578,7 +578,7 @@ sugar-panels sits **above** this layer. It uses ultraviolet's border character s
 
 4. **Sentinel pattern for optional fields**: The private `nop(): \stdClass` sentinel distinguishes "preserve existing value" from "explicitly set to null", enabling clean multi-call chaining.
 
-5. **Border style composition**: sugar-panels uses `candy-sprinkles` Border/Style types as typed state rather than re-implementing border characters, maintaining cross-library consistency.
+5. **Border style composition**: sugar-panels uses `sugar-style` Border/Style types as typed state rather than re-implementing border characters, maintaining cross-library consistency.
 
 ### 4.2 Known Limitations
 
@@ -613,7 +613,7 @@ sugar-panels sits **above** this layer. It uses ultraviolet's border character s
 ```
 sugar-panels
   └─ candy-core (Width::string for ANSI-aware width)
-  └─ candy-sprinkles (Border, Style, Align, VAlign types)
+  └─ sugar-style (Border, Style, Align, VAlign types)
 ```
 
 ### 5.2 Consumers
@@ -624,7 +624,7 @@ sugar-panels is a **foundational layout primitive** used by other SugarCraft lib
 
 - Clean separation of layout from rendering
 - Immutable nodes enable safe sharing across the monorepo
-- Delegates to canonical candy-sprinkles types (Border, Style)
+- Delegates to canonical sugar-style types (Border, Style)
 - ANSI-aware width calculation via candy-core
 - Zero external dependencies beyond the monorepo
 - 26 unit tests covering core functionality

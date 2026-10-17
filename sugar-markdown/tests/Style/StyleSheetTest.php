@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Render\BlockKind;
 use SugarCraft\Markdown\Style\StyleCascade;
 use SugarCraft\Markdown\Style\StyleSheet;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 final class StyleSheetTest extends TestCase
 {

@@ -68,16 +68,16 @@ src/
 | Repo | Relevance | Major applicable concepts | Priority |
 |------|-----------|--------------------------|----------|
 | `charmbracelet/bubbletea` | High | TEA pattern (Model/Update/View), Elm architecture in PHP via candy-core | P0 |
-| `charmbracelet/lipgloss` → candy-sprinkles | High | Declarative styling, color system, border rendering | P0 |
+| `charmbracelet/lipgloss` → sugar-style | High | Declarative styling, color system, border rendering | P0 |
 | `charmbracelet/harmonica` → sugar-spring | High | Spring physics for ghost-piece animation, line-clear particles, camera shake | P1 |
 | `ratatui/ratatui` | Medium | Widget trait pattern, immediate-mode rendering, buffer diffing | P1 |
 | `charmbracelet/bubbles` → sugar-widgets | Medium | Component patterns (Timer, Progress, Help) for game UI chrome | P1 |
 | `charmbracelet/vhs` | Medium | Demo recording infrastructure (.tape format) | P2 |
 | `sugarcraft/sugar-spring` | High | Spring physics, easing curves, WCAG REDUCE_MOTION | P0 |
-| `sugarcraft/candy-sprinkles` | High | Styling foundation for board rendering, borders, colors | P0 |
+| `sugarcraft/sugar-style` | High | Styling foundation for board rendering, borders, colors | P0 |
 | `sugarcraft/candy-core` | High | TEA runtime, View rendering, input handling | P0 |
 
-**Source:** `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_candy-sprinkles.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`
+**Source:** `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_sugar-style.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`
 
 ---
 
@@ -322,7 +322,7 @@ Game::configure()
 - `GuidelineScoring` (current)
 - `CustomScoring`
 
-**Reference:** Pattern from `candy-sprinkles/src/Style.php` where rendering styles are composable.
+**Reference:** Pattern from `sugar-style/src/Style.php` where rendering styles are composable.
 
 ---
 
@@ -378,9 +378,9 @@ Screen shake (via `Canvas` layer offset) when player achieves a Tetris (4-line c
 
 **Priority:** Medium | **Complexity:** Low
 
-Allow `Theme` customization for board colors, piece colors, border styles. Currently uses candy-sprinkles styling but no game-specific theme system.
+Allow `Theme` customization for board colors, piece colors, border styles. Currently uses sugar-style styling but no game-specific theme system.
 
-**Reference:** `docs/repo_map/sugarcraft_candy-sprinkles.md:208-214` — 10 named theme factories.
+**Reference:** `docs/repo_map/sugarcraft_sugar-style.md:208-214` — 10 named theme factories.
 
 ## 5. Sound Effect Hooks
 
@@ -576,4 +576,4 @@ candy-tetris is a **mature, well-architected** library that has already surpasse
 - DAS/ARR keyboard timing is essential for competitive play; native terminal key repeat (Kitty protocol) is a future optimization
 - The 7-bag randomizer with injectable RNG is a best practice other games should adopt
 
-**Source citations:** `docs/repo_map/sugarcraft_candy-tetris.md`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_candy-sprinkles.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/charmbracelet_bubbles.md`, `candy-tetris/README.md`, `candy-tetris/CALIBER_LEARNINGS.md`
+**Source citations:** `docs/repo_map/sugarcraft_candy-tetris.md`, `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_sugar-style.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`, `docs/repo_map/charmbracelet_bubbles.md`, `candy-tetris/README.md`, `candy-tetris/CALIBER_LEARNINGS.md`

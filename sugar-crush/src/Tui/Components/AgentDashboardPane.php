@@ -22,8 +22,8 @@ use SugarCraft\Crush\Tui\Mode;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\StallWarning;
 use SugarCraft\Crush\Theme;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\Veil;
 

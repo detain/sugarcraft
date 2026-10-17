@@ -88,10 +88,10 @@ if ($level->value < $this->minLevel->value) {
 
 **File:** `src/Formatter/TextFormatter.php:16-123`
 
-Colorized human-readable output with configurable timestamp, caller, prefix, and structured context. Uses `candy-sprinkles/Style` for ANSI SGR rendering:
+Colorized human-readable output with configurable timestamp, caller, prefix, and structured context. Uses `sugar-style/Style` for ANSI SGR rendering:
 
 ```php
-// Level coloring via candy-sprinkles
+// Level coloring via sugar-style
 private function styledLevel(Level $level): string
 {
     $label = $level->shortLabel();
@@ -440,14 +440,14 @@ Configurable log-part ordering enables:
         "psr/log": "^3.0",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-colorprofile": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master"
+        "sugarcraft/sugar-style": "dev-master"
     }
 }
 ```
 
 - **candy-core** — `Tty::restoreLast()` for terminal recovery
 - **sugar-colorprofile** — `Probe::colorProfile()->allowsColor()` for color detection
-- **candy-sprinkles** — `Style` for ANSI SGR rendering
+- **sugar-style** — `Style` for ANSI SGR rendering
 
 ## Strengths
 

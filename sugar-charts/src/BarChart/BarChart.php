@@ -10,7 +10,7 @@ use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Vertical bar chart drawn with `█` blocks. Bars are spaced one column

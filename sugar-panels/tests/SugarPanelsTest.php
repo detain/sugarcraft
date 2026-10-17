@@ -6,9 +6,9 @@ namespace SugarCraft\Panels\Tests;
 
 use SugarCraft\Panels\{Node, SugarPanels};
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Align;
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Style\Align;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\VAlign;
 use PHPUnit\Framework\TestCase;
 
 final class SugarPanelsTest extends TestCase

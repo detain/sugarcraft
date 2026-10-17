@@ -20,7 +20,7 @@ use InvalidArgumentException;
  * the other half of that contract: it admits *styling* and nothing else.
  *
  * What passes: SGR sequences (`ESC [` followed by nothing but digits, `;` and `:`
- * until a final `m` — the styling sequences candy-sprinkles emits) and printable
+ * until a final `m` — the styling sequences sugar-style emits) and printable
  * text. What does not: every other escape form (CSI cursor/erase/mode, OSC/DCS/APC
  * payloads, charset designators, Fe/Fs pairs), a malformed or truncated sequence, a
  * bare C0 control, DEL, and an 8-bit C1 control in EITHER wire form — the raw byte

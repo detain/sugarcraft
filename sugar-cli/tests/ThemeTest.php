@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Cli\Tests;
 
 use SugarCraft\Cli\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Palettes;
 use PHPUnit\Framework\TestCase;
@@ -50,7 +50,7 @@ final class ThemeTest extends TestCase
         // W5 fix: sugar-cli's dracula accent had diverged to purple #bd93f9.
         // It is now re-sourced from candy-core's Palettes SSOT and bound to
         // Dracula's `pink` (#ff79c6 → SGR 38;2;255;121;198), matching the
-        // canonical candy-sprinkles accent slot.
+        // canonical sugar-style accent slot.
         $this->assertSame('#ff79c6', Palettes::DRACULA['pink']);
         $this->assertStringContainsString(
             '38;2;255;121;198',

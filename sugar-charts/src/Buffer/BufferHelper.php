@@ -7,7 +7,7 @@ namespace SugarCraft\Charts\Buffer;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style as BufferStyle;
-use SugarCraft\Sprinkles\Style as SprinklesStyle;
+use SugarCraft\Style\Style as SugarStyle;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\Util\Color;
 
@@ -71,7 +71,7 @@ final class BufferHelper
      * Convert a Sprinkles\Style to a Buffer\Style.
      * Only fg/bg/attrs are transferred; advanced features (borders, padding, etc.) are dropped.
      */
-    public static function toBufferStyle(SprinklesStyle $s): BufferStyle
+    public static function toBufferStyle(SugarStyle $s): BufferStyle
     {
         $attrs = 0;
         if ($s->isBold())          { $attrs |= BufferStyle::ATTR_BOLD; }

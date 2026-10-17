@@ -8,7 +8,7 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Text-cursor primitive used inside {@see \SugarCraft\Forms\TextInput\TextInput}

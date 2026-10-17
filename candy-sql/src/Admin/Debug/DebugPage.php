@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\ServerContextInterface;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Debug pane displaying the query/action log from QueryLogger.

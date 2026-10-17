@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Formats an uncaught exception into a human-readable panic report.

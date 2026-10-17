@@ -71,7 +71,7 @@ final class EntryTest extends TestCase
      * The audit's MEDIUM: the old sweep exempted ESC itself and knew only
      * the CSI shape, so OSC set-title, charset selection (ESC B) and
      * save-cursor (ESC 7) crafted into filenames survived verbatim and
-     * reached the terminal through candy-sprinkles rendering raw text.
+     * reached the terminal through sugar-style rendering raw text.
      * bin2hex-level pins: the result carries NO control byte at all.
      */
     public static function escapeBypassProvider(): array

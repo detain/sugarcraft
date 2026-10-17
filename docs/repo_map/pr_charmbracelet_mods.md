@@ -22,7 +22,7 @@ The first-pass analysis identified these unmapped areas relevant to SugarCraft:
 | Gap | Likely Candidate |
 |-----|-----------------|
 | Streaming LLM client | `sugar-forms` or new `sugar-llm` |
-| Conversation caching | `candy-sprinkles` (caching utilities) |
+| Conversation caching | `sugar-style` (caching utilities) |
 | MCP client integration | `sugar-mcp-client` or `honey-mcp` |
 | SQLite storage | leveraging `sugar-widgets` persistence |
 

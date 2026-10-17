@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Admin\ServerStatus;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sql\Admin\Sampler;
 use SugarCraft\Sql\Admin\ServerContextInterface;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Collection of all sidebar gauges for the Server Status page.

@@ -6,7 +6,7 @@ namespace SugarCraft\Charts\Canvas;
 
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Drawing primitives for {@see Canvas}. Mirrors ntcharts' `canvas/graph`

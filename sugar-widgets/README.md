@@ -146,7 +146,7 @@ $bar = AnimatedProgress::new()
 
 ```php
 use SugarCraft\Widgets\TextInput\TextInput;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Color;
 
 $ti = TextInput::new()
@@ -382,7 +382,7 @@ echo $pid->text();                 // "123" — non-digit input is rejected whol
 use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Widgets\Menu\OptionRow;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 echo OptionRow::render(
     'Update ms',

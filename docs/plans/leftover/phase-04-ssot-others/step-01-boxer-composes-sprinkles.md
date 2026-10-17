@@ -1,4 +1,4 @@
-# Step 04.01 — sugar-panels composes candy-sprinkles Border/Style
+# Step 04.01 — sugar-panels composes sugar-style Border/Style
 
 **Source:** `leftover_updates_later.md` SSOT-02 + sugar-panels research §3.1
 **Branch:** `ai/boxer-composes-sprinkles`
@@ -7,26 +7,26 @@
 
 `sugar-panels` plans `BoxStyle` enum (Single/Double/Round/Bold/Classic/
 Hidden/Block), text alignment, box titles, colors, margin — all already
-canonical in candy-sprinkles. Refactor sugar-panels to compose
-`\SugarCraft\Sprinkles\Style` + `\SugarCraft\Sprinkles\Border\Border`
+canonical in sugar-style. Refactor sugar-panels to compose
+`\SugarCraft\Style\Style` + `\SugarCraft\Style\Border\Border`
 instead of rolling its own.
 
 ## Files
 
 **Modify:**
 
-- `sugar-panels/src/Boxer.php` — `withBorder(\SugarCraft\Sprinkles\Border\Border)`,
-  `withStyle(\SugarCraft\Sprinkles\Style)`, `withTitle(string)`. Delete
+- `sugar-panels/src/Boxer.php` — `withBorder(\SugarCraft\Style\Border\Border)`,
+  `withStyle(\SugarCraft\Style\Style)`, `withTitle(string)`. Delete
   any internal `Border*` / `BorderChars` / `BorderStyle` enums sugar-panels
   may have ported.
-- `sugar-panels/composer.json` — add `"sugarcraft/candy-sprinkles": "@dev"`
+- `sugar-panels/composer.json` — add `"sugarcraft/sugar-style": "@dev"`
   + path-repo.
 
 **Add (sugar-panels-specific):**
 
 - `withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0)`
   — outer spacing (vs padding which is inner). This stays in sugar-panels
-  because candy-sprinkles doesn't ship margin as a first-class concept.
+  because sugar-style doesn't ship margin as a first-class concept.
 - `withAlign(HAlign|VAlign)` — text alignment.
 
 ## Acceptance

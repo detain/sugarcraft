@@ -11,7 +11,7 @@ use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Dashboard\Plot\DistanceFade;
 use SugarCraft\Dashboard\Plot\ProcRow\ProcGraphTracker;
 use SugarCraft\Dashboard\Plot\ProcRow\ProcRowComposer;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\PanelFrame;

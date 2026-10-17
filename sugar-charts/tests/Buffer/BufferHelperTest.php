@@ -10,7 +10,7 @@ use SugarCraft\Buffer\Style as BufferStyle;
 use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style as SprinklesStyle;
+use SugarCraft\Style\Style as SugarStyle;
 
 /**
  * @covers \SugarCraft\Charts\Buffer\BufferHelper
@@ -155,7 +155,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleEmptyStyle(): void
     {
-        $sprinkles = SprinklesStyle::new();
+        $sprinkles = SugarStyle::new();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertNull($buffer->fg());
@@ -168,7 +168,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithBold(): void
     {
-        $sprinkles = SprinklesStyle::new()->bold();
+        $sprinkles = SugarStyle::new()->bold();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasBold());
@@ -179,7 +179,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithItalic(): void
     {
-        $sprinkles = SprinklesStyle::new()->italic();
+        $sprinkles = SugarStyle::new()->italic();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasItalic());
@@ -190,7 +190,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithUnderline(): void
     {
-        $sprinkles = SprinklesStyle::new()->underline();
+        $sprinkles = SugarStyle::new()->underline();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasUnderline());
@@ -201,7 +201,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithStrikethrough(): void
     {
-        $sprinkles = SprinklesStyle::new()->strikethrough();
+        $sprinkles = SugarStyle::new()->strikethrough();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasStrike());
@@ -212,7 +212,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithFaint(): void
     {
-        $sprinkles = SprinklesStyle::new()->faint();
+        $sprinkles = SugarStyle::new()->faint();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasFaint());
@@ -223,7 +223,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithBlink(): void
     {
-        $sprinkles = SprinklesStyle::new()->blink();
+        $sprinkles = SugarStyle::new()->blink();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasBlink());
@@ -234,7 +234,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithReverse(): void
     {
-        $sprinkles = SprinklesStyle::new()->reverse();
+        $sprinkles = SugarStyle::new()->reverse();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasReverse());
@@ -245,7 +245,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithOverline(): void
     {
-        $sprinkles = SprinklesStyle::new()->overline();
+        $sprinkles = SugarStyle::new()->overline();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasOverline());
@@ -256,7 +256,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithInvisible(): void
     {
-        $sprinkles = SprinklesStyle::new()->invisible();
+        $sprinkles = SugarStyle::new()->invisible();
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertTrue($buffer->hasInvisible());
@@ -267,7 +267,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithForegroundColor(): void
     {
-        $sprinkles = SprinklesStyle::new()->foreground(Color::rgb(255, 0, 0));
+        $sprinkles = SugarStyle::new()->foreground(Color::rgb(255, 0, 0));
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertSame(0xff0000, $buffer->fg());
@@ -278,7 +278,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithBackgroundColor(): void
     {
-        $sprinkles = SprinklesStyle::new()->background(Color::rgb(0, 0, 255));
+        $sprinkles = SugarStyle::new()->background(Color::rgb(0, 0, 255));
         $buffer = BufferHelper::toBufferStyle($sprinkles);
 
         $this->assertSame(0x0000ff, $buffer->bg());
@@ -289,7 +289,7 @@ final class BufferHelperTest extends TestCase
      */
     public function testToBufferStyleWithMultipleAttributes(): void
     {
-        $sprinkles = SprinklesStyle::new()
+        $sprinkles = SugarStyle::new()
             ->bold()
             ->italic()
             ->underline()

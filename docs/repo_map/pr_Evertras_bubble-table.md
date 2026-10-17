@@ -33,7 +33,7 @@ The `sugar-table` library is the direct PHP port of bubble-table. Per the origin
 - `Row` → `Row` (both immutable copies)
 - `RowData` → `RowData` (both use `map[string]any` / associative array)
 - `StyledCell` → `StyledCell`
-- `Border` → `Border` (from `SugarCraft\Sprinkles\Border`)
+- `Border` → `Border` (from `SugarCraft\Style\Border`)
 - `FilterFunc` / `FilterFuncInput` → `Table::Filter()`
 - `filterFuncContains` → Built into `filteredSortedRows()`
 - `SortColumn` / `SortDirection` → `sortColumns` array + `SortBy()`

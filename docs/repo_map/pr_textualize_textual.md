@@ -38,8 +38,8 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | App, Widget, Screen, DOMNode, MessagePump | `candy-core/` | ✅ Mapped |
 | Reactive, var(), watch_*() | `candy-core/` + `sugar-widgets/` | ✅ Mapped |
 | Widget library (Button, Input, Tree, etc.) | `sugar-widgets/` | ✅ Mapped |
-| TCSS Stylesheet, CSS properties | `candy-sprinkles/` | ✅ Mapped |
-| Layout, VerticalLayout, HorizontalLayout, GridLayout | `candy-sprinkles/` + `sugar-panels/` | ✅ Mapped |
+| TCSS Stylesheet, CSS properties | `sugar-style/` | ✅ Mapped |
+| Layout, VerticalLayout, HorizontalLayout, GridLayout | `sugar-style/` + `sugar-panels/` | ✅ Mapped |
 | Color, HSL/HSV/Lab color spaces | `sugar-colorprofile/` | ✅ Mapped |
 | Content, Text, Span, Style | `sugar-markdown/` | ✅ Mapped |
 | markdown, MarkdownViewer | `sugar-markdown/` | ✅ Mapped |
@@ -674,7 +674,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 - Textual's Styles/Stylesheet holding strong references to widget nodes
 - Issue #4964 required extensive work to fix object leaks
 - Issue #6381 shows Styles objects creating 600+ cycles
-- **SugarCraft Risk**: If our `candy-sprinkles` styles system holds similar references, we could hit same GC issues
+- **SugarCraft Risk**: If our `sugar-style` styles system holds similar references, we could hit same GC issues
 - **Mitigation**: Use weakrefs for parent references, clear caches aggressively
 
 ### B. Context Var Management
@@ -1005,7 +1005,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 
 1. **Audit Weak Reference Usage in Core**
    - Check if `candy-core` DOM nodes use weakrefs for parent links
-   - Check if `candy-sprinkles` styles hold strong references to owner widgets
+   - Check if `sugar-style` styles hold strong references to owner widgets
    - **Rationale**: Avoid repeating issue #4964/#6381 GC problems
    - **Effort**: Medium | **Impact**: HIGH
 

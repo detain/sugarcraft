@@ -344,7 +344,7 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 | **Lifecycle hooks** | `Close() error` on pop only | `onEnter()` + `onLeave()` |
 | **Shell model** | `tea.Model` (Init/Update/View) | Plain PHP class (no tea.Model) |
 | **Window** | Explicit `window.Model` for dimension offsets | Not needed (no tea.WindowSizeMsg) |
-| **Styles** | Lipgloss styles for framing | Plain strings (candy-sprinkles optional) |
+| **Styles** | Lipgloss styles for framing | Plain strings (sugar-style optional) |
 | **Menu component** | Included — wraps bubbles/list | **Not ported** (Menu is in bubbleo, not sugar-navstack) |
 | **Type-ahead filter** | Not present | `NavStack::filter()` |
 | **Path parsing** | Not present | `Shell::pushDirectory()` |
@@ -359,7 +359,7 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 
 1. **Menu component** (`menu/model.go`) — wraps `bubbles/list` for choice selection. sugar-navstack does not port this; use `SugarCraft\Widgets\ItemList` or `SugarCraft\Forms\Form` instead.
 
-2. **Styles package** — lipgloss-based styling constants. sugar-navstack is unstyled by default; apply `SugarCraft\Sprinkles\Style` to output strings as desired.
+2. **Styles package** — lipgloss-based styling constants. sugar-navstack is unstyled by default; apply `SugarCraft\Style\Style` to output strings as desired.
 
 3. **Window model** — offset-based dimension management. Not needed without bubbletea's `tea.WindowSizeMsg`.
 

@@ -13,7 +13,7 @@ use SugarCraft\Crush\Media\MediaRequest;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\FilePicker;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The media generation form (crush-media W3.1, Shape A): a full-band,

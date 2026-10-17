@@ -34,7 +34,7 @@ use SugarCraft\Core\Util\Width;
  * deliberately: {@see \SugarCraft\Markdown\SyntaxHighlighter::highlight()} joins
  * its number column to the code with a literal `"\t"`, and the two halves of the
  * frame never agree about it: `Width::string("\t")` measures a fixed 4 while
- * candy-sprinkles' `Style::render()` paints it as `tabWidth` spaces — so
+ * sugar-style' `Style::render()` paints it as `tabWidth` spaces — so
  * flipping that flag would inject a mismeasured tab into every code-fence
  * line of every assistant reply and put the frame back into the PR #1403
  * over-wide-row failure. renderDiff() expands tabs before measuring for exactly

@@ -154,7 +154,7 @@ SugarCraft already has a direct port: **`sugar-table`**
 | `Row` | `Row` | Row with `RowData`; both are immutable copies |
 | `RowData` | `RowData` | Both use `map[string]any` / associative array |
 | `StyledCell` | `StyledCell` | Cell with explicit style override |
-| `Border` | `Border` (from `SugarCraft\Sprinkles\Border`) | Pre-built border families (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) |
+| `Border` | `Border` (from `SugarCraft\Style\Border`) | Pre-built border families (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) |
 | `KeyMap` | (partially via KeyMap in sugar-forms) | Keyboard bindings not fully ported |
 | `FilterFunc` / `FilterFuncInput` | `Table::Filter()` | Per-column filter map; sugar-table filters by `stripos` |
 | `filterFuncContains` | Built into `filteredSortedRows()` | Case-insensitive contains |

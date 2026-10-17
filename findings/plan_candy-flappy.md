@@ -93,7 +93,7 @@ Address all 12 findings from the candy-flappy audit, covering bug fixes, perform
   - **Conditions for Success:** Benchmark showing <10% CPU reduction in render path; golden file tests still pass
   - **Investigation Notes:**
     - `cellGlyph()` is called for every cell in the playfield (lines 28-29)
-    - `Style::new()` returns fresh instance each time (`candy-sprinkles/src/Style.php:103-106`)
+    - `Style::new()` returns fresh instance each time (`sugar-style/src/Style.php:103-106`)
     - Three styles are reused throughout the render loop: bird, pipe, parallax dots
 
 - [ ] 2.2 High Score Persistence Not Atomic

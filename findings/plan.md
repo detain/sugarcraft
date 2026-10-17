@@ -87,7 +87,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-charts | P1 | 2 | Extract ChartExtras trait (DRY across BarChart/Scatter/OHLCChart ~200 lines) |
 | candy-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to candy-core after sugar-spring |
 | candy-buffer | P1 | 2 | AsyncOps duplication (same as candy-async) |
-| candy-sprinkles | P1 | 1 | Style value object — finalize after candy-core foundation stable |
+| sugar-style | P1 | 1 | Style value object — finalize after candy-core foundation stable |
 | candy-mdview | P1 | 2 | Glow Renderer animation timing |
 
 **Concurrency:** 6 libs — spawn 6 subagents in parallel.
@@ -226,7 +226,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
    - **Subagent C2:** sugar-charts (ChartExtras trait extraction)
    - **Subagent C3:** candy-async (AsyncOps deduplication)
    - **Subagent C4:** candy-buffer (AsyncOps deduplication)
-   - **Subagent C5:** candy-sprinkles (Style immutable value object)
+   - **Subagent C5:** sugar-style (Style immutable value object)
    - **Subagent C6:** candy-mdview (animation timing)
 2. Each subagent: review → implement → run tests → fix any issues → commit
 3. After all 6 complete: commit to master, pull, continue to Group D

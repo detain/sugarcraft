@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Gallery;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Style\Layout;
 use SugarCraft\Mouse\Zones\Manager as ZoneManager;
 
 /**

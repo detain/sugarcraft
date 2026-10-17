@@ -90,7 +90,7 @@ final class Game implements Model
     /**
      * Construct a new Game from the current state with optional field overrides.
      * Mirrors the canonical SugarCraft immutable/fluent pattern (see
-     * candy-sprinkles/src/Style.php, candy-core/src/Concerns/Mutable.php).
+     * sugar-style/src/Style.php, candy-core/src/Concerns/Mutable.php).
      *
      * `lockWindowGeneration` is nullable and closes via explicit null, so
      * it uses array_key_exists rather than the ?? carry — otherwise

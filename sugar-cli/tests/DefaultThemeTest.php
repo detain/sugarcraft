@@ -14,7 +14,7 @@ use SugarCraft\Cli\Stage;
 use SugarCraft\Cli\StatusLine;
 use SugarCraft\Cli\Theme;
 use SugarCraft\Cli\Tests\Support\SandboxTerminalColumns;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The colour-capability guard: a presenter handed no theme renders through
@@ -268,7 +268,7 @@ final class DefaultThemeTest extends TestCase
 
     /**
      * For a direct render, Theme::withColorProfile() is byte-identical to
-     * candy-sprinkles' own Style::colorProfile() at every tier — NoTty
+     * sugar-style' own Style::colorProfile() at every tier — NoTty
      * included, where sprinkles now strips every escape itself — across every
      * preset slot, a style carrying every attribute plus OSC 8 and a border,
      * and pre-styled content. Theme adds nothing to what a render emits; its
@@ -293,7 +293,7 @@ final class DefaultThemeTest extends TestCase
             ->hyperlink('https://example.com')
             ->foreground(\SugarCraft\Core\Util\Color::hex('#ff0000'))
             ->background(\SugarCraft\Core\Util\Color::ansi(4))
-            ->padding(0, 1)->border(\SugarCraft\Sprinkles\Border::rounded())->width(14);
+            ->padding(0, 1)->border(\SugarCraft\Style\Border::rounded())->width(14);
         $themes = [
             'ansi'       => Theme::ansi(),
             'charm'      => Theme::charm(),
