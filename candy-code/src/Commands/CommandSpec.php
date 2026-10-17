@@ -354,11 +354,19 @@ final class CommandSpec
     }
 
     /**
-     * The row's display text in the Ctrl+P palette.
+     * The row's display text in the Ctrl+P palette, and — for rows a
+     * {@see \SugarCraft\Code\Tui\Components\MenuBar} menu lists but no palette
+     * row labels (slash-only commands, which carry no paletteLabel because the
+     * palette never shows them) — in the F10 dropdown too.
+     *
+     * ISS-104: the fallback used to be the bare lowercase name, so the Session
+     * menu read `New session`, `Switch session`, `compact`, `clear`. The
+     * derived text comes from {@see CommandRegistry::derivedMenuLabel()};
+     * pinning and the derivation rules live there.
      */
     public function label(): string
     {
-        return $this->paletteLabel ?? $this->name;
+        return $this->paletteLabel ?? CommandRegistry::derivedMenuLabel($this);
     }
 
     /**

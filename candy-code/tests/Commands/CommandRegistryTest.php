@@ -179,13 +179,26 @@ final class CommandRegistryTest extends TestCase
         $this->assertSame(['mcp'], self::names(CommandRegistry::filter('mcp')));
     }
 
-    public function testLabelFallsBackToTheCommandName(): void
+    /**
+     * ISS-104 replaced this fallback. A registry row with no `paletteLabel` is
+     * a slash-only row — never listed in the palette, but listed in the F10
+     * menus — and it used to read there as the bare lowercase name beside the
+     * Title-case rows around it. The name survives only for FILE rows, whose
+     * description is the user's own prose; {@see MenuBarLabelDerivationTest}
+     * owns the derivation table.
+     */
+    public function testTheMenuLabelDerivesFromTheShortDescription(): void
     {
         $spec = CommandSpec::new('compact', 'Compact history', 'Session');
 
-        $this->assertSame('compact', $spec->label());
+        $this->assertSame('Compact history', $spec->label());
         $this->assertNull($spec->paletteAction);
         $this->assertTrue($spec->slashVisible);
+        $this->assertSame(
+            'compact',
+            CommandSpec::new('compact', 'Compact history', 'Session', template: 'x')->label(),
+            'a file row keeps the name fallback',
+        );
     }
 
     public function testCommandsThatTakeArgumentsCarryAHint(): void

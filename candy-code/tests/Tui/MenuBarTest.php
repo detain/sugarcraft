@@ -102,7 +102,10 @@ final class MenuBarTest extends TestCase
     /**
      * Test that getMenuItems returns the registry's rows for a valid menu.
      * The 'Session' menu holds every CommandRegistry row in that category,
-     * in declaration order, labelled the way the palette labels it.
+     * in declaration order, labelled the way `CommandSpec::label()` reads it:
+     * the authored palette label where the row has one (ISS-104: the rows the
+     * palette never lists — and so never labelled — derive their text from the
+     * short description instead of falling back to the bare command name).
      */
     public function testGetMenuItemsReturnsArrayForValidMenu(): void
     {
@@ -110,7 +113,7 @@ final class MenuBarTest extends TestCase
 
         $this->assertIsArray($items);
         $this->assertSame(
-            ['New session', 'New session…', 'Switch session', 'Pin or unpin session', 'Delete session…', 'Share session', 'compact', 'clear', 'Branch session', 'Rename session…', 'rewind', 'undo', 'redo', 'diff', 'bg', 'fork', 'goal', 'grind', 'btw', 'handoff'],
+            ['New session', 'New session…', 'Switch session', 'Pin or unpin session', 'Delete session…', 'Share session', 'Manually compact chat', 'Clear the transcript', 'Branch session', 'Rename session…', 'Restore an earlier', 'Take back the last', 'Step forward again', 'Show what changed', 'Run a task', 'Clone', 'Work until a condition', 'Like /goal', 'Ask the title model', 'Continue in a new'],
             $items
         );
     }

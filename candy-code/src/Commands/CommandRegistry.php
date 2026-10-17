@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Commands;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
 use SugarCraft\Code\Palette\PaletteAction;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\CharFold;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -76,6 +77,89 @@ final class CommandRegistry
     public static function isControlPlane(string $name): bool
     {
         return \in_array($name, self::CONTROL_PLANE, true);
+    }
+
+    /**
+     * The cell budget for a derived F10 menu label. A menu column is built at
+     * the shell's width, and the widest natural palette row is
+     * `Review generated settings` at 23 — derived text stops one short of it
+     * so the bare-name era's ragged right edge never came back with longer
+     * filler. {@see fitMenuWords()}.
+     */
+    public const MAX_MENU_LABEL_CELLS = 22;
+
+    /**
+     * The F10 menu text for a row that carries no explicit `paletteLabel`
+     * (ISS-104: slash-only commands never appear in the palette, so they
+     * shipped without one, and the menu fell back to the bare lowercase name —
+     * `compact` beside `New session`).
+     *
+     * The text is DERIVED, never authored: the description's first clause, the
+     * trailing parenthetical dropped, Title-cased like every palette row, and
+     * fitted word-wise into {@see MAX_MENU_LABEL_CELLS}. {@see CommandSpec::label()}
+     * is the single consumer, so the dropdown and `dispatchMenuSelection()`'s
+     * resolve-by-label round-trip through exactly one function — the row that
+     * renders is the row that dispatches. `Commands\MenuBarLabelDerivationTest`
+     * pins the whole table.
+     *
+     * A file-based row's description is its body excerpt and already opens with
+     * the user's own capitalisation; those rows reach the menu only through
+     * `all()`-shaped walks, where the name fallback stays byte-true.
+     */
+    public static function derivedMenuLabel(CommandSpec $spec): string
+    {
+        if ($spec->paletteLabel !== null) {
+            return $spec->paletteLabel;
+        }
+        if ($spec->isFileBased()) {
+            return $spec->name;
+        }
+
+        // First clause: the sentence before the first ". ", "! " or "? " (a
+        // word-internal period has no trailing space, so "PNG's" survives), or
+        // the first line. Drop one trailing parenthetical — it is a usage hint,
+        // not part of the row's name. The "this session's" hedge goes too:
+        // inside the menu of ONE session it carries no information, and left in
+        // it collides `/permissions` ("…session's permission mode…") with
+        // `/budget` ("…session's reported spend…") at the fit budget, where the
+        // first row would win dispatch for both.
+        $clause = preg_split('/[.!?]\s+|\n/u', $spec->description, 2)[0] ?? $spec->description;
+        $clause = \trim((string) preg_replace('/\s*\([^()]*\)\s*$/u', '', $clause));
+        $clause = str_replace("this session's ", '', $clause);
+
+        return self::fitMenuWords(ucfirst($clause));
+    }
+
+    /**
+     * Take $text whole when it fits the label budget; otherwise keep the
+     * leading words that do, then trim orphaned stopwords and dangling
+     * separators off the tail. Zero-width words cannot occur (every word has a
+     * space), so the loop always terminates with at least one word.
+     */
+    private static function fitMenuWords(string $text): string
+    {
+        if (Width::of($text) <= self::MAX_MENU_LABEL_CELLS) {
+            return $text;
+        }
+
+        $kept = [];
+        $cells = 0;
+        foreach (preg_split('/\s+/u', $text) ?: [] as $word) {
+            $added = Width::of($word) + ($kept === [] ? 0 : 1);
+            if ($cells + $added > self::MAX_MENU_LABEL_CELLS) {
+                break;
+            }
+            $kept[] = $word;
+            $cells += $added;
+        }
+
+        // A fitted row that ends on an article, a preposition or a copula reads
+        // like a cut-off sentence; the menu has no hover text to complete it.
+        while (\count($kept) > 1 && \in_array(mb_strtolower((string) end($kept), 'UTF-8'), ['a', 'an', 'the', 'or', 'and', 'of', 'to', 'in', 'on', 'at', 'by', 'for', 'with', 'without', 'into', 'onto', 'from', 'than', 'via', 'per', 'as', 'its', 'it', 'is', 'are', 'that', 'this', 'these', 'their', 'how'], true)) {
+            array_pop($kept);
+        }
+
+        return \rtrim(implode(' ', $kept), " \t,.:;-—–");
     }
 
     /**
