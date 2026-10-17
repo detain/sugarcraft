@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { diffStats, parseUnifiedDiff } from '../lib/diff'
 import { duration, keyArgument } from '../lib/format'
+import { stripTerminalSequences } from '../lib/ansi'
 import type { SubAgent, ToolItem } from '../stores/reducer'
 import { usePanelsStore } from '../stores/agents/panels'
 import { buildTree, foldRuns, startedBy } from '../stores/agents/tree'
@@ -33,6 +34,10 @@ const icon = computed(() => {
   }
 })
 const argsJson = computed(() => JSON.stringify(props.item.arguments, null, 2))
+// ISS-109: colour codes meant for a terminal are stripped for display only —
+// the stored text, which the model re-reads, keeps every byte.
+const output = computed(() => (props.item.content === undefined ? null : stripTerminalSequences(props.item.content)))
+const reasoning = computed(() => (props.item.reasoning === undefined ? '' : stripTerminalSequences(props.item.reasoning)))
 // The runs this call delegated to, live, with what they delegated in turn
 // (roadmap O-6c); a row opens the run's agent view in the side panels.
 const agentTree = computed(() =>
@@ -55,7 +60,7 @@ function openAgent(id: string): void {
       <span v-if="stats" class="stats"><span class="plus">+{{ stats.added }}</span> <span class="minus">−{{ stats.removed }}</span></span>
       <span class="time">{{ duration(item.durationMs) }}</span>
     </button>
-    <ReasoningFold v-if="item.reasoning" :text="item.reasoning" />
+    <ReasoningFold v-if="reasoning !== ''" :text="reasoning" />
     <div v-if="open" class="body">
       <p v-if="item.denial" class="denial">Refused ({{ item.denial.kind }}){{ item.denial.reason ? `: ${item.denial.reason}` : '' }}</p>
       <details class="args">
@@ -63,7 +68,7 @@ function openAgent(id: string): void {
         <pre>{{ argsJson }}</pre>
       </details>
       <DiffView v-if="item.diff" :diff="item.diff" />
-      <pre v-if="item.content !== undefined && item.content !== ''" class="output" data-testid="tool-output">{{ item.content }}</pre>
+      <pre v-if="output !== null && output !== ''" class="output" data-testid="tool-output">{{ output }}</pre>
       <button v-if="item.truncated" type="button" class="more" @click="emit('loadFull', item)">Load the full output</button>
       <!-- Artifact refs ride the event; the bytes are pulled by each card on
            demand (Appendix C-7). Media joins after the output region. -->

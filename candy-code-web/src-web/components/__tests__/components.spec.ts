@@ -40,6 +40,14 @@ describe('ToolCard', () => {
     expect(wrapper.find('[data-testid="diff"]').exists()).toBe(true)
   })
 
+  it('hides terminal colour codes from the output (ISS-109)', async () => {
+    const item = tool({ content: '\x1b[32madded\x1b[0m \x1b[1mtext\x1b[0m' })
+    const wrapper = mount(ToolCard, { props: { item } })
+    await wrapper.find('button.head').trigger('click')
+    expect(wrapper.find('[data-testid="tool-output"]').text()).toBe('added text')
+    expect(item.content).toBe('\x1b[32madded\x1b[0m \x1b[1mtext\x1b[0m')
+  })
+
   it('offers the full output when the event was truncated', async () => {
     const item = tool({ status: 'error', truncated: true })
     const wrapper = mount(ToolCard, { props: { item } })
