@@ -738,6 +738,14 @@ final class UsageTest extends TestCase
         $totalOnly = [];
         foreach ($this->providerClasses() as $short => $file) {
             $source = (string) file_get_contents($file);
+            // ISS-023a: providers assemble behavior from traits exactly as
+            // PHP does, so the census reads the FLATTENED composition - a
+            // class whose wire lives in Concerns\AnthropicMessagesWire
+            // (Vertex since the lift, and every future native arm) still
+            // knows the input/output split.
+            if (isset(class_uses('SugarCraft\\Code\\Providers\\' . $short)[\SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::class])) {
+                $source .= (string) file_get_contents($dir . '/Concerns/AnthropicMessagesWire.php');
+            }
             // The usage array keys, quoted, so a local variable named
             // $inputTokens cannot masquerade as a provider that reads one.
             $hasInput = preg_match("/'(?:inputTokens|input_tokens|prompt_tokens)'/", $source) === 1;
@@ -820,10 +828,16 @@ final class UsageTest extends TestCase
      * each locator upgraded from presence to an exact count of one so a
      * half-collapse regression ("emit the total on one of the two events")
      * reddens the count just like a full one would.
+     *
+     * ISS-023 moved the wire into the shared trait once more, so the scan
+     * reads Vertex's class AND the wire it assembles: the counts below are
+     * Vertex's behavior, and the trait contributes its emit sites exactly
+     * once no matter how many providers use it.
      */
     public function testVertexsStreamEmitsTheTwoHalvesSeparatelyUnlikeItsUnaryPath(): void
     {
-        $source = (string) file_get_contents(dirname(__DIR__) . '/src/Providers/VertexProvider.php');
+        $source = (string) file_get_contents(dirname(__DIR__) . '/src/Providers/VertexProvider.php')
+            . (string) file_get_contents(dirname(__DIR__) . '/src/Providers/Concerns/AnthropicMessagesWire.php');
 
         $this->assertSame(
             1,

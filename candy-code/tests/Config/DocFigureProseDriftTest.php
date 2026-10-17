@@ -5688,7 +5688,11 @@ final class DocFigureProseDriftTest extends TestCase
         // P10.S3: the turn loop's cache-health watch is the third consumer -
         // it holds an instance for observeCacheHealth() alone, and the page's
         // observeCacheHealth bullet names it.
-        self::assertSame(['src/Backend/CacheHealthWatch.php', 'src/Providers/ProviderFactory.php', 'src/Providers/VertexProvider.php'], $consumers, 'the armed-on-one-wire paragraph names VertexProvider as the one caller and ProviderFactory as the switch reader, and the observeCacheHealth bullet names Backend\\CacheHealthWatch — the src/ census moved');
+        // ISS-023a: the constructing caller is the shared Anthropic wire
+        // trait (Vertex assembled it inline until the lift); the file the
+        // census sees moved with the code, and one production call site
+        // still holds.
+        self::assertSame(['src/Backend/CacheHealthWatch.php', 'src/Providers/Concerns/AnthropicMessagesWire.php', 'src/Providers/ProviderFactory.php'], $consumers, 'the armed-on-one-wire paragraph has the wire trait (Vertex\'s Anthropic path, the one caller) building CacheBreakpoints, ProviderFactory reading the switch, and the observeCacheHealth bullet naming Backend\\CacheHealthWatch — the src/ census moved');
         self::assertStringContainsString('`Backend\\CacheHealthWatch`', $flat, 'the observeCacheHealth bullet no longer names the watch the census above counts');
         self::assertStringContainsString('It is armed on one wire: Claude on `vertex`', $flat, 'the armed paragraph was reworded away from the census pinned above');
         $bin = (string) file_get_contents($root . '/bin/candy-code');
