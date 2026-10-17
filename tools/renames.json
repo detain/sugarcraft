@@ -54,7 +54,7 @@
     {"batch":"E","kind":"rename","old":"candy-pty","new":"sugar-pty","ns_old":"Pty","ns_new":"Pty","type":"lib","bins":{},"status":"packagist-done"},
     {"batch":"E","kind":"rename","old":"candy-core","new":"sugar-core","ns_old":"Core","ns_new":"Core","type":"lib","bins":{},"status":"packagist-done"},
 
-    {"batch":"F","kind":"rename","old":"sugar-crush","new":"candy-code","ns_old":"Crush","ns_new":"Code","type":"app","bins":{"bin/sugarcrush":"bin/candy-code"},"protect":["sugar-crush-web"],"compact_ident_new":"candycode","extra_literals":{"sugarcraft-crush":"candy-code"},"status":"renamed"},
+    {"batch":"F","kind":"rename","old":"sugar-crush","new":"candy-code","ns_old":"Crush","ns_new":"Code","type":"app","bins":{"bin/sugarcrush":"bin/candy-code"},"protect":["sugar-crush-web"],"compact_ident_new":"candycode","extra_literals":{"sugarcraft-crush":"candy-code"},"status":"packagist-done"},
     {"batch":"F","kind":"rename","old":"sugar-crush-web","new":"candy-code-web","ns_old":"CrushWeb","ns_new":"CodeWeb","type":"lib","bins":{},"status":"renamed"},
 
     {"batch":"1","kind":"merge","old":"candy-zone","new":"sugar-mouse","ns_old":"Zone","ns_new":"Mouse\\Zones","type":"lib","bins":{},"github":"archive","status":"renamed"},
