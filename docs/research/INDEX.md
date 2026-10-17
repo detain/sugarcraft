@@ -23,9 +23,9 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **candy-core** | [research/libraries/candy-core-research.md](libraries/candy-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
-| **sugar-style** | [research/libraries/sugar-style-research.md](libraries/sugar-style-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing |
-| **candy-pty** | [research/libraries/candy-pty-research.md](libraries/candy-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
-| **sugar-vterm** | [research/libraries/sugar-vterm-research.md](libraries/sugar-vterm-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
+| **sugar-style** | [research/libraries/candy-sprinkles-research.md](libraries/candy-sprinkles-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing |
+| **sugar-pty** | [research/libraries/sugar-pty-research.md](libraries/sugar-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
+| **sugar-vterm** | [research/libraries/candy-vt-research.md](libraries/candy-vt-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
 | **candy-vcr** | [research/libraries/candy-vcr-research.md](libraries/candy-vcr-research.md) | 1. stats CLI, 2. RegexAssertion, 3. Gzip compression |
 
 ### Dashboard & Components
@@ -152,7 +152,7 @@ To implement an item:
 ### Terminal Capabilities
 
 - **sugar-vterm**: Scrollback buffer, subparam parsing, cursor shapes
-- **candy-pty**: openpty FFI, waitpid FFI, raw mode
+- **sugar-pty**: openpty FFI, waitpid FFI, raw mode
 - **sugar-mouse**: Hover tracking, drag detection, click count
 - **sugar-colorprofile**: CLICOLOR, terminfo Tc, color space handling
 

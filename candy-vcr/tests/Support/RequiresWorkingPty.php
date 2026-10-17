@@ -50,7 +50,7 @@ trait RequiresWorkingPty
         if (PHP_OS_FAMILY === 'Windows') {
             return self::$ptyProbeCache = [
                 'ok' => false,
-                'reason' => 'candy-pty is POSIX-only; Windows ConPTY is a separate port.',
+                'reason' => 'sugar-pty is POSIX-only; Windows ConPTY is a separate port.',
             ];
         }
         if (!\extension_loaded('ffi')) {

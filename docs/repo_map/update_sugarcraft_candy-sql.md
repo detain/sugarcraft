@@ -213,7 +213,7 @@ candy-sql/src/
 - **Description**: No external editor integration.
 - **Why it matters**: Long SQL queries are easier to edit in a proper editor.
 - **Source**: lazysql `Ctrl+E` opens `$SQL_EDITOR`; gum write `ctrl+e`
-- **Implementation idea**: `Ctrl+E` forks `$SQL_EDITOR` via candy-pty/process, captures output on close, populates query buf
+- **Implementation idea**: `Ctrl+E` forks `$SQL_EDITOR` via sugar-pty/process, captures output on close, populates query buf
 - **Estimated complexity**: Medium — PTY/process integration
 - **Expected impact**: Power-user editing
 

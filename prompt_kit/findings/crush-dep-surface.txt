@@ -151,7 +151,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
   distinct symbols imported: 0
   NONE - namespace appears only as an inline FQN or not at all
 
-=== candy-pty (SugarCraft\Pty) ===
+=== candy-pty (SugarCraft\Pty) === <!-- @rename-keep historical provenance -->
   referencing files: 10  (src=3, tests=7, other=0)
   distinct symbols imported: 5
     - Libc  x2

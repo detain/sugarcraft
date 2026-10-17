@@ -134,7 +134,7 @@ final class PosixBackendTest extends TestCase
     }
 
     /**
-     * `enableRawMode()` driven through candy-pty's `stty` TERMIOS backend on a
+     * `enableRawMode()` driven through sugar-pty's `stty` TERMIOS backend on a
      * real pty, end to end: cooked, then raw, then cooked again.
      *
      * ## This test did not run for the whole of its life, and the gate that
@@ -449,7 +449,7 @@ final class PosixBackendTest extends TestCase
             $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
         }
 
-        // Injected Termios (real fd, obtained via candy-pty's own FFI
+        // Injected Termios (real fd, obtained via sugar-pty's own FFI
         // open()) rather than fopen() + PosixBackend's (int)-cast fd
         // resolution - that cast is PHP's internal resource ID, not the OS
         // fd, and only coincides with the real fd for a process's original

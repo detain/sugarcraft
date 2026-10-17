@@ -94,7 +94,7 @@ namespace SugarCraft\AnsiParser\Parser;
  *    (`candy-codeshot/src/AnsiParser.php`); implements this interface.
  *
  * Sinks that do NOT opt in need nothing pushed and are dispatched unchanged —
- * e.g. candy-vcr's `MouseModeTracker` and candy-pty's `AnsiOutputParser` pass a
+ * e.g. candy-vcr's `MouseModeTracker` and sugar-pty's `AnsiOutputParser` pass a
  * plain {@see Handler}, and candy-ansi-inspect's `AnsiHandler` pulls instead (above).
  *
  * Re-derive this map from the wiring before trusting it: the only object that

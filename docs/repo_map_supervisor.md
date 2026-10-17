@@ -111,7 +111,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 6 — Ecosystem-wide adoption sweep (8)
 - [x] [Step 30 — Ecosystem audit (no code, produces roadmap)](repo_map_step_30.md) — branch: `ai/ecosystem-audit`, PR #909
-- [x] [Step 31 — candy-pty adopts sugar-input + sugar-ansi-parser](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
+- [x] [Step 31 — sugar-pty adopts sugar-input + sugar-ansi-parser](repo_map_step_31.md) — branch: `ai/sugar-pty-shared`, PR #910
 - [x] [Step 32 — candy-tetris + candy-minesweeper adopt sugar-cellbuffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
 - [x] [Step 33 — candy-kv + candy-ssh-launcher + candy-git adopt sugar-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
 - [x] [Step 34 — sugar-datepicker + sugar-toast adopt sugar-cellbuffer + sugar-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
@@ -137,7 +137,7 @@ The shared-foundation refactor is **complete**. Summary:
 
 - **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 sugar-forms migration which was not completed)
 - **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, sugar-mouse, candy-input, sugar-fuzzy, candy-async <!-- @rename-keep historical provenance -->
-- **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy
+- **15 consumer libs migrated** in Phase 6: sugar-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy
 - **4 items deferred** to future plan (sugar-metrics, sugar-log, sugar-mouse, candy-starter — see docs/repo_map_update_followups.md)
 - **1 step not completed** (step-15 sugar-forms — FuzzyMatcher API incompatibility; deferred)
 - Retrospective: docs/repo_map_update.md § Plan retrospective

@@ -19,7 +19,7 @@ parameters:
         # FFI::scope()/FFI::cdef() synthesise the declared C functions as
         # METHODS on the \FFI object at runtime, so the compiled ext/ffi
         # class the analyser reflects carries no open()/close(). PosixBackend's
-        # controlling-terminal arm calls exactly those two on candy-pty's
+        # controlling-terminal arm calls exactly those two on sugar-pty's
         # Libc::lib() handle, whose cdef declares `int open(const char*, int)`
         # and `int close(int)` -- a genuine false positive, not a typing defect.
         # A stubFile was tried first and is a no-op here: with ext-ffi LOADED

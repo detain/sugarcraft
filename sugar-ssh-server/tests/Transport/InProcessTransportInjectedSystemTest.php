@@ -72,7 +72,7 @@ final class InProcessTransportInjectedSystemTest extends TestCase
         // No-arg construction must not throw — PtySystemFactory::new()
         // returns PosixPtySystem on every POSIX host (Linux/Darwin/BSD/Solaris).
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('Default resolution throws on Windows; covered separately in candy-pty.');
+            $this->markTestSkipped('Default resolution throws on Windows; covered separately in sugar-pty.');
         }
         $transport = new InProcessTransport();
         $this->assertInstanceOf(InProcessTransport::class, $transport);

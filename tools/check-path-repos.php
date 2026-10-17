@@ -401,7 +401,7 @@ foreach ($libs as $manifestPath) {
  * Returns depSlug => path-string, where the path records the first chain that
  * introduced the dep (e.g. "sugar-widgets -> sugar-forms", a root test edge is
  * marked "[require-dev]") for actionable reporting. Cycles (candy-core ⇄
- * candy-pty) are handled via the visited set.
+ * sugar-pty) are handled via the visited set.
  *
  * @param array<string, array{devDeps:array<string,string>, testDeps:array<string,string>}> $libData
  * @return array<string, string>
@@ -730,7 +730,7 @@ if ($unused) {
             // Would the dep still be pulled in if we dropped THIS direct require?
             // Reachable from every OTHER production require plus every require-dev
             // root. The lib's own edge to the dep is removed from the graph too —
-            // otherwise a cycle back through this lib (e.g. candy-core ⇄ candy-pty)
+            // otherwise a cycle back through this lib (e.g. candy-core ⇄ sugar-pty)
             // would re-traverse the very edge we are hypothetically deleting and
             // falsely report the dep as still reachable. In-set ⇒ keep the repo
             // entry (only drop `require`); absent ⇒ the repo entry is safe to drop.

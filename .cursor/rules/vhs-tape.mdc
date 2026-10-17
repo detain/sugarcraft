@@ -11,5 +11,5 @@ alwaysApply: false
 - Body: `Type "php examples/<demo>.php"` → `Enter` → `Sleep 2s` → keys → `Sleep 1s`.
 - Output `<slug>/.vhs/<demo>.gif`; embed via `https://raw.githubusercontent.com/detain/sugarcraft/master/<slug>/.vhs/<demo>.gif`.
 - DO NOT commit rendered GIFs — the `commit` job in `.github/workflows/vhs.yml` does it.
-- `all=(...)` array in `vhs.yml` is HAND-MAINTAINED — missing entry = no GIF. Non-visual libs (`candy-pty`, FFI, codecs) EXEMPT — note in PR body.
+- `all=(...)` array in `vhs.yml` is HAND-MAINTAINED — missing entry = no GIF. Non-visual libs (`sugar-pty`, FFI, codecs) EXEMPT — note in PR body.
 - If `composer.json` needs `ext-ssh2`/`ext-gd`/`ext-ffi`/`ext-pdo_sqlite`, add it to `extensions:` in `vhs.yml`.

@@ -110,7 +110,7 @@ candy-flappy/bin/       # candy-flappy CLI entry point (composer bin)
 
 | # | Title | Description | Why it matters | Source repo | Implementation ideas | Complexity | Impact |
 |---|-------|-------------|----------------|------------|---------------------|------------|--------|
-| 2 | Audio feedback | Play sounds on flap/score/crash | Classic Flappy Bird had distinct sounds for each action; completes the arcade feel | `docs/repo_map/sugarcraft_candy-flappy.md:606` | Use `exec('printf \\a')` for terminal bell on flap, distinct sequences for score (+1 point sound) and crash; platform via `candy-pty` for cross-platform | Low | High |
+| 2 | Audio feedback | Play sounds on flap/score/crash | Classic Flappy Bird had distinct sounds for each action; completes the arcade feel | `docs/repo_map/sugarcraft_candy-flappy.md:606` | Use `exec('printf \\a')` for terminal bell on flap, distinct sequences for score (+1 point sound) and crash; platform via `sugar-pty` for cross-platform | Low | High |
 | 3 | Pause/resume | Space bar toggles pause when alive | Allows player to take a break mid-game without losing progress | `docs/repo_map/sugarcraft_candy-flappy.md:612` | Add `paused` field to Game; when paused, `update(TickMsg)` returns `[self, null]` (no advance); render "PAUSED" overlay; 'p' key toggles | Low | Medium |
 
 ### Medium
@@ -208,7 +208,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 
 4. **"Adding sound to TUI games" how-to**: Using candy-flappy's (future) audio support as the example, covering:
    - Platform-independent sound via `exec('printf \\a')`
-   - Using candy-pty for more sophisticated audio
+   - Using sugar-pty for more sophisticated audio
    - Timing sounds with the game loop
 
 ---

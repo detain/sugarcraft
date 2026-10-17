@@ -8,7 +8,7 @@ paths:
 
 - Tests at `<slug>/tests/<Class>Test.php`, namespace `<NS>\<Sub>\Tests\…`.
 - `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` — see `candy-core/phpunit.xml`. Every public method needs ≥1 test.
-- **Loop-pinning bootstrap**: a suite that bounds waits with timers on the shared `Loop::get()` sets `bootstrap="tests/bootstrap.php"` and calls `\SugarCraft\Testing\LoopPin::pinStableClock()` there (`sugar-async`, `sugar-image`, `candy-pty`, `sugar-testing`, `sugar-crush`). Under ext-uv, timer deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue and fires on the first tick; `StreamSelectLoop` refreshes at arm time. Mechanism in `sugar-testing/src/LoopPin.php`, measurements on `candy-core/src/Program.php`.
+- **Loop-pinning bootstrap**: a suite that bounds waits with timers on the shared `Loop::get()` sets `bootstrap="tests/bootstrap.php"` and calls `\SugarCraft\Testing\LoopPin::pinStableClock()` there (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `sugar-crush`). Under ext-uv, timer deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue and fires on the first tick; `StreamSelectLoop` refreshes at arm time. Mechanism in `sugar-testing/src/LoopPin.php`, measurements on `candy-core/src/Program.php`.
 
 **Patterns** (`sugar-widgets/tests/`, `candy-core/tests/`, `sugar-vterm/tests/`):
 - **Snapshot byte** — call `view()`, assert raw `\x1b[1m`-style SGR strings. Don't abstract.
@@ -21,8 +21,8 @@ paths:
 
 **Stream-write gotcha**: don't `ftruncate; rewind;` between writes — slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `candy-core/tests/RendererTest.php`).
 
-**FFI tests** (`candy-pty/tests/`): structural tests run unconditionally; syscall round-trips call `requirePtySyscalls()` as the FIRST line and skip on FFI-less CI.
+**FFI tests** (`sugar-pty/tests/`): structural tests run unconditionally; syscall round-trips call `requirePtySyscalls()` as the FIRST line and skip on FFI-less CI.
 
-**Hang watchdog** (`candy-pty/tests/`): `tests/bootstrap.php` calls `HangWatchdog::install()` AFTER `LoopPin::pinStableClock()`. The out-of-process watchdog (`candy-pty/tests/Support/hang-watchdog.php`) bounds each test and SIGKILLs the runner with a forensic dump, because `PosixPump::pump()`/`MultiPump::run()` style loops can only hang, never fail. `candy-pty/tests/Support/SharedLoopResidue.php` throws on timers/streams left armed on the shared `Loop::get()`.
+**Hang watchdog** (`sugar-pty/tests/`): `tests/bootstrap.php` calls `HangWatchdog::install()` AFTER `LoopPin::pinStableClock()`. The out-of-process watchdog (`sugar-pty/tests/Support/hang-watchdog.php`) bounds each test and SIGKILLs the runner with a forensic dump, because `PosixPump::pump()`/`MultiPump::run()` style loops can only hang, never fail. `sugar-pty/tests/Support/SharedLoopResidue.php` throws on timers/streams left armed on the shared `Loop::get()`.
 
 Run: `cd <slug> && composer install && vendor/bin/phpunit`. A bare `composer update` swaps symlinked siblings for Packagist copies — check with `php scripts/refresh-deps.php --status`.

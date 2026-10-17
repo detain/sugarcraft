@@ -66,7 +66,7 @@ declare(strict_types=1);
  * count reds the other way. Unaccounted findings exit 1.
  *
  * WHAT A ROW MEANS, per kind (rule 7 — this is the judgement record, not an
- * exemption list): for the two `candy-pty` rows and the `candy-core` row, the
+ * exemption list): for the two `sugar-pty` rows and the `candy-core` row, the
  * same REPORT sugar-crush's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
  * a package this repo's CI does not own, so the row buys visibility, not
  * silence. For the three `sugar-dashboard`/`sugar-video` rows, E366 shipped a
@@ -113,14 +113,14 @@ final class CheckChildLifetimes
                 . 'because the handle goes to is_resource() first. Spec is 0,1,2 only. Same site '
                 . 'sugar-crush\'s ACCOUNTED_FOR_IN_LIBS reports — candy-core owns the fix.',
         ],
-        'candy-pty/src/Spawn.php::proc' => [
+        'sugar-pty/src/Spawn.php::proc' => [
             'count' => 1,
             'reason' => 'the PTY child, whose three stdio descriptors are all the one open slave '
                 . 'stream; the handle is kept for the life of the pty, so silence above fd 2 is '
                 . 'the shape of the library, not an oversight in it. Report row — NOT FIXABLE '
                 . 'FROM REPO GUARD; mirrors sugar-crush\'s ACCOUNTED_FOR_IN_LIBS.',
         ],
-        'candy-pty/src/Posix/PosixProcess.php::spawn' => [
+        'sugar-pty/src/Posix/PosixProcess.php::spawn' => [
             'count' => 1,
             'reason' => 'the same shape one layer down: the spec names fd 0 as a file and routes '
                 . '1 and 2 to pipes or the real STDOUT/STDERR — the author thought about '

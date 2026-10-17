@@ -24,7 +24,7 @@ use SugarCraft\Pty\Pty;
  * headless CI has no controlling terminal AT ALL, so "child cannot open
  * /dev/tty" passes there with or without the fix — the canonical fixture
  * shaped like the property rather than the bug. The PTY test allocates a
- * REAL controlling terminal via candy-pty, runs the trait inside it, and
+ * REAL controlling terminal via sugar-pty, runs the trait inside it, and
  * fails the containment claim against a terminal that genuinely exists.
  * Its environment guards are the same ones ForkedChildTest already relies
  * on in every green run of this suite — if one ever fires, SuiteSkipRoster
@@ -523,7 +523,7 @@ final class InteractivePromptContainmentTest extends TestCase
         // any of these already reddens SuiteSkipRoster through that file,
         // so these skips never fire in a supported run of this suite.
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
         if (!\extension_loaded('ffi')) {
             $this->markTestSkipped('ext-ffi is required to allocate the pty.');

@@ -21,30 +21,30 @@ Three loose ends from phase P6:
 
 **Create:**
 
-- `candy-pty/examples/multi-pump.php` — spawn two shells; tee each
+- `sugar-pty/examples/multi-pump.php` — spawn two shells; tee each
   master to stdout with a prefix; quit on Ctrl-C.
-- `candy-pty/tests/PtyPoolReactLoopTest.php` — boots a ReactPHP loop,
+- `sugar-pty/tests/PtyPoolReactLoopTest.php` — boots a ReactPHP loop,
   acquires/releases from the pool, asserts no signal double-handling.
-- `candy-pty/tests/ExpectRecorderIntegrationTest.php` — `Expect` with
+- `sugar-pty/tests/ExpectRecorderIntegrationTest.php` — `Expect` with
   a `?Recorder` attached records a scripted dialog; `Player::play()`
   reproduces it.
 
 **Modify:**
 
-- `candy-pty/src/Expect.php` — add `withRecorder(?Recorder $r): self`
+- `sugar-pty/src/Expect.php` — add `withRecorder(?Recorder $r): self`
   via the `mutate()` helper. Calls to `send()` and matched `expect()`
   also call the recorder's `recordInputBytes()` and `recordOutput()`.
-- `candy-pty/src/Posix/MultiPump.php` — add an example reference in
+- `sugar-pty/src/Posix/MultiPump.php` — add an example reference in
   the class doc-comment.
-- `candy-pty/README.md` — add an "Multi-pump" section with the
+- `sugar-pty/README.md` — add an "Multi-pump" section with the
   example snippet.
-- `candy-pty/composer.json` — `require-dev` `sugarcraft/candy-vcr`
+- `sugar-pty/composer.json` — `require-dev` `sugarcraft/candy-vcr`
   (for the ExpectRecorder test); add path-repo if missing.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter "PtyPool|MultiPump|Expect"` green.
-- `php candy-pty/examples/multi-pump.php` runs interactively.
+- `cd sugar-pty && vendor/bin/phpunit --filter "PtyPool|MultiPump|Expect"` green.
+- `php sugar-pty/examples/multi-pump.php` runs interactively.
 - README "Multi-pump" section renders correctly.
 - `php tools/check-path-repos.php` green.
 

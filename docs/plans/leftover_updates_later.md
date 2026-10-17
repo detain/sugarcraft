@@ -242,7 +242,7 @@ short bullet list; treat them as backlog items, not sequenced steps.
 - BCE (P2.2), combining-char composition (P2.3), synchronized output 2026 (P2.4).
 - Kitty graphics + Sixel decode (P3) — strategic, see §6.
 
-### candy-pty
+### sugar-pty
 
 (See `plans/leftover_updates.md` for the full list; pulled out here too
 because research adds three items the PTY plan did not call out:)
@@ -637,7 +637,7 @@ to `proc_open()` and must be stored separately.
    reading JSON from stdin, echoing back. The existing
    `tests/Plugin/ExternalModuleTest.php` must round-trip against this
    fixture (not against mocks).
-4. Add `sugarcraft/candy-pty` to `sugar-dashboard/composer.json` `require`
+4. Add `sugarcraft/sugar-pty` to `sugar-dashboard/composer.json` `require`
    + path-repo.
 
 **Acceptance:** integration test `ExternalModuleRoundTripTest` boots a
@@ -918,7 +918,7 @@ are 1 PR each.
 
 **Group C — Per-lib feature work (parallel; each lib own PR series):**
 
-- candy-pty leftover items (see `plans/leftover_updates.md`).
+- sugar-pty leftover items (see `plans/leftover_updates.md`).
 - sugar-style features (Color string parsing, HSL, markup parser, etc.).
 - candy-bits Table sort/filter/paginate (Phase 2/3).
 - candy-prompt validators + fuzzy autocomplete.

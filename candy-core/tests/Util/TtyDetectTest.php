@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\TtyDetect;
  * ## The defect these tests exist for
  *
  * `isAtty()` used to derive its descriptor with `$fd = (int) $stream` and
- * hand that number to candy-pty. An `(int)` cast of a PHP stream yields its
+ * hand that number to sugar-pty. An `(int)` cast of a PHP stream yields its
  * RESOURCE ID, which is a different number from the file descriptor.
  * MEASURED, PHP 8.3.6, fresh CLI process: the resource ids of the three
  * standard streams are 1, 2 and 3 while the descriptors behind them are 0,

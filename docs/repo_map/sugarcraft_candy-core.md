@@ -349,7 +349,7 @@ Model::update() returns [Model, ?Cmd]
 
 8. **Subscription timers polling model** — Key subscriptions use a 0.1s polling interval (`addPeriodicTimer(0.1, ...)`). This is less efficient than event-driven key detection would be, though it reflects how terminal input works (polling the byte stream).
 
-9. **Windows FFI dependency** — Raw mode on Windows requires FFI (`candy-pty`'s `Kernel32Interface`). FFI can be disabled at compile time, and it has security implications.
+9. **Windows FFI dependency** — Raw mode on Windows requires FFI (`sugar-pty`'s `Kernel32Interface`). FFI can be disabled at compile time, and it has security implications.
 
 10. **No built-in logging/tracing** — Debug tip in README recommends `error_log()` to a file. No structured logging, no debug mode with frame timing information.
 
@@ -577,12 +577,12 @@ php-tui is a more complete TUI framework (widgets, layout, backend abstraction).
 | Feature | whisp | candy-core |
 |---|---|---|
 | Event loop | `socket_select()` + forking | ReactPHP |
-| PTY management | FFI-based PTY | candy-pty (separate) |
+| PTY management | FFI-based PTY | sugar-pty (separate) |
 | Signal handling | SIGHUP/SIGUSR2/SIGINT/SIGTERM | SIGINT/SIGWINCH/SIGTSTP/SIGCONT |
 | Process model | Fork per connection | Single process + ReactPHP |
 | Protocol | SSH (with crypto) | Terminal I/O |
 
-Whisp uses a similar event-driven pattern but for network I/O rather than terminal I/O. The PTY management patterns could inform candy-pty integration.
+Whisp uses a similar event-driven pattern but for network I/O rather than terminal I/O. The PTY management patterns could inform sugar-pty integration.
 
 ---
 
@@ -655,7 +655,7 @@ The cursor management patterns are identical. php-console-spinner's delta-timer 
 
 ### From whisp
 
-1. **FFI-based PTY management** — Whisp's FFI layer for `ioctl(TIOCSCTTY)`, `TIOCSWINSZ`, `grantpt()` is directly relevant to `candy-pty`. Could inform a tighter integration.
+1. **FFI-based PTY management** — Whisp's FFI layer for `ioctl(TIOCSCTTY)`, `TIOCSWINSZ`, `grantpt()` is directly relevant to `sugar-pty`. Could inform a tighter integration.
 
 2. **Process per connection model** — For very concurrent use cases (SSH server), fork-based concurrency is appropriate. For TUI, single process + ReactPHP is better.
 
@@ -943,7 +943,7 @@ This enables: "sidebar is 30% width" + "main + sidebar = terminal width" → sol
 
 ### whisp: FFI PTY Management
 
-`Pty::open()` uses `/dev/ptmx` master opening, then `ioctl(TIOCPTSNAME)` to get slave name, `grantpt()` for permission, `unlockpt()`. This is directly relevant to `candy-pty`. The cross-platform FFI approach (different constant sets for Linux vs macOS) is well-engineered.
+`Pty::open()` uses `/dev/ptmx` master opening, then `ioctl(TIOCPTSNAME)` to get slave name, `grantpt()` for permission, `unlockpt()`. This is directly relevant to `sugar-pty`. The cross-platform FFI approach (different constant sets for Linux vs macOS) is well-engineered.
 
 ### bubbleboxer: ModelMap Pattern
 

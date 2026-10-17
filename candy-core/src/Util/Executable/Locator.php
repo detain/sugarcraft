@@ -21,7 +21,7 @@ namespace SugarCraft\Core\Util\Executable;
  * (`ProcessContainment::locateOnPath()`, `ClaudeCodeMcpClient::resolveExecutable()`
  * and the `DetectsCapabilities` stat walk, the last pair of docblocks naming
  * the duplication on purpose) plus per-lib walkers in candy-core's own
- * `Editor`, candy-pty, sugar-dashboard and sugar-video. One class, one set of
+ * `Editor`, sugar-pty, sugar-dashboard and sugar-video. One class, one set of
  * rules, zero state.
  *
  * STATELESS BY CONTRACT: nothing here memoizes. A per-process cache of PATH

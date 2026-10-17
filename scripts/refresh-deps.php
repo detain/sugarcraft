@@ -186,7 +186,7 @@ $closureOf = static function (string $lib) use ($manifestOf, $siblingsIn): array
     }
 
     // A lib can reach ITSELF through a dependency's own requires (candy-core →
-    // candy-pty → candy-core). Injecting `../<self>` would be circular.
+    // sugar-pty → candy-core). Injecting `../<self>` would be circular.
     unset($seen[$lib]);
 
     return \array_keys($seen);

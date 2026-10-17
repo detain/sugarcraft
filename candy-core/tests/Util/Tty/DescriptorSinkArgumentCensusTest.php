@@ -53,7 +53,7 @@ use PHPUnit\Framework\TestCase;
  * the tree.
  *
  * WHAT IS TRUE NOW: it saw them only where they are spelled as a plain
- * function or as `Class::method`. Every call into candy-pty's FFI `Libc`
+ * function or as `Class::method`. Every call into sugar-pty's FFI `Libc`
  * binding -- `Libc::lib()->close($fd)`, `$libc->fcntl($masterFd, ...)`,
  * `self::libc()->dup($this->fd)` -- is a libc symbol taking a descriptor, and
  * not one of them was visible. The previous round's own fix added one of them
@@ -193,17 +193,17 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'candy-gifview, the app-package twin of the sugar-animation pin above.',
         ],
 
-        // ---- candy-pty ---------------------------------------------------
-        'candy-pty/src/Posix/PosixTermios.php::posix_isatty($this->fd)' => [
+        // ---- sugar-pty ---------------------------------------------------
+        'sugar-pty/src/Posix/PosixTermios.php::posix_isatty($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. $this->fd is the `int $fd` constructor parameter -- a descriptor the '
             . 'caller supplied, never a cast of a stream.',
         ],
-        'candy-pty/src/Posix/SttyTermios.php::posix_isatty($this->fd)' => [
+        'sugar-pty/src/Posix/SttyTermios.php::posix_isatty($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same shape and same reason as PosixTermios.',
         ],
-        'candy-pty/src/SizeIoctl.php::posix_isatty($fd)' => [
+        'sugar-pty/src/SizeIoctl.php::posix_isatty($fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The `int $fd` parameter of query(). This is the guard every other member '
             . 'of the family ultimately trips over when handed a resource id, which is why the '
@@ -213,7 +213,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
 
         // ---- the METHOD spelling ------------------------------------------
         //
-        // Every row below is a call on candy-pty's FFI `Libc` handle, i.e. a
+        // Every row below is a call on sugar-pty's FFI `Libc` handle, i.e. a
         // real libc symbol declared in {@see \SugarCraft\Pty\Libc::cdef()}
         // with a file descriptor as its first parameter. The census could not
         // see any of them until this round: it reported a sink only in its
@@ -246,39 +246,39 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'by the previous round INSIDE the blind spot that same round documented.',
         ],
 
-        // candy-pty/ControllingTerminal. NOTE for anyone re-deriving: this
+        // sugar-pty/ControllingTerminal. NOTE for anyone re-deriving: this
         // file ALSO carries a doc-comment mention of the same symbol, and the
         // backlog counted the doc-comment while missing the live call one
         // screen below it. Token-based scanning does not have that problem --
         // T_DOC_COMMENT is never tokenised into a call.
-        'candy-pty/src/ControllingTerminal.php::->ioctl($fd)' => [
+        'sugar-pty/src/ControllingTerminal.php::->ioctl($fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. claim()\'s `int $fd` parameter, handed straight to TIOCSCTTY.',
         ],
 
-        // candy-pty/PosixMasterPty. `$this->fd` is the promoted `int $fd`
+        // sugar-pty/PosixMasterPty. `$this->fd` is the promoted `int $fd`
         // constructor parameter; `$this->anchorSlaveFd` is set only by
         // attachAnchorSlaveFd(int $fd) and initialised to the -1 sentinel.
-        'candy-pty/src/Posix/PosixMasterPty.php::->close($this->anchorSlaveFd)' => [
+        'sugar-pty/src/Posix/PosixMasterPty.php::->close($this->anchorSlaveFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. attachAnchorSlaveFd() closing the anchor it is replacing.',
         ],
-        'candy-pty/src/Posix/PosixMasterPty.php::->close($this->anchorSlaveFd) #2' => [
+        'sugar-pty/src/Posix/PosixMasterPty.php::->close($this->anchorSlaveFd) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The same field released on close(). A SECOND site spelled exactly like '
             . 'the one above -- before the ordinal existed these two collapsed into one row and '
             . 'only the later survived.',
         ],
-        'candy-pty/src/Posix/PosixMasterPty.php::->dup($this->fd)' => [
+        'sugar-pty/src/Posix/PosixMasterPty.php::->dup($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The promoted constructor parameter. `dup` is one of the five symbols the '
             . 'backlog\'s hand-written alternation could not express.',
         ],
-        'candy-pty/src/Posix/PosixMasterPty.php::->close($this->fd)' => [
+        'sugar-pty/src/Posix/PosixMasterPty.php::->close($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same field, released on close().',
         ],
-        'candy-pty/src/Posix/PosixMasterPty.php::->close($stableFd)' => [
+        'sugar-pty/src/Posix/PosixMasterPty.php::->close($stableFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The return value of the `dup($this->fd)` taken earlier in the same '
             . 'close(), released again once the original has been closed. (Cited by what it IS, '
@@ -294,91 +294,91 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'guarded by `>= 0`, and never a cast of a PHP stream.',
         ],
 
-        // candy-pty/PosixPtySystem. `$masterFd` comes from openPtyMaster(),
+        // sugar-pty/PosixPtySystem. `$masterFd` comes from openPtyMaster(),
         // i.e. posix_openpt(); `$slaveFd` from `$libc->open($slavePath, ...)`;
         // `$slaveFdPtr[0]` is openpty()'s out-parameter. All three are libc
         // return values, never a cast of a PHP stream.
-        'candy-pty/src/Posix/PosixPtySystem.php::->fcntl($masterFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->fcntl($masterFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. FD_CLOEXEC on the freshly opened master.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->close($masterFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->close($masterFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Error-path cleanup after the FD_CLOEXEC call above failed.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->grantpt($masterFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->grantpt($masterFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same descriptor.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->close($masterFd) #2' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->close($masterFd) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Error-path cleanup after grantpt() failed.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->unlockpt($masterFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->unlockpt($masterFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same descriptor.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->close($masterFd) #3' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->close($masterFd) #3' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Error-path cleanup after unlockpt() failed.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->fcntl($slaveFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->fcntl($slaveFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. FD_CLOEXEC on the slave descriptor `$libc->open($slavePath, ...)` returned.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->close($slaveFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->close($slaveFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Error-path cleanup for that slave descriptor.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->close($slaveFdPtr[0])' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->close($slaveFdPtr[0])' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. openpty()\'s slave out-parameter, an `int[1]` allocated through FFI. An '
             . 'ARRAY ELEMENT operand -- the shape the FIRST census of this family could not '
             . 'express and dropped in silence.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->ptsname_r($masterFd)' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->ptsname_r($masterFd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same master descriptor.',
         ],
-        'candy-pty/src/Posix/PosixPtySystem.php::->close($masterFd) #4' => [
+        'sugar-pty/src/Posix/PosixPtySystem.php::->close($masterFd) #4' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Error-path cleanup after ptsname_r() failed.',
         ],
 
-        // candy-pty/PosixTermios. `$this->fd` is the `int $fd` constructor
+        // sugar-pty/PosixTermios. `$this->fd` is the `int $fd` constructor
         // parameter -- the same field the posix_isatty() row above judges.
-        'candy-pty/src/Posix/PosixTermios.php::->tcgetattr($this->fd)' => [
+        'sugar-pty/src/Posix/PosixTermios.php::->tcgetattr($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The constructor\'s descriptor. `tcgetattr` is another symbol absent from '
             . 'the backlog\'s alternation.',
         ],
-        'candy-pty/src/Posix/PosixTermios.php::->tcsetattr($this->fd)' => [
+        'sugar-pty/src/Posix/PosixTermios.php::->tcsetattr($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same field, applying a termios snapshot.',
         ],
 
-        // candy-pty/SizeIoctl. The ioctl pair are the `int $fd` parameters of
+        // sugar-pty/SizeIoctl. The ioctl pair are the `int $fd` parameters of
         // static helpers that take the FFI handle alongside; the dup/close
         // pair lives inside the Darwin stty(1) read fallback that one of
         // those ioctls falls back to (run 33796495350's arm64 ABI defect),
         // where close releases exactly what dup returned, in the same scope.
-        'candy-pty/src/SizeIoctl.php::->ioctl($fd)' => [
+        'sugar-pty/src/SizeIoctl.php::->ioctl($fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. setSizeViaLibc()\'s `int $fd` parameter (TIOCSWINSZ).',
         ],
-        'candy-pty/src/SizeIoctl.php::->ioctl($fd) #2' => [
+        'sugar-pty/src/SizeIoctl.php::->ioctl($fd) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. getSizeViaLibc()\'s `int $fd` parameter (TIOCGWINSZ).',
         ],
-        'candy-pty/src/SizeIoctl.php::->dup($fd)' => [
+        'sugar-pty/src/SizeIoctl.php::->dup($fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. sttyGetSize()\'s `int $fd` parameter -- the same number the ioctl above '
             . 'was just attempted with. The dup exists because the stty(1) child addresses the '
-            . 'terminal through /dev/fd/N after exec(), and an FD_CLOEXEC-marked fd (candy-pty\'s '
+            . 'terminal through /dev/fd/N after exec(), and an FD_CLOEXEC-marked fd (sugar-pty\'s '
             . 'own pty master is one on both platforms) is gone from the child\'s table by then; '
             . 'dup(2) clears the close-on-exec flag on the new descriptor.',
         ],
-        'candy-pty/src/SizeIoctl.php::->close($dup)' => [
+        'sugar-pty/src/SizeIoctl.php::->close($dup)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The return value of the `dup($fd)` line above, released in a `finally` so '
             . 'the alias cannot outlive one stty round-trip. Local to sttyGetSize(), guarded by '
@@ -804,7 +804,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         $fn     = DescriptorSinkScanner::FUNCTION_SINKS[0];
         $static = DescriptorSinkScanner::STATIC_SINKS[1];
         // Taken from the derived roster rather than typed, so that a symbol
-        // leaving candy-pty's cdef cannot leave this fixture quietly
+        // leaving sugar-pty's cdef cannot leave this fixture quietly
         // exercising a name the scanner no longer looks for.
         $method = DescriptorSinkScanner::methodSinks()[0];
         self::assertNotSame('', $method, 'the cdef yielded no fd-first symbol at all');
@@ -943,11 +943,11 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
     }
 
     /**
-     * The method-sink roster is READ OUT OF candy-pty's cdef, not typed here.
+     * The method-sink roster is READ OUT OF sugar-pty's cdef, not typed here.
      *
      * This family's recurring failure is a hand-written list of the cases its
      * author already had. The list this arm replaces was written into the
-     * backlog with `read`, `write` and `dup2` in it -- three symbols candy-pty
+     * backlog with `read`, `write` and `dup2` in it -- three symbols sugar-pty
      * does not declare -- and without `grantpt`, `unlockpt`, `ptsname_r`,
      * `tcgetattr` or `tcsetattr`, which it does and which are fd-first. So the
      * roster is derived, and this test is the derivation's control.
@@ -986,7 +986,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         // `fchdir(int)`, it answered `['close']` and dropped the other three
         // without a sound. `fildes` is POSIX's own spelling for `fsync`,
         // `ftruncate` and `fstat`; `oldfd`/`newfd` are the `dup` family's;
-        // and candy-pty already declares `dup`. A descriptor sink missing
+        // and sugar-pty already declares `dup`. A descriptor sink missing
         // from this roster is every call site of it missing from the census.
         self::assertSame(
             ['dup3', 'fsync'],
@@ -998,8 +998,8 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         );
 
         // And the REAL cdef, through the same parser. Asserted by membership
-        // rather than by set equality: candy-pty owns that file, and a census
-        // in candy-core that reds because candy-pty declared a new symbol
+        // rather than by set equality: sugar-pty owns that file, and a census
+        // in candy-core that reds because sugar-pty declared a new symbol
         // would be reporting the wrong thing. What must NOT drift is the
         // discrimination -- fd-first in, everything else out.
         $real = DescriptorSinkScanner::methodSinks();
@@ -1011,7 +1011,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         foreach (['open', 'waitpid', 'setsid', 'posix_openpt', 'cfmakeraw'] as $rejected) {
             self::assertNotContains($rejected, $real, $rejected . ' is not fd-first but is in the roster');
         }
-        // The three the hand-written alternation invented. If candy-pty ever
+        // The three the hand-written alternation invented. If sugar-pty ever
         // declares one of them fd-first this assertion is the right place to
         // find out, because a new sink means new roster rows.
         foreach (['read', 'write', 'dup2'] as $imaginary) {

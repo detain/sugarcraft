@@ -11,12 +11,12 @@ P0–P5 acceptance criteria from the original PTY plan hold on Windows.
 
 ## Files (rough sketch)
 
-- `candy-pty/src/Windows/ConPtySystem.php`
-- `candy-pty/src/Windows/ConPtyPair.php`
-- `candy-pty/src/Windows/ConPtyMaster.php`
-- `candy-pty/src/Windows/ConPtySlave.php`
-- `candy-pty/src/Windows/ConPtyChild.php`
-- `candy-pty/src/Windows/Kernel32.php` — FFI cdef for `CreatePseudoConsole`,
+- `sugar-pty/src/Windows/ConPtySystem.php`
+- `sugar-pty/src/Windows/ConPtyPair.php`
+- `sugar-pty/src/Windows/ConPtyMaster.php`
+- `sugar-pty/src/Windows/ConPtySlave.php`
+- `sugar-pty/src/Windows/ConPtyChild.php`
+- `sugar-pty/src/Windows/Kernel32.php` — FFI cdef for `CreatePseudoConsole`,
   `ResizePseudoConsole`, `ClosePseudoConsole`, `CreateProcessW`,
   `STARTUPINFOEXW`, `InitializeProcThreadAttributeList`,
   `UpdateProcThreadAttribute`.

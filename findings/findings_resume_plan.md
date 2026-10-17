@@ -10,11 +10,11 @@ skips/flake), `5f33c4b7` (sugar-mouse contains, sugar-ssh-server StreamHelper
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-scriptui), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
 sugar-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
-(candy-pty). sugar-style plan items were all verified
+(sugar-pty). sugar-style plan items were all verified
 misreferenced/N-A (see plan_candy-sprinkles.md annotations).
 Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
 "Future work (deferred pre-1.0)" sections: candy-git-server 6.1/6.2/7.5-7.9,
-candy-pty 8.1/8.3/8.4, candy-sql 3.1/3.3/3.4/5.1 (+1.8/0.25
+sugar-pty 8.1/8.3/8.4, candy-sql 3.1/3.3/3.4/5.1 (+1.8/0.25
 react-pg WONTFIX, react/mysql stable pin WONTFIX — no 0.7 tag),
 sugar-readline 3.2 (vi text objects, needs sugar-forms VimAction).
 ## ⚠️ CONCURRENCY RULES — READ BEFORE SPAWNING ANY AGENT
@@ -159,20 +159,20 @@ For each phase:
 
 ### Group 0-B (3 agents)
 
-#### 0.10 🔴 candy-pty: FD reuse race (Item 1.1)
+#### 0.10 🔴 sugar-pty: FD reuse race (Item 1.1)
 
-**Plan:** `findings/plan_candy-pty.md` — Item 1.1
+**Plan:** `findings/plan_sugar-pty.md` — Item 1.1
 **Issue:** `PosixMasterPty::close()` closes FD directly without `libc::dup()` first — race condition
 **Fix:** Add `libc::dup($this->fd)` before closing to prevent FD reuse
-**Files:** `candy-pty/src/Posix/PosixMasterPty.php:244-251`
+**Files:** `sugar-pty/src/Posix/PosixMasterPty.php:244-251`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.11 🔴 candy-pty: Encoding artifact (Item 2.1)
+#### 0.11 🔴 sugar-pty: Encoding artifact (Item 2.1)
 
-**Plan:** `findings/plan_candy-pty.md` — Item 2.1
+**Plan:** `findings/plan_sugar-pty.md` — Item 2.1
 **Issue:** `Expect.php:389` — `Mirrors charmbracelet/m泡泡/expect.Exp.` — Chinese chars in comment
 **Fix:** Remove the artifact, correct the comment
-**Files:** `candy-pty/src/Expect.php:389`
+**Files:** `sugar-pty/src/Expect.php:389`
 **Agent:** Same coder agent as 0.10 (grouped — same lib)
 
 #### 0.12 🔴 candy-vcr: Undefined $cassette variable (Item 1.1)
@@ -1285,7 +1285,7 @@ Same verification as previous phases.
 | `plan_sugar-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
 | `plan_sugar-image.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
 | `plan_sugar-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |
-| `plan_candy-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
+| `plan_sugar-pty.md` | 3.1-3.5, 4.1-4.4, 5.1-5.4, 6.1-6.2, 7.1-7.5, 8.1-8.4 | O_RDWR duplication, buffer trim, tight polling, mutable session, expect patterns, Darwin stty, value objects, async patterns |
 | `plan_candy-sql.md` | 2.1-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.1 | isIgnorableError codes, AdminQueryCache injectable, atomic operations, DsnParser, query cancellation, timeout |
 | `plan_candy-git-server.md` | 3.1-3.2, 4.1-4.5, 5.1-5.2, 6.1-6.2, 7.1-7.9 | SSH key validation, git error output, config properties, async patterns |
 | `plan_candy-scriptui.md` | 2.2-2.3, 3.1-3.2, 4.1, 5.1-5.3 | Hex color validation, terminate closed, php://memory limit, ImagickRasterizer cache, CLI options |

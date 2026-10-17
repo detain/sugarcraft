@@ -19,7 +19,7 @@ Create a detailed implementation plan addressing all 15 findings from `/home/sit
 | sugar-gallery is renderer-agnostic by design | PosterCard holds pre-rendered poster bytes; it never decodes images. Image rendering is delegated to sugar-image (ext-gd) | `findings/sugar-gallery.md:L10` |
 | Gallery.php and FFIDecoder.php do not exist | Current library has PosterCard, Rail, PosterGrid only. No FFI decoder, no file-system navigation, no chdir() | `glob:sugar-gallery/src/**/*.php` |
 | No 1:1 upstream port | MATCHUPS.md states this is an original SugarCraft component inspired by bubbles' list/viewport and phlix web media grid | `docs/MATCHUPS.md:L51` |
-| FFI patterns exist in candy-pty | PosixTermios shows proper FFI allocation/try-finally pattern | `candy-pty/src/Posix/PosixTermios.php:L39-L44` |
+| FFI patterns exist in sugar-pty | PosixTermios shows proper FFI allocation/try-finally pattern | `sugar-pty/src/Posix/PosixTermios.php:L39-L44` |
 | Image validation in sugar-image | ImageSource.fromFile() validates via getimagesize() before decode | `sugar-image/src/ImageSource.php:L53-L56` |
 
 ---
@@ -185,15 +185,15 @@ If FFI features are ever considered in the future, add constraint:
 - **2026-06-30**: The audit findings describe a `Gallery.php` and `FFIDecoder.php` that do not exist. The sugar-gallery library is intentionally renderer-agnostic per CALIBER_LEARNINGS.md.
 - **2026-06-30**: MATCHUPS.md confirms this is an original SugarCraft component, not a 1:1 port of charmbracelet/bubbles/gallery.
 - **2026-06-30**: Image rendering is handled by sugar-image (ext-gd based); file browsing would belong in a separate library.
-- **2026-06-30**: FFI patterns are established in candy-pty (PosixTermios) and can be referenced if FFI decoding is ever implemented.
+- **2026-06-30**: FFI patterns are established in sugar-pty (PosixTermios) and can be referenced if FFI decoding is ever implemented.
 
 ---
 
 ## Appendix: Reference Patterns
 
-### FFI Best Practices (from candy-pty)
+### FFI Best Practices (from sugar-pty)
 
-**Source:** `candy-pty/src/Posix/PosixTermios.php:L39-L44`
+**Source:** `sugar-pty/src/Posix/PosixTermios.php:L39-L44`
 
 ```php
 public function __construct(int $fd)

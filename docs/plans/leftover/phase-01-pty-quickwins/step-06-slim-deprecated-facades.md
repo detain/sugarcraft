@@ -1,4 +1,4 @@
-# Step 01.06 — Slim the deprecated candy-pty facades
+# Step 01.06 — Slim the deprecated sugar-pty facades
 
 **Source:** `leftover_updates.md` P4-LO-01
 **Branch:** `ai/slim-pty-facades`
@@ -6,7 +6,7 @@
 
 ## Deliverable
 
-`candy-pty/src/{Pty,Spawn,Child,Master}.php` are marked `@deprecated`
+`sugar-pty/src/{Pty,Spawn,Child,Master}.php` are marked `@deprecated`
 but still contain non-trivial logic (the EINTR retry loop in
 `Pty::read()`, etc.) instead of pure delegation. Reduce each to a 5-line
 shim that delegates to the canonical `Posix\Posix*` class.
@@ -15,13 +15,13 @@ shim that delegates to the canonical `Posix\Posix*` class.
 
 **Modify:**
 
-- `candy-pty/src/Pty.php` — every public method delegates to the
+- `sugar-pty/src/Pty.php` — every public method delegates to the
   equivalent on `\SugarCraft\Pty\Posix\PosixPtySystem` or
   `\SugarCraft\Pty\Posix\PosixMasterPty`. The `read()` loop lives
   in `PosixMasterPty::read()` already; remove the duplicate body.
-- `candy-pty/src/Spawn.php` — delegate to `PosixSlavePty`.
-- `candy-pty/src/Child.php` — delegate to `PosixChild`.
-- `candy-pty/src/Master.php` — delegate to `PosixMasterPty`. Confirm
+- `sugar-pty/src/Spawn.php` — delegate to `PosixSlavePty`.
+- `sugar-pty/src/Child.php` — delegate to `PosixChild`.
+- `sugar-pty/src/Master.php` — delegate to `PosixMasterPty`. Confirm
   whether Master is needed at all; if no callers, mark for deletion
   in a follow-up.
 
@@ -31,11 +31,11 @@ public surface is identical.
 
 ## Acceptance
 
-- `wc -l candy-pty/src/{Pty,Spawn,Child,Master}.php` totals ≤120 LOC
+- `wc -l sugar-pty/src/{Pty,Spawn,Child,Master}.php` totals ≤120 LOC
   across the four files.
 - Each facade still has its `@deprecated since v0.x, use <new path>`
   doc-block.
-- candy-pty + candy-core + candy-scriptui + sugar-ssh-server + candy-vcr full
+- sugar-pty + candy-core + candy-scriptui + sugar-ssh-server + candy-vcr full
   suites green.
 - `grep -rn "use SugarCraft\\\\Pty\\\\Pty;\|use SugarCraft\\\\Pty\\\\Spawn;" /home/sites/sugarcraft/*/src`
   — confirm any remaining callers still get correct behaviour (they

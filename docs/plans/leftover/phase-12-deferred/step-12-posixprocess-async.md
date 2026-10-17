@@ -14,16 +14,16 @@ users. Layered on top of `proc_get_status` polling.
 
 **Modify:**
 
-- `candy-pty/src/Posix/PosixProcess.php`.
-- `candy-pty/composer.json` — `require-dev` `react/promise`.
+- `sugar-pty/src/Posix/PosixProcess.php`.
+- `sugar-pty/composer.json` — `require-dev` `react/promise`.
 
 ## Tests
 
-- `candy-pty/tests/Posix/PosixProcessPromiseTest.php`.
+- `sugar-pty/tests/Posix/PosixProcessPromiseTest.php`.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter PosixProcessPromise` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter PosixProcessPromise` green.
 
 ---
 

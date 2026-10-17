@@ -127,7 +127,7 @@ final class ScreenHandler implements SubparamsAwareHandler
     public array $replies = [];
 
     /**
-     * Backlog cap for {@see $replies}: hostile streams (candy-pty renders
+     * Backlog cap for {@see $replies}: hostile streams (sugar-pty renders
      * untrusted program output) can spam queries nobody drains, and a
      * pull queue has no io.Pipe-style write blocking. Drop-oldest ring.
      */

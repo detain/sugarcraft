@@ -38,7 +38,7 @@ Check `.github/workflows/`:
 - **`vhs.yml`** — **hand-maintained** matrix at the `all=(...)` array.
   If the step added or renamed a `.vhs/*.tape` file, the matrix MUST
   be updated or the GIF will never re-render. (CLAUDE.md "Gotchas".)
-- **`pty-matrix.yml`** — only relevant if the step touched candy-pty.
+- **`pty-matrix.yml`** — only relevant if the step touched sugar-pty.
 - **`scripts/affected-libs.php`** — `WINDOWS_LIBS` / `MACOS_LIBS` pools
   are hand-maintained. If the step touches an OS-specific code path
   for the first time, add the lib to the relevant pool. **Skip macOS
@@ -65,7 +65,7 @@ For every touched lib:
 cd <lib> && composer install --quiet && vendor/bin/phpunit
 ```
 
-Use the PHPUnit watchdog (see brief) for candy-pty / sugar-ssh-server /
+Use the PHPUnit watchdog (see brief) for sugar-pty / sugar-ssh-server /
 candy-vcr.
 
 ## Output

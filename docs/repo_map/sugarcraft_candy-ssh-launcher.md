@@ -16,7 +16,7 @@
 
 - **Upstream:** `charmbracelet/wishlist` (Go, ~700 stars)
 
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-widgets`, `sugarcraft/candy-pty`, `sugarcraft/sugar-style`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-mouse`, `sugarcraft/sugar-spring`, `sugarcraft/sugar-colorprofile`
+- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-widgets`, `sugarcraft/sugar-pty`, `sugarcraft/sugar-style`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-mouse`, `sugarcraft/sugar-spring`, `sugarcraft/sugar-colorprofile`
 
 ---
 
@@ -192,7 +192,7 @@ If these are added, they would live in a future `sugar-discovery` leaf library.
 
 candy-ssh-launcher is a **consumer** of `sugar-ssh-server` (the SugarCraft port of `charmbracelet/wish`). However, v1 of candy-ssh-launcher does NOT run an SSH server — it runs as a local CLI tool that launches `ssh` as a subprocess via `pcntl_exec`.
 
-The `sugar-ssh-server` dependency exists for potential future SSH-server TUI mode (`ssh user@host` to connect and see the wishlist picker over SSH). In v1, the `candy-pty` dependency is used only for `RawMode` support in the picker.
+The `sugar-ssh-server` dependency exists for potential future SSH-server TUI mode (`ssh user@host` to connect and see the wishlist picker over SSH). In v1, the `sugar-pty` dependency is used only for `RawMode` support in the picker.
 
 ### Process replacement vs proxying
 
@@ -330,7 +330,7 @@ Provides SSH-based authentication, encrypted KV store, and cloud filesystem. Not
 
 ### `sugar-ssh-server` (SugarCraft port of charmbracelet/wish)
 
-SSH server middleware framework. candy-ssh-launcher declares it as a dependency (via `candy-core`, `candy-pty`) but does not invoke its SSH server capabilities in v1. The dependency exists for future SSH-server TUI mode.
+SSH server middleware framework. candy-ssh-launcher declares it as a dependency (via `candy-core`, `sugar-pty`) but does not invoke its SSH server capabilities in v1. The dependency exists for future SSH-server TUI mode.
 
 ---
 

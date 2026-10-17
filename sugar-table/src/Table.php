@@ -776,7 +776,7 @@ final class Table
      *
      * Use these constants when calling the keyboard navigation helpers to ensure
      * correct key names.  These map to typical terminal arrow-key and navigation
-     * key sequences that input libraries (e.g. candy-pty, brick/console) emit.
+     * key sequences that input libraries (e.g. sugar-pty, brick/console) emit.
      */
     public const KEY_ARROW_UP    = 'arrowUp';
     public const KEY_ARROW_DOWN  = 'arrowDown';

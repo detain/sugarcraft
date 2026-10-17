@@ -354,7 +354,7 @@ Soft Serve is a comprehensive Go application that doesn't map directly to a sing
 | Soft Serve Component | SugarCraft Library | Relevance |
 |---------------------|---------------------|-----------|
 | **TUI/BubbleTea** | `candy-bubbletea` (if it existed) or `candy-term` | Bubble Tea TUI framework - SugarCraft would need a Bubbletea port for TUI apps |
-| **SSH Server** | `candy-pty`, `candy-ssh` (partial) | SSH handling - charmbracelet/ssh wrapper could become `candy-ssh` |
+| **SSH Server** | `sugar-pty`, `candy-ssh` (partial) | SSH handling - charmbracelet/ssh wrapper could become `candy-ssh` |
 | **Git operations** | `sugar-git` | Git repository operations via `go-git` - could be `sugar-git` |
 | **LFS support** | N/A | No SugarCraft equivalent - would be new territory |
 | **Lipgloss styling** | `candy-lipgloss` | Terminal styling library - perfect match for `candy-lipgloss` |

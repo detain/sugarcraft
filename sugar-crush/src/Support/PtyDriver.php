@@ -21,7 +21,7 @@ namespace SugarCraft\Crush\Support;
  *
  * THE HANG BUDGET IS THE DESIGN. Every read is clamped to the smaller of the
  * step window and the remaining wall deadline; `$child->wait()` — an unbounded
- * poll in candy-pty — is called ONLY when {@see ProcessReaper::escalate()} has
+ * poll in sugar-pty — is called ONLY when {@see ProcessReaper::escalate()} has
  * reported the child gone, exactly the Phase 9 doctrine: a child that traps
  * SIGTERM cannot turn a bounded refusal back into a hang. Teardown fires on
  * every exit path, including expect-timeout and mid-script exceptions.

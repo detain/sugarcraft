@@ -1,0 +1,329 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Pty;
+
+/**
+ * Thin FFI bindings to the subset of libc needed for PTY control.
+ *
+ * The cdef is loaded lazily on first {@see lib()} call and cached for
+ * the lifetime of the process. Library lookup honours
+ * `SUGARCRAFT_LIBC` (env override) before falling back to the
+ * platform default — `libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib`
+ * on macOS.
+ *
+ * SECURITY: `SUGARCRAFT_LIBC` feeds directly into `FFI::cdef($cdef, $lib)`,
+ * which loads and RUNS native code from the named shared object — i.e. it
+ * is an arbitrary-code-execution primitive if the value is ever influenced
+ * by untrusted input. Only set it in a trusted environment and never derive
+ * it from a request, config downloaded at runtime, etc. {@see libraryPath()}
+ * validates the override (absolute path, existing regular file, libc-shaped
+ * basename) and throws rather than loading anything that fails those checks.
+ *
+ * Mirrors charmbracelet/x/xpty internals (which call the same libc
+ * symbols directly via cgo / unix.Syscall).
+ */
+final class Libc
+{
+    /** Default Linux libc shared object. */
+    public const DEFAULT_LINUX = 'libc.so.6';
+
+    /** Default Linux libutil shared object (contains openpty on some distros). */
+    public const DEFAULT_LINUX_UTILS = 'libutil.so.1';
+
+    /** Default macOS libc shared object. */
+    public const DEFAULT_DARWIN = '/usr/lib/libSystem.B.dylib';
+
+    /** Lazily-loaded FFI handle, shared per-process. */
+    private static ?\FFI $ffi = null;
+
+    /** Lazily-loaded libutil FFI handle (Linux only, for openpty). */
+    private static ?\FFI $ffiUtil = null;
+
+    /**
+     * Return the cached FFI handle, loading the libc cdef on first call.
+     *
+     * The cdef block is intentionally minimal — only the symbols PR1
+     * needs (open round-trip + close). Later PRs extend the surface.
+     *
+     * @throws PtyException if the platform is unsupported or the
+     *                      library cannot be loaded
+     */
+    public static function lib(): \FFI
+    {
+        if (self::$ffi !== null) {
+            return self::$ffi;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            throw new PtyException(
+                'sugar-pty requires POSIX libc; use ConPTY on Windows (not yet ported).'
+            );
+        }
+
+        $library = self::libraryPath();
+
+        try {
+            self::$ffi = \FFI::cdef(self::cdef(), $library);
+        } catch (\FFI\Exception $e) {
+            throw new PtyException(
+                "Failed to load libc from '{$library}': " . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+
+        return self::$ffi;
+    }
+
+    /**
+     * Resolve the libc shared-object path for the host platform.
+     *
+     * Honours the `SUGARCRAFT_LIBC` env override (required for musl/Alpine
+     * sysroots and custom builds — musl's libc is e.g.
+     * `/lib/ld-musl-x86_64.so.1`, not `libc.so.6`) before defaulting per
+     * `PHP_OS_FAMILY`.
+     *
+     * SECURITY: the override value is loaded and executed by
+     * `FFI::cdef($cdef, $lib)`, so an attacker-controlled `SUGARCRAFT_LIBC`
+     * is remote code execution. Only set it in a trusted environment; NEVER
+     * expose it to untrusted input. When present it is validated here —
+     * must be an absolute path (relative paths would load from the CWD),
+     * must exist as a regular file, and its basename must look like a real
+     * libc (contains `libc`, `libSystem`, or `musl`). Any violation throws
+     * loudly rather than silently loading the object or falling back to the
+     * platform default.
+     *
+     * @throws PtyException if `SUGARCRAFT_LIBC` is set but fails validation
+     */
+    public static function libraryPath(): string
+    {
+        $override = \getenv('SUGARCRAFT_LIBC');
+        if (\is_string($override) && $override !== '') {
+            if (!\str_starts_with($override, '/')) {
+                throw new PtyException(Lang::t('libc.override_not_absolute', ['path' => $override]));
+            }
+            if (!\is_file($override)) {
+                throw new PtyException(Lang::t('libc.override_not_file', ['path' => $override]));
+            }
+            $base = \strtolower(\basename($override));
+            if (!\str_contains($base, 'libc')
+                && !\str_contains($base, 'libsystem')
+                && !\str_contains($base, 'musl')
+            ) {
+                throw new PtyException(Lang::t('libc.override_not_libc', ['path' => $override]));
+            }
+            return $override;
+        }
+
+        return PHP_OS_FAMILY === 'Darwin'
+            ? self::DEFAULT_DARWIN
+            : self::DEFAULT_LINUX;
+    }
+
+    /**
+     * Return the libc cdef declaration block.
+     *
+     * Kept as a constant-like static so tests can introspect it without
+     * loading the FFI runtime.
+     *
+     * On Darwin, `openpty` is included (provided by libSystem.B.dylib).
+     * On Linux it is NOT declared here — it lives in libutil.so and is
+     * loaded via a separate FFI handle in {@see libutil()} to avoid
+     * eager-symbol-resolution failures when loading libc.so.6.
+     */
+    public static function cdef(): string
+    {
+        $openpty = \PHP_OS_FAMILY === 'Darwin'
+            ? "int   openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);\n"
+            : '';
+
+        // FFI::cdef() resolves every declared symbol eagerly, so declaring
+        // the wrong platform's errno accessor fails the WHOLE libc load
+        // ("Failed resolving C function '__errno_location'" on macOS).
+        $errnoFn = self::errnoSymbol();
+
+        return <<<CPROTO
+int   setsid(void);
+int   posix_openpt(int flags);
+int   grantpt(int fd);
+int   unlockpt(int fd);
+int   ptsname_r(int fd, char *buf, unsigned long buflen);
+{$openpty}int   waitpid(int pid, int *status, int options);
+int   dup(int fd);
+int   close(int fd);
+/* kill(2): the ext-posix-less path of Libc::kill(). pid_t is int on
+   every target ABI. */
+int   kill(int pid, int sig);
+int   open(const char *path, int flags);
+/* ioctl is variadic in <sys/ioctl.h>; this fixed-arg form is what every
+   call site uses. On arm64 DARWIN a winsize pointer does NOT survive the
+   variadic frame in either direction — measured for TIOCSWINSZ (PR #475)
+   and TIOCGWINSZ (CI run 33796495350: rc=-1 on a posix_isatty-accepted
+   slave fd). All size ioctls therefore go through SizeIoctl, which owns
+   the Darwin stty(1) fallbacks; do not call this declaration with a
+   struct pointer from new sites. Integer/pointer-free third args
+   (TIOCSCTTY passing null as 0) are unaffected on every lane. */
+int   ioctl(int fd, unsigned long request, void *arg);
+
+/* fcntl is varargs in <fcntl.h> on Linux/macOS, but the int-arg form
+   (used here for F_SETFD/FD_CLOEXEC) is ABI-compatible with this
+   fixed-prototype cdef on every System V calling convention sugar-pty
+   targets. Do NOT call commands that take a struct flock * through this
+   declaration — add a separate `int fcntl_lock(...)` cdef if needed. */
+int   fcntl(int fd, int cmd, int arg);
+
+/* errno is thread-local; the accessor symbol is platform-specific:
+   __errno_location() on glibc/musl (Linux), __error() on Darwin.
+   Returns int*. */
+int * {$errnoFn}(void);
+
+/* termios — struct termios is treated as opaque (≥80 bytes) because
+   layout differs across glibc/musl (60 bytes) and Darwin (72 bytes).
+   Only call cfmakeraw/tcgetattr/tcsetattr; do NOT read individual fields. */
+int   tcgetattr(int fd, void *termios_p);
+int   tcsetattr(int fd, int when, void *termios_p);
+void  cfmakeraw(void *termios_p);
+int   cfgetospeed(void *termios_p);
+int   cfsetospeed(void *termios_p, int speed);
+unsigned int cfgetispeed(void *termios_p);
+int   cfsetispeed(void *termios_p, int speed);
+CPROTO;
+    }
+
+    /**
+     * Return the current value of errno for this thread.
+     *
+     * This is the only portable way to read errno after an FFI call,
+     * since PHP's own errno constants (like EIO) are not available
+     * until PHP 8.4+ and FFI calls do not set PHP's errno.
+     */
+    public static function errno(): int
+    {
+        $ptr = self::lib()->{self::errnoSymbol()}();
+        return $ptr === null ? 0 : $ptr[0];
+    }
+
+    /**
+     * The platform's thread-local errno accessor symbol.
+     *
+     * glibc and musl both export `__errno_location`; Darwin's libSystem
+     * exports `__error` instead (same `int *` contract).
+     */
+    public static function errnoSymbol(): string
+    {
+        return \PHP_OS_FAMILY === 'Darwin' ? '__error' : '__errno_location';
+    }
+
+    /**
+     * Human-readable errno for error messages: `"13 (Permission denied)"`.
+     *
+     * Uses ext-posix's strerror when available (the FFI cdef stays
+     * minimal — no `strerror` symbol needed); falls back to the bare
+     * number otherwise. Read errno IMMEDIATELY after the failing FFI
+     * call — any intervening syscall may clobber it.
+     */
+    public static function errnoDetail(): string
+    {
+        $errno = self::errno();
+        return \function_exists('posix_strerror')
+            ? $errno . ' (' . \posix_strerror($errno) . ')'
+            : (string) $errno;
+    }
+
+    /** EINTR is the errno value for "interrupted system call". */
+    public const EINTR = 4;
+
+    /**
+     * Send `$signal` to `$pid`; true when the signal was delivered.
+     *
+     * Uses `posix_kill()` when ext-posix is loaded and libc `kill(2)` over
+     * FFI otherwise. ext-posix is optional for this package (every other
+     * posix_* call site is `function_exists`-guarded, and sugar-crush runs
+     * without it by design), but the child `kill()` methods called
+     * `posix_kill()` bare -- a fatal "undefined function" at exactly the
+     * moment a caller tries to terminate a wedged child. ext-ffi is a hard
+     * requirement already, so the libc path is always available.
+     *
+     * @throws PtyException if ext-posix is absent and libc cannot be loaded
+     */
+    public static function kill(int $pid, int $signal): bool
+    {
+        if (\function_exists('posix_kill')) {
+            return \posix_kill($pid, $signal);
+        }
+
+        return self::killViaLibc($pid, $signal);
+    }
+
+    /**
+     * The ext-posix-less arm of {@see kill()}: libc `kill(2)` over FFI.
+     *
+     * @internal public only so the arm is testable on hosts that DO load
+     *           ext-posix, where {@see kill()} never reaches it.
+     * @throws PtyException if libc cannot be loaded
+     */
+    public static function killViaLibc(int $pid, int $signal): bool
+    {
+        return self::lib()->kill($pid, $signal) === 0;
+    }
+
+    /**
+     * Reset the cached FFI handle.
+     *
+     * Test-only. Production code never needs to drop the handle since
+     * libc symbols cannot become invalid mid-process.
+     */
+    public static function reset(): void
+    {
+        self::$ffi = null;
+        self::$ffiUtil = null;
+    }
+
+    /**
+     * Return the libutil FFI handle on Linux (contains openpty).
+     *
+     * On Darwin this method returns the regular libc handle since
+     * openpty is already in libSystem.B.dylib. On Windows it throws.
+     *
+     * @throws PtyException if the platform is unsupported or the
+     *                      library cannot be loaded
+     * @return \FFI the libutil FFI handle (contains openpty on Linux)
+     */
+    public static function libutil(): \FFI
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            throw new PtyException(
+                'sugar-pty requires POSIX libc; use ConPTY on Windows (not yet ported).'
+            );
+        }
+
+        if (PHP_OS_FAMILY === 'Darwin') {
+            return self::lib();
+        }
+
+        if (self::$ffiUtil !== null) {
+            return self::$ffiUtil;
+        }
+
+        $libutilCdef = <<<'CPROTO'
+int openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);
+int close(int fd);
+CPROTO;
+
+        try {
+            self::$ffiUtil = \FFI::cdef($libutilCdef, self::DEFAULT_LINUX_UTILS);
+        } catch (\FFI\Exception $e) {
+            throw new PtyException(
+                'Failed to load libutil from \'' . self::DEFAULT_LINUX_UTILS . '\': ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+
+        return self::$ffiUtil;
+    }
+
+    private function __construct() {}
+}

@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarPty",
+    "description": "SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS).",
+    "ogTitle": "SugarCraft — SugarPty",
+    "ogDescription": "Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.",
+    "emoji": "🖥️",
+    "displayName": "SugarPty",
+    "tagline": "Pseudo-terminal primitive — open / spawn / read / write / resize",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/x/tree/main/xpty\" style=\"color: inherit;\">charmbracelet/x/xpty</a></span>\n          <span class=\"tag-chip\">linux + macos</span>\n          <span class=\"tag-chip\">ext-ffi</span>\n          <span class=\"tag-chip\">posix_openpt</span>\n          <span class=\"tag-chip\">tiocswinsz</span>\n          <span class=\"tag-chip\">sigwinch</span>"
+}

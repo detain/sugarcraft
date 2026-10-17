@@ -425,7 +425,7 @@ final class AgentWorkerPool
      * is swallowed: the teardown is best-effort cleanup with no caller to report
      * to. (No in-repo handler throws today — Program's SIGINT/SIGWINCH/SIGTSTP/
      * SIGCONT set state or send() a Msg, WorkflowEngine's SIGINT/SIGTERM already
-     * catches \Throwable before exit(), candy-pty's SignalForwarder forwards —
+     * catches \Throwable before exit(), sugar-pty's SignalForwarder forwards —
      * so this widens a window the pre-fix glob/@unlink loop already had, rather
      * than admitting a new class of hazard.)
      *
@@ -1470,7 +1470,7 @@ final class AgentWorkerPool
 
                 // $reaped === -1 means the child is gone but unwaitable: some
                 // other waiter got there first. A SIGCHLD handler set to SIG_IGN
-                // has the kernel auto-reap every child (candy-pty's
+                // has the kernel auto-reap every child (sugar-pty's
                 // SignalForwarder can install exactly that), and so does any
                 // blanket wait() elsewhere in the process. Treating -1 as "not
                 // yet" would strand this agent in $active with nothing left able

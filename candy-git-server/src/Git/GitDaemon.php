@@ -209,7 +209,7 @@ final class GitDaemon
      * `git pack-objects`, `git update-ref`) is the same synchronous code
      * the blocking mode runs — it executes inside the readiness callback.
      *
-     * Naming/shape mirrors candy-pty's ReactPump: lazily resolves the
+     * Naming/shape mirrors sugar-pty's ReactPump: lazily resolves the
      * global loop, returns a promise that settles on stop, and funnels
      * every exit path through one teardown so no read stream or timer
      * can leak into the loop.

@@ -17,7 +17,7 @@ dialogs, extend with:
 
 ## Files
 
-**Modify:** `candy-pty/src/Expect.php`.
+**Modify:** `sugar-pty/src/Expect.php`.
 
 ## Acceptance
 

@@ -23,7 +23,7 @@ env:
 
   # CI checks the repo out at a detached merge ref, so each lib's root package
   # versions as `dev-<sha>`. Libs with a circular intra-monorepo dependency
-  # (e.g. candy-core ⇆ candy-pty) then fail install because the sibling's
+  # (e.g. candy-core ⇆ sugar-pty) then fail install because the sibling's
   # back-requirement on `dev-master` doesn't match the root's `dev-<sha>`.
   # Pin the root version so composer treats every lib-under-test as dev-master.
   COMPOSER_ROOT_VERSION: dev-master
@@ -172,9 +172,9 @@ jobs:
   # AND THE NAME HAD TO MOVE AGAIN, ONE ROUND LATER, FOR THE SAME REASON.
   # WHAT IT SAID: "tools/ guards (classifiers, docs generator, scanner-copy
   # drift)". WHAT IS TRUE NOW: `tools/tests/BareCitationDriftTest.php` reads
-  # every `.php` file under `candy-pty/` as well — `src/`, `bin/` and `tests/`
+  # every `.php` file under `sugar-pty/` as well — `src/`, `bin/` and `tests/`
   # — so editing a doc-block in a PUBLISHED package can now red this job, and
-  # that name told a contributor working in `candy-pty` nothing whatsoever.
+  # that name told a contributor working in `sugar-pty` nothing whatsoever.
   # WHY THE PARAGRAPH ABOVE STILL EARNS ITS PLACE: it is the argument, and the
   # argument generalises past the case that produced it. A job under `tools/`
   # that reaches into other packages will keep acquiring reasons to red that
@@ -188,7 +188,7 @@ jobs:
   # a test instead of rotting quietly — move the literal and this paragraph
   # in the same edit if the judgement changes again.
   tools-guards:
-    name: 'tools/ guards (+ drift pins that read candy-pty/ and sugar-crush/)'
+    name: 'tools/ guards (+ drift pins that read sugar-pty/ and sugar-crush/)'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -554,16 +554,16 @@ jobs:
             php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml --colors=never
           }
 
-  # macOS test job — verifies POSIX PTY paths (candy-pty's libc FFI:
+  # macOS test job — verifies POSIX PTY paths (sugar-pty's libc FFI:
   # posix_openpt / grantpt / unlockpt / ptsname_r / ioctl + the macOS
   # TIOCSWINSZ / TIOCGWINSZ constants that diverge from Linux) work
-  # on Darwin. Scoped to candy-pty only — other libs would catch
+  # on Darwin. Scoped to sugar-pty only — other libs would catch
   # macOS-specific regressions on demand if/when issues surface.
   macos-test:
     name: 'macOS · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     # macos-15 is the current stable Apple Silicon (arm64) image.
     # macos-26-intel was an Intel runner; GitHub is phasing Intel out
-    # and the candy-pty FFI / PTY syscalls hung on it past the 30-min
+    # and the sugar-pty FFI / PTY syscalls hung on it past the 30-min
     # cell timeout. arm64 ships a newer macOS kernel + libSystem and
     # is the default for new repos as of late 2025.
     runs-on: macos-15

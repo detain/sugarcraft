@@ -2693,16 +2693,16 @@ final class DocFigureProseDriftTest extends TestCase
      * siblings in a spelled word and names each one. The count and the name
      * set are re-derived from composer.json's require block.
      *
-     * The second half used to pin a runtime/dev split - "candy-pty's exclusion
+     * The second half used to pin a runtime/dev split - "sugar-pty's exclusion
      * is not an oversight" - and asserted the dev side was non-empty. It WAS
-     * the oversight (crush_libs.md candy-pty #5): `CapturesProcessOutput`
+     * the oversight (crush_libs.md sugar-pty #5): `CapturesProcessOutput`
      * opens `\SugarCraft\Pty\Pty` from `src/`, so a `--no-dev` install
      * leaned on candy-core's transitive pin to keep interactive capture
      * working. The property that actually matters is the one that split was
      * standing in for, so that is what is pinned now: every sibling namespace
      * `src/` names in code (not comments, not strings) belongs to a package in
-     * `require`. Measured: with candy-pty back in require-dev this arm goes red
-     * on `sugarcraft/candy-pty`. Any sibling still in require-dev stays
+     * `require`. Measured: with sugar-pty back in require-dev this arm goes red
+     * on `sugarcraft/sugar-pty`. Any sibling still in require-dev stays
      * barred from the page's runtime list.
      */
     public function testArchitectureSiblingRosterMatchesRuntimeRequiresAndSrcReach(): void

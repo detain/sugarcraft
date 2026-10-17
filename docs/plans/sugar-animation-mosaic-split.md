@@ -689,7 +689,7 @@ Step ordering after this memo lands:
    GCE timing (independent of 07.15).
 4. **step 09.02** — sugar-animation Floyd-Steinberg + transparency
    (independent of 07.15).
-5. **step 09.03** — sugar-animation adaptive cell size via candy-pty
+5. **step 09.03** — sugar-animation adaptive cell size via sugar-pty
    `SizeIoctl::query()` + frame cache (independent of 07.15).
 6. **(later, optional, NOT yet stepped)** — sugar-animation `MosaicBridge`
    that re-encodes `Frame[]` → `ImageSource[]` → `Animation`, behind

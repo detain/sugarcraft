@@ -36,7 +36,7 @@ From `charmbracelet_sequin.md` (first-pass analysis):
 | Terminal mode handling (mouse, bracketed paste) | `candy-core` | Terminal capability negotiation |
 | Theme support (dark/light) | `sugar-markdown` | Theme system |
 | Golden file comparison for ANSI output | `sugar-widgets` | Snapshot testing patterns |
-| PTY execution for command output capture | `candy-pty` | PTY/sudo process handling |
+| PTY execution for command output capture | `sugar-pty` | PTY/sudo process handling |
 
 **Primary Mapping**: `candy-core` for ANSI parsing/rendering primitives, `sugar-markdown` for visual styling/color handling
 
@@ -237,7 +237,7 @@ $ tput rs2 | sequin
 1. `socat` piping to sequin
 2. `script session.log` recording + replay
 
-**SugarCraft Implication**: `candy-pty` must handle argument passing robustly, especially for commands with flags that look like sequin flags.
+**SugarCraft Implication**: `sugar-pty` must handle argument passing robustly, especially for commands with flags that look like sequin flags.
 
 ---
 
@@ -381,7 +381,7 @@ $ tput rs2 | sequin
 
 **Root Cause**: Likely argument parsing conflict between sequin's flags and command's flags
 
-**SugarCraft Implication**: `candy-pty` must provide clean separation between sequin args and command args
+**SugarCraft Implication**: `sugar-pty` must provide clean separation between sequin args and command args
 
 ---
 
@@ -579,7 +579,7 @@ setenv -g COLORTERM "truecolor"
 
 1. **PTY Execution with Clean Arg Separation**
    - Problem: sequin's PTY exec fails when command has similar flags
-   - Solution: `candy-pty` should use `--` sentinel or env-based separation
+   - Solution: `sugar-pty` should use `--` sentinel or env-based separation
 
 2. **Multiple Private Mode Support**
    - Problem: Combined private mode sequences only show first mode
@@ -851,7 +851,7 @@ defer ansi.PutParser(p)
 
 ---
 
-### 2. Create PTY Execution Layer (`candy-pty`)
+### 2. Create PTY Execution Layer (`sugar-pty`)
 
 **Impact**: Enables capturing ANSI output from any command
 

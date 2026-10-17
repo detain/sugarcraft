@@ -178,7 +178,7 @@ final class TickMsg implements Msg
 Route ticks by `id` when multiple instances of the same Model can coexist (see `Stopwatch::$nextId` + `TickMsg->id`).
 
 ### Step 6 — i18n any user-facing string
-Exception messages and rendered labels go through `Lang::t('<slug>.<key>', [...])`, which wraps `SugarCraft\Core\I18n\T` (pattern in `candy-pty/src/Lang.php`). Do not hard-code English in a `throw` or `view()`.
+Exception messages and rendered labels go through `Lang::t('<slug>.<key>', [...])`, which wraps `SugarCraft\Core\I18n\T` (pattern in `sugar-pty/src/Lang.php`). Do not hard-code English in a `throw` or `view()`.
 
 ### Step 7 — Verify before finishing
 1. `php -l <slug>/src/<Class>.php` → `No syntax errors detected`.

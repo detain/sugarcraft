@@ -17,10 +17,10 @@ namespace SugarCraft\Core\Util;
  * when the stream is not a terminal (piped input, CI, tests) — they
  * never shell out and never throw in that case.
  *
- * Contrast with candy-pty's `PosixTermios`: that is the FFI/termios
+ * Contrast with sugar-pty's `PosixTermios`: that is the FFI/termios
  * path which operates on an arbitrary PTY file descriptor and is far
  * heavier. Reach for RawMode when you only need the simple, portable
- * stty toggle on the controlling terminal and don't want the candy-pty
+ * stty toggle on the controlling terminal and don't want the sugar-pty
  * dependency.
  *
  * @see TtyDetect::isAtty()

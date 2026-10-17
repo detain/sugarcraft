@@ -205,7 +205,7 @@ gradient ramps, the per-panel `data_same` memo, border embeds) can repeat this.
 - Reads per-AIE-column utilization and power via `DRM_IOCTL_AMDXDNA_GET_INFO` on `/dev/accel/accelN`
   (world-readable). XDNA1 parts are skipped by probing.
 - Shows the device as an "NPU" row through the GPU drawing path, using a `box_label`.
-**Our state:** None. Plain PHP cannot issue the ioctl. It could through FFI (candy-pty already gates on FFI), or
+**Our state:** None. Plain PHP cannot issue the ioctl. It could through FFI (candy-pty already gates on FFI), or <!-- @rename-keep historical provenance -->
 possibly through DRM fdinfo engine keys if amdxdna exposes them.
 **Verdict: ADOPT-LATER (GPU wave, FFI-gated).**
 - Add a generic `Accelerator` device kind (`label` GPU/NPU) to the GPU model. It is shared with #985.

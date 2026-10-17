@@ -1,7 +1,7 @@
 # Render with: vhs sugar-ssh-server/.vhs/spawn-bash.tape
 #
 # Demonstrates the InProcessTransport (default) spawning a real
-# /bin/bash inside a candy-pty supervisor. The supervisor pumps
+# /bin/bash inside a sugar-pty supervisor. The supervisor pumps
 # bytes between VHS's terminal and the inner bash's slave PTY, so
 # every keystroke / signal / resize behaves as if you were running
 # bash directly — except the sugar-ssh-server middleware stack (Logger
@@ -28,7 +28,7 @@ Type "php examples/spawn-bash.php"
 Enter
 Sleep 1500ms
 
-# Inside the candy-pty-spawned bash:
+# Inside the sugar-pty-spawned bash:
 Type "echo 'hello from in-process bash'"
 Enter
 Sleep 500ms

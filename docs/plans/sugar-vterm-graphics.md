@@ -747,7 +747,7 @@ the following must hold:
    blocking.
 3. **A port lands that pipes through a virtual terminal and
    downstream surface includes images.** E.g. a `glow`-style markdown
-   renderer that embeds images, run inside a `candy-pty` PTY whose
+   renderer that embeds images, run inside a `sugar-pty` PTY whose
    output gets fed into a sugar-vterm for diff-based render — the
    images would be silently dropped today.
 4. **A SugarCraft demo app wants to display inline images in a

@@ -21,7 +21,7 @@ use SugarCraft\SshServer\Transport\InProcessTransport;
  * decides HOW the middleware stack runs against the session:
  *
  *   - {@see Transport\InProcessTransport} (default) — PTY supervisor:
- *     allocates a `candy-pty`, spawns the user's cmd as a subprocess
+ *     allocates a `sugar-pty`, spawns the user's cmd as a subprocess
  *     with full controlling-terminal semantics, pumps bytes between
  *     supervisor stdio and the PTY master.
  *   - {@see Transport\HostSshdTransport} (legacy, opt-in) — runs the

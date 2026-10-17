@@ -244,7 +244,7 @@ ABSENT tools: TodoWrite/plan/ExitPlanMode (→ 3.C, 5.7-1), AskUserQuestion (→
 ### 6.3 Bash (`BuiltIn/Bash.php`, `Tools/Concerns/CapturesProcessOutput`)
 
 - `proc_open` inside `setsid -w -- /bin/sh -c` (`Support/ProcessContainment`), stdin closed, non-interactive env. No cwd/env persistence.
-- `runCaptured($timeoutSeconds)` and `terminateGroup()` (SIGTERM→SIGKILL the setsid group) exist, but **Bash passes no timeout and has no `timeout` parameter** (→ 0.4-a). `interactive:true` runs on a candy-pty PTY with an 8 s idle / 24 s hard ceiling (`runCapturedInteractive`).
+- `runCaptured($timeoutSeconds)` and `terminateGroup()` (SIGTERM→SIGKILL the setsid group) exist, but **Bash passes no timeout and has no `timeout` parameter** (→ 0.4-a). `interactive:true` runs on a candy-pty PTY with an 8 s idle / 24 s hard ceiling (`runCapturedInteractive`). <!-- @rename-keep historical provenance -->
 - No sandbox (→ 5.12). Live guards: the gate's `rm -rf /` breaker, `ProtectFilesHook`, `ConfirmRemoveHook`. `BashEscapeDenyHook` is DORMANT (§2.6).
 
 ### 6.4 Web

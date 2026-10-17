@@ -15,4 +15,4 @@ paths:
 
 **VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. Standard dims `FontSize 14 / Width 800 / Height 480`; compact text uses `FontSize 16 / Width 600 / Height 180`. See `sugar-widgets/.vhs/spinners.tape` for the canonical shape.
 
-**Non-visual libs exempt**: FFI bindings (`candy-pty`), syscall wrappers, codecs — no `view()` to render. Skip the tape AND the `vhs.yml` matrix entry; call out the exemption in the PR body.
+**Non-visual libs exempt**: FFI bindings (`sugar-pty`), syscall wrappers, codecs — no `view()` to render. Skip the tape AND the `vhs.yml` matrix entry; call out the exemption in the PR body.

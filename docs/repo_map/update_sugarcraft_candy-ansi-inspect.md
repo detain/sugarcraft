@@ -70,7 +70,7 @@ candy-ansi-inspect/src/
 | StreamingInspector | ✅ Unique | Incremental chunked parsing (NOT in Go sequin) |
 | JSON output | ✅ Unique | Machine-readable format (NOT in Go sequin) |
 | i18n (16 locales) | ✅ | Via SugarCraft i18n system |
-| PTY execution | ❌ Missing | Requires candy-pty integration |
+| PTY execution | ❌ Missing | Requires sugar-pty integration |
 | Theme/syntax highlighting | ❌ Missing | Plain text output only |
 | Golden file tests | ❌ Missing | No snapshot testing infrastructure |
 
@@ -132,7 +132,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 | `ratatui/ratatui` | 🟢 Rust TUI reference | Buffer diffing, immediate-mode rendering, widget system | **Low** |
 | `textualize/textual` | 🟢 Python TUI reference | CSS-based styling, message pump, reactive state | **Low** |
 | `sugarcraft/sugar-vterm` | 🔴 Related parsing | VT500 state machine, same upstream (charmbracelet/x), complementary (emulation vs explanation) | **High** |
-| `sugarcraft/candy-pty` | 🟠 Integration target | PTY execution, FFI patterns, signal handling | **High** |
+| `sugarcraft/sugar-pty` | 🟠 Integration target | PTY execution, FFI patterns, signal handling | **High** |
 
 ---
 
@@ -150,14 +150,14 @@ $segs = $inspector->finish();              // Flushes trailing text
 
 **Implementation ideas:**
 
-- Integrate with `candy-pty` (already exists in SugarCraft)
+- Integrate with `sugar-pty` (already exists in SugarCraft)
 - Create `Inspector::execute(string $command): list<Segment>` that spawns PTY, captures output, and feeds to parser
-- Use `candy-pty`'s `PosixPump` for byte capture
+- Use `sugar-pty`'s `PosixPump` for byte capture
 - Support timeout, resize events, and signal forwarding
 
 **Expected impact:** High — enables the primary Go sequin use case
 
-**Estimated complexity:** Medium — depends on candy-pty maturity
+**Estimated complexity:** Medium — depends on sugar-pty maturity
 
 ---
 
@@ -581,7 +581,7 @@ final class OscSegment implements Segment { ... }
    }
    ```
 
-2. **Capturing PTY output:** With future candy-pty integration
+2. **Capturing PTY output:** With future sugar-pty integration
 
    ```php
    $segments = Inspector::execute('ls -la --color=always');
@@ -715,7 +715,7 @@ final class Snapshotter {
 
 ## Ecosystem / Integration Opportunities
 
-### 1. candy-pty Integration (PTY Execution)
+### 1. sugar-pty Integration (PTY Execution)
 
 **Implementation:**
 ```php
@@ -778,7 +778,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 **Lessons for candy-ansi-inspect:**
 
 - This is the #1 requested feature
-- Should prioritize candy-pty integration
+- Should prioritize sugar-pty integration
 - PTY execution enables unique use cases beyond static analysis
 
 ### 2. charmbracelet/sequin#8 — Golden File Testing
@@ -847,7 +847,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
    - Run both parsers in parallel, assert equivalence
    - **Impact:** Better maintainability, alignment with ecosystem
 
-5. **candy-pty integration for PTY execution**
+5. **sugar-pty integration for PTY execution**
    - Implement `Inspector::execute(string $cmd): list<Segment>`
    - Add `bin/candy-ansi-inspect-exec` wrapper script
    - **Impact:** Primary Go sequin feature parity
@@ -896,7 +896,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 | CALIBER_LEARNINGS.md | Medium | Low | Low | **P0 — Immediate** |
 | CLI improvements | Medium | Low | Low | **P0 — Immediate** |
 | Diff mode | Medium | Low | Low | **P1 — Short term** |
-| candy-pty integration | High | Medium | Medium | **P1 — Short term** |
+| sugar-pty integration | High | Medium | Medium | **P1 — Short term** |
 | Handler registry | Medium | Medium | Low | **P1 — Short term** |
 | State machine prototype | High | High | Medium | **P2 — Medium term** |
 | Theme/colorized output | Medium | Medium | Low | **P2 — Medium term** |
@@ -920,12 +920,12 @@ candy-ansi-inspect is a mature, well-tested PHP port of Go sequin that provides 
 The manual byte-by-byte parsing approach, while functional, differs from the state-machine approach used by both Go sequin (`charmbracelet/x/ansi`) and the ecosystem's own `sugar-vterm`. Migrating to a state machine would improve maintainability and align with the VT500 standard, but carries risk of regression. A phased approach (parallel operation, then migration) is recommended.
 
 **Ecosystem positioning:**
-candy-ansi-inspect is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `candy-core` (TUI runtime), `sugar-vterm` (terminal emulation), `candy-pty` (PTY execution), and `sugar-markdown` (styling). The primary opportunity is integration with `candy-pty` to provide the PTY execution that makes Go sequin so powerful.
+candy-ansi-inspect is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `candy-core` (TUI runtime), `sugar-vterm` (terminal emulation), `sugar-pty` (PTY execution), and `sugar-markdown` (styling). The primary opportunity is integration with `sugar-pty` to provide the PTY execution that makes Go sequin so powerful.
 
 **Recommended focus:**
 
 1. Add golden file testing immediately (low risk, high value)
-2. Integrate with `candy-pty` for PTY execution (high value, medium complexity)
+2. Integrate with `sugar-pty` for PTY execution (high value, medium complexity)
 3. Consider state machine migration as a medium-term goal for better alignment with ecosystem
 
 The library is in good shape but has clear opportunities for enhancement. With the addition of PTY execution and golden file testing, it would be feature-complete relative to upstream Go sequin, with unique contributions (streaming inspector, JSON output) that Go sequin lacks.

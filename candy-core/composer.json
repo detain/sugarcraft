@@ -34,7 +34,7 @@
         "ext-intl": "*",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
-        "sugarcraft/candy-pty": "dev-master"
+        "sugarcraft/sugar-pty": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

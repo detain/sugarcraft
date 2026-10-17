@@ -1,6 +1,6 @@
 ---
 name: vhs-tape-record
-description: Authors a `<slug>/.vhs/*.tape` VHS demo file and wires it into `.github/workflows/vhs.yml` so CI re-renders the GIF. Sets `Set Theme "TokyoNight"`, 800x480 dims, `Type "php examples/<demo>.php"` boilerplate. Use when user says 'add a demo', 'record VHS', 'new tape', 'regenerate GIF', or creates/edits a file under `<slug>/.vhs/`. Capabilities: scaffolds the .tape file, adds the slug to the workflow `all=(...)` array, registers required non-default PHP extensions (ext-ssh2/ext-gd/ext-ffi) in `extensions:`. Do NOT use for non-visual primitive libs (`candy-pty`, FFI bindings, codecs) — they're matrix-exempt; do NOT use for changes to the rendered `.gif` itself (CI overwrites it).
+description: Authors a `<slug>/.vhs/*.tape` VHS demo file and wires it into `.github/workflows/vhs.yml` so CI re-renders the GIF. Sets `Set Theme "TokyoNight"`, 800x480 dims, `Type "php examples/<demo>.php"` boilerplate. Use when user says 'add a demo', 'record VHS', 'new tape', 'regenerate GIF', or creates/edits a file under `<slug>/.vhs/`. Capabilities: scaffolds the .tape file, adds the slug to the workflow `all=(...)` array, registers required non-default PHP extensions (ext-ssh2/ext-gd/ext-ffi) in `extensions:`. Do NOT use for non-visual primitive libs (`sugar-pty`, FFI bindings, codecs) — they're matrix-exempt; do NOT use for changes to the rendered `.gif` itself (CI overwrites it).
 paths:
   - '**/.vhs/*.tape'
   - .github/workflows/vhs.yml
@@ -10,13 +10,13 @@ paths:
 ## Critical
 
 - **`.github/workflows/vhs.yml` is HAND-MAINTAINED.** Adding a `.tape` file is NOT enough — if the lib's slug is missing from the `all=(...)` array (and from `extensions:` when it needs non-default PHP extensions), CI silently skips the lib and the `.gif` never re-renders. Verify both edits before claiming completion.
-- **Matrix-exempt libs** — `candy-pty`, raw FFI bindings, codecs, and other non-visual primitives MUST NOT be added to the matrix. If the lib has no TUI output, refuse and tell the user the lib is matrix-exempt (call this out in the PR body too).
+- **Matrix-exempt libs** — `sugar-pty`, raw FFI bindings, codecs, and other non-visual primitives MUST NOT be added to the matrix. If the lib has no TUI output, refuse and tell the user the lib is matrix-exempt (call this out in the PR body too).
 - **Author the `examples/<demo>.php` file FIRST.** A `.tape` that runs `Type "php examples/<demo>.php"` against a missing script renders an empty GIF. Confirm `<slug>/examples/<demo>.php` exists and exits cleanly under ~3 seconds before recording.
 - **Never edit the rendered `.gif` directly** — `.github/workflows/vhs.yml` overwrites it on every push touching `<slug>/.vhs/`.
 
 ## Instructions
 
-1. **Confirm the lib qualifies.** Visual/TUI libs only — components, prompts, charts, dashboards, spinners. If the lib is `candy-pty`, an FFI binding, a parser, or a codec, STOP. Tell the user: "`<slug>` is matrix-exempt — non-visual primitives don't get VHS demos." Verify by reading `<slug>/README.md` and checking for screen-output APIs. Verify before proceeding.
+1. **Confirm the lib qualifies.** Visual/TUI libs only — components, prompts, charts, dashboards, spinners. If the lib is `sugar-pty`, an FFI binding, a parser, or a codec, STOP. Tell the user: "`<slug>` is matrix-exempt — non-visual primitives don't get VHS demos." Verify by reading `<slug>/README.md` and checking for screen-output APIs. Verify before proceeding.
 
 2. **Author the example script.** Create `<slug>/examples/<demo>.php` if it does not already exist. Top of file: `<?php declare(strict_types=1); require __DIR__ . '/../vendor/autoload.php';`. The script must self-terminate in under ~3 seconds (no `while (true)` loops without a break). Run it once locally to confirm it exits cleanly: `cd <slug> && php examples/<demo>.php`. Verify the script exits with status 0 before proceeding.
 
@@ -143,4 +143,4 @@ paths:
 
 - **"Tape runs forever / GIF is 10MB."** The example script has an infinite loop or hangs on stdin. Either add a hard timeout inside the script (`pcntl_alarm(3)`), or have the script auto-exit after N frames. Don't try to fix this with a shorter `Sleep` — the tape will still record the hung process up to the sleep duration.
 
-- **"User asked for a VHS demo on `candy-pty` / an FFI binding."** Refuse politely: "`candy-pty` is matrix-exempt — it's a non-visual primitive (PTY allocator). VHS demos are reserved for libs with TUI output. Add a `## Why no demo` note to its README if needed."
+- **"User asked for a VHS demo on `sugar-pty` / an FFI binding."** Refuse politely: "`sugar-pty` is matrix-exempt — it's a non-visual primitive (PTY allocator). VHS demos are reserved for libs with TUI output. Add a `## Why no demo` note to its README if needed."

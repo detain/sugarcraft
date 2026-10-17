@@ -130,8 +130,8 @@ $registry->register(new MyCustomSerializer());
 ## Backend conventions
 
 There are no pluggable backends in candy-vcr — recording always goes through
-the candy-pty `PosixPump` with a `Recorder` tap. The PTY session is managed
-by `candy-pty` internally.
+the sugar-pty `PosixPump` with a `Recorder` tap. The PTY session is managed
+by `sugar-pty` internally.
 
 ---
 

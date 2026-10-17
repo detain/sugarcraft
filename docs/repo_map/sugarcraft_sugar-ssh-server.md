@@ -14,11 +14,11 @@
 
 - **Upstream:** [charmbracelet/wish](https://github.com/charmbracelet/wish) (MIT, Go, 5.2k stars)
 
-- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-pty`, `react/event-loop`, `react/promise-timer`
+- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-pty`, `react/event-loop`, `react/promise-timer`
 
 ## Description
 
-SugarSshServer is a PHP port of `charmbracelet/wish` — an SSH server middleware framework that lets you build TUIs anyone can `ssh user@host` to run. The library provides composable middleware (auth, logging, rate-limiting), pluggable transport strategies (InProcessPTY or HostSshd inline), and deep integration with `candy-pty` for full pseudo-terminal semantics. Unlike the Go original which implements the full SSH wire protocol, SugarSshServer intentionally delegates SSH to the host OpenSSH daemon and operates as a middleware processor per connection.
+SugarSshServer is a PHP port of `charmbracelet/wish` — an SSH server middleware framework that lets you build TUIs anyone can `ssh user@host` to run. The library provides composable middleware (auth, logging, rate-limiting), pluggable transport strategies (InProcessPTY or HostSshd inline), and deep integration with `sugar-pty` for full pseudo-terminal semantics. Unlike the Go original which implements the full SSH wire protocol, SugarSshServer intentionally delegates SSH to the host OpenSSH daemon and operates as a middleware processor per connection.
 
 ---
 
@@ -55,7 +55,7 @@ sugar-ssh-server/
 │   ├── CancellationException.php
 │   ├── Lang.php                      # i18n wrapper around SugarCraft\Core\I18n\T
 │   ├── Transport/
-│   │   ├── InProcessTransport.php   # Default: PTY supervisor + PosixPump + candy-pty
+│   │   ├── InProcessTransport.php   # Default: PTY supervisor + PosixPump + sugar-pty
 │   │   ├── HostSshdTransport.php      # Legacy: inline middleware on sshd's PTY
 │   │   └── ChildSpawner.php           # Interface for transports that can spawn child PTY
 │   ├── Middleware/
@@ -64,7 +64,7 @@ sugar-ssh-server/
 │   │   ├── RateLimit.php             # Per-IP token-bucket with flock-persisted JSON state
 │   │   ├── Keepalive.php             # SSH-level keepalive via PTY master idle callback
 │   │   ├── BubbleTea.php             # Terminal: mounts SugarCraft Program inline (HostSshd only)
-│   │   ├── Spawn.php                 # Terminal: spawns child cmd in candy-pty (InProcess only)
+│   │   ├── Spawn.php                 # Terminal: spawns child cmd in sugar-pty (InProcess only)
 │   │   ├── Subsystem.php             # Parses "subsystem <name>", dispatches to SubsystemHandler
 │   │   ├── AsyncMiddleware.php       # Abstract base for promise-returning middleware
 │   │   └── Auth/
@@ -171,9 +171,9 @@ Two concrete implementations ship:
 
 ### `InProcessTransport` (default)
 
-The default transport since PR5. Allocates a `candy-pty` master/slave pair via `PtySystemFactory::new()`, spawns the user's cmd as a subprocess with `controllingTerminal: true`, and pumps bytes between the supervisor's STDIN/STDOUT and the PTY master via `PosixPump`.
+The default transport since PR5. Allocates a `sugar-pty` master/slave pair via `PtySystemFactory::new()`, spawns the user's cmd as a subprocess with `controllingTerminal: true`, and pumps bytes between the supervisor's STDIN/STDOUT and the PTY master via `PosixPump`.
 
-**Key integration points with candy-pty:**
+**Key integration points with sugar-pty:**
 
 - `PtySystemFactory::new()` resolves `PosixPtySystem` on Linux/macOS
 
@@ -347,11 +347,11 @@ The `RateLimit` middleware uses a token-bucket algorithm with file-persisted sta
 
 ---
 
-## PTY Integration (candy-pty)
+## PTY Integration (sugar-pty)
 
 ### Integration Points
 
-| candy-pty component | sugar-ssh-server usage |
+| sugar-pty component | sugar-ssh-server usage |
 |---|---|
 | `PtySystemFactory::new()` | Resolves platform-appropriate PTY backend |
 | `PosixPtySystem::open($cols, $rows)` | Opens master/slave pair in `InProcessTransport` |
@@ -418,7 +418,7 @@ The handler is injectable into `InProcessTransport` via `setChannelHandler()`, e
 | Aspect | Go (wish) | PHP (sugar-ssh-server) |
 |---|---|---|
 | SSH transport | Native Go SSH via `charmbracelet/ssh` | Delegated to OpenSSH via ForceCommand |
-| PTY | `gliderlabs/ssh` built-in PTY | `candy-pty` FFI-based |
+| PTY | `gliderlabs/ssh` built-in PTY | `sugar-pty` FFI-based |
 | Host key generation | Auto-generated ED25519 | No host keys (sshd handles) |
 | Git server middleware | Yes (git-receive-pack, etc.) | No — future leaf lib |
 | SCP middleware | Yes (full SCP protocol) | No — future leaf lib |
@@ -438,11 +438,11 @@ The handler is injectable into `InProcessTransport` via `setChannelHandler()`, e
 | Encryption | AES-256-GCM with Curve25519 DH | None (sshd handles) |
 | Host keys | Ed25519 + RSA generated | None (sshd handles) |
 | Process model | `pcntl_fork()` per connection | One PHP process per connection (forked by sshd) |
-| PTY | FFI-based (like candy-pty) | `candy-pty` |
+| PTY | FFI-based (like sugar-pty) | `sugar-pty` |
 | Auth | Ed25519/RSA key, password, KI | sshd handles; middleware validates sshd's result |
 | SFTP/SCP | No | Stub only |
 | Middleware | None | Express-style composable pipeline |
-| SugarCraft integration | None | Deep (candy-pty, sugar-widgets via BubbleTea) |
+| SugarCraft integration | None | Deep (sugar-pty, sugar-widgets via BubbleTea) |
 
 **Fundamental difference:** Whisp is a complete SSH server application. SugarSshServer is a middleware framework that expects to run under an existing SSH server. Whisp has no concept of middleware composition, while sugar-ssh-server builds entirely around it.
 
@@ -517,7 +517,7 @@ Currently only `InProcessTransport` implements it. The interface enables `Spawn`
 
 2. **Transport abstraction** — The `InProcessTransport` vs `HostSshdTransport` split elegantly handles the two deployment modes: full PTY subprocess spawning (arbitrary shells, editors) vs. zero-overhead inline program mounting.
 
-3. **Deep candy-pty integration** — Signal forwarding (SIGWINCH → window resize), proper SIGHUP teardown, non-blocking pump with idle callbacks for keepalive. All of candy-pty's capabilities are accessible.
+3. **Deep sugar-pty integration** — Signal forwarding (SIGWINCH → window resize), proper SIGHUP teardown, non-blocking pump with idle callbacks for keepalive. All of sugar-pty's capabilities are accessible.
 
 4. **Context propagation** — Mirrors Go's `context.Context` API, enabling cancellation propagation, deadline enforcement, and key-value metadata across the middleware chain.
 
@@ -566,7 +566,7 @@ Currently only `InProcessTransport` implements it. The interface enables `Spawn`
 ```
 sugar-ssh-server
 ├── candy-core    # Core: SugarCraft\Core\I18n\T, event loop patterns
-└── candy-pty     # PTY: PosixPump, PosixPtySystem, SignalForwarder, PumpOptions
+└── sugar-pty     # PTY: PosixPump, PosixPtySystem, SignalForwarder, PumpOptions
 ```
 
 ### Dependent Libraries
@@ -578,7 +578,7 @@ SugarSshServer is a leaf-level library in the dependency graph. It is not depend
 | Library | Relationship |
 |---|---|
 | `candy-core` | Dependency — provides `Context`, i18n, exception types |
-| `candy-pty` | Dependency — PTY syscalls, pump, signal forwarding |
+| `sugar-pty` | Dependency — PTY syscalls, pump, signal forwarding |
 | `sugar-widgets` | Potential consumer — BubbleTea middleware mounts sugar-widgets Programs over SSH |
 | `sugar-metrics` | Parallel — `SessionMetrics` middleware pattern mirrors promwish; both are SSH session middleware |
 | `candy-sshconfig` | Future — wishlist's `sshconfig.ParseFile()` would be a natural `candy-sshconfig` leaf lib |
@@ -613,7 +613,7 @@ From `CALIBER_LEARNINGS.md`:
 
 4. **Channel Handler Pattern** — RFC 4254 channel messages dispatched through a `ChannelHandler` interface with 7 message types. Enables custom session wiring without modifying transport code.
 
-5. **candy-pty as a Reusable FFI Layer** — The deep integration with `candy-pty` (PosixPump, SignalForwarder, PtySystemFactory) means sugar-ssh-server benefits from all candy-pty improvements without changes.
+5. **sugar-pty as a Reusable FFI Layer** — The deep integration with `sugar-pty` (PosixPump, SignalForwarder, PtySystemFactory) means sugar-ssh-server benefits from all sugar-pty improvements without changes.
 
 ---
 

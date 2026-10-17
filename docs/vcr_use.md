@@ -44,7 +44,7 @@ Phases 0–6 shipped sequentially as individual PRs per the repo's standard cycl
 | Player | `candy-vcr/src/Player.php` | ✅ Speed modes, idle-trim |
 | Recorder | `candy-vcr/src/Recorder.php` | ✅ |
 | CLI scaffold | `candy-vcr/src/Cli/` — record, inspect, replay, diff, stats, migrate | ✅ 6 subcommands |
-| PTY abstraction | `candy-pty/src/` | ✅ Reusable for shell exec |
+| PTY abstraction | `sugar-pty/src/` | ✅ Reusable for shell exec |
 | Program/Msg primitives | `candy-core/src/` | ✅ |
 
 ### What we don't have

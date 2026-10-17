@@ -23,7 +23,7 @@ use SugarCraft\SshServer\Transport;
 use SugarCraft\SshServer\TransportAware;
 
 /**
- * Default transport — allocates a `candy-pty` master/slave pair via
+ * Default transport — allocates a `sugar-pty` master/slave pair via
  * the injected (or factory-resolved) {@see PtySystem}, spawns the
  * user's cmd as a subprocess with `controllingTerminal: true`, and
  * pumps bytes between the supervisor's STDIN/STDOUT and the PTY
@@ -237,7 +237,7 @@ final class InProcessTransport implements Transport, ChildSpawner
      * that don't react to STDIN EOF (sleep, daemons) still
      * terminate when the SSH client disconnects.
      *
-     * @param list<string>              $cmd  argv passed to candy-pty
+     * @param list<string>              $cmd  argv passed to sugar-pty
      * @param array<string,string>|null $env
      * @param resource|null             $stdin   defaults to STDIN
      * @param resource|null             $stdout  defaults to STDOUT
@@ -266,7 +266,7 @@ final class InProcessTransport implements Transport, ChildSpawner
         // spawning ANY child. PasswordAuth also scrubs it, but only if it
         // ran — a spawner middleware placed *before* PasswordAuth in the
         // stack would otherwise leak the password into the child via
-        // /proc/<pid>/environ (candy-pty's proc_open inherits the parent
+        // /proc/<pid>/environ (sugar-pty's proc_open inherits the parent
         // environment when $env is null). Scrubbing here makes the
         // guarantee independent of middleware ordering.
         unset($_SERVER['SSH_PASSWORD']);
@@ -357,7 +357,7 @@ final class InProcessTransport implements Transport, ChildSpawner
             // after a brief grace if still alive.
             //
             // Through Child::kill(), not a function_exists('posix_kill')
-            // guard: candy-pty routes it to posix_kill() or libc kill(2)
+            // guard: sugar-pty routes it to posix_kill() or libc kill(2)
             // over FFI, so ext-posix is optional. The old guard skipped the
             // whole teardown without ext-posix, and a child that ignores
             // SIGHUP then held runChild() in wait() for its entire life.

@@ -46,7 +46,7 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 - [x] `FrameStream` Resize preserves theme: feed a Resize event mid-stream; assert the post-resize Terminal carries the original theme. (`tests/Render/FrameStreamThemeResizeTest.php`; bg pixel must stay TokyoNight `0x15161e` after the Resize, via the rasterizer)
 - [x] `ImagickRasterizer::indexToHex` grayscale: index 232 (rgb 8,8,8) returns `#080808`, not `#888888`. (`tests/Raster/ImagickRasterizerGrayscaleTest.php`; required fixing `Theme::color()` in sugar-vterm to fall back to `Theme::rgb()` for indices 216..255 not in the cube palette — the old `?? 0` returned black for grayscale)
 - [x] `Application::runSymfonyCommand`: invoke `render-tape /tmp/foo.tape -o /tmp/foo.gif` via `Application::run()` (not directly), assert the tape arg reaches the command. (`tests/Cli/ApplicationRoutingTest.php`)
-- [x] `pty-shim.php` autoload discovery: simulate being installed at `vendor/sugarcraft/candy-pty/bin/pty-shim.php` — assert it still finds an autoload. (`tests/Cli/PtyShimAutoloadTest.php`)
+- [x] `pty-shim.php` autoload discovery: simulate being installed at `vendor/sugarcraft/sugar-pty/bin/pty-shim.php` — assert it still finds an autoload. (`tests/Cli/PtyShimAutoloadTest.php`)
 
 ## Section D — PHPStan: clear baseline + 87 new errors
 
@@ -129,7 +129,7 @@ Spawn one last review agent to:
 
 - [ ] Re-read `vcr_use.md` section by section and grep / read the codebase to verify each Phase 0–7 deliverable matches the plan.
 - [ ] Re-confirm each box in this file is ticked.
-- [ ] Run `vendor/bin/phpunit` in `candy-vcr`, `sugar-vterm`, `candy-pty` — report assertion counts.
+- [ ] Run `vendor/bin/phpunit` in `candy-vcr`, `sugar-vterm`, `sugar-pty` — report assertion counts.
 - [ ] Run `vendor/bin/phpstan analyze` in `candy-vcr` and `sugar-vterm` — report error counts.
 - [ ] Render `candy-vcr/.vhs/smoke.tape` end-to-end with both `--encoder ffmpeg` and `--encoder php`; report GIF dimensions + sizes.
 - [ ] Compare against the upstream-vhs runner job's output for the seed lib; report any visual drift.
@@ -155,7 +155,7 @@ Spawn one last review agent to:
 **Test totals:**
 - candy-vcr: 634 tests / 5402 assertions (1 skipped — ffmpeg-gated VFR test on hosts without ffmpeg-on-PATH variant)
 - sugar-vterm: 506 tests / 2127 assertions
-- candy-pty: 331 tests / 929 assertions (7 skipped — FFI/PTY environment gates)
+- sugar-pty: 331 tests / 929 assertions (7 skipped — FFI/PTY environment gates)
 
 **phpstan:**
 - candy-vcr: exit 0 — `[OK] No errors`

@@ -1,6 +1,6 @@
 ---
 name: record-vhs-demo
-description: Creates a VHS .tape file at <slug>/.vhs/<demo>.tape driving php examples/<demo>.php with TokyoNight theme and the standard FontSize/Width/Height/Type/Enter/Sleep sequence. Also adds the lib to the hand-maintained matrix in .github/workflows/vhs.yml when missing. Use when user says 'add VHS demo', 'record gif', 'new tape file', 'add a tape for <slug>'. Do NOT use for editing an existing tape's visual style, rendering GIFs locally (CI does that via vhs.yml), or for non-visual libs (candy-pty, FFI/syscall wrappers) — those are exempt from the .vhs/ + matrix requirement.
+description: Creates a VHS .tape file at <slug>/.vhs/<demo>.tape driving php examples/<demo>.php with TokyoNight theme and the standard FontSize/Width/Height/Type/Enter/Sleep sequence. Also adds the lib to the hand-maintained matrix in .github/workflows/vhs.yml when missing. Use when user says 'add VHS demo', 'record gif', 'new tape file', 'add a tape for <slug>'. Do NOT use for editing an existing tape's visual style, rendering GIFs locally (CI does that via vhs.yml), or for non-visual libs (sugar-pty, FFI/syscall wrappers) — those are exempt from the .vhs/ + matrix requirement.
 paths:
   - '*/.vhs/*.tape'
   - .github/workflows/vhs.yml
@@ -14,7 +14,7 @@ paths:
 - The CI matrix in `.github/workflows/` for VHS rendering is **hand-maintained** (a bash array in the workflow file). A tape that exists but whose lib isn't in that array will silently never render. Verify the lib is present before claiming the work is done.
 - Do **not** run `vhs` locally to commit a rendered output. CI renders and commits via the workflow's commit job. Tape files only — no rendered output in the same PR.
 - The matching example script (PHP entrypoint or bin command) must already exist. If it doesn't, stop and ask the user — don't fabricate an example script just to make the tape runnable.
-- Skip this skill entirely for non-visual libs: `candy-pty`, FFI/syscall wrappers, transport-only libs. They're explicitly listed (or omitted) from the workflow matrix and don't carry tape directories.
+- Skip this skill entirely for non-visual libs: `sugar-pty`, FFI/syscall wrappers, transport-only libs. They're explicitly listed (or omitted) from the workflow matrix and don't carry tape directories.
 
 ## Instructions
 

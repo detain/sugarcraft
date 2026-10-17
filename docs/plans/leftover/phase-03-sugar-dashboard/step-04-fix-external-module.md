@@ -25,7 +25,7 @@ Fix two ways:
   - Replace `proc_open(...)` with `new PosixProcess(...)`.
   - `sendRequest()` writes to `$this->pipes[0]` (stdin).
   - `readResponse()` reads from `$this->pipes[1]` (stdout).
-- `sugar-dashboard/composer.json` — add `"sugarcraft/candy-pty": "@dev"`
+- `sugar-dashboard/composer.json` — add `"sugarcraft/sugar-pty": "@dev"`
   to `require` (was transitive; now direct). Add path-repo per
   `tools/check-path-repos.php`.
 

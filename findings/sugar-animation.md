@@ -280,7 +280,7 @@ The library is synchronous and follows the SugarCraft `Model`/`Cmd`/`Msg` patter
 ```
 sugar-animation
 ├── sugarcraft/candy-core      (Model, Cmd, Msg, Program, ProgramOptions, Ansi)
-├── sugarcraft/candy-pty       (SizeIoctl)
+├── sugarcraft/sugar-pty       (SizeIoctl)
 ├── sugarcraft/sugar-style (Style — not directly imported, but in ecosystem)
 ├── sugarcraft/sugar-testing   (test only, assertGoldenAnsi)
 └── ext-gd                     (PHP extension)

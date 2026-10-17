@@ -682,7 +682,7 @@ Port the VHS `.tape` format as a SugarCraft library for scripted terminal demos
 11. **Build `SyntaxHighlighterInterface` + adapters** — close the lexer gap (largest effort)
 12. **Create `ImagettftextRenderer`** — TTF-based PNG for per-segment background + CJK
 13. **Add WebpRenderer** — using `imagewebp()`
-14. **Build PTY capture via candy-pty** — `--execute` equivalent
+14. **Build PTY capture via sugar-pty** — `--execute` equivalent
 
 ## Experimental Ideas
 

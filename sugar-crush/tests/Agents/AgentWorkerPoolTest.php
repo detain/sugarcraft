@@ -1695,7 +1695,7 @@ final class AgentWorkerPoolTest extends TestCase
      *
      * pcntl_waitpid() answers -1 when the child is gone but unwaitable: a
      * SIGCHLD disposition of SIG_IGN has the kernel auto-reap every child
-     * (candy-pty's SignalForwarder can install exactly that handler), and so
+     * (sugar-pty's SignalForwarder can install exactly that handler), and so
      * does any blanket wait() elsewhere in the process. Folding -1 in with 0
      * ("nothing yet") strands the agent in $active with no mechanism left that
      * can remove it — the same permanent-hang shape the whole change-set is
@@ -2378,7 +2378,7 @@ final class AgentWorkerPoolTest extends TestCase
      * The deferred-reap list must be bounded by the "someone else got there
      * first" answer, not only by a successful reap.
      *
-     * Under a SIGCHLD disposition of SIG_IGN — which candy-pty's
+     * Under a SIGCHLD disposition of SIG_IGN — which sugar-pty's
      * SignalForwarder can install in this very process — the kernel auto-reaps
      * every child, so pcntl_waitpid() answers -1 forever and never $pid. A
      * sweep that only cleared on `=== $pid` would then never remove the entry,

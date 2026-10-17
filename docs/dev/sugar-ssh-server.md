@@ -202,7 +202,7 @@ The `ChannelMsg` hierarchy:
 
 ### InProcessTransport (default)
 
-- Allocates a `candy-pty` master/slave pair via `PtySystem`
+- Allocates a `sugar-pty` master/slave pair via `PtySystem`
 - Spawns the user's command as a subprocess with `controllingTerminal: true`
 - Pumps bytes between the supervisor's STDIN/STDOUT and the PTY master
 - Forwards SIGWINCH to resize the PTY

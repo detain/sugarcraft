@@ -17,7 +17,7 @@ slot in without changing call sites.
 
 **Modify:**
 
-- `candy-pty/src/PtySystemFactory.php`:
+- `sugar-pty/src/PtySystemFactory.php`:
   - `default(): PtySystem` checks `getenv('SUGARCRAFT_PTY_BACKEND')`
     first.
   - Recognized values: `posix-ffi` (default), `sidecar` (throws
@@ -25,13 +25,13 @@ slot in without changing call sites.
     message), `pecl` (same), `auto` (= default behaviour).
   - Unrecognized values throw `\InvalidArgumentException` with a
     helpful message listing valid values.
-- `candy-pty/README.md` — document the env var in the Architecture
+- `sugar-pty/README.md` — document the env var in the Architecture
   section.
-- `candy-pty/docs/CONCEPTS.md` — one paragraph on backend selection.
+- `sugar-pty/docs/CONCEPTS.md` — one paragraph on backend selection.
 
 ## Tests
 
-- `candy-pty/tests/PtySystemFactoryTest.php`:
+- `sugar-pty/tests/PtySystemFactoryTest.php`:
   - Asserts default behaviour with no env var set.
   - Asserts `SUGARCRAFT_PTY_BACKEND=posix-ffi` returns
     `PosixPtySystem`.
@@ -41,7 +41,7 @@ slot in without changing call sites.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter PtySystemFactory` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter PtySystemFactory` green.
 - README has the new section documenting all four recognized values.
 - No behavioural change for default (no env var set) callers.
 

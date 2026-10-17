@@ -18,7 +18,7 @@
   `\SugarCraft\Style\Border\Border` and `Style`.
 - `sugar-quickpick/src/Hermit.php` — SIGWINCH handler attaches via
   `SignalForwarder::attachSigwinch`.
-- `sugar-quickpick/composer.json` — add `sugar-style` + `candy-pty`.
+- `sugar-quickpick/composer.json` — add `sugar-style` + `sugar-pty`.
 
 **Create:**
 

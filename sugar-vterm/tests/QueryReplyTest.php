@@ -251,7 +251,7 @@ final class QueryReplyTest extends TestCase
     public function testReplyQueueIsBoundedAgainstQueryStorms(): void
     {
         // Hostile program output spamming CSI 6n at a terminal nobody
-        // drains must not grow memory without bound (candy-pty renders
+        // drains must not grow memory without bound (sugar-pty renders
         // exactly such untrusted streams). Drop-OLDEST at MAX_REPLIES:
         // queries rotate over 5 rows — 5 is coprime with the 1024-entry
         // window, so head (push 76) and tail (push 1099) answer distinct

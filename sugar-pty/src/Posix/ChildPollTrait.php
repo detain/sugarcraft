@@ -1,0 +1,317 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Pty\Posix;
+
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+
+/**
+ * Package-private trait shared by {@see \SugarCraft\Pty\Child} and any other
+ * sugar-pty handle that owns a `proc_open()` resource and needs to expose the
+ * canonical waitpid-style lifecycle (`exited()`, `wait()`, `exitCode()`,
+ * `pid()`).
+ *
+ * Mirrors charmbracelet/x/xpty.Cmd's waitpid semantics — `running=false`
+ * triggers `exitcode` capture before `proc_close()`. PHP's `proc_close()`
+ * returns the wait-status; `-1` means the child was already reaped, which is
+ * harmless and intentionally ignored here.
+ *
+ * Intended only for sugar-pty internal use; PHP has no real access control on
+ * traits, so this is a doc-comment convention.
+ *
+ * @internal
+ *
+ * @see \SugarCraft\Pty\Child
+ * @see \SugarCraft\Pty\Posix\PosixChild
+ */
+trait ChildPollTrait
+{
+    use \SugarCraft\Pty\Concerns\LibcAccess;
+
+    /** @var resource|null */
+    private $process;
+
+    private ?int $exitCode = null;
+
+    private const WNOHANG = 1;
+
+    /**
+     * Try to reap an exited child via waitpid() FFI (non-blocking).
+     *
+     * Returns the exit code if the child has exited, null if still
+     * running or FFI is unavailable (falls back to proc_get_status).
+     *
+     * WNOHANG is used so this never blocks — returns null immediately
+     * if the child has not yet exited. Exit code: normally-exited =>
+     * (status >> 8) & 0xFF; signal-terminated => 128 + (status & 0x7F).
+     *
+     * @internal
+     *
+     * @param int $pid the child process ID to wait on
+     * @return int|null the exit code if the child has exited, null if still
+     *                  running or FFI is unavailable
+     */
+    private function tryWaitpid(int $pid): ?int
+    {
+        static $libc = null;
+        if ($libc === null) {
+            try {
+                $libc = self::libc();
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        try {
+            // Allocate int[1] array, pass addr of first element as int*.
+            $statusArray = $libc->new('int[1]');
+            $result = $libc->waitpid($pid, \FFI::addr($statusArray[0]), self::WNOHANG);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        // result > 0 means the child has exited (returns the pid)
+        // result === 0 means WNOHANG and child hasn't exited yet
+        // result < 0 means error
+        if ($result <= 0) {
+            return null;
+        }
+
+        // $statusArray[0] is the int that waitpid wrote to.
+        // For normally-exited process: status = exit_code (0-255)
+        // For signal-terminated process: status = signal_number (1-127)
+        // Convention: exit code for signal death is 128 + signal_number.
+        $statusVal = (int)$statusArray[0];
+        $signal = $statusVal & 0x7F;
+        if ($signal !== 0) {
+            // Signal-terminated: 128 + signal number.
+            return 128 + $signal;
+        }
+        return ($statusVal >> 8) & 0xFF;
+    }
+
+    /**
+     * @see creack/pty.Cmd.ProcessState
+     *
+     * Sharp edge: a child reaped by a prior `waitpid` call may report
+     * `exited() === true` while `exitCode() === null` (proc_get_status
+     * sets exitcode to -1 for reaped children). Callers that need a
+     * guaranteed numeric exit code should prefer `wait()`.
+     */
+    public function exited(): bool
+    {
+        if ($this->exitCode !== null) {
+            return true;
+        }
+        if (!\is_resource($this->process)) {
+            return true;
+        }
+
+        // Fast path: use waitpid FFI for sub-millisecond detection.
+        $exitCode = $this->tryWaitpid($this->pid);
+        if ($exitCode !== null) {
+            $this->exitCode = $exitCode;
+            return true;
+        }
+
+        // Fallback: proc_get_status poll.
+        $status = \proc_get_status($this->process);
+        if ($status['running'] === false) {
+            // Note: exitcode is -1 if the child has already been reaped
+            // by a prior waitpid call; only use it if it's a real exit code
+            // and we haven't already captured the exit code.
+            $code = (int) $status['exitcode'];
+            if ($code >= 0 && $this->exitCode === null) {
+                $this->exitCode = $code;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @see creack/pty.Cmd.Wait()
+     *
+     * CONTRACT (E717): waitpid semantics — the poll loop below carries
+     * no internal deadline; callers MUST bound. It exits only when the
+     * child is reaped, so a child that never exits pins the caller
+     * forever, exactly like an unbounded pump loop. The bounded
+     * composition is the non-blocking {@see exited()} probe plus a
+     * caller-side kill; tests additionally sit behind the
+     * `sugar-pty/tests/Support/HangWatchdog` process backstop.
+     */
+    public function wait(): int
+    {
+        if ($this->exitCode !== null) {
+            return $this->exitCode;
+        }
+        if (!\is_resource($this->process)) {
+            return $this->exitCode ?? 0;
+        }
+
+        // Fast path: use waitpid FFI for sub-millisecond detection.
+        $exitCode = $this->tryWaitpid($this->pid);
+        if ($exitCode !== null) {
+            $this->exitCode = $exitCode;
+            \proc_close($this->process);
+            $this->process = null;
+            return $this->exitCode;
+        }
+
+        while (true) {
+            // Try waitpid first on each iteration.
+            $exitCode = $this->tryWaitpid($this->pid);
+            if ($exitCode !== null) {
+                $this->exitCode = $exitCode;
+                break;
+            }
+            $status = \proc_get_status($this->process);
+            if ($status['running'] === false) {
+                // Note: exitcode is -1 if the child has already been reaped
+                // by a prior waitpid call; only use it if it's a real exit code
+                // and we haven't already captured the exit code.
+                $code = (int) $status['exitcode'];
+                if ($code >= 0 && $this->exitCode === null) {
+                    $this->exitCode = $code;
+                }
+                break;
+            }
+            // Tight polling: 10 ms sleep between proc_get_status checks.
+            // This is intentional — waitpid FFI may be unavailable (ext-ffi
+            // disabled) or may return null on the first call before the
+            // child has exited. The fallback poll loop needs a small sleep
+            // to avoid spinning the CPU at 100% while still detecting exit
+            // within ~10 ms. This matches the granularity shells use for
+            // $SECONDS-level polling.
+            \usleep(10_000);
+        }
+
+        \proc_close($this->process);
+        $this->process = null;
+        // Darwin SIGINT-via-PTY can reap the zombie before tryWaitpid runs;
+        // proc_get_status then reports running=false with exitcode=-1 and
+        // $this->exitCode stays null. Match PHP's convention: -1 means
+        // "process is gone but the exit code could not be captured".
+        return $this->exitCode ?? -1;
+    }
+
+    /**
+     * Async variant of {@see wait()}: returns a ReactPHP promise that
+     * resolves with the child's exit code without ever blocking the
+     * event loop.
+     *
+     * Implementation is a periodic-timer poll of the non-blocking
+     * {@see exited()} probe (which itself fast-paths through the FFI
+     * `waitpid(WNOHANG)` in {@see tryWaitpid()}). A SIGCHLD handler is
+     * deliberately NOT used: POSIX signal dispositions are process-global,
+     * so installing one would silently conflict with user code and with
+     * sugar-pty's own SignalForwarder, and ext-pcntl (plus a loop backend
+     * that tolerates foreign `pcntl_signal` calls) is not guaranteed.
+     * A 15 ms default poll keeps exit-detection latency comparable to the
+     * sync `wait()` fallback loop while costing effectively zero CPU.
+     *
+     * Multiple concurrent waitAsync() calls each get their own timer and
+     * all resolve independently — the exit code is cached on first capture
+     * so later resolutions are pure reads.
+     *
+     * Cancelling the returned promise cancels the poll timer for THAT
+     * call only (other pending waitAsync() promises keep polling) and
+     * rejects with a \RuntimeException. The child itself is not signalled.
+     *
+     * Implements plan item 8.3 (findings/plan_sugar-pty.md).
+     *
+     * @param LoopInterface|null $loop            defaults to the global Loop::get()
+     * @param float              $pollIntervalSec exit-probe cadence in seconds
+     * @return PromiseInterface<int> resolves with the exit code ({@see wait()} semantics,
+     *                               including -1 when the code could not be captured)
+     */
+    public function waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = 0.015): PromiseInterface
+    {
+        if ($pollIntervalSec <= 0.0) {
+            throw new \InvalidArgumentException("pollIntervalSec must be > 0; got {$pollIntervalSec}");
+        }
+
+        if ($this->exited()) {
+            return \React\Promise\resolve($this->wait());
+        }
+
+        // Resolve the loop only when a timer is actually needed — the
+        // already-exited fast path must not instantiate the global loop.
+        $loop ??= Loop::get();
+
+        /** @var TimerInterface|null $timer */
+        $timer = null;
+        $deferred = new Deferred(function (callable $resolve, callable $reject) use (&$timer, $loop): void {
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+            $reject(new \RuntimeException('waitAsync() cancelled before the child exited'));
+        });
+
+        $timer = $loop->addPeriodicTimer($pollIntervalSec, function () use (&$timer, $loop, $deferred): void {
+            if (!$this->exited()) {
+                return;
+            }
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+            // exited() === true guarantees wait() returns without blocking:
+            // the exit status is already captured (or the process handle is
+            // gone), so this is reaping + cache-read only.
+            $deferred->resolve($this->wait());
+        });
+
+        return $deferred->promise();
+    }
+
+    /**
+     * @see creack/pty.Cmd.ExitCode()
+     *
+     * Sharp edge: returns `null` when the child was reaped by a prior
+     * `waitpid` call (proc_get_status exitcode is -1 for reaped
+     * children). Use `wait()` for a guaranteed numeric return value.
+     */
+    public function exitCode(): ?int
+    {
+        return $this->exitCode;
+    }
+
+    /**
+     * @see creack/pty.Cmd.Pid()
+     */
+    public function pid(): int
+    {
+        return $this->pid;
+    }
+
+    /**
+     * Zombie-reaper safety net for the consuming class's `__destruct`.
+     *
+     * PHP traits do not compose `__destruct` cleanly with the consuming
+     * class (the trait method is shadowed if the class declares its own).
+     * Each consumer must therefore define its own `__destruct` that
+     * delegates here.
+     *
+     * Suppression around `proc_get_status()` / `proc_close()` is deliberate:
+     * destructors MUST NOT throw, and `proc_close()` returning `-1` for an
+     * already-reaped child is expected (see class doc-comment).
+     */
+    protected function pollDestruct(): void
+    {
+        if (!\is_resource($this->process)) {
+            return;
+        }
+        $status = @\proc_get_status($this->process);
+        if (\is_array($status) && ($status['running'] ?? true) === false) {
+            @\proc_close($this->process);
+            $this->process = null;
+        }
+    }
+}

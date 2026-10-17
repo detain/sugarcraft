@@ -33,7 +33,7 @@
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-animation": "dev-master",
-        "sugarcraft/candy-pty": "dev-master"
+        "sugarcraft/sugar-pty": "dev-master"
     },
     "suggest": {
         "ext-gd": "Required to decode GIF animations (via sugarcraft/sugar-animation); ANSI art playback needs neither."

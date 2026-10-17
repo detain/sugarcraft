@@ -3145,7 +3145,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * the terminal still in raw mode inside the alt screen. Nothing in the TUI
      * noticed, because the raw mode it runs under clears ISIG and an
      * interactive Ctrl+C therefore arrives as a byte rather than as a signal at
-     * all: `PosixBackend` delegates to candy-pty's `TermiosFactory`, whose two
+     * all: `PosixBackend` delegates to sugar-pty's `TermiosFactory`, whose two
      * implementations are `SugarCraft\Pty\Posix\PosixTermios::makeRaw()`
      * (libc `cfmakeraw()`) and `SugarCraft\Pty\Posix\SttyTermios::makeRaw()`
      * (`stty raw -echo`) — both of which clear ISIG by definition. So this was

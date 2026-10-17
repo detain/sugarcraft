@@ -19,7 +19,7 @@ Create `<slug>/lang/<code>.php` for an existing SugarCraft library by translatin
 
 ## Instructions
 
-1. **Resolve the slug and confirm i18n is wired.** From the user's lib name derive the kebab slug (e.g. "charts" → `sugar-charts`, "pty" → `candy-pty`). Verify the source exists:
+1. **Resolve the slug and confirm i18n is wired.** From the user's lib name derive the kebab slug (e.g. "charts" → `sugar-charts`, "pty" → `sugar-pty`). Verify the source exists:
    ```sh
    ls <slug>/lang/en.php <slug>/src/Lang.php
    ```
@@ -33,7 +33,7 @@ Create `<slug>/lang/<code>.php` for an existing SugarCraft library by translatin
 
 3. **Read the full `<slug>/lang/en.php`.** `Read <slug>/lang/en.php` in its entirety. Capture: the header docblock, every `'key' => 'value'` pair (including comment lines like `// Canvas/Canvas.php` that group keys in multi-section files such as `sugar-charts/lang/fr.php`), and every `{placeholder}` token inside each value. This is the template — the output must have identical structure. Uses the file from Step 1.
 
-4. **Write `<slug>/lang/<code>.php`** matching this exact shape (from `candy-pty/lang/en.php` and `sugar-charts/lang/fr.php`):
+4. **Write `<slug>/lang/<code>.php`** matching this exact shape (from `sugar-pty/lang/en.php` and `sugar-charts/lang/fr.php`):
    ```php
    <?php
 
@@ -92,7 +92,7 @@ Create `<slug>/lang/<code>.php` for an existing SugarCraft library by translatin
 
 - **`KEY MISMATCH missing=... extra=...` from Step 5:** your locale file dropped or renamed a key. Re-Read `<slug>/lang/en.php`, copy the exact key strings, do not translate keys. If `extra=` shows a key not in `en.php`, you invented one — remove it. Never "fix" it by editing `en.php`.
 - **`PLACEHOLDER MISMATCH on <key>` from Step 5:** you translated or dropped a `{token}`. Restore the exact `{...}` names from that key's `en.php` value; only translate the surrounding words. Tokens are case-sensitive: `{fd}` ≠ `{FD}`.
-- **`ls: sugar-<x>/lang/en.php: No such file` in Step 1:** the lib is not internationalized yet. Do NOT scaffold `src/Lang.php`/`lang/en.php` here — tell the user this needs first-time i18n wiring (add a `Lang extends SugarCraft\Core\I18n\Lang` facade with `NAMESPACE`/`DIR` like `candy-pty/src/Lang.php`, plus `Lang::t()` call sites) and stop.
+- **`ls: sugar-<x>/lang/en.php: No such file` in Step 1:** the lib is not internationalized yet. Do NOT scaffold `src/Lang.php`/`lang/en.php` here — tell the user this needs first-time i18n wiring (add a `Lang extends SugarCraft\Core\I18n\Lang` facade with `NAMESPACE`/`DIR` like `sugar-pty/src/Lang.php`, plus `Lang::t()` call sites) and stop.
 - **`LangCoverageTest` fails with "key referenced in src/ missing from en.php":** that is a pre-existing `<slug>/lang/en.php` gap unrelated to your locale file — surface it to the user; it is out of scope for a locale add and must be fixed in `en.php` separately.
 - **PHPUnit fails on unrelated classes after only adding a lang file:** stale per-lib `vendor/`/`composer.lock`. Run `cd <slug> && composer update` then re-run phpunit before trusting the failure.
 - **File loads but strings never appear at runtime:** the code is `zh_CN`-style but files are `zh-cn`. `T::detect()` lowercases and maps `_`→`-`; name the file `<slug>/lang/zh-cn.php`, not `zh_CN.php`.

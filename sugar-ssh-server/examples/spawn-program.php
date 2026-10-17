@@ -2,7 +2,7 @@
 
 /**
  * In-process sugar-ssh-server example that mounts a SugarCraft Program
- * inside a candy-pty subprocess (the in-process equivalent of the
+ * inside a sugar-pty subprocess (the in-process equivalent of the
  * pre-PTY-upgrade BubbleTea + HostSshd setup).
  *
  * Two pieces:
@@ -16,7 +16,7 @@
  *      call `(new Program($model))->run()`. Lives next to this
  *      file in production deployments.
  *
- * The wrapper runs as a subprocess under the candy-pty PTY, so
+ * The wrapper runs as a subprocess under the sugar-pty PTY, so
  * Ctrl+C / Ctrl+Z / SIGWINCH all behave correctly via the
  * controlling-terminal claim. The supervisor middleware layer
  * (Logger, Auth, RateLimit) runs in the parent, before the

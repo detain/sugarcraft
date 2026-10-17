@@ -11,7 +11,7 @@ session replays for bug repro, regression testing, and demo capture.
 ### What the process does
 
 `candy-vcr record` spawns a fresh master/slave PTY, drops the host stdin
-into raw mode, and runs the recorded command under a candy-pty byte pump with
+into raw mode, and runs the recorded command under a sugar-pty byte pump with
 a `Recorder` tee'd onto every stdin/master-output chunk. The cassette is
 append-only and flushes after every event — a crash mid-recording does not
 lose previously written events.

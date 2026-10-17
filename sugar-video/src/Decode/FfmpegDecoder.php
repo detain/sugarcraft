@@ -44,7 +44,7 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  * null NEVER desyncs the forward-only pipe. The E722 law it satisfies is
  * unchanged: no single call parks the loop forever (the pre-timeout plain
  * fread it documented could). THE CALLER still owns the latency budget
- * (the r69 pump law, same shape as candy-pty's PosixPump): repeated nulls
+ * (the r69 pump law, same shape as sugar-pty's PosixPump): repeated nulls
  * on a live-but-silent ffmpeg persist past any one deadline, so whoever
  * drives next() decides when to give up and reach close(). What this class
  * guarantees is that the child cannot pin a read forever once the caller

@@ -48,7 +48,7 @@ The 8 shared packages:
 
 ## Per-lib opportunities
 
-### candy-pty
+### sugar-pty
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
@@ -300,7 +300,7 @@ The 8 shared packages:
 | Effort | libs |
 |--------|------|
 | **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, sugar-cli (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, sugar-animation (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, sugar-metrics, sugar-log |
+| **M** (multiple pkgs or larger surface) | sugar-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, sugar-metrics, sugar-log |
 
 ---
 

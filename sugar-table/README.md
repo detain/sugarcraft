@@ -256,7 +256,7 @@ $t = Table::fromColumns([...])
     ->withViewportHeight(15);
 
 // Simulate keyboard input
-$key = 'arrowDown';  // from your input library (e.g., candy-pty)
+$key = 'arrowDown';  // from your input library (e.g., sugar-pty)
 $t = $t->handleKey($key);
 
 // Or use the constants

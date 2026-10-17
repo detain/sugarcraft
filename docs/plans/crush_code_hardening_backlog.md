@@ -4022,7 +4022,7 @@ acquires more callers.
 
 **Recorded 2026-08-21 while scoping Phase 9. The FIX is deferred; the FINDING is not.**
 
-Phase 9 adds an opt-in interactive mode: a command marked interactive runs under a `candy-pty` PTY
+Phase 9 adds an opt-in interactive mode: a command marked interactive runs under a `candy-pty` PTY <!-- @rename-keep historical provenance -->
 whose output is composited **inside** the chat pane and whose prompt routes to the user. That is the
 right shape for usability, and it creates a surface that does not exist today.
 
@@ -12493,7 +12493,7 @@ themselves out, and that is not what happened here. **Answer: no. The orphaning 
 in flight, so the row measured already-fixed code. The pre-fix evidence is the separate direct
 measurement in E365 (0 servers before a run, 4 after, reproduced).
 
-⚠️ **NOT COVERED, and neither is an all-clear.** `candy-pty` was excluded on purpose: its suite spawns
+⚠️ **NOT COVERED, and neither is an all-clear.** `candy-pty` was excluded on purpose: its suite spawns <!-- @rename-keep historical provenance -->
 PTYs through FFI and this project already knows `timeout` does not reliably kill a hung PTY child, so
 testing it needs a pid-scoped watchdog and three lanes were mid-round. `sugar-crush` was excluded as
 lane-owned and too much load during a measurement window — and it has by far the most sites, ~40.
@@ -12522,7 +12522,7 @@ children ranked by exposure:
 `ClaudeCodeInvocation.php:109` (no deadline at all) · `candy-core/src/Program.php:792`.
 
 **LOW / already correct:** candy-git-server's five sites are one-shot and drained (no timeout, string commands)
-· candy-pty is clean judged on its own PTY terms · `candy-git/src/Process.php` is correct · several
+· candy-pty is clean judged on its own PTY terms · `candy-git/src/Process.php` is correct · several <!-- @rename-keep historical provenance -->
 sugar-crush sites are already hardened reference implementations.
 
 **The user-facing shape of this, stated plainly:** sugar-crush's MCP servers, language servers and
@@ -12659,7 +12659,7 @@ cause. Unlike sites 2–5 this needs no unusual process state — only a shell r
   correct — and it is the shape the other sites should be moving toward, not away from.
 - `candy-vcr/src/Cli/RecordCommand.php` calls `TermiosFactory::open(0)` with a literal `0`. That is a real
   descriptor number, not a cast. Correct.
-- `candy-pty/src/Posix/PosixPtySystem.php` passes `$masterFd` / `$slaveFd` to `fcntl()`. These come from
+- `candy-pty/src/Posix/PosixPtySystem.php` passes `$masterFd` / `$slaveFd` to `fcntl()`. These come from <!-- @rename-keep historical provenance -->
   `posix_openpt` through FFI and are genuine kernel descriptors. Correct.
 
 #### STEP
@@ -12701,7 +12701,7 @@ it) because the roster is a set of file paths and none of those changed — this
     `Program::childDescriptor()`.
   - `candy-core/src/Util/RawMode.php` — says both its methods "gate on `TtyDetect::isAtty()`, which opens
     with `is_resource($stream)` and returns false". Still true, and the sentence after it about the
-    fd→Termios route is not: `isAtty()` no longer reaches candy-pty at all.
+    fd→Termios route is not: `isAtty()` no longer reaches candy-pty at all. <!-- @rename-keep historical provenance -->
 
 **Step.** Rewrite the three rows in the three-part form (rule 7) — WHAT IT SAID / WHAT IS TRUE NOW / WHY THE
 ROW STAYS. Do not delete them; the roster's own instructions say the judgement belongs in the doc-block, and
@@ -13540,7 +13540,7 @@ file is pre-existing and the new coverage was added alongside rather than folded
 The descriptor question is now pinned by `PosixBackendRestoreLastDescriptorTest` (two child processes,
 descriptors 0 and 1 arranged both ways round a `/dev/ptmx` handle). **What remains unpinned is the
 round-trip itself** — that a second `restoreLast()` call actually re-applies the snapshot. Closing that
-needs the same child-process shape plus a way to read a termios mode back, which candy-pty deliberately
+needs the same child-process shape plus a way to read a termios mode back, which candy-pty deliberately <!-- @rename-keep historical provenance -->
 does not expose (`struct termios` is opaque there); `stty -F <pts> -a` is the available route.
 
 ---
@@ -13552,7 +13552,7 @@ census for E368, before it was ever trusted.**
 
 The replacement scanner (`candy-core/tests/Util/Tty/DescriptorSinkScanner`) was first written to match a
 sink name as a `T_STRING` token. Run against a known-answer fixture it looked perfect. Run against
-`candy-pty/src/` it found `posix_isatty` in `PosixTermios` and `SttyTermios` — and **missed the one in
+`candy-pty/src/` it found `posix_isatty` in `PosixTermios` and `SttyTermios` — and **missed the one in <!-- @rename-keep historical provenance -->
 `SizeIoctl::query()`**, which is the guard every other member of this defect family ultimately trips over.
 
 The reason: `\posix_isatty(...)`, with the leading backslash the tree uses in that file, is a **single
@@ -13594,7 +13594,7 @@ no count is load-bearing.* Of the 13:
     accept, so both are correct — but the carve-out list was a hand-read snapshot and it was incomplete,
     which is the fourth time in this family that a hand-maintained roster of "the ones we know about"
     has turned out to be a subset.
-  - The remaining one is `candy-pty/src/SizeIoctl.php`'s own `\posix_isatty($fd)` guard, i.e. the check
+  - The remaining one is `candy-pty/src/SizeIoctl.php`'s own `\posix_isatty($fd)` guard, i.e. the check <!-- @rename-keep historical provenance -->
     the whole family ultimately trips over.
 
 **No seventh instance exists tree-wide.** That is a claim the first census could not have made, because it
@@ -13751,8 +13751,8 @@ and wrong for the one sink in the list that is *normally* reached as a method.
 **MEASURED, this lane's worktree, generator = `grep -rEn '(->|::)<sink>\s*\(' --include=*.php */src/`
 for each of `DescriptorSinkScanner::FUNCTION_SINKS`:** `posix_isatty` and `posix_ttyname` have **zero**
 method-shaped call sites tree-wide. `fcntl` has **two**, both in
-`candy-pty/src/Posix/PosixPtySystem.php`, both spelled `$libc->fcntl($masterFd, …)` /
-`$libc->fcntl($slaveFd, …)` against candy-pty's FFI `Libc` binding, whose cdef declares
+`candy-pty/src/Posix/PosixPtySystem.php`, both spelled `$libc->fcntl($masterFd, …)` / <!-- @rename-keep historical provenance -->
+`$libc->fcntl($slaveFd, …)` against candy-pty's FFI `Libc` binding, whose cdef declares <!-- @rename-keep historical provenance -->
 `int fcntl(int fd, int cmd, int arg)` — a genuine descriptor sink by the census's own definition.
 
 **Both are currently CORRECT** (`$masterFd` and `$slaveFd` come from `posix_openpt()` and the
@@ -13766,7 +13766,7 @@ Widening further, the same `Libc` binding exposes `open`/`close`/`ioctl`/`read`/
 *Re-derive both numbers before acting on them — they are a property of this worktree, not of master.*
 
 **STEP**: give the scanner a third sink class, `METHOD_SINKS`, matched as
-`T_OBJECT_OPERATOR`/`T_DOUBLE_COLON` + name, and seed it from candy-pty's `Libc` cdef rather than by
+`T_OBJECT_OPERATOR`/`T_DOUBLE_COLON` + name, and seed it from candy-pty's `Libc` cdef rather than by <!-- @rename-keep historical provenance -->
 hand, so the sink roster stops being the same kind of hand-maintained list this whole family keeps
 getting caught by.
 
@@ -13784,7 +13784,7 @@ commit series this entry was written beside:
   - `closeDeviceDescriptor()` — `Libc::lib()->close($fd)`, **which takes a descriptor as its first
     argument and is therefore a sink by this census's own definition**.
 
-Neither has a roster row, and neither can have one until `METHOD_SINKS` exists. Naming candy-pty's two
+Neither has a roster row, and neither can have one until `METHOD_SINKS` exists. Naming candy-pty's two <!-- @rename-keep historical provenance -->
 `fcntl` sites as the blind spot's live instances, while the fix in the library the census *lives in* sat
 in the same hole, understated it. `closeDeviceDescriptor()`'s `close($fd)` is also the cheapest available
 known-positive seed for the `METHOD_SINKS` step, being one file away from the test.
@@ -13799,15 +13799,15 @@ grep -rEn '(Libc::lib\(\)|\$libc|self::libc\(\)|libc\(\))->(open|close|ioctl|fcn
   --include=*.php */src/          # -> 23 lines
 ```
 
-Of those 23: **1 is a doc-comment reference**, not a call (`candy-pty/src/ControllingTerminal.php`'s
+Of those 23: **1 is a doc-comment reference**, not a call (`candy-pty/src/ControllingTerminal.php`'s <!-- @rename-keep historical provenance -->
 `{@see Libc::lib()->ioctl()}`), and **2 are `open()`, whose FIRST argument is a path and not a descriptor**
-(`candy-core/src/Util/Tty/PosixBackend.php` and `candy-pty/src/Posix/PosixPtySystem.php`). That leaves
+(`candy-core/src/Util/Tty/PosixBackend.php` and `candy-pty/src/Posix/PosixPtySystem.php`). That leaves <!-- @rename-keep historical provenance -->
 **20 method-shaped calls whose first argument is a file descriptor** — the population `METHOD_SINKS` would
 have to judge. Not 18.
 
 The two things the original alternation could not express are worth more than the corrected number:
 
-  - the receiver spelling **`self::libc()->`** — four sites in `candy-pty/src/Posix/PosixMasterPty.php`,
+  - the receiver spelling **`self::libc()->`** — four sites in `candy-pty/src/Posix/PosixMasterPty.php`, <!-- @rename-keep historical provenance -->
     which neither `lib\(\)->` (that needs a literal `lib(`) nor `$libc->` matches;
   - the symbol **`dup`** — `PosixMasterPty.php`'s `self::libc()->dup($this->fd)`, a live fd sink.
 
@@ -14518,7 +14518,7 @@ open. The lowest match is preferred and that preference is pinned (mutation m5 s
 committed: `DescriptorSinkScanner::methodSinks()` / `sinksFromCdef()`.**
 
 E404 put the method-shaped population at 20, from a grep whose symbol alternation was
-`open|close|ioctl|fcntl|read|write|dup|dup2`. Re-derived by parsing candy-pty's own
+`open|close|ioctl|fcntl|read|write|dup|dup2`. Re-derived by parsing candy-pty's own <!-- @rename-keep historical provenance -->
 `Libc::cdef()` for every declaration whose FIRST parameter is `int fd`:
 
   - `read`, `write` and `dup2` **are not declared in that cdef at all** — three imaginary symbols;
@@ -14539,7 +14539,7 @@ had already lost four sites to a missing one. A scanner that has no opinion abou
 a fifth. Mutation m16 plants a sink behind a receiver spelling nothing in the tree uses
 (`$registry->handles()->dup($someFd)`) and the census reds.
 
-**A smaller correction to E404.** It recorded `candy-pty/src/ControllingTerminal.php`'s mention of the
+**A smaller correction to E404.** It recorded `candy-pty/src/ControllingTerminal.php`'s mention of the <!-- @rename-keep historical provenance -->
 symbol as "a doc-comment reference, not a call", and discounted it. That file has BOTH: the doc-comment,
 and a live `$libc->ioctl($fd, $tioCSctty, null)` one screen below it, which the entry did not count. Token
 scanning does not have that problem — `T_DOC_COMMENT` is never tokenised into a call.
@@ -14590,7 +14590,7 @@ its own preconditions, and "it kills under `--filter`" is not the same claim as 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: dead guard. **DEFERRED — not fixed, see below.**
 
 `PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()` is the only test in the tree that exercised
-`enableRawMode()` through candy-pty's `stty` termios backend on a real pty. MEASURED on this box,
+`enableRawMode()` through candy-pty's `stty` termios backend on a real pty. MEASURED on this box, <!-- @rename-keep historical provenance -->
 PHP 8.3.6: it is SKIPPED. Its skip gate reads
 
 ```php
@@ -14640,18 +14640,18 @@ this round:
      exist and every symbol in the roster is declared with at least one parameter, so a nullary call of
      that name is provably a different method;
   2. the symbol roster is derived from `SugarCraft\Pty\Libc::cdef()`, so **an fd-first declaration added in
-     candy-pty reds candy-core** with no candy-core change on either side.
+     candy-pty reds candy-core** with no candy-core change on either side. <!-- @rename-keep historical provenance -->
 
 The failure text now says all of this and names the resolution, because the person who hits it will be
 resolving a merge and looking at a red package they never opened.
 
 ---
 
-### E434 [SUPERSEDED] — candy-pty's assertion count is not stable across takes
+### E434 [SUPERSEDED] — candy-pty's assertion count is not stable across takes <!-- @rename-keep historical provenance -->
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: measurement hygiene.
 
-The round-54 brief gave candy-pty's floor as `606 / 1476 / 16 skipped / 1 warning / rc 0`. MEASURED on this
+The round-54 brief gave candy-pty's floor as `606 / 1476 / 16 skipped / 1 warning / rc 0`. MEASURED on this <!-- @rename-keep historical provenance -->
 box at `606a131c`, PHP 8.3.6, four takes: **1477, 1476, 1476, 1476** — tests, skips, warnings and rc
 identical every time. 1476 is right as the usual value and the brief is not wrong, but the assertion count
 is not a constant, and a lane that measures once and sees 1477 should not conclude it broke something.
@@ -14659,15 +14659,15 @@ The `+1` was not chased down; whichever test it is, it has an environment-depend
 
 ---
 
-### E435 [CLOSED] — candy-pty's assertion wobble is ONE named test, and E434 understates it in two ways
+### E435 [CLOSED] — candy-pty's assertion wobble is ONE named test, and E434 understates it in two ways <!-- @rename-keep historical provenance -->
 
 **Recorded 2026-08-25 by the round-54 lane-a recovery run.** Severity: measurement hygiene / merge-floor
-correctness. candy-pty is **not** edited by this lane; it is read by candy-core's descriptor census, and
+correctness. candy-pty is **not** edited by this lane; it is read by candy-core's descriptor census, and <!-- @rename-keep historical provenance -->
 its figures are quoted as a round floor, which is why this is worth a number.
 
 **E434 is refuted in both of its quantitative halves.** It says 1476 is "the usual value" and that the
 count "moves by ±1", from four takes. MEASURED at `5bef36cb`, PHP 8.3.6, this box, **20 consecutive
-takes**, `cd candy-pty && vendor/bin/phpunit`, tests/skips/warnings/rc identical throughout
+takes**, `cd candy-pty && vendor/bin/phpunit`, tests/skips/warnings/rc identical throughout <!-- @rename-keep historical provenance -->
 (`606 / 16 skipped / 1 warning / rc 0`):
 
 | assertions | takes |
@@ -14697,11 +14697,11 @@ SugarCraft\Pty\Tests\Integration\ResizeRaceTest::testResizeRaceProducesUntornWid
 child emits inside that window is a function of host scheduling, so the assertion count is timing-derived
 by construction. It is a legitimate integration test; the count is simply not a suite constant.
 
-**STEP (the actionable part):** stop quoting candy-pty's assertion count as a floor. A floor for this
+**STEP (the actionable part):** stop quoting candy-pty's assertion count as a floor. A floor for this <!-- @rename-keep historical provenance -->
 package should be `tests / skipped / warnings / rc` only, with the assertion count recorded as a RANGE and
 attributed to this test. If a hard number is genuinely wanted, the fix is inside the test — accumulate the
 per-line checks and assert once on the aggregate, so one assertion covers N lines — but that is a
-candy-pty change and no lane owns it this round.
+candy-pty change and no lane owns it this round. <!-- @rename-keep historical provenance -->
 
 **Unresolved, and deliberately left open: the round-54 reviewer observed `Failures: 1` on one of eleven
 takes at `9c93f095` and could not reproduce it in eight further takes; the failing test's name was not
@@ -15006,8 +15006,8 @@ Measured over the 18 libraries in `sugar-crush/vendor/sugarcraft`, PHP 8.3.6 on 
 every one declares `autoload.psr-4 => src` and nothing else, so the walk sees **438** `.php` files. Two
 kinds of real code sit outside that set:
 
-- **Code a library executes as a child rather than loading.** `candy-pty/bin/pty-shim.php` is run by
-  `candy-pty/src/Spawn.php::wrapInShim()`, and it inherits this process's descriptors when it runs. It is
+- **Code a library executes as a child rather than loading.** `candy-pty/bin/pty-shim.php` is run by <!-- @rename-keep historical provenance -->
+  `candy-pty/src/Spawn.php::wrapInShim()`, and it inherits this process's descriptors when it runs. It is <!-- @rename-keep historical provenance -->
   in no autoload section, so no instrument reads it. It happens to be clean today — `proc_open` appears
   in it exactly twice and both are comments — so the gap is currently silent, which is why it needs
   writing down rather than leaving for the first person whose shim spawns something.
@@ -15427,7 +15427,7 @@ returns null; the shutdown `exit(1)` removed; `unexpectedSkips()` returns `[]`;
 `rosterWasFullyReached()` returns true) were all killed, and the harness was run against a known no-op
 and a known kill first.
 
-### E459 [CLOSED] — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again
+### E459 [CLOSED] — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again <!-- @rename-keep historical provenance -->
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: measurement hygiene. **Fixed, mutation-checked.**
 
@@ -15512,7 +15512,7 @@ that new one, leaving 4 open. `$this->fd` is therefore open continuously from `p
 `close()` and its number is never free during the window the old comment described, so an unrelated
 `open()` cannot take it. The `dup()` is also taken *after* the `fclose()`, so it could neither detect nor
 prevent that substitution even if it could happen. MEASURED further: removing the `dup()` **and** its
-release together is behaviourally inert — `candy-pty` `--filter Posix` gives `165 / 394 / 1 warning /
+release together is behaviourally inert — `candy-pty` `--filter Posix` gives `165 / 394 / 1 warning / <!-- @rename-keep historical provenance -->
 2 skipped / rc 0`, identical to keeping them. It is retained as a deliberate dormant seam (two syscalls),
 not as a race fix, and the justification now says so in all three places it appears: the block in
 `PosixMasterPty::close()`, the `::->close($stableFd)` row in candy-core's
@@ -15529,7 +15529,7 @@ right answer was to stop leaking, not to loosen the walk.
 
 The brief's own lane map says lane a owns `candy-core/src/Util/Tty/` and `candy-core/tests/Util/Tty/` and
 gives `sugar-crush/tests/` to lanes b and c; the brief's YOUR FILES section gives lane a
-`sugar-crush/tests/`, `candy-pty/tests/` and exactly one file under `candy-core/tests/Util/Tty/`. This is
+`sugar-crush/tests/`, `candy-pty/tests/` and exactly one file under `candy-core/tests/Util/Tty/`. This is <!-- @rename-keep historical provenance -->
 E416 recurring in the round that rewrote the map to fix it. Work was done against YOUR FILES, widened
 where a guard or a real defect forced it, and every such edit is named at the top of the lane report.
 
@@ -15596,14 +15596,14 @@ such child); it is simply not what makes them quiet.
 **Recorded 2026-08-25 by round-55 lane a.** Severity: open question, deliberately deferred. **Not done.**
 
 E462's correction establishes that the dup does not prevent the race it was written for and that
-removing it together with its release is inert across `candy-pty --filter Posix`
+removing it together with its release is inert across `candy-pty --filter Posix` <!-- @rename-keep historical provenance -->
 (`165 / 394 / 1 warning / 2 skipped / rc 0`, identical). It is KEPT under rule 6 and now documented as a
 deliberate dormant seam.
 
 What is **not** established is that no caller pattern anywhere wants a stable reference across that
 `close()`. "No test notices" is a much weaker claim than "no reachable caller was found", and the
 difference is exactly the kind of sentence this plan has had to retract before. Someone closing this owes
-a generator: a census of `PosixMasterPty::close()` callers across the monorepo (`candy-pty`,
+a generator: a census of `PosixMasterPty::close()` callers across the monorepo (`candy-pty`, <!-- @rename-keep historical provenance -->
 `sugar-animation`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the <!-- @rename-keep historical provenance -->
 descriptor number across the call. Until then the block stays and the comment says what it does not know.
 
@@ -15975,7 +15975,7 @@ library-root tool config.
 Two of those five ARE reachable in the sense this guard cares about, and neither is an autoload
 question. `lang/` is executed **in this process** — `candy-core/src/I18n/T.php::load()` spells the load
 `$data = require $path`, and a `require` is not an autoload, so no manifest names those files. `bin/`
-runs as **our child** — `candy-pty/src/Spawn.php` prepends `[PHP_BINARY, bin/pty-shim.php]`, so the shim
+runs as **our child** — `candy-pty/src/Spawn.php` prepends `[PHP_BINARY, bin/pty-shim.php]`, so the shim <!-- @rename-keep historical provenance -->
 inherits every descriptor we hold. `LIB_HORIZON` rosters all five with the mechanism, and the walk now
 reads the two that qualify.
 
@@ -16111,12 +16111,12 @@ not look here" row should be checked for the same hole — the standard was alre
 
 ## Round 55 — supervisor. E490.
 
-### E490 [SUPERSEDED] — 🔴 candy-pty hung INDEFINITELY on the merged tree, once in two takes, and a hang is invisible to CI as anything but a timeout
+### E490 [SUPERSEDED] — 🔴 candy-pty hung INDEFINITELY on the merged tree, once in two takes, and a hang is invisible to CI as anything but a timeout <!-- @rename-keep historical provenance -->
 
 **Observed 2026-08-25 by the round-55 supervisor** while measuring the merged floor at `b489405ba`.
 Severity: intermittent, unreproduced, and deliberately filed anyway — see rule 14.
 
-**Take 1 (hung).** `vendor/bin/phpunit` in `candy-pty` stalled at roughly **363 of 608** and never
+**Take 1 (hung).** `vendor/bin/phpunit` in `candy-pty` stalled at roughly **363 of 608** and never <!-- @rename-keep historical provenance -->
 advanced. Evidence collected from `/proc` while it was still wedged, rather than inferred afterwards:
 
 - `State: S (sleeping)`, `wchan: do_select` — blocked in a select, not spinning.
@@ -16140,7 +16140,7 @@ is NOT evidence. One occurrence in two takes is not a diagnosis.
 
 **STEP:**
 
-1. Re-run `candy-pty` alone in a loop — 20+ takes, non-tty stdin, capturing `--testdox` so the LAST NAMED
+1. Re-run `candy-pty` alone in a loop — 20+ takes, non-tty stdin, capturing `--testdox` so the LAST NAMED <!-- @rename-keep historical provenance -->
    test is recorded on every take. Get the failing test's name before theorising about the cause.
 2. **Compare against `a8acfcc9`**, the pre-round base, under the same loop. If the base hangs too, this is
    pre-existing and E459/E462 are exonerated; if only the merged tree hangs, it is one of those two.
@@ -16150,7 +16150,7 @@ is NOT evidence. One occurrence in two takes is not a diagnosis.
 4. Note for whoever runs step 1: `timeout` does not reliably kill a wedged PTY/FFI child. Spawn a
    watchdog that kills the ONE recorded pid and nothing else — a global `pkill` is prohibited here.
 
-### E491 [CLOSED] — 🔴 `retryOnEintr()`'s EINTR detection could never be true, so candy-pty has NEVER retried an interrupted select
+### E491 [CLOSED] — 🔴 `retryOnEintr()`'s EINTR detection could never be true, so candy-pty has NEVER retried an interrupted select <!-- @rename-keep historical provenance -->
 
 **Measured 2026-08-25 by the round-55 supervisor** while writing the first behavioural test the helper
 has ever had (see [[E490]]). Severity: a signal turns an ordinary wait into a thrown exception, in a
@@ -16203,7 +16203,7 @@ deadline across three interruptions**, which the pre-fix code could not do in ei
 under test is 3 s rather than 1 s. The null-timeout arm is deliberately ungated so something still runs
 where the EINTR arm must skip.
 
-candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608 / 1401 / 16).
+candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608 / 1401 / 16). <!-- @rename-keep historical provenance -->
 
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
@@ -16234,7 +16234,7 @@ contradictions were not subtle:
 |---|---|---|
 | a | `candy-core/src/Util/Tty/` | `sugar-crush/src/Renderer.php`, `Runtime.php`, `Backend/EngineBackend.php` |
 | b | `src/MCP/`, `src/McpMessage.php`, `src/Sessions/` | `src/LSP/` — **a directory the map does not grant it at all** |
-| c | three `sugar-crush/tests/Support/*` scanners + seven descriptor specs | `candy-pty/`, which appears nowhere in the map |
+| c | three `sugar-crush/tests/Support/*` scanners + seven descriptor specs | `candy-pty/`, which appears nowhere in the map | <!-- @rename-keep historical provenance -->
 
 **What this measures is not the defect. It is how much of a 30,000-character brief is load-bearing.** A
 standing rule that names its own failure mode, gives the exact reporting action, and cites the round it
@@ -16933,7 +16933,7 @@ with the union, **rc 1 — "Delete the row" — without it.**
 ### E520 [CLOSED] — 🔴 the E490 hang watchdog could SIGKILL a healthy run at bootstrap
 
 **FIXED this round (review finding F4).** The state directory is
-`sys_get_temp_dir()/candy-pty-hang-watchdog-<pid>` — a pid and nothing else — and `install()` tolerated it
+`sys_get_temp_dir()/candy-pty-hang-watchdog-<pid>` — a pid and nothing else — and `install()` tolerated it <!-- @rename-keep historical provenance -->
 already existing without clearing the heartbeat inside. **Reproduced end to end:** seed one for a
 process's own pid, load the real `tests/bootstrap.php`, and the runner is SIGKILLed *before a single test
 executes*, with the forensic dump naming a test that is not running. That is **rc 137 with no `Tests:`
@@ -17725,12 +17725,12 @@ only signal is a reviewer noticing. A `--check` mode plus a CI step is the same 
 ### E550 [NO-FIX] — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
 
 **MEASURED, round 57, lane c. A definite outcome, and it is not "closed".** Configuration, so the number
-means something (rule 3): PHP 8.3.6, this box, `candy-pty` at `1dea13c4f` (unchanged this round — the
+means something (rule 3): PHP 8.3.6, this box, `candy-pty` at `1dea13c4f` (unchanged this round — the <!-- @rename-keep historical provenance -->
 lane touched no `candy-*` file, verified with `git diff --name-only`), every take
-`cd candy-pty && vendor/bin/phpunit --testdox` with a 7/7 in-lane symlink closure.
+`cd candy-pty && vendor/bin/phpunit --testdox` with a 7/7 in-lane symlink closure. <!-- @rename-keep historical provenance -->
 
-- **Arm A, candy-pty alone, 49 takes.** All `rc=0`, all `630 / 1494 / 16 skipped / 1 warning`, 48s each.
-- **Arm C — THE EXPERIMENT THAT HAD NEVER BEEN RUN: the full `sugar-crush` suite and then `candy-pty`,
+- **Arm A, candy-pty alone, 49 takes.** All `rc=0`, all `630 / 1494 / 16 skipped / 1 warning`, 48s each. <!-- @rename-keep historical provenance -->
+- **Arm C — THE EXPERIMENT THAT HAD NEVER BEEN RUN: the full `sugar-crush` suite and then `candy-pty`, <!-- @rename-keep historical provenance -->
   back to back in one script, 4 cycles.** That is the only context the single observed hang occurred in.
   All four clean, and byte-identical: `10137 / 154739 / 1` then `630 / 1494 / 16 / 1w` every time.
 - Arm A ran CONCURRENTLY with the lane's own `sugar-crush` runs for most of its 49 takes, so a
@@ -17742,7 +17742,7 @@ distinguish "the leaked-timer fix closed it" from "it did not happen to fire".**
 rate needs roughly **230** consecutive clean takes (≈3.1 hours at 48s each); halving it needs ~460.
 
 **The instrument was checked before the quiet run was believed** (rule 15): with
-`CANDY_PTY_HANG_BUDGET=0.6` the watchdog fired, SIGKILLed the runner at `rc=137`, and printed the named
+`CANDY_PTY_HANG_BUDGET=0.6` the watchdog fired, SIGKILLed the runner at `rc=137`, and printed the named <!-- @rename-keep historical provenance -->
 test (`Integration\EOFGraceTest::testVeofDrainsTailBytesBeforeChildExit`), its in-flight time, its
 `ps`/wchan line, its open-fd count and its children. A watchdog that never fires and a dead one produce
 identical green suites; this one is alive.
@@ -18134,7 +18134,7 @@ every other probe in the file passes under either form.
 
 **The residual:** if the drain is ever reverted, that known-positive HANGS rather than reddening, and a
 hanging test in CI is worse than a failing one. Its doc-block says so in as many words. Bounding it
-properly needs a wall-clock budget around the child, which is `HangWatchdog`'s territory in `candy-pty`
+properly needs a wall-clock budget around the child, which is `HangWatchdog`'s territory in `candy-pty` <!-- @rename-keep historical provenance -->
 and does not exist in this package.
 
 ### E568 [CLOSED] — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
@@ -18628,7 +18628,7 @@ original rate estimate was high from a single observation. **240 takes cannot di
 nothing short of a reproducer will.
 
 **THE INSTRUMENT WAS PROVEN ALIVE BEFORE THE QUIET RUN WAS BELIEVED (rule 15).** Take zero runs at
-`CANDY_PTY_HANG_BUDGET=0.6`; the watchdog fired, SIGKILLed the runner at **`rc=137`**, and named the test.
+`CANDY_PTY_HANG_BUDGET=0.6`; the watchdog fired, SIGKILLed the runner at **`rc=137`**, and named the test. <!-- @rename-keep historical provenance -->
 It is recorded in `EVENTS.txt` and **it is not a take**. Without it, 240 green runs and a dead watchdog are
 the same log.
 
@@ -19350,14 +19350,14 @@ Pair all four: `class_exists() || interface_exists() || trait_exists() || enum_e
 
 **THIS ENTRY UNDERSTATED N BY 298 TAKES IN ITS FIRST VERSION.** It reported the supervisor's
 240-take campaign as though it were the only one. There are **two** completed E490 campaigns, both
-`candy-pty`, both the same take form (`vendor/bin/phpunit --testdox`), both watchdogged per-PID,
+`candy-pty`, both the same take form (`vendor/bin/phpunit --testdox`), both watchdogged per-PID, <!-- @rename-keep historical provenance -->
 both entirely clean. The second was verified here from its raw TSV and its runner script, not from
 a summary:
 
 | campaign | tree | takes | contiguous | events | rc≠0 | rule-15 instrument row |
 |---|---|---|---|---|---|---|
-| supervisor (`r58campaign/takes.tsv`) | `/home/sites/sugarcraft/candy-pty` | **240** | 1..240 ✔ | 0 | none | **yes** — `instrument rc=137` at `CANDY_PTY_HANG_BUDGET=0.6` |
-| round 58 lane c (`r58c/campaign-takes.tsv`) | `/home/sites/crush-lane-c/candy-pty` | **298** | 1..298 ✔ | 0 (`campaign-events.log` never created) | none | **no** |
+| supervisor (`r58campaign/takes.tsv`) | `/home/sites/sugarcraft/candy-pty` | **240** | 1..240 ✔ | 0 | none | **yes** — `instrument rc=137` at `CANDY_PTY_HANG_BUDGET=0.6` | <!-- @rename-keep historical provenance -->
+| round 58 lane c (`r58c/campaign-takes.tsv`) | `/home/sites/crush-lane-c/candy-pty` | **298** | 1..298 ✔ | 0 (`campaign-events.log` never created) | none | **no** | <!-- @rename-keep historical provenance -->
 
 Every row in both is byte-identical at `Tests: 630, Assertions: 1494, Warnings: 1, Skipped: 16.` —
 one distinct result string across 538 takes. The 298-take run was `campaign.stop`-ed at 298 of
@@ -19428,18 +19428,18 @@ brief named an already-closed item as its headline work. **The file is `sugar-cr
 which is lane a's this round**, so the brief additionally directed lane c at a file lane c may not
 touch.
 
-### E625 [CLOSED] — no citation guard walked `tools/` or `candy-pty/`, and one of the two offenders was a refuted mechanism claim
+### E625 [CLOSED] — no citation guard walked `tools/` or `candy-pty/`, and one of the two offenders was a refuted mechanism claim <!-- @rename-keep historical provenance -->
 
 E583 left the bare-citation alphabet question open for "a round where one lane owns `tests/`".
 **The alphabet was never the reachable half of it.** Every `.php` file under `tools/` and under
-`candy-pty/` sat outside every citation guard in the repo, for the plainest reason available: the
+`candy-pty/` sat outside every citation guard in the repo, for the plainest reason available: the <!-- @rename-keep historical provenance -->
 only such guard is `sugar-crush`'s `SymbolCitationDriftTest`, and neither tree is inside
 `sugar-crush`. Applying E583's *narrow* alphabet (test-shaped names only, the one whose answer is not
 a judgement call) to that population reported **two** unresolvable citations, both real:
 
 - `tools/tests/ToolsEnvRosterTest.php` — `scriptRoster()` cited a sibling test method under its
   pre-rename name. A rename leftover committed **this round**, by the lane that owns the file.
-- `candy-pty/tests/Support/SharedLoopResidueTest.php` — the class doc-block cited
+- `candy-pty/tests/Support/SharedLoopResidueTest.php` — the class doc-block cited <!-- @rename-keep historical provenance -->
   `testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()`, which **no longer exists**.
 
 **The second is the finding.** The sentence around it asserted that the leak the file was written
@@ -19486,7 +19486,7 @@ CLAIMS WRITTEN WITHOUT MEASUREMENT — rule 8 landing on the entry that invokes 
 The first version said 141, which was the pre-commit tree minus `examples/` and `lang/` — already
 stale in its own paragraph, rule 18 exactly. The guard derives its population at run time and
 asserts specific files by NAME (`BareCitationDriftTest.php` itself, `SharedLoopResidueTest.php`,
-`candy-pty/src/PtyPool.php`) rather than counting, precisely so no cardinality has to be maintained
+`candy-pty/src/PtyPool.php`) rather than counting, precisely so no cardinality has to be maintained <!-- @rename-keep historical provenance -->
 here. Do not re-add one.
 
 **Three shapes the narrow alphabet cannot express, censused with rule-15 controls** so that each
@@ -19507,8 +19507,8 @@ widened into a different alphabet with nothing noticing. One fixture row (`{@see
 
 **The alphabet choice is measured, not assumed (rule 16).** Widening it to every bare citation was
 run as a mutation: it reds **two correct files** in this population and finds **no** additional real
-offender — `candy-pty/src/PtyPool.php:41` cites `spl_object_id()`, a PHP built-in, and
-`candy-pty/tests/Support/HangWatchdogTest.php:115` cites `budgetFromEnv()`, a real
+offender — `candy-pty/src/PtyPool.php:41` cites `spl_object_id()`, a PHP built-in, and <!-- @rename-keep historical provenance -->
+`candy-pty/tests/Support/HangWatchdogTest.php:115` cites `budgetFromEnv()`, a real <!-- @rename-keep historical provenance -->
 `public static function` on the class under test. For this population, widening buys 0 true positives
 and 2 false ones. That is E583's "the two numbers answer different questions" with a count attached.
 
@@ -19549,7 +19549,7 @@ and the body came back **truncated**: `$s = "a{$a}b"; return 1;` extracted as
 `["$s", "=", '"', "a", "{", "$a"]`.
 
 **Why that was a fail-open rather than a wrong answer.** Both callers are drift pins that compare
-two copies of one function for EQUALITY — `ToolsEnvRosterTest` against `candy-pty`'s
+two copies of one function for EQUALITY — `ToolsEnvRosterTest` against `candy-pty`'s <!-- @rename-keep historical provenance -->
 `envAccessesIn()`, `StackedDocCommentTest` against `sugar-crush`'s `stackedDocCommentLines()`.
 Truncate both sides at the same interpolation and a real divergence *after* it compares equal.
 MEASURED, filtered to the drift pin alone: with a genuine divergence (dropping
@@ -19616,9 +19616,9 @@ than a promise. It is where a future widening starts.
    but the failure text says "restore the edge" while the edge is present in another spelling, which
    sends the reader to add something that is already there. Low harm, non-zero confusion.
 
-### E630 [NO-FIX] — `candy-pty/composer.lock` exists on disk
+### E630 [NO-FIX] — `candy-pty/composer.lock` exists on disk <!-- @rename-keep historical provenance -->
 
-**DEFERRED, informational.** 113 KB, dated 2026-08-22, gitignored via `candy-pty/.gitignore:1`, so
+**DEFERRED, informational.** 113 KB, dated 2026-08-22, gitignored via `candy-pty/.gitignore:1`, so <!-- @rename-keep historical provenance -->
 not committed and not a policy breach. Recorded only because a per-lib lock makes CI's path-repo
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
@@ -20672,10 +20672,10 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 **What:** phase-4 sibling sweep (§5 rank-3): `candy-core/src/WorkerPool.php:286` spawns the pool worker from a `<<<'PHP'` nowdoc script — its `exit()`s at :341/:392 are CHILD-side and legitimate (sweep §3 exit-in-lib judgement) — but the POOL's own handling of that long-lived worker's death is the risk surface: no wall-clock/lifetime accounting at the parent side. The lib carries the repo's highest absolute suppression count (51 call-shaped `@` sites over 132 files) and 9 proc_open sites (shell probes escaped ✓). FOUNDATION ordering: candy-core is depended-on tree-wide — dependent spot-runs consume the change only AFTER this lane's gate prove-outs. Repo law reminder (memory: candy-pty ioctl lane): candy-core HOSTS `DescriptorSinkArgumentCensusTest` — any libc fd sink added/removed REQUIRES judged roster rows THERE in-step. **Acceptance:** worker-script lifetime accounted (bounded reap ladder or documented owner-reap), the 51 suppressions triaged IN PLACE (keep-with-why or remove with the verdict inline), full candy-core suite green + dependent spot-runs (candy-sprinkles, sugar-bits) green. **Conf:** MED. <!-- @rename-keep historical provenance -->
 **CLOSED 2026-09-15 (round 82, lane q7 `e49040de3` → pick `364c43b16`; rv APPROVE 0C/1M/3MINOR; MAJOR fold `269101e30`):** Worker lifetime ACCOUNTED — bounded grace→TERM→KILL reap ladder per closeWorker/stop (each rung owns its deadline; KILL-confirm bounded poll; never a bare proc_close into a wedged child) + stop() now REJECTS unsettled pending jobs (pre-image `$this->pending = []` dropped them silently) + null-stderr guard. All 51 `@`-sites triaged IN PLACE with verdicts inline (`/home/sites/crush-r61-artifacts/q7/sites.md`; tally 36+10+3+1+1, rv row-checked). MAJOR (comment-truth, +0T, fixed at weld): the fd-0 claim's IMPACT was impossible — react/event-loop keys readStreams by PHP RESOURCE ID (≥1, never fd; `(int) STDIN === 1` measured), so key 0 is unreachable on stock loops and the pre-guard cast was a silent no-op; the guard stays as PROPHYLAXIS for fd-keyed/custom-loop and closed-resource-ID-reuse shapes (law + the PHP-8 shmop_read-throws correction now in candy-core/CALIBER_LEARNINGS.md). Erratum (rv MINOR-1): the child-lifetime roster row at `tools/check-child-lifetimes.php:109` predates q7 (lane-df r67) — q7's work is downstream, not authored it. Suite 862T/7646A/27S exit0 (+3T/+15A exact, weld-re-measured); consumer spot sugar-forms 1823T green; tool rc=0 with mutation-verified fail-closed roster; probe children hermetic.
 
-### E717 [CLOSED] — the candy-pty pump family is caller-bounded BY CONTRACT but the contract is unpinned — a caller that forgets the deadline hangs forever and nothing in src says so
+### E717 [CLOSED] — the candy-pty pump family is caller-bounded BY CONTRACT but the contract is unpinned — a caller that forgets the deadline hangs forever and nothing in src says so <!-- @rename-keep historical provenance -->
 
-**What:** phase-4 sibling sweep (§5 rank-1, class-density #1): `candy-pty/src/Posix/PosixPump.php:114` spins `stream_select` with a per-iteration timeout but NO overall wall-clock deadline — it exits only on child `exited()`, stdin-close, or select error; same shape at `Posix/PosixMasterPty.php:75` and `:387`, `Posix/ChildPollTrait.php:158`, `PosixProcess.php:161`. The bounds burden is deliberately on the CALLER — AGENTS.md names exactly this hazard ("`PosixPump::pump()`/`MultiPump::run()` style loops carry no deadline, so a test built on them can only hang, never fail") — and the TEST side is armed (`candy-pty/tests/Support/HangWatchdog` SIGKILLs the runner on overrun) while the SRC side carries no bounded wrapper and no machine-checked contract. 44 files also carry 41 `@`-suppressions and the Darwin stty/dup-alias fallbacks (`SizeIoctl.php`, `SttyTermios.php`). **Acceptance:** pump-family audit + bounded wrappers or explicit deadline params, the caller-bounds-it contract DOCUMENTED and pinned by test (an unbounded call must be loud, never silently forever); FULL candy-pty suite green (HangWatchdog + SharedLoopResidue + LoopPin bootstraps honored — LoopPin FIRST); arm64-Darwin learnings honored (cloexec master ⇒ `dup()` before `stty -f /dev/fd/N`, BSD `rows/cols` word order, size reads never cached); `tools/check-child-lifetimes.php` rc=0. **Conf:** HIGH.
-**CLOSED 2026-09-15 (round 82, lane q10 `291b822e0` → pick `38a284716`; rv APPROVE 0C/0M/2MINOR):** Pump bounds SHIPPED: `PumpOptions::pumpDeadlineUs` (ctor + wither validate >0; null = unbounded, every default path byte-unchanged — E646 honored, no wall-clock kill anywhere), a per-iteration exit-only deadline guard in `PosixPump::pump()` (answers the -1 contract; child + master verified alive and usable post-deadline; flushMaster still drains), `MultiPump::run` deadline → partial map with GENUINELY EXERCISED resume (`testDeadlineReturnsPartialStateAndSecondRunResumes` drives the same multiplexer to allDone() on the second run), `ReactPump` per-poll-tick guard funnelling finish(); the caller-bounds-by-contract law is now DOCUMENTED on `Contract\Pump` + the pump family and pinned by test (unbounded default and hidden-default regressions both red). Full candy-pty suite 663T/1862A/1W/17S exit0 (the 1W is the known base-carry ReactPumpExtendedTest env warning — not chased); HangWatchdog/SharedLoopResidue/LoopPin bootstraps untouched and green; check-child-lifetimes figures unchanged. RE-NOTES (accepted, no code): (1) rv MINOR-1 — PumpOptionsTest's 10-hop carrier-propagation list is hand-typed (setter+10 verified by reviewer reflection; a future lane may pin list↔method-set via a getMethods()-diff arm — an 11th rebuilder could otherwise silently escape); (2) rv MINOR-2 — bash-wrapped fixtures orphan inner sleeps up to their own lifetime after parent-SIGKILL (bounded, self-clearing within fixture ceiling +25s).
+**What:** phase-4 sibling sweep (§5 rank-1, class-density #1): `candy-pty/src/Posix/PosixPump.php:114` spins `stream_select` with a per-iteration timeout but NO overall wall-clock deadline — it exits only on child `exited()`, stdin-close, or select error; same shape at `Posix/PosixMasterPty.php:75` and `:387`, `Posix/ChildPollTrait.php:158`, `PosixProcess.php:161`. The bounds burden is deliberately on the CALLER — AGENTS.md names exactly this hazard ("`PosixPump::pump()`/`MultiPump::run()` style loops carry no deadline, so a test built on them can only hang, never fail") — and the TEST side is armed (`candy-pty/tests/Support/HangWatchdog` SIGKILLs the runner on overrun) while the SRC side carries no bounded wrapper and no machine-checked contract. 44 files also carry 41 `@`-suppressions and the Darwin stty/dup-alias fallbacks (`SizeIoctl.php`, `SttyTermios.php`). **Acceptance:** pump-family audit + bounded wrappers or explicit deadline params, the caller-bounds-it contract DOCUMENTED and pinned by test (an unbounded call must be loud, never silently forever); FULL candy-pty suite green (HangWatchdog + SharedLoopResidue + LoopPin bootstraps honored — LoopPin FIRST); arm64-Darwin learnings honored (cloexec master ⇒ `dup()` before `stty -f /dev/fd/N`, BSD `rows/cols` word order, size reads never cached); `tools/check-child-lifetimes.php` rc=0. **Conf:** HIGH. <!-- @rename-keep historical provenance -->
+**CLOSED 2026-09-15 (round 82, lane q10 `291b822e0` → pick `38a284716`; rv APPROVE 0C/0M/2MINOR):** Pump bounds SHIPPED: `PumpOptions::pumpDeadlineUs` (ctor + wither validate >0; null = unbounded, every default path byte-unchanged — E646 honored, no wall-clock kill anywhere), a per-iteration exit-only deadline guard in `PosixPump::pump()` (answers the -1 contract; child + master verified alive and usable post-deadline; flushMaster still drains), `MultiPump::run` deadline → partial map with GENUINELY EXERCISED resume (`testDeadlineReturnsPartialStateAndSecondRunResumes` drives the same multiplexer to allDone() on the second run), `ReactPump` per-poll-tick guard funnelling finish(); the caller-bounds-by-contract law is now DOCUMENTED on `Contract\Pump` + the pump family and pinned by test (unbounded default and hidden-default regressions both red). Full candy-pty suite 663T/1862A/1W/17S exit0 (the 1W is the known base-carry ReactPumpExtendedTest env warning — not chased); HangWatchdog/SharedLoopResidue/LoopPin bootstraps untouched and green; check-child-lifetimes figures unchanged. RE-NOTES (accepted, no code): (1) rv MINOR-1 — PumpOptionsTest's 10-hop carrier-propagation list is hand-typed (setter+10 verified by reviewer reflection; a future lane may pin list↔method-set via a getMethods()-diff arm — an 11th rebuilder could otherwise silently escape); (2) rv MINOR-2 — bash-wrapped fixtures orphan inner sleeps up to their own lifetime after parent-SIGKILL (bounded, self-clearing within fixture ceiling +25s). <!-- @rename-keep historical provenance -->
 
 ### E718 [CLOSED] — candy-sql admin pane blocks the TUI event loop on synchronous DB status queries — known defect, carried in project memory
 
@@ -20738,7 +20738,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 ### E729 [CLOSED] — candy-vt carries two parallel cell-grid representations (Cell/Buffer vs CellGrid) — unification is an architectural decision needing a design lane first <!-- @rename-keep historical provenance -->
 
 **What:** PHASE-5-KICKOFF (r82 deferred FLAG list, RESUME §0-NOW-84(c)/worklog ROUND 82): at `052025282` the surface still holds both shapes — `candy-vt/src/Cell.php` (+ `src/Cell/`) as the Buffer-family cell, `candy-vt/src/CellGrid.php` as the second grid representation, and `src/Buffer/` alongside. The r82 q15 lane issued a VOID ruling on the CellGrid::set() contract item (E725) and explicitly did NOT touch the duplication; unification changes the lib's public geometry API. Re-verify premise at lane base (the w4 upstream merge touched candy-vt — alt-restore/resize regions). **Acceptance:** a design note first (which representation wins, migration + deprecation story, cost vs benefit for a pre-1.0 port), orchestrator ruling on it, THEN an implementation lane with full candy-vt suite green (weld figure 607T baseline at r82) + all downstream consumers (sugar-crush cell-grid tests via `SugarCraft\Vt\Terminal`) green. **Conf:** HIGH (surface verified at tip; scope judgment deferred by design). <!-- @rename-keep historical provenance -->
-**Erratum (r83):** consumer premise corrected — sugar-crush has zero references; downstream surface is candy-vcr + candy-pty VimSmoke; parity bridge candy-vcr/tests/VtParityTest.php.
+**Erratum (r83):** consumer premise corrected — sugar-crush has zero references; downstream surface is candy-vcr + candy-pty VimSmoke; parity bridge candy-vcr/tests/VtParityTest.php. <!-- @rename-keep historical provenance -->
 **r83:** design doc landed docs/plans/crush_code_vt_unification_design.md — recommendation: DECLINE unification for now (use-case split is code-true; VtParityTest already enforces semantic convergence; reopen triggers + B-projection first-slice named in doc) — pending orchestrator ruling.
 
 **CLOSED-DECLINED 2026-09-15 (round 83 wave-2 weld):** ORCHESTRATOR ACCEPTS r8 design-doc recommendation (§7) — unification DECLINED with reasons; split is code-true (recorder-vs-emulator impedance, README rationale); reopen triggers per §7 of docs/plans/crush_code_vt_unification_design.md; B-projection first-slice if triggered. Design-lane acceptance satisfied via lane r8 `0f820b265` → pick `4545142c7`.

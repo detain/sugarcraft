@@ -59,9 +59,9 @@ final class ToolsEnvRosterTest extends TestCase
     use PhpFunctionBodyTokens;
 
     /**
-     * The copy of this file's environment scanner that ships with `candy-pty`.
+     * The copy of this file's environment scanner that ships with `sugar-pty`.
      */
-    private const CANDY_PTY_COPY = '/candy-pty/tests/EnvRosterTest.php';
+    private const SUGAR_PTY_COPY = '/sugar-pty/tests/EnvRosterTest.php';
 
     /**
      * The scanner methods the two implementations must agree about.
@@ -521,10 +521,10 @@ final class ToolsEnvRosterTest extends TestCase
     }
 
     /**
-     * `candy-pty`'s copy of this scanner has not drifted from this one.
+     * `sugar-pty`'s copy of this scanner has not drifted from this one.
      *
-     * WHY THERE IS A COPY AT ALL, AND WHY THE PIN LIVES HERE. `candy-pty` is
-     * published standalone as `sugarcraft/candy-pty`; a guard for its four
+     * WHY THERE IS A COPY AT ALL, AND WHY THE PIN LIVES HERE. `sugar-pty` is
+     * published standalone as `sugarcraft/sugar-pty`; a guard for its four
      * environment knobs that lived under `tools/` would not ship with the
      * package and would not run for anyone who cloned the split repo. So the
      * package carries its own, and the copy is only defensible while divergence
@@ -539,14 +539,14 @@ final class ToolsEnvRosterTest extends TestCase
      * PHPUnit PHAR and does no `composer install` — there is no autoloader for
      * `SugarCraft\Pty\Tests\*` in it.
      */
-    public function testTheScannerHasNotDriftedFromTheCandyPtyCopy(): void
+    public function testTheScannerHasNotDriftedFromTheSugarPtyCopy(): void
     {
-        $copy = \dirname(__DIR__, 2) . self::CANDY_PTY_COPY;
+        $copy = \dirname(__DIR__, 2) . self::SUGAR_PTY_COPY;
 
         $this->assertFileExists(
             $copy,
-            "candy-pty's copy of the environment scanner has moved or been deleted. Update "
-            . \basename(__FILE__) . '::CANDY_PTY_COPY to wherever it lives now — do not delete '
+            "sugar-pty's copy of the environment scanner has moved or been deleted. Update "
+            . \basename(__FILE__) . '::SUGAR_PTY_COPY to wherever it lives now — do not delete '
             . 'this guard, which would leave that copy unwatched',
         );
 
@@ -560,16 +560,16 @@ final class ToolsEnvRosterTest extends TestCase
             // RULE 14 IN BOTH DIRECTIONS: an extractor that found nothing would
             // answer [] === [] and pass. Neither side may be empty.
             $this->assertNotSame([], $ours, 'no ' . $method . '() body was found in this file');
-            $this->assertNotSame([], $them, 'no ' . $method . '() body was found in ' . self::CANDY_PTY_COPY);
+            $this->assertNotSame([], $them, 'no ' . $method . '() body was found in ' . self::SUGAR_PTY_COPY);
 
             $this->assertSame(
                 $ours,
                 $them,
-                'candy-pty\'s copy of ' . $method . '() has drifted from the one in this file. '
+                'sugar-pty\'s copy of ' . $method . '() has drifted from the one in this file. '
                 . 'Port the change across rather than letting the two diverge: one of the two '
                 . 'packages would otherwise be scanned by an implementation that no longer '
                 . 'agrees with the other about what an environment access IS. The copy lives '
-                . 'in ' . self::CANDY_PTY_COPY,
+                . 'in ' . self::SUGAR_PTY_COPY,
             );
         }
     }

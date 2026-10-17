@@ -31,9 +31,9 @@ const WINDOWS_LIBS = [
     'candy-core', 'sugar-forms', 'sugar-widgets', 'candy-scriptui', 'sugar-markdown',
 ];
 const MACOS_LIBS = [
-    // candy-pty held out of the macOS pool. The split-job debug
+    // sugar-pty held out of the macOS pool. The split-job debug
     // workflow (see .github/workflows/macos-debug.yml + branch
-    // `debug/macos-candy-pty` PR #_) narrowed the failure mode to:
+    // `debug/macos-candy-pty` PR #_) narrowed the failure mode to: // @rename-keep historical branch name
     // TIOCSWINSZ ioctl returns -1 on macOS arm64 master fds via PHP
     // FFI, independent of slave-anchor / resize-ordering workarounds.
     // Hypothesised root cause is the variadic-vs-fixed-arg ABI
@@ -42,7 +42,7 @@ const MACOS_LIBS = [
     // variadic FFI cdef breaks Linux because PHP FFI doesn't
     // auto-convert FFI\CData arrays for variadic params. Real fix
     // needs either a Darwin-specific shell-out to `stty` for resize
-    // or a different FFI binding. Until then, candy-pty's macOS
+    // or a different FFI binding. Until then, sugar-pty's macOS
     // coverage flows through its consumers (candy-core's PosixBackend
     // and sugar-ssh-server's InProcessTransport — both exercise the same
     // posix_openpt + grantpt + TIOCSWINSZ chain, and sugar-ssh-server's

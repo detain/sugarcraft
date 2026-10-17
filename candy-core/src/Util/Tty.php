@@ -70,7 +70,7 @@ final class Tty
             // itself is a Linux ELF so DIRECTORY_SEPARATOR would be '/'.
             // If we are here, DIRECTORY_SEPARATOR is '\\', so this IS
             // native Windows and we should use the WindowsBackend.
-            // WindowsBackend does not take a Termios — the candy-pty
+            // WindowsBackend does not take a Termios — the sugar-pty
             // contract is POSIX-only in v1.
             if (!Tty\EnvDetect::isWsl()) {
                 return new Tty\WindowsBackend($stream);
