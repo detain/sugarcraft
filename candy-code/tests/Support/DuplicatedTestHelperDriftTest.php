@@ -2633,6 +2633,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'CHUNKED' => 'The crush-media W4.4 pair (the /sendto host command and the PNG-info importer) point at the one chunked-payload fixture; both files sit two levels under the package, so the identical relative path is a single statement about the fixture tree, not a value to diverge.',
         'CORRUPT' => 'The crush-media W5.6 pair (the image-ingress suite and the video-tab suite) point at the one corrupt-PNG fixture under fixtures/img; identical by the same depth argument as CHUNKED, and a re-roll of the fixture moves the pair together.',
         'GIF' => 'The crush-media W5.6 pair share the one tiny-GIF fixture pointer (the wrong-format polarity of the ingress door); identical by the same depth argument as CHUNKED.',
+        'UPGRADE' => 'The srvsec server-auth suites (the middleware census and the lockout-ordering suite) state the same stock RFC 6455 upgrade-header handshake fixture; the identical array is one statement about the protocol shape, and a re-roll of the sample nonce moves the pair together.',
         'TINY' => 'The crush-media W5.6 pair share the one tiny-PNG fixture pointer (the accepted-bytes polarity of the ingress door); identical by the same depth argument as CHUNKED.',
         'DEEPSEEK_V4' => 'The SGLang suites that pin DeepSeek-V4 behaviour (DSML hold-back, server limits, the truncation guard and its warning rate limit) name the same deployment id, spelled out since audit A26 moved SglangProvider::DEFAULT_MODEL to Qwen3.8; it is a request label those suites send, and the served-model suite names its own V4.5 id under a different constant.',
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
@@ -2689,6 +2690,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     private const ACCEPTED_CONST_DRIFT = [
         'BASE' => 'Each suite names its own fixture origin URL; the SD studio port and the provider host are unrelated constants sharing the generic word.',
         'BODY_SENTINEL' => 'Each containment suite plants its own payload under the same word; the names collide, the fixtures do not.',
+        'TOKEN' => 'Each srvsec suite mints its own visually distinctive 64-hex bearer sentinel (0123-abcdef / 9c9c / 5e5e) — the per-file value is the point: a failing line names which fixture forged the token, which one shared constant would erase.',
         'BOUND_SECONDS' => 'Per-suite waits: a reap test and a shutdown test legitimately bound differently. THE SEMANTIC DIFFERENCES LIVE HERE, which is why this map is per-polity and not a widening of the other.',
         'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'The census documents a different budget than the suites enforce; that difference is the claim being tested.',
         'COLS' => 'Per-fixture terminal geometry from unrelated suites that named one constant the same.',
