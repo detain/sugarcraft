@@ -159,27 +159,9 @@ final class HttpMcpServer implements McpServer
             // params omitted rather than sent as `[]` (a JSON array, which the
             // SDK servers reject) — omission is what the reference TS client
             // sends. No session-expiry recovery here: the session is seconds old.
-            $data = $this->exchange('tools/list', null);
-            // A non-JSON / non-object body (e.g. an HTTP 5xx error page) means the
-            // tools/list leg of the handshake failed — surface it as a start failure.
-            if ($data === null) {
-                throw new \RuntimeException('tools/list returned an invalid response');
-            }
-
-            // The same gate as initialize: an ERROR reply (session- or
-            // capability-gated servers answer -32601 here) or a reply with no
-            // result is not "up, 0 tools" — that shape looks connected,
-            // exposes nothing, and throws the server's own diagnosis away.
-            // sugar-mcp-client's StdioMcpServer::start() refuses it the same way.
-            if (isset($data['error'])) {
-                throw new \RuntimeException('tools/list refused' . self::describeError($data['error']));
-            }
-
-            if (!array_key_exists('result', $data)) {
-                throw new \RuntimeException('tools/list returned no result');
-            }
-
-            $this->tools = $this->parseTools($data);
+            // The reply is gated and its cursor pages followed in
+            // {@see collectToolPages()} (ISS-093(b)).
+            $this->tools = $this->collectToolPages($this->exchange('tools/list', null));
         } catch (HttpMcpAuthRequiredException $e) {
             // ISS-042: the session leg that refused may already hold a
             // session id (a bearer rejected AFTER initialize, at tools/list)
@@ -203,6 +185,101 @@ final class HttpMcpServer implements McpServer
         // Mark initialized only after the full handshake succeeds, so a failed
         // start can be retried rather than wedging the server half-open.
         $this->initialized = true;
+    }
+
+    /**
+     * Page ceiling for the `tools/list` cursor walk (ISS-093(b)).
+     *
+     * A wall for pathological servers, not a working budget: 32 pages times a
+     * typical page of a hundred tools is three thousand entries, far past any
+     * real server. The guard that actually catches a broken server is the
+     * repeated-cursor refusal below — this one catches the adversarial shape
+     * of a server inventing a fresh cursor forever, which would otherwise
+     * spin the handshake (and, since start() holds no deadline by E646
+     * design, spin it until the transport's own exchange budget says stop).
+     */
+    private const MAX_TOOL_PAGES = 32;
+
+    /**
+     * Gate a `tools/list` reply and FOLLOW ITS CURSOR until the roster is whole.
+     *
+     * (ISS-093(b)) The spec says `tools/list` MAY paginate; servers that do
+     * answer with `result.nextCursor`, and a client that ignores it caches the
+     * FIRST page as the entire truth — tools silently missing from every
+     * later dispatch, with the panel cheerfully counting what it never saw.
+     * Each follow-up page goes through the SAME gate as the first: an error
+     * reply mid-walk is as fatal as one at the front, because a partial
+     * roster cached as a whole one is the defect this method exists to close.
+     * A cursor that repeats is a server lying about its pagination — refusing
+     * it turns a would-be loop into a start failure with the cursor in the
+     * sentence. Page 1's messages stay byte-identical to the pre-ISS-093(b)
+     * gate every existing pin asserts; later pages append their page number.
+     *
+     * @param array<mixed>|null $data the first page, as {@see exchange()} answered
+     * @return array<McpTool>
+     */
+    private function collectToolPages(?array $data): array
+    {
+        $tools = $this->requireToolsListPage($data, 1);
+        $seenCursors = [];
+
+        for ($page = 2; $page <= self::MAX_TOOL_PAGES; $page++) {
+            $cursor = $data['result']['nextCursor'] ?? null;
+
+            if (!is_string($cursor) || $cursor === '') {
+                return $tools;
+            }
+
+            if (isset($seenCursors[$cursor])) {
+                throw new \RuntimeException(
+                    'tools/list repeated cursor ' . $cursor . ' at page ' . $page
+                    . ' — refusing to walk a pagination loop',
+                );
+            }
+            $seenCursors[$cursor] = true;
+
+            $data = $this->exchange('tools/list', ['cursor' => $cursor]);
+            $tools = array_merge($tools, $this->requireToolsListPage($data, $page));
+        }
+
+        // MAX pages spent and the last reply still handed out a cursor: a
+        // roster KNOWN to be cut short must not masquerade as a whole one —
+        // missing tools are invisible downstream, exactly the failure this
+        // walk exists to prevent. Fail the start the way an error reply does.
+        throw new \RuntimeException('tools/list still had a nextCursor after '
+            . self::MAX_TOOL_PAGES . ' pages — refusing to cache a truncated roster');
+    }
+
+    /**
+     * The one gate every `tools/list` page passes, at any page number.
+     *
+     * A non-JSON / non-object body (e.g. an HTTP 5xx error page) means the
+     * leg failed — surface it as a start failure. An ERROR reply (session- or
+     * capability-gated servers answer -32601 here) or a reply with no result
+     * is not "up, 0 tools" — that shape looks connected, exposes nothing, and
+     * throws the server's own diagnosis away. sugar-mcp-client's
+     * StdioMcpServer::start() refuses it the same way.
+     *
+     * @param array<mixed>|null $data
+     * @return array<McpTool>
+     */
+    private function requireToolsListPage(?array $data, int $page): array
+    {
+        $suffix = $page === 1 ? '' : ' (page ' . $page . ')';
+
+        if ($data === null) {
+            throw new \RuntimeException('tools/list returned an invalid response' . $suffix);
+        }
+
+        if (isset($data['error'])) {
+            throw new \RuntimeException('tools/list refused' . self::describeError($data['error']) . $suffix);
+        }
+
+        if (!array_key_exists('result', $data)) {
+            throw new \RuntimeException('tools/list returned no result' . $suffix);
+        }
+
+        return $this->parseTools($data);
     }
 
     /**

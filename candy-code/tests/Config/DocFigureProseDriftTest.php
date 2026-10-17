@@ -3585,7 +3585,7 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-9 (AW): MCP.md's trust-gate table against the four
+     * E686 tranche-9 (AW): MCP.md's trust-gate table against the five
      * Bootstrap status constants (selected by their doc-block anchor to
      * mcpConfigDecision(), so message-format MCP_* constants cannot join),
      * the "contains no proc_open()" inventory claim against the method's own
@@ -3599,7 +3599,7 @@ final class DocFigureProseDriftTest extends TestCase
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         self::assertSame(
             1,
-            preg_match('/It returns one of four statuses:/', $mcp),
+            preg_match('/It returns one of five statuses:/', $mcp),
             'the trust-gate sentence no longer states its status count',
         );
 
@@ -3611,11 +3611,11 @@ final class DocFigureProseDriftTest extends TestCase
             }
         }
         self::assertSame(
-            ['absent', 'outside-tree', 'untrusted', 'trusted'],
+            ['absent', 'outside-tree', 'untrusted', 'trusted', 'disabled'],
             array_values($statuses),
-            'the status constants (doc-block-anchored to mcpConfigDecision) no longer spell the page\'s four-row table — flip constant, table and this pin together',
+            'the status constants (doc-block-anchored to mcpConfigDecision) no longer spell the page\'s five-row table — flip constant, table and this pin together',
         );
-        self::assertCount(4, $statuses);
+        self::assertCount(5, $statuses);
 
         $rows = (string) preg_replace('/^.*\| Status \| Meaning \| What happens \|\n\|---\|---\|---\|\n/s', '', $raw);
         $rows = (string) explode("\n\n", $rows)[0];
@@ -3649,12 +3649,12 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsArray($probes, 'doctorProbes() vanished — the doctor verdict row lost its closure');
         $probeText = (string) substr(self::sourceOf('Cli/Subcommands.php'), $probes['begin'], $probes['end'] - $probes['begin']);
         self::assertSame(
-            3,
+            4,
             preg_match_all('/Bootstrap::(MCP_[A-Z_]+)\s*\n\s*=> \[.status. => .(OK|WARN|FAIL)./', $probeText, $verdicts),
-            'the mcp config row no longer matches its three named status constants to verdicts arm by arm',
+            'the mcp config row no longer matches its four named status constants to verdicts arm by arm',
         );
         self::assertSame(
-            ['MCP_ABSENT' => 'OK', 'MCP_OUTSIDE_TREE' => 'FAIL', 'MCP_UNTRUSTED' => 'WARN'],
+            ['MCP_DISABLED' => 'OK', 'MCP_ABSENT' => 'OK', 'MCP_OUTSIDE_TREE' => 'FAIL', 'MCP_UNTRUSTED' => 'WARN'],
             array_combine($verdicts[1], $verdicts[2]),
             'a named status changed its doctor verdict — the page sentence and this pin must flip together',
         );
@@ -3669,7 +3669,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the undecodable-config verdict is no longer FAIL',
         );
         self::assertStringContainsString(
-            '`OK` for absent or trusted, `WARN` for untrusted, `FAIL` for out-of-tree or undecodable',
+            '`OK` for absent, disabled or trusted, `WARN` for untrusted, `FAIL` for out-of-tree or',
             $mcp,
             'the doctor verdict sentence reworded while the closure above still answers — re-pin with the prose',
         );
@@ -3706,7 +3706,7 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-9 (AX): MCP.md's type table against the factory that
      * builds it — match arms, classes, per-type config keys, the absent-type
      * default and the throw for anything else — plus the env-interpolation
-     * section: the two resolveEnv call sites, the anchored pattern quoted
+     * section: the two resolveEnv call sites, the interpolation pattern quoted
      * byte-for-byte, and the getenv ?: default form.
      */
     public function testMcpServerTypesKeysAndEnvInterpolationMatchTheFactory(): void
@@ -3877,18 +3877,18 @@ final class DocFigureProseDriftTest extends TestCase
         $resolveText = (string) substr($clientSource, $resolve['begin'], $resolve['end'] - $resolve['begin']);
         self::assertSame(
             1,
-            preg_match('/preg_match\(.(\/[^\/]+\/).,/', $resolveText, $anchored),
-            'resolveEnv() no longer matches one quoted anchored pattern — the page quotes it verbatim',
+            preg_match('/preg_replace_callback\(\s*.(\/[^\/]+\/).,/', $resolveText, $walked),
+            'resolveEnv() no longer walks with one quoted pattern — the page quotes it verbatim',
         );
         self::assertSame(
             1,
-            preg_match('/The pattern is anchored \(`([^`]+)`\)/', $mcp, $quoted),
-            'the page stopped quoting the anchored pattern',
+            preg_match('/One quoted pattern \(`([^`]+)`\) walks/', $mcp, $quoted),
+            'the page stopped quoting the interpolation pattern',
         );
-        self::assertSame($anchored[1], $quoted[1], 'the anchored pattern in resolveEnv() and the one MCP.md quotes no longer match byte for byte');
+        self::assertSame($walked[1], $quoted[1], 'the pattern in resolveEnv() and the one MCP.md quotes no longer match byte for byte');
         self::assertSame(
             1,
-            preg_match('/getenv\(\$matches\[1\]\) \?: \(/', $resolveText),
+            preg_match('/getenv\(\$m\[1\]\) \?: \(/', $resolveText),
             'the resolution is no longer the getenv-then-?: form the page paraphrases as `getenv($name) ?: $default` — flip paraphrase and code together',
         );
         self::assertStringContainsString('`getenv($name) ?: $default`', $mcp, 'the page stopped quoting the resolution form');

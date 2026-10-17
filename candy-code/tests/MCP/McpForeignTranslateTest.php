@@ -94,12 +94,52 @@ final class McpForeignTranslateTest extends TestCase
         // come out identical (modulo key ORDER, asserted separately) with an
         // EMPTY notes list. The empty list is the pin: a note line per server
         // that needed nothing would train the reader to skim the real ones.
+        // The fixtures therefore carry no `${` and no `sse` — ISS-093(e)'s
+        // two warning classes; both have their own rows below.
         $document = ['mcpServers' => ['fs' => self::CANONICAL_SERVERS['searxng']]];
 
         $translated = McpForeignTranslate::translateDocument('claude', $document);
 
         self::assertSame(['fs' => self::CANONICAL_SERVERS['searxng']], $translated['servers']);
         self::assertSame([], $translated['notes']);
+    }
+
+    /**
+     * ISS-093(e): `sse` is the one foreign transport with no alias — the entry
+     * imports CLEAN and then throws `Unknown MCP server type: sse` at every
+     * launch. The note is the import telling the truth about a lie it is
+     * about to write down.
+     */
+    public function testAnSseEntryIsImportedWithANamedFailingWarning(): void
+    {
+        $translated = McpForeignTranslate::translateDocument('claude', ['mcpServers' => [
+            'legacy' => ['type' => 'sse', 'url' => 'https://old.example/sse'],
+        ]]);
+
+        self::assertSame(
+            ['legacy: type "sse" has no transport in this port — the entry will fail at launch; convert it to "http" if the server speaks streamable HTTP'],
+            $translated['notes'],
+        );
+        self::assertSame('sse', $translated['servers']['legacy']['type'], 'the warning annotates, it does not silently rewrite the type');
+    }
+
+    /**
+     * ISS-093(e): `${VAR}` rides the entry to LAUNCH, where resolveEnv()
+     * expands it from this machine — substring occurrences included — so the
+     * import is only equivalent on a host carrying the same variables. One
+     * sentence per entry at most (three fields carry references here), and
+     * the reference itself is written into the block UNTOUCHED.
+     */
+    public function testEmbeddedVariableReferencesEarnOneLaunchSemanticsWarningPerEntry(): void
+    {
+        $translated = McpForeignTranslate::translateDocument('claude', ['mcpServers' => [
+            'a' => ['type' => 'http', 'url' => 'https://${HOST}/mcp', 'headers' => ['X-K' => 'k-${KEY}'], 'env' => ['T' => '${TOKEN}']],
+            'b' => ['type' => 'stdio', 'command' => 'x', 'env' => ['LITERAL' => 'no references here']],
+        ]]);
+
+        $warning = 'a: references ${VAR} — expanded from this machine\'s environment at launch; the import is only equivalent where those variables are set';
+        self::assertSame([$warning], $translated['notes']);
+        self::assertSame('https://${HOST}/mcp', $translated['servers']['a']['url']);
     }
 
     public function testKeyOrderIsCanonicalOnEmissionWhateverOrderTheFileCarried(): void

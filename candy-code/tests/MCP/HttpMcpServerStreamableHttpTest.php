@@ -87,6 +87,21 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
         ]));
     }
 
+    /** A `tools/list` page reply, optionally handing out the next cursor (ISS-093(b)). */
+    private static function pageReply(int $id, array $tools, ?string $nextCursor = null): Response
+    {
+        $result = ['tools' => $tools];
+        if ($nextCursor !== null) {
+            $result['nextCursor'] = $nextCursor;
+        }
+
+        return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+            'jsonrpc' => '2.0',
+            'id' => $id,
+            'result' => $result,
+        ]));
+    }
+
     private static function sse(string $body): Response
     {
         return new Response(200, ['Content-Type' => 'text/event-stream; charset=utf-8'], $body);
@@ -466,6 +481,78 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
 
         self::assertCount(4, $this->history, 'the failed start must end the session the server issued');
         $this->assertSessionDelete(3);
+    }
+
+    /**
+     * ISS-093(b): `tools/list` MAY paginate, and the first page's `result
+     * .nextCursor` names the rest. Ignoring it cached a truncated roster as
+     * the whole truth — tools invisible downstream with a panel counting only
+     * what it never asked for. The follow-up request carries `cursor` and
+     * each page passes the SAME gate the first one does.
+     */
+    public function testToolListPagesAreFollowedUntilTheRosterIsWhole(): void
+    {
+        $server = $this->server([
+            self::initReply(),
+            new Response(202),
+            self::pageReply(1, [['name' => 'alpha']], 'cur-1'),
+            self::pageReply(2, [['name' => 'beta']]),
+        ]);
+
+        $server->start();
+
+        self::assertSame(['alpha', 'beta'], array_map(
+            static fn ($tool): string => $tool->name,
+            $server->listTools(),
+        ));
+        self::assertSame('tools/list', $this->body(2)['method']);
+        self::assertArrayNotHasKey('params', $this->body(2), 'the first page keeps sending no params at all');
+        self::assertSame('tools/list', $this->body(3)['method']);
+        self::assertSame(['cursor' => 'cur-1'], $this->body(3)['params']);
+    }
+
+    /** A cursor that repeats is a server lying about its pages — refuse, never loop. */
+    public function testARepeatedCursorRefusesToWalkTheSamePageForever(): void
+    {
+        $server = $this->server([
+            self::initReply(),
+            new Response(202),
+            self::pageReply(1, [['name' => 'alpha']], 'cur-x'),
+            self::pageReply(2, [['name' => 'beta']], 'cur-x'),
+            new Response(200),
+        ]);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'a lying cursor walked forever instead of failing the start');
+        self::assertStringContainsString('repeated cursor cur-x at page 3', $caught->getMessage());
+        $this->assertSessionDelete(4);
+    }
+
+    /** Fresh cursors past the page wall are the adversarial shape the ceiling catches. */
+    public function testAStreamOfFreshCursorsHitsThePageWallAndFailsTheStart(): void
+    {
+        $responses = [self::initReply(), new Response(202)];
+        for ($page = 1; $page <= 32; $page++) {
+            $responses[] = self::pageReply($page, [['name' => 'tool' . $page]], 'cur-' . $page);
+        }
+        $server = $this->server($responses);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'an endless cursor stream cached a truncated roster');
+        self::assertStringContainsString('after 32 pages', $caught->getMessage());
+        self::assertStringContainsString('truncated roster', $caught->getMessage());
     }
 
     public function testAnInitializeReplyWithoutResultFailsStart(): void

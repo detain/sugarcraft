@@ -565,6 +565,8 @@ final class Subcommands
                 $inventory = Bootstrap::mcpServerInventory($args->root);
 
                 return match (true) {
+                    $inventory['status'] === Bootstrap::MCP_DISABLED
+                        => ['status' => 'OK', 'detail' => Lang::t('cli.doctor.mcp_disabled')],
                     $inventory['status'] === Bootstrap::MCP_ABSENT
                         => ['status' => 'OK', 'detail' => Lang::t('cli.doctor.mcp_absent', ['file' => Bootstrap::MCP_CONFIG_FILENAME])],
                     $inventory['status'] === Bootstrap::MCP_OUTSIDE_TREE
@@ -1179,6 +1181,14 @@ final class Subcommands
         }
 
         switch ($inventory['status']) {
+            case Bootstrap::MCP_DISABLED:
+                // ISS-093(a): its own sentence, because the absent sentence
+                // is a LIE here — the file may exist and name servers; the
+                // launch switch does.
+                echo Lang::t('cli.mcp.list.disabled', ['path' => $inventory['path']]) . "\n";
+
+                return NonInteractive::EXIT_OK;
+
             case Bootstrap::MCP_ABSENT:
                 echo Lang::t('cli.mcp.list.absent', ['file' => Bootstrap::MCP_CONFIG_FILENAME, 'path' => $inventory['path']]) . "\n";
 
@@ -1274,6 +1284,15 @@ final class Subcommands
         }
 
         switch ($report['status']) {
+            case Bootstrap::MCP_DISABLED:
+                // trustProjectMcp() refuses every status outside
+                // {UNTRUSTED, TRUSTED} before touching the writers, so this
+                // row is the whole story: nothing was granted, and the grant
+                // is not the blocked step — the switch is.
+                echo Lang::t('cli.mcp.trust.disabled', ['path' => $report['path']]) . "\n";
+
+                return NonInteractive::EXIT_OK;
+
             case Bootstrap::MCP_ABSENT:
                 echo Lang::t('cli.mcp.trust.absent', ['file' => Bootstrap::MCP_CONFIG_FILENAME, 'path' => $report['path']]) . "\n";
 

@@ -50,30 +50,35 @@ final class GitMcpServer implements McpServer
                 description: 'Get repository status as a list of changed files',
                 inputSchema: $this->schema(['path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitSnapshot',
                 description: 'Get repository snapshot: branch, remote, tags, and staged changes',
                 inputSchema: $this->schema(['path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitConfigList',
                 description: 'List all git config entries',
                 inputSchema: $this->schema(['path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitConfigGet',
                 description: 'Get a specific git config value by key',
                 inputSchema: $this->schema(['key' => ['type' => 'string'], 'path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitAliasList',
                 description: 'List all configured git aliases',
                 inputSchema: $this->schema(['path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             // git_history
             new McpTool(
@@ -84,6 +89,7 @@ final class GitMcpServer implements McpServer
                     'path' => ['type' => 'string', 'nullable' => true],
                 ]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitShow',
@@ -93,6 +99,7 @@ final class GitMcpServer implements McpServer
                     'path' => ['type' => 'string', 'nullable' => true],
                 ]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitBlame',
@@ -102,6 +109,7 @@ final class GitMcpServer implements McpServer
                     'path' => ['type' => 'string', 'nullable' => true],
                 ]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitReflog',
@@ -111,6 +119,7 @@ final class GitMcpServer implements McpServer
                     'path' => ['type' => 'string', 'nullable' => true],
                 ]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             // git_commits
             new McpTool(
@@ -170,6 +179,7 @@ final class GitMcpServer implements McpServer
                     'path' => ['type' => 'string', 'nullable' => true],
                 ]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitBranchCreate',
@@ -217,6 +227,7 @@ final class GitMcpServer implements McpServer
                 description: 'List worktrees',
                 inputSchema: $this->schema(['path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitWorktreeRemove',
@@ -289,6 +300,7 @@ final class GitMcpServer implements McpServer
                 description: 'List current LFS locks',
                 inputSchema: $this->schema(['path' => ['type' => 'string', 'nullable' => true]]),
                 serverName: $this->name,
+                annotations: ['readOnlyHint' => true],
             ),
             new McpTool(
                 name: 'gitLfsMigrate',

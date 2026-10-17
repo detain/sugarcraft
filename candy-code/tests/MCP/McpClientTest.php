@@ -350,6 +350,58 @@ final class McpClientTest extends TestCase
         $this->assertSame('nested_value', $result['KEY']);
     }
 
+    /**
+     * ISS-093(e): the expansion is a SUBSTRING walk now — a value that merely
+     * contains a reference resolves it instead of shipping the braces to the
+     * wire.
+     */
+    public function testResolveExpandsReferencesEmbeddedInLongerValues(): void
+    {
+        $client = new McpClient($this->configPath);
+        $method = (new \ReflectionClass($client))->getMethod('resolveEnv');
+        $method->setAccessible(true);
+
+        putenv('SUB_MCP_HOST=gateway.example');
+        $result = $method->invoke($client, [
+            'URL' => 'https://${SUB_MCP_HOST}/mcp/${SUB_MCP_HOST}-tail',
+            'PROSE' => 'costs $5 and 100${} and ${BAD NAME} stay literal',
+        ]);
+        putenv('SUB_MCP_HOST');
+
+        $this->assertSame('https://gateway.example/mcp/gateway.example-tail', $result['URL']);
+        $this->assertSame('costs $5 and 100${} and ${BAD NAME} stay literal', $result['PROSE']);
+    }
+
+    /** A non-matching value is byte-identical, and a default rides the same walk. */
+    public function testResolveLeavesPlainValuesAloneAndDefaultsEmbeddedReferences(): void
+    {
+        $client = new McpClient($this->configPath);
+        $method = (new \ReflectionClass($client))->getMethod('resolveEnv');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($client, [
+            'PLAIN' => 'nothing to expand',
+            'EMB' => 'token:${NOPE_EMB:-sk-put-me-not}',
+        ]);
+
+        $this->assertSame('nothing to expand', $result['PLAIN']);
+        $this->assertSame('token:sk-put-me-not', $result['EMB']);
+    }
+
+    /** The old falsy-`0` semantics survive the rewrite untouched — `?:`, not `??`. */
+    public function testAVariableSetToZeroStillFallsToItsDefault(): void
+    {
+        $client = new McpClient($this->configPath);
+        $method = (new \ReflectionClass($client))->getMethod('resolveEnv');
+        $method->setAccessible(true);
+
+        putenv('ZERO_VAR=0');
+        $result = $method->invoke($client, ['A' => '${ZERO_VAR:-dflt}']);
+        putenv('ZERO_VAR');
+
+        $this->assertSame('dflt', $result['A']);
+    }
+
     // =========================================================================
     // startServers Tests
     // =========================================================================

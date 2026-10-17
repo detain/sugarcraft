@@ -893,6 +893,23 @@ final class McpClient
     }
 
     /**
+     * `${VAR}` and `${VAR:-default}` expansion inside config values.
+     *
+     * (ISS-093(e)) SUBSTRING occurrences, not only whole-value ones: a URL
+     * like `https://$HOST/mcp` is a legitimate config that used to reach the
+     * wire with the `${HOST}` braces still in it, because the old form was
+     * anchored `^…$` and never even considered a value that merely CONTAINS a
+     * reference. A value with no reference passes through byte-identical —
+     * including the prose kinds (`$5`, `100${}`) the looser old name
+     * characters used to gamble with. NAMES are the shell alphabet
+     * (`[A-Za-z_][A-Za-z0-9_]*`) since this rewrite: `${BAD NAME}` cannot be
+     * a real variable, so it stays literal instead of expanding to nothing.
+     * The value side keeps the old `?:` exactly — an env var set to `0` is
+     * falsy and falls to the default, which is what every pin here (and the
+     * documented fallback semantics) has always asserted. A PCRE failure on
+     * pathological bytes leaves the ORIGINAL value, the honest
+     * no-worse-than-before answer this method's whole contract is built on.
+     *
      * @param array<string, string> $env
      * @return array<string, string>
      */
@@ -901,11 +918,16 @@ final class McpClient
         $resolved = [];
 
         foreach ($env as $key => $value) {
-            if (is_string($value) && preg_match('/^\$\{(.*?)(?::-(.*))?\}$/', $value, $matches)) {
-                $resolved[$key] = getenv($matches[1]) ?: ($matches[2] ?? '');
-            } else {
-                $resolved[$key] = $value;
+            if (is_string($value)) {
+                $interpolated = preg_replace_callback(
+                    '/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/',
+                    static fn (array $m): string => (string) (getenv($m[1]) ?: ($m[2] ?? '')),
+                    $value,
+                );
+                $value = is_string($interpolated) ? $interpolated : $value;
             }
+
+            $resolved[$key] = $value;
         }
 
         return $resolved;

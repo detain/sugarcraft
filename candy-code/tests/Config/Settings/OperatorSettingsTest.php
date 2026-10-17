@@ -233,7 +233,7 @@ final class OperatorSettingsTest extends TestCase
 
             $this->writeConfig([Bootstrap::MCP_ENABLED_SETTING => false]);
             self::assertTrue(Bootstrap::mcpDisabled());
-            self::assertSame(Bootstrap::MCP_ABSENT, Bootstrap::mcpConfigDecision($root)['status'], 'off answers what a config-less checkout answers');
+            self::assertSame(Bootstrap::MCP_DISABLED, Bootstrap::mcpConfigDecision($root)['status'], 'off answers its own status since ISS-093(a)');
 
             $this->writeConfig([Bootstrap::MCP_ENABLED_SETTING => true]);
             putenv(Bootstrap::MCP_DISABLE_ENV . '=1');

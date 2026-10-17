@@ -24,7 +24,9 @@ use SugarCraft\Code\Support\TimedFileLock;
  * cached map instead (audit MCP-7) erased every login another process had
  * made since the cache was filled, and the old in-place, chmod-afterwards
  * write could be observed torn (read back as "no credentials") and briefly
- * world-readable.
+ * world-readable. Token REFRESHES dial the endpoint inside that same lock
+ * ({@see refreshGuarded()}, ISS-093(g)) — checking expiry against a memo and
+ * saving afterwards let two processes both spend the same refresh token.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc7591
  */
@@ -387,7 +389,7 @@ final class OAuthClientRegistration
      * Get an auth entry for a server, auto-refreshing if within the buffer window.
      *
      * Nothing is ever written before a token exchange has SUCCEEDED: the store
-     * is changed only by {@see refreshAndSave()}, after the token endpoint
+     * is changed only by {@see refreshGuarded()}, after the token endpoint
      * answered with a usable token. A failed refresh throws and leaves the
      * stored entry exactly as it was.
      *
@@ -436,14 +438,7 @@ final class OAuthClientRegistration
                 );
             }
 
-            $refreshed = $this->refreshToken(
-                $tokenUrl,
-                $entry->clientId,
-                $entry->clientSecret,
-                $entry->refreshToken,
-            );
-
-            return $this->refreshAndSave($serverUrl, $entry, $refreshed);
+            return $this->refreshGuarded($serverUrl, $entry, $tokenUrl);
         }
 
         if ($entry->expiresAt !== null && $entry->expiresAt - time() < self::TOKEN_EXPIRY_BUFFER_SECONDS) {
@@ -466,14 +461,7 @@ final class OAuthClientRegistration
                 return $entry;
             }
 
-            $refreshed = $this->refreshToken(
-                $tokenUrl,
-                $entry->clientId,
-                $entry->clientSecret,
-                $entry->refreshToken,
-            );
-
-            return $this->refreshAndSave($serverUrl, $entry, $refreshed);
+            return $this->refreshGuarded($serverUrl, $entry, $tokenUrl);
         }
 
         return $entry;
@@ -486,7 +474,7 @@ final class OAuthClientRegistration
      * {@see getValidAuth()} using the token endpoint that entry PERSISTS — so a caller holding only the server URL (an
      * {@see HttpMcpServer} composing its request headers) gets the refresh
      * behavior for free, and a rotated token is written back through
-     * {@see refreshAndSave()}'s existing save path.
+     * {@see refreshGuarded()}'s locked save path.
      *
      * A legacy row saved before endpoints were persisted carries an empty
      * tokenUrl: there is nothing to refresh against, so the stored entry is
@@ -596,26 +584,82 @@ final class OAuthClientRegistration
     }
 
     /**
-     * Reconstruct an AuthEntry from a refreshed token response and persist it.
+     * Reconstruct an AuthEntry from a refreshed token response. Identity and
+     * registration fields carry over from the entry being renewed; only the
+     * three token fields come off the wire.
      */
-    private function refreshAndSave(string $serverUrl, AuthEntry $entry, array $refreshed): AuthEntry
+    private static function entryFromRefresh(AuthEntry $entry, array $refreshed): AuthEntry
     {
-        $now = time();
-        $newEntry = new AuthEntry(
+        return new AuthEntry(
             clientId: $entry->clientId,
             clientSecret: $entry->clientSecret,
             registrationAccessToken: $entry->registrationAccessToken,
             accessToken: $refreshed['accessToken'],
             refreshToken: $refreshed['refreshToken'],
-            expiresAt: self::expiresAtFor($refreshed['expiresIn'], $now),
+            expiresAt: self::expiresAtFor($refreshed['expiresIn']),
             scopes: $entry->scopes,
             tokenUrl: $entry->tokenUrl,
             registrationUrl: $entry->registrationUrl,
             registrationClientUri: $entry->registrationClientUri,
         );
+    }
 
-        $this->saveAuth($serverUrl, $newEntry);
-        return $newEntry;
+    /**
+     * ISS-093(g): refresh through ONE locked read-check-refresh-save pass.
+     *
+     * The old sequence judged expiry against this object's (possibly stale)
+     * memo, dialed the token endpoint, and only then entered the sidecar lock
+     * to save. Two processes racing on the same expiring token therefore BOTH
+     * dialed, and on servers that rotate `refresh_token` on use the loser's
+     * new row was dead the moment the winner's rotation replaced it — worse,
+     * whichever save landed LAST won the file, so the loser could overwrite
+     * the winner's row with a refresh token the server had already replaced.
+     * The lock now spans the whole pass: the file is re-read fresh inside
+     * {@see mutateAuthFile()}, the row is double-checked against the entry we
+     * set out to renew, and only an unchanged row permits the dial.
+     *
+     * A row that changed under us is SERVED, not overwritten: another process
+     * renewed it, that is the outcome we wanted anyway, and no request leaves
+     * this process. A vanished row (deleted while we held the lock) falls
+     * through to a normal refresh — our stored refresh token is still the
+     * server's current one for that grant, and re-creating the row from a
+     * successful renewal is a better answer than failing an in-flight request
+     * over a concurrent `mcp auth remove`.
+     *
+     * The "a failed refresh leaves the stored entry untouched" contract
+     * survives the reshape: `refreshToken()` throwing inside the closure
+     * propagates through {@see mutateAuthFile()}, whose finally releases the
+     * lock without a byte written.
+     *
+     * @return AuthEntry the renewed row, or the peer-renewed row found under the lock
+     */
+    private function refreshGuarded(string $serverUrl, AuthEntry $stale, string $tokenUrl): AuthEntry
+    {
+        $renewed = null;
+
+        $this->mutateAuthFile(function (array $raw) use ($serverUrl, $stale, $tokenUrl, &$renewed): ?array {
+            $fresh = $this->decodeEntries($raw)[$serverUrl] ?? null;
+
+            if ($fresh !== null && ($fresh->accessToken !== $stale->accessToken || $fresh->expiresAt !== $stale->expiresAt)) {
+                $renewed = $fresh;
+                // "nothing changed" — the file already carries the renewal.
+                return null;
+            }
+
+            $renewed = self::entryFromRefresh(
+                $stale,
+                $this->refreshToken($tokenUrl, $stale->clientId, $stale->clientSecret, $stale->refreshToken),
+            );
+
+            $raw[$serverUrl] = $renewed->toArray();
+            return $raw;
+        });
+
+        // mutateAuthFile() only returns after the closure ran (or it threw),
+        // and both of the closure's arms above assign $renewed first.
+        assert($renewed instanceof AuthEntry);
+
+        return $renewed;
     }
 
     /**

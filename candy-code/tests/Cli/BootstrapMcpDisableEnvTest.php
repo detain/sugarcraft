@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\NonInteractive;
+use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tui\McpPanel;
 
 /**
  * E737 (residual 1): the `CANDY_CODE_MCP_DISABLE` opt-out hatch.
@@ -15,10 +19,12 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * WHAT THE GATE Owes THE CALLERS. `mcpConfigDecision()` is THE one discovery
  * path — `mcpClient()`, `mcpServerInventory()`, `mcpLivenessSnapshot()` and
  * `mcpConfigChangedSinceLaunch()` all route through it — so the disable branch
- * must answer the EXACT shape of a config-less miss: a well-formed array with
- * the canonical `path` present and `status === MCP_ABSENT`. A null, a missing
- * key, or a fifth status none of the consumers special-case would turn an
- * operator's opt-out into a crash in their own tools panel. This class pins
+ * must answer a well-formed array with the canonical `path` present and
+ * `status === MCP_DISABLED` (ISS-093(a) gave it its own status; the earlier
+ * `MCP_ABSENT` answer made a project holding a real `.mcp.json` report that it
+ * declared none). A null, a missing key, or a consumer crashing on the status
+ * it forgot to special-case would turn an operator's opt-out into a crash in
+ * their own tools panel. This class pins
  * that contract for every reader, plus the never-builds witness (a TRUSTED
  * project whose only server would leave a mark if it ever ran), plus the
  * narrower truthy vocabulary — `1`, `true`, `yes` case-insensitive DISABLE;
@@ -96,7 +102,7 @@ final class BootstrapMcpDisableEnvTest extends TestCase
 
     /**
      * THE OVERRIDE, at its strongest: config present, root granted trust in
-     * the HOME freeze — and the decision still answers the absent shape with
+     * the HOME freeze — and the decision still answers the switch-off shape with
      * the canonical path intact. This is what makes the hatch an override of
      * the trust gate rather than a peer of it.
      *
@@ -111,7 +117,7 @@ final class BootstrapMcpDisableEnvTest extends TestCase
 
         $decision = Bootstrap::mcpConfigDecision($root);
 
-        self::assertSame(Bootstrap::MCP_ABSENT, $decision['status'], 'the gate must answer the config-less miss shape, not a fifth status');
+        self::assertSame(Bootstrap::MCP_DISABLED, $decision['status'], 'ISS-093(a): the gate answers its own status — absent lied about a file that exists');
         self::assertIsString($decision['path']);
         self::assertStringEndsWith('/' . Bootstrap::MCP_CONFIG_FILENAME, $decision['path']);
         self::assertIsString($decision['root']);
@@ -144,7 +150,7 @@ final class BootstrapMcpDisableEnvTest extends TestCase
     }
 
     /**
-     * THE OTHER READERS, fed the gated decision: the listing says absent with
+     * THE OTHER READERS, fed the gated decision: the listing says disabled with
      * no rows, the liveness readout says null, the change verdict says silent
      * — every consumer walks its existing non-trusted arm on the well-formed
      * array. (This is the "no null-shape crash" half of the ruling.)
@@ -157,10 +163,45 @@ final class BootstrapMcpDisableEnvTest extends TestCase
         $this->grantProjectTrust($root);
 
         $inventory = Bootstrap::mcpServerInventory($root);
-        self::assertSame(Bootstrap::MCP_ABSENT, $inventory['status']);
+        self::assertSame(Bootstrap::MCP_DISABLED, $inventory['status'], 'the reader walks the non-trusted arm on the gate status too (ISS-093(a))');
         self::assertSame([], $inventory['servers']);
         self::assertNull(Bootstrap::mcpLivenessSnapshot($root));
         self::assertNull(Bootstrap::mcpConfigChangedSinceLaunch($root));
+    }
+
+    /**
+     * ISS-093(a): the surfaces must say SWITCHED OFF, not file-hunting advice.
+     * `mcp list` and `mcp trust` keep exit 0 (this is the operator's own
+     * choice, not a refusal to diagnose) but answer their own sentences; the
+     * panel renders the disabled status line and prints NEITHER the
+     * refusal-tier "not listed (discovery refused before parsing)" row NOR the
+     * setup guidance rows an absent project earns — a file that exists must
+     * not be advertised as one to add.
+     */
+    public function testTheDisabledGateOwnsItsOwnSentencesOnEverySurface(): void
+    {
+        putenv(Bootstrap::MCP_DISABLE_ENV . '=1');
+        $root = $this->makeLivenessRoot();
+        $this->writeConfigNaming($root, ['ledger' => ['type' => 'git']]);
+        $this->grantProjectTrust($root);
+
+        ob_start();
+        $listRc = Subcommands::dispatch(ArgvParser::parse(['candy-code', $root, 'mcp', 'list']));
+        $listOut = (string) ob_get_clean();
+        self::assertSame(NonInteractive::EXIT_OK, $listRc);
+        self::assertStringContainsString('MCP is switched off for this launch', $listOut);
+        self::assertStringNotContainsString('declares no', $listOut, 'the absent sentence blames the file for the switch');
+
+        ob_start();
+        $trustRc = Subcommands::dispatch(ArgvParser::parse(['candy-code', $root, 'mcp', 'trust']));
+        $trustOut = (string) ob_get_clean();
+        self::assertSame(NonInteractive::EXIT_OK, $trustRc);
+        self::assertStringContainsString('grant not attempted', $trustOut);
+
+        $panel = McpPanel::render(Bootstrap::mcpServerInventory($root));
+        self::assertStringContainsString('SWITCHED OFF', $panel);
+        self::assertStringNotContainsString('discovery refused before parsing', $panel);
+        self::assertStringNotContainsString('declares no .mcp.json', $panel);
     }
 
     // -------------------------------------------------------------------------

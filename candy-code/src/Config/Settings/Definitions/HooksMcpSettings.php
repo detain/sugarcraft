@@ -80,7 +80,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(Bootstrap::MCP_DISABLE_ENV)
                 ->withLabel(Lang::t('settings.mcp.enabled.label'))
-                ->withHelp('Start the MCP servers a trusted project\'s .mcp.json names; off starts none, as if the file were absent.')
+                ->withHelp('Start the MCP servers a trusted project\'s .mcp.json names; off starts none and the surfaces report the launch as disabled.')
                 ->withReaderSymbol(Bootstrap::class . '::mcpDisabled')
                 ->withReadBy('`Bootstrap::mcpConfigDecision()` (so `mcpClient()` and `mcp list`) → `mcpDisabled()`'),
             SettingDefinition::new('claudeMcpBinary', SettingType::Path)

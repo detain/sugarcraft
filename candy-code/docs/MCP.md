@@ -16,7 +16,7 @@ happens at launch, before any tool call and in every permission mode.
 `Bootstrap::mcpConfigDecision()` is the one discovery path — `mcpClient()`,
 `mcpServerInventory()` and `candy-code mcp list` all come through it, so the
 listing can never report a verdict the launch does not act on. It returns one of
-four statuses:
+five statuses:
 
 | Status | Meaning | What happens |
 |---|---|---|
@@ -24,6 +24,7 @@ four statuses:
 | `outside-tree` | present, but it resolves outside the checkout | refused, reported at launch |
 | `untrusted` | present and contained, but this root is not trusted | not started, reported at launch |
 | `trusted` | present, contained, and this root is listed | servers may start |
+| `disabled` | the `CANDY_CODE_MCP_DISABLE` gate is on — it short-circuits every status above | nothing starts, whatever the file says; the surfaces say switched-off, not absent |
 
 To opt in, add the canonical project root to `trustedProjectMcp` in
 `~/.candy-code/config.json`:
@@ -290,10 +291,11 @@ applied to **two keys only**: a `stdio` server's `env` map and an `http`
 server's `headers` map. It is *not* applied to `command`, `args`, `url` or
 `path`.
 
-The pattern is anchored (`/^\$\{(.*?)(?::-(.*))?\}$/`), so the placeholder must
-be the **whole value**. `"Bearer ${TOKEN}"` is passed through literally, with
-the braces intact — write `"${BEARER_HEADER}"` and put the whole header in the
-variable instead.
+One quoted pattern (`/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/`) walks the
+value as a **substring**, so `"Bearer ${TOKEN}"` interpolates in place —
+ISS-093(e) replaced the whole-value form that passed such a header through
+literally. A reference whose name leaves that shell alphabet (`${BAD NAME}`)
+and bare `$` prose stay literal, unparsed.
 
 An unset variable with no `:-default` resolves to the empty string. Note the
 resolution is `getenv($name) ?: $default`, so a variable set to `0` or to the
@@ -403,7 +405,8 @@ The consequence, stated because it is a real limit: the listing reflects the
 to start; finding that out means starting it.
 
 `candy-code doctor` reports the same verdict as one `mcp config` line: `OK` for
-absent or trusted, `WARN` for untrusted, `FAIL` for out-of-tree or undecodable.
+absent, disabled or trusted, `WARN` for untrusted, `FAIL` for out-of-tree or
+undecodable.
 
 ---
 

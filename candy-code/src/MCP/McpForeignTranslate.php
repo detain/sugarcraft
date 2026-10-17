@@ -254,6 +254,31 @@ final class McpForeignTranslate
                 unset($canonical['enabled']);
                 $notesForEntry[] = 'redundant "enabled": true dropped';
             }
+            if ($foreignType === 'sse') {
+                // ISS-093(e): the one foreign transport this port has NO
+                // alias for — the entry imports cleanly and then throws
+                // `Unknown MCP server type: sse` at every launch, silent
+                // until that first spawn. Say it where the operator is still
+                // reading, with the fix named.
+                $notesForEntry[] = 'type "sse" has no transport in this port — the entry will fail at launch; convert it to "http" if the server speaks streamable HTTP';
+            }
+            // `${VAR}` in a value is not literal here: {@see McpClient::resolveEnv()}
+            // expands it from THIS machine's environment at launch (whole-value
+            // only before ISS-093(e); substring occurrences now too, which is
+            // exactly why an importer must warn — the old behavior left the
+            // braces in place and made the operator's URL quietly wrong in a
+            // different way). Either reading, the imported entry is only
+            // equivalent on a host that carries the same variables.
+            foreach (['url', 'headers', 'env'] as $field) {
+                $candidate = $canonical[$field] ?? null;
+                $haystacks = is_string($candidate) ? [$candidate] : (is_array($candidate) ? array_values($candidate) : []);
+                foreach ($haystacks as $needle) {
+                    if (is_string($needle) && str_contains($needle, '${')) {
+                        $notesForEntry[] = 'references ${VAR} — expanded from this machine\'s environment at launch; the import is only equivalent where those variables are set';
+                        break 2;
+                    }
+                }
+            }
 
             $servers[$name] = self::orderEntryKeys($canonical);
             foreach ($notesForEntry as $note) {

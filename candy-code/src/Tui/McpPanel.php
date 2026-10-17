@@ -105,6 +105,7 @@ final class McpPanel
 
         $out .= self::line('  ' . Lang::t('tui.mcp.status', ['status' => match ($status) {
             Bootstrap::MCP_ABSENT => Lang::t('tui.mcp.status.absent'),
+            Bootstrap::MCP_DISABLED => Lang::t('tui.mcp.status.disabled'),
             Bootstrap::MCP_OUTSIDE_TREE => Lang::t('tui.mcp.status.outside_tree'),
             Bootstrap::MCP_UNTRUSTED => Lang::t('tui.mcp.status.untrusted'),
             Bootstrap::MCP_TRUSTED => Lang::t('tui.mcp.status.trusted'),
@@ -141,7 +142,12 @@ final class McpPanel
                     $out .= self::line($row, $width);
                 }
             }
-        } elseif ($status !== Bootstrap::MCP_ABSENT) {
+        } elseif ($status !== Bootstrap::MCP_ABSENT && $status !== Bootstrap::MCP_DISABLED) {
+            // ISS-093(a): the gate says "off" in its own status line already;
+            // "not listed (discovery refused before parsing)" belongs to the
+            // refusal states, where something WAS declined. Nothing here and
+            // nothing in the guidance arm below may print setup advice for a
+            // disabled launch — the file question is not the live question.
             $out .= self::line('  ' . Lang::t('tui.mcp.servers_not_listed'), $width);
         }
 

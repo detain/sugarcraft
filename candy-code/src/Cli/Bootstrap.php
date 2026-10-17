@@ -8101,8 +8101,21 @@ final class Bootstrap
     public const MCP_TRUSTED = 'trusted';
 
     /**
+     * {@see mcpConfigDecision()} status: project MCP is switched off for this
+     * launch ({@see mcpDisabled()}, ISS-093(a)).
+     *
+     * The consumers' law is unchanged — every non-{@see self::MCP_TRUSTED}
+     * status starts nothing — so this exists purely so the SURFACE can say why
+     * nothing started. Before it the gate answered {@see self::MCP_ABSENT},
+     * which made a project that has a `.mcp.json` report "this project
+     * declares no .mcp.json" while the file sat right there, and taught the
+     * operator to go hunt a file question when the answer was a switch.
+     */
+    public const MCP_DISABLED = 'disabled';
+
+    /**
      * E737 — the opt-out hatch. Env var that forces the MCP decision to
-     * `MCP_ABSENT` regardless of what the project root holds.
+     * `MCP_DISABLED` regardless of what the project root holds.
      *
      * WHY AN ENV VAR AND NOT A SETTING: the consumers that need it most are
      * automated environments that have no settings file to edit and must not
@@ -8141,12 +8154,13 @@ final class Bootstrap
      *
      * {@see self::MCP_DISABLE_ENV} (or the `mcp.enabled: false` setting,
      * {@see mcpDisabled()}) short-circuits this whole gate to
-     * {@see self::MCP_ABSENT} before any stat or trust read — the decision
+     * {@see self::MCP_DISABLED} before any stat or trust read — the decision
      * stays the one discovery path, it just answers the environment first.
      *
      * @return array{path: string, root: string, canonicalRoot: string|false, status: string}
-     *   `status` is one of {@see self::MCP_ABSENT}, {@see self::MCP_OUTSIDE_TREE},
-     *   {@see self::MCP_UNTRUSTED}, {@see self::MCP_TRUSTED}.
+     *   `status` is one of {@see self::MCP_DISABLED}, {@see self::MCP_ABSENT},
+     *   {@see self::MCP_OUTSIDE_TREE}, {@see self::MCP_UNTRUSTED},
+     *   {@see self::MCP_TRUSTED}.
      */
     public static function mcpConfigDecision(?string $root = null): array
     {
@@ -8168,16 +8182,18 @@ final class Bootstrap
         $decision = ['path' => $path, 'root' => $root, 'canonicalRoot' => $canonicalRoot];
 
         // E737 — the opt-out hatch, honored ABOVE every other gate and BEFORE
-        // any stat, containment compare, trust read or refusal write, and it
-        // answers the very shape a config-less miss answers: the same
-        // `MCP_ABSENT` with a well-formed path. Every consumer treats a
-        // non-TRUSTED decision as "nothing to launch", so the environment can
-        // silence the whole subsystem (zero launches, zero children) without
-        // any of them learning a new status to special-case — which is also
-        // why NO notice is recorded here: an operator who disabled MCP does
-        // not want to be told to trust it on every launch.
+        // any stat, containment compare, trust read or refusal write. It
+        // answers the SHAPE of a config-less miss — well-formed array, nothing
+        // to launch — under its OWN status since ISS-093(a): `MCP_DISABLED`,
+        // because ABSENT told an operator with a real `.mcp.json` that the
+        // project declared none, and the panel's advice then pointed at adding
+        // a file that existed. Every consumer's law is byte-unchanged: a
+        // non-TRUSTED decision is "nothing to launch", so the environment
+        // still silences the whole subsystem (zero launches, zero children) —
+        // and still NO notice is recorded here: an operator who disabled MCP
+        // does not want to be told to trust it on every launch.
         if (self::mcpDisabled()) {
-            return $decision + ['status' => self::MCP_ABSENT];
+            return $decision + ['status' => self::MCP_DISABLED];
         }
 
         // is_file() FIRST, so the overwhelmingly common "no MCP config" case

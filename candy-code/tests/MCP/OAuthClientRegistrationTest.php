@@ -427,6 +427,65 @@ final class OAuthClientRegistrationTest extends TestCase
     }
 
     // =========================================================================
+    // ISS-093(g): the lock spans read-check-refresh-save, not just the save
+    // =========================================================================
+
+    public function testTheRefreshReReadsTheFileUnderTheLockAndServesAPeerRenewalWithoutDialing(): void
+    {
+        // The cross-process race simulated deterministically: the FILE carries
+        // a peer's renewal while this object's memo still carries the row from
+        // before it, signature-matched so loadAuth() serves the stale memo.
+        // The old sequence would have dialed the endpoint with a token the
+        // peer had already rotated and then clobbered the peer's row on save;
+        // the locked double-check must find the fresh row first.
+        $history = [];
+        $ocr = new OAuthClientRegistration(
+            $this->clientRecording([$this->tokenResponse('loser-access', 'loser-refresh')], $history),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://race/mcp', $this->storeEntry('peer-access', time() + 7200, 'peer-refresh'));
+
+        $cache = new \ReflectionProperty(OAuthClientRegistration::class, 'authCache');
+        $signature = new \ReflectionMethod(OAuthClientRegistration::class, 'fileSignature');
+        $cacheSignature = new \ReflectionProperty(OAuthClientRegistration::class, 'authCacheSignature');
+        $cache->setValue($ocr, ['https://race/mcp' => $this->storeEntry('old-access', time() - 10, 'old-refresh')]);
+        $cacheSignature->setValue($ocr, $signature->invoke($ocr));
+
+        $result = $ocr->getValidAuth('https://race/mcp', 'https://as/token');
+
+        $this->assertNotNull($result);
+        $this->assertSame('peer-access', $result->accessToken, 'the peer-renewed row is served as-is');
+        $this->assertSame([], $history, 'the double-check must skip the network entirely');
+        $this->assertSame(
+            'peer-access',
+            $this->onDisk()['https://race/mcp']['accessToken'],
+            'and no write may clobber the peer row',
+        );
+    }
+
+    public function testARenewalRunsInsideTheLockedPassAndPublishesToTheFile(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            $this->tokenResponse('renewed-access', 'renewed-refresh'),
+        ]), $this->authFilePath);
+        $ocr->saveAuth('https://g/mcp', $this->storeEntry('g-one', time() - 10, 'g-refresh'));
+        $ocr->saveAuth('https://other/mcp', $this->storeEntry('other-one', time() + 7200, 'other-refresh'));
+
+        $result = $ocr->getValidAuth('https://g/mcp', 'https://as/token');
+
+        $this->assertNotNull($result);
+        $this->assertSame('renewed-access', $result->accessToken);
+        $disk = $this->onDisk();
+        $this->assertSame('renewed-access', $disk['https://g/mcp']['accessToken']);
+        $this->assertSame('renewed-refresh', $disk['https://g/mcp']['refreshToken']);
+        $this->assertSame(
+            'other-one',
+            $disk['https://other/mcp']['accessToken'],
+            'the locked refresh-save carries untouched rows through',
+        );
+    }
+
+    // =========================================================================
     // MCP-8: expires_in is optional (RFC 6749 §5.1) — unknown expiry, not a throw
     // =========================================================================
 
@@ -883,10 +942,19 @@ final class OAuthClientRegistrationTest extends TestCase
     }
 
     /**
-     * The race the merge has to win on its own, independently of the read-side
-     * memo check: the other process's login lands WHILE the TUI's refresh
-     * request is on the wire — after the TUI read the entry, before it writes.
-     * Driven through validAuthFor(), the per-request path HttpMcpServer uses.
+     * The peer login that arrives WHILE the TUI's refresh is on the wire.
+     * ISS-093(g) reshaped how this race resolves: the refresh now holds the
+     * sidecar lock across read-check-dial-save, so a lock-respecting peer's
+     * `mcp auth login` cannot land between our read and our write at all —
+     * it BLOCKS on the lock and merges onto our published row when we
+     * release. The old in-process repro dialed from inside the mock handler
+     * and saved through the lock from the same thread, which is precisely the
+     * nesting the widened lock forbids (flock is per open file description,
+     * so the callback would deadlock against its own holder — 5 s timeout,
+     * loud, never silent). Driven as the two ordered passes production now
+     * forces, through validAuthFor(), the per-request path HttpMcpServer uses:
+     * the renewal publishes first, the deferred login lands second, and
+     * NEITHER row is lost in either direction.
      */
     public function testLoginLandingDuringTheRefreshRoundTripSurvives(): void
     {
@@ -894,18 +962,18 @@ final class OAuthClientRegistrationTest extends TestCase
         $seed->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 30, 'rY1'));
 
         $tui = new OAuthClientRegistration($this->clientAnswering([
-            function (): Response {
-                (new OAuthClientRegistration(null, $this->authFilePath))
-                    ->saveAuth('https://x/mcp', $this->storeEntry('X1', time() + 3600));
-
-                return $this->tokenResponse('Y2', 'rY2');
-            },
+            $this->tokenResponse('Y2', 'rY2'),
         ]), $this->authFilePath);
 
         $this->assertSame('Y2', $tui->validAuthFor('https://y/mcp')?->accessToken);
 
-        $this->assertSame('X1', $this->onDisk()['https://x/mcp']['accessToken'] ?? null, 'the concurrent login was erased by the refresh write');
-        $this->assertSame('Y2', $this->onDisk()['https://y/mcp']['accessToken']);
+        // The login that was waiting on the lock now proceeds; its own locked
+        // merge must carry the TUI's renewed row through untouched.
+        $peer = new OAuthClientRegistration(null, $this->authFilePath);
+        $peer->saveAuth('https://x/mcp', $this->storeEntry('X1', time() + 3600));
+
+        $this->assertSame('X1', $this->onDisk()['https://x/mcp']['accessToken'] ?? null, 'the deferred login must land');
+        $this->assertSame('Y2', $this->onDisk()['https://y/mcp']['accessToken'], 'the refresh write must survive the deferred login');
 
         // The memo is the merged disk state, not "the TUI's map plus its change".
         $memo = $tui->loadAuth();

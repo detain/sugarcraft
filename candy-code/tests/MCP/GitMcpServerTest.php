@@ -88,6 +88,39 @@ final class GitMcpServerTest extends TestCase
         }
     }
 
+    /**
+     * ISS-093(d): the twelve purely reading git tools declare
+     * `readOnlyHint`, so the bridge's {@see McpToolBridge::readOnly()} table
+     * stops judging them by its fallback roster — and NO mutating tool does,
+     * because a hint on a writer is what turns an auto-approval into an
+     * auto-destruction. The rosters are bidirectional: an unlisted name fails
+     * the else-arm, so a new reading tool cannot silently skip its hint and a
+     * renamed writer cannot inherit one.
+     */
+    public function testTheReadingToolsDeclareThemselvesReadOnlyAndTheWritersDoNot(): void
+    {
+        $readOnly = [
+            'gitStatus', 'gitSnapshot', 'gitConfigList', 'gitConfigGet', 'gitAliasList',
+            'gitLog', 'gitShow', 'gitBlame', 'gitReflog',
+            'gitBranchList', 'gitWorktreeList', 'gitLfsLocks',
+        ];
+
+        $tools = $this->server->listTools();
+        $this->assertCount(29, $tools, 'the tool roster moved — re-judge the readOnly split');
+
+        $seen = [];
+        foreach ($tools as $tool) {
+            $seen[] = $tool->name;
+            if (in_array($tool->name, $readOnly, true)) {
+                $this->assertTrue($tool->readOnlyHint(), $tool->name . ' only reads and must say so');
+            } else {
+                $this->assertFalse($tool->readOnlyHint(), $tool->name . ' writes; a hint here is a permission hole');
+            }
+        }
+        $this->assertSame(29, count($seen));
+        $this->assertEmpty(array_diff($readOnly, $seen), 'a declared-reading tool vanished from the table');
+    }
+
     public function testAllToolsHaveDescription(): void
     {
         $tools = $this->server->listTools();
