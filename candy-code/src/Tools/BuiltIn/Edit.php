@@ -601,7 +601,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
             return null;
         }
 
-        $preview = self::diffPreview($resolved, $original, $content, $this->root);
+        $preview = self::diffPreview($resolved, $original, $content, $root);
 
         return $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
     }

@@ -416,7 +416,7 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
             return null;
         }
 
-        $preview = self::diffPreview($resolved, $original === false ? '' : $original, $content, $this->root);
+        $preview = self::diffPreview($resolved, $original === false ? '' : $original, $content, $root);
 
         return $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
     }

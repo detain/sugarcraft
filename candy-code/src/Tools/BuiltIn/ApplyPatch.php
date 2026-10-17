@@ -720,7 +720,7 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFrom
                 return null;
             }
 
-            $preview = self::diffPreview($resolved, $before, $after, $this->root);
+            $preview = self::diffPreview($resolved, $before, $after, $root);
             $previews[] = $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
         }
 
