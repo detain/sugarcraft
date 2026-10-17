@@ -33,7 +33,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('coder', $coder->name);
         $this->assertSame('General coding assistant', $coder->description);
         $this->assertStringStartsWith('You are a coding assistant', $coder->prompt);
-        $this->assertSame(['Read', 'Edit', 'Bash', 'Skill'], $coder->defaultTools);
+        $this->assertSame(['Read', 'Edit', 'Write', 'Grep', 'Glob', 'ApplyPatch', 'Bash', 'Skill'], $coder->defaultTools);
         $this->assertSame([], $coder->defaultSkills);
     }
 
@@ -108,7 +108,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('tester', $tester->name);
         $this->assertSame('Test writing and coverage', $tester->description);
         $this->assertStringStartsWith('You are a testing specialist', $tester->prompt);
-        $this->assertSame(['Read', 'Bash', 'Skill'], $tester->defaultTools);
+        $this->assertSame(['Read', 'Write', 'Edit', 'Grep', 'Glob', 'Bash', 'Skill'], $tester->defaultTools);
         $this->assertSame(['phpunit-master'], $tester->defaultSkills);
     }
 
@@ -673,4 +673,34 @@ final class AgentDefinitionTest extends TestCase
         @rmdir($path);
     }
 
+
+    /**
+     * ISS-033: a built-in prompt that orders the model to consult a granted
+     * skill must phrase it conditionally — skillLoader skips can leave a
+     * named skill unavailable, and an unconditional "you have been granted"
+     * would then be a lie inside the sub-agent's identity prompt.
+     */
+    public function testSkillMentionsInBuiltInPromptsAreConditional(): void
+    {
+        $unconditional = ['you have been granted', 'Follow the phpunit-master'];
+
+        foreach (['reviewer', 'tester'] as $type) {
+            $definition = \SugarCraft\Code\Agents\AgentDefinition::fromType($type, $type);
+            $this->assertNotNull($definition);
+
+            foreach ($unconditional as $phrasing) {
+                $this->assertStringNotContainsString(
+                    $phrasing,
+                    $definition->prompt,
+                    sprintf('the %s prompt must not assert a skill grant unconditionally', $type),
+                );
+            }
+
+            $this->assertMatchesRegularExpression(
+                '/when the php-best-practices|Where the phpunit-master/i',
+                $definition->prompt,
+                sprintf('the %s prompt names its skills in a conditional clause', $type),
+            );
+        }
+    }
 }

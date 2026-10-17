@@ -46,7 +46,13 @@ final readonly class AgentDefinition
                 . 'surrounding code rather than introducing your own. Finish with a short summary '
                 . 'naming every file you changed and calling out anything that alters a public API '
                 . 'or an observable behaviour.',
-            defaultTools: ['Read', 'Edit', 'Bash', 'Skill'],
+            // ISS-033: 'Make the smallest change' includes changes that ADD
+            // files and multi-file edits applied as one patch, and finding
+            // the code to change comes before changing it. Before this grant
+            // the built-in coder could not create a file with any tool, and
+            // the repo's own .candy-code/agents/coder.md grant — which fixes
+            // exactly this — is read only when launching inside the package.
+            defaultTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'ApplyPatch', 'Bash', 'Skill'],
             defaultSkills: [],
         );
     }
@@ -59,8 +65,9 @@ final readonly class AgentDefinition
             description: 'Code review specialist',
             prompt: 'You are a code review specialist. Review the diff or the files you are given '
                 . 'for correctness bugs, security issues, and violations of this project\'s own '
-                . 'conventions — consult the php-best-practices and security-audit skills you have '
-                . 'been granted rather than relying on general knowledge alone. Report findings '
+                . 'conventions — when the php-best-practices and security-audit skills are '
+                . 'available to you, consult them rather than relying on general knowledge '
+                . 'alone. Report findings '
                 . 'grouped by severity, blocking before suggestion, each one naming the file and '
                 . 'line it is about. Do not rewrite the code yourself unless you are asked to.',
             // `git *`, NOT `git:*`, AND THE COLON WAS NOT A TYPO — it was
@@ -178,13 +185,16 @@ final readonly class AgentDefinition
             type: self::TYPE_TESTER,
             name: $name,
             description: 'Test writing and coverage',
-            prompt: 'You are a testing specialist. Follow the phpunit-master skill you have been '
-                . 'granted for this project\'s test conventions. Every test you write must fail '
+            prompt: 'You are a testing specialist. Where the phpunit-master skill is available '
+                . 'to you, follow it for this project\'s test conventions. Every test you write must fail '
                 . 'when the behaviour it covers is broken — prove that, and never weaken an '
                 . 'assertion to make a suite pass. Assert the property rather than an incidental '
                 . 'literal, and finish by reporting the tests you added and the run that showed '
                 . 'them green.',
-            defaultTools: ['Read', 'Bash', 'Skill'],
+            // ISS-033: the prompt asks for tests to be WRITTEN, so the file
+            // tools that write them ride the grant; before this the only way
+            // a delegated tester could create a file was a Bash heredoc.
+            defaultTools: ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'Bash', 'Skill'],
             defaultSkills: ['phpunit-master'],
         );
     }
