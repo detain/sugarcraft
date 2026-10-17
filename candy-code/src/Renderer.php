@@ -336,6 +336,14 @@ final class Renderer
     private const SLASH_MENU_CHROME_COLS = 4;
 
     /**
+     * Rows the "/" popup's own frame costs: `border()` is 1 above and 1 below
+     * ({@see SLASH_MENU_CHROME_COLS}'s vertical twin — `padding(0, 1)` adds
+     * none). The height budget in {@see renderView()} subtracts it so the
+     * box, not the transcript, eats the popup's border rows.
+     */
+    private const SLASH_MENU_CHROME_ROWS = 2;
+
+    /**
      * Terminal widths below which {@see renderSlashMenu()}'s narrowest painted
      * row cannot fit: its own chrome ({@see SLASH_MENU_CHROME_COLS}), the two
      * columns every row spends on its "▸ "/"  " marker, and one content cell.
@@ -1834,7 +1842,14 @@ final class Renderer
         $body = self::fitToPane($body, $contentWidth);
 
         $input = self::renderInput($chat, $theme);
-        $slashMenu = self::renderSlashMenu($chat, $theme);
+        $rows = $chat->rows();
+        // ISS-046: the "/" popup used to paint every match — `filter('')` is
+        // all 48 commands — and {@see render()}'s tail clip then slid the
+        // input box and the selected row off the top of the frame. The popup
+        // is therefore rendered BELOW, once every block that shares the frame
+        // with it knows its own height; $slashMenu keeps its slot here so the
+        // assembly order below stays exactly as it was.
+        $agentHeaderUp = $openView !== null && $rows >= 4;
 
         // CL-3: the transcript shell paints BARE. Its rounded border +
         // padding(1, 2) (6 cols, 4 rows) is removed unconditionally — the
@@ -1879,14 +1894,7 @@ final class Renderer
             Chat::mouseClicksEnabled(),
         );
 
-        $content = $shell . "\n"
-            . ($agentStrip !== '' ? $agentStrip . "\n" : '')
-            . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
-
         $tabStrip = self::renderSessionTabStrip($chat);
-        if ($tabStrip !== '') {
-            $content = $tabStrip . "\n" . $content;
-        }
 
         // The footer shows only when it is the frame's sole agent listing:
         // not while the live strip above the input paints one (pre-existing),
@@ -1894,6 +1902,32 @@ final class Renderer
         $agentView = ($agentStrip === '' && !self::$agentsPaneDocked)
             ? self::renderAgentView($chat)
             : '';
+
+        // ISS-046, the height cap: the popup lives below the input inside the
+        // ONE tail-clipped block, so its rows come out of what the frame has
+        // left after every other block below the transcript is counted. The
+        // floor of 3 follows the issue's own suggestion: on a frame that
+        // cannot afford the popup, the input and a first look at the list,
+        // the popup keeps a usable minimum and the transcript — the block
+        // the clip drops from the head anyway — pays, rather than the box
+        // being pushed off its own frame.
+        $frameRows = max(1, $rows - 1 - ($agentHeaderUp ? 1 : 0));
+        $popup = self::blockRows($input) + self::blockRows($agentStrip)
+            + self::blockRows($tabStrip) + self::blockRows($agentView);
+        $slashMenu = self::renderSlashMenu(
+            $chat,
+            $theme,
+            max(3, $frameRows - $popup - self::SLASH_MENU_CHROME_ROWS),
+        );
+
+        $content = $shell . "\n"
+            . ($agentStrip !== '' ? $agentStrip . "\n" : '')
+            . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
+
+        if ($tabStrip !== '') {
+            $content = $tabStrip . "\n" . $content;
+        }
+
         if ($agentView !== '') {
             $content .= "\n" . $agentView;
         }
@@ -1939,7 +1973,8 @@ final class Renderer
         // the frame is deliberately 2, not 1. Backlog E48 took the floor as the
         // answer rather than dropping the bar; renderStatusBar()'s docblock says
         // why the bar is the row that survives.
-        $rows = $chat->rows();
+        // $rows was read at the popup budget above — the same single
+        // authoritative $chat->rows() these derivations have always used.
         // P-C2: the Agent View's header row is pinned ABOVE the clip, so the
         // way back ("main", "esc back") never scrolls off with older rows.
         // Dropped on a terminal too short to give it a row of its own.
@@ -5667,8 +5702,16 @@ final class Renderer
      * marker included) inside a 20-, 30- OR 40-column terminal - exactly the
      * overflow this comment used to claim was impossible. Pinned at seven widths
      * by `RendererTest::testSlashMenuFitsTheWholeRowNotJustTheHint()`.
+     *
+     * HEIGHT (ISS-046): {@see renderView()} hands this renderer the rows the
+     * frame has left below the input box, so the popup can never grow the
+     * block the tail clip slides over. When the match list is longer than
+     * that, it is WINDOWED around {@see Chat::slashMenuIndex()} — the
+     * highlighted row is always on screen — and the hidden rows are counted
+     * by a faint "↑ N more" / "↓ N more" row at the respective edge, the
+     * same convention the side panes use.
      */
-    private static function renderSlashMenu(Chat $chat, Theme $theme): string
+    private static function renderSlashMenu(Chat $chat, Theme $theme, int $maxRows): string
     {
         $matches = $chat->slashMenuMatches();
         if ($matches === []) {
@@ -5763,11 +5806,56 @@ final class Renderer
             $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $badge . $hint . $tail);
         }
 
+        // ISS-046: the window. When the list fits under $maxRows this paints
+        // exactly the frame the popup always painted; otherwise the cap is
+        // centered on the highlighted row and faint "more" rows count what
+        // the cut left out on each side. A side touching an edge gives its
+        // reserved row back to the items (so up to $maxRows-1 commands are
+        // visible with one marker), and the extension always leaves at least
+        // one item beyond the surviving marker — a "more" row that would say
+        // "1 more" about nothing is not rendered at all.
+        $total = count($lines);
+        if ($total > $maxRows) {
+            $itemCap = max(1, $maxRows - 2);
+            $start = max(0, min($selected - intdiv($itemCap, 2), $total - $itemCap));
+            $end = $start + $itemCap;
+            if ($start === 0) {
+                $end = $end + 1 < $total ? $end + 1 : $total - 1;
+            } elseif ($end === $total) {
+                $start = $start - 1;
+            }
+
+            $window = array_slice($lines, $start, $end - $start);
+            $moreStyle = Style::new()->foreground($theme->systemLabel)->faint();
+            // The marker pays the SAME width budget an item row pays (marker
+            // excluded, the box's longest row rules), or a 15-column
+            // "↓ 46 more" would widen the box past a 7-column terminal —
+            // FrameWidthClipTest sweeps exactly that.
+            if ($start > 0) {
+                array_unshift($window, $moreStyle->render('  ' . self::clipToWidth(Lang::t('tui.slash.more_above', ['count' => $start]), $budget)));
+            }
+            if ($end < $total) {
+                $window[] = $moreStyle->render('  ' . self::clipToWidth(Lang::t('tui.slash.more_below', ['count' => $total - $end]), $budget));
+            }
+            $lines = $window;
+        }
+
         return Style::new()
             ->border(Border::normal())
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * Rows a rendered block occupies inside the frame it gets joined into.
+     * '' is not painted at all — {@see renderView()} splices such blocks in
+     * conditionally — so it counts zero, not the one line `explode("\n", '')`
+     * would report.
+     */
+    private static function blockRows(string $block): int
+    {
+        return $block === '' ? 0 : substr_count($block, "\n") + 1;
     }
 
     /**

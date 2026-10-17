@@ -902,6 +902,68 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString('▸', $out);
     }
 
+    // =========================================================================
+    // ISS-046: "/" popup height cap and windowing. A bare "/" matched every
+    // command and painted 50 rows, and the tail clip — which keeps the TAIL of
+    // the frame — slid the input box and the highlighted first row off the top.
+    // =========================================================================
+
+    public function testTheBareSlashPopupIsCappedAndKeepsTheFrameBottomBlocksVisible(): void
+    {
+        $plain = $this->stripAnsi(Renderer::render(
+            (new Chat(history: [Message::user('hi')], inputBuf: '/'))->withSize(100, 24)
+        ));
+
+        $items = 0;
+        $markers = 0;
+        foreach (explode("\n", $plain) as $line) {
+            if (preg_match('/^│ (?:▸|  )\//', $line)) {
+                $items++;
+            }
+            if (preg_match('/[↑↓] \d+ more/', $line)) {
+                $markers++;
+            }
+        }
+
+        self::assertStringContainsString('│ > /', $plain, 'the input box stays in the frame');
+        self::assertMatchesRegularExpression('/^│ ▸ \//m', $plain, 'the highlighted row is on screen');
+        self::assertGreaterThan(0, $markers, 'the clipped tail of the list announces itself');
+        self::assertLessThan(10, $markers, 'one row per hidden edge, never one per hidden item');
+        // available 24-1, input box 3 rows, popup's own border 2: no more than
+        // what the frame has left below the input may be painted.
+        self::assertLessThanOrEqual(24 - 1 - 3 - 2, $items, 'the popup is capped, not merely clipped');
+    }
+
+    public function testThePopupWindowFollowsTheSelectedRow(): void
+    {
+        $plain = $this->stripAnsi(Renderer::render(
+            (new Chat(history: [Message::user('hi')], inputBuf: '/', slashMenuIndex: 40))->withSize(100, 24)
+        ));
+
+        self::assertMatchesRegularExpression('/^│ ▸ \//m', $plain, 'a selection deep in the list is still painted');
+        self::assertMatchesRegularExpression('/↑ \d+ more/', $plain, 'and the rows above it are counted');
+        self::assertStringContainsString('│ > /', $plain, 'the input box survives to the last row');
+    }
+
+    public function testEvenOnAShortFrameThePopupKeepsTheInputVisible(): void
+    {
+        $plain = $this->stripAnsi(Renderer::render(
+            (new Chat(history: [Message::user('hi')], inputBuf: '/'))->withSize(80, 8)
+        ));
+
+        $items = 0;
+        foreach (explode("\n", $plain) as $line) {
+            if (preg_match('/^│ (?:▸|  )\//', $line)) {
+                $items++;
+            }
+        }
+
+        self::assertStringContainsString('│ > /', $plain);
+        self::assertMatchesRegularExpression('/^│ ▸ \//m', $plain, 'the 3-row floor shows the selection');
+        self::assertGreaterThanOrEqual(1, $items);
+        self::assertLessThanOrEqual(3, $items, 'the floor is the cap too — never more');
+    }
+
     public function testDifferentThemesProduceDifferentOutput(): void
     {
         $dark = new Chat(history: [Message::user('hi')], themeName: 'dark');
