@@ -31,6 +31,11 @@ use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
  * owner-only and appended under an exclusive lock, so two sessions of one
  * project never interleave a line.
  *
+ * The file is append-only to its writers and consumable by its reader: the
+ * dream pass keeps a byte cursor and trims the prefix it has folded
+ * ({@see scanFrom()}, {@see trimBefore()}), so what sits on disk is the work
+ * not yet read, never the whole log of the project (ISS-071).
+ *
  * Journalling never fails a compaction: {@see append()} answers false on any
  * I/O failure and the summary lands in the transcript regardless.
  */
@@ -127,26 +132,163 @@ final class CompactionJournal
         $raw = is_file($this->path) ? @file($this->path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : false;
         $entries = [];
         foreach ($raw === false ? [] : $raw as $line) {
-            $entry = json_decode($line, true);
-            if (!is_array($entry) || !is_array($entry['tags'] ?? null) || !is_array($entry['records'] ?? null)
-                || !is_string($entry['compaction'] ?? null) || !is_string($entry['at'] ?? null)) {
+            $entry = self::decodeLine((string) $line);
+            if ($entry === null) {
                 continue;
             }
             if ($tag !== null && !in_array($tag, $entry['tags'], true)) {
                 continue;
             }
-            $entries[] = [
-                'v' => is_int($entry['v'] ?? null) ? $entry['v'] : self::VERSION,
-                'at' => $entry['at'],
-                'tags' => array_values(array_filter($entry['tags'], 'is_string')),
-                'project' => is_string($entry['project'] ?? null) ? $entry['project'] : null,
-                'compaction' => $entry['compaction'],
-                'records' => array_values(array_filter($entry['records'], 'is_string')),
-                'state' => is_string($entry['state'] ?? null) ? $entry['state'] : null,
-            ];
+            $entries[] = $entry;
         }
 
         return $limit > 0 ? array_slice($entries, -$limit) : $entries;
+    }
+
+    /**
+     * Read the journal from a byte offset rather than from its start (ISS-071).
+     * The offset is a consumed-until cursor: everything before it has been
+     * folded, only the tail still describes work. ends[k] is the absolute byte
+     * just past entries[k]'s newline — the offset a later read resumes from —
+     * so a consumer that takes a prefix of the entries learns exactly how far
+     * consumption reached. aligned is false when $offset cannot describe a
+     * position in this file (past its end, or resting mid-line); the caller
+     * then resyncs from zero. A trailing line without its newline is a half
+     * finished append: it is never returned, and the cursor stays before it.
+     *
+     * @return array{entries: list<array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string}>, ends: list<int>, aligned: bool, size: int}
+     */
+    public function scanFrom(int $offset = 0): array
+    {
+        if (!is_file($this->path)) {
+            return ['entries' => [], 'ends' => [], 'aligned' => true, 'size' => 0];
+        }
+        clearstatcache(true, $this->path);
+        $size = filesize($this->path);
+        if ($size === false) {
+            return ['entries' => [], 'ends' => [], 'aligned' => false, 'size' => 0];
+        }
+        if ($offset < 0 || $offset > $size) {
+            return ['entries' => [], 'ends' => [], 'aligned' => false, 'size' => $size];
+        }
+        if ($offset > 0) {
+            // Line boundaries only: the byte before the cursor must be a newline.
+            $probe = @file_get_contents($this->path, false, null, $offset - 1, 1);
+            if ($probe !== "\n") {
+                return ['entries' => [], 'ends' => [], 'aligned' => false, 'size' => $size];
+            }
+        }
+
+        $handle = @fopen($this->path, 'rb');
+        if ($handle === false) {
+            return ['entries' => [], 'ends' => [], 'aligned' => false, 'size' => $size];
+        }
+        $entries = [];
+        $ends = [];
+        try {
+            if ($offset > 0 && fseek($handle, $offset) !== 0) {
+                return ['entries' => [], 'ends' => [], 'aligned' => false, 'size' => $size];
+            }
+            $position = $offset;
+            while (($line = fgets($handle)) !== false) {
+                $length = strlen($line);
+                if ($line[$length - 1] !== "\n") {
+                    break; // incomplete trailing append — leave the cursor before it
+                }
+                $position += $length;
+                $entry = self::decodeLine(rtrim($line, "\r\n"));
+                if ($entry === null) {
+                    continue;
+                }
+                $entries[] = $entry;
+                $ends[] = $position;
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return ['entries' => $entries, 'ends' => $ends, 'aligned' => true, 'size' => $size];
+    }
+
+    /**
+     * Drop the journal's first $offset bytes — the entries a consumer has
+     * provably folded — keeping any unread tail (ISS-071). Without this the
+     * journal grows for the life of the project and every fold re-reads all
+     * history. Returns false when the trim could not be trusted (the file
+     * shrank or was replaced under the lock, a lock or write failure); the
+     * caller then keeps its byte cursor and loses nothing but space.
+     */
+    public function trimBefore(int $offset): bool
+    {
+        if ($offset <= 0) {
+            return true;
+        }
+        if (!is_file($this->path)) {
+            return false;
+        }
+        $handle = @fopen($this->path, 'r+b');
+        if ($handle === false) {
+            return false;
+        }
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                return false;
+            }
+            try {
+                $stat = fstat($handle);
+                $size = is_array($stat) ? ($stat['size'] ?? -1) : -1;
+                if ($size < $offset) {
+                    return false;
+                }
+                if ($size === $offset) {
+                    return @ftruncate($handle, 0);
+                }
+                if (fseek($handle, $offset) !== 0) {
+                    return false;
+                }
+                $tail = stream_get_contents($handle);
+                if ($tail === false) {
+                    return false;
+                }
+                if (rewind($handle) !== true || !@ftruncate($handle, 0)) {
+                    return false;
+                }
+                $written = fwrite($handle, $tail);
+                fflush($handle);
+
+                return $written === strlen($tail);
+            } finally {
+                flock($handle, LOCK_UN);
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * One journal line to its canonical entry, or null when the line is not
+     * one of ours. The file is the user's to read and edit, so foreign lines
+     * are skipped, never fatal.
+     *
+     * @return ?array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string}
+     */
+    private static function decodeLine(string $line): ?array
+    {
+        $entry = json_decode($line, true);
+        if (!is_array($entry) || !is_array($entry['tags'] ?? null) || !is_array($entry['records'] ?? null)
+            || !is_string($entry['compaction'] ?? null) || !is_string($entry['at'] ?? null)) {
+            return null;
+        }
+
+        return [
+            'v' => is_int($entry['v'] ?? null) ? $entry['v'] : self::VERSION,
+            'at' => $entry['at'],
+            'tags' => array_values(array_filter($entry['tags'], 'is_string')),
+            'project' => is_string($entry['project'] ?? null) ? $entry['project'] : null,
+            'compaction' => $entry['compaction'],
+            'records' => array_values(array_filter($entry['records'], 'is_string')),
+            'state' => is_string($entry['state'] ?? null) ? $entry['state'] : null,
+        ];
     }
 
     private function write(string $line): bool

@@ -115,6 +115,68 @@ final class CompactionJournalTest extends TestCase
         $this->assertSame(['c1'], array_column($journal->entries(), 'compaction'));
     }
 
+    public function testScanFromResumesAtAByteOffsetAndReportsWhereEntriesEnd(): void
+    {
+        $journal = CompactionJournal::at($this->dir . '/journal.jsonl');
+        $journal->append('c1', ['k' => 'one']);
+        $journal->append('c2', ['k' => 'two']);
+        $journal->append('c3', ['k' => 'three']);
+
+        $scan = $journal->scanFrom();
+        $this->assertTrue($scan['aligned']);
+        $this->assertSame(['c1', 'c2', 'c3'], array_column($scan['entries'], 'compaction'));
+        $this->assertSame(filesize($journal->path()), $scan['size']);
+        $this->assertSame($scan['size'], $scan['ends'][2], 'an entry ends just past its newline, the last at the file size');
+
+        $tail = $journal->scanFrom($scan['ends'][1]);
+        $this->assertSame(['c3'], array_column($tail['entries'], 'compaction'));
+        $this->assertSame($scan['size'], $tail['ends'][0]);
+    }
+
+    public function testScanFromRefusesUnalignedOffsetsAndIncompleteLines(): void
+    {
+        $journal = CompactionJournal::at($this->dir . '/journal.jsonl');
+        $journal->append('c1', ['k' => 'one']);
+
+        $this->assertFalse($journal->scanFrom(5)['aligned'], 'a mid-line offset describes nothing we can trust');
+        $this->assertFalse($journal->scanFrom(filesize($journal->path()) + 7)['aligned']);
+
+        file_put_contents($journal->path(), '{"v":1,"at":"2026-01-01T00:00:00Z","tags":["compaction"],"compaction":"c2","records":["half"]', FILE_APPEND);
+        $scan = $journal->scanFrom();
+        $this->assertSame(['c1'], array_column($scan['entries'], 'compaction'), 'a half-written append is not an entry yet');
+        $this->assertTrue($scan['aligned']);
+        $this->assertLessThan($scan['size'], $scan['ends'][0], 'the cursor stays clear of the partial tail');
+
+        $missing = CompactionJournal::at($this->dir . '/none.jsonl')->scanFrom();
+        $this->assertSame([], $missing['entries']);
+        $this->assertTrue($missing['aligned']);
+        $this->assertSame(0, $missing['size']);
+    }
+
+    public function testTrimBeforeDropsTheFoldedPrefixAndKeepsTheUnreadTail(): void
+    {
+        $journal = CompactionJournal::at($this->dir . '/journal.jsonl');
+        $journal->append('c1', ['k' => 'one']);
+        $journal->append('c2', ['k' => 'two']);
+        $scan = $journal->scanFrom();
+
+        $this->assertTrue($journal->trimBefore(0));
+        $this->assertTrue($journal->trimBefore($scan['ends'][0]));
+        $this->assertSame(['c2'], array_column($journal->entries(), 'compaction'));
+
+        clearstatcache(true, $journal->path());
+        $this->assertTrue($journal->trimBefore(filesize($journal->path())));
+        $this->assertSame([], $journal->entries());
+
+        $this->assertFalse($journal->trimBefore(999), 'an offset past the file is not one we can trust');
+
+        $journal->append('c3', ['k' => 'three']);
+        $journal->append('c4', ['k' => 'four']);
+        $scan = $journal->scanFrom();
+        $this->assertTrue($journal->trimBefore($scan['ends'][0]));
+        $this->assertSame(['c4'], array_column($journal->entries(), 'compaction'), 'the unread tail rides out the trim');
+    }
+
     public function testTheStoreJournalLivesBesideTheHomeStateKeyedByProject(): void
     {
         mkdir($this->dir . '/home/memory', 0o700, true);

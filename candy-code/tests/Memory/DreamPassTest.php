@@ -161,6 +161,11 @@ final class DreamPassTest extends TestCase
         $pass = $this->pass()->withInterval(0);
 
         self::assertTrue($this->settled($pass->call($engine, false, 's'))->advanced);
+        $state = json_decode((string) file_get_contents(DreamPass::statePath($this->store)), true);
+        self::assertSame(0, $state['offset'] ?? null, 'a pass that folded everything restarts the byte cursor at the top of the tail');
+        self::assertArrayNotHasKey('cursor', $state, 'the count cursor is retired (ISS-071)');
+        self::assertArrayNotHasKey('size', $state);
+        self::assertSame([], CompactionJournal::forStore($this->store)->entries(), 'the folded prefix leaves the journal');
         self::assertNull($pass->call($engine, false, 's'), 'an unchanged journal is not dreamed over again');
 
         $this->journal('c2', 'Second summary.');
@@ -170,8 +175,36 @@ final class DreamPassTest extends TestCase
         self::assertStringNotContainsString('First summary.', $prompt);
     }
 
-    public function testAnUnansweredOrTruncatedPassLeavesTheCursorForNextTime(): void
+    public function testPreOffsetStateFilesBecomeByteCursorsByIdentity(): void
     {
+        $this->journal('c1', 'First summary.');
+        $this->journal('c2', 'Second summary.');
+        $journal = CompactionJournal::forStore($this->store);
+        $scan = $journal->scanFrom();
+        $first = $journal->entries()[0];
+        $identity = $first['at'] . '|' . $first['compaction'];
+        $pass = DreamPass::new(MemoryWriter::new($this->store, $this->root));
+
+        [$taken, $start, $end] = $pass->pending($journal, ['cursor' => 1, 'last' => $identity]);
+        self::assertSame(['c2'], array_column($taken, 'compaction'), 'the legacy count converts at the entry it names');
+        self::assertSame($scan['ends'][0], $start);
+        self::assertSame($scan['size'], $end);
+
+        [$taken] = $pass->pending($journal, ['cursor' => 1]);
+        self::assertSame(['c2'], array_column($taken, 'compaction'), 'a count alone still converts against the scan');
+
+        [$taken] = $pass->pending($journal, ['cursor' => 1, 'last' => 'gone|never-was']);
+        self::assertSame(['c1', 'c2'], array_column($taken, 'compaction'), 'an identity that matches nothing re-reads, it never skips forward');
+
+        [$taken] = $pass->pending($journal, ['offset' => $scan['ends'][0]]);
+        self::assertSame(['c2'], array_column($taken, 'compaction'), 'an aligned byte cursor reads from the byte');
+
+        [$taken, $start] = $pass->pending($journal, ['offset' => 5, 'last' => $identity]);
+        self::assertSame(['c2'], array_column($taken, 'compaction'), 'a cursor knocked off its line by a hand edit re-synchronises by identity');
+        self::assertSame($scan['ends'][0], $start);
+    }
+
+    public function testAnUnansweredOrTruncatedPassLeavesTheCursorForNextTime(): void    {
         $this->journal('c1', 'Only summary.');
         $provider = new ScriptedProvider([new CompleteResponse(content: 'I looked around and memory seems fine.')]);
         $engine = EngineBackend::new($provider, 'm')->withRoot($this->root);
@@ -186,8 +219,8 @@ final class DreamPassTest extends TestCase
         $this->settled($again);
         self::assertStringContainsString('Only summary.', self::lastUserText($provider->requests[1]));
 
-        [$entries, $start] = $pass->pending(CompactionJournal::forStore($this->store), []);
-        $cut = $pass->settle(Message::assistant('{"operations":[]}')->withStepsTruncated(true), $this->store, $entries, $start, null, 's');
+        [$entries, $start, $end] = $pass->pending(CompactionJournal::forStore($this->store), []);
+        $cut = $pass->settle(Message::assistant('{"operations":[]}')->withStepsTruncated(true), $this->store, $entries, $end, 's');
         self::assertFalse($cut->advanced, 'a turn the step ceiling ended is not complete');
     }
 
@@ -256,8 +289,8 @@ final class DreamPassTest extends TestCase
         self::assertFileDoesNotExist(DreamPass::statePath($other));
 
         $pass = DreamPass::new(MemoryWriter::new($this->store, $this->root))->withInterval(0);
-        [$entries, $start] = $pass->pending(CompactionJournal::forStore($this->store), []);
-        $landed = $pass->settle(Message::assistant($reply)->withUsage(Usage::new(10, 0.003)), $this->store, $entries, $start, null, 's');
+        [$entries, $start, $end] = $pass->pending(CompactionJournal::forStore($this->store), []);
+        $landed = $pass->settle(Message::assistant($reply)->withUsage(Usage::new(10, 0.003)), $this->store, $entries, $end, 's');
 
         [$shown, $none] = $settled->update($landed);
         self::assertNull($none);

@@ -56,9 +56,13 @@ use function React\Promise\resolve;
  *
  * THE CURSOR MOVES ONLY ON COMPLETION. Beside the home store's notes,
  * `.dream-<key>.json` records the last run's time and how far into the
- * journal the passes have read. A turn that fails, is cut off by a step,
- * output or loop limit, or answers no JSON leaves the cursor where it was,
- * so those entries are shown again next time.
+ * journal the passes have read — a byte offset, and a completed pass trims
+ * the prefix it folded out of the journal, so the file on disk is the work
+ * not yet read rather than the project's whole log (ISS-071). A turn that
+ * fails, is cut off by a step, output or loop limit, or answers no JSON
+ * leaves the cursor where it was, so those entries are shown again next
+ * time; state files written before the byte cursor are converted once, by
+ * the identity of the last entry they name.
  *
  * SKILLS ARE ONLY EVER PROPOSED, AND ONLY WHEN ASKED. The pass is limited to
  * memory notes and never edits a live skill. With the user-tier
@@ -309,7 +313,9 @@ PROMPT;
         }
 
         $state = $this->readState($home);
-        if (($state['size'] ?? null) === $size) {
+        // Nothing has been appended past the cursor (byte offset since ISS-071;
+        // a state file written before it still compares on size).
+        if ((isset($state['offset']) ? $state['offset'] === $size : ($state['size'] ?? null) === $size)) {
             return null;
         }
 
@@ -332,10 +338,15 @@ PROMPT;
 
         return (function () use ($backend, $home, $journal, $sessionId): PromiseInterface {
             try {
-                $size = self::sizeOf($journal);
-                [$entries, $start, $rest] = $this->pending($journal, $this->readState($home));
+                [$entries, $startOffset, $endOffset] = $this->pending($journal, $this->readState($home));
                 if ($entries === []) {
-                    $this->writeState($home, ['size' => $size] + $this->readState($home));
+                    // The cursor is current — a resync may have moved it across
+                    // entries a hand edit deleted. Record it in bytes and retire
+                    // the legacy count keys so state is offset-native from here.
+                    $this->writeState($home, ['offset' => $startOffset] + \array_diff_key(
+                        $this->readState($home),
+                        ['size' => 1, 'cursor' => 1, 'last' => 1],
+                    ));
 
                     return resolve(null);
                 }
@@ -350,8 +361,7 @@ PROMPT;
                     $reply,
                     $home,
                     $entries,
-                    $start,
-                    $rest === 0 ? $size : null,
+                    $endOffset,
                     $sessionId,
                 ),
                 static fn(\Throwable $e): DreamPassCompletedMsg => new DreamPassCompletedMsg(
@@ -423,58 +433,93 @@ PROMPT;
     /**
      * The entries the next pass reads: those after the cursor, oldest first,
      * at most {@see MAX_ENTRIES} and {@see MAX_INPUT_BYTES} of them — with the
-     * index of the first one in the journal and how many unread entries are
-     * left over for a later pass.
+     * byte offset the read started at and the offset just past the last entry
+     * taken, where a consuming fold stops.
      *
-     * The cursor is a count plus the identity of the last entry read, so a
-     * journal edited by hand is re-synchronised by that identity, and one
-     * the identity cannot be found in is read again from the start.
+     * The cursor is a byte offset (ISS-071): reading starts there and a journal
+     * the passes have not touched is never re-parsed from the start. State
+     * written before this cursor existed holds a count plus the identity of the
+     * last entry read; {@see resyncFromStart()} converts it, and so does every
+     * offset that no longer describes a line boundary in this file — a journal
+     * edited by hand re-synchronises by identity, and one whose identity cannot
+     * be found in is read again from the start, never skipped forward.
      *
-     * @param array{cursor?: int, last?: string} $state
+     * @param array{offset?: int, cursor?: int, last?: string} $state
      *
      * @return array{0: list<array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string}>, 1: int, 2: int}
      */
     public function pending(CompactionJournal $journal, array $state): array
     {
-        $all = $journal->entries();
-        $start = 0;
-        $cursor = $state['cursor'] ?? 0;
-        $last = $state['last'] ?? null;
-        if (\is_string($last) && $cursor > 0) {
-            if ($cursor <= \count($all) && self::key($all[$cursor - 1]) === $last) {
-                $start = $cursor;
-            } else {
-                for ($i = \count($all) - 1; $i >= 0; $i--) {
-                    if (self::key($all[$i]) === $last) {
-                        $start = $i + 1;
-
-                        break;
-                    }
-                }
+        $startOffset = \is_int($state['offset'] ?? null) && $state['offset'] >= 0 ? $state['offset'] : null;
+        if ($startOffset === null) {
+            [$startOffset, $scan] = $this->resyncFromStart($journal, $state);
+        } else {
+            $scan = $journal->scanFrom($startOffset);
+            if (!$scan['aligned']) {
+                [$startOffset, $scan] = $this->resyncFromStart($journal, $state);
             }
         }
 
         $taken = [];
         $bytes = 0;
-        foreach (\array_slice($all, $start, self::MAX_ENTRIES) as $entry) {
+        $endOffset = $startOffset;
+        foreach ($scan['entries'] as $index => $entry) {
+            if (\count($taken) >= self::MAX_ENTRIES) {
+                break;
+            }
             $size = \strlen($this->render($entry)) + 2;
             if ($taken !== [] && $bytes + $size > self::MAX_INPUT_BYTES) {
                 break;
             }
             $bytes += $size;
             $taken[] = $entry;
+            $endOffset = $scan['ends'][$index];
         }
 
-        return [$taken, $start, \count($all) - $start - \count($taken)];
+        return [$taken, $startOffset, $endOffset];
+    }
+
+    /**
+     * Resolve a pre-offset (or no longer aligning) cursor to a byte offset by
+     * scanning the whole journal and finding where reading stopped: the last
+     * entry read is searched from the newest end backwards, matching the old
+     * cursor's own identity resync. Identity wins over the count; a state file
+     * that only ever held a count (or matches nothing) starts at that many
+     * entries — and no entry found at all means starting at zero. Re-reading is
+     * never the hazard; skipping is.
+     *
+     * @param array{cursor?: int, last?: string} $state
+     *
+     * @return array{0: int, 1: array{entries: list<array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string}>, ends: list<int>, aligned: bool, size: int}}
+     */
+    private function resyncFromStart(CompactionJournal $journal, array $state): array
+    {
+        $scan = $journal->scanFrom(0);
+        $start = 0;
+        $last = $state['last'] ?? null;
+        if (\is_string($last) && $last !== '') {
+            for ($i = \count($scan['entries']) - 1; $i >= 0; $i--) {
+                if (self::key($scan['entries'][$i]) === $last) {
+                    $start = $scan['ends'][$i];
+
+                    break;
+                }
+            }
+        } elseif (\is_int($state['cursor'] ?? null) && $state['cursor'] > 0) {
+            $index = min($state['cursor'], \count($scan['entries']));
+            $start = $index === 0 ? 0 : $scan['ends'][$index - 1];
+        }
+
+        return [$start, $start === 0 ? $scan : $journal->scanFrom($start)];
     }
 
     /**
      * Apply the pass's answer in this process and record it. Never throws.
      *
      * @param list<array{at:string,tags:list<string>,compaction:string,records:list<string>,state:?string}> $entries
-     * @param ?int $size the journal size to remember when the pass read every unread entry, else null
+     * @param int $endOffset the journal byte just past the last entry the fold read
      */
-    public function settle(Message $reply, MemoryStore $home, array $entries, int $start, ?int $size, ?string $sessionId): DreamPassCompletedMsg
+    public function settle(Message $reply, MemoryStore $home, array $entries, int $endOffset, ?string $sessionId): DreamPassCompletedMsg
     {
         $plan = ConsolidationPlan::parse($reply->content);
         $completed = !$reply->stepsTruncated && !$reply->lengthStopped && $reply->loopGuardStoppedBy === null
@@ -504,12 +549,19 @@ PROMPT;
 
         if ($completed && $entries !== []) {
             $state = $this->readState($home);
-            $state['cursor'] = $start + \count($entries);
-            $state['last'] = self::key($entries[\count($entries) - 1]);
-            unset($state['size']);
-            if ($size !== null) {
-                $state['size'] = $size;
+            // The folded prefix leaves the journal (ISS-071): what remains on
+            // disk is only the unread tail, and the cursor restarts at its top.
+            // When the trim cannot be made to stick, remember the byte reached
+            // instead — plus the identity of the entry there, so a file edited
+            // under the cursor re-synchronises rather than skipping work.
+            if (CompactionJournal::forStore($home)->trimBefore($endOffset)) {
+                $state['offset'] = 0;
+                unset($state['last']);
+            } else {
+                $state['offset'] = $endOffset;
+                $state['last'] = self::key($entries[\count($entries) - 1]);
             }
+            unset($state['size'], $state['cursor']);
             $this->writeState($home, $state);
         }
 
@@ -689,7 +741,7 @@ PROMPT;
     }
 
     /**
-     * @return array{at?: int, cursor?: int, last?: string, size?: int}
+     * @return array{at?: int, offset?: int, cursor?: int, last?: string, size?: int}
      */
     private function readState(MemoryStore $home): array
     {
@@ -700,7 +752,7 @@ PROMPT;
         }
 
         $state = [];
-        foreach (['at', 'cursor', 'size'] as $field) {
+        foreach (['at', 'offset', 'cursor', 'size'] as $field) {
             if (\is_int($data[$field] ?? null) && $data[$field] >= 0) {
                 $state[$field] = $data[$field];
             }
@@ -713,7 +765,7 @@ PROMPT;
     }
 
     /**
-     * @param array{at?: int, cursor?: int, last?: string, size?: int} $state
+     * @param array{at?: int, offset?: int, cursor?: int, last?: string, size?: int} $state
      */
     private function writeState(MemoryStore $home, array $state): bool
     {
