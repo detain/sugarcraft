@@ -707,6 +707,19 @@ the report's `@path` tokens stay text, because they are the background model's
 words, not a request to attach a file. A session that has not settled is
 refused `bg_not_settled`.
 
+**A spawned daemon runs in the server's mode.** A `bg.spawn` — and the
+host-side `/bg` it mirrors — starts its daemon in this server's admitted
+permission mode rather than the headless `bypass-permissions` default: the
+mode is named in the spawn config, and the daemon resolves its gate from it.
+Nobody sits at a daemon's keyboard, so what the mode would ask about is
+refused by the no-terminal approver (with its refusal recorded in the
+session's output), while what it allows — every read-only tool included —
+runs normally. A server admitted for `bypass-permissions` with
+`--allow-bypass` spawns bypass daemons; a `bg.spawn` request can name no mode
+of its own, so no call escalates past the launch. An ask inside a spawned
+daemon is not yet routed to the server's clients as a session-scope
+`permission.asked` — that wiring is a follow-up.
+
 **A starting server re-adopts what an earlier one left.** A background daemon
 outlives whatever started it, so on start the server adopts the daemons an
 earlier server — or a TUI of the same project — left running for its root,
@@ -1113,8 +1126,12 @@ report what it returned:
   open/close — never a query string (a ticket rides there), a header, a body or
   a prompt.
 - **Permission modes.** Server sessions start in `default` (they ask), as the
-  TUI does — not in the `bypass-permissions` that `-p` and background sessions
-  keep, because a server has a client to answer an ask. `bypass-permissions`
+  TUI does — not in the `bypass-permissions` that `-p` keeps. A background
+  (`/bg`) daemon a client or the host path spawns from this server inherits
+  the server's admitted mode rather than the headless default: its asks reach
+  no keyboard, so the no-terminal approver refuses them (read-only tools stay
+  auto-allowed); a local TUI's `/bg` is not a server spawn and keeps the
+  documented headless default. `bypass-permissions`
   and `dont-ask` are refused — at startup and over the wire (`-32020`) —
   unless `--allow-bypass` / `server.allowBypass`.
 - **Process hardening.** Refuses root without `--allow-root`; runs under

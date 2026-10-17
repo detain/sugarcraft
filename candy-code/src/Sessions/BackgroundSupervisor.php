@@ -223,6 +223,20 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      */
     private int $handoffScannedAt = 0;
 
+    /**
+     * The permission mode daemons spawned WITHOUT an explicit one run in
+     * (ISS-004), as its kebab value; null leaves them on the daemon's own
+     * documented headless resolution. A `serve` workspace host sets this to
+     * its admitted session mode once per server (the {@see
+     * \SugarCraft\Code\Protocol\ServerContext} construction), which is how
+     * the host-side `/bg` and `/fork` inherit the operator's choice — the
+     * `bg.spawn` RPC names the mode on every spawn and does not consult this.
+     * A local TUI's supervisor never learns one: the launch configured no
+     * server mode, and `-p`/daemon bypass-documented default (PERMISSIONS.md)
+     * stays exactly where its rejection notice says it is.
+     */
+    private ?string $spawnPermissionMode = null;
+
     public function __construct(
         ?SessionNotificationInterface $listener = null,
         ?StallDetector $stallDetector = null,
@@ -232,6 +246,26 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         $this->stallDetector = $stallDetector ?? new StallDetector();
         $this->tempRoot = rtrim($tempRoot ?? sys_get_temp_dir(), '/') ?: '/';
         $this->homeStamp = self::ownerStamp();
+    }
+
+    /**
+     * Start daemons that name no mode of their own in $mode (ISS-004).
+     *
+     * Typed on the enum on purpose: by the time a mode can reach a spawn
+     * config it has passed every admission door the launcher has
+     * ({@see \SugarCraft\Code\Server\ServerConfig::admitsPermissionMode()} on
+     * a serve), so this seam cannot smuggle a bypass-class mode past a
+     * server that refuses one. Null restores the daemon's own default.
+     */
+    public function setSpawnPermissionMode(?\SugarCraft\Code\Permissions\PermissionMode $mode): void
+    {
+        $this->spawnPermissionMode = $mode?->value;
+    }
+
+    /** The mode daemons with no explicit one run in, or null for the daemon default. */
+    public function spawnPermissionMode(): ?string
+    {
+        return $this->spawnPermissionMode;
     }
 
     // =========================================================================
@@ -325,11 +359,23 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * `description`, `model`, `resume`, `permissionMode` and `scope` — names
      * and modes, never secrets, because they ride the daemon's argv.
      *
+     * $permissionMode is the SPAWN's session mode (ISS-004): a top-level key
+     * of the daemon config, applied by {@see BackgroundSessionRunner::backend()}
+     * to the bare `/bg` turn and the gate the delegation narrows against —
+     * NOT the delegation block's `permissionMode`, which keeps its bypass-
+     * inheritance semantics (the delegating session's own mode). Null falls
+     * back to {@see setSpawnPermissionMode()} (what a serve wires), and that
+     * to the daemon's own documented headless resolution. A non-null value
+     * that names no real mode is refused HERE, before any file is created:
+     * the daemon would otherwise carry a poison pill its fail-closed gate
+     * resolution turns into a task failure at the first heartbeat.
+     *
      * @param array<string, string>|null $delegation
      * @return BackgroundSession The newly spawned session
      * @throws \RuntimeException If the private IPC directory or files cannot be
      *         created, or the child fails to authenticate within the handshake
      *         window
+     * @throws \InvalidArgumentException when $permissionMode names no real mode
      */
     public function spawnSession(
         string $name,
@@ -340,7 +386,12 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         ?array $tags = null,
         ?string $forkedSessionId = null,
         ?array $delegation = null,
+        ?string $permissionMode = null,
     ): BackgroundSession {
+        $permissionMode = $permissionMode ?? $this->spawnPermissionMode;
+        if ($permissionMode !== null && \SugarCraft\Code\Permissions\PermissionMode::tryFrom($permissionMode) === null) {
+            throw new \InvalidArgumentException("not a permission mode: {$permissionMode}");
+        }
         $sessionId = $this->generateSessionId();
         // All four files live inside a 0700 per-process directory rather than
         // loose in a world-writable /tmp (audit M5): directory permissions are
@@ -400,6 +451,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $timeoutSeconds,
                 $forkedSessionId,
                 $delegation,
+                $permissionMode,
             ),
         ];
 
@@ -612,6 +664,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         int $timeoutSeconds,
         ?string $forkedSessionId = null,
         ?array $delegation = null,
+        ?string $permissionMode = null,
     ): string {
         $config = [
             'sessionId' => $sessionId,
@@ -629,6 +682,13 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         }
         if ($delegation !== null && $delegation !== []) {
             $config['delegation'] = $delegation;
+        }
+        if ($permissionMode !== null) {
+            // Top-level, NOT inside the delegation block: this is the SPAWN's
+            // own session mode (ISS-004). The daemon applies it in
+            // BackgroundSessionRunner::backend(); the delegation block's own
+            // permissionMode keeps its bypass-inheritance semantics.
+            $config['permissionMode'] = $permissionMode;
         }
 
         // The umask/fork/setsid/fork sequence is {@see Daemonize::code()}:

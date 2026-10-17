@@ -83,12 +83,20 @@ final class BgMethods
         $name = BackgroundCommand::sessionName($params->optionalString('name', 256) ?? $task);
         $root = $call->server->hub()->workspace()->root;
 
+        // ISS-004: the daemon runs in the server session's mode, refused at
+        // its no-terminal approver for anything it must ask about. A client
+        // names no mode on this call — the server's own admitted mode is the
+        // one and only source, so no request can escalate past what the
+        // operator launched.
+        $permissionMode = self::spawnPermissionMode($call->server->config());
+
         try {
             $session = $events->supervisor()->spawnSession(
                 name: $name,
                 agent: $agent,
                 task: $task,
                 workingDirectory: $root !== null && $root !== '' ? $root : '.',
+                permissionMode: $permissionMode,
             );
         } catch (\Throwable) {
             // The cause can name a private path; it stays out of the answer.
@@ -97,6 +105,23 @@ final class BgMethods
         $events->track($session);
 
         return $events->summary($session);
+    }
+
+    /**
+     * The mode to name in a spawn config for this server (ISS-004).
+     *
+     * The launch's admission door ({@see ServerConfig::admitsPermissionMode()})
+     * already refused to boot a bypass-class server without `--allow-bypass`,
+     * so through any real boot the config's mode is its own; checked again at
+     * the application point, and an unadmitted one downgrades to `default` —
+     * whose asks the daemon's no-terminal approver refuses — rather than
+     * handing the daemon the very bypass the operator withheld.
+     */
+    private static function spawnPermissionMode(ServerConfig $config): string
+    {
+        return $config->admitsPermissionMode($config->permissionMode)
+            ? $config->permissionMode->value
+            : \SugarCraft\Code\Permissions\PermissionMode::Default->value;
     }
 
     /** @return array<string, mixed> */

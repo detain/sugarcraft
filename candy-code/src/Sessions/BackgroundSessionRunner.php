@@ -216,6 +216,17 @@ final class BackgroundSessionRunner
          * @var array<string, string>
          */
         public readonly array $delegation = [],
+        /**
+         * The SPAWN's session mode (ISS-004), kebab value, empty for "the
+         * launcher said nothing" — top-level config key, deliberately NOT
+         * inside {@see $delegation}, whose own `permissionMode` keeps its
+         * bypass-inheritance semantics for delegated agents. Applied once in
+         * {@see backend()} as `$CANDY_CODE_PERMISSION_MODE`, the headless
+         * gate's own highest-ranked source, so the bare `/bg` turn asks (or
+         * refuses, through the console approver's no-terminal arm) exactly as
+         * the server that admitted this spawn runs.
+         */
+        public readonly string $permissionMode = '',
     ) {}
 
     /**
@@ -237,6 +248,10 @@ final class BackgroundSessionRunner
             tokenPath: (string) ($config['tokenPath'] ?? ''),
             forkedSessionId: (string) ($config['forkedSessionId'] ?? ''),
             delegation: self::delegationFrom($config['delegation'] ?? null),
+            // String-shaped or absent: anything else on argv is dropped the
+            // way delegationFrom() drops it, so the daemon falls back to the
+            // documented headless default rather than trusting a non-string.
+            permissionMode: \is_string($config['permissionMode'] ?? null) ? $config['permissionMode'] : '',
         );
     }
 
@@ -962,6 +977,20 @@ final class BackgroundSessionRunner
 
         if ($this->model !== '' && $this->model !== 'unknown') {
             \putenv('CANDY_CODE_MODEL=' . $this->model);
+        }
+
+        // ISS-004: the spawn config is the server's explicit statement of
+        // what mode THIS daemon runs in, so it outranks whatever the launch
+        // environment happens to carry (the double fork inherits it verbatim).
+        // The headless gate reads `$CANDY_CODE_PERMISSION_MODE` above the
+        // config file, and an unrecognised value there fails CLOSED with the
+        // variable named, which is why BackgroundSupervisor::spawnSession()
+        // refuses one before the daemon is ever born. Empty is absence,
+        // untouched: the documented daemon default (bypass, PERMISSIONS.md
+        // D5) stands for every spawn that named no mode — the local TUI's
+        // `/bg` included.
+        if ($this->permissionMode !== '') {
+            \putenv('CANDY_CODE_PERMISSION_MODE=' . $this->permissionMode);
         }
 
         // Roadmap 5.7-2: nobody sits at a daemon's keyboard (fd 0 is

@@ -211,6 +211,81 @@ final class BackgroundSupervisorTest extends TestCase
         $this->assertStringNotContainsString('umask(0);', $code);
     }
 
+    // ── ISS-004: the spawn's session mode rides the config ─────────────
+
+    public function testDaemonCodeNamesTheSpawnModeOnlyWhenOneIsGiven(): void
+    {
+        $with = (new BackgroundSupervisor())->buildSessionDaemonCode(
+            socketPath: '/tmp/s.sock',
+            bufferPath: '/tmp/s.buffer',
+            tokenPath: '/tmp/s.token',
+            sessionId: 'sess_x',
+            task: 't',
+            workingDirectory: '/tmp',
+            provider: 'anthropic',
+            model: 'm',
+            timeoutSeconds: 60,
+            permissionMode: 'accept-edits',
+        );
+        $without = (new BackgroundSupervisor())->buildSessionDaemonCode(
+            socketPath: '/tmp/s.sock',
+            bufferPath: '/tmp/s.buffer',
+            tokenPath: '/tmp/s.token',
+            sessionId: 'sess_x',
+            task: 't',
+            workingDirectory: '/tmp',
+            provider: 'anthropic',
+            model: 'm',
+            timeoutSeconds: 60,
+        );
+
+        // Top-level key, exactly once: the delegation block owns its own
+        // permissionMode and a second copy of the SAME key inside it would
+        // silently re-widen the bypass-inheritance the owner ruling protects.
+        $this->assertSame(1, substr_count($with, '"permissionMode":"accept-edits"'));
+        $this->assertStringNotContainsString('"permissionMode"', $without);
+    }
+
+    public function testTheWiredSpawnModeIsTypedAndReadableBack(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $this->assertNull($supervisor->spawnPermissionMode(), 'an unwired supervisor — every local TUI — keeps the daemon default');
+
+        $supervisor->setSpawnPermissionMode(\SugarCraft\Code\Permissions\PermissionMode::Plan);
+        $this->assertSame('plan', $supervisor->spawnPermissionMode());
+
+        $supervisor->setSpawnPermissionMode(null);
+        $this->assertNull($supervisor->spawnPermissionMode());
+    }
+
+    /**
+     * The guard runs BEFORE any file is created: a spawn config carrying a
+     * poison-pill mode would otherwise reach the daemon's fail-closed gate
+     * resolution and die at the first heartbeat, after the supervisor had
+     * already written its IPC files and index record.
+     */
+    public function testSpawnSessionRefusesAModeThatIsNotAModeBeforeTouchingTheFileSystem(): void
+    {
+        $tempRoot = sys_get_temp_dir() . '/bgmode_' . bin2hex(random_bytes(4));
+        mkdir($tempRoot, 0o700);
+        $supervisor = new BackgroundSupervisor(tempRoot: $tempRoot);
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('not a permission mode: paln');
+            $supervisor->spawnSession(
+                name: 'n',
+                agent: $this->makeAgent(),
+                task: 't',
+                workingDirectory: '/tmp',
+                permissionMode: 'paln',
+            );
+        } finally {
+            $this->assertSame(['.', '..'], scandir($tempRoot), 'no IPC directory, no records: refused before the first write');
+            @rmdir($tempRoot);
+        }
+    }
+
     public function testTickTreatsAnAdvancingSessionBufferAsAHeartbeat(): void
     {
         $supervisor = new BackgroundSupervisor();

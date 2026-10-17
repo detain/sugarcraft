@@ -10,6 +10,7 @@ use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SessionHub;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 
@@ -63,6 +64,20 @@ final class ServerContext
         private readonly \Closure $clock,
     ) {
         $this->startedAt = ($this->clock)();
+
+        // ISS-004: the host-side `/bg` (and `/fork`) spawn through this same
+        // supervisor and name no mode of their own — bg.spawn carries the
+        // admitted mode on every call, and this default makes the slash
+        // command's path spawn in it too. A mode the launch would not admit
+        // (constructible only around problems(), never through a real boot)
+        // downgrades to `default`, whose asks the daemon's no-terminal
+        // approver refuses: fail closed, never into the daemon's documented
+        // bypass default. A local TUI builds no ServerContext at all, so its
+        // supervisor keeps the pre-ISS-004 daemon default untouched.
+        $admitted = $config->admitsPermissionMode($config->permissionMode)
+            ? $config->permissionMode
+            : PermissionMode::Default;
+        $hub->workspace()->backgroundSupervisor?->setSpawnPermissionMode($admitted);
     }
 
     /** @param (\Closure(): float)|null $clock */

@@ -918,6 +918,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             'model' => 'claude-sonnet-4-6',
             'timeoutSeconds' => 42,
             'tokenPath' => '/tmp/s1.token',
+            'permissionMode' => 'accept-edits',
         ]);
 
         $this->assertSame('s1', $runner->sessionId);
@@ -929,6 +930,7 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertSame('claude-sonnet-4-6', $runner->model);
         $this->assertSame(42, $runner->timeoutSeconds);
         $this->assertSame('/tmp/s1.token', $runner->tokenPath);
+        $this->assertSame('accept-edits', $runner->permissionMode);
     }
 
     public function testMainRejectsAnIncompleteConfig(): void
@@ -1032,6 +1034,163 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertStringNotContainsString('[session:provider:fallback]', $log);
         $this->assertStringContainsString('[session:task:failed]', $log);
         $this->assertStringContainsString('not usable JSON', $log);
+    }
+
+    // ── ISS-004: the spawn's session mode ──────────────────────────────
+
+    /**
+     * `$CANDY_CODE_PERMISSION_MODE` through the launch environment: what the
+     * spawn config says wins (the server stated this daemon's mode
+     * explicitly), and the headless gate resolves from the variable the same
+     * way `-p` and the local `/bg` daemon never did before — asks go to the
+     * console approver's no-terminal refusal, read-only tools stay allowed.
+     */
+    public function testTheSpawnModeDecidesTheGateTheBuiltBackendRunsUnder(): void
+    {
+        [$home, $cleanup] = $this->customProviderHomeSandbox();
+        $buffer = $this->bufferPath();
+        $runner = new BackgroundSessionRunner(
+            sessionId: 's1',
+            socketPath: $buffer . '.sock',
+            bufferPath: $buffer,
+            task: 'x',
+            provider: 'custom',
+            permissionMode: 'accept-edits',
+        );
+
+        $previousMode = $this->saveEnv('CANDY_CODE_PERMISSION_MODE');
+
+        try {
+            // A stale inherited override must LOSE to the spawn config — that
+            // is the whole point of re-asserting it from the config here.
+            putenv('CANDY_CODE_PERMISSION_MODE=plan');
+            $backend = $runner->backend();
+            $this->assertInstanceOf(\SugarCraft\Code\Backend\EngineBackend::class, $backend);
+            $this->assertSame(
+                \SugarCraft\Code\Permissions\PermissionMode::AcceptEdits,
+                $backend->permissionGate()?->mode(),
+                'the gate must run in the mode the spawn named, not the one the launcher inherited',
+            );
+        } finally {
+            $this->restoreEnv('CANDY_CODE_PERMISSION_MODE', $previousMode);
+            $cleanup();
+        }
+    }
+
+    /**
+     * Empty is absence: a spawn that named no mode (every local TUI `/bg`)
+     * leaves the variable exactly as it found it, so the documented daemon
+     * default — bypass, PERMISSIONS.md D5 — stands unchanged.
+     */
+    public function testASpawnThatNamedNoModeDoesNotTouchTheGateEnvironment(): void
+    {
+        [$home, $cleanup] = $this->customProviderHomeSandbox();
+        $buffer = $this->bufferPath();
+        $runner = new BackgroundSessionRunner(
+            sessionId: 's1',
+            socketPath: $buffer . '.sock',
+            bufferPath: $buffer,
+            task: 'x',
+            provider: 'custom',
+        );
+
+        $previousMode = $this->saveEnv('CANDY_CODE_PERMISSION_MODE');
+
+        try {
+            putenv('CANDY_CODE_PERMISSION_MODE');
+            $backend = $runner->backend();
+            $this->assertInstanceOf(\SugarCraft\Code\Backend\EngineBackend::class, $backend);
+            $this->assertFalse(
+                getenv('CANDY_CODE_PERMISSION_MODE'),
+                'no spawn mode means no putenv, not a cleared inherited one',
+            );
+            $this->assertSame(
+                \SugarCraft\Code\Permissions\PermissionMode::BypassPermissions,
+                $backend->permissionGate()?->mode(),
+                'the daemon default the docs promise, for the path that always had it',
+            );
+        } finally {
+            $this->restoreEnv('CANDY_CODE_PERMISSION_MODE', $previousMode);
+            $cleanup();
+        }
+    }
+
+    /**
+     * A poison-pill mode that somehow reached the config (the supervisor
+     * refuses one before birth; argv forgery is another matter) fails CLOSED
+     * at gate resolution, naming the variable — never degrading to the
+     * permissive default. The task-failure reporting arm around this call is
+     * already pinned by {@see testAnUnusablePermissionPolicyIsNotReportedAsAProviderFallback()}.
+     */
+    public function testAPoisonModeFromTheConfigFailsClosedNamingTheVariable(): void
+    {
+        $buffer = $this->bufferPath();
+        $runner = BackgroundSessionRunner::fromConfig([
+            'sessionId' => 's1',
+            'socketPath' => $buffer . '.sock',
+            'bufferPath' => $buffer,
+            'task' => 'x',
+            'provider' => 'custom',
+            'permissionMode' => 'paln',
+        ]);
+        $this->assertSame('paln', $runner->permissionMode, 'the runner carries argv verbatim; the gate is the judge');
+
+        [$home, $cleanup] = $this->customProviderHomeSandbox();
+        $previousMode = $this->saveEnv('CANDY_CODE_PERMISSION_MODE');
+
+        try {
+            $this->expectException(\SugarCraft\Code\Cli\PermissionConfigException::class);
+            $this->expectExceptionMessage('$CANDY_CODE_PERMISSION_MODE');
+            $runner->backend();
+        } finally {
+            $this->restoreEnv('CANDY_CODE_PERMISSION_MODE', $previousMode);
+            $cleanup();
+        }
+    }
+
+    /** A `custom` provider whose API key exists, under a private empty HOME. */
+    private function customProviderHomeSandbox(): array
+    {
+        $home = sys_get_temp_dir() . '/crush_bg_home_' . uniqid('', true);
+        mkdir($home . '/.candy-code', 0700, true);
+
+        $previousKey = getenv('CUSTOM_API_KEY');
+        putenv('CUSTOM_API_KEY=k');
+        $previousProvider = getenv('CANDY_CODE_PROVIDER');
+        putenv('CANDY_CODE_PROVIDER=');
+
+        $previousHome = getenv('HOME');
+        $previousServerHome = $_SERVER['HOME'] ?? null;
+        putenv('HOME=' . $home);
+        $_SERVER['HOME'] = $home;
+
+        $cleanup = function () use ($home, $previousKey, $previousProvider, $previousHome, $previousServerHome): void {
+            $restore = static fn (string $name, string|false $value): string => $value === false ? $name : $name . '=' . $value;
+            putenv($restore('CUSTOM_API_KEY', $previousKey));
+            putenv($restore('CANDY_CODE_PROVIDER', $previousProvider));
+            putenv($restore('HOME', $previousHome));
+            if ($previousServerHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServerHome;
+            }
+            @unlink($home . '/.candy-code/config.json');
+            @rmdir($home . '/.candy-code');
+            @rmdir($home);
+        };
+
+        return [$home, $cleanup];
+    }
+
+    /** @return string|false the value saveEnv() hands restoreEnv() */
+    private function saveEnv(string $name): string|false
+    {
+        return getenv($name);
+    }
+
+    private function restoreEnv(string $name, string|false $value): void
+    {
+        putenv($value === false ? $name : $name . '=' . $value);
     }
 }
 

@@ -494,6 +494,11 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // reports the mode fromPreset() already gated (a foreign
                 // preset's is Default) and drives no permission decision.
                 'Protocol/Methods/AgentsMethods.php',
+                // ISS-004: NOT an Agent reader — the needle also matches
+                // ServerConfig's own launch-mode property: bg.spawn names the
+                // SERVER's admitted session mode in the spawn config, never a
+                // preset's field.
+                'Protocol/Methods/BgMethods.php',
                 'Protocol/Methods/PermissionMethods.php',
                 'Protocol/Methods/ServerMethods.php',
                 'Protocol/Methods/SessionMethods.php',
@@ -504,6 +509,11 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // SERVER's session mode off the gateway's spawn line (stdin),
                 // validated against PermissionMode, as `serve` itself does.
                 'Server/Workspace/WorkspaceHostProcess.php',
+                // ISS-004: NOT an Agent reader — the needle also matches the
+                // runner's OWN promoted `$permissionMode`, the spawn config's
+                // top-level session mode the server named (the delegation
+                // block's own key is read from the array, never off an Agent).
+                'Sessions/BackgroundSessionRunner.php',
                 // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
                 // to AgentManager::createSubAgent(), which narrows it to the
                 // session's (stricter-of, never wider), and fromPreset()
