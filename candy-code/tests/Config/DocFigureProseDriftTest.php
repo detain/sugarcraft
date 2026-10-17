@@ -2784,9 +2784,17 @@ final class DocFigureProseDriftTest extends TestCase
      * sentence, and this tranche's SECOND FALSE: "ext-sqlite3 is called by
      * nothing in src/" was refuted by TaskList's own `new \SQLite3` task
      * database, so the sentence was corrected to name the one real user. The
-     * corrected shape is what gets pinned: code-level SQLite3 use == exactly
-     * TaskList, the store's PDO type declaration, the composer declaration,
-     * doctor's pdo_sqlite probe, and every table cell against its literal.
+     * corrected shape is what gets pinned: code-level SQLite3 use, the store's
+     * PDO type declaration, the composer declaration, doctor's pdo_sqlite
+     * probe, and every table cell against its literal.
+     *
+     * ISS-083 grew a SECOND constructor on purpose: doctor's extension probe
+     * builds an in-memory `new \SQLite3(':memory:')` so the CLI can SAY
+     * ext-sqlite3 works rather than infer it from a name check. The roster
+     * names both files, and the sentence pin became a two-spelling alternation
+     * - the OLD (one-place) wording and the NEW (probe) wording - because the
+     * docs page flips in closeout, not mid-lane. CLOSEOUT: when the page
+     * carries the new sentence, collapse the alternation to the new arm alone.
      */
     public function testArchitectureSessionsTableAndSqliteSentenceSurviveTheirSources(): void
     {
@@ -2794,10 +2802,12 @@ final class DocFigureProseDriftTest extends TestCase
         $arch = self::markdownProse($archRaw);
 
         self::assertStringNotContainsString('called by nothing in', $arch, 'the refuted claim is back — TaskList constructs \\SQLite3; see the corrected sentence this arm pins');
+        $oldSentence = '/`ext-sqlite3` is declared, and `src\/` constructs it in exactly one place: `Agents\\\\TaskList`\'s task database\. The session store reaches SQLite through\s+\*\*PDO\*\*, which is why `doctor` probes `pdo_sqlite` rather than the extension/';
+        $newSentence = '/`ext-sqlite3` is declared, and `src\/` constructs it in two places: `Agents\\\\TaskList`\'s task database and `doctor`\'s in-memory extension probe\. The session store reaches SQLite through\s+\*\*PDO\*\*; `doctor` reports `pdo_sqlite` and `ext-sqlite3` separately because the task list does not go through PDO./';
         self::assertSame(
             1,
-            preg_match('/`ext-sqlite3` is declared, and `src\/` constructs it in exactly one place: `Agents\\\\TaskList`\'s task database\. The session store reaches SQLite through\s+\*\*PDO\*\*, which is why `doctor` probes `pdo_sqlite` rather than the extension/', $arch),
-            'the corrected sqlite sentence moved — pin the replacement here rather than deleting the guard',
+            (int) (bool) (preg_match($oldSentence, $arch) || preg_match($newSentence, $arch)),
+            'the corrected sqlite sentence moved a third way — neither the pre-ISS-083 wording nor the ISS-083 wording matches; pin the replacement here rather than deleting the guard',
         );
 
         $users = [];
@@ -2816,7 +2826,11 @@ final class DocFigureProseDriftTest extends TestCase
                 }
             }
         }
-        self::assertSame(['src/Agents/TaskList.php'], array_keys($users), 'code-level `new \\SQLite3` spread beyond (or out of) TaskList — the page names exactly one place');
+        self::assertSame(
+            ['src/Agents/TaskList.php', 'src/Cli/Subcommands.php'],
+            array_keys($users),
+            'code-level `new \\SQLite3` moved beyond TaskList + doctor\'s ISS-083 probe — the sentence\'s "two places" counts this roster',
+        );
 
         $composer = json_decode((string) file_get_contents(\dirname(__DIR__, 2) . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
         self::assertArrayHasKey('ext-sqlite3', $composer['require'], 'the page still says ext-sqlite3 is declared — composer stopped declaring it');
