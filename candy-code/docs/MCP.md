@@ -245,6 +245,13 @@ session, so `start()` treats it as a start failure: the child is stopped and
 the exception carries the server's error code and message plus its stderr
 tail. In `/mcp` such a server shows ` · not up`, never ` · up 0 tools`.
 
+When the start-time `tools/list` is paginated, both transports follow the
+cursor chain to the end before caching the roster (ISS-093(b)): every
+`nextCursor` is walked page by page, and a cursor that repeats or a roster
+still being cut at the thirty-two page ceiling is a start failure. A mid-walk
+error is treated exactly like a front one — a partial roster never masquerades
+as a whole one.
+
 An `http` server is held to the same rule — an `initialize` error reply fails
 `start()` with the server's code and message — and speaks the Streamable HTTP
 transport the rest of the way:

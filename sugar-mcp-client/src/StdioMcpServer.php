@@ -109,6 +109,19 @@ final class StdioMcpServer implements McpServer
     public const DEFAULT_START_TIMEOUT_SECONDS = 60.0;
 
     /**
+     * Page ceiling for the `tools/list` cursor walk (ISS-093(b)), mirroring
+     * candy-code's HttpMcpServer. A wall for pathological servers, not a
+     * working budget: 32 pages times a typical page of a hundred tools is
+     * three thousand entries, far past any real server. The guard that
+     * actually catches a lying server is the repeated-cursor refusal; the
+     * shared handshake deadline stops a silent one; this one catches the
+     * adversarial shape of a server answering FAST with a fresh cursor
+     * forever, which would otherwise eat the whole start budget walking
+     * before refusing anything.
+     */
+    private const MAX_TOOL_PAGES = 32;
+
+    /**
      * Tail budget for captured stderr. The cap exists so a server flooding
      * stderr cannot grow our memory without bound; keeping the TAIL (not the
      * head) is the point — the lines nearest the failure are the ones worth
@@ -438,21 +451,7 @@ final class StdioMcpServer implements McpServer
             // optional ({cursor?}) and omission is exactly what the reference
             // TS client puts on the wire, so it is the shape every server has
             // been tested against.
-            $listResponse = $this->request('tools/list', null, $deadline);
-
-            // The same gate as initialize: an ERROR reply (session- or
-            // capability-gated servers answer -32601 here) or no reply at all
-            // is not "up, 0 tools" — that shape looks connected, exposes
-            // nothing, and throws the server's own diagnosis away.
-            if ($listResponse === null || $listResponse->error !== null || !$listResponse->resultSet) {
-                $diagnostics = $this->stderrTailForDiagnostics();
-                $refusal = $listResponse?->error !== null ? $this->describeError('tools/list', $listResponse) : ' — no tools/list reply';
-                $this->stop();
-
-                throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $refusal . $diagnostics);
-            }
-
-            $this->tools = $this->parseTools($listResponse->toArray());
+            $this->tools = $this->collectToolPages($this->request('tools/list', null, $deadline), $deadline);
         } catch (\Throwable $failure) {
             // A throw from any handshake leg — the oversized-frame refusal
             // rides this path — must not leave the spawned child alive on the
@@ -1508,6 +1507,80 @@ final class StdioMcpServer implements McpServer
      * @param array<string,mixed> $response inspection-view array
      * @return list<McpTool>
      */
+    /**
+     * Gate a `tools/list` reply and FOLLOW ITS CURSOR until the roster is
+     * whole (ISS-093(b); the same walk candy-code's HttpMcpServer does — the
+     * spec says `tools/list` MAY paginate, and caching the FIRST page as the
+     * whole truth leaves tools silently missing from every later dispatch).
+     * Each follow-up page goes through the SAME gate as the first, inside the
+     * SAME handshake deadline; a cursor that repeats is a server lying about
+     * its pagination, refused rather than looped. Page 1's refusal messages
+     * stay byte-identical to the pre-pagination gate every existing pin
+     * asserts; later pages name their page number.
+     *
+     * A throwing helper is reap-safe from here: start()'s catch stops the
+     * child for any throw, exactly as the inline gate's stop() used to.
+     *
+     * @return list<McpTool>
+     */
+    private function collectToolPages(?McpMessage $first, float $deadline): array
+    {
+        $data = $first?->toArray();
+        $tools = $this->requireToolsListPage($first, $data, 1);
+        $seenCursors = [];
+
+        for ($page = 2; $page <= self::MAX_TOOL_PAGES; $page++) {
+            $cursor = is_array($data) ? ($data['result']['nextCursor'] ?? null) : null;
+
+            if (!is_string($cursor) || $cursor === '') {
+                return $tools;
+            }
+
+            if (isset($seenCursors[$cursor])) {
+                throw new \RuntimeException(
+                    'tools/list repeated cursor ' . $cursor . ' at page ' . $page
+                    . ' — refusing to walk a pagination loop',
+                );
+            }
+            $seenCursors[$cursor] = true;
+
+            $response = $this->request('tools/list', ['cursor' => $cursor], $deadline);
+            $data = $response?->toArray();
+            $tools = array_merge($tools, $this->requireToolsListPage($response, $data, $page));
+        }
+
+        // MAX pages spent and the last reply still handed out a cursor: a
+        // roster KNOWN to be cut short must not masquerade as a whole one —
+        // missing tools are invisible downstream, exactly the failure this
+        // walk exists to prevent. Fail the start the way an error reply does.
+        throw new \RuntimeException('tools/list still had a nextCursor after '
+            . self::MAX_TOOL_PAGES . ' pages — refusing to cache a truncated roster');
+    }
+
+    /**
+     * The one gate every `tools/list` page passes, at any page number: an
+     * ERROR reply (session- or capability-gated servers answer -32601 here)
+     * or no reply at all is not "up, 0 tools" — that shape looks connected,
+     * exposes nothing, and throws the server's own diagnosis away.
+     *
+     * @param array<mixed>|null $data the reply's wire shape, for the tools body
+     * @return list<McpTool>
+     */
+    private function requireToolsListPage(?McpMessage $response, ?array $data, int $page): array
+    {
+        if ($response === null || $response->error !== null || !$response->resultSet) {
+            $diagnostics = $this->stderrTailForDiagnostics();
+            $refusal = $response?->error !== null ? $this->describeError('tools/list', $response) : ' — no tools/list reply';
+            if ($page > 1) {
+                $refusal .= " (page {$page})";
+            }
+
+            throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $refusal . $diagnostics);
+        }
+
+        return $this->parseTools($data ?? []);
+    }
+
     private function parseTools(array $response): array
     {
         $tools = [];
