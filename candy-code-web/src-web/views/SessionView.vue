@@ -82,11 +82,13 @@ async function stop(): Promise<void> {
   }
 }
 
-async function answer(askId: string, reply: Reply, cascade: boolean, note = ''): Promise<void> {
+async function answer(askId: string, reply: Reply, cascade: boolean, note: string, failed: () => void): Promise<void> {
   try {
     await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}) })
   } catch (failure) {
     error.value = describe(failure)
+    // ISS-110: the question is still open — hand the card back to the user.
+    failed()
   }
 }
 
@@ -144,7 +146,7 @@ async function rename(): Promise<void> {
           :key="ask.askId"
           :ask="ask"
           :can-answer="canAnswer"
-          @answer="(reply, cascade, note) => answer(ask.askId, reply, cascade, note)"
+          @answer="(reply, cascade, note, failed) => answer(ask.askId, reply, cascade, note, failed)"
         />
       </template>
     </Transcript>

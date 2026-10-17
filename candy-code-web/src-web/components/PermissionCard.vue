@@ -6,7 +6,7 @@ import type { PendingAsk } from '../protocol/generated'
 export type Reply = 'once' | 'always' | 'reject'
 
 const props = defineProps<{ ask: PendingAsk; canAnswer: boolean }>()
-const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean, note: string] }>()
+const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean, note: string, failed: () => void] }>()
 
 const busy = ref(false)
 /**
@@ -29,7 +29,14 @@ function answer(reply: Reply, cascade = false): void {
   if (busy.value || !props.canAnswer) return
   busy.value = true
   const text = note.value.trim()
-  emit('answer', reply, cascade, reply === 'reject' || (reply === 'once' && question.value) ? text : '')
+  // The card disables itself on the assumption the answer lands and the ask
+  // disappears. It may not (ISS-110): a transport failure or a non-terminal
+  // refusal leaves the same question open, and a permanently greyed card is
+  // a dead end. The `failed` callback lets the caller re-arm the buttons.
+  const failed = () => {
+    busy.value = false
+  }
+  emit('answer', reply, cascade, reply === 'reject' || (reply === 'once' && question.value) ? text : '', failed)
 }
 
 /** y / a / n answer the focused card, the TUI's keys. */

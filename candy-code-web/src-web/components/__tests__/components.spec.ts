@@ -81,7 +81,7 @@ describe('PermissionCard', () => {
       const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
       expect(wrapper.text()).toContain('git push')
       await wrapper.find(`[data-testid="${id}"]`).trigger('click')
-      expect(wrapper.emitted('answer')?.[0]).toEqual([...expected, ''])
+      expect(wrapper.emitted('answer')?.[0]?.slice(0, 3)).toEqual([...expected, ''])
     }
   })
 
@@ -89,7 +89,7 @@ describe('PermissionCard', () => {
     const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
     await wrapper.trigger('keydown', { key: 'n' })
     await wrapper.trigger('keydown', { key: 'y' })
-    expect(wrapper.emitted('answer')).toEqual([['reject', false, '']])
+    expect(wrapper.emitted('answer')?.map((payload) => payload.slice(0, 3))).toEqual([['reject', false, '']])
   })
 
   it('sends the note with a rejection, not with an allow', async () => {
@@ -97,7 +97,7 @@ describe('PermissionCard', () => {
       const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
       await wrapper.find('[data-testid="ask-note"]').setValue('  use rg ')
       await wrapper.find(`[data-testid="${id}"]`).trigger('click')
-      expect(wrapper.emitted('answer')?.[0]).toEqual(expected)
+      expect(wrapper.emitted('answer')?.[0]?.slice(0, 3)).toEqual(expected)
     }
   })
 
@@ -108,7 +108,19 @@ describe('PermissionCard', () => {
     await wrapper.find('[data-testid="ask-note"]').trigger('keydown', { key: 'n' })
     expect(wrapper.emitted('answer')).toBeUndefined()
     await wrapper.find('[data-testid="ask-once"]').trigger('click')
-    expect(wrapper.emitted('answer')?.[0]).toEqual(['once', false, 'teal'])
+    expect(wrapper.emitted('answer')?.[0]?.slice(0, 3)).toEqual(['once', false, 'teal'])
+  })
+
+  it('re-arms the buttons when the caller reports the answer failed (ISS-110)', async () => {
+    const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
+    await wrapper.find('[data-testid="ask-once"]').trigger('click')
+    expect(wrapper.find('[data-testid="ask-once"]').attributes('disabled')).toBeDefined()
+    const failed = wrapper.emitted('answer')?.[0]?.[3] as () => void
+    failed()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="ask-once"]').attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-testid="ask-once"]').trigger('click')
+    expect(wrapper.emitted('answer')?.length).toBe(2)
   })
 
   it('cannot answer without the approve scope', async () => {
