@@ -268,7 +268,7 @@ final class DocsQuickstartTest extends TestCase
         $src = \var_export(self::root() . '/sugar-constraints/src/', true);
         $script = "<?php\ndeclare(strict_types=1);\n"
             . "spl_autoload_register(static function (string \$c): void {\n"
-            . "    if (str_starts_with(\$c, 'SugarCraft\\\\Constraints\\\\') && is_file(\$f = {$src} . str_replace('\\\\', '/', substr(\$c, 18)) . '.php')) { require \$f; }\n"
+            . "    if (str_starts_with(\$c, 'SugarCraft\\\\Constraints\\\\') && is_file(\$f = {$src} . str_replace('\\\\', '/', substr(\$c, 23)) . '.php')) { require \$f; }\n"
             . "});\n"
             . "?>" . self::asFile($code)
             . "\n\$__widths = [];\n"
