@@ -1162,6 +1162,14 @@ final readonly class ProviderFactory
             // Audit 15b-15: null leaves the answer to discovery's
             // `has_image_understanding`; the block's key overrides it.
             supportsVision: self::configuredSupportsVision($config['supportsVision'] ?? null),
+            // ISS-073 review fix: the `sglang` TYPE_SCHEMAS row admits
+            // `contextWindow`; without this sink the key was a silent no-op -
+            // block key first, user-tier fallback, map-or-scalar (same
+            // normaliser the other arms use).
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
         );
     }
 
@@ -1461,13 +1469,26 @@ final readonly class ProviderFactory
      */
     private function createBedrock(array $config): BedrockProvider
     {
+        // create() resolves a null model to DEFAULT_MODEL; the override
+        // normaliser needs the concrete id it will end up serving, so the
+        // default is applied here once and passed down.
+        $model = $config['model'] ?? BedrockProvider::DEFAULT_MODEL;
+
         return BedrockProvider::create(
             region: $config['region'],
-            model: $config['model'] ?? null,
+            model: $model,
             modelPrices: self::modelPricesFor($config),
             // Audit A15: Converse cache points after the system prompt and
             // the conversation, unless the operator turned them off.
             promptCache: self::promptCacheEnabled($config),
+            // ISS-073 review fix: the `bedrock` TYPE_SCHEMAS row admits
+            // `contextWindow`; without this sink the key was a silent no-op -
+            // block key first, user-tier fallback, map-or-scalar (same
+            // normaliser the other arms use).
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
         );
     }
 

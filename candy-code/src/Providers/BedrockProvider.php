@@ -275,6 +275,10 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
      *        ({@see marksPromptCache()}). From the `promptCache` setting and
      *        `CANDY_CODE_DISABLE_PROMPT_CACHE`
      *        ({@see ProviderFactory::createBedrock()}); on by default.
+     * @param ?int $contextWindowOverride ISS-073 review fix: the operator's
+     *        `contextWindow` for this model, null for none, in which case the
+     *        family table answers. The `bedrock` TYPE_SCHEMAS row admits the
+     *        key; this is the sink that makes the admission mean something.
      */
     public function __construct(
         private BedrockRuntimeClient $client,
@@ -282,6 +286,9 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         private string $defaultModel = self::DEFAULT_MODEL,
         private array $modelPrices = [],
         private bool $promptCache = true,
+        // ISS-073 review fix: the operator's `contextWindow` for this model;
+        // null for none, in which case the family table answers.
+        private ?int $contextWindowOverride = null,
     ) {}
 
     /**
@@ -298,12 +305,14 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     /**
      * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
      * @param bool $promptCache see {@see __construct()}
+     * @param ?int $contextWindowOverride see {@see __construct()}
      */
     public static function create(
         string $region = self::REGION_US,
         ?string $model = null,
         array $modelPrices = [],
         bool $promptCache = true,
+        ?int $contextWindowOverride = null,
     ): self {
         $region = self::resolveRegion($region);
 
@@ -340,7 +349,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
             ],
         ]);
 
-        return new self($client, $region, $model ?? self::DEFAULT_MODEL, $modelPrices, $promptCache);
+        return new self($client, $region, $model ?? self::DEFAULT_MODEL, $modelPrices, $promptCache, $contextWindowOverride);
     }
 
     /**
@@ -450,10 +459,16 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
      * The configured model's window, looked up by its normalised family
      * (audit A20: an exact match on the raw id sized every real versioned or
      * inference-profile id at 8,192). 0 when the family is unknown.
+     *
+     * ISS-073 review fix: the operator's `contextWindow` override outranks
+     * the table - the same precedence the vertex/custom/anthropic arms give
+     * the same key, and the sink that makes the `bedrock` schema row's
+     * admission of the key real.
      */
     public function contextWindow(): int
     {
-        return self::CONTEXT_WINDOWS[self::family($this->defaultModel)] ?? 0;
+        return $this->contextWindowOverride
+            ?? self::CONTEXT_WINDOWS[self::family($this->defaultModel)] ?? 0;
     }
 
     /**

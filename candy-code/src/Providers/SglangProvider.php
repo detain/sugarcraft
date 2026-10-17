@@ -657,6 +657,16 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
          * {@see supportsVision()}.
          */
         private ?bool $supportsVision = null,
+        /**
+         * ISS-073 review fix: the operator's `contextWindow` for this model,
+         * carried from the provider block (or the user tier) by
+         * {@see ProviderFactory::createSglang()}; null for none. It outranks
+         * even a discovered window - an operator who sets the knob means it,
+         * the same authority the `$modelPrices` entry follows - and it is the
+         * sink that makes the `sglang` TYPE_SCHEMAS row's admission of the
+         * key mean something.
+         */
+        private ?int $contextWindowOverride = null,
     ) {
         if ($this->reasoningEffort !== null) {
             self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
@@ -685,6 +695,8 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         ?string $sessionAffinityId = null,
         bool $discoverServerInfo = false,
         ?bool $supportsVision = null,
+        // ISS-073 review fix: see the promoted docblock on __construct().
+        ?int $contextWindowOverride = null,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -722,6 +734,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             $sessionAffinityId,
             $serverInfoLoader,
             $supportsVision,
+            $contextWindowOverride,
         );
     }
 
@@ -1118,6 +1131,13 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      */
     public function contextWindow(): int
     {
+        // ISS-073 review fix: the operator's explicit number outranks every
+        // derived answer below, discovery included - the `sglang` schema row
+        // admits the key and this is where it lands.
+        if ($this->contextWindowOverride !== null) {
+            return $this->contextWindowOverride;
+        }
+
         $discovered = $this->serverInfo()?->inputWindow(self::CONTEXT_WINDOW_OUTPUT_HEADROOM);
         if ($discovered !== null) {
             return $discovered;
