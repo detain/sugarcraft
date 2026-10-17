@@ -58,7 +58,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 - **Guards at closeout tip:** `check-rename-residue --all-done`, `gen-docs --check`, `gen-ansi-readme --check`, `check-path-repos --no-lib-path-repos`, `check-child-lifetimes` — all rc0; `check-lib-licenses` joins the roster post-closeout (`dc425a896`), rc0 at live tip.
 - **Owner-pending:** 52 Packagist abandons (web UI) · provirted 4 decisions · teams-chat-bot deployed `.env` slug-list check · oc.7z re-supply. Full list: `prompt_kit/briefs/rename-5-P12-closeout/REPORT.md`.
 - **Follow-up 2026-10-17:** provirted 11.4 closed (e2829a3 @995c35276); residue guard re-green — closeout REPORT.md:12 historical mention tagged @rename-keep; owner-pending now 3 items (Packagist abandons · teams-chat-bot .env · oc.7z).
-- **Follow-up 2026-10-17:** per-package LICENSE landed at `dc425a896` — `tools/check-lib-licenses.php` guard (61 packages / 0 problems) + CI step in `path-repo-check` + 61 LICENSE copies + `CheckLibLicensesTest` (+11T/+70A; guard hardened at `f4440ae02` — symlinked-LICENSE refusal + upward-link sweep, +3T/+31A) — closes the dead-badge issue (`sugar_issues.md` ISS-120, RESOLVED there).
+- **Follow-up 2026-10-17:** per-package LICENSE landed at `dc425a896` — `tools/check-lib-licenses.php` guard (61 packages / 0 problems) + CI step in `path-repo-check` + 61 LICENSE copies + `CheckLibLicensesTest` (+11T/+75A; guard hardened at `f4440ae02` — symlinked-LICENSE refusal + upward-link sweep, +3T/+31A) — closes the dead-badge issue (`sugar_issues.md` ISS-120, RESOLVED there).
 
 Per-lib progress inside Batches 3–8 is tracked in the `status` field of `tools/renames.json`
 (`pending` → `renamed` → `remote-done` → `packagist-done`).
