@@ -447,7 +447,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $task,
                 $workingDirectory,
                 $agent->provider,
-                $agent->model,
+                // ISS-087: the daemon stamps CANDY_CODE_MODEL from this value;
+                // an inheriting agent dictates nothing and the session's own
+                // model stays in charge (BackgroundSessionRunner skips export
+                // on the empty answer).
+                $agent->exportedModel(),
                 $timeoutSeconds,
                 $forkedSessionId,
                 $delegation,

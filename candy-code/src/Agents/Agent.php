@@ -417,6 +417,24 @@ final readonly class Agent
     }
 
     /**
+     * The model this agent DICTATES to a fresh process, or '' when it follows
+     * its session instead (ISS-087 — the same inheritance reading
+     * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool::chooseModel()} applies to
+     * sub-agents). A background daemon stamps a non-empty answer into
+     * `CANDY_CODE_MODEL`; an inheriting agent must leave that variable
+     * unexported so the session's own model stays in charge rather than the
+     * preset's placeholder.
+     */
+    public function exportedModel(): string
+    {
+        if ($this->inheritsModel || trim($this->model) === '' || $this->model === 'inherit') {
+            return '';
+        }
+
+        return trim($this->model);
+    }
+
+    /**
      * Rebuild with the named constructor fields replaced, carrying every other
      * field forward BY NAME — so a field added to the constructor cannot be
      * dropped by a wither that forgot to spell it (each wither used to repeat

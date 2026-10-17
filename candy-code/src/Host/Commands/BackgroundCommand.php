@@ -13,6 +13,7 @@ use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Sessions\BackgroundStopOutcome;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Skills\SkillSource;
 
 /**
  * `/bg <task>` (alias `/background`) — dispatch a task onto the
@@ -96,12 +97,17 @@ final class BackgroundCommand implements HostCommand
      * The thunk that actually spawns the session and resolves with its
      * {@see BackgroundSessionSpawnedMsg}.
      *
-     * The agent is a registered "default", then whatever IS registered, then a
-     * synthesised stand-in. The middle arm is what a real launch takes:
-     * `spawnSession()` feeds the agent's provider and model straight into the
-     * daemon's command line, so before the launch registered its roster every
-     * daemon ran as the literal "unknown"/"unknown". Pinned by
+     * The agent is a registered "default", then the first NATIVE roster
+     * entry, then a synthesised stand-in. The middle arm is what a real
+     * launch takes: `spawnSession()` feeds the agent's provider and model
+     * straight into the daemon's command line, so before the launch
+     * registered its roster every daemon ran as the literal
+     * "unknown"/"unknown". Pinned by
      * `ChatTest::testBackgroundSpawnRunsTheDaemonAsARosterAgentNotTheUnknownStandIn()`.
+     * The middle arm reads natives only since ISS-087: foreign imports are
+     * inserted FIRST in the roster, so a positional [0] handed the default
+     * background session to a stray `~/.claude/agents` helper — someone
+     * else's agent, model, and isolation, deciding every `/bg` and `/fork`.
      * The stand-in stays for embedders with no manager.
      *
      * The session is spawned into the SAME tree this run is rooted at: a
@@ -129,7 +135,7 @@ final class BackgroundCommand implements HostCommand
         ?string $forkedSessionId,
     ): \Closure {
         $agent = $agentManager?->get('default')
-            ?? ($agentManager?->all()[0] ?? null)
+            ?? self::firstNativeAgent($agentManager)
             ?? self::defaultAgent();
         $workingDirectory = $root !== '' ? $root : '.';
         $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
@@ -279,6 +285,31 @@ final class BackgroundCommand implements HostCommand
         $name = TitleService::sanitizeTitle($task);
 
         return $name === '' ? Lang::t('host.bg.default_name') : $name;
+    }
+
+    /**
+     * The first NATIVE roster entry (ISS-087).
+     *
+     * Bootstrap's agentRoster inserts foreign imports BEFORE the built-ins,
+     * and PHP keeps the first-inserted position when a name overwrites, so a
+     * positional read of {@see AgentManager::all()} could hand the default
+     * background session to any file in the user's `~/.claude/agents/`. A
+     * fallback agent must be OURS: the built-in tier the launch registered,
+     * never an import whose model and isolation nobody chose for this role.
+     */
+    private static function firstNativeAgent(?AgentManager $agentManager): ?Agent
+    {
+        if ($agentManager === null) {
+            return null;
+        }
+
+        foreach ($agentManager->all() as $agent) {
+            if ($agent->source === SkillSource::Native) {
+                return $agent;
+            }
+        }
+
+        return null;
     }
 
     /**
