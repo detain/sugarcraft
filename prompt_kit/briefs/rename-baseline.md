@@ -21,7 +21,7 @@
 ## Baseline test figures (per lib)
 
 Command per lib: `cd /home/sites/sugarcraft/<lib> && vendor/bin/phpunit --colors=never`.
-PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-scriptui, sugar-crush) run under the
+PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-scriptui, sugar-crush) run under the <!-- @rename-keep historical provenance -->
 Part A rule-9 watchdog (1800 s). Pre-existing failures are RECORDED, not fixed.
 sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush — sharded, E671)".
 
@@ -49,7 +49,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-mosaic | 661 | 14820 | 0 | 0 | 5 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-mouse | 204 | 500 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-palette | 529 | 5537 | 0 | 0 | 1 | 0 |  | <!-- @rename-keep historical provenance -->
-| candy-pty | — | — | — | — | — | 137 | HUNG: lib's own HangWatchdog SIGKILLed the runner at 53% (418/708) — PosixPumpTest::testRunWithNullChildReturnsZero in-flight 90.5s > 90s budget (child stuck in do_select with [true] defunct zombie). Pre-existing under this env; see /tmp/opencode/rename-baseline/candy-pty.txt forensic dump |
+| candy-pty | — | — | — | — | — | 137 | HUNG: lib's own HangWatchdog SIGKILLed the runner at 53% (418/708) — PosixPumpTest::testRunWithNullChildReturnsZero in-flight 90.5s > 90s budget (child stuck in do_select with [true] defunct zombie). Pre-existing under this env; see /tmp/opencode/rename-baseline/candy-pty.txt forensic dump | <!-- @rename-keep historical provenance -->
 | candy-query | 1580 | 11900 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-serve | 354 | 875 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
 | candy-shell | 334 | 694 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
@@ -104,7 +104,7 @@ Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E67
 2. **sugar-dash** — `Weather\WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp` and <!-- @rename-keep -->
    `State\PersistenceTest::testSaveLeavesNoLeftoverTempFiles` fail — 7483T/14859A/2F, rc=1.
    (Known AtomicJsonFile temp-residue family in dash.)
-3. **candy-pty** — suite HUNG under its own HangWatchdog (see row above); no figures recorded.
+3. **candy-pty** — suite HUNG under its own HangWatchdog (see row above); no figures recorded. <!-- @rename-keep historical provenance -->
 
 ## Tools guards (Step 0.1 item 4) — ALL rc=0 from repo root
 

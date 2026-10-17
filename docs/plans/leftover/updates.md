@@ -10,7 +10,7 @@
 - **Step 07 preconditions**: ⚠️ P3-LO-01 and CC-LO-08 are NOT YET in the done log — step 01.07 is the next logical step (matching `step-07-realprocess-deletion.md`). Pre-step grep was run during this health check; `RealProcess` has **active callers** in `candy-scriptui/src/Command/SpinCommand.php:71` and `candy-scriptui/tests/Process/RealProcessTest.php` — deletion is NOT safe. The step file's own logic handles this correctly (keep as deprecated alias if callers exist). No blocker — the step can proceed on its defined path.
 - **leftover_updates.md**: ✅ Reviewed. No urgent items missed. Sequencing in that file (P5-LO-01 first, CC-LO-02 second, step 07 fifth) is consistent with current done-log state.
 - **Symlinks**: ✅ All `composer.json` files in consumer libs resolve to real files — no broken symlinks. Verified `candy-pty`, `candy-scriptui`, `sugar-bits`, `sugar-charts`, `sugar-dash`, `candy-sprinkles`, `candy-vt`. <!-- @rename-keep historical provenance -->
-- **candy-scriptui dep on candy-pty**: ✅ Already satisfied — `candy-scriptui/composer.json` already has `sugarcraft/candy-pty: dev-master` in `require`.
+- **candy-scriptui dep on candy-pty**: ✅ Already satisfied — `candy-scriptui/composer.json` already has `sugarcraft/candy-pty: dev-master` in `require`. <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -32,7 +32,7 @@ this before spawning the next subagent.)
 
 - **step 01.06** (slim-deprecated-facades): ~~RESOLVED via PR#499~~ — hybrid approach: composition for Pty (138 LOC), Spawn/Child/Master left minimal per revised targets (≤324 total achievable). Original step prescription (`extends Posix\Foo`) was structurally impossible since all Posix classes are `final`.
 
-- **step 01.12** (SignalForwarder tests): ~~RESOLVED via PR#513~~ — NOT a PHP architectural limitation. Two real, narrow candy-pty bugs: (1) `posix_openpt` master fd lacked `FD_CLOEXEC` so the forked child inherited it, keeping the kernel master-side refcount > 0 across parent close; (2) `PosixMasterPty::close()` returned early after `fclose($stream)`, but `fopen('php://fd/N')` dup()s the fd so the original `posix_openpt` fd stayed open. Both required — with only one fix, child still survives 2 s+. With both: `sleep 30` exits ~20 ms after master close. Fixes + the three integration tests (SignalForwarderReactLoop, SIGHUPForwarding, NoControllingTerminal) landed together.
+- **step 01.12** (SignalForwarder tests): ~~RESOLVED via PR#513~~ — NOT a PHP architectural limitation. Two real, narrow candy-pty bugs: (1) `posix_openpt` master fd lacked `FD_CLOEXEC` so the forked child inherited it, keeping the kernel master-side refcount > 0 across parent close; (2) `PosixMasterPty::close()` returned early after `fclose($stream)`, but `fopen('php://fd/N')` dup()s the fd so the original `posix_openpt` fd stayed open. Both required — with only one fix, child still survives 2 s+. With both: `sleep 30` exits ~20 ms after master close. Fixes + the three integration tests (SignalForwarderReactLoop, SIGHUPForwarding, NoControllingTerminal) landed together. <!-- @rename-keep historical provenance -->
 
 - ~~**step 03.05** (sugar-dash canonical primitives): **BLOCKED**~~ — **PARTIALLY RESOLVED (2026-05-18)**: Color class replaced with `class_alias` shim → Core\Util\Color (true duplicate). Five non-duplicates (Style/Theme/Rect/Buffer/Cell) retained with clarifying docblocks + CALIBER_LEARNINGS entries. **Remaining narrow blocker**: `StyleParser` was declared a "true duplicate" in the revised step scope but is NOT drop-in compatible with `\SugarCraft\Sprinkles\StyleParser` — the Sprinkles version returns `list<\SugarCraft\Sprinkles\Cell>` with `\SugarCraft\Sprinkles\Style` (private `$fg`/`$bg`), while sugar-dash tests access `$cell->style->foreground->r` (requires public `readonly ?Color $foreground` on the Dash Style class). Replacing the parser would require rewriting all StyleParserTest assertions to use the Sprinkles Style API — out of scope per step instructions. StyleParser kept as sugar-dash SSOT. **ACTION NEEDED**: If future work wants to eliminate the sugar-dash StyleParser duplication, the test suite for StyleParserTest.php must be rewritten to use Sprinkles\Style API, then StyleParser.php can be deleted. <!-- @rename-keep -->
 
@@ -83,25 +83,25 @@ step 01.01 · PR#490 · plans: add x-windows.md stub plan + MATCHUPS.md TODO
 review for step 01.01 · clean · PR#490
 step 01.02 · PR#491 · PARTIAL — add .gitignore + @dev→dev-master + CI cache keys; composer.lock deletion NOT executed (see open findings)
 fix for step 01.02 · PR#492 · resolved 3 findings
-step 01.03 · PR#493 · candy-pty: split onIdle from onSigwinch; de-TODO recorder-tap comment
+step 01.03 · PR#493 · candy-pty: split onIdle from onSigwinch; de-TODO recorder-tap comment <!-- @rename-keep historical provenance -->
 fix for step 01.03 · PR#494 · resolved 3 findings
 tests-ci for step 01.03 · clean
-step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor
+step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor <!-- @rename-keep historical provenance -->
 review for step 01.04 · clean · PR#496
-docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html
+docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html <!-- @rename-keep historical provenance -->
 step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
 review for step 01.05 · clean · PR#498
-step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
+step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible) <!-- @rename-keep historical provenance -->
 candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue)
 path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02) <!-- @rename-keep historical provenance -->
-step 01.07 · PR#502 · candy-scriptui: RealProcess kept as deprecated alias; Process interface aligned with candy-pty/Contract
+step 01.07 · PR#502 · candy-scriptui: RealProcess kept as deprecated alias; Process interface aligned with candy-pty/Contract <!-- @rename-keep historical provenance -->
 review for step 01.07 · clean · PR#502
 docs for step 01.07 · clean · PR#502
 tests-ci for step 01.07 · PR#503 · add stdoutBytes/stderrBytes forwarding tests to FakeProcess
-step 01.08 · PR#504 · candy-pty: add SUGARCRAFT_PTY_BACKEND env var for backend selection
+step 01.08 · PR#504 · candy-pty: add SUGARCRAFT_PTY_BACKEND env var for backend selection <!-- @rename-keep historical provenance -->
 fix for step 01.08 · PR#505 · add deferred-backend-exception CALIBER entry
 docs for step 01.08 · PR#506 · document SUGARCRAFT_PTY_BACKEND in end-user/admin/dev docs
-step 01.09 · PR#507 · candy-pty: PtyPool ReactPHP test + MultiPump example + Expect withRecorder
+step 01.09 · PR#507 · candy-pty: PtyPool ReactPHP test + MultiPump example + Expect withRecorder <!-- @rename-keep historical provenance -->
 review for step 01.09 · clean · PR#507
 docs for step 01.09 · clean
  step 01.10 · PR#508 · candy-vcr: RecordCommand polish — SIGINT rescue + env-allow-secrets + cassette doc + ShirleyHtopTest
@@ -113,7 +113,7 @@ tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkips
  step 01.11 · PR#511 · tools: add --fix flag to check-path-repos.php
  review for step 01.11 · clean · PR#511
  docs for step 01.11 · PR#512 · document --fix in CONTRIBUTING.md + docblock
-step 01.12 · PR#513 · candy-pty: SIGHUP delivery fix (FD_CLOEXEC on master fd + libc close after fclose) + SignalForwarderReactLoop/SIGHUPForwarding/NoControllingTerminal integration tests; resolved blocker (was two narrow bugs, not a PHP architectural gap)
+step 01.12 · PR#513 · candy-pty: SIGHUP delivery fix (FD_CLOEXEC on master fd + libc close after fclose) + SignalForwarderReactLoop/SIGHUPForwarding/NoControllingTerminal integration tests; resolved blocker (was two narrow bugs, not a PHP architectural gap) <!-- @rename-keep historical provenance -->
 tests-ci for step 01.12 · clean
  docs for step 01.12 · PR#515 · improve PHPDoc on PosixMasterPty::close() + PosixPtySystem::open(); log fd-dup-close-after-fclose and fd-cloexec-on-master in CALIBER
 step 01.13 · PR#516 · candy-mosaic + candy-core: TtyDetect static helper (TermiosFactory::open->isAtty) + WezTerm detection fix (Kitty only, not both Kitty+iTerm2) + tests <!-- @rename-keep historical provenance -->
@@ -337,17 +337,17 @@ docs for step 11.04 · clean
 step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, immutable + fluent) + AnimationDriver (Model + Cmd::tick frame timing + delete+render cycle) + KittyRenderer::renderFrame() + FrameTickMsg + tests (leftover-rollout step 07.15) <!-- @rename-keep historical provenance -->
 fix for step 07.15 · PR#667 · resolved 2 CALIBER findings
 docs for step 07.15 · PR#668 · document Animation/AnimationDriver/renderFrame() in README (Animation section + Architecture) + end-user HTML (feature grid + API table) + dev guide (new docs/dev/candy-mosaic.md) + PHPDoc on 6 methods <!-- @rename-keep historical provenance -->
-step 07.16 · PR#669 · candy-pty: add openpty() FFI binding for Darwin (primary) with quartet fallback; libutil.so.1 path on Linux for future extension; OpenptyTest coverage
+step 07.16 · PR#669 · candy-pty: add openpty() FFI binding for Darwin (primary) with quartet fallback; libutil.so.1 path on Linux for future extension; OpenptyTest coverage <!-- @rename-keep historical provenance -->
 fix for step 07.16 · PR#670 · resolved 2 findings (CALIBER openpty-darwin-first + openpty-libutil-linux pattern entries; README API table + Platform behaviour section surfaces openpty() Darwin-first path)
 docs for step 07.16 · PR#671 · document openpty FFI in end-user HTML (Pty::open() feature description) + admin HTML (platform behaviour section) + dev HTML (internal PTY allocation section) + Libc::libutil() @return PHPDoc fix
-step 07.17 · PR#672 · candy-pty: add waitpid() FFI for fast process-exit detection (<1ms vs 10ms poll) + ChildPollWaitpidTest (5 tests) + signal-exit handling (128+signal)
+step 07.17 · PR#672 · candy-pty: add waitpid() FFI for fast process-exit detection (<1ms vs 10ms poll) + ChildPollWaitpidTest (5 tests) + signal-exit handling (128+signal) <!-- @rename-keep historical provenance -->
 tests-ci for step 07.17 · clean
 docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALIBER + end-user/admin/dev HTML + PHPDoc on tryWaitpid
- step 07.18 · PR#674 · candy-pty: add attachSigwinchToFd() for /dev/tty size-forwarding (SizeIoctl against raw fd + onResize callback + SignalForwarderDevTtyTest)
+ step 07.18 · PR#674 · candy-pty: add attachSigwinchToFd() for /dev/tty size-forwarding (SizeIoctl against raw fd + onResize callback + SignalForwarderDevTtyTest) <!-- @rename-keep historical provenance -->
  review for step 07.18 · clean · PR#674
  tests-ci for step 07.18 · clean
  docs for step 07.18 · PR#675 · document attachSigwinchToFd() in README (resize forwarding + Mirrors table) + end-user HTML (resize section + API table) + dev HTML (SignalForwarder extension point note) + CALIBER_LEARNINGS.md [pattern:attachSigwinchToFd-fd-based]
-  step 07.19 · PR#676 · candy-pty: add ControllingTerminal::claim(int $fd) static method (setsid+ioctl(TIOCSCTTY)); bin/pty-shim.php delegates to it
+  step 07.19 · PR#676 · candy-pty: add ControllingTerminal::claim(int $fd) static method (setsid+ioctl(TIOCSCTTY)); bin/pty-shim.php delegates to it <!-- @rename-keep historical provenance -->
   docs for step 07.19 · PR#677 · document ControllingTerminal::claim() in README (Mirrors + API table + Controlling terminal section) + end-user HTML (feature + API table) + admin HTML (new section) + dev HTML (new section + namespace tree) + CALIBER [pattern:claim-setsid-ioctl]
  step 07.20 · PR#678 · candy-vcr: add RelativeFormat (dt field at file level) + Recorder::withFormat() + Player auto-detect; 48 Format tests green
  docs for step 07.20 · PR#679 · document RelativeFormat + withFormat() + detectFormat() in README/end-user HTML/dev HTML + CALIBER entry
@@ -449,8 +449,8 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 ## Open review findings — 07.16
 
-- [x] candy-pty/CALIBER_LEARNINGS.md: openpty Darwin-first fallback pattern not logged — `openpty()` primary on Darwin, quartet fallback, and `libutil.so.1` Linux path are new FFI patterns that future PTY implementers should find documented (e.g. `[pattern:openpty-darwin-first]`, `[pattern:libutil-linux-symbol]`) — ✅ resolved PR#670
-- [x] candy-pty/README.md: `openpty()` Darwin path not surfaced in API docs — the Mirrors table and API-at-a-glance table only mention `posix_openpt + grantpt + unlockpt + ptsname_r`; the new `openpty` first path on Darwin is not mentioned anywhere in the README — ✅ resolved PR#670
+- [x] candy-pty/CALIBER_LEARNINGS.md: openpty Darwin-first fallback pattern not logged — `openpty()` primary on Darwin, quartet fallback, and `libutil.so.1` Linux path are new FFI patterns that future PTY implementers should find documented (e.g. `[pattern:openpty-darwin-first]`, `[pattern:libutil-linux-symbol]`) — ✅ resolved PR#670 <!-- @rename-keep historical provenance -->
+- [x] candy-pty/README.md: `openpty()` Darwin path not surfaced in API docs — the Mirrors table and API-at-a-glance table only mention `posix_openpt + grantpt + unlockpt + ptsname_r`; the new `openpty` first path on Darwin is not mentioned anywhere in the README — ✅ resolved PR#670 <!-- @rename-keep historical provenance -->
 
 ## Open review findings — 03.05
 
@@ -465,7 +465,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 ## Open review findings — 01.08
 
-- [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
+- [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl <!-- @rename-keep historical provenance -->
 
 step 09.06 · PR#721 · candy-minesweeper: chord clicks + microtime timer + DifficultyStats persistence
 step 09.07 · PR#723 · candy-minesweeper: O(1) win detection via revealedCount + serialize/unserialize + CustomDifficulty UI

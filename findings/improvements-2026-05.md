@@ -228,7 +228,7 @@ The `sugar-forms` extraction (form primitives pulled out of `sugar-bits`/`sugar-
 - `sugar-forms/src/Spinner.php` calls `stream_isatty(STDERR)` directly.
 - `candy-mdview/src/RenderCommand.php` calls `stream_isatty(STDIN)` directly.
 
-`candy-core/src/Util/TtyDetect.php` already exists. Inject it. For raw-mode toggling, candy-pty is the natural home, or introduce a new `candy-term` foundation lib that owns terminal-control concerns. Either way, `shell_exec('stty …')` belongs out of leaf libs.
+`candy-core/src/Util/TtyDetect.php` already exists. Inject it. For raw-mode toggling, candy-pty is the natural home, or introduce a new `candy-term` foundation lib that owns terminal-control concerns. Either way, `shell_exec('stty …')` belongs out of leaf libs. <!-- @rename-keep historical provenance -->
 
 ### 4.2 phpunit.xml duplication
 

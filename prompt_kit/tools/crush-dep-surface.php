@@ -28,7 +28,7 @@ $libs = [
     'candy-layout' => 'Layout',
     'sugar-focus' => 'Focus',
     'sugar-cli' => 'Cli',
-    'candy-pty' => 'Pty',
+    'candy-pty' => 'Pty', // @rename-keep historical provenance
 ];
 
 $BS = chr(92);

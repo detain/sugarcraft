@@ -10,7 +10,7 @@ bins {`bin/candyshell`: `bin/candy-scriptui`} (glued compact bin spelling). Base
 ## R0 recon
 - Cross-lib `SugarCraft\Shell\` PHP consumers: ZERO code — only docblock cross-refs <!-- @rename-keep -->
   (candy-pty PosixProcess.php:17/:28 `@see \SugarCraft\Shell\Process\RealProcess`, Contract/Process.php, <!-- @rename-keep -->
-  SECURITY.md:43, research docs). All rewritten by R1, comment-only → no candy-pty/candy-core suite re-run.
+  SECURITY.md:43, research docs). All rewritten by R1, comment-only → no candy-pty/candy-core suite re-run. <!-- @rename-keep historical provenance -->
   No lib requires sugarcraft/candy-shell (root composer only) → no consumer serial/K=8. <!-- @rename-keep -->
 - Outside-lib `candyshell` brand refs: candy-core/src/ProgramOptions.php:42,308 + candy-core/src/Renderer.php:35, <!-- @rename-keep -->
   candy-forms/src/ActionSpinner.php:20, candy-core/README.md, sugar-bits/examples/item-list.php, <!-- @rename-keep -->

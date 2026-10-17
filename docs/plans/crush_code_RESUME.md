@@ -155,7 +155,7 @@ $   # 2 survivors: E736 (umbrella — ALL remaining shape is ruling/feature, eve
 **Tip chain:** this closeout's docs commits (companion/stamps/worklog/RESUME/pointer + filemap regen) sit atop the six picks + `7988f2305`; master is fast-forwarded to the final closeout tip. NEVER pushed.
 
 1. Read this §0-NOW-90, the worklog `## ROUND 87` section, and `docs/plans/crush_code_filemap.md` (2 rows = census: E736 + E742).
-2. Preflight in any fresh sandbox: `git -C /home/sites/sugarcraft status --porcelain` shows ONLY ignorable operator dirt at the tip; `php scripts/refresh-deps.php --mode=linked` FULL then EXPLICIT census **sugar-crush 19/19 + candy-pty 8/8**; config at-rest truth `d96e124ee7967eb34ef479ef824231ad`; floor gate if doubted: K=8 `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv --out <fresh>` (~85s) or plain-pipe serial (cwd=sugar-crush).
+2. Preflight in any fresh sandbox: `git -C /home/sites/sugarcraft status --porcelain` shows ONLY ignorable operator dirt at the tip; `php scripts/refresh-deps.php --mode=linked` FULL then EXPLICIT census **sugar-crush 19/19 + candy-pty 8/8**; config at-rest truth `d96e124ee7967eb34ef479ef824231ad`; floor gate if doubted: K=8 `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv --out <fresh>` (~85s) or plain-pipe serial (cwd=sugar-crush). <!-- @rename-keep historical provenance -->
 3. **DO NOT auto-open round 88** — the campaign is mechanically complete per the operator (m0225). If directed: the §2 menu is E742-ruling-first (one small lane either way), then trigger-gated E736 tails only with real demand. NEVER push; author `Joe Huss <[EMAIL]>`; no composer, no caliber, no touch of `.mcp.json`/`.sugar-crush/config*` operator files or foreign `sugarcraft-cc`.
 4. Per-lane loop unchanged (task+coder implement → SHA/worktree verify → task+coder review → fix round → weld; blank/fragment reports → RESUME same task_id ≤10x with disk-probes, salvage-first before any redo).
 5. If a future round welds: close as rounds 83–87 did — worklog + stamps + `§0-NOW-91` + pointer + filemap regen; re-pin crush figures ONLY when sugar-crush files move (four rounds now proven on the zero-move EXACT-carry shape).
@@ -479,13 +479,13 @@ Three things follow, and the third is the one that will bite a future round:
    Neither `prompt_resume.md`'s floor nor §0-NOW-61's names its mode. **So state the mode next to
    every figure from now on, alongside the cwd** — and before comparing a lane's figure to the
    supervisor's, confirm both are in the same mode. If they are not, the difference is not a finding.
-4. 🔴 **`candy-pty` IS IN THE SAME STATE, AND ITS LOCK WAS REGENERATED TODAY.** MEASURED
-   2026-09-10: `candy-pty` is `published 0/7` — zero symlinks, not the **7** §4b's recipe expects —
-   and `candy-pty/composer.lock` is 115,257 B dated **2026-09-10 02:08**, i.e. rewritten during this
+4. 🔴 **`candy-pty` IS IN THE SAME STATE, AND ITS LOCK WAS REGENERATED TODAY.** MEASURED <!-- @rename-keep historical provenance -->
+   2026-09-10: `candy-pty` is `published 0/7` — zero symlinks, not the **7** §4b's recipe expects — <!-- @rename-keep historical provenance -->
+   and `candy-pty/composer.lock` is 115,257 B dated **2026-09-10 02:08**, i.e. rewritten during this <!-- @rename-keep historical provenance -->
    session's dependency refresh. Backlog **E630** recorded that file at 113 KB / 2026-08-22 and warns
    that regenerating it is the action that makes CI's path-repo injection a no-op. It is `.gitignore`d
-   (`candy-pty/.gitignore:1`), so this is **not** a policy breach and CI is unaffected — but any
-   `candy-pty` figure measured locally from here is a `published`-mode figure, and §0-NOW-61's carried
+   (`candy-pty/.gitignore:1`), so this is **not** a policy breach and CI is unaffected — but any <!-- @rename-keep historical provenance -->
+   `candy-pty` figure measured locally from here is a `published`-mode figure, and §0-NOW-61's carried <!-- @rename-keep historical provenance -->
    `644 / 1785 / 16 / 1 warning` predates all of it.
 
 
@@ -522,9 +522,9 @@ only, and `/home/sites/crush-lane-{a,b,c}` are absent, as are the `prompt-step-F
 before launch:
 
 ```sh
-php scripts/refresh-deps.php --status | grep -E 'sugar-crush|candy-pty'   # RUN THIS FIRST, see section 3
+php scripts/refresh-deps.php --status | grep -E 'sugar-crush|candy-pty'   # RUN THIS FIRST, see section 3 <!-- @rename-keep historical provenance -->
 php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/sugar-crush/vendor/sugarcraft/*"),"is_link"))."\n";'  # expect 18
-php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-pty/vendor/sugarcraft/*"),"is_link"))."\n";'     # expect 7
+php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-pty/vendor/sugarcraft/*"),"is_link"))."\n";'     # expect 7 <!-- @rename-keep historical provenance -->
 ```
 
 ⚠️ **The `18` is a COUNT OF SYMLINKS, and this session measured a tree with eighteen entries and

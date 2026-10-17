@@ -82,7 +82,7 @@ You (Master)
 ## Dependency ordering (hard requirement)
 Follow the topological order in plan §6/§9. A lib is backported only after **all** its
 `sugarcraft/*` deps are 7.4‑clean — because path‑repo symlinks expose dependency *source* to
-phpunit and 7.4 cannot parse un‑backported 8‑syntax. `candy-core ↔ candy-pty` is a cycle and is
+phpunit and 7.4 cannot parse un‑backported 8‑syntax. `candy-core ↔ candy-pty` is a cycle and is <!-- @rename-keep historical provenance -->
 done as one fused phase (Phase 2). Each step's Tester runs `composer update && vendor/bin/phpunit`
 to prove the whole dependency set parses on 7.4.
 

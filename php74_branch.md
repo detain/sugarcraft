@@ -41,7 +41,7 @@ Composer polyfill can fix:
 | `WeakMap` | 8.0 | 1 | 3 | Mechanical (`SplObjectStorage`) |
 
 Already‑7.4 features in the codebase (arrow `fn`, `??`, `??=`, spread, typed props, FFI) need **no
-change**. FFI landed in 7.4, so `candy-pty` / `candy-core` Windows console code is not blocked at
+change**. FFI landed in 7.4, so `candy-pty` / `candy-core` Windows console code is not blocked at <!-- @rename-keep historical provenance -->
 the language level.
 
 **Effort shape:** ~80% of the work is mechanical and parallelizable per file; the irreducible
@@ -335,7 +335,7 @@ on both, so CI can prove 7.4 *and* 8.x parse the backported source).
 
 Order is the topological dependency order from the audit, so each lib is backported only after its
 sugarcraft deps are already 7.4‑clean (required because path‑repo symlinks expose dependency
-*source* to phpunit — 7.4 cannot even parse an un‑backported dep). `candy-core ↔ candy-pty` is a
+*source* to phpunit — 7.4 cannot even parse an un‑backported dep). `candy-core ↔ candy-pty` is a <!-- @rename-keep historical provenance -->
 dependency cycle and is backported as one fused phase.
 
 ### Phase 0 — Branch & global infrastructure
@@ -368,7 +368,7 @@ keystone, so they come first within the phase.
 - **2.5** core `Exception/` (6) + `Cmd/` (4) + `Undo`,`Progress`,`I18n` (2 each).
 - **2.6** core root files (`View`, `Subscriptions*`, `Screen*`, `WorkerPool`, `SgrState`, …) →
   **2.6a/2.6b** (~10 each).
-- **2.7** `candy-pty` (42 src, high) → **2.7a** `Posix/` (11, FFI/libc/termios), **2.7b**
+- **2.7** `candy-pty` (42 src, high) → **2.7a** `Posix/` (11, FFI/libc/termios), **2.7b** <!-- @rename-keep historical provenance -->
   `Contract/` (8), **2.7c** `Exception/`+`Output/` (7), **2.7d** root files (`Pty`,`Master`,
   `Spawn`,`Libc`,`SizeIoctl`,…). FFI is 7.4‑OK; focus is syntax only.
 
@@ -482,7 +482,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
 | candy-minesweeper | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |
 | sugar-image | high | 25 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, php8-strfn; gd/mbstring |
-| candy-pty | high | 42 | FFI, ctor-promotion, match, mixed, new-in-init, nullsafe |
+| candy-pty | high | 42 | FFI, ctor-promotion, match, mixed, new-in-init, nullsafe | <!-- @rename-keep historical provenance -->
 | candy-sql | high | 14 | enum-with-methods, ctor-promotion, match, mixed, named-args; pdo_sqlite |
 | candy-shine | high | 9 | attribute, ctor-promotion, enum, match, named-args, nullsafe; commonmark | <!-- @rename-keep historical provenance -->
 | candy-vt | high | 40 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args |
@@ -539,7 +539,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 
 - **Level 0 (no sugarcraft deps):** candy-ansi, candy-async, candy-buffer, candy-fuzzy, <!-- @rename-keep historical provenance -->
   candy-input, candy-layout.
-- **Keystone (cyclic):** candy-core ↔ candy-pty (+ candy-sprinkles right after).
+- **Keystone (cyclic):** candy-core ↔ candy-pty (+ candy-sprinkles right after). <!-- @rename-keep historical provenance -->
 - **Level 1 (everything else):** depends on core/buffer/sprinkles/etc.; backport strictly after
   its listed deps. Full per‑lib dep lists are in the audit (see `plans/PHP74_BACKPORT.md`).
 

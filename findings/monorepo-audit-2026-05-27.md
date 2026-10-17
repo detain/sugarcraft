@@ -112,13 +112,13 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| candy-pty | 50+ ✓ | APPROVE | 0 | 1 | 3 | 0 |
+| candy-pty | 50+ ✓ | APPROVE | 0 | 1 | 3 | 0 | <!-- @rename-keep historical provenance -->
 | candy-vt | 58 ✓ | APPROVE | 0 | 1 | 2 | 0 |
 | candy-vcr | 90 ✓ | REQUEST_CHANGES | 1 | 1 | 4 | 0 |
 | candy-wish | 80 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
 | candy-mouse | 70 ✓ | APPROVE | 0 | 1 | 4 | 0 | <!-- @rename-keep historical provenance -->
 
-**candy-pty** — PTY/Fork wrapper. Clean. Issue: `@proc_open()` error suppression hides legitimate errors.
+**candy-pty** — PTY/Fork wrapper. Clean. Issue: `@proc_open()` error suppression hides legitimate errors. <!-- @rename-keep historical provenance -->
 
 **candy-vt** — Virtual terminal emulator. Issue: `Terminal` uses leaky internal state sharing with `CsiHandlerImpl`.
 
@@ -261,7 +261,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **God classes** | super-candy/Manager (915L), candy-git/App (1201L) | Single class handling too many responsibilities |
 | **Stub features wired silently** | sugar-readline/Highlight, sugar-toast/AnimationDuration | Feature exists in API but does nothing; no warning to consumers |
 | **Static singleton facades** | candy-mouse/Zones, candy-prompt | Makes testing harder, causes state leakage | <!-- @rename-keep historical provenance -->
-| **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder |
+| **`@` error suppression** | super-candy/FsLister, candy-pty/Spawn | Hides legitimate errors, makes debugging harder | <!-- @rename-keep historical provenance -->
 | **String-based type detection** | super-candy/reverseAction, candy-git/HistoryManager | Uses `str_starts_with($desc, 'delete ')` for action types — fragile if strings change |
 | **Constructor parameter explosion** | super-candy/Manager (14 params), candy-git/withAll (22 params) | Adding new properties requires updating many call sites |
 | **Inconsistent mutability** | candy-codetime/Milestone vs Heartbeat, sugar-treelist/Model, candy-flip/Decoder | Same package has some readonly and some mutable classes | <!-- @rename-keep -->
@@ -324,7 +324,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### Lower Priority (Post 1.0)
 
 9. **`candy-term` foundation lib** (improvements.md §4.1)
-   - Extract terminal-control concerns (raw mode, TTY detection) from candy-pty
+   - Extract terminal-control concerns (raw mode, TTY detection) from candy-pty <!-- @rename-keep historical provenance -->
    - Consolidate `shell_exec('stty ...')` calls scattered in leaf libs
 
 10. **Exchanger interface for common error handling**
@@ -361,7 +361,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | **Static singletons** | LOW | candy-mouse, sugar-forms | Inject via constructor or clear test cleanup | <!-- @rename-keep historical provenance -->
 | **Inconsistent mutability** | LOW | Multiple packages | Some classes readonly, some not in same package |
 | **Magic numbers** | LOW | candy-flappy, candy-tetris | Comments explaining gameplay constants |
-| **@ suppression** | LOW | super-candy, candy-pty | Use explicit error handling |
+| **@ suppression** | LOW | super-candy, candy-pty | Use explicit error handling | <!-- @rename-keep historical provenance -->
 
 ---
 
