@@ -104,7 +104,7 @@ final class Definitions
                 ], ['fromSeq', 'throughSeq', 'pendingAsks'])->describe('Replaying from fromSeq through throughSeq, then live.'),
             ),
             self::ADMISSION => Schema::object([
-                'admitted' => Schema::enum(['started', 'queued', 'steered', 'pending']),
+                'admitted' => Schema::enum(['started', 'queued', 'steered', 'pending', 'handled']),
                 'turnId' => Schema::string(),
                 'messageId' => Schema::string(),
                 'steerId' => Schema::string(),

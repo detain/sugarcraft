@@ -416,7 +416,7 @@ final class MethodSchemas
                 Schema::object([
                     'bgId' => Schema::string(),
                     'sessionId' => Schema::ref(D::SESSION_ID),
-                    'admitted' => Schema::enum(['started', 'queued', 'steered', 'pending']),
+                    'admitted' => Schema::enum(['started', 'queued', 'steered', 'pending', 'handled']),
                     'turnId' => Schema::string(),
                     'messageId' => Schema::string(),
                     'steerId' => Schema::string(),

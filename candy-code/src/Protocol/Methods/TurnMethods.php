@@ -101,6 +101,9 @@ final class TurnMethods
             ],
             TurnTicket::STEERED => self::steered($feed, $ticket, \trim($text)),
             TurnTicket::PENDING => ['admitted' => TurnTicket::PENDING],
+            // ISS-056: a built-in or `!bang` that ran here was admitted — it
+            // simply never becomes a model turn, so it answers, not refuses.
+            TurnTicket::HANDLED => ['admitted' => TurnTicket::HANDLED],
             default => throw RpcError::of(ErrorCode::Conflict, (string) ($ticket->reason ?? 'the prompt was refused'), 'refused'),
         };
     }

@@ -35,6 +35,7 @@ use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\CommandText;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Role;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionReply;
@@ -1055,6 +1056,9 @@ final class SessionHost
 
         $this->history = [...$this->history, ...$result->rows];
         $this->save();
+        foreach ($result->rows as $row) {
+            $this->announceTranscriptRow($row);
+        }
     }
 
     private function runAsync(CommandEffect $effect): void
@@ -1114,8 +1118,10 @@ final class SessionHost
     /** One UI-only reply row a command's later answer lands as, saved. */
     private function appendCommandRow(string $text): void
     {
-        $this->history[] = Message::assistant($text)->withUiOnly();
+        $row = Message::assistant($text)->withUiOnly();
+        $this->history[] = $row;
         $this->save();
+        $this->announceTranscriptRow($row);
     }
 
     /**
@@ -1133,17 +1139,22 @@ final class SessionHost
         $refused = BangShell::refusal($bang, $this->workspace->permissionGate, $root);
         if ($refused !== null) {
             $notice = $turns->bangRefusedNotice($bang, $refused);
-            $this->history[] = Message::notice($notice);
+            $row = Message::notice($notice);
+            $this->history[] = $row;
             $this->save();
+            $this->announceTranscriptRow($row);
 
             return TurnTicket::refused($notice);
         }
 
-        $this->history[] = Message::notice($turns->bangRunningNotice($bang));
+        $running = Message::notice($turns->bangRunningNotice($bang));
+        $this->history[] = $running;
         $cancellation = new CancellationToken();
         $this->turn = $cancellation;
         $generation = ++$this->generation;
         $this->save();
+        $this->announceTranscriptRow($running);
+        $this->announceSessionStatus('busy');
 
         $cmd = (BangShell::cmd($bang, $root, $cancellation, $generation))();
         $cmd->promise->then(function (mixed $msg) use ($generation): void {
@@ -1154,10 +1165,64 @@ final class SessionHost
             $this->history[] = $msg->message;
             $this->turn = null;
             $this->save();
+            $this->announceTranscriptRow($msg->message);
             $this->releaseQueue();
+            if (!$this->isBusy()) {
+                $this->announceSessionStatus('idle');
+            }
         });
 
         return TurnTicket::handled();
+    }
+
+    /**
+     * Announce one command or bang transcript row as the `message.created`
+     * event a driver renders it from (ISS-056). The rows were saved and read
+     * back on the next turn, but no event carried them, so a web client
+     * watched a refused command answer with silence. Same shape (and same
+     * fail-soft) as {@see TurnController::recordMessagesCreated()}, widened
+     * to every role — a command row is system or assistant, never user.
+     */
+    private function announceTranscriptRow(Message $row): void
+    {
+        if ($this->transcripts->events() === null || $this->transcripts->persists() !== true) {
+            return;
+        }
+
+        try {
+            $identity = $this->transcripts->identify($this->sessionId, $row);
+            if ($identity === null) {
+                return;
+            }
+            $kind = match ($row->role) {
+                Role::User => 'user',
+                Role::Assistant => 'assistant',
+                default => 'notice',
+            };
+            $this->announce(SessionEvent::new(SessionEvent::MESSAGE_CREATED, [
+                'messageId' => $identity[0],
+                'ref' => $identity[1],
+                'role' => $row->role->value,
+                'kind' => $kind,
+                'content' => $row->content,
+                'createdAt' => (int) floor(microtime(true) * 1000),
+            ], $this->sessionId));
+        } catch (\Throwable) {
+            // The row is saved; a command does not fail because its audience
+            // missed the event, exactly as a turn does not.
+        }
+    }
+
+    /**
+     * Announce the session's status word (ISS-056): a `!bang` holds the
+     * session without a turn, so no `turn.started`/`turn.completed` marks the
+     * busy window for a driver that watches status instead of guessing.
+     */
+    private function announceSessionStatus(string $status): void
+    {
+        $this->announce(SessionEvent::new(SessionEvent::SESSION_STATUS, [
+            'status' => $status,
+        ], $this->sessionId));
     }
 
     /** The session as a host command reads it ({@see CommandContext}). */

@@ -13,7 +13,8 @@
                         "started",
                         "queued",
                         "steered",
-                        "pending"
+                        "pending",
+                        "handled"
                     ]
                 },
                 "turnId": {
@@ -1052,7 +1053,8 @@
                             "started",
                             "queued",
                             "steered",
-                            "pending"
+                            "pending",
+                            "handled"
                         ]
                     },
                     "turnId": {
