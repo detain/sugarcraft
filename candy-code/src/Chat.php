@@ -10845,7 +10845,11 @@ final class Chat implements Model
      */
     private function submitToAgents(AgentControlMsg $msg): array
     {
-        $text = trim($msg->text !== '' ? $msg->text : $this->inputBuf);
+        // ISS-051 (review fix): the mailbox is an egress exactly like submit —
+        // a run must read the paste, never the marker. The composer's text and
+        // the draft box can BOTH carry chips, so the expansion sits ahead of
+        // the choice between them.
+        $text = trim($this->expandPasteChips($msg->text !== '' ? $msg->text : $this->inputBuf));
         if ($text === '' || $msg->agentIds === []) {
             return [$this, null];
         }
@@ -16621,8 +16625,8 @@ final class Chat implements Model
     /**
      * ISS-051: replace every chip in $text with the payload it filed. Called
      * by each reader that sends the draft's text — submit, queue, the
-     * AskUser/permission answer and the scope editor, and history recording
-     * — so the model and the transcript never see the marker. Unknown or
+     * AskUser/permission answer, the scope editor and the agent-mailbox send —
+     * so the model and the transcript never see the marker. Unknown or
      * hand-edited chip text simply does not match and survives literally.
      */
     public function expandPasteChips(string $text): string

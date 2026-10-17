@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
@@ -77,6 +78,31 @@ final class AgentComposerTest extends TestCase
         $this->assertInstanceOf(AgentMessageSentMsg::class, $answer);
         $this->assertSame(AgentMessageSentMsg::QUEUED, $answer->status);
         $this->assertSame($mail[0]->msgId, $answer->msgId);
+    }
+
+    public function testTheMailboxReceivesTheExpandedPasteNeverTheChipMarker(): void
+    {
+        // ISS-051 (review fix): the mailbox is an egress like submit — the run
+        // must read the paste, not the marker.
+        $payload = implode("\n", array_map(
+            static fn (int $line): string => "hunk body line {$line}",
+            range(1, 12),
+        ));
+        $app = $this->app();
+        $chat = $app->chat;
+        $this->assertNotNull($chat);
+        [$chipped] = $chat->update(new PasteMsg($payload));
+        $this->assertStringContainsString('[Pasted text', $chipped->inputBuf, 'fixture: the big paste collapsed to a chip');
+
+        [$sent] = $app->openAgentView('run-2')->withChat($chipped)->update(new KeyMsg(KeyType::Enter));
+
+        $inbox = AgentInbox::forSession($this->session);
+        $this->assertNotNull($inbox);
+        $mail = $inbox->drain('run-2');
+        $this->assertCount(1, $mail);
+        $this->assertSame($payload, $mail[0]->text, 'the run reads the paste, never the marker');
+        $this->assertStringNotContainsString('[Pasted text', $mail[0]->text);
+        $this->assertSame('', $sent->chat?->inputBuf, 'and the composer took the draft');
     }
 
     public function testTheViewShowsTheMessageQueuedUntilTheRunLogsItDelivered(): void
