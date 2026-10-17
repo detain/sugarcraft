@@ -145,6 +145,17 @@ export async function signIn(context: BrowserContext, server: CandyCodeServer): 
     headers: { Origin: server.baseURL },
   })
   expect(response.ok()).toBe(true)
+  const body = (await response.json()) as { loginSecret?: string }
+  expect(typeof body.loginSecret).toBe('string')
+  // ISS-007: the cookie is only half the credential — every protected POST
+  // and WS ticket also carries the login secret the app keeps in
+  // localStorage. The #code exchange stores it there itself; an out-of-band
+  // sign-in must seed it the same way (last-added init script wins, so a
+  // re-sign-in after a server restart supersedes the stale secret).
+  const secret = body.loginSecret ?? ''
+  await context.addInitScript((value) => {
+    globalThis.localStorage?.setItem('candy-code-web:login-secret', value)
+  }, secret)
 }
 
 /** Open the UI signed in, and wait for the socket. */

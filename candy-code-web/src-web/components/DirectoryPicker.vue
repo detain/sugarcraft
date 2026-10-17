@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { describe } from '../stores/session'
 import { useNewSessionStore, type DirListing } from '../stores/newSession'
@@ -138,11 +138,28 @@ function onListKey(event: KeyboardEvent): void {
 }
 
 function onKey(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
+  // Guard the open state: with both the backdrop's own handler and the
+  // document listener, a keydown that starts inside the picker reaches
+  // onKey twice, and a second cancel() would resolve the start promise
+  // with no settle left to resolve.
+  if (event.key === 'Escape' && picker.pickerOpen) {
     event.preventDefault()
     picker.cancel()
   }
 }
+
+/**
+ * A div only receives keydown when it holds focus, and the backdrop does not:
+ * the browser dispatches Escape to whatever is focused (the body when nothing
+ * else is), where it bubbles to document and never touches this subtree. The
+ * unit test triggers on the element, so it could not catch this — the e2e
+ * press does. Listen where a real key actually lands, only while open.
+ */
+watch(() => picker.pickerOpen, (open) => {
+  if (open) globalThis.window?.addEventListener('keydown', onKey)
+  else globalThis.window?.removeEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => globalThis.window?.removeEventListener('keydown', onKey))
 
 watch(selected, async () => {
   await nextTick()
