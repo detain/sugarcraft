@@ -599,6 +599,15 @@ mode, `Bash{command: "rm -rf build"}`:
 | `Deny Bash*` | Deny |
 | *(no rules)* with `command: "rm -rf /"` | Deny (step 0, the breaker) |
 
+One dialect is translated on load: a Claude Code `(prefix:*)` tail
+(`Bash(rm:*)`, ISS-012) is rewritten to the native `Bash(rm *)` by
+`PermissionRule::fromClaudePrefixDialect()` as `Bootstrap::permissionRules()`
+reads it — the raw spelling passes well-formedness and matches nothing, so a
+migrated settings file silently denied nothing until this. Only that exact
+`:*)`-at-end tail translates; everything else, `WebFetch(domain:github.com)`
+included, reaches the grammar byte-identically. Foreign agent preset files
+ride the same translation at import.
+
 (This section used to be titled "Pattern matching is name-only" and to show
 `Bash(rm *)` → **Allow**. That was true while the only matcher compared the tool
 name; argument-scoped patterns have matched since the matcher moved into

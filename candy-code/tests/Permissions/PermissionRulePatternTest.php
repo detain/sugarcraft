@@ -654,4 +654,42 @@ final class PermissionRulePatternTest extends TestCase
             );
         }
     }
+    public function testTheClaudePrefixTailIsTranslatedAtTheLoadBoundary(): void
+    {
+        // ISS-012: `Bash(rm:*)` was accepted by the grammar and matched by
+        // nothing — the colon tail is Claude's spelling of a prefix rule.
+        // Bootstrap's loader translates it; everything else passes through
+        // byte-identically, warnings and rejections naming the user's text.
+        $rules = \SugarCraft\Code\Cli\Bootstrap::permissionRules([
+            'permissionRules' => [
+                ['pattern' => 'Bash(rm:*)', 'action' => 'deny'],
+                ['pattern' => 'WebFetch(domain:github.com)', 'action' => 'ask'],
+                ['pattern' => 'Bash(git *)', 'action' => 'allow'],
+            ],
+        ]);
+
+        self::assertSame('Bash(rm *)', $rules[0]->pattern, 'the translated form is what the rule carries');
+        self::assertTrue($rules[0]->matches(new \SugarCraft\Code\ToolCall('Bash', ['command' => 'rm -rf build'], 'c1')));
+        self::assertSame('WebFetch(domain:github.com)', $rules[1]->pattern, 'a colon with no * tail is not the dialect');
+        self::assertSame('Bash(git *)', $rules[2]->pattern);
+
+        $loaded = \SugarCraft\Code\Cli\Bootstrap::permissionRules([
+            'permissionRules' => [
+                ['pattern' => 'Bash(rm:**)', 'action' => 'deny'],
+            ],
+        ]);
+        self::assertCount(1, $loaded, 'the grammar, not the dialect pass, decides this one');
+        self::assertSame('Bash(rm:**)', $loaded[0]->pattern, 'a near-miss tail rides through untranslated');
+        self::assertFalse($loaded[0]->matches(new \SugarCraft\Code\ToolCall('Bash', ['command' => 'rm -rf build'], 'c1')));
+    }
+
+    public function testFromClaudePrefixDialectShapes(): void
+    {
+        self::assertSame('Bash(rm *)', PermissionRule::fromClaudePrefixDialect('Bash(rm:*)'));
+        self::assertSame('Bash(npm run *)', PermissionRule::fromClaudePrefixDialect('Bash(npm run:*)'));
+        self::assertSame('Bash(git *)', PermissionRule::fromClaudePrefixDialect('Bash(git *)'));
+        self::assertSame('WebFetch(domain:github.com)', PermissionRule::fromClaudePrefixDialect('WebFetch(domain:github.com)'));
+        self::assertSame('Bash(rm:**)', PermissionRule::fromClaudePrefixDialect('Bash(rm:**)'));
+        self::assertSame('Bash(rm:*)x', PermissionRule::fromClaudePrefixDialect('Bash(rm:*)x'), 'the tail must END the pattern');
+    }
 }

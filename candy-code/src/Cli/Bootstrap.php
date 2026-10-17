@@ -7425,7 +7425,13 @@ final class Bootstrap
             // one, so the wording lives in
             // {@see PermissionRule::patternRejectionReason()} beside the check
             // that produces it.
-            $rejection = PermissionRule::patternRejectionReason($entry['pattern']);
+            // ISS-012: a Claude-migrated `(prefix:*)` tail is translated to
+            // the native form HERE, at the load boundary, before the grammar
+            // ever sees it — the raw spelling passes well-formedness and
+            // matches nothing, which is the silent no-op this closes. The
+            // complaint below still names the user's own spelling.
+            $pattern = PermissionRule::fromClaudePrefixDialect($entry['pattern']);
+            $rejection = PermissionRule::patternRejectionReason($pattern);
             if ($rejection !== null) {
                 $complaint = Lang::t('cli.warn.rule_bad_pattern', [
                     'key' => self::PERMISSION_RULES_CONFIG_KEY,
@@ -7441,7 +7447,7 @@ final class Bootstrap
                 continue;
             }
 
-            $rules[] = new PermissionRule($entry['pattern'], $action);
+            $rules[] = new PermissionRule($pattern, $action);
         }
 
         return $rules;

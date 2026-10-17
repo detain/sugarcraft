@@ -1259,4 +1259,27 @@ final class PermissionRule
     {
         return trim((string) preg_replace('/\s+/', ' ', $value));
     }
+    /**
+     * Translate Claude Code's documented `(prefix:*)` rule tail into this
+     * product's native prefix form: `Bash(rm:*)` becomes `Bash(rm *)`
+     * (ISS-012). Accepted here by the grammar yet matched by NOTHING — the
+     * colon is not a separator any subject matcher reads — so a settings
+     * file migrated from Claude silently denied nothing.
+     *
+     * ONLY the `:*` tail is touched. Every other shape passes through
+     * byte-identically, including `WebFetch(domain:github.com)` (a colon
+     * with no `*` tail — matched natively against the url's host) and
+     * already-native `Bash(git *)`. This is a boundary translation, not a
+     * general dialect parser: {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry}
+     * applies the same one at preset-import time, and a settings file is
+     * read by {@see \SugarCraft\Code\Cli\Bootstrap::permissionRules()}
+     * instead of the registry, so the translation lives beside the grammar
+     * both readers share.
+     */
+    public static function fromClaudePrefixDialect(string $pattern): string
+    {
+        $translated = preg_replace('/\(([^()]*):\*\)$/', '($1 *)', $pattern, 1);
+
+        return is_string($translated) ? $translated : $pattern;
+    }
 }
