@@ -273,10 +273,10 @@ final class DetectClosedStdinTest extends TestCase
         $pair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
         self::assertIsArray($pair);
         fwrite($pair[1], "\x1b[?62;4;0c");
-        self::assertSame("\x1b[?62;4;0c", $read->invoke(null, 200, $pair[0]), 'the control read nothing at all');
+        self::assertSame("\x1b[?62;4;0c", $read->invoke(null, 200, $pair[0], Detect::DA1_REPLY_TERMINATOR), 'the control read nothing at all');
         fclose($pair[0]);
         fclose($pair[1]);
-        self::assertSame('', $read->invoke(null, 200, $dead), 'readStdinTimed() did not degrade on a dead handle');
+        self::assertSame('', $read->invoke(null, 200, $dead, Detect::DA1_REPLY_TERMINATOR), 'readStdinTimed() did not degrade on a dead handle');
 
         // drainStdin(): void, so the control is the pipe being emptied.
         $drain = new \ReflectionMethod(Detect::class, 'drainStdin');

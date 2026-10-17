@@ -14,6 +14,10 @@ use SugarCraft\Core\Util\TtyDetect;
  * Results are cached per-process.
  *
  * Precedence: Kitty → iTerm2 → Sixel → HalfBlock (always available).
+ *
+ * The query phase runs with the tty briefly in non-canonical, echo-off
+ * mode (ISS-048) — in cooked mode the queries echo, the replies sit
+ * behind Enter, and leftovers ride into the next reader.
  */
 final class Detect
 {
@@ -22,6 +26,24 @@ final class Detect
     private const XTWINOP_16  = "\x1b[16t";          // cell pixel size
     private const XTWINOP_18  = "\x1b[18t";          // terminal cell count
     private const TIMEOUT_MS  = 100;
+
+    /**
+     * Terminator for a DA1 reply: `` ESC [ ? <attrs> c ``.
+     *
+     * It deliberately requires the ``?`` flag byte, which no real reply
+     * omits and the query itself (`` ESC [ c ``) never carries — echoed
+     * query bytes therefore cannot terminate a read (ISS-048). Public so
+     * tests pin its polarity.
+     */
+    public const DA1_REPLY_TERMINATOR = '/\e\[\?[\d;]*c/';
+
+    /**
+     * Terminator for an XTWINOPS 14/16/18 reply: every real answer carries
+     * the mode id and at least one ``;`` parameter before the ``t``
+     * (``ESC [ 6 ; h ; w t``), which the queries (``ESC [ 16t`` …) never
+     * do — echo-safe by the same argument as the DA1 pattern.
+     */
+    public const XTWINOPS_REPLY_TERMINATOR = '/\e\[[468];[\d;]*t/';
 
     /** @var resource|null */
     private static $probeStdin = null;
@@ -47,6 +69,24 @@ final class Detect
      * on xterm-compatible terminals that have no identifying env var.
      */
     public static function probe(): Capability
+    {
+        // ISS-048: every path below writes query bytes and waits ≤100 ms for
+        // a reply. In the terminal's default COOKED mode that exchange is
+        // broken three ways: the query echoes to the screen, the reply only
+        // becomes readable after Enter, and any bytes left unread when we
+        // stop waiting ride into the next reader — for candy-code, out of
+        // the launcher and into the user's bash. Put the tty in
+        // non-canonical, echo-off mode for exactly the query phase, and
+        // restore whatever settings it had even if a probe throws.
+        $restore = self::enterQueryMode();
+        try {
+            return self::probeQueries();
+        } finally {
+            self::exitQueryMode($restore);
+        }
+    }
+
+    private static function probeQueries(): Capability
     {
         $inTmux = getenv('TMUX') !== false;
 
@@ -128,10 +168,10 @@ final class Detect
         // Note: we intentionally skip a pre-read drain here.  In a real
         // interactive terminal any stale bytes before our query are
         // unlikely (we're the only thing writing), and even if some
-        // arrive they can't be confused for a valid DA1 reply because
-        // that reply always ends with the 'c' terminator we haven't
-        // sent yet.  In tests, pre-loading the reply avoids any
-        // drain-then-read race condition.
+        // arrive they can't be confused for a valid DA1 reply: the
+        // reply shape requires the '?' flag byte the query never carries,
+        // and the read only stops on it (ISS-048).  In tests, pre-loading
+        // the reply avoids any drain-then-read race condition.
 
         // Write DA1 query to stdout (terminal receives it as input).
         $written = @fwrite(STDOUT, self::DA1_QUERY);
@@ -141,7 +181,7 @@ final class Detect
         fflush(STDOUT);
 
         // Read the reply from stdin (terminal echoes it back).
-        $reply = self::readStdinTimed(self::TIMEOUT_MS, $fd);
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::DA1_REPLY_TERMINATOR);
         self::$lastDa1Reply = $reply;
 
         if ($reply === '') {
@@ -191,7 +231,8 @@ final class Detect
 
     /**
      * Read available bytes from stdin until $timeoutMs elapses or the
-     * full DA1 reply is received.  Returns '' on timeout.
+     * buffer matches $replyTerminator (a PCRE pattern naming the reply's
+     * shape).  Returns '' on timeout.
      *
      * Null means {@see stdinFd()} found no usable descriptor 0. '' is already
      * this method's no-answer value and every caller handles it, so a dead
@@ -200,7 +241,7 @@ final class Detect
      *
      * @param resource|null $fd
      */
-    private static function readStdinTimed(int $timeoutMs, $fd): string
+    private static function readStdinTimed(int $timeoutMs, $fd, string $replyTerminator): string
     {
         if (!\is_resource($fd)) {
             return '';
@@ -227,8 +268,10 @@ final class Detect
             }
             $buf .= $chunk;
 
-            // DA1 reply terminates with ESC [ ... c
-            if (str_contains($buf, "\x1b[c")) {
+            // Break on the REPLY's shape (ISS-048). This used to scan for
+            // the QUERY bytes "\x1b[c", which a reply never contains — the
+            // read then always ran the full 100 ms budget.
+            if (preg_match($replyTerminator, $buf) === 1) {
                 break;
             }
         }
@@ -313,6 +356,49 @@ final class Detect
     }
 
     /**
+     * Switch the controlling tty to non-canonical, echo-off mode for the
+     * query phase, returning the `stty -g` snapshot that undoes it — or
+     * null when this process must not touch a terminal at all.
+     *
+     * WHY IT CAN BE NULL, in order (ISS-048):
+     *  - a probe stdin was injected (tests, harnesses): the real tty is
+     *    not the stream under test, and re-setting it would be a side
+     *    effect on the developer's own terminal for an exchange that
+     *    never happens;
+     *  - not an interactive tty: nothing echoes, nothing canonicalises,
+     *    so there is nothing to fix;
+     *  - `stty -g` answered empty (no `stty` binary, exotic terminal):
+     *    restoring would then be impossible, and a probe stuck in
+     *    raw mode is worse than one that echoes.
+     *
+     * `shell_exec` inherits our fd 0, so stty operates on exactly the
+     * descriptor the probes read from.
+     */
+    private static function enterQueryMode(): ?string
+    {
+        if (self::$probeStdin !== null || !self::isInteractiveTty()) {
+            return null;
+        }
+
+        $saved = trim((string) shell_exec('stty -g 2>/dev/null'));
+        if ($saved === '') {
+            return null;
+        }
+        shell_exec('stty -icanon -echo min 1 time 0 2>/dev/null');
+
+        return $saved;
+    }
+
+    /** Put back what {@see enterQueryMode()} snapshot; null means it never took anything off. */
+    private static function exitQueryMode(?string $saved): void
+    {
+        if ($saved === null) {
+            return;
+        }
+        shell_exec('stty ' . escapeshellarg($saved) . ' 2>/dev/null');
+    }
+
+    /**
      * Parse a raw DA1 reply string.
      *
      * The reply format is `` ESC [ <primary> ; <secondary> ; ... c ``.
@@ -388,7 +474,7 @@ final class Detect
         fflush(STDOUT);
 
         // Read the response with a tight timeout (terminal responds fast).
-        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd());
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd(), self::XTWINOPS_REPLY_TERMINATOR);
 
         return self::parseXtwinoReply($reply, $query);
     }
@@ -406,7 +492,7 @@ final class Detect
         }
         fflush(STDOUT);
 
-        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd());
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd(), self::XTWINOPS_REPLY_TERMINATOR);
 
         return self::parseXtwinoReply($reply, self::XTWINOP_18);
     }

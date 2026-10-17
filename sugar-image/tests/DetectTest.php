@@ -609,6 +609,114 @@ final class DetectTest extends TestCase
         $this->assertSame(12, $cap->cellSize->cellHeight);
     }
 
+    /**
+     * ISS-048: the reply terminators key on the REPLY shapes only. The old
+     * read scanned for the query bytes "\x1b[c", which a reply never
+     * contains, so every DA1 read burned its full timeout — and echoed
+     * query bytes must never satisfy the scan either.
+     */
+    public function testTheReplyTerminatorsMatchRepliesNotQueries(): void
+    {
+        foreach (["\x1b[?62;4;0c", "\x1b[?4c", "\x1b[?1;2;4c"] as $reply) {
+            $this->assertSame(1, preg_match(Detect::DA1_REPLY_TERMINATOR, $reply), "DA1 terminator rejected {$this->escape($reply)}");
+        }
+        foreach (["\x1b[c", "\x1b[?16", "plain"] as $notAReply) {
+            $this->assertSame(0, preg_match(Detect::DA1_REPLY_TERMINATOR, $notAReply), "DA1 terminator accepted {$this->escape($notAReply)}");
+        }
+
+        foreach (["\x1b[6;20;10t", "\x1b[4;480;800t", "\x1b[8;24;80t"] as $reply) {
+            $this->assertSame(1, preg_match(Detect::XTWINOPS_REPLY_TERMINATOR, $reply), "XTWINOPS terminator rejected {$this->escape($reply)}");
+        }
+        // The queries are ESC [ <digits> t — no ';' before the 't', so an
+        // echoed query byte string can never end a read.
+        foreach (["\x1b[16t", "\x1b[14t", "\x1b[18t", "\x1b[c"] as $notAReply) {
+            $this->assertSame(0, preg_match(Detect::XTWINOPS_REPLY_TERMINATOR, $notAReply), "XTWINOPS terminator accepted {$this->escape($notAReply)}");
+        }
+    }
+
+    /** Escape the control bytes so a failure message names them legibly. */
+    private function escape(string $bytes): string
+    {
+        return str_replace("\x1b", 'ESC', $bytes);
+    }
+
+    /**
+     * ISS-048, behaviour side: a complete reply ends the read long before
+     * the timeout budget, and an incomplete one still runs it out (the
+     * terminator discriminates, it does not merely fire on first contact).
+     */
+    public function testAPreloadedReplyEndsTheReadBeforeItsTimeout(): void
+    {
+        $read = new \ReflectionMethod(Detect::class, 'readStdinTimed');
+
+        $pair = $this->createStreamPair();
+        @fwrite($pair['write'], "\x1b[?62;4;0c");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $start = hrtime(true);
+        $buf   = $read->invoke(null, 400, $pair['read'], Detect::DA1_REPLY_TERMINATOR);
+        $tookMs = (hrtime(true) - $start) / 1_000_000;
+
+        $this->assertSame("\x1b[?62;4;0c", $buf);
+        $this->assertLessThan(300, $tookMs, "the full reply arrived yet the read still timed out ({$tookMs} ms)");
+
+        $half = $this->createStreamPair();
+        @fwrite($half['write'], "\x1b[?62;4");
+        @fflush($half['write']);
+        usleep(20_000);
+
+        $start = hrtime(true);
+        $buf   = $read->invoke(null, 100, $half['read'], Detect::DA1_REPLY_TERMINATOR);
+        $tookMs = (hrtime(true) - $start) / 1_000_000;
+
+        $this->assertSame("\x1b[?62;4", $buf, 'an unterminated reply must still come back for the parser');
+        $this->assertGreaterThanOrEqual(90, $tookMs, 'the read abandoned its budget on an incomplete reply');
+
+        @fclose($pair['write']);
+        @fclose($half['write']);
+    }
+
+    /**
+     * ISS-048 guard: enterQueryMode() must never touch the developer's
+     * real terminal for an exchange that reads from an injected stream or
+     * from no interactive tty at all.
+     */
+    public function testEnterQueryModeStaysOffTheRealTerminalForInjectedProbes(): void
+    {
+        $enter = new \ReflectionMethod(Detect::class, 'enterQueryMode');
+
+        $pair = $this->createStreamPair();
+        Detect::setProbeStdin($pair['read']);
+        $this->assertNull($enter->invoke(null), 'an injected probe stdin still entered raw mode on the real tty');
+
+        Detect::setProbeStdin(null);
+        $GLOBALS['__candy_non_interactive'] = true;
+        $this->assertNull($enter->invoke(null), 'a non-interactive process still tried to re-set the terminal');
+
+        $exit = new \ReflectionMethod(Detect::class, 'exitQueryMode');
+        $exit->invoke(null, null); // null snapshot = never took anything off; must no-op
+        $this->assertTrue(true, 'exitQueryMode(null) threw');
+
+        // Wiring: probe() must actually bracket the query phase, restoring
+        // even on a throw (finally). A pipe harness can never observe the
+        // stty side, so the call structure itself is the pin.
+        $probe = new \ReflectionMethod(Detect::class, 'probe');
+        $body  = implode('', array_slice(
+            file($probe->getFileName()),
+            $probe->getStartLine() - 1,
+            $probe->getEndLine() - $probe->getStartLine() + 1,
+        ));
+        $this->assertStringContainsString('self::enterQueryMode()', $body, 'probe() no longer arms raw mode');
+        $this->assertStringContainsString('try {', $body);
+        $this->assertStringContainsString('finally {', $body, 'the restore is not on the throw path');
+        $this->assertStringContainsString('self::exitQueryMode($restore)', $body);
+        $this->assertStringContainsString('self::probeQueries()', $body);
+
+        @fclose($pair['read']);
+        @fclose($pair['write']);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
