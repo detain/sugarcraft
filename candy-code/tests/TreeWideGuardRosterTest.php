@@ -617,6 +617,9 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($this->worktreesBase)',
         ],
         'LSP/LspConnectionStdinWedgeTest.php' => ['scandir($dir)'],
+        // sweepChildHome() empties the 0700 sandbox HOME the ISS-125 locale
+        // launch made (however deep the child wrote) before removing it.
+        'LangLaunchLocaleTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'MCP/McpClientTest.php' => ['glob($this->tempDir.\'/*\')'],
         // removeTree() tears down the serve state dir the test made under its sandbox.
         'Server/ServeStatusStopTest.php' => ['scandir($path)'],

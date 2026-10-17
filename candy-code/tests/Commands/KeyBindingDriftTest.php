@@ -2526,8 +2526,7 @@ final class KeyBindingDriftTest extends TestCase
      * `mouse.palette-row`) assert the row RAN rather than that something
      * changed. Its index is looked up in the live match list every time, never
      * hardcoded: the order is a scoring decision, not a declaration order.
-     */
-    /**
+     *
      * The row the palette fixtures highlight and run. ISS-034 renamed the
      * `/agents` palette row from 'Switch agent' to the honest 'List agents',
      * which dropped it from the 'switch'-filtered match list and moved
