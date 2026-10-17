@@ -153,7 +153,7 @@ return [
     'cli.doctor.mode' => 'mode {mode}',
     'cli.doctor.mode_split' => 'mode {tui} in the TUI, {headless} for -p and background sessions (built-in defaults)',
     'cli.doctor.no_problems' => 'No problems detected.',
-    'cli.doctor.pdo' => 'pdo_{driver} {state}; ext-sqlite3 (declared in composer.json, unused by the code) {sqlite3}',
+    'cli.doctor.pdo' => 'pdo_{driver} {state}; ext-sqlite3 {sqlite3} — the Team task list opens SQLite3 directly',
     'cli.doctor.pdo_unusable' => 'UNUSABLE — the session store cannot open its database: {error}',
     'cli.doctor.pdo_usable' => 'usable',
     'cli.doctor.php' => '{version} at {binary}',

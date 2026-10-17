@@ -127,5 +127,11 @@ final class DoctorExtensionProbesTest extends TestCase
         $pdoSlice = substr($src, (int) strpos($src, 'private static function pdoDriverProbe'));
         $pdoSlice = substr($pdoSlice, 0, (int) strpos($pdoSlice, "\n    }"));
         $this->assertStringContainsString('new \\PDO($dsn)', $pdoSlice);
+
+        // ISS-083: the sqlite3 half of the row is the EXERCISED construction
+        // TaskList performs, not a returned `extension_loaded` string — a
+        // regression to name-checking must not hide behind the DSN probe.
+        $this->assertStringContainsString('self::sqlite3Exercise()', $pdoSlice);
+        $this->assertStringNotContainsString("extension_loaded('sqlite3')", $pdoSlice);
     }
 }

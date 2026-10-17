@@ -1938,6 +1938,18 @@ final class BinCandyCodeDispatchTest extends TestCase
         $this->assertSame('OK', $good['status'], (string) $good['detail']);
         $this->assertStringContainsString('pdo_sqlite usable', (string) $good['detail']);
 
+        // ISS-083: the detail names the REAL consumer instead of claiming the
+        // extension is "unused by the code" (TaskList's Team task list opens
+        // it on every launch), and an absent ext-sqlite3 FAILS the row — the
+        // branch no host here reaches by unloading a declared extension, so
+        // the seam drives it directly.
+        $this->assertStringContainsString('Team task list', (string) $good['detail']);
+
+        $noSqlite3 = $probe->invoke(null, $dsn, false);
+        $this->assertSame('FAIL', $noSqlite3['status'], (string) $noSqlite3['detail']);
+        $this->assertStringContainsString('ext-sqlite3 absent', (string) $noSqlite3['detail']);
+        $this->assertStringNotContainsString('unused by the code', (string) $noSqlite3['detail']);
+
         // The branch no host can reach by unloading an extension.
         $bad = $probe->invoke(null, 'nosuchdriver:whatever');
         $this->assertSame('FAIL', $bad['status'], (string) $bad['detail']);

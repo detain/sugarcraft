@@ -244,14 +244,19 @@ final class Subcommands
      * The linkage is asserted, not asserted-about: a test compares this
      * scheme against the DSN literal in SessionStore's own source, because a
      * probe of some OTHER driver would report a green install on a box where
-     * every session write fatals — which is exactly what checking the
-     * manifest's `ext-sqlite3` (declared, and called by nothing in src/) would
-     * have done.
+     * every session write fatals.
+     *
+     * ISS-083 corrects the old tail clause ("`ext-sqlite3` is declared and
+     * called by nothing in src/"): it was never true — {@see
+     * \SugarCraft\Code\Agents\TaskList} opens `new \SQLite3` for the Team
+     * task list, and the Team tool ships on every launch. Both halves are
+     * therefore exercised here, and an absent `ext-sqlite3` FAILS the probe
+     * the same way the mbstring/intl probes fail: the manifest declares it.
      */
     private const SESSION_STORE_PROBE_DSN = 'sqlite::memory:';
 
     /**
-     * Can PDO actually open this DSN?
+     * Can PDO actually open this DSN, and can `ext-sqlite3` open a database?
      *
      * EXERCISED, not name-checked. `extension_loaded('pdo_sqlite')` was the
      * earlier spelling and it encodes an extension NAME — swap the name for a
@@ -260,9 +265,16 @@ final class Subcommands
      * is no name left to get wrong, and the failing branch is reachable in a
      * test by handing it a DSN no driver claims.
      *
+     * The sqlite3 half (ISS-083) is the act {@see
+     * \SugarCraft\Code\Agents\TaskList} performs: constructing the class and
+     * opening `:memory:` — a name check would call an install broken-or-fine
+     * from a string rather than from the capability. `$sqlite3Available` is
+     * the test seam for the branch no host here can reach by unloading a
+     * declared extension; production callers omit it.
+     *
      * @return array{status: string, detail: string}
      */
-    private static function pdoDriverProbe(string $dsn): array
+    private static function pdoDriverProbe(string $dsn, ?bool $sqlite3Available = null): array
     {
         $driver = \strtok($dsn, ':');
         $driver = $driver === false ? $dsn : $driver;
@@ -276,14 +288,35 @@ final class Subcommands
             $usable = false;
         }
 
+        $sqlite3Ok = $sqlite3Available ?? self::sqlite3Exercise();
+
         return [
-            'status' => $usable ? 'OK' : 'FAIL',
+            // ISS-083: `ext-sqlite3` is declared in composer.json and opened
+            // directly by the Team task list, so its absence FAILS — the same
+            // doctrine as the declared mbstring/intl probes below. WARN would
+            // tell the user "usable" and the first Team call would fatal.
+            'status' => $usable && $sqlite3Ok ? 'OK' : 'FAIL',
             'detail' => Lang::t('cli.doctor.pdo', [
                 'driver' => $driver,
                 'state' => $state,
-                'sqlite3' => \extension_loaded('sqlite3') ? Lang::t('cli.doctor.loaded') : Lang::t('cli.doctor.absent'),
+                'sqlite3' => $sqlite3Ok ? Lang::t('cli.doctor.loaded') : Lang::t('cli.doctor.absent'),
             ]),
         ];
+    }
+
+    /**
+     * Perform the construction the Team task list performs ({@see
+     * \SugarCraft\Code\Agents\TaskList}, `new \SQLite3($dbPath)`), against
+     * `:memory:` so no file is touched. Returns false when the class is
+     * absent or refuses the open — the capability, not its name.
+     */
+    private static function sqlite3Exercise(): bool
+    {
+        try {
+            return (new \SQLite3(':memory:'))->querySingle('SELECT 1;') === 1;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
