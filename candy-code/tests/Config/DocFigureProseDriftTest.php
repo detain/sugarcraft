@@ -6328,15 +6328,16 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * Audit 15d-19: SETTINGS.md's "only N keys actually change behaviour
-     * mid-session" sentence said two (`parallelToolCalls`,
-     * `parallelToolDeadlineSeconds`) for as long as `maxOutputTokens` had
-     * been riding the same per-turn read — nothing pinned the figure to the
-     * method that does the reading. Both the spelled count and the named
-     * list are now DERIVED from `EngineBackend::runTurn()`: every use of the
-     * per-turn config variable must be a `self::<resolver>($var)` call, and
-     * each resolver's `$config[self::CONST]` lookups name the keys. The
-     * project-tier caveat after it is derived from PROJECT_TIER_KEYS.
+     * Audit 15d-19 + ISS-119(b): SETTINGS.md's per-turn sentence once claimed
+     * ONLY the derived trio changed behaviour mid-session — a figure pinned
+     * to `EngineBackend::runTurn()`'s own read, but contradicting the badge
+     * roster the same page generates (the whole `next turn` set re-reads at
+     * every turn start, in the turn child). The sentence now states the
+     * roster first and the trio as the EngineBackend-internal subset, still
+     * DERIVED from `runTurn()`: every use of the per-turn config variable
+     * must be a `self::<resolver>($var)` call, and each resolver's
+     * `$config[self::CONST]` lookups name the keys. The project-tier caveat
+     * names a key PROJECT_TIER_KEYS refuses.
      */
     public function testPerTurnReappliedKeysSentenceNamesExactlyWhatRunTurnReads(): void
     {
@@ -6384,35 +6385,49 @@ final class DocFigureProseDriftTest extends TestCase
         $settings = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md'));
         $words = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
 
+        self::assertStringNotContainsString(
+            'only three keys actually change behaviour mid-session',
+            $settings,
+            'ISS-119(b): the whole-set "only N keys" claim is back — it contradicts the badge roster the same page generates',
+        );
         self::assertSame(
             1,
-            preg_match('/only (\w+) keys actually change behaviour mid-session\. That per-turn read feeds exactly (\w+) settings — (.*?) — so/', $settings, $claim),
-            'the "only N keys actually change behaviour mid-session" sentence in docs/SETTINGS.md was reworded out from under this arm — re-establish the pin, do not delete it',
+            preg_match('/the entire `next turn` roster in the table above, not three keys: every key badged there resolves its value afresh at turn start — (\w+) of them inside `EngineBackend` itself \((.*?)\) and the rest at the site/', $settings, $claim),
+            'the per-turn sentence in docs/SETTINGS.md was reworded out from under this arm — re-establish the pin, do not delete it',
         );
-        self::assertSame(count($keys), $words[$claim[1]] ?? -1, "SETTINGS.md says {$claim[1]} keys change mid-session — runTurn() re-applies " . count($keys) . ' (' . implode(', ', $keys) . ')');
-        self::assertSame(count($keys), $words[$claim[2]] ?? -1, "SETTINGS.md says the per-turn read feeds exactly {$claim[2]} settings — runTurn() feeds " . count($keys));
-        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $claim[3], $named);
+        self::assertSame(count($keys), $words[$claim[1]] ?? -1, "SETTINGS.md says {$claim[1]} of them resolve inside EngineBackend — runTurn() feeds " . count($keys) . ' (' . implode(', ', $keys) . ')');
+        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $claim[2], $named);
         $sortedNamed = $named[1];
         sort($sortedNamed);
         $sortedKeys = $keys;
         sort($sortedKeys);
-        self::assertSame($sortedKeys, $sortedNamed, 'the per-turn key list in SETTINGS.md no longer names exactly the keys runTurn() resolves off its per-turn config');
+        self::assertSame($sortedNamed, $sortedKeys, 'the EngineBackend-internal list in SETTINGS.md no longer names exactly the keys runTurn() resolves off its per-turn config');
         self::assertStringContainsString('`EngineBackend::runTurn()`, the loop behind `complete()`, calls `readUserConfig()` once per turn', $settings, 'the "re-read every turn" sentence no longer names runTurn() as the per-turn reader');
+
+        // The roster claim: the badge set must be wider than the trio, and the
+        // trio must ride inside it — the sentence leans on both.
+        $nextTurn = [];
+        foreach (\SugarCraft\Code\Config\Settings\SettingsSchema::all() as $definition) {
+            if ($definition->applyMode === \SugarCraft\Code\Config\Settings\ApplyMode::NextTurn) {
+                $nextTurn[] = $definition->key;
+            }
+        }
+        self::assertGreaterThan(count($keys), count($nextTurn), 'the next-turn badge no longer outnumbers the EngineBackend-internal trio — the prose calls the roster "not three keys", a claim that needs the roster to be the wider set');
+        foreach ($keys as $key) {
+            self::assertContains($key, $nextTurn, "SETTINGS.md calls `{$key}` an EngineBackend-internal next-turn key — the schema no longer badges it next turn");
+        }
 
         self::assertSame(
             1,
-            preg_match('/`\.candy-code\/settings\.local\.json` reaches only the first (\w+), because `(\w+)` is a key no project file may set/', $settings, $tier),
-            'the project-tier caveat after the per-turn list was reworded out from under this arm',
+            preg_match('/reaches only the `P`-tier subset of that roster — `([a-zA-Z][\w.]*)`, for one, is a key no project file may set/', $settings, $tier),
+            'the project-tier caveat after the roster sentence was reworded out from under this arm',
         );
         $projectKeys = (new \ReflectionClassConstant(\SugarCraft\Code\Config\LayeredSettings::class, 'PROJECT_TIER_KEYS'))->getValue();
-        $first = $words[$tier[1]] ?? -1;
-        self::assertSame(
-            array_values(array_filter($named[1], static fn (string $k): bool => in_array($k, $projectKeys, true))),
-            array_slice($named[1], 0, $first),
-            'the "reaches only the first N" caveat no longer counts the per-turn keys PROJECT_TIER_KEYS lets a project set — or the list is no longer ordered project-settable first',
+        self::assertNotContains($tier[1], $projectKeys, "the caveat says no project file may set `{$tier[1]}` — PROJECT_TIER_KEYS now lists it");
+        self::assertNotEmpty(
+            array_intersect($keys, $projectKeys),
+            'the caveat promises a project-settable subset, yet no EngineBackend-internal next-turn key is in PROJECT_TIER_KEYS — recheck the subset claim before restoring the sentence',
         );
-        self::assertSame(array_slice($named[1], $first), [$tier[2]], 'the caveat names a different user-tier-only per-turn key than the list leaves after the first N');
-        self::assertNotContains($tier[2], $projectKeys, "the caveat says no project file may set `{$tier[2]}` — PROJECT_TIER_KEYS now lists it");
     }
 
     /**

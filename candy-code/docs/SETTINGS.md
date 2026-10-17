@@ -1300,6 +1300,9 @@ Saved is not applied: see the next section for when each key takes effect.
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
+**In numbers:** thirty-five live, fifty-five next turn, sixty-five restart and
+seven next launch.
+
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
 `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -1345,14 +1348,20 @@ and starts from the files alone.
 `complete()`, calls `readUserConfig()` once per turn, so all four are opened
 again each time.
 
-**Re-read is not the same as re-applied**, and only three keys actually change
-behaviour mid-session. That per-turn read feeds exactly three settings —
-`parallelToolCalls`, `parallelToolDeadlineSeconds` and `maxOutputTokens` — so
-editing your own `~/.candy-code/config.json` or `~/.candy-code/settings.json`
-mid-session changes those on the next turn and nothing else. A trusted project's
-`.candy-code/settings.local.json` reaches only the first two, because
-`maxOutputTokens` is a key no project file may set. Every other key is
-consumed once, while `Bootstrap` builds the session: `disabledSkills` is read
+**Re-read is not the same as re-applied**, but what the per-turn read feeds is
+the entire `next turn` roster in the table above, not three keys: every key
+badged there resolves its value afresh at turn start — three of them inside
+`EngineBackend` itself (`parallelToolCalls`, `parallelToolDeadlineSeconds` and
+`maxOutputTokens`) and the rest at the site that uses them — so editing your
+own `~/.candy-code/config.json` or `~/.candy-code/settings.json` mid-session
+changes all of them from the next turn. A trusted project's
+`.candy-code/settings.local.json` reaches only the `P`-tier subset of that
+roster — `maxOutputTokens`, for one, is a key no project file may set. The
+`live` badge describes a save through the settings view — a save drops the
+values the session holds in memory, where a hand edit rewrites only the file.
+For everything outside the `next turn` roster the hand edit waits for the next
+launch: the values are consumed once while `Bootstrap` builds the session —
+`disabledSkills` is read
 by `Bootstrap::skillRegistry()` at launch (and again on a Ctrl+P skill
 switch), `theme` and `provider` when the `Chat` is constructed, `models` whenever a backend is built for a provider (at launch and on a `/model` switch), `disabledRules` when the launch seeds the session's `RulesState`
 — a mid-session edit to that file waits for a restart like the rest, though a

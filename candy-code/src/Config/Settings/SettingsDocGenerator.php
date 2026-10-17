@@ -172,6 +172,21 @@ final class SettingsDocGenerator
             }
         }
 
+        // ISS-119(b): the prose under this region used to hand-count "three
+        // keys" and drifted against the badge. The counts are schema
+        // metadata — say them here, where SettingsSchemaDocDriftTest byte-
+        // polices the region, and let the prose point at the roster instead
+        // of restating a number it cannot keep fresh.
+        $lines[] = '';
+        $counts = [];
+        foreach (ApplyMode::cases() as $mode) {
+            if (isset($byMode[$mode->value])) {
+                $counts[] = self::spell(count($byMode[$mode->value])) . ' ' . $mode->badge();
+            }
+        }
+        $tail = array_pop($counts);
+        $lines[] = self::wrap('**In numbers:** ' . implode(', ', $counts) . ' and ' . $tail . '.');
+
         $lines[] = '';
         $lines[] = self::wrap('**This session only** accepts ' . self::codeList(SettingsWriter::sessionKeys(), ', ', ' and ') . '.');
 
