@@ -185,9 +185,13 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         // The command PRINTS "twig" without CONTAINING it, because a refusal
         // notice quotes the command it declined — so a command whose text held
         // its own output would make the assertion below unfalsifiable.
-        $this->projectCommand('branch', 'On !`touch ' . $marker . ' && printf %s%s tw ig` now.');
+        // (ISS-036: the name must not shadow a built-in — an untrusted project
+        // shadow of a built-in is now refused at load and never reaches the
+        // model at all; that path is pinned in CommandLoaderTest and
+        // CustomCommandDispatchTest, not here.)
+        $this->projectCommand('shipnote', 'On !`touch ' . $marker . ' && printf %s%s tw ig` now.');
 
-        $sent = $this->submit('/branch');
+        $sent = $this->submit('/shipnote');
 
         $this->assertFileDoesNotExist($marker, 'the command must not have run at all');
         $this->assertStringNotContainsString('twig', $sent);

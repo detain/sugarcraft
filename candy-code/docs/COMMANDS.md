@@ -31,10 +31,18 @@ Three tiers, merged by name, later overriding earlier
 and the walk is capped at `CommandLoader::MAX_DEPTH` levels deep — which also
 bounds a symlink cycle inside the directory.
 
-A project file **may override a built-in** by name, and does: `Chat` keeps the
-merged map minus everything that is still a built-in row, so a file-based
-override survives the filter while the built-ins stay reachable through their own
-dispatch arms (keeping both would list every built-in twice in the "/" popup).
+A file-based command **may override a built-in** by name — a user-tier file
+always may, and a project-tier file only when its root is listed under
+`trustedProjectCommands`. An untrusted project shadow is refused at load onto
+`CommandLoader::refusedCommands()` and reported at launch exactly like a
+control-plane grab: the file never reaches the model and the built-in keeps its
+behaviour. Every override that *is* allowed records its announcement on
+`CommandLoader::overrides()` (name, tier and winning path). `Chat` keeps the
+merged map minus everything that is still a built-in row, so an allowed
+override survives the filter while the built-ins stay reachable through their
+own dispatch arms (keeping both would list every built-in twice in the "/"
+popup). A file row carries its tier as `CommandSpec::tierBadge()` — `[user]`
+or `[project]` — so the popup can show which file is about to run.
 
 ### Except the control plane
 
@@ -289,8 +297,8 @@ properties this key shares with `trustedProjectHooks`, `trustedProjectMcp` and
 
 ## The built-in commands
 
-For reference, since a custom command can override any built-in except the names
-`CommandRegistry::CONTROL_PLANE` reserves. The rows below are
+For reference, since a custom command can override any built-in — subject to the
+trust rule above — except the names `CommandRegistry::CONTROL_PLANE` reserves. The rows below are
 `CommandRegistry::all()` in that method's order — a command appears here because
 the registry defines it and not because anyone counted them — and the two marker
 columns are the same two derivations read off the same source: **S** marks a row

@@ -81,12 +81,15 @@ final class CommandLoader
     /**
      * The env var that puts this loader's refusals back on stderr.
      *
-     * OFF BY DEFAULT. Three of the five `error_log()` calls below are paired
+     * OFF BY DEFAULT. Four of the seven `report()` calls below are paired
      * with a collector that {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
      * drains onto the transcript seam, so by default they were saying the same
-     * thing twice on one channel; the other two
+     * thing twice on one channel; two more
      * ({@see loadFromDirectory()}'s containment skip and its parse failure) are
-     * per-FILE and are collected on {@see skippedFiles()} instead. Nothing is
+     * per-FILE and are collected on {@see skippedFiles()} instead. The seventh
+     * — {@see $overrides}'s accepted-shadow announcement — is paired with
+     * nothing yet: {@see overrides()} is readable and no launch seam drains it,
+     * so this flag is currently its only reader. Nothing is
      * dropped either way — see {@see $refusedDirectories} for the routing
      * argument and {@see \SugarCraft\Code\Skills\SkillLoader::DEBUG_SKIPS_ENV}
      * for the contract this copies. Since E172 (round 70) the skipped-file
@@ -215,6 +218,16 @@ final class CommandLoader
     private array $refusedCommands = [];
 
     /**
+     * Built-in names a surviving file row replaced, name => one-line report
+     * (ISS-036). The counterpart of {@see $refusedCommands} on the allowed
+     * side of the trust rule: a user-tier file, or a project-tier one under a
+     * trusted root, wins by design — what it must not win is silence.
+     *
+     * @var array<string, string>
+     */
+    private array $overrides = [];
+
+    /**
      * name => the `*.md` it was last read from, so a refusal can name a path
      * the user can open rather than a bare command name.
      *
@@ -293,6 +306,18 @@ final class CommandLoader
     public function refusedCommands(): array
     {
         return $this->refusedCommands;
+    }
+
+    /**
+     * Which built-ins this load's surviving file rows replaced, name => report
+     * line — the ISS-036 launch notice's source. Empty until {@see loadAll()}
+     * has run, like every other collection on this instance.
+     *
+     * @return array<string, string>
+     */
+    public function overrides(): array
+    {
+        return $this->overrides;
     }
 
     /**
@@ -490,7 +515,33 @@ final class CommandLoader
     /**
      * Every command both surfaces should know about: built-in rows first,
      * then user files, then project files - each tier overriding the previous
-     * tier's row of the same name.
+     * tier's row of the same name, EXCEPT where two rules take names back:
+     *
+     *  - the control plane (below) is never file-based, whatever the tier;
+     *  - since ISS-036, a PROJECT-tier file may not replace a built-in unless
+     *    $projectCommandsTrusted - the same `trustedProjectCommands` grant the
+     *    `` !`cmd` `` form needs. The control-plane reservation exists because
+     *    "a file that could replace it could falsify the check"; COMMANDS.md
+     *    reserves `/permissions` with that sentence, and the same argument
+     *    covers `/notices` (the file that hides the launch warnings, including
+     *    its own refusal), `/mcp`, `/context`, `/agents`, `/undo`, `/rewind`
+     *    and `/diff`. Nine reserved names were a list without a principle;
+     *    the principle is that a `git clone` may ADD names and may replace
+     *    another file's rows, but it may not silently replace a command the
+     *    operator typed into every tool-using model turn.
+     *
+     * $projectCommandsTrusted is the ANSWER Bootstrap resolved once at launch
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::projectCommandShellIsTrusted()})
+     * and {@see \SugarCraft\Code\Chat} carries in its own ctor - the same
+     * pass-the-answer-not-the-ability-to-ask reasoning that keeps the trust
+     * list frozen for the process. DEFAULT FALSE: a caller that never asks
+     * gets the refusing behaviour, which is the direction to be wrong in.
+     *
+     * A built-in replacement that DID happen - user tier, or project tier on
+     * a trusted root - is recorded on {@see overrides()} for the launch
+     * report, and reaches stderr with the other per-name details when
+     * {@see DEBUG_REFUSALS_ENV} is on. A refused one lands on the existing
+     * {@see refusedCommands()} seam Bootstrap already drains.
      *
      * Keyed by name (unlike {@see CommandRegistry::all()}'s list) because
      * override-by-name is the whole point of the tiering: a project
@@ -499,18 +550,17 @@ final class CommandLoader
      *
      * @return array<string, CommandSpec>
      */
-    public function loadAll(string $projectRoot = '.'): array
+    public function loadAll(string $projectRoot = '.', bool $projectCommandsTrusted = false): array
     {
         $builtIn = [];
         foreach (CommandRegistry::all() as $spec) {
             $builtIn[$spec->name] = $spec;
         }
 
-        $merged = array_merge(
-            $builtIn,
-            $this->loadUserCommands(),
-            $this->loadProjectCommands($projectRoot),
-        );
+        $user = $this->loadUserCommands();
+        $project = $this->loadProjectCommands($projectRoot);
+
+        $merged = array_merge($builtIn, $user, $project);
 
         // THE CONTROL PLANE IS NOT OVERRIDABLE. Everything above this line is
         // the override the tiering exists for; this loop takes back the seven
@@ -547,6 +597,54 @@ final class CommandLoader
             } else {
                 unset($merged[$reserved]);
             }
+        }
+
+        // ISS-036's trust half, AFTER the control-plane loop so the reserved
+        // names keep their existing refusal order and wording, and iterated
+        // over the BUILT-IN map so the refusals this one adds arrive in the
+        // registry's own order rather than whichever directory walk produced
+        // the winner. A PROJECT-tier file that won a built-in's name answers a
+        // keystroke the operator meant for the shipped command, so it needs
+        // the same grant the `` !`cmd` `` form needs; an untrusted one is
+        // replaced back — by a USER-tier file of the same name where one
+        // exists, since the operator's own file was never the party being
+        // gated.
+        if (!$projectCommandsTrusted) {
+            foreach ($builtIn as $name => $row) {
+                $winner = $merged[$name];
+                if (!$winner->isFileBased() || $winner->tier !== 'project') {
+                    continue;
+                }
+
+                $reason = Lang::t('cmd.loader.builtin-shadowed-project', ['name' => $name]);
+                $this->report($reason);
+                $this->refusedCommands[$this->commandSources[$name] ?? $name] = $reason;
+
+                if (isset($user[$name])) {
+                    $merged[$name] = $user[$name];
+                } else {
+                    $merged[$name] = $row;
+                }
+            }
+        }
+
+        // ISS-036's report half, AFTER the refusal loop so a name it took back
+        // is never announced as an override: every built-in a surviving file
+        // row actually replaced. Promotion without notice is how a trusted
+        // root accumulates silent edits to its own command set; one line per
+        // replacement, on the seam Bootstrap drains at launch and on stderr
+        // with {@see DEBUG_REFUSALS_ENV}.
+        foreach ($merged as $name => $spec) {
+            if (!isset($builtIn[$name]) || !$spec->isFileBased()) {
+                continue;
+            }
+
+            $this->overrides[$name] = Lang::t('cmd.loader.builtin-overridden', [
+                'name' => $name,
+                'tier' => $spec->tier ?? 'file',
+                'path' => $this->commandSources[$name] ?? $name,
+            ]);
+            $this->report($this->overrides[$name]);
         }
 
         return $merged;

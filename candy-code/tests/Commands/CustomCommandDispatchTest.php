@@ -75,9 +75,13 @@ final class CustomCommandDispatchTest extends TestCase
     /**
      * A Chat wired the way {@see \SugarCraft\Code\Cli\Bootstrap::chat()} wires
      * one — a live loader plus the launch's root. Built AFTER the fixture files,
-     * because discovery happens in the constructor.
+     * because discovery happens in the constructor. `$trusted` mirrors the
+     * answer Bootstrap computes from `trustedProjectCommands` (ISS-036); it
+     * defaults to FALSE because that is the honest state of a fresh clone, and
+     * the tests that want a project override opt in explicitly rather than
+     * letting the rule sneak past a permissive helper.
      */
-    private function chat(string $draft = '', ?CommandLoader $loader = null): Chat
+    private function chat(string $draft = '', ?CommandLoader $loader = null, bool $trusted = false): Chat
     {
         return new Chat(
             history: [Message::user('hello'), Message::assistant('hi')],
@@ -85,6 +89,7 @@ final class CustomCommandDispatchTest extends TestCase
             backend: new EchoBackend(),
             projectRoot: $this->project,
             commandLoader: $loader ?? new CommandLoader(),
+            projectCommandsTrusted: $trusted,
         );
     }
 
@@ -264,7 +269,7 @@ final class CustomCommandDispatchTest extends TestCase
     {
         $this->projectCommand('compact', 'Summarise this conversation your own way.');
 
-        $next = $this->submit('/compact');
+        $next = $this->submit('/compact', $this->chat('/compact', trusted: true));
 
         $this->assertSame('Summarise this conversation your own way.', $this->sent($next));
         $this->assertTrue($next->inFlight);
@@ -275,11 +280,56 @@ final class CustomCommandDispatchTest extends TestCase
     {
         $this->projectCommand('compact', 'Summarise this conversation your own way.');
 
-        $rows = $this->chat()->slashCommandRows();
+        $rows = $this->chat(trusted: true)->slashCommandRows();
         $compact = array_values(array_filter($rows, static fn(CommandSpec $s): bool => $s->name === 'compact'));
 
         $this->assertCount(1, $compact);
         $this->assertTrue($compact[0]->isFileBased(), 'and it is the file, not the registry row');
+        $this->assertSame('[project]', $compact[0]->tierBadge());
+    }
+
+    /**
+     * ISS-036's refusal half: the same file on a root the operator never
+     * granted is replaced back at the LOADER seam (so dispatch, the popup and
+     * `/help` all keep seeing the built-in), lands in
+     * {@see CommandLoader::refusedCommands()} for Bootstrap's launch report,
+     * and never reaches Chat at all.
+     */
+    public function testAProjectFileCannotShadowABuiltInOnAnUntrustedRoot(): void
+    {
+        $this->projectCommand('compact', 'Summarise this conversation your own way.');
+
+        $loader = new CommandLoader();
+        $chat = $this->chat('/compact', $loader);
+
+        $this->assertSame([], $chat->customCommands(), 'the file is not a command on this root');
+
+        $refusals = $loader->refusedCommands();
+        $paths = implode("\n", array_keys($refusals));
+        $this->assertStringContainsString('compact.md', $paths);
+        $this->assertStringContainsString('trustedProjectCommands', array_values($refusals)[0]);
+        $this->assertSame([], $loader->overrides(), 'a refused shadow is never announced as an override');
+
+        $next = $this->submit('/compact', $chat);
+        $this->assertFalse($next->inFlight, 'the file prompt was never sent — the BUILT-IN answered');
+        foreach (array_slice($next->history, 2) as $appended) {
+            $this->assertStringNotContainsString('your own way', $appended->content);
+        }
+    }
+
+    /**
+     * The refusal replaces the project row with the USER row when one exists —
+     * the operator's own file was never the party the grant gates.
+     */
+    public function testAnUntrustedProjectShadowStillLetsTheUserTierOverride(): void
+    {
+        $this->userCommand('compact', 'Summarise the way I asked.');
+        $this->projectCommand('compact', 'Summarise the way the repository asked.');
+
+        $chat = $this->chat('/compact', null, false);
+
+        $this->assertArrayHasKey('compact', $chat->customCommands());
+        $this->assertSame('Summarise the way I asked.', $this->sent($this->submit('/compact', $chat)));
     }
 
     public function testThePopupListsACustomCommandWhileItIsBeingTyped(): void
@@ -439,7 +489,7 @@ final class CustomCommandDispatchTest extends TestCase
     {
         $this->projectCommand('compact', 'CUSTOM COMPACT BODY');
 
-        $next = $this->submit('/compact:x');
+        $next = $this->submit('/compact:x', $this->chat('/compact:x', trusted: true));
 
         $this->assertSame('CUSTOM COMPACT BODY', $this->sent($next));
         $this->assertTrue($next->inFlight, 'the built-in /compact dispatches no turn at all');
@@ -532,12 +582,16 @@ final class CustomCommandDispatchTest extends TestCase
         $this->assertFalse($help[0]->isFileBased());
     }
 
-    /** And a NON-reserved built-in is still overridable — the reservation is a list, not a policy shift. */
+    /**
+     * And a NON-reserved built-in is still overridable on a trusted root — the
+     * reservation is a list, not a policy shift. ISS-036 narrowed this to
+     * trusted roots (the refusal pin above); the USER tier keeps it ungated.
+     */
     public function testANonReservedBuiltInIsStillOverridable(): void
     {
         $this->projectCommand('rewind', 'Rewind my way.');
 
-        $this->assertSame('Rewind my way.', $this->sent($this->submit('/rewind')));
+        $this->assertSame('Rewind my way.', $this->sent($this->submit('/rewind', $this->chat('/rewind', trusted: true))));
     }
 
     // ── placeholders that are NOT placeholders ───────────────────────────

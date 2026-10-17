@@ -1599,15 +1599,17 @@ final class Chat implements Model
         }
 
         // FILE-BASED ROWS ONLY. loadAll() merges the built-in registry underneath
-        // the two disk tiers so a project file can override a built-in by name;
-        // what is kept here is the result of that merge MINUS everything that is
+        // the two disk tiers so a file can override a built-in by name — the
+        // PROJECT tier only on a `trustedProjectCommands` root (ISS-036), which
+        // is why the ctor's answer is threaded into the call; what is kept here
+        // is the result of that merge MINUS everything that is
         // still a built-in row, because the built-ins are already reachable
         // through CommandRegistry and dispatchCommand()'s match arms. Keeping
         // them would list every built-in twice in the "/" popup. A project file
         // that DOES override a built-in survives the filter — it is file-based by
         // then — which is exactly the override loadAll() documents.
         $this->customCommands = $customCommands ?? array_filter(
-            $commandLoader?->loadAll($this->projectRoot()) ?? [],
+            $commandLoader?->loadAll($this->projectRoot(), $this->projectCommandsTrusted) ?? [],
             static fn(CommandSpec $spec): bool => $spec->isFileBased(),
         );
 

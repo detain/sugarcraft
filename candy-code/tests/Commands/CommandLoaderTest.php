@@ -274,9 +274,60 @@ final class CommandLoaderTest extends TestCase
         $this->assertCount(count(CommandRegistry::all()) + 1, $commands);
     }
 
-    public function testLoadAllWithNoCommandDirectoriesIsJustTheBuiltInRegistry(): void
+    /**
+     * ISS-036: a project-tier file that WOULD shadow a built-in is replaced
+     * back on an untrusted root, refused on the same launch-report channel the
+     * `` !`cmd` `` gate uses, and never announced as an override.
+     */
+    public function testLoadAllRefusesProjectTierBuiltInShadowsOnAnUntrustedRoot(): void
     {
-        $_SERVER['HOME'] = $this->tmp . '/no-home';
+        $project = $this->tmp . '/project';
+        $this->writeCommand('project/.candy-code/commands/compact.md', 'project compact body');
+
+        $loader = new CommandLoader();
+        $commands = $loader->loadAll($project);
+
+        $this->assertFalse($commands['compact']->isFileBased(), 'the built-in row survived the merge');
+        $this->assertSame([$project . '/.candy-code/commands/compact.md'], array_keys($loader->refusedCommands()));
+        $this->assertStringContainsString('trustedProjectCommands', array_values($loader->refusedCommands())[0]);
+        $this->assertSame([], $loader->overrides());
+    }
+
+    /**
+     * The same file on a TRUSTED root overrides — and the override is REPORTED,
+     * which is the half ISS-036 adds beyond the gate: an operator who granted
+     * the root still learns their `/compact` is no longer the shipped one.
+     */
+    public function testLoadAllReportsTheOverrideWhenTheRootIsTrusted(): void
+    {
+        $project = $this->tmp . '/project';
+        $this->writeCommand('project/.candy-code/commands/compact.md', 'project compact body');
+
+        $loader = new CommandLoader();
+        $commands = $loader->loadAll($project, true);
+
+        $this->assertTrue($commands['compact']->isFileBased());
+        $this->assertSame(['compact'], array_keys($loader->overrides()));
+        $this->assertStringContainsString('project-tier command file replaced the built-in', array_values($loader->overrides())[0]);
+        $this->assertSame([], $loader->refusedCommands());
+    }
+
+    /** A USER-tier shadow needs no grant but is still announced. */
+    public function testLoadAllReportsAUserTierOverrideWithoutAnyGrant(): void
+    {
+        $_SERVER['HOME'] = $this->tmp . '/home';
+        putenv('HOME=' . $_SERVER['HOME']);
+        $this->writeCommand('home/.candy-code/commands/compact.md', 'user compact body');
+
+        $loader = new CommandLoader();
+        $commands = $loader->loadAll($this->tmp . '/no-project');
+
+        $this->assertTrue($commands['compact']->isFileBased());
+        $this->assertStringContainsString('user-tier command file replaced the built-in', array_values($loader->overrides())[0]);
+    }
+
+    public function testLoadAllWithNoCommandDirectoriesIsJustTheBuiltInRegistry(): void
+    {        $_SERVER['HOME'] = $this->tmp . '/no-home';
         putenv('HOME=' . $_SERVER['HOME']);
 
         $commands = (new CommandLoader())->loadAll($this->tmp . '/no-project');

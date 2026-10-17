@@ -371,6 +371,22 @@ final class CommandSpec
     }
 
     /**
+     * The popup badge that says WHOSE file this row is: `[user]` / `[project]`
+     * for a file row, null for a built-in (ISS-036's display half).
+     *
+     * ISSUED as a string and rendered by the consumer, because {@see $tier}
+     * already carries the fact and the popup's bytes belong to
+     * {@see \SugarCraft\Code\Renderer::renderSlashMenu()} — an override the
+     * operator cannot SEE is the same silence this issue's launch report fixes
+     * for the launch. The bracket shape mirrors the skill listing's
+     * `[project]` origin badges.
+     */
+    public function tierBadge(): ?string
+    {
+        return $this->tier === null ? null : '[' . $this->tier . ']';
+    }
+
+    /**
      * Whether this body holds a `` !`…` `` form, i.e. whether expanding it may
      * have to run a shell (audit 15b-20).
      *
