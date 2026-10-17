@@ -386,7 +386,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.6** `sugar-image`(25,high, core+palette+sprinkles) → **3.6a** `Renderer/` (7), **3.6b**
   root (≈10), **3.6c** remainder; ext‑gd/mbstring.
 - **3.7** `candy-shine`(9,high, buffer+core+sprinkles; attributes, league/commonmark pin). <!-- @rename-keep historical provenance -->
-- **3.8** `candy-vt`(40,high, buffer+core+sprinkles) → **3.8a** `Parser/` (11), **3.8b**
+- **3.8** `candy-vt`(40,high, buffer+core+sprinkles) → **3.8a** `Parser/` (11), **3.8b** <!-- @rename-keep historical provenance -->
   `Handler/` (8), **3.8c** `Sgr/Screen/Msg/...`, **3.8d** root (`Terminal`,`Cell*`,`Cursor*`,…).
 - **3.9** `candy-vcr`(81,med, buffer+core+pty; symfony console/process/yaml→^5.4) → **3.9a**
   `Tape/Ast` (19→ split a/b), **3.9b** `Cli` (10), **3.9c** `Format/Raster/Assert` (17), **3.9d**
@@ -485,7 +485,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-pty | high | 42 | FFI, ctor-promotion, match, mixed, new-in-init, nullsafe |
 | candy-sql | high | 14 | enum-with-methods, ctor-promotion, match, mixed, named-args; pdo_sqlite |
 | candy-shine | high | 9 | attribute, ctor-promotion, enum, match, named-args, nullsafe; commonmark | <!-- @rename-keep historical provenance -->
-| candy-vt | high | 40 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args |
+| candy-vt | high | 40 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args | <!-- @rename-keep historical provenance -->
 | honey-bounce | high | 12 | enum-with-methods, ctor-promotion, match, named-args, readonly | <!-- @rename-keep historical provenance -->
 | sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init | <!-- @rename-keep historical provenance -->
 | sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |

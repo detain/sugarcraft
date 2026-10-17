@@ -35,8 +35,8 @@ use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Tape\Compiler;
 use SugarCraft\Vcr\Tape\Lexer;
 use SugarCraft\Vcr\Tape\Parser;
-use SugarCraft\Vt\Terminal;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Theme;
 
 $tape = __DIR__ . '/../.vhs/smoke.tape';
 if (!is_file($tape)) {

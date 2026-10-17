@@ -14,9 +14,9 @@ use SugarCraft\Vcr\Raster\Rasterizer;
 use SugarCraft\Vcr\Tape\Compiler;
 use SugarCraft\Vcr\Tape\Lexer;
 use SugarCraft\Vcr\Tape\Parser;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Terminal;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Canonical pipeline: .tape file → .gif file.

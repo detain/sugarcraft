@@ -370,7 +370,7 @@ entire remaining queue** and should be W's next item after the in-flight bundles
 
 sugar-crush-scoped lane ownership says nothing about `candy-core/`, `candy-vt/`, `candy-shine/`, <!-- @rename-keep historical provenance -->
 `candy-vcr/`. Those get edited: commit `6c1e51c8` is titled *"sugar-crush + candy-core"* and `fe7ce954`
-is *"sugar-crush + candy-core + candy-vt"* — two of the last five commits touched siblings. And the
+is *"sugar-crush + candy-core + candy-vt"* — two of the last five commits touched siblings. And the <!-- @rename-keep historical provenance -->
 hardening backlog has four sibling-lib items: **E15** (`candy-vcr/src/Tape/Lexer.php`), **E46**
 (`candy-core/src/Util/Width.php`), **E49** (`candy-shine/src/Renderer.php`), **E50** <!-- @rename-keep historical provenance -->
 (`candy-core/src/SgrState.php`).

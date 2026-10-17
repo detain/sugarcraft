@@ -7,10 +7,10 @@ namespace SugarCraft\Vcr\Tests\Raster;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\FontLoader;
 use SugarCraft\Vcr\Raster\ImagickRasterizer;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cursor;
-use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Snapshot;
 
 /**
  * Mirrors {@see GdRasterizerCacheTest} for the Imagick backend.

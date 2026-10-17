@@ -12,9 +12,9 @@ use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vcr\Render\Renderer;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Terminal;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Regression: FrameStream Resize event preserves the terminal's theme.

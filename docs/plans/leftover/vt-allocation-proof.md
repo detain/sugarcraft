@@ -1,9 +1,9 @@
-# candy-vt allocation-growth proof
+# sugar-vterm allocation-growth proof
 
 Audit P2 — the "unbounded allocation growth across repeated resize/feed
 cycles" concern, as handed down in the brief at `sc-briefs/w3-vt.md` (that
 brief cites a `vt-source-code-audit.md` which is not committed to this
-repo). `candy-vt/tests/AllocationTest.php` pins the opposite property: the
+repo). `sugar-vterm/tests/AllocationTest.php` pins the opposite property: the
 grid/Buffer/Screen/Parser surfaces are **bounded** across long churn. No
 src/ or composer.json change — the proof is a test + this record.
 
@@ -44,7 +44,7 @@ growing data structure can pass:
 
 `NullHandler` (a discarding `Handler` that counts dispatches so the parser
 tests measure the parser's own buffers, not a growing log) lives at
-`candy-vt/tests/Support/NullHandler.php` under the `SugarCraft\Vt\Tests\`
+`sugar-vterm/tests/Support/NullHandler.php` under the `SugarCraft\Vterm\Tests\`
 → `tests/` autoload-dev mapping.
 
 ## Scenarios covered (15 tests)
@@ -69,7 +69,7 @@ tests measure the parser's own buffers, not a growing log) lives at
   saturation; slots reference the shared empty `Cell` (no clone churn).
 - `Terminal` scroll cycle x1200 on a 300-row ring: count stays 300, heap
   flat after the ring saturates.
-- Full pipeline `SugarCraft\Vt\Terminal\Terminal`: resize to 320x120, feed
+- Full pipeline `SugarCraft\Vterm\Terminal\Terminal`: resize to 320x120, feed
   deterministic SGR/CSI/UTF-8 stream + **alt-screen enter/leave**
   (`\x1b[?1049h`/`l`, DEC 1049 — allocates a whole fresh `Buffer` per
   cycle, the lib's largest per-cycle allocation), snapshot, resize back to
@@ -88,7 +88,7 @@ tests measure the parser's own buffers, not a growing log) lives at
 - Hostile truncated input x5000 (unterminated OSC, unterminated DCS, cut
   UTF-8 lead byte, 42-parameter CSI over the 32-param cap) with
   flush()+reset() every cycle: no growth.
-- Second pipeline (`SugarCraft\Vt\Terminal`, vcr renderer path): feed +
+- Second pipeline (`SugarCraft\Vterm\Terminal`, vcr renderer path): feed +
   `snapshot()` x300 at 160x50: heap and peak flat, grid dims intact.
 
 ## Where the unbounded-growth risk actually lives
@@ -118,7 +118,7 @@ tests measure the parser's own buffers, not a growing log) lives at
   plus resize() churn through `Terminal::resize` -> `Buffer::resize`, both
   covered above.
 - **Named types in the source audit that do not exist here**: there is no
-  `SugarCraft\Vt\Grid\Grid` and no `ScrollingBuffer`/`FixedBuffer` — the
+  `SugarCraft\Vterm\Grid\Grid` and no `ScrollingBuffer`/`FixedBuffer` — the
   grid is `CellGrid` + `Buffer\Buffer` (+ `Screen\Screen`/
   `Screen\Scrollback`). Per the brief the test asserts against the real
   classes; no API was invented. The per-cycle allocation risk in the
@@ -132,7 +132,7 @@ tests measure the parser's own buffers, not a growing log) lives at
 
 ## Known non-blocking diagnostics
 
-- `candy-vt/vendor/.../sugar-ansi-parser` tests report "Class cannot be found in
+- `sugar-vterm/vendor/.../sugar-ansi-parser` tests report "Class cannot be found in
   the configured test source" when `--filter` runs across symlinks —
   pre-existing, unrelated to this change.
 - phpstan baseline: 108 raw diagnostics on stdout for `src/`+`tests/` on HEAD
@@ -140,5 +140,5 @@ tests measure the parser's own buffers, not a growing log) lives at
   not diagnostics). Verified identical with the new files present and absent
   — they add zero.
 - php-cs-fixer is configured at the repo root (`.php-cs-fixer.dist.php`),
-  not in `candy-vt/`; the check runs with `--config=../.php-cs-fixer.dist.
+  not in `sugar-vterm/`; the check runs with `--config=../.php-cs-fixer.dist.
   php --path-mode=intersection` over both new files — 0 of 2 fixable.

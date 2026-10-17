@@ -10,8 +10,8 @@ use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * Iterator of Snapshot frames at fps cadence.

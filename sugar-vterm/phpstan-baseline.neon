@@ -1,0 +1,163 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^PHPDoc tag @param references unknown parameter\: \$rgb$#'
+			identifier: parameter.notFound
+			count: 1
+			path: src/Cell.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type SugarCraft\\Vterm\\Sgr\\Sgr\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Cell.php
+
+		-
+			message: '#^Parameter &\$pending by\-ref type of method SugarCraft\\Vterm\\Handler\\EraseHandler\:\:apply\(\) expects array\<int, array\{row\: int, col\: int, cell\: SugarCraft\\Vterm\\Cell\}\>\|null, array\|null given\.$#'
+			identifier: parameterByRef.type
+			count: 5
+			path: src/Handler/EraseHandler.php
+
+		-
+			message: '#^PHPDoc tag @implements has invalid value \(Msg\)\: Unexpected token "\\n ", expected ''\<'' at offset 125 on line 6$#'
+			identifier: phpDoc.parseError
+			count: 1
+			path: src/Msg/FocusInMsg.php
+
+		-
+			message: '#^PHPDoc tag @implements has invalid value \(Msg\)\: Unexpected token "\\n ", expected ''\<'' at offset 123 on line 6$#'
+			identifier: phpDoc.parseError
+			count: 1
+			path: src/Msg/FocusOutMsg.php
+
+		-
+			message: '#^PHPDoc tag @param has invalid value \(array\<int, array\<int, Cell\>\>\)\: Unexpected token "\*/", expected variable at offset 40 on line 1$#'
+			identifier: phpDoc.parseError
+			count: 1
+			path: src/Screen/Screen.php
+
+		-
+			message: '#^Property SugarCraft\\Vterm\\Terminal\\Terminal\:\:\$scrollbackSize is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Terminal/Terminal.php
+
+		-
+			message: '#^Instantiated class SugarCraft\\Vterm\\Cell\\Cell not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellAliasTest.php
+
+		-
+			message: '#^Parameter \#1 \$objectOrClass of class ReflectionClass constructor expects class\-string\<SugarCraft\\Vterm\\Cell\\Cell\>\|SugarCraft\\Vterm\\Cell\\Cell, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: tests/CellAliasTest.php
+
+		-
+			message: '#^Access to property \$continuation on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Access to property \$grapheme on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Access to property \$hyperlink on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 2
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method background\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method equals\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 15
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method fgRgb\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method foreground\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method sgr\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 2
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to static method continuation\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to static method empty\(\) on an unknown class SugarCraft\\Vterm\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Instantiated class SugarCraft\\Vterm\\Cell\\Cell not found\.$#'
+			identifier: class.notFound
+			count: 27
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/FuzzerTest.php
+
+		-
+			message: '#^Method SugarCraft\\Vterm\\Tests\\FuzzerTest\:\:seedAndLength\(\) should return list\<array\{int, int\}\> but returns array\{tiny\: array\{42, 100\}, small\: array\{12648430, 1024\}, medium\: array\{3735928559, 16384\}, large\: array\{195948557, 102400\}\}\.$#'
+			identifier: return.type
+			count: 1
+			path: tests/FuzzerTest.php
+
+		-
+			message: '#^Method SugarCraft\\Vterm\\Tests\\Mode\\CursorShapeTest\:\:feed\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: tests/Mode/CursorShapeTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertInstanceOf\(\) with ''SugarCraft\\\\Vterm\\\\Msg\\\\FocusInMsg'' and SugarCraft\\Vterm\\Msg\\FocusInMsg will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Mode/FocusEventTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertInstanceOf\(\) with ''SugarCraft\\\\Vterm\\\\Msg\\\\FocusOutMsg'' and SugarCraft\\Vterm\\Msg\\FocusOutMsg will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Mode/FocusEventTest.php
+
+		-
+			message: '#^Method SugarCraft\\Vterm\\Tests\\Mode\\OriginModeTest\:\:feed\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: tests/Mode/OriginModeTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertSame\(\) with array\{"\\033\[\?62;1;6;22c"\} and array\{\} will always evaluate to false\.$#'
+			identifier: method.impossibleType
+			count: 1
+			path: tests/Terminal/AsyncFeedTest.php

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Color\Color;
-use SugarCraft\Vt\Rendition;
-use SugarCraft\Vt\Sgr\Sgr;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Color\Color;
+use SugarCraft\Vterm\Rendition;
+use SugarCraft\Vterm\Sgr\Sgr;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * The cell→SGR emitter: {@see Cell::colorSgr()} re-projects a cell's colours

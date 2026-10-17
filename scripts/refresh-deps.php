@@ -316,7 +316,7 @@ $restore = static function () use (&$scratchSnapshot): void {
  * `vendor/composer/installed.json` to `dist.type: path` but skips the
  * filesystem reinstall, leaving stale Packagist directories beside the few
  * symlinks that did move (measured on wave-11 and reproduced verbatim on
- * wave-12: candy-vt 1/7, candy-vcr 1/8). The vendor then *lies* — lock and
+ * wave-12: candy-vt 1/7, candy-vcr 1/8). The vendor then *lies* — lock and <!-- @rename-keep historical provenance -->
  * installed.json claim path, the bytes on disk are an old snapshot — and the
  * mixed state is exactly what `$verify`/`$report` exists to refuse. Removing
  * the stale real dirs AND their records in `installed.json`/`installed.php`

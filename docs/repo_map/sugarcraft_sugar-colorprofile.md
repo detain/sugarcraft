@@ -20,7 +20,7 @@
 
 - **Upstream**: [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) (Go, ~111 stars)
 
-**Primary consumers within SugarCraft**: `sugar-log`, `sugar-image`, `candy-codeshot`, `candy-vt` consume `Probe::colorProfile()` + `ColorProfile` enum directly.
+**Primary consumers within SugarCraft**: `sugar-log`, `sugar-image`, `candy-codeshot`, `sugar-vterm` consume `Probe::colorProfile()` + `ColorProfile` enum directly.
 
 ---
 
@@ -846,7 +846,7 @@ Comprehensive coverage of all 12 detection steps.
 ### Two-Enum Design
 
 The existence of both `Profile` and `ColorProfile` enums is a source of confusion. They serve different purposes:
-- `ColorProfile` (in `Probe`) is the **SSOT** for environment-driven detection — consumed by `sugar-log`, `sugar-image`, `candy-codeshot`, `candy-vt`
+- `ColorProfile` (in `Probe`) is the **SSOT** for environment-driven detection — consumed by `sugar-log`, `sugar-image`, `candy-codeshot`, `sugar-vterm`
 
 - `Profile` (in `Palette` instances) is what the **degradation engine** operates on
 

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Raster;
 
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cursor;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Alternative rasterizer using ext-imagick.

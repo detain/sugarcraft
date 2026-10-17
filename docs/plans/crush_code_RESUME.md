@@ -144,7 +144,7 @@ $   # 2 survivors: E736 (umbrella — ALL remaining shape is ruling/feature, eve
 
 **(b) THE SURVIVORS (none is defect work):**
 
-1. **§E742** — candy-vt Theme cube palette mis-alignment: orchestrator RULING correct-to-xterm (user-visible; vt goldens + ansi-index census ripple + consumer snapshots) vs document-fallback (record-only + KNOWN-DIVERGENT pin). Posture: NOT auto-built (behavior-change STOP).
+1. **§E742** — candy-vt Theme cube palette mis-alignment: orchestrator RULING correct-to-xterm (user-visible; vt goldens + ansi-index census ripple + consumer snapshots) vs document-fallback (record-only + KNOWN-DIVERGENT pin). Posture: NOT auto-built (behavior-change STOP). <!-- @rename-keep historical provenance -->
 2. **§E736 tails, all trigger-gated:** forms Phase-5 (DECLINED wholesale r86-v6 — reopen ONLY on real consumer demand); vt 6.4 `scrollUpOne` (DEFERRED-WITH-TRIGGER — needs new public Buffer row-shift API, own ruling on demand); shine/layout/bits/charts declines ride the row; MATCHUPS 🟡/🔴 port completions = full add-a-lib checklist per lib, one lib per wave, only when scheduled by the operator. <!-- @rename-keep historical provenance -->
 3. **Phase-12 stays PAUSED** — never auto-resume (standing user decision).
 

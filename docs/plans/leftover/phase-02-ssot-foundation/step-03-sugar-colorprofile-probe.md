@@ -9,7 +9,7 @@
 Today multiple libs probe environment variables independently
 (`NO_COLOR` / `FORCE_COLOR` / `COLORTERM` / `WT_SESSION` / etc.).
 Consolidate every probe into `sugar-colorprofile/src/Probe.php` so that
-`sugar-log`, `sugar-image`, `candy-codeshot`, `candy-vt` (truecolor
+`sugar-log`, `sugar-image`, `candy-codeshot`, `sugar-vterm` (truecolor
 accept), and future consumers all call a single API.
 
 ## Files

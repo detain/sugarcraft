@@ -112,7 +112,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-mouse | (see findings/sugar-mouse.md) | Comprehensive mouse event handling audit |
 | sugar-widgets | (see findings/sugar-widgets.md) | Stopwatch/teardown patterns |
 | sugar-dashboard | (see findings/sugar-dashboard.md) | Largest sugar-* project — 52KB findings |
-| candy-vt | (see findings/candy-vt.md) | Terminal emulation |
+| sugar-vterm | (see findings/sugar-vterm.md) | Terminal emulation |
 | candy-kv | (see findings/candy-kv.md) | First-ever audit 2026-09-15 (E719, round 82): zero P0; two empirically-verified P1 defects + P2/P3 backlog, remediation planned |
 | others | various | See individual findings/*.md files |
 

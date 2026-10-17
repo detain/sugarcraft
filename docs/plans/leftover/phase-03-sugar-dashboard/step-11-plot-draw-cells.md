@@ -41,7 +41,7 @@ into the Buffer via `setCell()`.
 ## Notes
 
 - The braille math is well-tested in BrailleCanvas; just re-use it.
-- Buffer comes from candy-vt (post-SSOT cleanup). Use its `setCell`
+- Buffer comes from sugar-vterm (post-SSOT cleanup). Use its `setCell`
   API consistently.
 
 ---

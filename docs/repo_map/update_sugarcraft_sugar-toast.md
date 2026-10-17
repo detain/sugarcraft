@@ -353,7 +353,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 
 **Implementation Ideas**:
 
-- Use `candy-vt` terminal dimension detection
+- Use `sugar-vterm` terminal dimension detection
 - Default maxWidth to terminal width minus margins
 - Provide `withMaxWidth(null)` for auto-detection
 

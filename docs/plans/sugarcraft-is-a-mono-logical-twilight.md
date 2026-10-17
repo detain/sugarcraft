@@ -54,7 +54,7 @@ User decisions (confirmed up front):
 - Replacing ReactPHP as the event loop primitive.
 - Pure-PHP termios via ext-readline or custom PECL extension.
 - Sidecar binary distribution.
-- ANSI parsing (lives in `candy-core::InputReader` + `candy-vt`, stays there).
+- ANSI parsing (lives in `candy-core::InputReader` + `candy-vt`, stays there). <!-- @rename-keep historical provenance -->
 - VT-state recording semantics (lives in `candy-vcr`, stays there).
 - Changes to `candy-core::Util\Tty::WindowsBackend` (it handles native Windows console mode, not PTY allocation; out of scope for this plan).
 
@@ -533,12 +533,12 @@ git checkout master && git pull --ff-only
 - **Docs:** matrix README updates for the added shells.
 - **Review focus:** the `markTestSkipped('zsh not installed')` pattern is uniform; tests don't leak processes on assertion failure (use `try/finally` to `kill()` + `wait()`).
 
-#### Step P5.3 — Vim smoke test (with candy-vt screen assertion)
+#### Step P5.3 — Vim smoke test (with candy-vt screen assertion) <!-- @rename-keep historical provenance -->
 
-- **Subagent:** `general-purpose` — depends on `candy-vt` for screen state.
+- **Subagent:** `general-purpose` — depends on `candy-vt` for screen state. <!-- @rename-keep historical provenance -->
 - **Branch:** `ai/candy-pty-test-vim-smoke`.
-- **Create:** `candy-pty/tests/Integration/VimSmokeTest.php` — spawn `vim /tmp/scratch.txt`, send `iHello<Esc>:wq<CR>`, assert file content is "Hello" and exit code 0. Feed PTY output through `candy-vt::Terminal` to assert the editor screen showed "Hello" before save.
-- **Modify:** `candy-pty/composer.json` `require-dev` adds `"sugarcraft/candy-vt": "@dev"` + path-repo.
+- **Create:** `candy-pty/tests/Integration/VimSmokeTest.php` — spawn `vim /tmp/scratch.txt`, send `iHello<Esc>:wq<CR>`, assert file content is "Hello" and exit code 0. Feed PTY output through `candy-vt::Terminal` to assert the editor screen showed "Hello" before save. <!-- @rename-keep historical provenance -->
+- **Modify:** `candy-pty/composer.json` `require-dev` adds `"sugarcraft/candy-vt": "@dev"` + path-repo. <!-- @rename-keep historical provenance -->
 - **Review focus:** vim handles SIGWINCH (verifies the SIGWINCH path); test cleans up `/tmp/scratch.txt`; `markTestSkipped` if `vim` absent.
 
 #### Step P5.4 — Resize race + large buffer tests
@@ -659,8 +659,8 @@ Only if P0–P5 land on time. Each item is one step (one PR).
 
 - **Subagent:** `general-purpose`.
 - **Branch:** `ai/candy-vcr-shirley-integration`.
-- **Create:** `candy-vcr/tests/Integration/ShirleyBashTest.php` (record `bash -c 'echo hello; sleep 0.2; echo world'`, replay, assert byte-equality on stdout events). `candy-vcr/tests/Integration/ShirleyVimTest.php` (record `vim /tmp/scratch`, send `iHello<Esc>:wq<CR>`, replay through `candy-vt::Terminal`, screen-assert empty buffer post-quit).
-- **Modify:** `candy-vcr/composer.json` `require-dev` — confirm candy-vt dep.
+- **Create:** `candy-vcr/tests/Integration/ShirleyBashTest.php` (record `bash -c 'echo hello; sleep 0.2; echo world'`, replay, assert byte-equality on stdout events). `candy-vcr/tests/Integration/ShirleyVimTest.php` (record `vim /tmp/scratch`, send `iHello<Esc>:wq<CR>`, replay through `candy-vt::Terminal`, screen-assert empty buffer post-quit). <!-- @rename-keep historical provenance -->
+- **Modify:** `candy-vcr/composer.json` `require-dev` — confirm candy-vt dep. <!-- @rename-keep historical provenance -->
 - **Docs:** README sample output from `candy-vcr stats` on the produced cassettes.
 - **Review focus:** integration suite is bounded (≤30s wallclock); uses real shells; cleans up `/tmp/scratch*`.
 
@@ -677,7 +677,7 @@ The current `candy-vcr` only records sessions attached as a library to a `SugarC
 **Phase P6.5 acceptance:**
 
 - `candy-vcr record -- bash -c 'echo hello; sleep 0.2; echo world'` → cassette → replay reproduces the session.
-- `candy-vcr record -- vim /tmp/scratch.txt` round-trips through `candy-vt::Terminal` screen-assertion.
+- `candy-vcr record -- vim /tmp/scratch.txt` round-trips through `candy-vt::Terminal` screen-assertion. <!-- @rename-keep historical provenance -->
 - Recording overhead ≤2% wall-clock on `time bash -c 'seq 100000'`.
 - README documented with asciinema comparison.
 
@@ -725,7 +725,7 @@ To create:
 - `candy-vcr/src/Cli/RecordCommand.php` *(P6.5 — Shirley-style CLI)*
 - `candy-vcr/tests/Cli/RecordCommandTest.php` *(P6.5)*
 - `candy-vcr/tests/Integration/ShirleyBashTest.php` *(P6.5 — record `bash -c '...'`, replay, assert)*
-- `candy-vcr/tests/Integration/ShirleyVimTest.php` *(P6.5 — record `vim`, screen-assert via candy-vt)*
+- `candy-vcr/tests/Integration/ShirleyVimTest.php` *(P6.5 — record `vim`, screen-assert via candy-vt)* <!-- @rename-keep historical provenance -->
 
 To modify:
 
@@ -758,7 +758,7 @@ To leave alone:
 - `candy-pty/bin/pty-shim.php` — already correct
 - `candy-core/src/Util/Tty/WindowsBackend.php` — out of scope
 - `candy-core/src/InputReader.php` — ANSI parsing, not PTY plumbing
-- `candy-vt/` — VT-state machine, not PTY plumbing
+- `candy-vt/` — VT-state machine, not PTY plumbing <!-- @rename-keep historical provenance -->
 - `candy-vcr/` — recording semantics, not PTY plumbing
 
 ---

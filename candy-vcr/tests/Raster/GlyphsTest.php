@@ -6,7 +6,7 @@ namespace SugarCraft\Vcr\Tests\Raster;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\Glyphs;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Tests for Glyphs cache and rendering methods.

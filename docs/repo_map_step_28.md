@@ -6,7 +6,7 @@
 
 ## Goal
 
-Roll out sugar-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `sugar-forms`, `sugar-forms`, `sugar-widgets`, `sugar-charts`, `sugar-table`, `candy-mdview`, `candy-vt`, `candy-vcr`, `sugar-markdown`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
+Roll out sugar-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `sugar-forms`, `sugar-forms`, `sugar-widgets`, `sugar-charts`, `sugar-table`, `candy-mdview`, `sugar-vterm`, `candy-vcr`, `sugar-markdown`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
 
 Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakness across 8+ libs).
 
@@ -36,7 +36,7 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 
 - Per lib: add 1+ assertGoldenAnsi test for the canonical view() output of the lib's main component(s).
 - Convert any tests where the expected string is embedded literally → use a golden file.
-- Verify `UPDATE_GOLDENS=1` flow on candy-vt (or pick one lib that's representative).
+- Verify `UPDATE_GOLDENS=1` flow on sugar-vterm (or pick one lib that's representative).
 
 ## Scribe brief
 
@@ -49,7 +49,7 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 - **PR body**:
   ```
   ## Summary
-  - sugar-forms, sugar-forms, sugar-widgets, sugar-charts, sugar-table, candy-mdview, candy-vt, candy-vcr, sugar-markdown all gain assertGoldenAnsi-backed golden-file tests.
+  - sugar-forms, sugar-forms, sugar-widgets, sugar-charts, sugar-table, candy-mdview, sugar-vterm, candy-vcr, sugar-markdown all gain assertGoldenAnsi-backed golden-file tests.
   - Closes the ecosystem's most-cited weakness: "no snapshot tests for ANSI rendering" (§19/§149).
   - UPDATE_GOLDENS=1 phpunit workflow documented.
   - Tests are additive; existing tests preserved.

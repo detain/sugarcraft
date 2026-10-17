@@ -20,10 +20,10 @@ use SugarCraft\Forms\Lang;
  * keyboard model of charmbracelet/bubbles' colorpicker: the 6x6x6 color
  * cube, one 6x6 plane of red per page.
  *
- * The cube follows the SAME xterm table semantics candy-vt documents —
+ * The cube follows the SAME xterm table semantics sugar-vterm documents —
  * index `16 + 36r + 6g + b` over component levels [0, 95, 135, 175, 215,
  * 255] — but the values are computed here, not imported: sugar-forms does
- * not depend on candy-vt (adding a sibling dep in a lib manifest is a
+ * not depend on sugar-vterm (adding a sibling dep in a lib manifest is a
  * split-repo fatal, so the dependency edge itself was the STOP-gate), and
  * the arithmetic IS the table. Display defaults to `SGR 48;5;index`
  * (exact on any 256-color terminal, since every grid colour is a cube

@@ -38,7 +38,7 @@ on non-ASCII content.
 
 ### A. Manual Byte-Loop Parsing vs. State Machine Architecture
 candy-ansi-inspect uses a manual byte-by-byte parsing loop (551-line Inspector.php). sugar-quickpick
-uses `strlen()`/`strpos()` at byte level. candy-vt (referenced as upstream source) already
+uses `strlen()`/`strpos()` at byte level. sugar-vterm (referenced as upstream source) already
 has the VT500 state machine from `charmbracelet/x/ansi`. The ecosystem is re-implementing
 manual parsing instead of sharing the state machine.
 
@@ -73,7 +73,7 @@ Provides the ECMA-48 state machine parser (`ansi.Parser`), ANSI width calculatio
 `clipperhouse/displaywidth`, and C0/C1 control code tables. This is the foundational
 parsing layer for the entire ANSI-inspection and terminal emulation stack.
 
-**Why:** It's the upstream source for both candy-ansi-inspect's parser AND candy-vt's VT500
+**Why:** It's the upstream source for both candy-ansi-inspect's parser AND sugar-vterm's VT500
 implementation. Sharing it would eliminate duplicate state-machine ports.
 
 ### 3. charmbracelet/lipgloss (cited in candy-ansi-inspect, sugar-toast, candy-ssh-launcher, sugar-quickpick)

@@ -1,6 +1,6 @@
-# Step 07.07 — candy-vt BCE + combining chars + synchronized output 2026 (P2.2-4)
+# Step 07.07 — sugar-vterm BCE + combining chars + synchronized output 2026 (P2.2-4)
 
-**Source:** `leftover_updates_later.md` candy-vt P2.2 + P2.3 + P2.4
+**Source:** `leftover_updates_later.md` sugar-vterm P2.2 + P2.3 + P2.4
 **Branch:** `ai/vt-bce-combining-sync`
 
 ## Deliverable
@@ -16,10 +16,10 @@
 
 **Modify:**
 
-- `candy-vt/src/Handler/EraseHandler.php` — uses current SGR bg.
-- `candy-vt/src/Cell/Cell.php` — `combining: string` field; setter
+- `sugar-vterm/src/Handler/EraseHandler.php` — uses current SGR bg.
+- `sugar-vterm/src/Cell/Cell.php` — `combining: string` field; setter
   honors graphemes.
-- `candy-vt/src/Mode/Mode.php` — `$syncOutput` field; when set, defer
+- `sugar-vterm/src/Mode/Mode.php` — `$syncOutput` field; when set, defer
   Buffer mutations into a batch; flush on disable or timeout.
 
 ## Tests
@@ -28,7 +28,7 @@
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter "Bce|Combining|Sync"` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter "Bce|Combining|Sync"` green.
 
 ---
 

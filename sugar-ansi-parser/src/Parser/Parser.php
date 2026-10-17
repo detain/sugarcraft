@@ -86,7 +86,7 @@ final class Parser
     /**
      * @param int $maxStringBuffer Cap (in bytes) on the DCS/OSC/SOS/PM/APC
      *                             payload accumulator. Defaults to 64 KiB;
-     *                             emulator front-ends (e.g. candy-vt) may raise
+     *                             emulator front-ends (e.g. sugar-vterm) may raise
      *                             it for large passthrough payloads.
      */
     public function __construct(
@@ -241,7 +241,7 @@ final class Parser
      * after `feed()` for the last completed sequence; they reset when the next
      * sequence's params start accumulating. This is the PULL route.
      *
-     * The alternative — the one the candy-vt and candy-codeshot sinks now use — is
+     * The alternative — the one the sugar-vterm and candy-codeshot sinks now use — is
      * the PUSH: implement {@see SubparamsAwareHandler} and be handed the same
      * flags in the dispatch call chain, so the handler needs no back-reference to
      * the parser dispatching it. {@see SubparamsAwareHandler::setSubparams()}
@@ -343,7 +343,7 @@ final class Parser
         // sequence starts next (`ESC ] a CAN` then `0x9D b 0x9C` must dispatch
         // "b", matching charmbracelet/x/ansi; the start()-clears-buffer shape
         // of this fix was rejected because a mid-string C1 re-introducer MUST
-        // keep the bytes collected before it — pinned downstream by candy-vt,
+        // keep the bytes collected before it — pinned downstream by sugar-vterm,
         // CALIBER 2026-05-30 step-20, and here by
         // ParserTest::testC1ReintroducerPreservesStringPayload).
         if ($next === State::Ground
@@ -523,7 +523,7 @@ final class Parser
      *
      * A handler that did not opt in is dispatched exactly as it was before this
      * capability existed: no extra call, no changed argument. The in-tree sinks
-     * DO opt in and read the push — candy-vt's `ScreenHandler` (emulator) and
+     * DO opt in and read the push — sugar-vterm's `ScreenHandler` (emulator) and
      * `RendererHandler` (renderer, forwarding to `CsiHandlerImpl`), and
      * candy-codeshot's `SgrStateHandler` — so none of them needs the late-bound
      * back-reference any more. {@see subparams()} remains public for a program

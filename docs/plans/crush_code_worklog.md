@@ -10190,7 +10190,7 @@ expectation from `getconf PAGESIZE`. The obstacle that had made a previous agent
 (`failOnWarning` vs `proc_open`'s warning) turned out not to be real once checked.
 
 **A report nobody can see is not a mitigation, and only a capture proves it.** E57 was closed with a
-launch-time stderr warning. A reviewer drove a real PTY launch and replayed it through `candy-vt`:
+launch-time stderr warning. A reviewer drove a real PTY launch and replayed it through `candy-vt`: <!-- @rename-keep historical provenance -->
 the line lives **0.47 s** before `\e[?1049h` takes the screen, and is absent from every frame after.
 The fix moved it into the transcript — and was required to prove it by **replaying only the bytes after
 the alt-screen enter**, so "showing through from underneath" could not be mistaken for "painted".
@@ -11619,7 +11619,7 @@ prose sat above an unrelated declaration.
 | v2 `30beda267` | candy-layout | → `86dd9807c` | Phase-5/6 `SolverEdgeCaseTest` 10T + MAX_FLOOR_RECLAIM const + docblocks; zero behavior bug | **157T/882A** |
 | v3 `2cfd90bba` | sugar-bits | → `2d11ab830` | Table shrink-through-mutate + visibleRows memo (E736/3.3) + Tree twin + multisort/7.1 stamps + LEARNINGS | **509T/1066A** | <!-- @rename-keep historical provenance -->
 | v4 `926585f2b` | sugar-charts | → `7dfa8de45` | P2–P4 perf builds (Heatmap/BufferHelper/Legend/Sixel) + `Phase2PerfPinsTest`; render-dump md5-identical proof | **576T/1445A** (+6T) |
-| v5 `018739046` | candy-vt docs | → `3696b7bf7` | plan RE-DERIVATION: 22/31 non-actionable, 9-row surviving tail | docs-only |
+| v5 `018739046` | candy-vt docs | → `3696b7bf7` | plan RE-DERIVATION: 22/31 non-actionable, 9-row surviving tail | docs-only | <!-- @rename-keep historical provenance -->
 
 **rv dispositions:** rv-v1 APPROVE-WITH-FIX 1 MINOR (figure honesty — base was 331/687, delta +3T/+7A not +1T/+3A; weld carries corrected figures); rv-v2 APPROVE 0C/0M/2m (MINOR-1: 2.3 row cited `138b3d7e5` but Tableau.php file-kill is `5a232f565`; MINOR-2 render-dump-style probe note); rv-v3 APPROVE 0C/0M/2m (MINORs: getPaginator docblock memo-claim false — rebuilds inline; 7.1 "cannot reproduce" overstates the measurement); rv-v4 APPROVE 0C/0M/2m (sixel single-channel key-collapse leg; render-dump arg shape); rv-v5 APPROVE 0C/0M/2m (feedAsync attribution — row `a45666b08`, `26ee0fa97` is the feedStream cancellation; mutate() also at Cell.php:126; ENDORSED the r87 cheap-lane cut WITH 6.4 carve-out + 6.2 consumer-set-ordering gate); rv-v6 APPROVE 0C/0M/0m.
 
@@ -11814,7 +11814,7 @@ at `e765b1742`) over six waves.
 
 ### Per-lib suite figures at the FINAL weld (all linked, plain pipe)
 
-candy-mdview **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5),
+candy-mdview **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5), <!-- @rename-keep historical provenance -->
 sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6), candy-input 307/40762/1S, <!-- @rename-keep -->
 candy-pty 663/1862/1W(base-carry)/17S, candy-core 862/7646/27S, candy-git-server 354/875, sugar-reel 361/2473/1S, <!-- @rename-keep -->
 candy-mosaic 465/7783/6S, candy-sql 1483/4203, candy-kv 206/427 (audit-only); sugar-crush <!-- @rename-keep historical provenance -->
@@ -14282,7 +14282,7 @@ Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows,
 ## ROUND 88 — the forms Ph5 build-out welded through the campaign's worst fabrication storm (4 of 7 lanes phantom'd)
 
 Operator directed round 88 (overriding the r87 "mechanically complete" hold): a 7-lane cut —
-forms Phase-5 build-out (x3 cluster A / x4 Date-Slider-Color / x5 mouse-clipboard), candy-vt E742
+forms Phase-5 build-out (x3 cluster A / x4 Date-Slider-Color / x5 mouse-clipboard), candy-vt E742 <!-- @rename-keep historical provenance -->
 palette fix (x1), sugar-bits Progress extraction + layout docblocks (x2), vt 6.4 row-shift API <!-- @rename-keep historical provenance -->
 (x6), candy-shine streaming render (x7). **SALVAGE-FIRST caught it: only 3 lanes existed on disk.** <!-- @rename-keep historical provenance -->
 

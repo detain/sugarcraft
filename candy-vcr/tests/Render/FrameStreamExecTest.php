@@ -11,8 +11,8 @@ use SugarCraft\Vcr\Tape\Compiler;
 use SugarCraft\Vcr\Tape\Lexer;
 use SugarCraft\Vcr\Tape\Parser;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**

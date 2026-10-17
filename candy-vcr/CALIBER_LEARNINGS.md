@@ -71,7 +71,7 @@ The A/B parallel run ensures zero downtime risk during the switchover.
 
 ### phpstan baseline
 
-Added `candy-vcr/phpstan.neon` (level: max, paths: src/ + tests/) and a generated baseline (`phpstan-baseline.neon`, 441 errors suppressed). The pre-existing type-inference issues in the legacy code require broader cleanup beyond Phase 0 scope; baselines preserve signal for NEW errors introduced by subsequent phases. Same pattern applied to `candy-vt/phpstan.neon` (128 errors baseline).
+Added `candy-vcr/phpstan.neon` (level: max, paths: src/ + tests/) and a generated baseline (`phpstan-baseline.neon`, 441 errors suppressed). The pre-existing type-inference issues in the legacy code require broader cleanup beyond Phase 0 scope; baselines preserve signal for NEW errors introduced by subsequent phases. Same pattern applied to `sugar-vterm/phpstan.neon` (128 errors baseline).
 
 ### Benchmark — Player replay (counter.cas, 6 events)
 

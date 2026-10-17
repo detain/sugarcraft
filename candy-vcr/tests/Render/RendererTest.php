@@ -12,7 +12,7 @@ use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameStream;
 use SugarCraft\Vcr\Render\Renderer;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * Tests for Renderer + FrameStream integration.
@@ -86,7 +86,7 @@ final class RendererTest extends TestCase
         $grid = $frames[0]->grid;
         $cell = $grid->cell(0, 0);
         $this->assertSame('b', $cell->char);
-        $this->assertSame(1, $cell->attrs & \SugarCraft\Vt\Cell::ATTR_BOLD);
+        $this->assertSame(1, $cell->attrs & \SugarCraft\Vterm\Cell::ATTR_BOLD);
     }
 
     public function testFrameStreamHandlesResizeEvent(): void

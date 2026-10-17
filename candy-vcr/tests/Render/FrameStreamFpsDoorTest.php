@@ -11,7 +11,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameStream;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * F2 (round 90): FrameStream::getIterator() divides 1.0/$fps on the shared

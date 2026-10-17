@@ -75,7 +75,7 @@ Supporting Infrastructure:
 
 ## Rendering Systems
 
-Not applicable — `candy-pty` is a terminal I/O primitive library, not a rendering library. The PTY pair is a byte pipe; rendering is handled by consuming libraries (e.g., `candy-vt` for virtual terminal emulation).
+Not applicable — `candy-pty` is a terminal I/O primitive library, not a rendering library. The PTY pair is a byte pipe; rendering is handled by consuming libraries (e.g., `sugar-vterm` for virtual terminal emulation).
 
 ## Extension Systems
 
@@ -387,9 +387,9 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 
 3. `PtyView::handleResize()` chaining `SignalForwarder`
 
-4. Consider `candy-vt` integration for escape sequence interpretation
+4. Consider `sugar-vterm` integration for escape sequence interpretation
 
-**Estimated complexity:** High — depends on `candy-vt` and `candy-core` rendering APIs
+**Estimated complexity:** High — depends on `sugar-vterm` and `candy-core` rendering APIs
 
 **Expected impact:** Low — niche use case until full TUI framework exists
 

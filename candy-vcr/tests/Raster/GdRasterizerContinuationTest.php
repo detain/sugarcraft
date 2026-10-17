@@ -7,10 +7,10 @@ namespace SugarCraft\Vcr\Tests\Raster;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\FontLoader;
 use SugarCraft\Vcr\Raster\GdRasterizer;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Cursor;
-use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Snapshot;
 
 /**
  * F4 (round 90): the rasterizer walk must follow the vt cell-grid contract

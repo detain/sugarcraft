@@ -20,7 +20,7 @@ use SugarCraft\GitServer\Lang;
  * Port of charmbracelet/soft-serve clipboard handling.
  *
  * @see https://github.com/charmbracelet/soft-serve
- * @see \SugarCraft\Vt\Handler\OscHandler for the TUI-side OSC 52 parser
+ * @see \SugarCraft\Vterm\Handler\OscHandler for the TUI-side OSC 52 parser
  */
 final class Osc52
 {

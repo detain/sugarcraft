@@ -13,7 +13,7 @@ use SugarCraft\Forms\Field\Color;
 /**
  * E736 5.8 (r88-x4): xterm-256 swatch picker — hex boundary coercion onto
  * the cube, bubbles axis mapping, table semantics pinned to the xterm
- * formula (the same one candy-vt documents — computed locally, no dep),
+ * formula (the same one sugar-vterm documents — computed locally, no dep),
  * snapshot frames with the hollow cursor cell.
  */
 final class ColorTest extends TestCase

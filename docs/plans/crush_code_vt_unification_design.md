@@ -1,4 +1,4 @@
-# E729 — candy-vt dual-stack unification: design note (lane r8, round 83)
+# E729 — candy-vt dual-stack unification: design note (lane r8, round 83) <!-- @rename-keep historical provenance -->
 
 **Status: DESIGN ONLY. Zero implementation.** This note answers the "design note first"
 half of §E729's acceptance; the orchestrator ruling on its recommendation is the
@@ -8,7 +8,7 @@ All surface facts below were re-measured at lane base `9f731a3d5`.
 
 ## 1. What actually exists (measured)
 
-candy-vt ships two COMPLETE, independently written emulator stacks sharing the
+candy-vt ships two COMPLETE, independently written emulator stacks sharing the <!-- @rename-keep historical provenance -->
 sugar-ansi-parser VT500 state machine (de-forked onto it by `9952e3f5c`):
 
 | | Renderer path (root namespace) | Emulator path (sub-namespaces) |
@@ -30,14 +30,14 @@ wider once Screen/Scrollback/Cursor/Sgr/Mode count in).
 - **Renderer stack → candy-vcr PRODUCTION**: `src/Render/Renderer.php:8`,
   `src/Render/FrameStream.php:14`, `src/Render/FrameDedup.php`,
   `src/Encode/TapeToGif.php:18`, `src/Cli/InspectCommand.php:14`, `src/Raster/*`
-  — every import is `use SugarCraft\Vt\Terminal;`. The GIF rasterizer consumes
+  — every import is `use SugarCraft\Vt\Terminal;`. The GIF rasterizer consumes <!-- @rename-keep historical provenance -->
   palette-indexed cells; FrameDedup consumes dirty-region deltas.
 - **Emulator stack → candy-vcr `src/Assert/ScreenAssertion.php:7`**
-  (`use SugarCraft\Vt\Terminal\Terminal;`), ~50 candy-vt tests, and
+  (`use SugarCraft\Vt\Terminal\Terminal;`), ~50 candy-vt tests, and <!-- @rename-keep historical provenance -->
   candy-pty `tests/Integration/VimSmokeTest.php:10`.
-- **sugar-crush → NEITHER.** `grep -rn 'SugarCraft\\Vt' sugar-crush/` = **0**.
+- **sugar-crush → NEITHER.** `grep -rn 'SugarCraft\\Vt' sugar-crush/` = **0**. <!-- @rename-keep historical provenance -->
   The backlog §E729 acceptance clause "all downstream consumers (sugar-crush
-  cell-grid tests via `SugarCraft\Vt\Terminal`)" was a FALSE premise; erratum
+  cell-grid tests via `SugarCraft\Vt\Terminal`)" was a FALSE premise; erratum <!-- @rename-keep historical provenance -->
   appended in place (E729 stays OPEN).
 
 ## 3. The parity bridge — an oracle that already exists
@@ -62,7 +62,7 @@ normaliser, compare directly".
 The renderer cell model (palette index, 5 attr bits) cannot express what the
 emulator already stores (truecolor, combining marks, blink/dim/hidden). The
 emulator's own suite and ScreenAssertion depend on those. This is a feature
-loss disguised as unification; candy-vt's upstream-parity port target
+loss disguised as unification; candy-vt's upstream-parity port target <!-- @rename-keep historical provenance -->
 (`charmbracelet/x/vt`-style emulator) would regress.
 
 ### B. Renderer-adopts-emulator (Cell/Buffer wins; root stack becomes a façade) — the only viable unification
@@ -90,7 +90,7 @@ purity, largest blast radius on BOTH downstream suites simultaneously.
 
 ## 5. Re-pin implications (campaign domain)
 
-- candy-vt suite (607T weld figure, r82) and candy-vcr suite (≈890T, r83) are
+- candy-vt suite (607T weld figure, r82) and candy-vcr suite (≈890T, r83) are <!-- @rename-keep historical provenance -->
   BOTH sensitive — sibling-lib gate = full suite of every touched lib
   (RESUME §1b).
 - **sugar-crush is UNAFFECTED** (zero references): no suite-figure.json /
@@ -100,7 +100,7 @@ purity, largest blast radius on BOTH downstream suites simultaneously.
 
 ## 6. Confronting the documented-intentional split (README:85-107)
 
-`candy-vt/README.md` "Two Terminal classes" states the split is deliberate: the
+`candy-vt/README.md` "Two Terminal classes" states the split is deliberate: the <!-- @rename-keep historical provenance -->
 root Terminal is *immutable fluent, produces Snapshot value objects, optimized
 for per-frame snapshots*; `Terminal\Terminal` *mutates in place, optimized for
 byte-stream ingest*. Measured against code: **the rationale is TRUE, not

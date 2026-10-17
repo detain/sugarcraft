@@ -84,7 +84,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
 - [x] [Step 10 — candy-sprinkles uses candy-layout](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
 - [x] [Step 11 — sugar-markdown StyleSheet + BlockStack](repo_map_step_11.md) — branch: `ai/sugar-markdown-blockstack`
-- [x] [Step 12 — candy-vt delegates to sugar-ansi-parser](repo_map_step_12.md) — branch: `ai/candy-vt-uses-ansi`
+- [x] [Step 12 — sugar-vterm delegates to sugar-ansi-parser](repo_map_step_12.md) — branch: `ai/sugar-vterm-uses-ansi`
 - [x] [Step 13 — sugar-image + sugar-colorprofile TerminalProbe](repo_map_step_13.md) — branch: `ai/probe-consolidation`
 
 ### Phase 3 — Migrate UI components onto shared foundations (6)

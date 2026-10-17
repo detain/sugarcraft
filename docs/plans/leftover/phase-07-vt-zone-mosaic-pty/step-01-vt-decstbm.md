@@ -1,6 +1,6 @@
-# Step 07.01 — candy-vt DECSTBM scroll margins (P0.1)
+# Step 07.01 — sugar-vterm DECSTBM scroll margins (P0.1)
 
-**Source:** `leftover_updates_later.md` candy-vt P0.1
+**Source:** `leftover_updates_later.md` sugar-vterm P0.1
 **Branch:** `ai/vt-decstbm`
 
 ## Deliverable
@@ -14,21 +14,21 @@ support throughout the scroll handler.
 
 **Modify:**
 
-- `candy-vt/src/Handler/ScrollHandler.php` — track top/bottom margin
+- `sugar-vterm/src/Handler/ScrollHandler.php` — track top/bottom margin
   rows; `scroll up/down` respects them.
-- `candy-vt/src/Screen/Screen.php` — `scrollRegion(int $top, int $bottom)`
+- `sugar-vterm/src/Screen/Screen.php` — `scrollRegion(int $top, int $bottom)`
   setter / getter; default to full screen.
-- `candy-vt/src/Parser/Parser.php` — dispatches `CSI r` → handler.
+- `sugar-vterm/src/Parser/Parser.php` — dispatches `CSI r` → handler.
 
 ## Tests
 
-- `candy-vt/tests/Handler/ScrollHandlerDecstbmTest.php` — feed
+- `sugar-vterm/tests/Handler/ScrollHandlerDecstbmTest.php` — feed
   `\x1b[5;15r` to set margins, then scroll, assert only the region
   scrolls.
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter Decstbm` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter Decstbm` green.
 
 ---
 

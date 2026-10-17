@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /*
- * W8-F differential probe: `ESC c` (RIS) on the two candy-vt engines.
+ * W8-F differential probe: `ESC c` (RIS) on the two sugar-vterm engines.
  *
- * Feeds each probe stream through the emulator (`SugarCraft\Vt\Terminal\Terminal`)
- * and the vcr renderer path (`SugarCraft\Vt\Terminal`, composed in
+ * Feeds each probe stream through the emulator (`SugarCraft\Vterm\Terminal\Terminal`)
+ * and the vcr renderer path (`SugarCraft\Vterm\Terminal`, composed in
  * `Terminal::new()` as Parser → RendererHandler → CsiHandlerImpl), then compares
  * every observable the two engines expose — normalised cell grid (char + masked
  * attrs), cursor home, DECTCEM visibility, the phantom-wrap flag, and the
@@ -23,8 +23,8 @@ if (!is_file($autoload)) {
 }
 require $autoload;
 
-use SugarCraft\Vt\Terminal as Renderer;
-use SugarCraft\Vt\Terminal\Terminal as Emulator;
+use SugarCraft\Vterm\Terminal as Renderer;
+use SugarCraft\Vterm\Terminal\Terminal as Emulator;
 
 const COLS = 20;
 const ROWS = 6;

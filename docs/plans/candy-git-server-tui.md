@@ -98,7 +98,7 @@ candy-git-server  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     ├── sugar-markdown      SyntaxHighlighter (file viewer colourisation)
     ├── candy-git      Git            (`log`, `show`, `cat-file`, `ls-tree`)
     ├── candy-core       Cmd::setClipboard()   (OSC 52 emitter, phase 5)
-    └── candy-vt         (terminal-state model used by candy-core writer)
+    └── sugar-vterm         (terminal-state model used by candy-core writer)
 ```
 
 ### 2.1 SSH → TUI plumbing (candy-wish handles it)
@@ -524,7 +524,7 @@ diff with file-level colourisation.
 - OSC 52 clipboard for the `c` keybind on both `RepoListView` and
   `RepoDetailView` — consume candy-core's existing
   `Cmd::setClipboard($url, 'c')` (`candy-core/src/Cmd.php:L267`,
-  shipped). No candy-vt prerequisite (candy-vt has OSC 52 *read*
+  shipped). No sugar-vterm prerequisite (sugar-vterm has OSC 52 *read*
   support; emit lives in candy-core via `Util/Ansi::setClipboard`).
 - HelpPanel modal (`?` keybind from any screen).
 - Theme polish — pick default theme; map keyboard cues consistently
@@ -602,8 +602,8 @@ authored.
 `candy-core/src/Cmd.php:L267` already exposes
 `Cmd::setClipboard($text, $selection = 'c')`, which emits the OSC 52
 escape (via `candy-core/src/Util/Ansi.php:L400` `Ansi::setClipboard`).
-Phase 5 consumes this directly — there is **no candy-vt prerequisite**
-for the clipboard emitter. (candy-vt has OSC 52 *read* support; emit
+Phase 5 consumes this directly — there is **no sugar-vterm prerequisite**
+for the clipboard emitter. (sugar-vterm has OSC 52 *read* support; emit
 lives in candy-core.)
 
 ---

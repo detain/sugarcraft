@@ -10601,7 +10601,7 @@ final class Chat implements Model
      * still have only that channel, by the judgement recorded on
      * `warnPermissionConfigInTranscript()`. MEASURED on a
      * real `bin/sugarcrush` launch under a pty: the line lands 0.47s before
-     * `\e[?1049h`, and replaying the captured stream through a `candy-vt`
+     * `\e[?1049h`, and replaying the captured stream through a `sugar-vterm`
      * `Terminal(120, 40)` finds no trace of it on the visible screen — the
      * alternate buffer painted over it, and the primary buffer it was written
      * into is not shown again until the session ENDS. An operator whose tool set

@@ -113,14 +113,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-pty | 50+ ✓ | APPROVE | 0 | 1 | 3 | 0 |
-| candy-vt | 58 ✓ | APPROVE | 0 | 1 | 2 | 0 |
+| candy-vt | 58 ✓ | APPROVE | 0 | 1 | 2 | 0 | <!-- @rename-keep historical provenance -->
 | candy-vcr | 90 ✓ | REQUEST_CHANGES | 1 | 1 | 4 | 0 |
 | candy-wish | 80 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
 | candy-mouse | 70 ✓ | APPROVE | 0 | 1 | 4 | 0 | <!-- @rename-keep historical provenance -->
 
 **candy-pty** — PTY/Fork wrapper. Clean. Issue: `@proc_open()` error suppression hides legitimate errors.
 
-**candy-vt** — Virtual terminal emulator. Issue: `Terminal` uses leaky internal state sharing with `CsiHandlerImpl`.
+**candy-vt** — Virtual terminal emulator. Issue: `Terminal` uses leaky internal state sharing with `CsiHandlerImpl`. <!-- @rename-keep historical provenance -->
 
 **candy-vcr** — Recording/playback. **Critical**: `PhpGifEncoder` is stub throwing `"Pure-PHP GIF encoder not yet implemented; use FfmpegGifEncoder"`. Major: `Recorder::withHook()` returns `$this` but mutates internal `HookRegistry` by reference.
 

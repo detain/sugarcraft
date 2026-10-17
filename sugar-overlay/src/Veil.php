@@ -739,7 +739,7 @@ final class Veil
      * Build a Buffer from a multi-line string output.
      *
      * Walks each row with a terminal-faithful tokenizer (mirroring the
-     * candy-vt emulator's cell representation, ESC-2/ESC-3 in commit
+     * sugar-vterm emulator's cell representation, ESC-2/ESC-3 in commit
      * 9a8c8879c) so the diff compares what a terminal would actually
      * SHOW, not raw bytes:
      *

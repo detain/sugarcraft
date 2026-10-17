@@ -6,12 +6,12 @@ namespace SugarCraft\Vcr\Tests\Msg;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Msg\BuiltinSerializer;
-use SugarCraft\Vt\Msg\FocusInMsg;
-use SugarCraft\Vt\Msg\FocusOutMsg;
+use SugarCraft\Vterm\Msg\FocusInMsg;
+use SugarCraft\Vterm\Msg\FocusOutMsg;
 
 /**
  * Round-trip tests for FocusInMsg and FocusOutMsg serialization.
- * These msg types originate in candy-vt (step 07.06) and must round-trip
+ * These msg types originate in sugar-vterm (step 07.06) and must round-trip
  * correctly through BuiltinSerializer for VCR cassette recording/replay.
  */
 final class BuiltinSerializerFocusTest extends TestCase

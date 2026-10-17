@@ -118,7 +118,7 @@ OSC 8 hyperlinks are supported by modern terminal emulators and commonly used. A
 
 **Conditions for success:**
 
-1. Docblock explicitly states "Deferred to v2" with reference to step-12 candy-vt migration
+1. Docblock explicitly states "Deferred to v2" with reference to step-12 sugar-vterm migration
 2. Issue or TODO comment links to tracking issue
 
 **Implementation approach:**
@@ -136,7 +136,7 @@ OSC 8 hyperlinks are supported by modern terminal emulators and commonly used. A
 **File:** `src/Parser/CsiHandlerImpl.php`
 
 **Notes:**
-Deferred to candy-vt migration in step-12 per CALIBER_LEARNINGS.md. Interface must remain stable for the migration. No action needed except ensuring interface stability.
+Deferred to sugar-vterm migration in step-12 per CALIBER_LEARNINGS.md. Interface must remain stable for the migration. No action needed except ensuring interface stability.
 
 ---
 
@@ -515,7 +515,7 @@ For the common case of OSC 2, the regex could be replaced with `strpos` + `subst
 
 ### CsiHandlerImpl all no-ops
 
-Deferred to candy-vt migration in step-12 per CALIBER_LEARNINGS.md.
+Deferred to sugar-vterm migration in step-12 per CALIBER_LEARNINGS.md.
 
 ### Synchronous-only design
 

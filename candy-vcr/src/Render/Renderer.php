@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Render;
 
 use SugarCraft\Vcr\Player;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * Orchestrates Player + Terminal to produce a stream of Snapshots

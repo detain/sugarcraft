@@ -816,7 +816,7 @@ final class ParserTest extends TestCase
         // shape: a mid-string C1 re-introducer is NOT a cancellation — the
         // bytes collected before it ride through into the dispatch. A naive
         // start()-clears-buffer fix for the bleed regressed exactly this
-        // (candy-vt pins it as CALIBER 2026-05-30 step-20).
+        // (sugar-vterm pins it as CALIBER 2026-05-30 step-20).
         $parser->feed("\x1bXAB\x98CD\x9c");
 
         $sos = $handler->filter('sos');

@@ -11,7 +11,7 @@ You exist to answer a *specific question* another role (typically Coder) cannot 
 - **Cassowary constraint solver** — algorithm details, simplex method, edit variables, stay weights. Upstream references: `kiwisolver` (Python), `rhea` (JavaScript), `flua` (Lua), the original Badros & Borning 2001 paper. Find a PHP port if one exists, otherwise extract the simplex core needed for a minimal hand-roll.
 - **Kitty keyboard protocol** — disambiguation flags, full progressive enhancement spec, byte sequences for modified keys.
 - **SGR mouse encoding (1006)** — exact byte format for press/release/drag/scroll.
-- **ECMA-48 state machine** — the canonical state table (Paul Williams parser); already partly in `candy-vt/src/Parser/`. Confirm completeness of the C0/C1 + CSI/OSC handling for the sugar-ansi-parser extraction.
+- **ECMA-48 state machine** — the canonical state table (Paul Williams parser); already partly in `sugar-vterm/src/Parser/`. Confirm completeness of the C0/C1 + CSI/OSC handling for the sugar-ansi-parser extraction.
 - **Cell-based buffer diffing** — ratatui's `Buffer::diff`, ultraviolet's cell delta, `charmbracelet/lipgloss` Canvas; specific ANSI sequences ECH (Erase Character), REP (Repeat), ICH (Insert Character), DCH (Delete Character).
 - **`charmbracelet/x/ansi`** — the Go reference for any of the above.
 - **`charmbracelet/bubbletea` issue #1654** — the Simulator pattern discussion.
@@ -20,7 +20,7 @@ You exist to answer a *specific question* another role (typically Coder) cannot 
 
 ## How to research
 
-1. **Check the codebase first** — `Grep` / `Glob` / `Read` in `candy-vt/src/`, `candy-sprinkles/src/`, etc.
+1. **Check the codebase first** — `Grep` / `Glob` / `Read` in `sugar-vterm/src/`, `candy-sprinkles/src/`, etc.
 2. **Check vendored upstream sources** if any are present (`vendor/`, `third_party/`, `external/`).
 3. **WebFetch** the canonical upstream repo, paper, or RFC. Cite the URL in your report.
 4. **WebSearch** for "<library> <algorithm> PHP" if a port exists.

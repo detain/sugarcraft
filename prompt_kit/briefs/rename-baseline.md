@@ -59,7 +59,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-tetris | 214 | 4322 | 0 | 0 | 0 | 0 |  |
 | candy-top | 2110 | 107777 | 0 | 0 | 0 | 0 |  |
 | candy-vcr | 989 | 4209 | 0 | 0 | 14 | 0 |  |
-| candy-vt | 976 | 12873 | 0 | 0 | 0 | 0 |  |
+| candy-vt | 976 | 12873 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-wish | 260 | 976 | 0 | 0 | 0 | 0 |  |
 | candy-mouse | 139 | 416 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | honey-bounce | 210 | 6088 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->

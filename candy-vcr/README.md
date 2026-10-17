@@ -2,14 +2,14 @@
 
 Cassette recorder / replayer for candy-core `Program`s **and** a
 `.tape` → `.gif` terminal-demo renderer for PHP 8.3+. Pairs with
-[candy-vt](../candy-vt/) — every frame
-fed to the GIF encoder is a `SugarCraft\Vt\Snapshot` taken off
-candy-vt's `Terminal`.
+[sugar-vterm](../sugar-vterm/) — every frame
+fed to the GIF encoder is a `SugarCraft\Vterm\Snapshot` taken off
+sugar-vterm's `Terminal`.
 
 Records every Msg fed into a candy-core `Program` and every frame emitted by
 `view()`, with timing, into a cassette file. Replays cassettes by feeding the
 recorded Msgs back at recorded cadence and asserting frames match (cell-grid
-equality via [candy-vt](../candy-vt/), with byte-equality fallback).
+equality via [sugar-vterm](../sugar-vterm/), with byte-equality fallback).
 
 ## Contents
 
@@ -671,7 +671,7 @@ with optional deduplication of identical adjacent frames:
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Render\FrameDedup;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Terminal;
 
 // Open a cassette (from tape compiler or direct record)
 $player = Player::open('demo.cas');
@@ -685,7 +685,7 @@ $stream = $renderer->render($player, $terminal, 30.0);
 $deduped = FrameDedup::dedup($stream);
 
 foreach ($deduped as $index => $snapshot) {
-    // $snapshot is a SugarCraft\Vt\Snapshot with grid + cursor + time
+    // $snapshot is a SugarCraft\Vterm\Snapshot with grid + cursor + time
     printf("Frame %d at t=%.3f\n", $index, $snapshot->time);
 }
 ```
@@ -923,9 +923,9 @@ Known limits:
 
 ### Engine parity tests
 
-`ScreenAssertion` grids come from candy-vt's renderer path
-(`SugarCraft\Vt\Terminal`), while `Render\Renderer` frames share it and
-tooling elsewhere uses the full emulator (`SugarCraft\Vt\Terminal\Terminal`).
+`ScreenAssertion` grids come from sugar-vterm's renderer path
+(`SugarCraft\Vterm\Terminal`), while `Render\Renderer` frames share it and
+tooling elsewhere uses the full emulator (`SugarCraft\Vterm\Terminal\Terminal`).
 `tests/VtParityTest.php` feeds curated + seeded-random escape streams through
 **both** engines and asserts identical normalised cell grids, so the two
 candy-vcr surfaces cannot drift silently. The renderer-path parity pass
@@ -940,7 +940,7 @@ renderer-only REP, and the explicit `CSI 0 L/M` count no-op that sugar-ansi-pars
 explicit tripwire case with a fix pointer rather than left to surface as a
 mystery assertion failure.
 
-`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [candy-vt](../candy-vt/)) is the recommended choice for round-trip tests:
+`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [sugar-vterm](../sugar-vterm/)) is the recommended choice for round-trip tests:
 
 ```php
 use SugarCraft\Vcr\Assert\ScreenAssertion;
@@ -952,7 +952,7 @@ $result = $player->play(
 ```
 
 It feeds both expected and actual byte streams into separate
-`SugarCraft\Vt\Terminal\Terminal` instances and compares the resulting
+`SugarCraft\Vterm\Terminal\Terminal` instances and compares the resulting
 cell grids. ANSI-level reorderings — redundant SGR re-emission,
 equivalent cursor moves, partial vs full repaints — collapse to the
 same grapheme grid, so a recording → replay round trip passes even
@@ -1004,7 +1004,7 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
 | Class | Use when |
 |-------|----------|
 | `ByteAssertion` | Strict byte-equality; the safest baseline. |
-| `ScreenAssertion` | Cell-grid equality through candy-vt; collapses ANSI re-orderings. Default for round-trip tests. |
+| `ScreenAssertion` | Cell-grid equality through sugar-vterm; collapses ANSI re-orderings. Default for round-trip tests. |
 | `ContainsAssertion` | Substring check; expected must appear anywhere in actual. |
 | `RegexAssertion` | PCRE regex match; supports `multiline` / `caseInsensitive` / `dotAll`. |
 | `Assertion` (interface) | `compare(string $expected, string $actual): array{0: bool, 1: string}` — implement for custom assertions. |

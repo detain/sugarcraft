@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Raster;
 
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Theme;
 
 /**
  * The single palette-vs-truecolour decision every rasterizer shares.

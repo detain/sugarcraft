@@ -7,13 +7,13 @@ namespace SugarCraft\Pty\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\PtySystemFactory;
-use SugarCraft\Vt\Terminal\Terminal;
+use SugarCraft\Vterm\Terminal\Terminal;
 
 /**
  * End-to-end smoke test for `vim` under a real PTY.
  *
  * Drives the canonical "open file, type Hello, save, quit" dialog and
- * asserts both the on-disk artifact and an in-memory candy-vt screen
+ * asserts both the on-disk artifact and an in-memory sugar-vterm screen
  * snapshot showing "Hello" appeared on the editor grid before the
  * `:wq` write. Vim is the most demanding child we exercise — it uses
  * the alternate screen buffer, drives SIGWINCH on resize, and reacts
@@ -54,10 +54,10 @@ final class VimSmokeTest extends TestCase
         if (!\is_executable(self::VIM_PATH)) {
             $this->markTestSkipped(\sprintf('vim not installed at %s', self::VIM_PATH));
         }
-        // candy-vt is require-dev — coverage runners that install only
+        // sugar-vterm is require-dev — coverage runners that install only
         // production deps won't have it. Skip cleanly rather than fatal.
         if (!\class_exists(Terminal::class)) {
-            $this->markTestSkipped('SugarCraft\\Vt\\Terminal\\Terminal not autoloadable (candy-vt require-dev missing on this runner)');
+            $this->markTestSkipped('SugarCraft\\Vterm\\Terminal\\Terminal not autoloadable (sugar-vterm require-dev missing on this runner)');
         }
 
         // Per-PID + random suffix so concurrent test runs don't collide.
@@ -167,7 +167,7 @@ final class VimSmokeTest extends TestCase
 
     /**
      * Drain master non-blocking for $window seconds, feeding every
-     * byte into the candy-vt terminal so callers can screen-assert
+     * byte into the sugar-vterm terminal so callers can screen-assert
      * mid-test. Exits early if the child has exited and EOF arrives.
      */
     private function pumpInto(Terminal $term, MasterPty $master, \SugarCraft\Pty\Contract\Child $child, float $window): void
@@ -193,7 +193,7 @@ final class VimSmokeTest extends TestCase
     }
 
     /**
-     * Scan the candy-vt screen row-by-row for $needle. We don't pin
+     * Scan the sugar-vterm screen row-by-row for $needle. We don't pin
      * coordinates because vim's status line / cursor line position
      * varies with version, signcolumn, and tabline defaults.
      */

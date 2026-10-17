@@ -23,6 +23,6 @@
         { "type": "path", "url": "../../sugar-dashboard",       "options": { "symlink": true } },
         { "type": "path", "url": "../../candy-pty",        "options": { "symlink": true } },
         { "type": "path", "url": "../../candy-vcr",        "options": { "symlink": true } },
-        { "type": "path", "url": "../../candy-vt",         "options": { "symlink": true } }
+        { "type": "path", "url": "../../sugar-vterm",         "options": { "symlink": true } }
     ]
 }

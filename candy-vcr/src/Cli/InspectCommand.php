@@ -11,9 +11,9 @@ use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Support\Scalars;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Terminal;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Theme;
 
 /**
  * `candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>]`

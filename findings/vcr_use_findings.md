@@ -44,7 +44,7 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 - [x] `RenderBatchCommand`: batch reuses one `TapeToGif` instance — assert `TapeToGif::create()` is called exactly once across N tapes (via mock / spy). (`tests/Cli/RenderBatchReuseTest.php`; `PhpToken` walk confirms one `TapeToGif::create()` call hoisted above the per-tape `foreach`, plus reflection confirms the rasterizer instance survives across `render()` calls)
 - [x] `TapeToGif` temp dir: parallel test ensuring two `TapeToGif::render()` calls in same process use different temp dirs. (`tests/Encode/TapeToGifTempDirTest.php`; reflection drives `createTempDir()` twice)
 - [x] `FrameStream` Resize preserves theme: feed a Resize event mid-stream; assert the post-resize Terminal carries the original theme. (`tests/Render/FrameStreamThemeResizeTest.php`; bg pixel must stay TokyoNight `0x15161e` after the Resize, via the rasterizer)
-- [x] `ImagickRasterizer::indexToHex` grayscale: index 232 (rgb 8,8,8) returns `#080808`, not `#888888`. (`tests/Raster/ImagickRasterizerGrayscaleTest.php`; required fixing `Theme::color()` in candy-vt to fall back to `Theme::rgb()` for indices 216..255 not in the cube palette — the old `?? 0` returned black for grayscale)
+- [x] `ImagickRasterizer::indexToHex` grayscale: index 232 (rgb 8,8,8) returns `#080808`, not `#888888`. (`tests/Raster/ImagickRasterizerGrayscaleTest.php`; required fixing `Theme::color()` in sugar-vterm to fall back to `Theme::rgb()` for indices 216..255 not in the cube palette — the old `?? 0` returned black for grayscale)
 - [x] `Application::runSymfonyCommand`: invoke `render-tape /tmp/foo.tape -o /tmp/foo.gif` via `Application::run()` (not directly), assert the tape arg reaches the command. (`tests/Cli/ApplicationRoutingTest.php`)
 - [x] `pty-shim.php` autoload discovery: simulate being installed at `vendor/sugarcraft/candy-pty/bin/pty-shim.php` — assert it still finds an autoload. (`tests/Cli/PtyShimAutoloadTest.php`)
 
@@ -55,7 +55,7 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 - [x] Run `vendor/bin/phpstan analyze` in `candy-vcr`; list every error not in the baseline. (92 unbaselined errors found at start.)
 - [x] Fix the ~87 unbaselined errors in `Cli/Application.php`, `Cli/RenderBatchCommand.php`, `Cli/RenderTapeCommand.php`, `Tape/Lexer.php`, `Tape/Compiler.php`, tests in `tests/Encode/`, `tests/Raster/`, `tests/Render/`, `tests/Tape/`. **Do not** add new baseline entries — fix at the source. (All 92 fixed at source: union typing for InputInterface options, removing redundant `assertInstanceOf` calls where types are already certain, narrowing nullable mixed → string casts via `is_string` guards, default arms on `match` expressions, redundant unused `new FfmpegGifEncoder('ffmpeg', $this->tempDir)` 2-arg-constructor call removed in TapeToGifTest.php — that was a real arity bug.)
 - [x] Audit the existing 1513-line baseline: any entry that the post-audit code no longer triggers (because we fixed the underlying issue) must be removed. (Baseline regenerated: 1513 → 1501 lines, 439 errors baselined.)
-- [x] candy-vt: regenerate or audit `phpstan-baseline.neon` similarly. (Found 35 unbaselined errors including REAL bugs: HandlerAdapter calling 3 methods missing from `CsiHandler` interface — `cht()`, `cbt()`, `gridRows()` — fixed by adding them to the interface. Baseline 433 → 397 lines, 119 errors baselined.)
+- [x] sugar-vterm: regenerate or audit `phpstan-baseline.neon` similarly. (Found 35 unbaselined errors including REAL bugs: HandlerAdapter calling 3 methods missing from `CsiHandler` interface — `cht()`, `cbt()`, `gridRows()` — fixed by adding them to the interface. Baseline 433 → 397 lines, 119 errors baselined.)
 - [x] Both libs end with `vendor/bin/phpstan analyze` clean (or with a justifiably smaller baseline). (Both exit 0.)
 
 ## Section E — php-cs-fixer install + lint pass
@@ -63,8 +63,8 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 **Why it matters:** Plan §0 said add it so subsequent phases have a lint gate. Root `.php-cs-fixer.dist.php` exists but no `vendor/bin/php-cs-fixer` is installed anywhere.
 
 - [x] Add `friendsofphp/php-cs-fixer: ^3.65` to `candy-vcr/composer.json` `require-dev`. (Installed as v3.95.2; no conflicts.)
-- [x] Same for `candy-vt/composer.json`. (Installed as v3.95.2; no conflicts.)
-- [x] Run `vendor/bin/php-cs-fixer fix --dry-run --diff` in both libs; commit fixes (separate commit from the dep install so the diff is readable). (candy-vcr: 2 files touched — `src/Encode/PhpGifEncoder.php` (`new class()` → `new class ()`) and `tests/Tape/CompilerTest.php` (`fn(...)` → `fn (...)`). candy-vt: 0 files touched.)
+- [x] Same for `sugar-vterm/composer.json`. (Installed as v3.95.2; no conflicts.)
+- [x] Run `vendor/bin/php-cs-fixer fix --dry-run --diff` in both libs; commit fixes (separate commit from the dep install so the diff is readable). (candy-vcr: 2 files touched — `src/Encode/PhpGifEncoder.php` (`new class()` → `new class ()`) and `tests/Tape/CompilerTest.php` (`fn(...)` → `fn (...)`). sugar-vterm: 0 files touched.)
 - [x] Add a one-line "lint" snippet to each lib's README under Development. (`vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php`; both libs have a Development section now.)
 
 ## Section F — Tape compiler round-trip + decompile
@@ -116,12 +116,12 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 ## Section K — README documentation completeness
 
-**Why it matters:** User asked that everything candy-vcr and candy-vt can do be fully documented in their README files at the end of this work.
+**Why it matters:** User asked that everything candy-vcr and sugar-vterm can do be fully documented in their README files at the end of this work.
 
 - [x] `candy-vcr/README.md` documents every public-facing capability: CLI subcommands (record, replay, inspect, diff, stats, migrate, render-tape, render-batch) with each flag, the `Cassette` / `Recorder` / `Player` PHP APIs, all five cassette formats (Jsonl, Relative, Yaml, Asciinema, CompressedJsonl), the Tape DSL (Lexer/Parser/Compiler/Decompiler) with full directive table, the rasterizer + encoder backends (GdRasterizer, ImagickRasterizer, FfmpegGifEncoder, PhpGifEncoder), the Renderer + FrameStream + FrameDedup pipeline, the Theme system, FontLoader + Glyphs cache. (New `## Contents` TOC at the top; new `## PHP API` table covering Cassette/Header/Event/EventKind/Recorder/Player/Format/CassetteLoader/ReplayResult; new `### Matcher classes (L3 — replay-side flexibility)` table covering Passthrough/Content/TimingTolerant; new `## Visual regression goldens` section pointing to `tests/golden/` + `scripts/refresh-goldens.php`; expanded Tape directive table including the `Set` key allowlist + AST node enumeration; expanded Rasterizer section with FontLoader + Glyphs public surface; expanded Assertion family table including `RegexAssertion`.)
-- [x] `candy-vt/README.md` documents Terminal (constructor, `feed`, `snapshot`, `theme`, `cursor`, `grid`, `windowTitle`), Cell/CellGrid/Cursor/Snapshot value-object surfaces, Parser state machine + handler interfaces, every theme factory (TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark), CSI/OSC handler coverage table. (New `## Contents` TOC; new `## Two Terminal classes` table distinguishing the full VT facade from the renderer-path `Terminal::new()` used by candy-vcr; new `### Snapshot` subsection; new `## Parser state machine` section with State / Action / Transitions / HandlerAdapter; new `## CSI coverage table` mapping every final byte to its method/behavior; new `## OSC coverage` table; new `## SGR attributes` table; new `### Theme accessors` table; new `## Subsystems` table covering Buffer/Screen/Scrollback/Cell/Cursor/Sgr/UnderlineStyle/Mode/Hyperlink/Msg/Color/CursorShape.)
+- [x] `sugar-vterm/README.md` documents Terminal (constructor, `feed`, `snapshot`, `theme`, `cursor`, `grid`, `windowTitle`), Cell/CellGrid/Cursor/Snapshot value-object surfaces, Parser state machine + handler interfaces, every theme factory (TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark), CSI/OSC handler coverage table. (New `## Contents` TOC; new `## Two Terminal classes` table distinguishing the full VT facade from the renderer-path `Terminal::new()` used by candy-vcr; new `### Snapshot` subsection; new `## Parser state machine` section with State / Action / Transitions / HandlerAdapter; new `## CSI coverage table` mapping every final byte to its method/behavior; new `## OSC coverage` table; new `## SGR attributes` table; new `### Theme accessors` table; new `## Subsystems` table covering Buffer/Screen/Scrollback/Cell/Cursor/Sgr/UnderlineStyle/Mode/Hyperlink/Msg/Color/CursorShape.)
 - [x] Both READMEs have a "Development" section with phpunit + phpstan + php-cs-fixer commands. (Already present from Section E; confirmed both libs.)
-- [x] Both READMEs cross-link to the other lib (candy-vt → candy-vcr's renderer, candy-vcr → candy-vt's Terminal). (candy-vcr README intro now mentions "Pairs with candy-vt — every frame fed to the GIF encoder is a `SugarCraft\Vt\Snapshot` taken off candy-vt's `Terminal`." candy-vt README intro now says "Used as the terminal emulator behind candy-vcr's `render-tape` pipeline" and the `## Related` section adds a top-level link.)
+- [x] Both READMEs cross-link to the other lib (sugar-vterm → candy-vcr's renderer, candy-vcr → sugar-vterm's Terminal). (candy-vcr README intro now mentions "Pairs with sugar-vterm — every frame fed to the GIF encoder is a `SugarCraft\Vterm\Snapshot` taken off sugar-vterm's `Terminal`." sugar-vterm README intro now says "Used as the terminal emulator behind candy-vcr's `render-tape` pipeline" and the `## Related` section adds a top-level link.)
 
 ## Final verification pass (after Sections A–K ship)
 
@@ -129,11 +129,11 @@ Spawn one last review agent to:
 
 - [ ] Re-read `vcr_use.md` section by section and grep / read the codebase to verify each Phase 0–7 deliverable matches the plan.
 - [ ] Re-confirm each box in this file is ticked.
-- [ ] Run `vendor/bin/phpunit` in `candy-vcr`, `candy-vt`, `candy-pty` — report assertion counts.
-- [ ] Run `vendor/bin/phpstan analyze` in `candy-vcr` and `candy-vt` — report error counts.
+- [ ] Run `vendor/bin/phpunit` in `candy-vcr`, `sugar-vterm`, `candy-pty` — report assertion counts.
+- [ ] Run `vendor/bin/phpstan analyze` in `candy-vcr` and `sugar-vterm` — report error counts.
 - [ ] Render `candy-vcr/.vhs/smoke.tape` end-to-end with both `--encoder ffmpeg` and `--encoder php`; report GIF dimensions + sizes.
 - [ ] Compare against the upstream-vhs runner job's output for the seed lib; report any visual drift.
-- [ ] Cross-check candy-vcr/README.md + candy-vt/README.md against the actual public API — flag undocumented surface.
+- [ ] Cross-check candy-vcr/README.md + sugar-vterm/README.md against the actual public API — flag undocumented surface.
 - [ ] Write the final verdict ("Plan complete" or list of residuals) into this file at the bottom.
 
 ---
@@ -143,8 +143,8 @@ Spawn one last review agent to:
 **Status:** Plan complete
 
 **Phase coverage:**
-- Phase 0: pass — `candy-vcr/phpstan.neon` + `candy-vt/phpstan.neon` (`level: max`) and root `.php-cs-fixer.dist.php` all present; both phpstan suites exit `[OK] No errors`; both cs-fixer dry-runs report `files:[]`; `TickModel::subscriptions()` returns `null` in test models.
-- Phase 1: pass — `candy-vt` ships `Terminal`, `Cell`, `CellGrid`, `Cursor`, `Snapshot::of()`, CSI state-machine parser (`Parser/Parser.php` + `State.php` + `Transitions.php` + `Action.php`), `CsiHandlerImpl` + `OscHandlerImpl` + `HandlerAdapter`, plus `Theme::tokyoNight()`/`dracula()`/`solarizedDark()`/`tokyoNightLight()`/`tokyoNightStorm()` factories and `Themes::all()`/`v1()` catalog.
+- Phase 0: pass — `candy-vcr/phpstan.neon` + `sugar-vterm/phpstan.neon` (`level: max`) and root `.php-cs-fixer.dist.php` all present; both phpstan suites exit `[OK] No errors`; both cs-fixer dry-runs report `files:[]`; `TickModel::subscriptions()` returns `null` in test models.
+- Phase 1: pass — `sugar-vterm` ships `Terminal`, `Cell`, `CellGrid`, `Cursor`, `Snapshot::of()`, CSI state-machine parser (`Parser/Parser.php` + `State.php` + `Transitions.php` + `Action.php`), `CsiHandlerImpl` + `OscHandlerImpl` + `HandlerAdapter`, plus `Theme::tokyoNight()`/`dracula()`/`solarizedDark()`/`tokyoNightLight()`/`tokyoNightStorm()` factories and `Themes::all()`/`v1()` catalog.
 - Phase 2: pass — `src/Tape/Lexer.php`, `Parser.php`, `Compiler.php`, full `Ast/*` directive set (Type/Enter/Sleep/Set/Env/Ctrl/Arrow/Backspace/Tab/Wait/Hide/Show/Screenshot/Output/Escape/Space). Corpus parse test green.
 - Phase 3: pass — `src/Render/Renderer.php`, `FrameStream.php`, `FrameDedup.php` honor `Set TypingSpeed`, `Sleep`, arrow/Ctrl sequences. Theme survives `Resize` events.
 - Phase 4: pass — `GdRasterizer` (default, cross-frame `Glyphs` cache with fingerprint invalidation), `ImagickRasterizer` (mirrored tile cache), `FontLoader`, `Glyphs`. JetBrainsMono Regular/Bold/Italic/BoldItalic + OFL `LICENSE` bundled; DejaVu retained as fallback.
@@ -154,16 +154,16 @@ Spawn one last review agent to:
 
 **Test totals:**
 - candy-vcr: 634 tests / 5402 assertions (1 skipped — ffmpeg-gated VFR test on hosts without ffmpeg-on-PATH variant)
-- candy-vt: 506 tests / 2127 assertions
+- sugar-vterm: 506 tests / 2127 assertions
 - candy-pty: 331 tests / 929 assertions (7 skipped — FFI/PTY environment gates)
 
 **phpstan:**
 - candy-vcr: exit 0 — `[OK] No errors`
-- candy-vt: exit 0 — `[OK] No errors`
+- sugar-vterm: exit 0 — `[OK] No errors`
 
 **php-cs-fixer:**
 - candy-vcr: clean — `files:[]`
-- candy-vt: clean — `files:[]`
+- sugar-vterm: clean — `files:[]`
 
 **End-to-end render:**
 - ffmpeg encoder: 640×672 / 8969 bytes — `/tmp/final-smoke-ffmpeg.gif` (GIF89a)

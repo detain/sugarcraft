@@ -654,15 +654,15 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 
 **Critical Architectural Note** (from README):
 
-> Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `candy-sprinkles`/`candy-core`/`candy-vt`. The lineage differs (charmbracelet/inline-termui for sugar-dashboard, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge.
+> Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `candy-sprinkles`/`candy-core`/`sugar-vterm`. The lineage differs (charmbracelet/inline-termui for sugar-dashboard, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge.
 
 | sugar-dashboard Class | candy-sprinkles Class | candy-core Class |
 |---|---|---|
 | `SugarCraft\Dashboard\Foundation\Style` | `SugarCraft\Sprinkles\Style` | -- |
 | `SugarCraft\Dashboard\Foundation\Theme` | `SugarCraft\Sprinkles\Theme` | -- |
 | `SugarCraft\Dashboard\Foundation\Rect` | -- | `SugarCraft\Core\Rect` |
-| `SugarCraft\Dashboard\Foundation\Buffer` | -- | `SugarCraft\Vt\Buffer\Buffer` |
-| `SugarCraft\Dashboard\Foundation\Cell` | -- | `SugarCraft\Vt\Cell\Cell` |
+| `SugarCraft\Dashboard\Foundation\Buffer` | -- | `SugarCraft\Vterm\Buffer\Buffer` |
+| `SugarCraft\Dashboard\Foundation\Cell` | -- | `SugarCraft\Vterm\Cell\Cell` |
 | `SugarCraft\Dashboard\Foundation\StyleParser` | `SugarCraft\Sprinkles\StyleParser` | -- |
 
 ---

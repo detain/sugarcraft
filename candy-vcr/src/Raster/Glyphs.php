@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Raster;
 
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Pre-rendered character tile cache.

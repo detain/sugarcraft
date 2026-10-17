@@ -25,7 +25,7 @@ P6 step shape (per the plan):
 | **P6.5.2** | `ai/candy-vcr-record-shell-env` | `--shell` / `--env` flags with secret regex filter |
 | **P6.5.3** | `ai/candy-vcr-record-idle-trim` | `--idle-trim N` with dual timestamps (t / tRaw) |
 | **P6.5.4** | `ai/candy-vcr-record-safety-net` | Host termios rescue via shutdown_function + SIGTERM/SIGHUP handlers |
-| **P6.5.5** | `ai/candy-vcr-shirley-integration` | bash + vim integration tests through `candy-vt::Terminal` |
+| **P6.5.5** | `ai/candy-vcr-shirley-integration` | bash + vim integration tests through `sugar-vterm::Terminal` |
 | **P6.5.6** | `ai/candy-vcr-shirley-perf` | ≤2% overhead assertion on `time bash -c 'seq 100000'` |
 
 **P6.5 is the headline.** Closes the gap with `asciinema rec` / charmbracelet/shirley. Depends on P6.1 (Recorder tap). Hot path: P6.1 → P6.5.1 → P6.5.2 → P6.5.3 → P6.5.4 → P6.5.5 → P6.5.6.

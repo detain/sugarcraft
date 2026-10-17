@@ -71,7 +71,7 @@
         "sugarcraft/candy-tetris": "dev-master",
         "sugarcraft/candy-top": "dev-master",
         "sugarcraft/candy-vcr": "dev-master",
-        "sugarcraft/candy-vt": "dev-master",
+        "sugarcraft/sugar-vterm": "dev-master",
         "sugarcraft/candy-wish": "dev-master",
         "sugarcraft/sugar-spring": "dev-master",
         "sugarcraft/candy-flappy": "dev-master",
@@ -328,7 +328,7 @@
         },
         {
             "type": "path",
-            "url": "candy-vt",
+            "url": "sugar-vterm",
             "options": {
                 "symlink": true
             }

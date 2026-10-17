@@ -1,6 +1,6 @@
-# Step 07.04 — candy-vt scrollback buffer (P1.1)
+# Step 07.04 — sugar-vterm scrollback buffer (P1.1)
 
-**Source:** `leftover_updates_later.md` candy-vt P1.1
+**Source:** `leftover_updates_later.md` sugar-vterm P1.1
 **Branch:** `ai/vt-scrollback`
 
 ## Deliverable
@@ -13,25 +13,25 @@ ring-buffer scrollback with configurable size (default 1000 lines).
 
 **Create:**
 
-- `candy-vt/src/Screen/Scrollback.php` — ring buffer of `Row[]`.
+- `sugar-vterm/src/Screen/Scrollback.php` — ring buffer of `Row[]`.
   Configurable max size; default 1000.
 
 **Modify:**
 
-- `candy-vt/src/Screen/Screen.php` — `scrollUp(int $n)` pushes the
+- `sugar-vterm/src/Screen/Screen.php` — `scrollUp(int $n)` pushes the
   evicted rows into `Scrollback` before dropping them. Add accessor
   `scrollback(): Scrollback`.
-- `candy-vt/src/Terminal/Terminal.php` — `withScrollbackSize(int): self`.
+- `sugar-vterm/src/Terminal/Terminal.php` — `withScrollbackSize(int): self`.
 
 ## Tests
 
-- `candy-vt/tests/Screen/ScrollbackTest.php` — write 1100 lines into a
+- `sugar-vterm/tests/Screen/ScrollbackTest.php` — write 1100 lines into a
   24-row screen; assert first 100 lines are in scrollback at the right
   positions.
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter Scrollback` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter Scrollback` green.
 
 ---
 

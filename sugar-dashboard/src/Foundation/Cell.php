@@ -6,7 +6,7 @@ namespace SugarCraft\Dashboard\Foundation;
 
 /**
  * Sugar-dash Cell holds (rune, Style) for the inline-termui
- * renderer. Intentionally distinct from \SugarCraft\Vt\Cell\Cell,
+ * renderer. Intentionally distinct from \SugarCraft\Vterm\Cell\Cell,
  * which holds (grapheme, Sgr, continuation, hyperlink) for VT
  * emulation. Both are canonical for their lib.
  *

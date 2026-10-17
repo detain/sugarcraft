@@ -82,7 +82,7 @@ final class PlayerTest extends TestCase
         // expected — replay's framerate-based renderer fires more
         // ticks (over the chained event interval) than recording's
         // briefer loop, producing extra frame bytes. PR5's
-        // ScreenAssertion via candy-vt collapses these to cell-grid
+        // ScreenAssertion via sugar-vterm collapses these to cell-grid
         // equality, which IS round-trippable. The structural
         // assertions here are what PR4 guarantees:
         $this->assertGreaterThan(0, $result->resizeCount);

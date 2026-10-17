@@ -25,7 +25,7 @@ To implement an item:
 | **candy-core** | [research/libraries/candy-core-research.md](libraries/candy-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
 | **candy-sprinkles** | [research/libraries/candy-sprinkles-research.md](libraries/candy-sprinkles-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing |
 | **candy-pty** | [research/libraries/candy-pty-research.md](libraries/candy-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
-| **candy-vt** | [research/libraries/candy-vt-research.md](libraries/candy-vt-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
+| **sugar-vterm** | [research/libraries/sugar-vterm-research.md](libraries/sugar-vterm-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
 | **candy-vcr** | [research/libraries/candy-vcr-research.md](libraries/candy-vcr-research.md) | 1. stats CLI, 2. RegexAssertion, 3. Gzip compression |
 
 ### Dashboard & Components
@@ -117,8 +117,8 @@ To implement an item:
 | 11 | candy-codeshot | Background colors | 2h | [link](libraries/candy-codeshot-research.md) |
 | 12 | candy-codeshot | Ligature flag | 1h | [link](libraries/candy-codeshot-research.md) |
 | 13 | sugar-image | WezTerm detection fix | 0.5h | [link](libraries/sugar-image-research.md) |
-| 14 | candy-vt | DECSTBM margins | 2-3h | [link](libraries/candy-vt-research.md) |
-| 15 | candy-vt | Auto-wrap DECAWM | 2h | [link](libraries/candy-vt-research.md) |
+| 14 | sugar-vterm | DECSTBM margins | 2-3h | [link](libraries/sugar-vterm-research.md) |
+| 15 | sugar-vterm | Auto-wrap DECAWM | 2h | [link](libraries/sugar-vterm-research.md) |
 | 16 | candy-kv | CSV/JSON export | 1-2h | [link](libraries/candy-kv-research.md) |
 | 17 | candy-kv | Levenshtein suggestions | 1h | [link](libraries/candy-kv-research.md) |
 | 18 | sugar-animation | imagecreatefromstring | 1-2h | [link](libraries/sugar-animation-research.md) |
@@ -151,7 +151,7 @@ To implement an item:
 
 ### Terminal Capabilities
 
-- **candy-vt**: Scrollback buffer, subparam parsing, cursor shapes
+- **sugar-vterm**: Scrollback buffer, subparam parsing, cursor shapes
 - **candy-pty**: openpty FFI, waitpid FFI, raw mode
 - **sugar-mouse**: Hover tracking, drag detection, click count
 - **sugar-colorprofile**: CLICOLOR, terminfo Tc, color space handling

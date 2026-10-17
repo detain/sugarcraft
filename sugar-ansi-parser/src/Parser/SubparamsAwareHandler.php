@@ -16,7 +16,7 @@ namespace SugarCraft\AnsiParser\Parser;
  * could get them was to *pull*: the front-end that owns the Parser handed the
  * handler a way back to it, and the handler read {@see Parser::subparams()}
  * from inside its own dispatch. The two injection helpers that bridged this on
- * the candy-vt/candy-codeshot paths (a closure via `attachSubparamsProvider()`, a
+ * the sugar-vterm/candy-codeshot paths (a closure via `attachSubparamsProvider()`, a
  * Parser object via `bindParser()`) are gone now — those paths take the push
  * instead. The pull itself is NOT a dead route: a handler that owns its Parser
  * (candy-ansi-inspect's `AnsiHandler` does `new Parser($this)` and reads
@@ -25,7 +25,7 @@ namespace SugarCraft\AnsiParser\Parser;
  * That pull inverted the dependency the parser otherwise has — the handler ended
  * up holding a reference to the thing dispatching it — and the reference could go
  * stale in ways the type system cannot see: a handler reused across two parsers
- * reads whichever one bound last, and candy-vt's `Terminal::__clone()` once had
+ * reads whichever one bound last, and sugar-vterm's `Terminal::__clone()` once had
  * to re-attach the closure after cloning precisely because the inherited one
  * still late-binds to the *original* terminal's parser. Pushing the flags at
  * dispatch time removes the back-reference entirely: the handler is told, in the
@@ -58,12 +58,12 @@ namespace SugarCraft\AnsiParser\Parser;
  * ## Two live routes: push (new) and pull (still used)
  *
  * This interface shipped one wave ahead of its consumers so neither side needed a
- * big-bang cutover, then wave-6 "vt-B" (#1447) migrated the candy-vt and
+ * big-bang cutover, then wave-6 "vt-B" (#1447) migrated the sugar-vterm and
  * candy-codeshot paths to the push and DELETED the pull-bridging injection
  * helpers those paths used (a closure-injection helper on two classes, a
  * Parser-injection helper on a third) —
- * `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()`,
- * `SugarCraft\Vt\Parser\CsiHandlerImpl::attachSubparamsProvider()`, and
+ * `SugarCraft\Vterm\Handler\ScreenHandler::attachSubparamsProvider()`,
+ * `SugarCraft\Vterm\Parser\CsiHandlerImpl::attachSubparamsProvider()`, and
  * `SugarCraft\CodeShot\SgrStateHandler::bindParser()`. Those helpers live in
  * consuming libraries (never in sugar-ansi-parser), which is why no `@deprecated` tag
  * ever accompanied this interface.
@@ -80,11 +80,11 @@ namespace SugarCraft\AnsiParser\Parser;
  * {@see Parser::__construct()}. A capable handler *nested behind* a plain wrapper
  * receives nothing, so the *sink* must be the capable one. The sinks that opt in:
  *
- *  - `SugarCraft\Vt\Handler\ScreenHandler` — the emulator's sink, handed straight
- *    to `new Parser(...)` by `candy-vt/src/Terminal/Terminal.php`; implements this
+ *  - `SugarCraft\Vterm\Handler\ScreenHandler` — the emulator's sink, handed straight
+ *    to `new Parser(...)` by `sugar-vterm/src/Terminal/Terminal.php`; implements this
  *    interface.
- *  - `SugarCraft\Vt\Parser\RendererHandler` — the renderer's sink, handed to
- *    `new Parser(...)` by `candy-vt/src/Terminal.php` (a different class from the
+ *  - `SugarCraft\Vterm\Parser\RendererHandler` — the renderer's sink, handed to
+ *    `new Parser(...)` by `sugar-vterm/src/Terminal.php` (a different class from the
  *    `Terminal/Terminal.php` emulator above); implements this interface and
  *    FORWARDS the flags down to the wrapped `CsiHandlerImpl` whose `sgr()` needs
  *    them. The plain {@see HandlerAdapter} sits *inside* that decorator and is no
@@ -124,7 +124,7 @@ interface SubparamsAwareHandler extends Handler
      * `DcsParam`), so `DCS 1 ; 2 : 3 q` reaches {@see Handler::dcsDispatch()} as
      * the flat `[1, 2, 3]` with the grouping otherwise recoverable only by
      * pulling — the same defect this interface closes for CSI. No in-tree handler
-     * needs that today (candy-vt's `dcsDispatch` is a documented no-op); sixel
+     * needs that today (sugar-vterm's `dcsDispatch` is a documented no-op); sixel
      * and ReGIS consumers are the ones that would.
      *
      * The other three are deliberately excluded because none has a parameter

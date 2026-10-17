@@ -110,7 +110,7 @@ Plan lines 644–651. `register_shutdown_function` + `pcntl_signal(SIGTERM/SIGHU
 
 ### P6.5.5 — Integration tests
 
-Plan lines 653–660. `ShirleyBashTest` + `ShirleyVimTest` (through candy-vt screen assertion).
+Plan lines 653–660. `ShirleyBashTest` + `ShirleyVimTest` (through candy-vt screen assertion). <!-- @rename-keep historical provenance -->
 
 ### P6.5.6 — Performance baseline
 
@@ -160,7 +160,7 @@ Plan lines 662–668. Assert overhead ≤2% wallclock on `time bash -c 'seq 1000
 
 When P6.5 is done:
 - `candy-vcr record -- bash -c 'echo hello; sleep 0.2; echo world'` → cassette → replay reproduces the session
-- `candy-vcr record -- vim /tmp/scratch.txt` round-trips through `candy-vt::Terminal` screen-assertion
+- `candy-vcr record -- vim /tmp/scratch.txt` round-trips through `candy-vt::Terminal` screen-assertion <!-- @rename-keep historical provenance -->
 - Recording overhead ≤2% wallclock on `time bash -c 'seq 100000'`
 - README documented with asciinema comparison
 

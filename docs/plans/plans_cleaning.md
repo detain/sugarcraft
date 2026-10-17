@@ -23,7 +23,7 @@
 
 ### ⚠️ PARTIAL
 
-- W7: unused path-repos — candy-vt still has unused candy-buffer path-repo
+- W7: unused path-repos — sugar-vterm still has unused candy-buffer path-repo
 - W14.4/5: icons — 60 present but need size verification
 - W15: orphaned features — only candy-kv verified
 - W16: status bar SSOT exists but migration unclear

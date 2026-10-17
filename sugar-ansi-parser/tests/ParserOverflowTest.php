@@ -342,7 +342,7 @@ final class ParserOverflowTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Constructor-configurable string-buffer cap (candy-vt de-fork prep).
+    // Constructor-configurable string-buffer cap (sugar-vterm de-fork prep).
     // -------------------------------------------------------------------------
 
     /**
@@ -377,7 +377,7 @@ final class ParserOverflowTest extends TestCase
     }
 
     /**
-     * A larger cap (candy-vt used 1 MiB) accepts payloads the 64 KiB default
+     * A larger cap (sugar-vterm used 1 MiB) accepts payloads the 64 KiB default
      * would have truncated.
      */
     public function testCustomLargeStringBufferCapHonored(): void

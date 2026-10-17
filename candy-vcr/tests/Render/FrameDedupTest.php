@@ -7,11 +7,11 @@ namespace SugarCraft\Vcr\Tests\Render;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\FrameStream;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cursor;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * Tests for FrameDedup collapsing identical adjacent frames.

@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-ansi-parser",
-    "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
+    "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from sugar-vterm.",
     "type": "library",
     "license": "MIT",
     "keywords": [

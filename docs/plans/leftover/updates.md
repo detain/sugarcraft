@@ -279,26 +279,26 @@ step 06.13 · PR#615 · candy-wish: async middleware — Middleware interface ac
 fix for step 06.13 · PR#616 · resolved 2 findings (AsyncMiddleware docs in README + promise-awaiting clarification note in Server.php)
 tests-ci for step 06.13 · clean
 docs for step 06.13 · PR#618 · add AsyncMiddleware to end-user API table + async middleware extension point in dev guide + operational notes in hub-admin guide
-step 07.01 · PR#619 · candy-vt: DECSTBM scroll margins — ScrollHandler accepts region bounds, ScreenHandler tracks scrollRegionTop/Bottom, CSI r wired (leftover-rollout step 07.01)
+step 07.01 · PR#619 · sugar-vterm: DECSTBM scroll margins — ScrollHandler accepts region bounds, ScreenHandler tracks scrollRegionTop/Bottom, CSI r wired (leftover-rollout step 07.01)
 fix for step 07.01 · PR#620 · resolved 2 findings
 docs for step 07.01 · clean
-step 07.02 · PR#621 · candy-vt: DECAWM auto-wrap (CSI ? 7 h/l) — Mode::autoWrap + withAutoWrap(), ModeHandler mode 7, ScreenHandler printChar wrap logic, 15 AutoWrapTest tests (leftover-rollout step 07.02)
+step 07.02 · PR#621 · sugar-vterm: DECAWM auto-wrap (CSI ? 7 h/l) — Mode::autoWrap + withAutoWrap(), ModeHandler mode 7, ScreenHandler printChar wrap logic, 15 AutoWrapTest tests (leftover-rollout step 07.02)
 review for step 07.02 · clean · PR#621
 docs for step 07.02 · PR#622 · document DECAWM in README/end-user HTML/Mode PHPDoc/CALIBER_LEARNINGS.md
-step 07.03 · PR#623 · candy-vt: CSI subparameter parsing — Parser::param() treats ':' as sub-param separator (same as ';'), 9 SubparamTest tests (leftover-rollout step 07.03)
+step 07.03 · PR#623 · sugar-vterm: CSI subparameter parsing — Parser::param() treats ':' as sub-param separator (same as ';'), 9 SubparamTest tests (leftover-rollout step 07.03)
 review for step 07.03 · clean · PR#623
 tests-ci for step 07.03 · clean
 docs for step 07.03 · PR#624 · document CSI subparameter parsing in CALIBER_LEARNINGS/README/end-user HTML
-step 07.04 · PR#625 · candy-vt: scrollback buffer — Scrollback ring-buffer class + Screen scrollback accessor + Terminal withScrollbackSize() + ScreenHandler scrollUp/Down push to scrollback + 10 ScrollbackTest tests (leftover-rollout step 07.04)
+step 07.04 · PR#625 · sugar-vterm: scrollback buffer — Scrollback ring-buffer class + Screen scrollback accessor + Terminal withScrollbackSize() + ScreenHandler scrollUp/Down push to scrollback + 10 ScrollbackTest tests (leftover-rollout step 07.04)
 review for step 07.04 · clean · PR#625
-step 07.05 · PR#627 · candy-vt: SGR underline styles 4:1–4:5 (UnderlineStyle enum + withUnderlineStyle/SgrHandler/Cell::equals + 20 SgrUnderlineStylesTest tests)
-step 07.06 · PR#629 · candy-vt: DECOM (mode 6) + DECSCUSR cursor shape (CSI Ps SP q) + focus events 1004 (CSI I/O) — CursorShape enum + FocusInMsg/FocusOutMsg + 38 tests
+step 07.05 · PR#627 · sugar-vterm: SGR underline styles 4:1–4:5 (UnderlineStyle enum + withUnderlineStyle/SgrHandler/Cell::equals + 20 SgrUnderlineStylesTest tests)
+step 07.06 · PR#629 · sugar-vterm: DECOM (mode 6) + DECSCUSR cursor shape (CSI Ps SP q) + focus events 1004 (CSI I/O) — CursorShape enum + FocusInMsg/FocusOutMsg + 38 tests
 review for step 07.06 · clean · PR#629
 docs for step 07.06 · PR#630 · document DECOM/DECSCUSR/focus events in README + CALIBER_LEARNINGS.md
-step 07.07 · PR#631 · candy-vt: BCE (SGR bg erase) + combining-char composition (Cell::combining + attachCombiningChar) + synchronized output 2026 queue/flush (leftover-rollout step 07.07)
+step 07.07 · PR#631 · sugar-vterm: BCE (SGR bg erase) + combining-char composition (Cell::combining + attachCombiningChar) + synchronized output 2026 queue/flush (leftover-rollout step 07.07)
 review for step 07.07 · PR#631 · code clean, 467 tests pass; 4 CALIBER_LEARNINGS issues (see Open review findings — 07.07)
 fix for step 07.07 · PR#632 · resolved 4 findings (CALIBER_LEARNINGS: BCE/combining/sync updated + 2 new entries)
-docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + docs/lib/candy-vt.html feature grid + API table
+docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + docs/lib/sugar-vterm.html feature grid + API table
  step 07.08 · PR#634 · candy-zone: ZoneHoverTracker + ZoneEnterMsg/ZoneExitMsg (leftover-rollout step 07.08) @rename-keep legacy wire token / historical log
  review for step 07.08 · clean · PR#634
  docs for step 07.08 · clean · PR#635
@@ -326,7 +326,7 @@ step 11.02 · PR#653 · plans: candy-git-server-tui interactive SSH TUI mileston
 fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-panels SugarPanels; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
-step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)
+step 11.03 · PR#658 · plans: sugar-vterm-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)
 review for step 11.03 · clean · PR#658
 tests-ci for step 11.03 · clean
 docs for step 11.03 · clean
@@ -353,7 +353,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
  docs for step 07.20 · PR#679 · document RelativeFormat + withFormat() + detectFormat() in README/end-user HTML/dev HTML + CALIBER entry
  step 07.21 · PR#680 · candy-vcr: add withIdleTrim() fluent setter + --idle-trim CLI flag for SPEED_REALTIME playback; fix detectFormat() missing Format import; 5 IdleTrimTest tests
   docs for step 07.21 · PR#681 · document withIdleTrim() in README/end-user HTML/dev HTML/admin HTML + ReplayCommand PHPDoc + CALIBER entry
-  step 07.22 · PR#682 · candy-vcr: add FocusInMsg/FocusOutMsg to BuiltinSerializer + update candy-vt FocusInMsg/FocusOutMsg to implemenets Msg + path-repo; 29 tests green
+  step 07.22 · PR#682 · candy-vcr: add FocusInMsg/FocusOutMsg to BuiltinSerializer + update sugar-vterm FocusInMsg/FocusOutMsg to implemenets Msg + path-repo; 29 tests green
   docs for step 07.22 · PR#683 · update BuiltinSerializer msg count 14→19 in README + end-user HTML; add @implements Msg to FocusInMsg/FocusOutMsg docblocks; note FocusInMsg/FocusOutMsg implements Msg in CALIBER_LEARNINGS
   step 08.01 · PR#684 · sugar-forms: add Validator interface + Required/Email/MinLength/MaxLength/Pattern classes; Input::withValidator() chains multiple validators (leftover-rollout step 08.01)
   review for step 08.01 · clean · PR#684

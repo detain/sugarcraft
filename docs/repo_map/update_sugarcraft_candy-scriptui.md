@@ -477,7 +477,7 @@ Users coming from gum need a quick reference:
 
 **Current:** Limited `--cursor-mode` support (blink/static/hidden).
 
-**Proposed:** Support for cursor shapes (block/underline/bar) via candy-vt or direct ANSI:
+**Proposed:** Support for cursor shapes (block/underline/bar) via sugar-vterm or direct ANSI:
 
 - Block cursor: `\x1b[2 q`
 - Underline: `\x1b[4 q`

@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Ansi;
  * every test compares against hand-derived hex rather than a constant of this
  * library, which would make the assertion tautological. The paired consumer
  * side — does a real parser read these bytes back as the intended effect? —
- * lives in candy-vcr/tests/CoreEmitterRoundTripTest.php, because candy-vt
+ * lives in candy-vcr/tests/CoreEmitterRoundTripTest.php, because sugar-vterm
  * depends on this lib and cannot be required back here.
  *
  * @see https://vt100.net/docs/vt510-rm/chapter4.html
