@@ -206,6 +206,10 @@ final class RenameLibTest extends TestCase
         $this->assertStringContainsString('SUGAR_ANSI_PARSER_TOKEN=1 CANDY_ANSI_INSPECT_BIN=2', $readme, 'own env prefix folds, sibling env prefix stays');
         $this->assertStringContainsString('sugar-ansi-parser vs candy-ansi-inspect', $readme, 'R3 protect stays independent of brand_protect');
         $this->assertStringContainsString('namespace SugarCraft\AnsiParser;', $this->read($root, 'sugar-ansi-parser/src/Parser.php'));
+        $tracked = $this->trackedPaths($root);
+        $this->assertContains('ansi/sugar-ansi-parser/sugar-ansi-parser2-tc-l-1.ansi', $tracked, 'ansi prefix rule still renames OWN digit-named art');
+        $this->assertContains('ansi/candy-ansi-inspect/candy-ansi-inspect-1-16-l-1.ansi', $tracked, 'ansi prefix rule must not eat a protected sibling');
+        $this->assertStringContainsString('sibling art', $this->read($root, 'ansi/candy-ansi-inspect/candy-ansi-inspect-1-16-l-1.ansi'));
     }
 
     public function testWithoutBrandProtectSiblingFoldsByDefault(): void
@@ -587,6 +591,8 @@ final class RenameLibTest extends TestCase
                 }
                 PHP . "\n",
             'candy-ansi/README.md' => "CandyAnsi and CandyAnsiInspect tools\nexport CANDY_ANSI_TOKEN=1 CANDY_ANSI_INSPECT_BIN=2\npkg candy-ansi vs candy-ansi-inspect\n",
+            'ansi/candy-ansi/candy-ansi2-tc-l-1.ansi' => "ours digit-named art\n",
+            'ansi/candy-ansi-inspect/candy-ansi-inspect-1-16-l-1.ansi' => "sibling art\n",
         ]);
     }
 

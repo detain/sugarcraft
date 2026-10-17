@@ -755,7 +755,19 @@ final class RenameLib
     {
         $out = $segment;
         if ($ansiPrefixContext && $out !== (string) $d['new'] && str_starts_with($out, (string) $d['old'])) {
-            $out = (string) $d['new'] . substr($out, strlen((string) $d['old']));
+            // The prefix rule must not eat a PROTECTED sibling: a segment
+            // starting `old-` is only OURS when no protect slug extends it
+            // (batch-E law — candy-ansi vs candy-ansi-inspect art files).
+            $sibling = false;
+            foreach ($d['protect'] as $p) {
+                if (is_string($p) && str_starts_with($out, $p)) {
+                    $sibling = true;
+                    break;
+                }
+            }
+            if (!$sibling) {
+                $out = (string) $d['new'] . substr($out, strlen((string) $d['old']));
+            }
         }
         $out = (string) preg_replace_callback(
             self::r2Pattern($d, $pathContext),
