@@ -586,20 +586,179 @@ final class TransientFailureTest extends TestCase
     public function testBackoffActuallySleepsForTheScheduledDuration(): void
     {
         // Pins that backoff() honours the schedule rather than merely computing
-        // it — a no-op backoff would leave every other test here passing.
+        // it. ISS-074 rewrote what "the schedule" is: a production draw is now
+        // jittered across `[0, ceiling]`, so the wall-clock direction that
+        // still MEANS something is the ceiling — a no-op-as-above-ceiling or an
+        // un-capped ladder reddens here — and the deterministic half moved onto
+        // the Retry-After path just below, where the server's word pins the
+        // exact figure the wrapper must hand to the sleeper.
         $started = microtime(true);
         TransientFailure::backoff(1);
         $elapsed = (microtime(true) - $started) * 1_000_000;
 
-        // The bound used to be 90% of the debt, "because usleep may return
-        // marginally early on a loaded box". It cannot any more: backoff() now
-        // re-sleeps against a `microtime(true)` deadline and only returns once
-        // that deadline has PASSED, so the full debt is a property of the
-        // implementation rather than a hope about the scheduler.
-        $this->assertGreaterThanOrEqual(
-            TransientFailure::backoffMicroseconds(1),
+        $this->assertLessThanOrEqual(
+            TransientFailure::backoffMicroseconds(1) + 100_000,
             $elapsed,
+            'a jittered draw must never EXCEED the deterministic ceiling the idle-timer law is computed from',
         );
+    }
+
+    public function testBackoffHonoursARetryAfterHeaderExactly(): void
+    {
+        // ISS-074: the server's word wins, un-jittered. A fake Retry-After of
+        // 2s must reach the sleeper as exactly 2_000_000 on the first slice —
+        // the deterministic-through-the-wrapper pin the old wall-clock test
+        // used to provide for the plain ladder.
+        $failure = new RequestException(
+            'throttled',
+            new Request('POST', 'https://provider.invalid/v1/chat/completions'),
+            new Response(429, ['Retry-After' => '2']),
+        );
+
+        $slept = [];
+        TransientFailure::backoff(1, static function (int $microseconds) use (&$slept): void {
+            $slept[] = $microseconds;
+            // The sleeper must PAY its slice in real time: the loop's deadline
+            // is wall-clock, so an instant seam would re-arm millions of times
+            // across the two seconds (measured: OOM before the first assert).
+            usleep($microseconds);
+        }, null, $failure);
+
+        $this->assertNotEmpty($slept);
+        $this->assertGreaterThanOrEqual(2_000_000, array_sum($slept), 'the whole Retry-After wait was not honoured');
+        $this->assertLessThanOrEqual(2_100_000, array_sum($slept), 'the wait ran past the server instruction plus slice rounding');
+    }
+
+    public function testAZeroRetryAfterRetriesImmediately(): void
+    {
+        $failure = new RequestException(
+            'throttled',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => '0']),
+        );
+
+        $naps = 0;
+        TransientFailure::backoff(1, static function (int $microseconds) use (&$naps): void {
+            $naps++;
+        }, null, $failure);
+
+        $this->assertSame(0, $naps, 'a server saying "retry now" must not be made to wait');
+    }
+
+    public function testRetryAfterSecondsParsesBothSpellingsAndCaps(): void
+    {
+        $delta = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => '7']),
+        );
+        $this->assertSame(7.0, TransientFailure::retryAfterSeconds($delta));
+
+        $date = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => gmdate(DATE_RFC7231, time() + 3)]),
+        );
+        $parsed = TransientFailure::retryAfterSeconds($date);
+        $this->assertIsFloat($parsed);
+        $this->assertGreaterThanOrEqual(0.0, $parsed);
+        $this->assertLessThanOrEqual(3.0, $parsed);
+
+        $skewed = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => gmdate(DATE_RFC7231, time() - 600)]),
+        );
+        $this->assertSame(0.0, TransientFailure::retryAfterSeconds($skewed), 'a clock-behind server cannot schedule a wait into the past');
+
+        $huge = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => '3600']),
+        );
+        $this->assertSame(TransientFailure::RETRY_AFTER_MAX_SECONDS, TransientFailure::retryAfterSeconds($huge));
+    }
+
+    public function testRetryAfterWalksTheWrappingChainAndRefusesGarbage(): void
+    {
+        $inner = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => '5']),
+        );
+        $this->assertSame(5.0, TransientFailure::retryAfterSeconds(new \RuntimeException('wrapper', 0, $inner)), 'providers wrap; the header lives under the wrap');
+
+        $garbage = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => 'soon']),
+        );
+        $this->assertNull(TransientFailure::retryAfterSeconds($garbage));
+
+        $absent = new RequestException(
+            'x',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429),
+        );
+        $this->assertNull(TransientFailure::retryAfterSeconds($absent));
+        $this->assertNull(TransientFailure::retryAfterSeconds(new \RuntimeException('nothing classifiable')));
+    }
+
+    public function testFullJitterDrawsUniformlyInsideTheCeiling(): void
+    {
+        // The seam shape: [0, owed], edges included, nonsense clamped.
+        $this->assertSame(0, TransientFailure::jitteredBackoffMicroseconds(500_000, static fn (int $max): int => 0));
+        $this->assertSame(500_000, TransientFailure::jitteredBackoffMicroseconds(500_000, static fn (int $max): int => $max));
+        $this->assertSame(500_000, TransientFailure::jitteredBackoffMicroseconds(500_000, static fn (int $max): int => $max + 999_999), 'a rogue seam cannot exceed the ceiling');
+        $this->assertSame(0, TransientFailure::jitteredBackoffMicroseconds(500_000, static fn (int $max): int => -5), 'nor go negative');
+        $this->assertSame(0, TransientFailure::jitteredBackoffMicroseconds(0));
+
+        $draws = [];
+        for ($i = 0; $i < 200; $i++) {
+            $draws[] = TransientFailure::jitteredBackoffMicroseconds(1000);
+        }
+
+        $this->assertGreaterThanOrEqual(0, min($draws));
+        $this->assertLessThanOrEqual(1000, max($draws));
+        $this->assertGreaterThan(1, count(array_unique($draws)), 'the production draw is not actually random — full jitter degenerated into the fixed ladder');
+        $this->assertTrue(min($draws) < 500 && max($draws) > 500, '200 production draws of U[0,1000] never straddle the midpoint — this is not uniform');
+    }
+
+    public function testTheBeatConsumerSlicesTheSilenceAndIsFailSoft(): void
+    {
+        // ISS-074: with a beat attached, no sleep slice may exceed one second,
+        // and a throwing beat may never cost the retry its wait. The sleeper
+        // seam makes the sequence instant: it records what each slice owed and
+        // "pays" it by moving no clock at all — the deadline still rules, so
+        // the loop bounds itself against the real microtime exactly as in
+        // production.
+        $failure = new RequestException(
+            'throttled',
+            new Request('POST', 'https://provider.invalid/'),
+            new Response(429, ['Retry-After' => '2']),
+        );
+
+        $slices = [];
+        $beats = 0;
+        $started = microtime(true);
+        TransientFailure::backoff(
+            1,
+            static function (int $microseconds) use (&$slices): void {
+                $slices[] = $microseconds;
+                usleep($microseconds);
+            },
+            null,
+            $failure,
+            static function () use (&$beats): void {
+                $beats++;
+                throw new \RuntimeException('a beating consumer that breaks must not break the backoff');
+            },
+        );
+
+        $this->assertNotEmpty($slices);
+        $this->assertLessThanOrEqual(TransientFailure::BEAT_SLICE_MICROSECONDS, max($slices), 'a beat consumer was starved — a slice longer than the heartbeat granularity went by in silence');
+        $this->assertGreaterThanOrEqual(2, $beats, 'a two-second honoured Retry-After heartbeat no more than once');
+        $this->assertLessThan(4.0, microtime(true) - $started, 'the wrapper outstayed the server instruction');
     }
 
     /**
@@ -618,6 +777,13 @@ final class TransientFailureTest extends TestCase
      * their window, and it silently put the retry back on the failing upstream
      * with no wait at all.
      *
+     * ISS-074 note: the child drives the RETRY-AFTER path, not the bare
+     * ladder. Full jitter makes the plain debt a uniform draw, which is a
+     * property of the policy and not something a signal-survival keystone
+     * should race; `Retry-After: 1` is deterministic by contract, so `slept >=
+     * 1_000_000` keeps meaning exactly what it meant when the schedule was
+     * fixed.
+     *
      * Run in a child process because the signal has to arrive while THIS call
      * is parked, and installing TUI signal handlers in the suite's own process
      * would leak into every test after it.
@@ -628,7 +794,7 @@ final class TransientFailureTest extends TestCase
             $this->markTestSkipped('pcntl is required to deliver a signal mid-sleep');
         }
 
-        $owed = TransientFailure::backoffMicroseconds(1);
+        $owed = 1_000_000;
         $slept = $this->backoffSleptWithSignalAt(120_000);
 
         $this->assertGreaterThanOrEqual(
@@ -668,7 +834,14 @@ final class TransientFailureTest extends TestCase
             }
 
             \$started = microtime(true);
-            SugarCraft\Code\Providers\TransientFailure::backoff(1);
+            // ISS-074: deterministic debt via the server's own instruction —
+            // the jittered ladder would make this keystone a coin-flip.
+            \$failure = new GuzzleHttp\Exception\RequestException(
+                'throttled',
+                new GuzzleHttp\Psr7\Request('POST', 'https://provider.invalid/'),
+                new GuzzleHttp\Psr7\Response(429, ['Retry-After' => '1'])
+            );
+            SugarCraft\Code\Providers\TransientFailure::backoff(1, null, null, \$failure);
             \$slept = (int) round((microtime(true) - \$started) * 1_000_000);
 
             \$status = 0;

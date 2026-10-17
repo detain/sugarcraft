@@ -110,6 +110,13 @@ use Psr\Http\Client\NetworkExceptionInterface;
  * derives that sum so a test can assert the relationship rather than a
  * literal.
  *
+ * ISS-074 keeps that law on both new paths: full jitter only ever DRAWS BELOW
+ * the derived ceiling (never extends a sequence), and a server's `Retry-After`
+ * is honoured only up to {@see RETRY_AFTER_MAX_SECONDS}, a cap chosen against
+ * the SMALLEST lawful idle ceiling rather than the default one. A call site
+ * that attaches the `$onBeat` seam heartbeats once per second of the wait,
+ * replacing silence with progress frames entirely.
+ *
  * Both knobs are settings now (`providerRetryAttempts`,
  * `providerRetryBaseBackoffMs`) and so is that ceiling
  * (`turnIdleTimeoutSeconds`), which moves the relationship from two constants
@@ -217,6 +224,26 @@ final class TransientFailure
 
     /** The largest `providerRetryBaseBackoffMs` honoured; see above. */
     public const MAX_BASE_BACKOFF_MS_SETTING = 1000;
+
+    /**
+     * The longest wait a server's `Retry-After` may ask for (ISS-074).
+     *
+     * `EngineBackend::MIN_TURN_IDLE_TIMEOUT_SECONDS` is 30 — the smallest
+     * idle ceiling an operator may lawfully choose. Capping one server answer
+     * at 25 keeps even an unbated Retry-After sleep inside that floor with a
+     * five-second reserve, so honouring a throttle can never itself look like
+     * a hung turn. Longer instructions are obeyed only to the cap; the
+     * following attempt draws its own fresh answer from the server anyway.
+     */
+    public const RETRY_AFTER_MAX_SECONDS = 25.0;
+
+    /**
+     * How finely {@see backoff()} slices the wait when a beat consumer is
+     * attached — one heartbeat per second of silence, matching the throttle
+     * granularity of the transport's own progress wrapper. Public because
+     * that granularity is what the slicing test measures against.
+     */
+    public const BEAT_SLICE_MICROSECONDS = 1_000_000;
 
     /**
      * Whether this thrown failure is worth another attempt.
@@ -380,10 +407,25 @@ final class TransientFailure
      * Sleep the backoff owed after `$attempt` failed attempts, where
      * `$attempt` is 1-based.
      *
-     * Deliberately deterministic — no jitter. Jitter exists to de-synchronise
-     * many clients retrying against one server; this is a single-user terminal
-     * app making one completion at a time, so there is no herd to spread, and
-     * a fixed schedule is worth more because it can be asserted exactly.
+     * ISS-074 replaced the deterministic schedule with the two rules servers
+     * and distributed clients actually have:
+     *
+     *   - When the failure carries a `Retry-After` (see
+     *     {@see retryAfterSeconds()}), the server's word wins, un-jittered,
+     *     capped at {@see RETRY_AFTER_MAX_SECONDS}. Jittering an explicit
+     *     server instruction would be arguing with it; sleeping past the cap
+     *     would break the idle-timer law below for one throttled request.
+     *     Within the cap, a server asking for `0` means retry now, and this
+     *     returns without sleeping at all.
+     *   - Otherwise FULL JITTER: a uniform draw in `[0, schedule]` — the AWS
+     *     architecture review's recommendation, and the shape that spreads a
+     *     retrying fleet across the whole window instead of synchronising it
+     *     on the 500ms/1s/2s ladder.
+     *
+     * "But this is a single-user terminal app, no herd to spread" — the old
+     * docblock's reasoning — died with parallel Task batches: one operator
+     * running N sub-agents IS the herd, and every lane of a multi-session box
+     * shares the same rate limiter.
      *
      * @param callable(int):void|null $sleeper
      *        Sleep seam (same family as {@see \SugarCraft\Code\MCP\OAuthLoopbackFlow}'s
@@ -394,10 +436,27 @@ final class TransientFailure
      *        time a loaded scheduler can violate.
      * @param ?array<string, mixed> $config the already-read merged config;
      *        null reads it (see {@see maxAttempts()})
+     * @param ?\Throwable $failure the exception being retried, when the call
+     *        site has one: its `Retry-After` outranks the schedule. Null
+     *        (every pre-ISS-074 call site) keeps the jittered ladder.
+     * @param ?\Closure $onBeat progress seam for the silence: called between
+     *        one-second sleep slices so a waiter can heartbeat "rate-limited,
+     *        retrying" and reset its own idle ceiling instead of going dark
+     *        for the whole wait. Fail-soft by the heartbeat contract — a
+     *        throwing beat must never cost the retry its sleep. Slicing is
+     *        opt-in: without a beat the loop stays the single-deadline shape
+     *        the EINTR measurement pinned.
      */
-    public static function backoff(int $attempt, ?callable $sleeper = null, ?array $config = null): void
+    public static function backoff(int $attempt, ?callable $sleeper = null, ?array $config = null, ?\Throwable $failure = null, ?\Closure $onBeat = null): void
     {
-        $owed = self::backoffMicroseconds($attempt, $config);
+        $serverSeconds = $failure !== null ? self::retryAfterSeconds($failure) : null;
+
+        if ($serverSeconds !== null) {
+            $owed = (int) round($serverSeconds * 1_000_000);
+        } else {
+            $owed = self::jitteredBackoffMicroseconds(self::backoffMicroseconds($attempt, $config));
+        }
+
         if ($owed <= 0) {
             return;
         }
@@ -412,13 +471,12 @@ final class TransientFailure
         // a wait, it is a wait UNTIL THE NEXT SIGNAL — see the class docblock
         // for the measurement. Re-armed from the clock rather than by summing
         // what was slept, so a handler that itself takes time is paid for out
-        // of the backoff instead of being added to it.
+        // of the backoff instead of being added to it. Without a beat the
+        // first slice is the whole remaining debt — the exact EINTR-pinned
+        // shape, byte-for-byte; with one, the wait is served in seconds.
         $deadline = microtime(true) + $owed / 1_000_000;
-        $micros = $owed;
 
         while (true) {
-            $nap($micros);
-
             $remaining = $deadline - microtime(true);
             if ($remaining <= 0.0) {
                 return;
@@ -427,7 +485,119 @@ final class TransientFailure
             // `ceil`, so a remainder under a microsecond still asks for one and
             // the loop cannot become a spin on a value that rounds to zero.
             $micros = (int) ceil($remaining * 1_000_000);
+
+            if ($onBeat !== null && $micros > self::BEAT_SLICE_MICROSECONDS) {
+                $micros = self::BEAT_SLICE_MICROSECONDS;
+            }
+
+            $nap($micros);
+
+            if ($onBeat === null) {
+                continue;
+            }
+
+            // ISS-074: the beat consumer heartbeats "rate-limited, retrying"
+            // between slices and resets its own idle ceiling while doing it.
+            // Fail-soft like every other heartbeat in this codebase (see
+            // HttpClientDefaults' progress wrapper): a throwing beat must
+            // never cost the retry its sleep.
+            try {
+                $onBeat();
+            } catch (\Throwable) {
+                // Fail-soft by contract - the sleep is the payload here.
+            }
         }
+    }
+
+    /**
+     * Uniform full-jitter draw over `[0, $owed]` — ISS-074.
+     *
+     * `backoffMicroseconds()` stays the deterministic CEILING of the ladder
+     * (that is what the idle-timer law is asserted against); this is what the
+     * sleeper actually pays. `$rng` is the seam: production draws via
+     * `random_int`, tests pin the range and the edges.
+     *
+     * @param (callable(int):int)|null $rng
+     */
+    public static function jitteredBackoffMicroseconds(int $owed, ?callable $rng = null): int
+    {
+        if ($owed <= 0) {
+            return 0;
+        }
+
+        if ($rng !== null) {
+            $drawn = $rng($owed);
+
+            // The seam may be given anything callable; the ceiling is still
+            // a ceiling — and still a floor of zero — whatever it returns.
+            return max(0, min($owed, $drawn));
+        }
+
+        return random_int(0, $owed);
+    }
+
+    /**
+     * The `Retry-After` a failed provider call carried, in seconds — the
+     * server's own instruction, honoured by {@see backoff()} above any
+     * locally computed schedule (ISS-074).
+     *
+     * Walks `getPrevious()` (bounded) because every provider in this codebase
+     * wraps: openai-php's `TransporterException` around the Guzzle exception,
+     * our own `transportFailure()` around that. The header is read wherever it
+     * actually lives. Both RFC 9110 spellings parse: `Retry-After: 7` (integer
+     * delta-seconds) and `Retry-After: Wed, 21 Oct 2026 07:28:00 GMT`
+     * (HTTP-date — converted against the local clock and clamped at zero, so a
+     * server whose clock runs behind our own cannot make us wait on a date
+     * that already passed, and one that runs ahead is obeyed only up to
+     * {@see RETRY_AFTER_MAX_SECONDS}).
+     *
+     * Returns null for "no usable instruction" — no header, garbage, a
+     * negative, a response we never see — and the caller falls back to the
+     * jittered ladder. `0.0` is a real answer and distinguishes itself.
+     */
+    public static function retryAfterSeconds(\Throwable $failure): ?float
+    {
+        $current = $failure;
+        $hops = 0;
+
+        while ($current !== null && $hops++ < 10) {
+            $response = self::responseOf($current);
+
+            if ($response !== null) {
+                $header = trim($response->getHeaderLine('Retry-After'));
+
+                if ($header !== '') {
+                    if (preg_match('/\A\d{1,9}\z/', $header) === 1) {
+                        return min((float) $header, self::RETRY_AFTER_MAX_SECONDS);
+                    }
+
+                    $timestamp = strtotime($header);
+                    if ($timestamp !== false) {
+                        return min(max(0.0, $timestamp - time()), self::RETRY_AFTER_MAX_SECONDS);
+                    }
+                }
+            }
+
+            $current = $current->getPrevious();
+        }
+
+        return null;
+    }
+
+    /**
+     * The PSR-7 response attached to a Guzzle-shaped failure, if it has one.
+     * `method_exists` before `getResponse` because the chain carries classes
+     * of our own that have no response concept at all.
+     */
+    private static function responseOf(\Throwable $failure): ?\Psr\Http\Message\ResponseInterface
+    {
+        if (!\method_exists($failure, 'getResponse')) {
+            return null;
+        }
+
+        $response = $failure->getResponse();
+
+        return $response instanceof \Psr\Http\Message\ResponseInterface ? $response : null;
     }
 
     /**
