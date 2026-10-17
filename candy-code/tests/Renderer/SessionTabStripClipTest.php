@@ -175,7 +175,14 @@ final class SessionTabStripClipTest extends TestCase
         self::assertStringContainsString(' tab:ghostGhost', $strip);
     }
 
-    public function testANameThatSanitizesToNothingFallsBackToTheId(): void
+    /**
+     * ISS-102: a name that sanitizes to nothing used to fall back to the raw
+     * session id — an unreadable 32-char hex string in production chrome. Now
+     * it shows the "untitled" word; the click zone stays keyed by id, so the
+     * tab is still selectable, and the current tab's brackets / a pinned tab's
+     * star still disambiguate it.
+     */
+    public function testANameThatSanitizesToNothingShowsTheUntitledLabel(): void
     {
         $store = $this->store();
         $store->createSession('session-a', 'openai', 'gpt-4', null, "\e[2J\r\n\t");
@@ -184,7 +191,8 @@ final class SessionTabStripClipTest extends TestCase
 
         $strip = explode("\n", Renderer::render($chat))[0];
 
-        self::assertStringContainsString(' session-a ', $strip);
+        self::assertStringContainsString(' untitled ', $strip, 'the nameless tab carries the untitled word');
+        self::assertStringNotContainsString('session-a', $strip, 'and never the raw id');
     }
 
     public function testEveryVisibleTabIsStillClickableAndHiddenTabsCarryNoZone(): void

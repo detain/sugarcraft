@@ -2261,6 +2261,12 @@ final class EnhancedSessionStore
      */
     public function pruneEmptySessions(?string $exemptSessionId = null, int $minAgeSeconds = 3600): int
     {
+        // ISS-102: the transcript NOT EXISTS clause used to be what decided
+        // emptiness — but saveTranscript() persists the launch notices on
+        // quit, so every session this tool ever opened carried a transcript
+        // row and none could ever be pruned. A transcript whose message rows
+        // are ALL UI-only (persisted notices, never model context) is as empty
+        // as none: the blob is judged on the PHP side, where JSON can be read.
         $stmt = $this->pdo->prepare('
             SELECT s.id FROM sessions s
             WHERE (s.name IS NULL OR s.name = \'\')
@@ -2268,18 +2274,103 @@ final class EnhancedSessionStore
               AND s.pinned = 0
               AND s.updated_at < ?
               AND s.id != ?
-              AND NOT EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)
               AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = s.id)
               AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)
         ');
         $stmt->execute([gmdate('Y-m-d H:i:s', time() - max(0, $minAgeSeconds)), $exemptSessionId ?? '']);
-        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $ids = array_values(array_filter(
+            $stmt->fetchAll(PDO::FETCH_COLUMN),
+            fn (mixed $id): bool => \is_string($id) && $this->transcriptIsUiOnlyOrAbsent($id),
+        ));
 
         foreach ($ids as $id) {
             $this->deleteSession((string) $id);
         }
 
         return \count($ids);
+    }
+
+    /**
+     * Whether a session's persisted transcript holds no content a resume
+     * would need: no transcript row at all, or one whose interned messages
+     * are every single one `uiOnly` (ISS-102, the launch-notices shape).
+     *
+     * Fail-closed: an envelope that does not decode, a blob row that is
+     * missing or unparseable, or a message that simply does not carry the
+     * `uiOnly` flag all answer "not empty". The cost of a wrong true here is
+     * a deleted history; the cost of a wrong false is one more stale tab.
+     */
+    private function transcriptIsUiOnlyOrAbsent(string $sessionId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT state_data FROM session_transcripts WHERE session_id = ?');
+        $stmt->execute([$sessionId]);
+        $stateData = $stmt->fetchColumn();
+        $stmt->closeCursor();
+
+        if (!\is_string($stateData)) {
+            return true;
+        }
+
+        $decoded = json_decode($stateData, false);
+        if (!$decoded instanceof \stdClass) {
+            return false;
+        }
+
+        $envelope = ($decoded->{self::CHECKPOINT_ENVELOPE_VERSION} ?? null) === 1
+            && \is_array($decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES} ?? null);
+
+        if ($envelope) {
+            /** @var list<int> $blobIds */
+            $blobIds = array_values(array_filter(
+                $decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES},
+                static fn (mixed $id): bool => \is_int($id) && $id > 0,
+            ));
+            if ($blobIds === []) {
+                // No ids at all: either a genuinely empty conversation, or
+                // every row was already unreadable when it was written. An
+                // empty conversation is prunable; unknown bytes are not ours
+                // to judge — but the ids were dropped by the SAME filter, so
+                // a corrupt list reads as empty here and in every reader.
+                return count($decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES}) === count($blobIds)
+                    || $decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES} === [];
+            }
+
+            $placeholders = implode(',', array_fill(0, count($blobIds), '?'));
+            $blobs = $this->pdo->prepare("SELECT payload FROM checkpoint_blobs WHERE session_id = ? AND id IN ({$placeholders})");
+            $blobs->execute(array_merge([$sessionId], $blobIds));
+            $payloads = $blobs->fetchAll(PDO::FETCH_COLUMN);
+            $blobs->closeCursor();
+
+            if (count($payloads) !== count($blobIds)) {
+                return false;
+            }
+
+            foreach ($payloads as $payload) {
+                if (!\is_string($payload)) {
+                    return false;
+                }
+                $message = json_decode($payload, false);
+                if (!$message instanceof \stdClass || ($message->uiOnly ?? null) !== true) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Pre-envelope inline shape: judge the rows exactly as the envelope
+        // branch judges blobs.
+        $rows = $decoded->messages ?? null;
+        if (!\is_array($rows)) {
+            return false;
+        }
+        foreach ($rows as $message) {
+            if (!$message instanceof \stdClass || ($message->uiOnly ?? null) !== true) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -3329,7 +3329,11 @@ final class Renderer
             $id = (string) ($row['id'] ?? '');
             $name = self::sessionTabName((string) ($row['name'] ?? ''));
             if ($name === '') {
-                $name = self::sessionTabName($id);
+                // ISS-102: the raw hex id was unreadable chrome, not a label.
+                // A nameless session is called what it is; the brackets of the
+                // current tab and the star of a pinned one still tell the
+                // tabs apart, and the picker underneath carries the ids.
+                $name = (string) Lang::t('tui.session.untitled');
             }
             $isCurrent = $id !== '' && $id === $current;
             if ($isCurrent) {
@@ -3420,9 +3424,10 @@ final class Renderer
      * Grapheme-aware ({@see Width::truncate()}), so a wide or combining
      * cluster is never split. A budget under one cell yields the empty string.
      *
-     * The file's one shared ellipsising clip — session tabs and, since the
-     * CL-2 pane auto-dock made the agent-composer ghost overrun a docked
-     * pane's text column, {@see renderInput()}'s ghost too.
+     * The file's one shared ellipsising clip — session tabs, the key-help
+     * rows (ISS-099), and, since the CL-2 pane auto-dock made the
+     * agent-composer ghost overrun a docked pane's text column,
+     * {@see renderInput()}'s ghost too.
      */
     private static function clipWithEllipsis(string $name, int $budget): string
     {

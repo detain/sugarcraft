@@ -249,6 +249,36 @@ final class SessionQueryTest extends TestCase
         $this->assertNotNull($this->store->getSession('pinned-empty'));
     }
 
+    /**
+     * ISS-102: the launch flow persists a transcript of pure UI-only notices
+     * on quit, so transcript-presence alone must not veto the empty sweep —
+     * while one real message, or any checkpoint, must keep the session.
+     */
+    public function testTheEmptySweepReadsUiOnlyTranscriptsAsEmpty(): void
+    {
+        $this->store->createSession('ui-only', 'p', 'm');
+        $this->store->createSession('real', 'p', 'm');
+        $this->store->createSession('checkpointed', 'p', 'm');
+        $this->store->saveTranscript('ui-only', [
+            Message::assistant('SKILLS-LISTING')->withUiOnly(),
+            Message::assistant('[local notice]')->withUiOnly(),
+        ]);
+        $this->store->saveTranscript('real', [
+            Message::user('hello there'),
+            Message::assistant('a notice')->withUiOnly(),
+        ]);
+        $this->store->saveTranscript('checkpointed', [Message::assistant('a notice')->withUiOnly()]);
+        $this->store->saveCheckpoint('checkpointed', ['messages' => []]);
+        foreach (['ui-only', 'real', 'checkpointed'] as $id) {
+            $this->age($id, '2000-01-01 00:00:00');
+        }
+
+        $this->assertSame(1, $this->store->pruneEmptySessions());
+        $this->assertNull($this->store->getSession('ui-only'), 'every persisted row was UI-only');
+        $this->assertNotNull($this->store->getSession('real'), 'one real message keeps the session');
+        $this->assertNotNull($this->store->getSession('checkpointed'), 'a checkpoint keeps the session');
+    }
+
     public function testThePlainStoreServesTheSameApi(): void
     {
         $store = new SessionStore(':memory:');
