@@ -10,6 +10,13 @@ namespace SugarCraft\Code\Server\Auth;
  * locked out for {@see LOCKOUT_SECONDS}. A 64-hex token is not guessable at
  * any rate; what this bounds is a login-code guesser and the log noise of a
  * misconfigured client hammering the port.
+ *
+ * A lockout never falls on the owner token (ISS-008): every loopback client —
+ * and every proxied client while `trustedProxies` is unset — shares one
+ * address, so the callers ({@see \SugarCraft\Code\Server\Http\AuthMiddleware}
+ * and {@see \SugarCraft\Code\Server\Http\ApiController::login()}) test a
+ * presented token against the store BEFORE consulting this gate, and a
+ * matching token neither waits here nor ever records a failure.
  */
 final class RateLimiter
 {
@@ -53,7 +60,13 @@ final class RateLimiter
         return (int) \ceil($left);
     }
 
-    public function recordFailure(string $address): void
+    /**
+     * One more failed sign-in for $address. Answers true on the strike that
+     * TRIPS the lockout — and only on that one — so the caller can write the
+     * event to the server log (ISS-008); later strikes inside the window and
+     * the lockout itself stay quiet.
+     */
+    public function recordFailure(string $address): bool
     {
         $now = ($this->clock)();
         $recent = \array_values(\array_filter(
@@ -66,7 +79,7 @@ final class RateLimiter
             $this->lockedUntil[$address] = $now + self::LOCKOUT_SECONDS;
             unset($this->failures[$address]);
 
-            return;
+            return true;
         }
 
         unset($this->failures[$address]);
@@ -74,5 +87,7 @@ final class RateLimiter
         if (\count($this->failures) > self::CAPACITY) {
             \array_shift($this->failures);
         }
+
+        return false;
     }
 }

@@ -16,6 +16,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\CookieSessions;
 use SugarCraft\Code\Server\Auth\TokenStore;
+use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\Server;
 use SugarCraft\Code\Server\ServerConfig;
@@ -98,12 +99,19 @@ final class WsUpgradeTest extends TestCase
         self::assertStringContainsString('HttpOnly', $setCookie);
         self::assertStringContainsString('SameSite=Strict', $setCookie);
         self::assertStringNotContainsString('Secure', $setCookie, 'no TLS, no trusted proxy: no Secure flag');
-        self::assertSame(1, \preg_match('/' . CookieSessions::COOKIE . '=([0-9a-f]+);/', $setCookie, $c));
-        $cookie = CookieSessions::COOKIE . '=' . $c[1];
+        // ISS-007: the cookie's NAME is scoped to the port it was minted on,
+        // and its AUTHORITY is the loginSecret beside it in the body — the
+        // page keeps that in localStorage and the server demands it back.
+        self::assertSame(1, \preg_match('/' . CookieSessions::COOKIE . '_' . $this->port . '=([0-9a-f]+);/', $setCookie, $c), 'the cookie name carries the port');
+        $cookie = CookieSessions::COOKIE . '_' . $this->port . '=' . $c[1];
+        $secret = (string) (\json_decode((string) $login->getBody(), true)['loginSecret'] ?? '');
+        self::assertSame(1, \preg_match('/^[0-9a-f]{64}$/', $secret), 'the login secret is 64 hex');
 
         self::assertSame(401, $this->post('/api/login', ['code' => $m[1]])->getStatusCode(), 'the code is spent');
 
-        $ticketResponse = $this->post('/api/ticket', [], ['Cookie' => $cookie]);
+        self::assertSame(401, $this->post('/api/ticket', [], ['Cookie' => $cookie])->getStatusCode(), 'the cookie alone no longer mints tickets');
+        self::assertSame(401, $this->post('/api/ticket', [], ['Cookie' => $cookie, AuthMiddleware::SECRET_HEADER => str_repeat('0', 64)])->getStatusCode(), 'a wrong secret does not either');
+        $ticketResponse = $this->post('/api/ticket', [], ['Cookie' => $cookie, AuthMiddleware::SECRET_HEADER => $secret]);
         self::assertSame(200, $ticketResponse->getStatusCode());
         $ticket = (string) (\json_decode((string) $ticketResponse->getBody(), true)['ticket'] ?? '');
 
