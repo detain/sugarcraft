@@ -60,6 +60,24 @@ final class AgentPresetRegistry
     private array $skippedFiles = [];
 
     /**
+     * Files the most recent {@see list()} displaced by a same-named preset from
+     * a higher-precedence search path, loser path => winner path — see
+     * {@see shadowedFiles()}.
+     *
+     * @var array<string, string>
+     */
+    private array $shadowedFiles = [];
+
+    /**
+     * Working set for the shadow walk: the source path every name currently
+     * claims, keyed by name, INCLUDING claims by files that a later candidate
+     * may displace a third tier from. Rebuilt by {@see list()}.
+     *
+     * @var array<string, string>
+     */
+    private array $shadowCandidates = [];
+
+    /**
      * Frontmatter keys the most recent {@see list()} found declared and
      * ignored, preset name => labels — see {@see ignoredFrontmatter()}.
      *
@@ -209,6 +227,8 @@ final class AgentPresetRegistry
     {
         $presets = [];
         $this->skippedFiles = [];
+        $this->shadowedFiles = [];
+        $this->shadowCandidates = [];
         $this->ignoredFrontmatter = [];
 
         foreach ($this->readableSearchPaths() as $path) {
@@ -223,8 +243,25 @@ final class AgentPresetRegistry
                 }
 
                 $name = basename($file, '.md');
-                // First search path takes precedence on name conflicts
-                if (isset($presets[$name])) {
+                // First search path takes precedence on name conflicts. The
+                // loser is RECORDED (ISS-031): precedence has always been
+                // decided here, but a file silently displaced by a same-named
+                // one from another tier was indistinguishable from a file that
+                // never existed — which is the other half of what made the
+                // old project > user order dangerous, and the reason it is a
+                // NOTICE and not a comment. The displaced file may itself
+                // shadow a THIRD tier below it, so it is kept as a candidate
+                // winner until a parse decides otherwise; a SKIPPED file does
+                // not claim its name (the load-bearing half — recording the
+                // shadow but skipping the candidate re-introduces the exact
+                // silent-displacement this seam exists to end).
+                // {@see shadowedFiles()}.
+                $displaced = isset($presets[$name])
+                    ? ($presets[$name]->sourcePath ?? '')
+                    : ($this->shadowCandidates[$name] ?? null);
+                if ($displaced !== null) {
+                    $this->shadowedFiles[$file] = $displaced;
+
                     continue;
                 }
 
@@ -250,7 +287,13 @@ final class AgentPresetRegistry
                 // did not anticipate (\TypeError) — and deliberately not \Throwable,
                 // so a genuine programming error still surfaces.
                 try {
-                    $presets[$name] = $this->parsePresetFile($file);
+                    $preset = $this->parsePresetFile($file);
+                    $presets[$name] = $preset;
+                    // The candidate stays even when no later file shadows it;
+                    // it is read only by the displacement check above, so a
+                    // shadow record can name the WINNER's path, not just the
+                    // winner's name.
+                    $this->shadowCandidates[$name] = $preset->sourcePath ?? '';
                     // The audit exists to tell a USER that a file they (or an
                     // import) wrote asks for something this build ignores.
                     // The presets shipped INSIDE this package are none of the
@@ -296,6 +339,26 @@ final class AgentPresetRegistry
     public function skippedFiles(): array
     {
         return $this->skippedFiles;
+    }
+
+    /**
+     * Preset files the most recent {@see list()} displaced by a same-named
+     * preset from a HIGHER-precedence search path, loser path => winner path
+     * (winner path `''` when the winner predates the field).
+     *
+     * ISS-031: precedence is a decision, and a decision nobody can see is
+     * silence wearing a rule's clothes. This is the seam that lets
+     * {@see \SugarCraft\Code\Cli\Bootstrap::agentPresets()} turn "your repo
+     * ships reviewer.md and it did nothing" into a launch row naming both
+     * files. Recomputed per {@see list()} like {@see skippedFiles()}; a
+     * DISPLACED file is not a skipped one — it parsed fine, it simply lost —
+     * so the two rosters stay separate.
+     *
+     * @return array<string, string>
+     */
+    public function shadowedFiles(): array
+    {
+        return $this->shadowedFiles;
     }
 
     /**
@@ -548,6 +611,7 @@ final class AgentPresetRegistry
             isolation: self::parseIsolation(self::stringField($data, 'isolation', $filePath), $filePath),
             color: self::stringField($data, 'color', $filePath),
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
+            sourcePath: $filePath,
         );
     }
 

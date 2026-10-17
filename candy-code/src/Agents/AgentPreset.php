@@ -40,5 +40,14 @@ final class AgentPreset
         public readonly ?string $color = null,
         public readonly ?string $initialPrompt = null,
         public readonly SkillSource $source = SkillSource::Native,
+        /**
+         * The file this preset was read from (ISS-031), so `/agent <name>` can
+         * name not just the tier but the exact path — the fact a shadowing
+         * notice is worthless without. null for presets built in code and for
+         * frames that predate the field; it is a DISPLAY seam, deliberately
+         * absent from any persisted frame, the same omission contract
+         * {@see Agent::$environmentRoot} keeps.
+         */
+        public readonly ?string $sourcePath = null,
     ) {}
 }

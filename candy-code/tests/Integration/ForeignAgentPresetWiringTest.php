@@ -288,10 +288,10 @@ final class ForeignAgentPresetWiringTest extends TestCase
      * `permissionMode: bypassPermissions` had nowhere to land on the roster.
      * That was the cheapest possible guarantee — a field that does not exist
      * cannot be read by anything, ever — and it was an ACCIDENT of
-     * `fromPreset()` reading six of sixteen fields.
+     * `fromPreset()` reading six of sixteen fields (the count then).
      *
      * ROUND TWO, and it was a REGRESSION: `fromPreset()` was widened to carry
-     * all sixteen, because a bridge that silently keeps six makes the other
+     * all seventeen, because a bridge that silently keeps six makes the other
      * ten look broken rather than unwired. That deleted the bound and replaced
      * it with "nothing reads the field yet" — and this very test asserted the
      * escape as if it were a feature, with
@@ -356,7 +356,7 @@ final class ForeignAgentPresetWiringTest extends TestCase
         ) {
             $this->assertTrue(
                 property_exists(Agent::class, $field),
-                "Agent should carry {$field} now that fromPreset() reads all sixteen preset fields",
+                "Agent should carry {$field} now that fromPreset() reads all seventeen preset fields",
             );
         }
     }

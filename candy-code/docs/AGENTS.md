@@ -24,12 +24,15 @@ merged from three layers, lowest first (`Bootstrap::agentRoster()`):
    `<project>/.opencode/agents`;
 2. six built-in definitions — `coder`, `reviewer`, `debugger`, `architect`,
    `tester` and `devops` (`Agents\AgentDefinition`);
-3. your own presets: `<project>/.candy-code/agents/*.md` and
-   `~/.candy-code/agents/*.md`.
+3. your own presets, in precedence order: `~/.candy-code/agents/*.md` first,
+   then `<project>/.candy-code/agents/*.md`.
 
 A higher layer wins on a name, so a cloned repository's
 `.claude/agents/reviewer.md` cannot replace the built-in `reviewer`, and your
-own `reviewer.md` replaces both. A preset sets the agent's prompt, model,
+own `reviewer.md` replaces both. WITHIN layer 3 the same direction holds
+(user > project): your home preset displaces a clone's same-named file, never
+the reverse, and whichever file loses the walk is reported by path in a launch
+notice. A preset sets the agent's prompt, model,
 reasoning effort, tool grant, permission mode, step cap, skills, MCP servers,
 and whether it runs in the background or in a worktree of its own — see
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#frontmatter).

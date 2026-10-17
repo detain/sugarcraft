@@ -27,7 +27,7 @@ use SugarCraft\Code\Skills\SkillSource;
  * NINE OF THE TEN NOW CARRY UNCONDITIONALLY. The tenth, `permissionMode`, is
  * GATED ON PROVENANCE — carried for a `SkillSource::Native` preset, forced to
  * {@see PermissionMode::Default} for a foreign one — because it is the only
- * field of the sixteen that is a privilege decision rather than a description,
+ * field of the seventeen that is a privilege decision rather than a description,
  * and the foreign tiers are repository directories read with no
  * `trustedProject*` opt-in. Both sides are pinned by
  * {@see testPermissionModeIsTheOneFieldGatedOnProvenance()}, and the fixture
@@ -44,15 +44,17 @@ use SugarCraft\Code\Skills\SkillSource;
 final class AgentPresetFieldCarryTest extends TestCase
 {
     /**
-     * The count that made this a finding. If someone adds a seventeenth field
-     * to AgentPreset, this fails and points at the carry below.
+     * The count that made this a finding. If someone adds an eighteenth field
+     * to AgentPreset, this fails and points at the carry below. (ISS-031's
+     * `sourcePath` is the seventeenth — the field this guard exists to catch
+     * being added without its carry, and the carry came in the same commit.)
      */
-    public function testAgentPresetStillDeclaresSixteenFields(): void
+    public function testAgentPresetStillDeclaresSeventeenFields(): void
     {
         $constructor = (new \ReflectionClass(AgentPreset::class))->getConstructor();
         self::assertNotNull($constructor);
 
-        $this->assertCount(16, $constructor->getParameters());
+        $this->assertCount(17, $constructor->getParameters());
     }
 
     /**
@@ -86,7 +88,7 @@ final class AgentPresetFieldCarryTest extends TestCase
      * The carry itself, with every field set AWAY from its default so a
      * dropped one shows up as the default rather than as a coincidence.
      */
-    public function testFromPresetCarriesAllSixteenFields(): void
+    public function testFromPresetCarriesAllSeventeenFields(): void
     {
         $agent = Agent::fromPreset($this->fullPreset(), 'anthropic', 'session-model');
 
@@ -96,6 +98,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         $this->assertSame('preset-model', $agent->model);
         $this->assertSame(['Read', 'Grep'], $agent->tools);
         $this->assertSame(['php-pro'], $agent->skillNames);
+        $this->assertSame('/fixture/reviewer.md', $agent->sourcePath, 'ISS-031: the file behind the name travels with the agent /agent reads out');
 
         // The ten that used to be dropped.
         $this->assertSame(['Bash', 'Write'], $agent->disallowedTools);
@@ -104,7 +107,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         // i.e. repository content, so its `Plan` is deliberately NOT carried.
         // See testPermissionModeIsTheOneFieldGatedOnProvenance() for both sides
         // of that; asserted here too so a reader of this list is not left
-        // believing all sixteen travel identically.
+        // believing all seventeen travel identically.
         $this->assertSame(PermissionMode::Default, $agent->permissionMode);
         $this->assertSame(7, $agent->maxTurns);
         $this->assertSame(['fs' => ['command' => 'mcp-fs']], $agent->mcpServers);
@@ -232,7 +235,7 @@ final class AgentPresetFieldCarryTest extends TestCase
     /**
      * THE ONE FIELD THAT DOES NOT CARRY UNCONDITIONALLY, both sides.
      *
-     * Fifteen of the preset's sixteen fields describe an agent. Only
+     * Sixteen of the preset's seventeen fields describe an agent. Only
      * `permissionMode` decides what it may do without asking, and
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry} reads
      * `{projectRoot}/.claude/agents` and `{projectRoot}/.opencode/agents` with
@@ -432,6 +435,7 @@ final class AgentPresetFieldCarryTest extends TestCase
             color: '#ff00ff',
             initialPrompt: 'You review.',
             source: SkillSource::Claude,
+            sourcePath: '/fixture/reviewer.md',
         );
     }
 }

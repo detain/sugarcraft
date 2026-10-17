@@ -220,6 +220,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // AgentPresetSkipMalformedFileTest. Quoted on no page, so no
         // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent below.
         'AGENT_PRESET_SKIP_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
+        // ISS-031's displaced-preset row, read back by
+        // AgentPresetShadowNoticeTest. Quoted on no page, so no PAGE_QUOTES row.
+        'AGENT_PRESET_SHADOW_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
         'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
@@ -524,6 +527,12 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'agentPresets' => [
             "': '", ' (', ')', "''", "'s'", "'; '",
             "'cli.warn.presets_unavailable'", "'error'",
+            // ISS-031 shadow rows: the winner joiner inside one row and the
+            // sentence joiner between the skip and shadow notices. Both are
+            // row-internal glue around data, not re-wordings of a promoted
+            // constant — the loser/winner paths and the row list all come
+            // from AGENT_PRESET_SHADOW_NOTICE_FORMAT's conversions.
+            "' — kept '", "' '",
         ],
     ];
 
@@ -805,7 +814,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            26,
+            27,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

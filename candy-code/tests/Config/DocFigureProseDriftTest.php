@@ -5364,7 +5364,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $root = \dirname(__DIR__, 2);
         $flat = self::markdownProse((string) file_get_contents($root . '/docs/AGENTS_AUTHORING.md'));
-        $words = ['six' => 6, 'seven' => 7, 'sixteen' => 16];
+        $words = ['six' => 6, 'seven' => 7, 'sixteen' => 16, 'seventeen' => 17];
 
         self::assertSame(1, preg_match('/carries (\w+) fields and the path/', $flat, $w1), 'the intro no longer spells what AgentPreset carries');
         self::assertArrayHasKey($w1[1], $words, "spelled count '{$w1[1]}' outside the pinned map — extend it deliberately");

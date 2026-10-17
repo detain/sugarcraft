@@ -332,23 +332,23 @@ final class AgentManagerWiringTest extends TestCase
 
     /**
      * On-disk presets reach the launched roster from both search paths, the
-     * project copy wins a name collision (a repo's checked-in definition is the
-     * more specific one — the order {@see \SugarCraft\Code\Skills\SkillLoader}
-     * also used for skills until audit 15d-03(b) put the user tier first there),
-     * and a preset
+     * USER copy wins a name collision (ISS-031: a cloned repository must not
+     * silently displace the operator's own presets — the direction audit
+     * 15d-03(b) already gave skills, built-in < project < user, and the loser
+     * is now additionally a launch notice, not silence), and a preset
      * named after a built-in REPLACES it rather than adding a duplicate row to
      * `/agents`.
      *
      * Fails against unwired code twice over: with a null manager there is no
      * roster at all, and with the built-ins alone every name here is absent.
      */
-    public function testOnDiskPresetsReachTheLaunchedRosterWithProjectWinning(): void
+    public function testOnDiskPresetsReachTheLaunchedRosterWithUserWinning(): void
     {
         $manager = $this->manager();
 
         $this->assertSame('Writes the docs', $manager->get('docs-writer')?->description);
         $this->assertSame('Enforces house style', $manager->get('house-style')?->description);
-        $this->assertSame('The project copy', $manager->get('shared')?->description);
+        $this->assertSame('The user copy', $manager->get('shared')?->description);
 
         $reviewers = array_filter($manager->all(), static fn($agent) => $agent->name === 'reviewer');
         $this->assertCount(1, $reviewers, 'a preset must replace the built-in, not duplicate it');

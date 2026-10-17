@@ -182,6 +182,14 @@ final class AgentsCommand
         echo '  ' . Lang::t('cmd.agents.detail.description', ['description' => $agent->description]) . "\n";
         echo '  ' . Lang::t('cmd.agents.detail.model', ['model' => $agent->model]) . "\n";
         echo '  ' . Lang::t('cmd.agents.detail.provider', ['provider' => $agent->provider]) . "\n";
+        // ISS-031: which convention wrote this agent, and the exact file it was
+        // read from (or null for the six built-ins, which have no file). A
+        // roster the operator cannot trace to a path is the silence this item
+        // exists to end.
+        echo '  ' . Lang::t('cmd.agents.detail.source', ['source' => $agent->source->value]) . "\n";
+        if ($agent->sourcePath !== null && $agent->sourcePath !== '') {
+            echo '  ' . Lang::t('cmd.agents.detail.path', ['path' => $agent->sourcePath]) . "\n";
+        }
         echo '  ' . Lang::t('cmd.agents.detail.status', [
             'status' => $agent->isActive ? Lang::t('cmd.agents.status.active') : Lang::t('cmd.agents.status.inactive'),
         ]) . "\n";

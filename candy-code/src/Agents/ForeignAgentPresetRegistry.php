@@ -49,7 +49,7 @@ use SugarCraft\Code\Skills\SkillSource;
  * WHAT REACHES THE ROSTER IS STILL NARROWER THAN WHAT THIS CLASS PARSES, but
  * for a different reason than it used to be — read this before relying on
  * either sentence it replaced. `Agent::fromPreset()` used to read six of the
- * preset's sixteen fields and drop ten, so the `permissionMode:` this class
+ * preset's seventeen fields and drop ten, so the `permissionMode:` this class
  * maps could not travel that path at all. It reads all sixteen now, because a
  * bridge that silently keeps six makes the other ten look broken rather than
  * unwired.

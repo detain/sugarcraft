@@ -17,7 +17,7 @@ final readonly class Agent
      *
      * THE TEN PARAMETERS AFTER `$environment` ARE THE PRESET'S FIELDS, and
      * they are here because {@see fromPreset()} was reading SIX of
-     * {@see AgentPreset}'s sixteen and dropping the rest on the floor. A
+     * {@see AgentPreset}'s seventeen and dropping the rest on the floor. A
      * preset is the `.md`+frontmatter file a user or a foreign tool
      * (`.claude/agents/`, `.opencode/agents/`) wrote; every key it declares
      * was declared deliberately, and a bridge that silently keeps six of them
@@ -109,6 +109,15 @@ final readonly class Agent
         public SkillSource $source = SkillSource::Native,
         public ?string $environmentRoot = null,
         public bool $inheritsModel = false,
+        /**
+         * The file the agent's preset was read from (ISS-031), copied through
+         * {@see fromPreset()} so `/agent` and the roster table can name the
+         * exact path behind a name. Absent from `toArray()`/`fromArray()` on
+         * the {@see $environmentRoot} contract: the roster is rebuilt from
+         * disk every launch, and a persisted path would outlive the checkout
+         * that made it.
+         */
+        public ?string $sourcePath = null,
     ) {}
 
     /**
@@ -242,7 +251,7 @@ final readonly class Agent
      * did not, and the doc-block here said they "stay on the preset" — true
      * of where the value lived, misleading about what a caller could reach,
      * since {@see AgentManager} stores the Agent and hands back the Agent.
-     * All sixteen are copied now, with ONE gated on provenance — see below.
+     * All seventeen are copied now, with ONE gated on provenance — see below.
      *
      * `permissionMode` IS GATED ON `$preset->source`, and it is the only
      * carried field that is. The other fifteen describe an agent; this one
@@ -314,6 +323,7 @@ final readonly class Agent
             isolation: $preset->isolation,
             color: $preset->color,
             source: $preset->source,
+            sourcePath: $preset->sourcePath,
             inheritsModel: $preset->model === 'inherit' || $preset->model === '',
         );
     }

@@ -531,6 +531,20 @@ final class Bootstrap
     public const AGENT_PRESET_SKIP_NOTICE_FORMAT = 'skipped %d agent preset file%s: %s';
 
     /**
+     * The one row {@see agentPresets()} raises when the same-name walk (ISS-031)
+     * displaced native preset files: `%d` the count, `%s` the noun plural, `%s`
+     * the `loser — kept winner` rows joined by `; `.
+     *
+     * The displacement is a DECISION the operator cannot otherwise see: after
+     * the user > project flip, a repository's preset yielding to the operator's
+     * own is the correct outcome, and the notice is what makes it a KNOWN one.
+     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
+     * {@see \SugarCraft\Code\Tests\Agents\AgentPresetShadowNoticeTest} pins the
+     * rendered row through this constant.
+     */
+    public const AGENT_PRESET_SHADOW_NOTICE_FORMAT = '%d native agent preset file%s displaced by a higher-precedence file: %s';
+
+    /**
      * The tail row {@see launchNotices()} synthesises when this launch raised
      * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
      *
@@ -792,6 +806,7 @@ final class Bootstrap
         self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT => 'cli.launch.tui_error_log_discarded',
         self::COMMAND_SKIP_NOTICE_FORMAT => 'cli.launch.command_skip',
         self::AGENT_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.agent_preset_skip',
+        self::AGENT_PRESET_SHADOW_NOTICE_FORMAT => 'cli.launch.agent_preset_shadow',
         self::LAUNCH_NOTICE_OVERFLOW_FORMAT => 'cli.launch.overflow',
         self::NARROWED_GRANT_NOTICE_FORMAT => 'cli.launch.narrowed_grant',
         self::NARROWED_GRANT_OVERFLOW_FORMAT => 'cli.launch.narrowed_grant_overflow',
@@ -2522,7 +2537,12 @@ final class Bootstrap
      * are documented against: cloning a repository that ships
      * `.claude/agents/reviewer.md` must not silently re-point `reviewer` at
      * somebody else's prompt. Additive is the only safe direction for a new
-     * discovery source.
+     * discovery source. WITHIN the native layer, the two on-disk tiers order
+     * user > project as of ISS-031 — see {@see agentPresetTiers()} — so a
+     * cloned repository can add names to this roster but can no longer displace
+     * the operator's own presets, and a displacement of any same-name file by
+     * any higher-precedence one is a launch notice, not silence
+     * ({@see AGENT_PRESET_SHADOW_NOTICE_FORMAT}).
      *
      * WINNING IS PER FIELD, AND THE PROMPT IS THE ONE FIELD A PRESET MIGHT NOT
      * HAVE. A native preset declaring no prompt at all — no markdown body and no
@@ -2540,7 +2560,7 @@ final class Bootstrap
      * replaced, which said {@see Agent::fromPreset()} reads six fields "and
      * NOTHING ELSE" and that an imported `permissionMode:` "does not travel
      * this path at all". Both were true when written and are now false:
-     * `fromPreset()` reads all sixteen of the preset's fields. Stated where
+     * `fromPreset()` reads all seventeen of the preset's fields. Stated where
      * the merge happens rather than left to be inferred, because THIS method
      * is the one that performs it.
      *
@@ -2567,11 +2587,12 @@ final class Bootstrap
      * {@see \SugarCraft\Code\Agents\AgentPreset} still carries every field, so a
      * future consumer reading presets directly inherits them ungated.
      *
-     * {@see \SugarCraft\Code\Agents\AgentPreset::$source} NOW HAS A CARRIER
-     * and still has no reader. {@see Agent} carries a `$source` field and
-     * `fromPreset()` copies it, so the tag survives onto the roster — but the
-     * palette does not badge an imported row yet, so the remaining half of
-     * Phase 1 item 3 is a call site rather than a field.
+     * {@see \SugarCraft\Code\Agents\AgentPreset::$source} HAS A CARRIER AND NOW
+     * HAS A READER. {@see Agent} carries a `$source` field and `fromPreset()`
+     * copies it; since ISS-031/ISS-034 the roster table badges imported rows and
+     * `/agent <name>` prints the source and, through the new
+     * {@see Agent::$sourcePath}, the exact file a preset was read from — the
+     * display half Phase 1 item 3 left unclaimed is claimed.
      *
      * @return list<Agent>
      */
@@ -2680,7 +2701,7 @@ final class Bootstrap
      * rules on the single code path that owns them.
      *
      * WHY A SPREAD INSTEAD OF A FIELD LIST. Neither class declares a `with*()`
-     * for this, and a list of the preset's sixteen fields would carry two costs
+     * for this, and a list of the preset's seventeen fields would carry two costs
      * at once: a field ADDED to `AgentPreset` later would default here rather
      * than travel, and naming its `permissionMode` at all trips
      * {@see \SugarCraft\Code\Tests\Integration\ForeignAgentPresetWiringTest::testNoSourceFileOutsideAgentReadsAnAgentsPermissionMode()},
@@ -2938,6 +2959,31 @@ final class Bootstrap
             $presets = [];
         }
 
+        // ISS-031, the visible half: with the tiers flipped to user > project,
+        // a file that LOST the same-name walk is a displacement the operator
+        // cannot otherwise observe — the roster simply does not mention the
+        // loser. Report it through the SAME seam call as the skips (one
+        // emission per outcome, the seam census counts call sites not
+        // sentences, and a reader of "your repo's reviewer.md yielded to your
+        // own" wants it on the same launch it silently got).
+        $shadowed = $registry->shadowedFiles();
+        if ($shadowed !== []) {
+            $rows = [];
+            foreach ($shadowed as $loser => $winner) {
+                $rows[] = $winner === ''
+                    ? (string) $loser
+                    : $loser . ' — kept ' . $winner;
+            }
+
+            $shadowNotice = sprintf(
+                self::translated(self::AGENT_PRESET_SHADOW_NOTICE_FORMAT),
+                \count($shadowed),
+                \count($shadowed) === 1 ? '' : 's',
+                implode('; ', $rows),
+            );
+            $notice = $notice === null ? $shadowNotice : $notice . ' ' . $shadowNotice;
+        }
+
         if ($notice !== null) {
             self::warnPermissionConfigInTranscript($notice);
         }
@@ -3035,9 +3081,22 @@ final class Bootstrap
             return [[$userAgents], [$userAgents => $userHome]];
         }
 
+        // USER FIRST (ISS-031). The order these paths are returned in IS the
+        // precedence — {@see AgentPresetRegistry::list()} lets the first path
+        // that claims a name keep it — and this method used to return project
+        // first. A cloned checkout's `.candy-code/agents/reviewer.md` therefore
+        // silently displaced both the operator's own `~/.candy-code/agents/
+        // reviewer.md` and the built-in it shadowed, which is repository
+        // content steering a local session, the exact direction skills had
+        // already reversed (audit 15d-03(b): built-in < project < USER). Agents
+        // now agree with them: your own presets outrank a repository's; what a
+        // repository can do is ADD names, not replace yours. The displacement
+        // side of the old order is not hidden either — see
+        // {@see AgentPresetRegistry::shadowedFiles()} and the notice
+        // {@see agentPresets()} renders from it.
         return [
-            [$projectAgents, $userAgents],
-            [$projectAgents => $root, $userAgents => $userHome],
+            [$userAgents, $projectAgents],
+            [$userAgents => $userHome, $projectAgents => $root],
         ];
     }
 

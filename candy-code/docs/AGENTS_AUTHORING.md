@@ -5,7 +5,7 @@ delegation target and tunes it. Presets are discovered at launch, merged into a
 roster, and shown by `/agents`.
 
 This page documents what the frontmatter *does* on this checkout, which is
-narrower than what it declares. `AgentPreset` carries sixteen fields and the path that puts a preset onto
+narrower than what it declares. `AgentPreset` carries seventeen fields and the path that puts a preset onto
 the roster now reads every one of them onto the `Agent` row. The per-field
 account is below rather than implied, because a preset whose
 `permissionMode: bypass-permissions` is honoured by a cloned checkout and one
@@ -79,9 +79,13 @@ cannot displace a built-in or a native preset, whichever tool or tier it came
 from. So the exposure is a foreign *name you do not otherwise define* — and that
 is exactly the case to check before running a strange repository.
 
-Note that the **native** tiers do not diverge: native agent presets and native
-skills both give the project tier precedence over the user tier. The asymmetry is
-foreign-vs-foreign, not agents-vs-skills.
+Note that the **native** tiers no longer diverge from skills either: since
+ISS-031, native agent presets and native skills both give the USER tier
+precedence over the project tier — a cloned repository can add preset names but
+cannot displace the operator's own, and a displaced file is named by path in a
+launch notice (`Bootstrap::AGENT_PRESET_SHADOW_NOTICE_FORMAT`). The remaining
+asymmetry is foreign-vs-foreign: the claude/opencode import scan still resolves
+project-over-user.
 
 ### Roster precedence
 
@@ -165,11 +169,12 @@ carrying both is asking for the declared one.
 ### Which fields reach the roster
 
 `Bootstrap::agentRoster()` maps each preset through `Agent::fromPreset()`, which
-now carries **all sixteen** `AgentPreset` fields onto the `Agent` row:
+now carries **all seventeen** `AgentPreset` fields onto the `Agent` row:
 `name`, `description`, `initialPrompt`, `model` (`inherit`/empty → the
 launch's model), `tools`, `skills`, `disallowedTools`, `maxTurns`,
 `mcpServers`, `memory`, `background`, `effort`, `isolation`, `color`,
-`source`, and — gated on provenance, alone among them — `permissionMode`.
+`source`, `sourcePath`, and — gated on provenance, alone among them —
+`permissionMode`.
 
 Native and imported presets take the same path — the wiring neither widens
 nor narrows it — with that one deliberate exception, stated per value because
@@ -189,8 +194,9 @@ of the preset's mode and the session's
 `bypass-permissions` on a preset never lifts a `default` session's questions.
 
 `source` rides along now, so an imported row carries its provenance in state;
-whether any surface renders it differently is a `/agents` question, not a
-wiring one.
+since ISS-031 `/agent <name>` renders it, and renders `sourcePath` beside it —
+the exact file a preset was read from, with the built-ins (no file) simply
+omitting the row.
 
 ### Which fields act
 
