@@ -30,6 +30,7 @@ use SugarCraft\Style\Style;
 use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\Veil;
 use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\ShellSubjectTools;
@@ -1842,7 +1843,7 @@ final class Renderer
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
             // where the reply is about to appear.
-            $thinking = Style::new()->foreground($theme->assistantLabel)->render('⠴ ' . Lang::t('tui.chat.assistant_thinking'));
+            $thinking = Style::new()->foreground($theme->assistantLabel)->render(self::thinkingLine($chat));
             $body = $body === '' ? $thinking : $body . "\n\n" . $thinking;
         }
         // Everything above wrote into $body; this is the single choke point
@@ -2670,6 +2671,98 @@ final class Renderer
         return Width::truncate($short, $room - 1) . '…';
     }
 
+    /** The frame glyph the live spinner should paint ({@see AgentLiveRegistry}). */
+    private static function liveSpinner(Chat $chat): string
+    {
+        return AgentLiveRegistry::SPINNER[$chat->agentLive()->spinnerFrame()];
+    }
+
+    /**
+     * The in-turn clock memos for the thinking row (ISS-103). Keyed loosely:
+     * a different registry identity starts a new turn, and any frame drawn
+     * with no turn in flight clears them. {@see AgentLiveRegistry}'s stored
+     * clock is the ONLY time source — the view still never reads a wall
+     * clock of its own.
+     */
+    private static ?int $turnClockOwner = null;
+
+    private static ?float $turnClockStart = null;
+
+    private static ?float $turnClockLastToken = null;
+
+    private static int $turnClockTailLen = -1;
+
+    private static function noteTurnClock(Chat $chat): void
+    {
+        $live = $chat->agentLive();
+        $owner = \spl_object_id($live);
+        $now = $live->now();
+
+        if (self::$turnClockOwner !== $owner || self::$turnClockStart === null || $now < self::$turnClockStart) {
+            self::$turnClockOwner = $owner;
+            self::$turnClockStart = $now;
+            self::$turnClockLastToken = $now;
+            self::$turnClockTailLen = mb_strlen($chat->streamingText());
+
+            return;
+        }
+
+        $len = mb_strlen($chat->streamingText());
+        if ($len !== self::$turnClockTailLen) {
+            self::$turnClockTailLen = $len;
+            self::$turnClockLastToken = $now;
+        }
+    }
+
+    private static function clearTurnClock(): void
+    {
+        self::$turnClockOwner = null;
+        self::$turnClockStart = null;
+        self::$turnClockLastToken = null;
+        self::$turnClockTailLen = -1;
+    }
+
+    /** Seconds → `m:ss`, switching to `h:mm:ss` past an hour (AgentActivityLine's shape). */
+    private static function turnClockSpan(float $seconds): string
+    {
+        $whole = max(0, (int) \floor($seconds));
+
+        if ($whole >= 3600) {
+            return \sprintf('%d:%02d:%02d', intdiv($whole, 3600), intdiv($whole % 3600, 60), $whole % 60);
+        }
+
+        return \sprintf('%d:%02d', intdiv($whole, 60), $whole % 60);
+    }
+
+    /**
+     * The in-chat "still working" row: the live glyph, and — ISS-103 — how
+     * long the turn has run. After {@see THINKING_STALL_SECONDS} without a
+     * single token landing, the row says so in words, because a frozen
+     * spinner and a slow model look identical otherwise.
+     */
+    private static function thinkingLine(Chat $chat): string
+    {
+        self::noteTurnClock($chat);
+
+        $live = $chat->agentLive();
+        $line = self::liveSpinner($chat) . ' ' . Lang::t('tui.chat.assistant_thinking');
+
+        $elapsed = $live->now() - (self::$turnClockStart ?? $live->now());
+        if ($elapsed >= 1.0) {
+            $line .= ' · ' . self::turnClockSpan($elapsed);
+        }
+
+        $silent = $live->now() - (self::$turnClockLastToken ?? $live->now());
+        if ($silent >= self::THINKING_STALL_SECONDS) {
+            $line .= ' · ' . Lang::t('tui.chat.thinking_stalled', ['gap' => self::turnClockSpan($silent)]);
+        }
+
+        return $line;
+    }
+
+    /** Silence this long with no token growth turns the thinking row blunt. */
+    private const THINKING_STALL_SECONDS = 60.0;
+
     /**
      * The processing hint at the widest form that fits $room columns, or its
      * narrowest form when none does ({@see fitStatusBar()} then cuts the bar).
@@ -2695,13 +2788,24 @@ final class Renderer
     private static function fitProcessingHint(Chat $chat, int $room): string
     {
         $step = $chat->liveStep();
+
+        if (!$chat->inFlight) {
+            self::clearTurnClock();
+        }
+
+        // ISS-103: one glyph for the whole frame — the registry's stored
+        // spinner state, advanced only by Chat::update's pump. A turn that
+        // never moves the row is a stall; the clock memos in
+        // {@see self::noteTurnClock()} decide that, not this glyph.
+        $spin = self::liveSpinner($chat);
+
         if ($chat->inFlight && $chat->stopRequested()) {
             $stopping = $step !== null ? Lang::t('tui.status.stopping_after_step', ['step' => $step->step]) : Lang::t('tui.status.stopping');
             $forms = [
-                '⠴ ' . $stopping . ' · ' . Lang::t('tui.status.esc_cancel_now'),
-                '⠴ ' . $stopping,
-                '⠴ ' . Lang::t('tui.status.stopping_ellipsis'),
-                '⠴',
+                $spin . ' ' . $stopping . ' · ' . Lang::t('tui.status.esc_cancel_now'),
+                $spin . ' ' . $stopping,
+                $spin . ' ' . Lang::t('tui.status.stopping_ellipsis'),
+                $spin,
             ];
         } elseif ($chat->inFlight && $step !== null) {
             $tag = Lang::t('tui.status.step', ['step' => $step->step]);
@@ -2709,18 +2813,18 @@ final class Renderer
                 $tag .= ' · ' . Lang::t('tui.status.step_ctx', ['percent' => $step->pressure->percentOfWindow()]);
             }
             $forms = [
-                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
-                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
-                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
-                '⠴ ' . $tag,
-                '⠴',
+                $spin . ' ' . $tag . ' · ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
+                $spin . ' ' . $tag . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
+                $spin . ' ' . $tag . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
+                $spin . ' ' . $tag,
+                $spin,
             ];
         } elseif ($chat->inFlight) {
             $forms = [
-                '⠴ ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
-                '⠴ ' . Lang::t('tui.status.esc_esc_cancel'),
-                '⠴ ' . Lang::t('tui.status.thinking'),
-                '⠴',
+                $spin . ' ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
+                $spin . ' ' . Lang::t('tui.status.esc_esc_cancel'),
+                $spin . ' ' . Lang::t('tui.status.thinking'),
+                $spin,
             ];
         } else {
             $menu = self::markPane(Pane::Menu, Lang::t('tui.status.menu'));
@@ -5432,7 +5536,12 @@ final class Renderer
     {
         $runs = $agents === null ? [] : $agents->forCall((string) $msg->pendingToolCallId);
         $queued = $runs !== [] && array_filter($runs, static fn ($run): bool => !$run->isQueued()) === [];
-        $spinner = Style::new()->foreground($theme->assistantLabel)->render($queued ? '◌' : '⠴');
+        // ISS-103: the working row animates off the same registry frame the
+        // activity lines use; no registry (a bare preview render) parks on
+        // the first frame instead of a hardcoded glyph.
+        $spinner = Style::new()->foreground($theme->assistantLabel)->render(
+            $queued ? '◌' : \SugarCraft\Code\Agents\Live\AgentLiveRegistry::SPINNER[$agents?->spinnerFrame() ?? 0],
+        );
         $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
         $running .= self::agentLines($runs, $theme, $width, $agents);
         $running .= self::previewLines((string) $msg->pendingToolCallId, $theme, $width, $images, $mosaic, $imageRows);

@@ -89,7 +89,7 @@ final class AgentLiveLinesTest extends TestCase
         [$chat] = $chat->update(new ToolEventPumpMsg());
 
         $frame = self::plain(Renderer::render($chat));
-        self::assertStringContainsString('⠴ running: ', $frame, 'its own start takes the slot over');
+        self::assertStringContainsString('⠋ running: ', $frame, 'its own start takes the slot over (ISS-103: the main row animates off the same frame as the sub-lines, and this test clock parks on frame 0)');
         self::assertStringContainsString('└ ⠋ starting…', $frame);
     }
 

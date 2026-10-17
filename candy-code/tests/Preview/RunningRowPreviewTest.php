@@ -45,7 +45,7 @@ final class RunningRowPreviewTest extends TestCase
         $afterClear = $this->paintRow(100, null, null, 0);
 
         $this->assertSame($plain, $afterClear);
-        $this->assertStringContainsString('⠴', $plain, 'fixture: the running line itself still renders');
+        $this->assertStringContainsString('⠋', $plain, 'fixture: the running line itself still renders (ISS-103: no registry parks on the first frame)');
     }
 
     public function testACaptionOnlySlotAddsThePercentAndEtaLine(): void
