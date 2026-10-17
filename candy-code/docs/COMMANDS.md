@@ -348,7 +348,7 @@ edit it by hand.
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
-| `/skills` | ✓ | | `[proposed\|accept <name> [--replace]\|reject <name>]` | List the skill drafts the dream pass proposed, or accept or reject one |
+| `/skills` | ✓ | | `[installed\|proposed\|accept <name> [--replace]\|reject <name>]` | List the invocable skills, or review the dream pass drafts: accept or reject one |
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |
@@ -582,11 +582,15 @@ switched away or started a turn meanwhile, in which case it stays and names the
 new session. A headless host opens the session and leaves it for a client to
 open, as it does a `/branch`.
 
-`/skills` reviews the skill drafts the dream pass proposes when
-`memory.dreamProposeSkills` is on: `/skills proposed` lists them,
-`/skills accept <name> [--replace]` makes one a live skill in
-`~/.candy-code/skills/`, `/skills reject <name>` deletes it. It is the only
-way a draft becomes live — see [SKILLS.md](SKILLS.md#proposed-skills).
+`/skills` answers both skills questions. Bare (or `/skills installed`) lists
+every invocable skill the launch discovery loads — built-in, user, project, and
+foreign tiers — as a table of name, tier badge, whether `disabledSkills` turns
+it off, how many same-named files it shadowed, and its one-line description.
+`/skills proposed` reviews the skill drafts the dream pass proposes when
+`memory.dreamProposeSkills` is on, `/skills accept <name> [--replace]` makes
+one a live skill in `~/.candy-code/skills/`, `/skills reject <name>` deletes
+it. Accept is the only way a draft becomes live — see
+[SKILLS.md](SKILLS.md#proposed-skills).
 
 `/editor` composes the next prompt in your own editor: `$VISUAL`, else
 `$EDITOR`, else `vi` (`notepad` on Windows), run as a shell command line with

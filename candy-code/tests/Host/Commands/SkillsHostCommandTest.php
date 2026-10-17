@@ -50,18 +50,100 @@ final class SkillsHostCommandTest extends TestCase
         }
     }
 
-    public function testProposedListsTheDraftsAndBareSkillsDoesTheSame(): void
+    /**
+     * ISS-089 split the two questions the command answers: the bare form now
+     * lists what is INSTALLED (the question with an answer in every session),
+     * and the drafts keep their explicit word. A pending draft must not leak
+     * into the table listing, and the table must not swallow the drafts.
+     */
+    public function testBareSkillsListsTheTableAndProposedKeepsTheDrafts(): void
     {
         self::assertStringContainsString('No skill drafts are waiting', $this->reply('/skills proposed'));
 
         ProposedSkills::new()->propose(SkillProposal::new('triage', 'Use when triaging a bug.', 'Steps.'));
 
-        foreach (['/skills', '/skills proposed'] as $text) {
-            $reply = $this->reply($text);
-            self::assertStringContainsString('1 skill draft waiting', $reply);
-            self::assertStringContainsString('`triage`', $reply);
-            self::assertStringContainsString('Use when triaging a bug.', $reply);
+        $drafts = $this->reply('/skills proposed');
+        self::assertStringContainsString('1 skill draft waiting', $drafts);
+        self::assertStringContainsString('`triage`', $drafts);
+        self::assertStringContainsString('Use when triaging a bug.', $drafts);
+
+        $table = $this->reply('/skills');
+        self::assertStringContainsString('invocable skills:', $table);
+        self::assertStringContainsString('Skill', $table);
+        self::assertStringNotContainsString('skill draft waiting', $table, 'the table is not the draft reviewer any more');
+
+        $installed = $this->reply('/skills installed');
+        self::assertSame($table, $installed, 'the explicit word is the bare form');
+    }
+
+    /** A project skill loads into the table with its tier, and a disabled row says `no`. */
+    public function testTheTableCarriesTiersAndTheDisabledFlag(): void
+    {
+        $this->writeShipLineSkill($this->project . '/.candy-code/skills', description: 'Ship  notes  for  a  release.');
+
+        $row = self::row($this->reply('/skills'), 'shipline');
+        self::assertSame('project', $row[2], 'the tier badge is the origin value');
+        self::assertSame('yes', $row[3]);
+        self::assertSame('Ship notes for a release.', $row[5], 'whitespace runs collapse to one space per cell');
+
+        mkdir($this->home . '/.candy-code', 0700, true);
+        file_put_contents($this->home . '/.candy-code/config.json', '{"disabledSkills":["shipline"]}');
+        $row = self::row($this->reply('/skills'), 'shipline');
+        self::assertSame('no', $row[3], 'the On column answers for disabledSkills');
+    }
+
+    /** The shadow count: the loser files a same-name collision records, on the winner's row. */
+    public function testTheSkipColumnCountsTheFilesThisSkillShadowed(): void
+    {
+        $this->writeShipLineSkill($this->home . '/.candy-code/skills', body: 'User body.');
+        $this->writeShipLineSkill($this->project . '/.candy-code/skills', body: 'Project body.');
+
+        // Different bytes (the writer calls alternate the body), so the loser
+        // is NOT the byte-identical linked-copy case the loader stays silent
+        // about — the shadow must be recorded. The registration order that
+        // decides WHICH file loses is SkillOrigin::precedence()'s last-write-
+        // wins walk (BuiltIn, Project, User), so the USER copy holds the name
+        // and the project copy is the recorded loser.
+        $row = self::row($this->reply('/skills'), 'shipline');
+        self::assertSame('user', $row[2], 'the later-registered tier holds the name');
+        self::assertSame('1', $row[4], 'one same-name file lost to this row');
+    }
+
+    /** `/skills installed extra` is a usage notice, matching the drafts arm's rule. */
+    public function testTheInstalledWordTakesNoArgument(): void
+    {
+        foreach (['/skills installed extra', '/skills proposed extra'] as $text) {
+            $result = (new SkillsHostCommand())->run($this->context(), $text);
+            $last = $result->rows[\count($result->rows) - 1];
+            self::assertSame(Role::System, $last->role, $text);
+            self::assertStringContainsString('Usage: /skills', $last->content, $text);
         }
+    }
+
+    /** Lay one `shipline/SKILL.md` into the given skills root (tier directory). */
+    private function writeShipLineSkill(string $skillsRoot, string $body = 'Body.', string $description = 'Ship notes for a release.'): void
+    {
+        $dir = $skillsRoot . '/shipline';
+        mkdir($dir, 0700, true);
+        file_put_contents($dir . '/SKILL.md', "---\nname: shipline\ndescription: {$description}\n---\n\n{$body}\n");
+    }
+
+    /**
+     * The shipline row of a rendered table, split into cells: the box borders
+     * and the cell trim are mechanical, so index 2 is Tier, 3 On, 4 Skip, and
+     * 5 the description — asserted by position because position IS the column
+     * the test is about.
+     *
+     * @return list<string>
+     */
+    private static function row(string $table, string $name): array
+    {
+        foreach (\explode("\n", $table) as $line) {
+            if (str_contains($line, $name)) {
+                return array_map(\trim(...), \explode('│', $line));
+            }
+        }
+        self::fail("no row named {$name} in:\n{$table}");
     }
 
     public function testAcceptPromotesAndRejectDeletes(): void
