@@ -14,6 +14,7 @@ use SugarCraft\Code\Tests\Config\EnvRosterDriftTest;
 use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
 use SugarCraft\Code\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
+use SugarCraft\Code\Workspace\GitRunner;
 
 final class HelpTest extends TestCase
 {
@@ -686,11 +687,25 @@ final class HelpTest extends TestCase
             return;
         }
 
+        // ISS-082: on this checkout the HEAD probe is the authority — Composer's
+        // frozen install ref may sit any number of commits behind, and asserting
+        // it would assert the bug. The probe below is a SECOND implementation,
+        // not the production one: it re-reads git through GitRunner rather than
+        // calling the private method under test, so the two can still disagree
+        // and the disagreement is the failure.
+        [$sha, $dirty] = $this->probeCheckoutReference();
+
+        if ($sha !== null) {
+            $this->assertSame($pretty . ' (' . $sha . ($dirty ? '+dirty' : '') . ')', $resolved);
+
+            return;
+        }
+
         if ($reference === null) {
             $this->assertSame(
                 $pretty,
                 $resolved,
-                'with no reference to append there is nothing to decorate with',
+                'with no reference to append — and no checkout to probe — there is nothing to decorate with',
             );
             $this->assertDoesNotMatchRegularExpression('/\([0-9a-f]{7}\)$/', $resolved);
 
@@ -698,6 +713,37 @@ final class HelpTest extends TestCase
         }
 
         $this->assertSame($pretty . ' (' . substr($reference, 0, 7) . ')', $resolved);
+    }
+
+    /**
+     * The independent oracle for {@see Help::checkoutReference()}: walk the
+     * same install path, run the same two git reads, and answer what the
+     * decoration SHOULD be — or [null, false] when this install is not a
+     * probeable checkout.
+     *
+     * @return array{0: ?string, 1: bool} seven-char sha and dirty flag
+     */
+    private function probeCheckoutReference(): array
+    {
+        $package = (new \ReflectionClass(Help::class))->getConstant('PACKAGE');
+        $installPath = \is_string($package) ? InstalledVersions::getInstallPath($package) : null;
+        $real = \is_string($installPath) ? \realpath($installPath) : false;
+
+        if ($real === false || \preg_match('#(?:^|/)vendor/#', $real) === 1 || !GitRunner::available()) {
+            return [null, false];
+        }
+
+        $git = GitRunner::new($real)->withTimeout(10.0);
+        $head = $git->capture(64, 'rev-parse', '--short', 'HEAD');
+        $sha = \trim((string) $head['stdout']);
+
+        if ($head['exitCode'] !== 0 || $head['timedOut'] || \preg_match('/^[0-9a-f]{7,40}$/', $sha) !== 1) {
+            return [null, false];
+        }
+
+        $status = $git->capture(64, 'status', '--porcelain', '-uno');
+
+        return [\substr($sha, 0, 7), $status['exitCode'] === 0 && \trim((string) $status['stdout']) !== ''];
     }
 
     /**
@@ -726,11 +772,12 @@ final class HelpTest extends TestCase
         ?string $pretty,
         ?string $reference,
         string $expected,
+        bool $dirty = false,
     ): void {
-        $this->assertSame($expected, Help::versionStringFor($pretty, $reference));
+        $this->assertSame($expected, Help::versionStringFor($pretty, $reference, $dirty));
     }
 
-    /** @return array<string,array{0:?string,1:?string,2:string}> */
+    /** @return array<string,array{0:?string,1:?string,2:string,3?:bool}> */
     public static function versionDecorationCases(): array
     {
         $fake = 'abcdef0' . str_repeat('9', 33);
@@ -742,6 +789,11 @@ final class HelpTest extends TestCase
             'a dev alias still reads as dev' => ['dev-feature/x', $fake, 'dev-feature/x (abcdef0)'],
             'no version at all'           => [null, $fake, 'unknown'],
             'empty version'               => ['', $fake, 'unknown'],
+            // ISS-082: the checkout probe's dirty flag rides the decoration…
+            'a dirty dev checkout appends the marker' => ['dev-master', $fake, 'dev-master (abcdef0+dirty)', true],
+            // …and never invents one where there is no decoration at all.
+            'dirty is invisible on a tagged release'  => ['v1.2.0', $fake, 'v1.2.0', true],
+            'dirty with no reference cannot decorate' => ['dev-master', null, 'dev-master', true],
         ];
     }
 
@@ -754,10 +806,17 @@ final class HelpTest extends TestCase
         $package = (new \ReflectionClass(Help::class))->getConstant('PACKAGE');
         self::assertIsString($package);
 
+        [$sha, $dirty] = $this->probeCheckoutReference();
+
         $this->assertSame(
             Help::versionStringFor(
                 InstalledVersions::getPrettyVersion($package),
-                InstalledVersions::getReference($package),
+                // ISS-082: the rule now runs on the probeable checkout's HEAD
+                // when there is one; Composer's frozen ref is the fallback the
+                // reader may still land on. Either way the SAME effective
+                // reference feeds both sides of this comparison.
+                $sha ?? InstalledVersions::getReference($package),
+                $sha !== null && $dirty,
             ),
             Help::versionString(),
         );

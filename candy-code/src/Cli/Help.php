@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Cli;
 
 use Composer\InstalledVersions;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Cli\HelpText;
 
 /**
@@ -88,6 +89,17 @@ final class Help
      * checkout `dev-master` alone identifies nothing — every checkout since
      * the branch existed says `dev-master` — whereas a tag is already exact
      * and does not need decorating.
+     *
+     * ISS-082: on a dev version the reference comes from the CHECKOUT when
+     * there is one. Composer's install metadata freezes the commit as of the
+     * last `composer install`, which in a git checkout rots one commit per
+     * pull — bug reports from a monorepo quoted `dev-master (d2f2a58)` while
+     * HEAD had moved 115 commits on. A bounded `git rev-parse --short HEAD`
+     * under the package's own install path reports what actually runs, with
+     * `+dirty` when tracked files differ from it. Installs that are not a
+     * checkout (a dist copy under some consumer's `vendor/`, where any git
+     * answer would describe the CONSUMER's repository) keep the Composer
+     * reference, and tagged versions are untouched by all of this.
      */
     public static function versionString(): string
     {
@@ -105,8 +117,71 @@ final class Help
             return 'unknown';
         }
 
+        if ($pretty !== null && \str_contains($pretty, 'dev')) {
+            $checkout = self::checkoutReference();
+            if ($checkout !== null) {
+                return self::versionStringFor($pretty, $checkout['sha'], $checkout['dirty']);
+            }
+        }
+
         return self::versionStringFor($pretty, $reference);
     }
+
+    /**
+     * The commit this checkout is built from, and whether its tracked files
+     * differ from it — or null when this install is not a git checkout.
+     *
+     * Two guards decide "checkout vs vendored copy", because running git in
+     * the wrong directory answers a different question than the one asked:
+     * the install path must resolve (phars and non-Composer autoloaders have
+     * no path to walk from) and must not sit under a `vendor/` directory (a
+     * dist-installed copy would otherwise report its CONSUMER's HEAD). The
+     * two git calls are bounded ({@see GIT_PROBE_TIMEOUT_SECONDS}) and every
+     * refusal — no git binary, no repository, a timeout, output that is not
+     * a hex object id — falls back to the Composer reference rather than
+     * hiding the version. A dirty read that fails is reported CLEAN: the
+     * commit itself was answered honestly, and `--version` must work on a
+     * machine where `git status` cannot.
+     *
+     * Untracked files do NOT set `+dirty` (`status -uno`): the marker answers
+     * "is the code that runs what this commit is?", and an untracked note
+     * changes nothing that gets built.
+     *
+     * @return ?array{sha: string, dirty: bool}
+     */
+    private static function checkoutReference(): ?array
+    {
+        $installPath = InstalledVersions::getInstallPath(self::PACKAGE);
+        if (!\is_string($installPath)) {
+            return null;
+        }
+
+        $real = \realpath($installPath);
+        if ($real === false || \preg_match('#(?:^|/)vendor/#', $real) === 1 || !GitRunner::available()) {
+            return null;
+        }
+
+        $git = GitRunner::new($real)->withTimeout(self::GIT_PROBE_TIMEOUT_SECONDS);
+
+        $head = $git->capture(self::GIT_PROBE_MAX_BYTES, 'rev-parse', '--short', 'HEAD');
+        $sha = \trim($head['stdout']);
+        if ($head['exitCode'] !== 0 || $head['timedOut'] || \preg_match('/^[0-9a-f]{7,40}$/', $sha) !== 1) {
+            return null;
+        }
+
+        $status = $git->capture(64, 'status', '--porcelain', '-uno');
+
+        return [
+            'sha' => $sha,
+            'dirty' => $status['exitCode'] === 0 && !$status['timedOut'] && \trim($status['stdout']) !== '',
+        ];
+    }
+
+    /** Wall-clock bound on each of the two ISS-082 probes. */
+    private const GIT_PROBE_TIMEOUT_SECONDS = 2.0;
+
+    /** A short object id is 41 bytes; anything bigger is not an id. */
+    private const GIT_PROBE_MAX_BYTES = 64;
 
     /**
      * The decoration rule on its own, given metadata rather than reading it.
@@ -124,15 +199,18 @@ final class Help
      * @param ?string $pretty    Composer's pretty version, or null when absent.
      * @param ?string $reference The install's commit, or null when Composer did
      *                           not resolve one.
+     * @param bool $dirty        ISS-082: appends `+dirty` to the dev decoration;
+     *                           has no effect on a tagged version, which carries
+     *                           no decoration to dirty.
      */
-    public static function versionStringFor(?string $pretty, ?string $reference): string
+    public static function versionStringFor(?string $pretty, ?string $reference, bool $dirty = false): string
     {
         if ($pretty === null || $pretty === '') {
             return 'unknown';
         }
 
         if ($reference !== null && \str_contains($pretty, 'dev')) {
-            return $pretty . ' (' . \substr($reference, 0, 7) . ')';
+            return $pretty . ' (' . \substr($reference, 0, 7) . ($dirty ? '+dirty' : '') . ')';
         }
 
         return $pretty;
