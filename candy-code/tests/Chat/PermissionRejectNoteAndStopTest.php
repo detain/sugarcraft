@@ -70,7 +70,7 @@ final class PermissionRejectNoteAndStopTest extends TestCase
     public function testTheScopeEditorGrantsTheExpandedChipPayload(): void
     {
         // ISS-051 (review fix): a pasted rule line still grants the RULE.
-[$editing, $ask] = $this->armedPromptWithChip(PermissionPromptStage::EditingScope, 'Bash(git *)');
+        [$editing, $ask] = $this->armedPromptWithChip(PermissionPromptStage::EditingScope, 'Bash(git *)');
 
         [$answered] = $editing->update(new KeyMsg(KeyType::Enter));
 
