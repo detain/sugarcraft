@@ -220,7 +220,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `repoMap.maxBytes` | `Runtime::repoMapSnapshot()` → `RepoMapBlock::withSettings()`, per turn | **no** |
 | `env.gitDiffAfterWrites` | `Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn | yes |
 | `env.diffMaxBytes` | `Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn | **no** |
-| `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider's `contextWindow()` | **no** |
+| `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `autoReview` | `Bootstrap::permissionGate()` | **no** |
 | `permissions.autoStrikeLimit` | `PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()` | **no** |
 | `permissions.autoTotalLimit` | `PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()` | **no** |
@@ -391,6 +391,17 @@ naming one would blind the spend cap for every one of those calls. Set them in
 your own `~/.candy-code/settings.json` or `config.json`, or with
 `CANDY_CODE_TITLE_MODEL` / `CANDY_CODE_SUMMARY_MODEL`.
 
+When neither names a model, the two fall back differently (ISS-077). A title,
+`/btw` line or goal judgement is a handful of output words, so the titler takes
+the provider type's cheap default from `ProviderFactory::AUXILIARY_MODEL_BY_TYPE`
+(Haiku-class on anthropic, vertex and bedrock, a mini on openai) before it would
+ever bill the provider block's conversation-class model; types with no cheap
+sibling we can promise a local or subscription endpoint serves (sglang, custom,
+claude-code) keep the block model. A summary keeps the opposite rule and
+defaults to the conversation's own model, because the `/compact` request has to
+hit the prompt cache the last turn wrote — a different model there would miss
+it by construction.
+
 `maxToolSteps` is the same axis counted in CALLS rather than tokens: how many
 provider round-trips ONE agentic turn may take before the harness stops it
 (F2). Unset keeps the shipped ceiling of 1000 (sub-agents spawned by `Task`
@@ -448,8 +459,8 @@ once, when the provider is built. A provider's own block in
 because it is the narrower statement. All four are user-tier only, for the
 same money reason as `maxOutputTokens`.
 
-- **`contextWindow`** sizes the context window of the `openai`, `anthropic`
-  and `custom` providers, the number
+- **`contextWindow`** sizes the context window of the `openai`, `anthropic`,
+  `vertex` and `custom` providers, the number
   every context tier (the 70% reminder, 85% auto-compaction and 95% refusal) is
   a percentage of (audit A13). Give a token count for whatever model the
   provider runs (`"contextWindow": 400000`), or an object to size models one

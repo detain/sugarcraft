@@ -285,6 +285,55 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     ];
 
     /**
+     * Built-in context-window sizes per normalised family (ISS-073), keyed
+     * exactly like {@see PRICE_TABLE}. The Claude rows mirror the numbers
+     * BedrockProvider ships for the same families (1M on the current
+     * fable/opus-4-6+/sonnet-5 class, 200K on the previous generations); the
+     * Gemini rows carry Google's published 1,048,576-token window. A family
+     * with no row keeps the 200,000 this method used to answer flat - the
+     * status-quo floor, never a fabricated larger budget that would let the
+     * compactor overrun a real limit.
+     *
+     * @var array<string, int>
+     */
+    private const CONTEXT_WINDOWS = [
+        'claude-fable-5-1' => 1_000_000,
+        'claude-fable-5' => 1_000_000,
+        'claude-opus-5-5' => 1_000_000,
+        'claude-opus-5' => 1_000_000,
+        'claude-opus-4-8' => 1_000_000,
+        'claude-opus-4-7' => 1_000_000,
+        'claude-opus-4-6' => 1_000_000,
+        'claude-opus-4-5' => 200_000,
+        'claude-opus-4-1' => 200_000,
+        'claude-opus-4' => 200_000,
+        'claude-3-opus' => 200_000,
+        'claude-sonnet-5-5' => 1_000_000,
+        'claude-sonnet-5' => 1_000_000,
+        'claude-sonnet-4-6' => 1_000_000,
+        'claude-sonnet-4-5' => 200_000,
+        'claude-sonnet-4' => 200_000,
+        'claude-3-7-sonnet' => 200_000,
+        'claude-3-5-sonnet' => 200_000,
+        'claude-3-sonnet' => 200_000,
+        'claude-haiku-4-5' => 200_000,
+        'claude-3-5-haiku' => 200_000,
+        'claude-3-haiku' => 200_000,
+        'gemini-2.5-pro' => 1_048_576,
+        'gemini-2.5-flash' => 1_048_576,
+        'gemini-2.5-flash-lite' => 1_048_576,
+        'gemini-2.0-flash' => 1_048_576,
+        'gemini-2.0-flash-lite' => 1_048_576,
+    ];
+
+    /**
+     * The window {@see contextWindow()} answers when neither the operator's
+     * override nor a table row names one — the flat value this method
+     * returned before the tables existed (ISS-073).
+     */
+    private const FALLBACK_CONTEXT_WINDOW = 200_000;
+
+    /**
      * Anthropic families on Vertex that never offered prompt caching, so a
      * `cache_control` mark is not sent to them (an unsupported model's answer
      * to one is not something this repo can measure without credentials, and
@@ -337,6 +386,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         private array $modelPrices = [],
         private ?int $thinkingBudget = null,
         private bool $promptCache = true,
+        // ISS-073: the operator's `contextWindow` for this model; null for
+        // none, in which case the per-family table answers.
+        private ?int $contextWindowOverride = null,
     ) {
         if ($thinkingBudget !== null && $thinkingBudget < -1) {
             throw new \InvalidArgumentException(sprintf(
@@ -361,6 +413,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
      * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
      * @param int|null $thinkingBudget see {@see __construct()}
      * @param bool $promptCache see {@see __construct()}
+     * @param int|null $contextWindowOverride see {@see __construct()}
      */
     public static function create(
         string $projectId,
@@ -371,8 +424,19 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         array $modelPrices = [],
         ?int $thinkingBudget = null,
         bool $promptCache = true,
+        ?int $contextWindowOverride = null,
     ): self {
-        return new self($projectId, $location, $model, $predictor, $streamer, $modelPrices, $thinkingBudget, $promptCache);
+        return new self(
+            $projectId,
+            $location,
+            $model,
+            $predictor,
+            $streamer,
+            $modelPrices,
+            $thinkingBudget,
+            $promptCache,
+            $contextWindowOverride,
+        );
     }
 
     /**
@@ -462,7 +526,13 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
 
     public function contextWindow(): int
     {
-        return 200_000;
+        // ISS-073: the operator's override wins; otherwise the family table
+        // (the same pricingFamily normalisation the price tables use, so a
+        // versioned `claude-sonnet-4-6@20250929` reads the 1M row); otherwise
+        // the flat 200K this method answered before tables existed.
+        return $this->contextWindowOverride
+            ?? self::CONTEXT_WINDOWS[self::pricingFamily($this->defaultModel)]
+            ?? self::FALLBACK_CONTEXT_WINDOW;
     }
 
     /**

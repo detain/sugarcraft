@@ -105,15 +105,15 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey', 'contextWindow'],
         ],
         'bedrock' => [
             'required' => ['region'],
-            'optional' => ['model', 'modelPrices', 'promptCache', 'fallbackModels'],
+            'optional' => ['model', 'modelPrices', 'promptCache', 'fallbackModels', 'contextWindow'],
         ],
         'vertex' => [
             'required' => ['projectId'],
-            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget', 'promptCache', 'fallbackModels'],
+            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget', 'promptCache', 'fallbackModels', 'contextWindow'],
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
@@ -1537,10 +1537,12 @@ final readonly class ProviderFactory
      */
     private function createVertex(array $config): VertexProvider
     {
+        $model = $config['model'] ?? 'claude-sonnet-4-6';
+
         return VertexProvider::create(
             projectId: $config['projectId'],
             location: $config['location'] ?? 'us-central1',
-            model: $config['model'] ?? 'claude-sonnet-4-6',
+            model: $model,
             modelPrices: self::modelPricesFor($config),
             // Audit A21 (b): how much of a Gemini reply's output budget
             // thinking may spend. User-tier only - raising it raises spend.
@@ -1550,6 +1552,14 @@ final readonly class ProviderFactory
             // Audit A15: `cache_control` breakpoints on the Anthropic arm
             // (system, last tool, conversation tail), unless turned off.
             promptCache: self::promptCacheEnabled($config),
+            // ISS-073: the `contextWindow` setting now reaches every wire
+            // that has a per-family table, vertex included - block key
+            // first, user-tier fallback, map-or-scalar both accepted (same
+            // normaliser the openai/anthropic/custom arms use).
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
         );
     }
 
