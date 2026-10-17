@@ -34,7 +34,7 @@ use SugarCraft\Crush\Protocol\Schema\Schema;
  *   decides" semantics of restore_faces/tiling et al. round-trip exactly.
  *
  * Immutable + fluent per candy-core Mutable/XSet convention
- * (candy-sprinkles/src/Style.php is the canonical shape).
+ * (sugar-style/src/Style.php is the canonical shape).
  */
 final readonly class MediaRequest
 {

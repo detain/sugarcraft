@@ -11,7 +11,7 @@ body:
       description: Which library is affected?
       options:
         - candy-core (runtime / Util)
-        - candy-sprinkles (styling / layout)
+        - sugar-style (styling / layout)
         - sugar-spring (spring physics)
         - sugar-mouse (mouse zones)
         - sugar-widgets (components)

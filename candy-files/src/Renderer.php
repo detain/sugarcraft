@@ -6,9 +6,9 @@ namespace SugarCraft\Files;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Style;
 
 /**
  * Pure view function for {@see Manager}. Lays out the two panes

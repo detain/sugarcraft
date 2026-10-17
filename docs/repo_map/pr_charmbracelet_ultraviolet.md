@@ -41,7 +41,7 @@ From the first-pass analysis, Ultraviolet maps across multiple SugarCraft libs:
 | Screen interface + TerminalScreen | `candy-core` | **CRITICAL** |
 | Terminal lifecycle | `candy-core` | **HIGH** |
 | KeyPress/Mouse/Paste/Focus events | `sugar-widgets` | **HIGH** |
-| Window parent/child hierarchy | `candy-sprinkles` | MEDIUM |
+| Window parent/child hierarchy | `sugar-style` | MEDIUM |
 | Cassowary layout solver | `sugar-spring` | MEDIUM |
 | Border functions | `candy-scriptui` | LOW |
 | StyledString + screen.Context | `sugar-widgets` | **HIGH** |
@@ -302,7 +302,7 @@ The discussion about "Expanding the Screen interface" (jaypipes, Feb 2026) revea
 
 `Window` supports both shared-buffer views (`NewView`) and independent buffers (`NewWindow`). The window hierarchy enables nested TUIs. The examples refactor (commit f72cc87) switched from `NewScreen` to `NewWindow` for creating the root, indicating that `Window` is the preferred abstraction even for root-level rendering.
 
-**SugarCraft lesson**: `candy-sprinkles` (windowing) should follow the same pattern: `NewWindow` for everything, not `NewScreen`.
+**SugarCraft lesson**: `sugar-style` (windowing) should follow the same pattern: `NewWindow` for everything, not `NewScreen`.
 
 ---
 

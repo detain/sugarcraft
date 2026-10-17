@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Flappy;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 /**
  * Pure view function: takes a Game and returns the framebuffer string.

@@ -99,7 +99,7 @@ final class ToolResult {
 
 ## Rendering Systems
 
-- **Renderer.php** — Pure view function using SugarMarkdown for markdown + candy-sprinkles for borders/styling
+- **Renderer.php** — Pure view function using SugarMarkdown for markdown + sugar-style for borders/styling
 - User messages: raw text with cyan `user>` prefix
 - Assistant messages: rendered via SugarMarkdown with magenta `assistant` prefix
 - Input: `> ` prompt with cursor block `█` when not in-flight

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Layout;
 
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\VAlign;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;

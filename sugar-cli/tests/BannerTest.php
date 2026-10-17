@@ -7,7 +7,7 @@ namespace SugarCraft\Cli\Tests;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Cli\Banner;
 use SugarCraft\Cli\Theme;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use PHPUnit\Framework\TestCase;
 
 final class BannerTest extends TestCase

@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Foundation** (`candy-*`): `candy-core` `sugar-ansi-parser` `sugar-cellbuffer` `sugar-async` `sugar-constraints` `candy-sprinkles` `sugar-forms` `candy-files` `sugar-animation` `sugar-testing` `sugar-vterm` `candy-vcr` `candy-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
+**Foundation** (`candy-*`): `candy-core` `sugar-ansi-parser` `sugar-cellbuffer` `sugar-async` `sugar-constraints` `sugar-style` `sugar-forms` `candy-files` `sugar-animation` `sugar-testing` `sugar-vterm` `candy-vcr` `candy-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
 
 ## Commands
 
@@ -24,7 +24,7 @@ cd candy-core && composer install && vendor/bin/phpunit
 ```
 
 ```sh
-for d in candy-core candy-sprinkles sugar-forms sugar-spring sugar-mouse sugar-widgets sugar-charts candy-scriptui sugar-markdown; do
+for d in candy-core sugar-style sugar-forms sugar-spring sugar-mouse sugar-widgets sugar-charts candy-scriptui sugar-markdown; do
   (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```
@@ -38,7 +38,7 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 ## Conventions
 
 - `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
-- **Immutable + fluent**: every `with*()` returns a new instance via `mutate()`; public `readonly` state. Canonical `candy-sprinkles/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`. Nullable fields pair a `bool $XSet` sentinel.
+- **Immutable + fluent**: every `with*()` returns a new instance via `mutate()`; public `readonly` state. Canonical `sugar-style/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`. Nullable fields pair a `bool $XSet` sentinel.
 - Bare accessors (no `get`). Factories mirror upstream: `Theme::ansi()`, `Spinner::line()`. `::new()` is the default root — never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`candy-core/src/Model.php`): `init()` · `update(Msg): [Model, ?Cmd]` · `view()`. Side effects → `Cmd`, never `view()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`candy-pty/src/Lang.php`).

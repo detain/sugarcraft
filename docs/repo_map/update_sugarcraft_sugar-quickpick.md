@@ -77,7 +77,7 @@ sugar-quickpick/src/
 | FileHistory (JSONL persistent) | ✅ Complete |
 | SIGWINCH via SignalForwarder | ✅ Complete |
 | tea.Model interface for embedding | ✅ Complete |
-| Border/Style composition (candy-sprinkles) | ✅ Complete |
+| Border/Style composition (sugar-style) | ✅ Complete |
 
 ## Strengths
 
@@ -804,7 +804,7 @@ Document using Hermit as the search mechanism for desktop launcher integration.
 ## Medium-Term Improvements (1-2 weeks each)
 
 4. **ANSI-aware width utility**
-   - Extract `Width` utility to `candy-core` or `candy-sprinkles`
+   - Extract `Width` utility to `candy-core` or `sugar-style`
 
    - Use in `replaceSegment()` for correct positioning
 

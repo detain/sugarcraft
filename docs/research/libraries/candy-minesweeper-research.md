@@ -21,7 +21,7 @@
 | `src/Cell.php` | Value object: `mine`, `revealed`, `flagged`, `adjacent` |
 | `src/Board.php` | Grid + transitions (reveal, flag, flood-fill, win detection) |
 | `src/Game.php` | Model: cursor, key routing, restart |
-| `src/Renderer.php` | TUI rendering with CandySprinkles |
+| `src/Renderer.php` | TUI rendering with SugarStyle |
 | `src/Difficulty.php` | Presets: EASY(9×9,10), MEDIUM(16×16,40), EXPERT(30×16,99) |
 | `src/Stats.php` | Per-difficulty: games, wins, best time |
 

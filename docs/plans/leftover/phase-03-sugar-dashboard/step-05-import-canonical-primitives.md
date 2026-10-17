@@ -11,13 +11,13 @@ Delete sugar-dashboard's `Foundation/Style.php`, `Foundation/Color.php`,
 and `Foundation/Buffer.php` + `Foundation/Cell.php`. Replace with imports
 from canonical homes:
 
-- `Style` → `\SugarCraft\Sprinkles\Style`
+- `Style` → `\SugarCraft\Style\Style`
 - `Color` → `\SugarCraft\Core\Util\Color`
 - `Rect` → `\SugarCraft\Core\Rect`
-- `Theme` → `\SugarCraft\Sprinkles\Theme` (from step 02.01)
-- `StyleParser` → `\SugarCraft\Sprinkles\StyleParser` (from step 02.02)
-- `Buffer` → `\SugarCraft\Vterm\Buffer\Buffer`
-- `Cell` → `\SugarCraft\Vterm\Cell\Cell`
+- `Theme` → `\SugarCraft\Style\Theme` (from step 02.01)
+- `StyleParser` → `\SugarCraft\Style\StyleParser` (from step 02.02)
+- `Buffer` → `\SugarCraft\Vt\Buffer\Buffer`
+- `Cell` → `\SugarCraft\Vt\Cell\Cell`
 
 `Foundation/` shrinks to just `Drawable.php`, `Item.php`, `Sizer.php`
 (sugar-dashboard-specific interfaces).
@@ -31,7 +31,7 @@ that imports `\SugarCraft\Dashboard\Foundation\Style` etc. — replace with
 the canonical import.
 
 **Modify:** `sugar-dashboard/composer.json`:
-- `require` adds `"sugarcraft/candy-sprinkles": "@dev"` and
+- `require` adds `"sugarcraft/sugar-style": "@dev"` and
   `"sugarcraft/sugar-vterm": "@dev"`.
 - `repositories[]` adds path-repos for both.
 - `tools/check-path-repos.php` green.

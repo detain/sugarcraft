@@ -25,7 +25,7 @@ final class AnsiCell
     ) {}
 
     /**
-     * House factory convention (`::new()`), mirroring the candy-sprinkles
+     * House factory convention (`::new()`), mirroring the sugar-style
      * immutable value-object shape.
      */
     public static function new(string $glyph, string $sgr = ''): self

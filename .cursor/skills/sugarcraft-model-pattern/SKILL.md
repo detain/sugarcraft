@@ -4,7 +4,7 @@ description: Scaffolds a new SugarCraft TUI class following the canonical immuta
 ---
 # SugarCraft Model Pattern
 
-Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every class must look identical in shape to `candy-sprinkles/src/Style.php` (data) or `candy-core/src/Model.php` (TUI root).
+Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every class must look identical in shape to `sugar-style/src/Style.php` (data) or `candy-core/src/Model.php` (TUI root).
 
 ## Critical
 
@@ -38,7 +38,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
    **Verify**: `<Sub>` matches one segment, capitalised, no hyphen.
 
 3. **Read the canonical templates before writing.** Always read both, even if you remember them:
-   - Data class template: `candy-sprinkles/src/Style.php`
+   - Data class template: `sugar-style/src/Style.php`
    - TUI Model interface: `candy-core/src/Model.php`
    - Msg/Cmd types (if TUI): `candy-core/src/Msg.php`, `candy-core/src/Cmd.php`
 
@@ -171,7 +171,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 
 **Actions**:
 1. Confirm `sugar-markdown/src/` exists; namespace from `sugar-markdown/composer.json` is `SugarCraft\Markdown\`.
-2. Read `candy-sprinkles/src/Style.php` (data shape — `Pulse` doesn't implement Model, it's a render decorator).
+2. Read `sugar-style/src/Style.php` (data shape — `Pulse` doesn't implement Model, it's a render decorator).
 3. Create `sugar-markdown/src/Pulse.php`:
    ```php
    <?php

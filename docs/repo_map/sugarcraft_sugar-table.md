@@ -43,7 +43,7 @@ sugar-table/
 ```json
 {
   "sugarcraft/candy-core": "dev-master",     // ANSI rendering primitives (Ansi class)
-  "sugarcraft/candy-sprinkles": "dev-master"   // Border family for table borders
+  "sugarcraft/sugar-style": "dev-master"   // Border family for table borders
 }
 ```
 
@@ -102,7 +102,7 @@ private string $headerStyle = '1;37';   // bold white
 private string $footerStyle = '90';     // bright black
 private bool $showHeader = true;
 private bool $showFooter = true;
-private ?Border $border = null;         // Border family from candy-sprinkles
+private ?Border $border = null;         // Border family from sugar-style
 private bool $multilineMode = false;    // Multi-line row rendering
 ```
 
@@ -454,7 +454,7 @@ Order (least specific to most specific):
 
 4. **Multi-column AND filtering** — Upstream bubble-table filters on all filterable columns simultaneously; sugar-table allows per-column filters via `Filter($colKey, $text)` with AND semantics
 
-5. **Border family integration** — Full `Border` family from candy-sprinkles (8 border styles) rather than hand-rolled border chars
+5. **Border family integration** — Full `Border` family from sugar-style (8 border styles) rather than hand-rolled border chars
 
 6. **i18n via Lang facade** — Page footer and future labels translatable via `SugarCraft\Table\Lang::t()`
 
@@ -579,7 +579,7 @@ Order (least specific to most specific):
 
 - ColumnWidth and WrapMode enums provide more flexibility than upstream
 
-- Integration with candy-sprinkles Border family (8 styles)
+- Integration with sugar-style Border family (8 styles)
 
 - i18n support via Lang facade
 

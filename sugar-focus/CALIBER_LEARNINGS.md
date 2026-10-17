@@ -3,7 +3,7 @@
 Patterns and anti-patterns specific to this lib. Treat as project-specific rules.
 
 - **Dependency-free on purpose.** `FocusRing` is pure focus-ring *state*: no
-  rendering, no key decoding, no candy-core/candy-sprinkles imports. Keep it that
+  rendering, no key decoding, no candy-core/sugar-style imports. Keep it that
   way — styling the focused region and mapping Tab→`next()` belong to the
   consumer. Adding a dependency to draw a focus border would defeat the point.
 - **One focused member invariant.** A non-empty ring always has exactly one

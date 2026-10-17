@@ -45,7 +45,7 @@ From the first-stage analysis, SugarCraft's direct equivalent is **sugar-cli** (
 | **SugarMarkdown** | Thematic cousin | Terminal styling via Glamour port |
 | **SugarLog** | Indirect complement | Styled terminal output |
 | **SugarColorprofile** | Dependency | Terminal color detection |
-| **CandySprinkles** | Thematic relation | Lipgloss-based styling |
+| **SugarStyle** | Thematic relation | Lipgloss-based styling |
 
 ### First-Stage Assessment Gaps
 
@@ -795,7 +795,7 @@ fang.Execute(ctx, root,
 
 **Observation:** lipgloss separates styling from rendering; Fang uses it for CLI output.
 **Signal:** Charm ecosystem is moving toward composable styling layers.
-**SugarCraft Implication:** sugar-cli should use composable styling (CandySprinkles).
+**SugarCraft Implication:** sugar-cli should use composable styling (SugarStyle).
 
 ### Trend 4: Extensibility via Hooks
 

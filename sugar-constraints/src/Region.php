@@ -12,7 +12,7 @@ namespace SugarCraft\Constraints;
  * NOTE: this is intentionally NOT the same class as {@see \SugarCraft\Buffer\Region}
  * in sugar-cellbuffer — a deliberate leaf-package name collision so sugar-constraints
  * stays dependency-free. The two are converted at the boundary by
- * candy-sprinkles' `RegionBridge`; do not conflate them.
+ * sugar-style' `RegionBridge`; do not conflate them.
  */
 final readonly class Region
 {

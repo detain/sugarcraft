@@ -10,7 +10,7 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 use SugarCraft\Dashboard\Layout\Grid\Options;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 

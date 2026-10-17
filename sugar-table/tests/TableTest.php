@@ -1198,7 +1198,7 @@ final class TableTest extends TestCase
 
     public function testWithBorderUsesCustomBorder(): void
     {
-        $border = \SugarCraft\Sprinkles\Border::rounded();
+        $border = \SugarCraft\Style\Border::rounded();
         $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorder($border);

@@ -10,7 +10,7 @@ use SugarCraft\Log\Formatter;
 use SugarCraft\Log\Level;
 use SugarCraft\Log\PartsOrder;
 use SugarCraft\Log\Styles;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Human-readable text formatter with optional color styling.

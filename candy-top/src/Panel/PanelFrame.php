@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\View\Ink;

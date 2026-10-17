@@ -14,7 +14,7 @@ use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tui\TextSelection;
 use SugarCraft\Mouse\Selection;
 use SugarCraft\Mouse\SelectionRange;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The rewire of {@see TextSelection} onto sugar-mouse's upstreamed

@@ -6,7 +6,7 @@ namespace SugarCraft\Widgets\Tests\Table;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Widgets\Table\Styles;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Tests for {@see Styles} — header / cell / selected style slots for Table.

@@ -254,7 +254,7 @@ public function withAction(\Closure $fn): self {
 }
 ```
 
-The canonical reference in `candy-sprinkles/src/Style.php` uses a `mutate()` private method:
+The canonical reference in `sugar-style/src/Style.php` uses a `mutate()` private method:
 
 ```php
 private function mutate(callable $fn): self {

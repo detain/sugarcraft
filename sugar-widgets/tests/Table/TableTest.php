@@ -9,7 +9,7 @@ use SugarCraft\Widgets\Table\Styles;
 use SugarCraft\Widgets\Table\Table;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class TableTest extends TestCase

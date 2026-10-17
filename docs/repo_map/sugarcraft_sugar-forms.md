@@ -7,7 +7,7 @@
 - **Namespace:** `SugarCraft\Forms`
 - **Status:** 🟡 in progress (extraction in progress, gaps tracked)
 - **Upstream sources:** Extracted from `sugar-widgets` + `sugar-forms`
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`
+- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`
 - **PHP minimum:** `^8.3`
 
 ## Overview

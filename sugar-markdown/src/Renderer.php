@@ -14,9 +14,9 @@ use SugarCraft\Markdown\Style\StyleSheet;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\Table\Table as SprinklesTable;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\Table\Table as StyleTable;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Event\DocumentPreParsedEvent;
 use League\CommonMark\Extension\Autolink\AutolinkExtension;
@@ -954,7 +954,7 @@ final class Renderer
         return $this->theme->codeBlock->render($literal) . "\n\n";
     }
 
-    private function isPlainStyle(\SugarCraft\Sprinkles\Style $s): bool
+    private function isPlainStyle(\SugarCraft\Style\Style $s): bool
     {
         return $s->render('x') === 'x';
     }
@@ -962,7 +962,7 @@ final class Renderer
     private function renderStrike(Strikethrough $node): string
     {
         $body = $this->renderChildren($node);
-        $style = $this->theme->strike ?? \SugarCraft\Sprinkles\Style::new()->strikethrough();
+        $style = $this->theme->strike ?? \SugarCraft\Style\Style::new()->strikethrough();
         return $style->render($body);
     }
 
@@ -970,7 +970,7 @@ final class Renderer
     {
         $alt = $this->renderChildren($node);
         $url = $this->resolveUrl($node->getUrl());
-        $imageStyle = $this->theme->image ?? \SugarCraft\Sprinkles\Style::new()->italic();
+        $imageStyle = $this->theme->image ?? \SugarCraft\Style\Style::new()->italic();
         if ($alt === '') {
             $rendered = $imageStyle->render('[image]');
         } else {
@@ -1024,7 +1024,7 @@ final class Renderer
         // sanitizer to preserve intentional controls in trusted text must
         // never thereby re-open a raw-HTML escape channel.
         $literal = self::stripControls(rtrim($node->getLiteral(), "\n"));
-        $style = $this->theme->htmlBlock ?? \SugarCraft\Sprinkles\Style::new();
+        $style = $this->theme->htmlBlock ?? \SugarCraft\Style\Style::new();
         return $style->render($literal) . "\n\n";
     }
 
@@ -1033,7 +1033,7 @@ final class Renderer
         // See renderHtmlBlock: raw inline HTML is always control-stripped,
         // independent of the withSanitize() toggle.
         $literal = self::stripControls($node->getLiteral());
-        $style = $this->theme->htmlSpan ?? \SugarCraft\Sprinkles\Style::new();
+        $style = $this->theme->htmlSpan ?? \SugarCraft\Style\Style::new();
         return $style->render($literal);
     }
 
@@ -1478,7 +1478,7 @@ final class Renderer
                 $rows[] = $cells;
             }
         }
-        $st = SprinklesTable::new()->border($this->buildTableBorder());
+        $st = StyleTable::new()->border($this->buildTableBorder());
         if ($headers !== []) {
             $st = $st->headers(...$headers);
         }

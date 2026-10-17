@@ -6,7 +6,7 @@ namespace SugarCraft\Markdown\Style;
 
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Markdown\Render\BlockKind;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Cascading stylesheet that resolves effective styles per block kind and depth.

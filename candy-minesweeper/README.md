@@ -56,7 +56,7 @@ Five pure-state classes plus the runtime Model, renderer, UI helper, and persist
 | `Stats`                 | Immutable difficulty stats — games, wins, best time per preset                                    |
 | `DifficultyStats`       | Atomic JSON persistence wrapper (tmp+rename, Homestead pattern)                                   |
 | `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). The mine cap means boards smaller than 10 cells (e.g. 2×2, 3×3) pass the side checks but can never validate; error messages name the violated bound. Throws i18n-aware `InvalidArgumentException` on constraint violation. |
-| `Renderer`              | Pure view function. CandySprinkles `Style` + `Border::rounded()`                                   |
+| `Renderer`              | Pure view function. SugarStyle `Style` + `Border::rounded()`                                   |
 
 The first reveal is always safe — mines are placed only after click 1, with the clicked cell's 3×3 neighbourhood excluded so the player gets a non-trivial flood-fill on every game.
 

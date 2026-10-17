@@ -402,7 +402,7 @@ final readonly class Usage
      * The usage with a reported/unreported input bucket set. Passing null
      * clears it back to unreported; the other buckets ride along untouched —
      * that is what the paired `bool $xSet` sentinels on {@see mutate()} are
-     * for (repo convention; canonical `candy-sprinkles/src/Style.php`).
+     * for (repo convention; canonical `sugar-style/src/Style.php`).
      */
     public function withInputTokens(?int $tokens): self
     {

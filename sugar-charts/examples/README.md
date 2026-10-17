@@ -32,7 +32,7 @@ the script's hard-coded constants if you want to embed it differently.
 
 ```php
 use SugarCraft\Charts\Sparkline\Sparkline;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\{Color, ColorProfile};
 
 $style = Style::new()

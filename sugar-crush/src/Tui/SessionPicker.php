@@ -18,8 +18,8 @@ use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\Theme;
 
 /**

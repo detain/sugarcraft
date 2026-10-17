@@ -90,7 +90,7 @@ final class CanvasOpsTest extends TestCase
         $c = new Canvas(2, 1);
         $c->setCell(0, 0, 'X');
         $this->assertNull($c->getCellStyle(0, 0));
-        $style = \SugarCraft\Sprinkles\Style::new()->bold();
+        $style = \SugarCraft\Style\Style::new()->bold();
         $c->setCellStyle(0, 0, $style);
         $this->assertSame($style, $c->getCellStyle(0, 0));
     }

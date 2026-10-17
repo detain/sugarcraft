@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Overlay;
 
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\FrameBuilder;

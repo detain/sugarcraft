@@ -7,10 +7,10 @@ namespace SugarCraft\ScriptUi\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\ScriptUi\Lang;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
- * Builds a {@see \SugarCraft\Sprinkles\Style} from CLI flag values. Pure
+ * Builds a {@see \SugarCraft\Style\Style} from CLI flag values. Pure
  * (no IO) so commands can unit-test the mapping.
  */
 final class StyleBuilder
@@ -79,9 +79,9 @@ final class StyleBuilder
         $align = $flags['align'] ?? null;
         if (is_string($align) && $align !== '') {
             $aligned = match (strtolower($align)) {
-                'left'   => \SugarCraft\Sprinkles\Align::Left,
-                'right'  => \SugarCraft\Sprinkles\Align::Right,
-                'center' => \SugarCraft\Sprinkles\Align::Center,
+                'left'   => \SugarCraft\Style\Align::Left,
+                'right'  => \SugarCraft\Style\Align::Right,
+                'center' => \SugarCraft\Style\Align::Center,
                 default  => null,
             };
             if ($aligned !== null) {
@@ -95,11 +95,11 @@ final class StyleBuilder
         $border = $flags['border'] ?? null;
         if (is_string($border) && $border !== '') {
             $b = match (strtolower($border)) {
-                'normal',  '1' => \SugarCraft\Sprinkles\Border::normal(),
-                'rounded'      => \SugarCraft\Sprinkles\Border::rounded(),
-                'thick'        => \SugarCraft\Sprinkles\Border::thick(),
-                'double'       => \SugarCraft\Sprinkles\Border::double(),
-                'block'        => \SugarCraft\Sprinkles\Border::block(),
+                'normal',  '1' => \SugarCraft\Style\Border::normal(),
+                'rounded'      => \SugarCraft\Style\Border::rounded(),
+                'thick'        => \SugarCraft\Style\Border::thick(),
+                'double'       => \SugarCraft\Style\Border::double(),
+                'block'        => \SugarCraft\Style\Border::block(),
                 'hidden', '0', 'none' => null,
                 default        => null,
             };

@@ -6,7 +6,7 @@ namespace SugarCraft\Markdown\Tests;
 
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class RendererTest extends TestCase

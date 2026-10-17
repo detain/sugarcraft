@@ -36,7 +36,7 @@
         "php": "^8.3",
         "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-dashboard": "dev-master"
     },
     "require-dev": {

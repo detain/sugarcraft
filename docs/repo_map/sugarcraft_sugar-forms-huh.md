@@ -7,7 +7,7 @@
 - **Namespace:** `SugarCraft\Forms` (re-export from `SugarCraft\Forms`)
 - **Status:** 🟢 v1 ready
 - **Upstream sources:** `charmbracelet/huh` (primary), `charmbracelet/bubbles` (widget layer)
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-forms`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-widgets`
+- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-style`, `sugarcraft/sugar-widgets`
 - **PHP minimum:** `^8.3`
 
 ## Overview
@@ -223,7 +223,7 @@ Themes are applied via `Form::withTheme(Theme::dracula())`. Per-Group overrides 
 
 ### Style Implementation
 
-`Style` comes from `SugarCraft\Sprinkles` (the Lipgloss analog). Styles are built from `Style::new()->bold()->foreground(Color::hex('#ff79c6'))` chains and render to ANSI SGR bytes via `->render(string)`.
+`Style` comes from `SugarCraft\Style` (the Lipgloss analog). Styles are built from `Style::new()->bold()->foreground(Color::hex('#ff79c6'))` chains and render to ANSI SGR bytes via `->render(string)`.
 
 ---
 

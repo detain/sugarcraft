@@ -6,7 +6,7 @@ namespace SugarCraft\Markdown\Tests\Style;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Style\StyleCascade;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * @covers \SugarCraft\Markdown\Style\StyleCascade

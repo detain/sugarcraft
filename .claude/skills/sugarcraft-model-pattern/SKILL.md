@@ -1,12 +1,12 @@
 ---
 name: sugarcraft-model-pattern
-description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, a private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters that return a new instance, bare accessors (no `get`), and (for TUI roots) the candy-core `Model` contract `init()`/`update(Msg): [Model, ?Cmd]`/`view()`/`subscriptions()`. Mirror `candy-sprinkles/src/Style.php` (value object) or `sugar-widgets/src/Stopwatch/Stopwatch.php` (Model). Use when the user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing an existing class (use direct Edit), tests-only changes (use write-phpunit-test), scaffolding a whole new library skeleton (use scaffold-library), or non-SugarCraft repos.
+description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, a private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters that return a new instance, bare accessors (no `get`), and (for TUI roots) the candy-core `Model` contract `init()`/`update(Msg): [Model, ?Cmd]`/`view()`/`subscriptions()`. Mirror `sugar-style/src/Style.php` (value object) or `sugar-widgets/src/Stopwatch/Stopwatch.php` (Model). Use when the user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing an existing class (use direct Edit), tests-only changes (use write-phpunit-test), scaffolding a whole new library skeleton (use scaffold-library), or non-SugarCraft repos.
 paths:
   - "*/src/**/*.php"
 ---
 # SugarCraft Model / value-object pattern
 
-Scaffold a new immutable+fluent class that looks byte-identical to the rest of the monorepo. Two shapes: a **value object** (mirror `candy-sprinkles/src/Style.php`) and a **TUI root** implementing `SugarCraft\Core\Model` (mirror `sugar-widgets/src/Stopwatch/Stopwatch.php`).
+Scaffold a new immutable+fluent class that looks byte-identical to the rest of the monorepo. Two shapes: a **value object** (mirror `sugar-style/src/Style.php`) and a **TUI root** implementing `SugarCraft\Core\Model` (mirror `sugar-widgets/src/Stopwatch/Stopwatch.php`).
 
 ## Critical
 
@@ -32,7 +32,7 @@ Given the target lib slug `<slug>` and class `<Class>`:
 - **Value object** (styling, config, DTO, geometry): no `Model` interface. → Step 3.
 - **TUI root / widget** (has state that changes over time in a program): `implements SugarCraft\Core\Model`. → Step 4.
 
-### Step 3 — Value object (mirror `candy-sprinkles/src/Style.php`)
+### Step 3 — Value object (mirror `sugar-style/src/Style.php`)
 Write:
 ```php
 <?php

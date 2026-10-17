@@ -51,7 +51,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
     - ItemList\Item  x1
   src entry points: src/Chat.php, src/Tui/SessionPicker.php, src/Tui/SessionRow.php, src/Tui/Settings/SettingsEditor.php, src/Tui/Settings/SettingsFieldFactory.php
 
-=== candy-sprinkles (SugarCraft\Sprinkles) ===
+=== candy-sprinkles (SugarCraft\Sprinkles) === @rename-keep
   referencing files: 45  (src=29, tests=16, other=0)
   distinct symbols imported: 6
     - Style  x35

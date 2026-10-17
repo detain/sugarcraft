@@ -2,7 +2,7 @@
 
 **sugar-navstack** is a PHP port of KevM/bubbleo providing NavStack (navigation stack) and Breadcrumb components for terminal UIs. It is a focused, framework-agnostic library (~370 lines of core source across 8 files) that produces pure string output, making it usable with any TUI framework. The library is 🟢 v1 ready with comprehensive test coverage (678+ lines across 6 test files).
 
-**Biggest opportunity areas:** Integration with the broader SugarCraft ecosystem (candy-core for message-driven patterns, candy-sprinkles for styling, sugar-forms for selection dialogs), fuzzy filtering matching the quality of `sahilm/fuzzy`, and modal/overlay compositing for stacked navigation.
+**Biggest opportunity areas:** Integration with the broader SugarCraft ecosystem (candy-core for message-driven patterns, sugar-style for styling, sugar-forms for selection dialogs), fuzzy filtering matching the quality of `sahilm/fuzzy`, and modal/overlay compositing for stacked navigation.
 
 **Biggest missing capabilities:** No message-driven navigation equivalent to bubbleo's `PushNavigation`/`PopNavigation` tea.Msg pattern; no animation/transition support; no built-in back-button/keybinding infrastructure; no fuzzy filtering with ranking/scoring.
 
@@ -369,8 +369,8 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - How sugar-navstack integrates with candy-core's message loop
    - Wiring mouse events from `candy-core` to `sugar-navstack` via `Manager::anyInBoundsAndUpdate()`
 
-3. **Integration guide: candy-sprinkles**
-   - Styling breadcrumbs with `candy-sprinkles` Style
+3. **Integration guide: sugar-style**
+   - Styling breadcrumbs with `sugar-style` Style
    - Color customization, borders
 
 4. **Migration guide from bubbleo**
@@ -427,7 +427,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Menu component for selection-driven navigation
    - `Selection` prompt → push selected item onto Shell
 
-3. **sugar-navstack → candy-sprinkles integration**
+3. **sugar-navstack → sugar-style integration**
    - Style-aware Breadcrumb renderer
    - Support custom separators with box-drawing characters
 
@@ -461,7 +461,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
 
 **Source:** `docs/repo_map/charmbracelet_lipgloss.md`
 **Relevance:** Medium — lipgloss v2 has built-in compositing that supersedes bubbletea-overlay
-**Lesson:** Consider using `candy-sprinkles` layer system instead of building overlay compositing
+**Lesson:** Consider using `sugar-style` layer system instead of building overlay compositing
 
 ---
 
@@ -476,7 +476,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Add `KeyMap` class with ESC/backspace/left for pop
    - Low complexity, high UX impact
 
-3. **Breadcrumb styling integration with candy-sprinkles**
+3. **Breadcrumb styling integration with sugar-style**
    - Style-aware rendering
    - Low complexity, improves visual polish
 
@@ -522,7 +522,7 @@ promptkit's filter also supports custom filter functions with binary search pagi
 |---|---|---|---|---|
 | Auto-invoke onEnter()/onLeave() | Medium | Low | Low | **Immediate** |
 | Back-button key handling | High | Low | Low | **Immediate** |
-| Breadcrumb styling (candy-sprinkles) | Medium | Low | Low | **Immediate** |
+| Breadcrumb styling (sugar-style) | Medium | Low | Low | **Immediate** |
 | Shell change listener/callback | Medium | Low | Low | **Immediate** |
 | Fuzzy filtering with ranking | High | High | Medium | **Medium-term** |
 | Message-driven navigation | High | Medium | Medium | **Medium-term** |

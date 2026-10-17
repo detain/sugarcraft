@@ -125,7 +125,7 @@ From the first-stage analysis, these gaps were identified:
 ### Issue #35 — "feat: add styling to skate list" (Closed, merged)
 
 **Resolution**: Added lipgloss styling to `skate list` output. <!-- @rename-keep -->
-**SugarCraft status**: Sugar-skate outputs plain text. Lipgloss styling could be added as an optional feature via `candy-sprinkles`.
+**SugarCraft status**: Sugar-skate outputs plain text. Lipgloss styling could be added as an optional feature via `sugar-style`.
 
 ### Issue #97 — "skate list should not print long strings with newlines" (Open)
 

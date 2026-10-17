@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Render\BlockContext;
 use SugarCraft\Markdown\Render\BlockKind;
 use SugarCraft\Markdown\Render\BlockStack;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 final class BlockStackTest extends TestCase
 {

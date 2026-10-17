@@ -18,7 +18,7 @@ Fix all 29 findings from the `candy-codeshot.md` code review across critical bug
 | Replace static `$cache` with instance property | Static variables in PHP persist across requests in long-running processes; instance-scoped state is correct for a reusable renderer object | `ref:candy-codeshot-investigation` |
 | Remove duplicate `throw` at `VsCodeThemeLoader.php:52` | PHP 8 allows `throw new Exception()` as an expression, so `throw throw new ...` is a parse error | `ref:candy-codeshot-investigation` |
 | Extract shared `LayoutCalculator` class | Both SVG and PNG renderers calculate identical layout dimensions; DRY violation means adding gutter options requires editing two files | `ref:candy-codeshot-investigation` |
-| Use `mutate()` trait for Segment | SugarCraft convention from `candy-sprinkles/src/Style.php` and `candy-core/src/Concerns/Mutable.php`; more extensible than ad-hoc `withBg()` | `ref:candy-codeshot-investigation` |
+| Use `mutate()` trait for Segment | SugarCraft convention from `sugar-style/src/Style.php` and `candy-core/src/Concerns/Mutable.php`; more extensible than ad-hoc `withBg()` | `ref:candy-codeshot-investigation` |
 | Add 1MB read limit to theme loaders | `file_get_contents()` without limits allows malicious large files to exhaust memory; standard security hardening | `ref:candy-codeshot-investigation` |
 | Wire `Theme::$windowStyle` into renderers | Currently set but never read — misleading API that implies it affects rendering when it doesn't | `ref:candy-codeshot-investigation` |
 
@@ -878,7 +878,7 @@ final class Segment
 
 - `src/Segment.php:23-33` — existing `withBg()` method
 - `candy-core/src/Concerns/Mutable.php:13-38` — the trait being applied
-- `candy-sprinkles/src/Style.php:39+` — canonical example of `mutate()` usage
+- `sugar-style/src/Style.php:39+` — canonical example of `mutate()` usage
 
 ---
 

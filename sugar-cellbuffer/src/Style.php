@@ -9,8 +9,8 @@ namespace SugarCraft\CellBuffer;
  * and a raw attribute bitmask.
  *
  * This is intentionally a stripped-down cousin of
- * {@see \SugarCraft\Sprinkles\Style}. The rich styling API (border,
- * padding, underline, transform, etc.) lives in candy-sprinkles and
+ * {@see \SugarCraft\Style\Style}. The rich styling API (border,
+ * padding, underline, transform, etc.) lives in sugar-style and
  * builds on top of these primitives. Buffer/Cell carry only what the
  * terminal needs to emit SGR sequences.
  *

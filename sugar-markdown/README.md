@@ -17,7 +17,7 @@
 ![demo](.vhs/render.gif)
 
 sugar-markdown — a Markdown → ANSI renderer for PHP 8.3+, built on
-`league/commonmark` and CandySprinkles.
+`league/commonmark` and SugarStyle.
 
 ```sh
 composer require sugarcraft/sugar-markdown
@@ -118,7 +118,7 @@ Build one with the constructor and feed it to `new Renderer($theme)`:
 ```php
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 $theme = new Theme(
     heading1:  Style::new()->bold()->underline()->foreground(Color::hex('#ff5f87')),

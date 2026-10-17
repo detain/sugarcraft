@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Selection;
 use SugarCraft\Mouse\SelectionRange;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * A mouse text selection over one painted frame: press anchors it, motion

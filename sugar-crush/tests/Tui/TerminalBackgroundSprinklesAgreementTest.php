@@ -7,15 +7,15 @@ namespace SugarCraft\Crush\Tests\Tui;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tui\TerminalBackground;
-use SugarCraft\Sprinkles\Theme as SprinklesTheme;
+use SugarCraft\Style\Theme as StyleTheme;
 
 /**
  * Pins what {@see TerminalBackground::detect()} and sugar-crush's own
  * {@see \SugarCraft\Crush\Theme::adaptive()} docblocks say about
- * candy-sprinkles' {@see SprinklesTheme::adaptive()}.
+ * sugar-style' {@see StyleTheme::adaptive()}.
  *
  * Both used to say the sprinkles rule was inverted (any index `>= 8` light)
- * and could not read rxvt's three-field `COLORFGBG`. candy-sprinkles
+ * and could not read rxvt's three-field `COLORFGBG`. sugar-style
  * 1845eebf9 fixed that, so the comments now claim the two rules agree on every
  * value carrying a `;` and part on exactly one shape — a lone index with no
  * `;`. If either side moves, this goes red and the comments get re-read
@@ -53,7 +53,7 @@ final class TerminalBackgroundSprinklesAgreementTest extends TestCase
         self::assertSame(
             TerminalBackground::detect(['COLORFGBG' => $colorfgbg]),
             self::sprinklesSaysDark($colorfgbg),
-            "COLORFGBG='{$colorfgbg}': TerminalBackground::detect() and SprinklesTheme::adaptive() disagree — the docblocks claiming agreement are stale",
+            "COLORFGBG='{$colorfgbg}': TerminalBackground::detect() and StyleTheme::adaptive() disagree — the docblocks claiming agreement are stale",
         );
     }
 
@@ -72,7 +72,7 @@ final class TerminalBackgroundSprinklesAgreementTest extends TestCase
     }
 
     /**
-     * SprinklesTheme::adaptive() reads the process environment itself, so the
+     * StyleTheme::adaptive() reads the process environment itself, so the
      * value has to be put there; the previous value (or its absence) is
      * restored whatever happens.
      */
@@ -81,15 +81,15 @@ final class TerminalBackgroundSprinklesAgreementTest extends TestCase
         $previous = getenv('COLORFGBG');
         putenv('COLORFGBG=' . $colorfgbg);
         try {
-            $theme = SprinklesTheme::adaptive();
+            $theme = StyleTheme::adaptive();
         } finally {
             putenv(is_string($previous) ? 'COLORFGBG=' . $previous : 'COLORFGBG');
         }
 
-        $dark = SprinklesTheme::dark();
-        $light = SprinklesTheme::light();
+        $dark = StyleTheme::dark();
+        $light = StyleTheme::light();
         self::assertNotEquals($dark, $light, 'the dark and light presets became equal, so this probe cannot tell them apart');
-        self::assertTrue($theme == $dark || $theme == $light, 'SprinklesTheme::adaptive() returned neither preset');
+        self::assertTrue($theme == $dark || $theme == $light, 'StyleTheme::adaptive() returned neither preset');
 
         return $theme == $dark;
     }

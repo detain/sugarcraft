@@ -97,7 +97,7 @@ final class RendererTest extends TestCase
             canHold:   false,
         );
         $out = Renderer::render($withHold);
-        // When canHold is false, the hold display is dimmed via SprinklesStyle->dim(true)
+        // When canHold is false, the hold display is dimmed via SugarStyle->dim(true)
         // The faint attribute ESC[2m is applied to the hold card
         $this->assertStringContainsString("\x1b[2m", $out);
     }

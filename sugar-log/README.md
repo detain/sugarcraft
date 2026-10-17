@@ -97,7 +97,7 @@ and `FORCE_COLOR` environment variables.
 Override level styles via `Logger::styles()`:
 
 ```php
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 $log = Logger::new();
 $styles = $log->styles();
 $styles->levels[Level::Error->value] = Style::new()->foreground('red')->bold();

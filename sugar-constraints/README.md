@@ -76,9 +76,9 @@ full base sizes instead (the layout runs off-grid).
 
 ## Shared foundations
 
-`sugar-constraints` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-widgets`/`sugar-forms` (step-14/15). The `LayoutSolver` interface — `solve()` alone; construction lives on the concrete classes — is the only public contract (`Expression`, a leftover of the retired simplex, is `@internal`). Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
+`sugar-constraints` is a **foundation package** consumed by `sugar-style` (step-10) and `sugar-widgets`/`sugar-forms` (step-14/15). The `LayoutSolver` interface — `solve()` alone; construction lives on the concrete classes — is the only public contract (`Expression`, a leftover of the retired simplex, is `@internal`). Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
 
-`Region` here is deliberately distinct from `SugarCraft\Buffer\Region` in sugar-cellbuffer (a leaf-package name collision that keeps sugar-constraints dependency-free); candy-sprinkles' `RegionBridge` converts between them.
+`Region` here is deliberately distinct from `SugarCraft\Buffer\Region` in sugar-cellbuffer (a leaf-package name collision that keeps sugar-constraints dependency-free); sugar-style' `RegionBridge` converts between them.
 
 ## Dock layout
 

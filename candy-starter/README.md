@@ -29,7 +29,7 @@ and you'll see a working counter. Replace `src/Counter.php` with your own `Model
 
 ```
 my-app/
-├── composer.json     # requires candy-core + candy-sprinkles
+├── composer.json     # requires candy-core + sugar-style
 ├── phpunit.xml
 ├── bin/start         # entry point — runs Program(new Counter())
 ├── src/

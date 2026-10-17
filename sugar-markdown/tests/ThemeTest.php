@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeTest extends TestCase

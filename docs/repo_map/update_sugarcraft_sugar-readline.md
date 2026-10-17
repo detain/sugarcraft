@@ -99,12 +99,12 @@ if ($this->submitted || $this->aborted) { return $this; }
 ### 2. Style System Overhaul
 
 - **Title:** Hardcoded ANSI SGR codes instead of proper style objects
-- **Description:** Styles like `$labelStyle = '1;36'` are bare SGR strings. Compare to `candy-sprinkles` which has a proper `Style` class with chainable methods and CIELAB color blending.
+- **Description:** Styles like `$labelStyle = '1;36'` are bare SGR strings. Compare to `sugar-style` which has a proper `Style` class with chainable methods and CIELAB color blending.
 - **Why it matters:** Cannot customize prompt appearance without manipulating raw ANSI strings; no color adaptability for light/dark terminals; no border/box model
 - **Source:** `docs/repo_map/sugarcraft_sugar-readline.md` (weakness #2)
 - **Source repo:** `charmbracelet_lipgloss.md` — pure value Style type with fluent API; `charmbracelet_bubbles.md` — Cursor component with blink modes
 - **Implementation ideas:**
-  1. Adopt `SugarCraft\Sprinkles\Style` from `candy-sprinkles` for styling
+  1. Adopt `SugarCraft\Style\Style` from `sugar-style` for styling
   2. Add per-prompt style properties (`labelStyle`, `cursorStyle`, `errorStyle`, etc.) that accept `Style` objects
   3. Implement cursor blink via `sugar-forms/Cursor` pattern (Timer/Cmd tick)
 - **Expected impact:** Unlocks theming, better visual rendering, cursor animation
@@ -294,7 +294,7 @@ This mirrors how `charmbracelet/bubbletea` separates input handling from model l
 
 ## 2. Style Object Integration
 
-Replace hardcoded ANSI codes with `SugarCraft\Sprinkles\Style` objects:
+Replace hardcoded ANSI codes with `SugarCraft\Style\Style` objects:
 
 ```php
 // Current
@@ -579,7 +579,7 @@ $prompt = TextPrompt::new('Search: ')
 
 ## Medium-Term (0.2.x - 0.3.x)
 
-5. **Style system integration** — adopt `candy-sprinkles/Style` objects instead of ANSI strings
+5. **Style system integration** — adopt `sugar-style/Style` objects instead of ANSI strings
 6. **Cursor blink** — use sugar-forms Cursor pattern or timer-based blink
 7. **Input driver** — create `TtyInputDriver` or integrate with `sugar-vterm`
 8. **Mouse support** — click to position cursor, click to select items
@@ -625,7 +625,7 @@ $prompt = TextPrompt::new('Search: ')
 
 The most critical gap is **input handling** — the library cannot read actual terminal input today. This is the single blocker preventing real-world usage. Fixing this requires either creating a new `candy-readline` input driver package or clearly documenting how to wire `sugar-vterm` into these prompts.
 
-The second most impactful improvement is the **style system** — hardcoded ANSI codes are a maintainability liability and prevent proper theming, color profile adaptation, and visual polish. Adopting `candy-sprinkles/Style` would bring sugar-readline in line with the rest of the ecosystem.
+The second most impactful improvement is the **style system** — hardcoded ANSI codes are a maintainability liability and prevent proper theming, color profile adaptation, and visual polish. Adopting `sugar-style/Style` would bring sugar-readline in line with the rest of the ecosystem.
 
 **Key differentiators to preserve:**
 

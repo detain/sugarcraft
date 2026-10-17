@@ -9,7 +9,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Components\Card\Text;
 use SugarCraft\Dashboard\Layout\Window;
-use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Style\VAlign;
 use PHPUnit\Framework\TestCase;
 
 final class WindowTest extends TestCase

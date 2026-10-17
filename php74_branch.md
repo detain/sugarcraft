@@ -376,7 +376,7 @@ keystone, so they come first within the phase.
 Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.1** `candy-layout`‑dependent + core‑only singles: `candy-metrics`(13,low), <!-- @rename-keep historical provenance -->
   `candy-zone`(14,low), `candy-mouse`(9,med), `candy-mold`(1,low). <!-- @rename-keep historical provenance -->
-- **3.2** `candy-sprinkles` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
+- **3.2** `sugar-style` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
   `Table/Border/Tree/Listing` (10), **3.2c** root color/style files (≈10), **3.2d** remainder.
 - **3.3** `candy-palette`(8,med), `candy-kit`(7,med), `sugar-treelist`(10,med) — deps core(+sprinkles). <!-- @rename-keep historical provenance -->
 - **3.4** `candy-testing`(8,med) — deps core+buffer; **Fiber** + attributes + first‑class‑callable <!-- @rename-keep -->
@@ -508,7 +508,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-palette | medium | 8 | ctor-promotion, enum-with-methods, match, named-args, new-in-init | <!-- @rename-keep historical provenance -->
 | candy-git-server | medium | 14 | ctor-promotion, first-class-callable, match, named-args; ssh2/openssl |
 | candy-scriptui | medium | 41 | attribute, backed-enum, ctor-promotion, enum-with-methods, match, mixed; symfony console |
-| candy-sprinkles | medium | 43 | backed-enum, enum, ctor-promotion, match, mixed, nullsafe |
+| sugar-style | medium | 43 | backed-enum, enum, ctor-promotion, match, mixed, nullsafe |
 | candy-testing | medium | 8 | **fiber**, attribute, ctor-promotion, enum-in-const-expr, first-class-callable, intersection | <!-- @rename-keep -->
 | candy-tetris | medium | 14 | attribute, backed-enum, ctor-promotion, enum-with-methods, first-class-callable |
 | candy-vcr | medium | 81 | attribute, backed-enum, ctor-promotion, match, named-args, new-in-init; symfony |
@@ -539,7 +539,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 
 - **Level 0 (no sugarcraft deps):** candy-ansi, candy-async, candy-buffer, candy-fuzzy, <!-- @rename-keep historical provenance -->
   candy-input, candy-layout. <!-- @rename-keep historical provenance -->
-- **Keystone (cyclic):** candy-core ↔ candy-pty (+ candy-sprinkles right after).
+- **Keystone (cyclic):** candy-core ↔ candy-pty (+ sugar-style right after).
 - **Level 1 (everything else):** depends on core/buffer/sprinkles/etc.; backport strictly after
   its listed deps. Full per‑lib dep lists are in the audit (see `plans/PHP74_BACKPORT.md`).
 

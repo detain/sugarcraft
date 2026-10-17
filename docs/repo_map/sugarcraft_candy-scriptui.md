@@ -90,7 +90,7 @@ candy-scriptui
 ├── sugarcraft/sugar-forms             (form components: TextInput, ItemList, etc.)
 ├── sugarcraft/candy-pty              (PosixProcess for spin command)
 ├── sugarcraft/sugar-markdown            (Theme, Renderer for format command)
-└── sugarcraft/candy-sprinkles        (Style, Border, Align for style command)
+└── sugarcraft/sugar-style        (Style, Border, Align for style command)
 ```
 
 ### 1.3 Two-Tier Architecture
@@ -407,7 +407,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 - `StyleCommand.php` — non-interactive, no Program loop
 
-- `StyleBuilder.php` — pure function building `SugarCraft\Sprinkles\Style` from flags
+- `StyleBuilder.php` — pure function building `SugarCraft\Style\Style` from flags
 
 **Options:**
 ```
@@ -439,7 +439,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 - ANSI 256: `16` through `255`
 
-**Component dependency:** `SugarCraft\Sprinkles\Style`
+**Component dependency:** `SugarCraft\Style\Style`
 
 ---
 
@@ -483,7 +483,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 **candy-scriptui implementation:**
 
-- `TableCommand.php` — non-interactive, uses `SugarCraft\Sprinkles\Table\Table`
+- `TableCommand.php` — non-interactive, uses `SugarCraft\Style\Table\Table`
 
 - `parseRows()` uses `fgetcsv()` for proper CSV parsing with quoted fields
 
@@ -503,7 +503,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 **CSV parsing:** Uses `fgetcsv()` over an in-memory stream for proper quoted-field handling with multi-character separators falling back to `explode()`
 
-**Component dependency:** `SugarCraft\Sprinkles\Table\Table`, `SugarCraft\Sprinkles\Border`
+**Component dependency:** `SugarCraft\Style\Table\Table`, `SugarCraft\Style\Border`
 
 ---
 
@@ -567,7 +567,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 - `logfmt` — `time=... level=... prefix=... msg=...`
 
-**Component dependency:** None (pure PHP with `SugarCraft\Sprinkles\Style` for badge rendering)
+**Component dependency:** None (pure PHP with `SugarCraft\Style\Style` for badge rendering)
 
 ---
 
@@ -753,7 +753,7 @@ $completion = match ($shell) {
 |---|---|---|
 | CLI Framework | Kong | Symfony Console |
 | TUI Framework | Bubble Tea (goroutines) | Program (ReactPHP-like loop) |
-| Components | bubbles/lipgloss | sugar-forms/candy-sprinkles |
+| Components | bubbles/lipgloss | sugar-forms/sugar-style |
 | Style System | lipgloss fluent API | Sprinkles Style builders |
 | Filter Algorithm | sahilm/fuzzy (Go) | ItemList substring (PHP) |
 | Fuzzy Matching | Full fuzzy + exact | Substring only (--fuzzy is no-op) |
@@ -921,7 +921,7 @@ candy-scriptui
 ├── sugar-forms         Components: TextInput, TextArea, ItemList, FilePicker, Viewport, Spinner, Confirm
 ├── candy-pty           PosixProcess for spawning child processes
 ├── sugar-markdown         Renderer (markdown), Theme system
-├── candy-sprinkles    Style, Border, Align, Table (layout + styling)
+├── sugar-style    Style, Border, Align, Table (layout + styling)
 └── symfony/console    CLI application framework
 ```
 

@@ -19,7 +19,7 @@ use SugarCraft\Crush\Tui\Components\PaneFrame;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
-use SugarCraft\Sprinkles\Theme as SprinklesTheme;
+use SugarCraft\Style\Theme as StyleTheme;
 
 /**
  * The shell's legibility contract, asserted as a RATIO on the bytes that reach
@@ -67,7 +67,7 @@ final class ShellContrastTest extends TestCase
      * Backgrounds a real terminal actually paints, each one a case the old
      * literals got wrong in a different way:
      *
-     *   - #000000  pure black: what SprinklesTheme::ansi() assumes, and where
+     *   - #000000  pure black: what StyleTheme::ansi() assumes, and where
      *              #6b7280 scored its BEST result (4.34:1) and still failed.
      *   - #ffffff  pure white: the reverse case entirely.
      *   - #0e0e14  the `dark` palette's own background.
@@ -479,7 +479,7 @@ final class ShellContrastTest extends TestCase
      * W3(c), and the user's third report: "im using the 'ansi' thme right now
      * which the mnyu bordr is not visible".
      *
-     * {@see \SugarCraft\Sprinkles\Theme::ansi()} is built exclusively from
+     * {@see \SugarCraft\Style\Theme::ansi()} is built exclusively from
      * `Color::ansi(0..8)` precisely so an app on that theme DEFERS to the
      * terminal's own 16 colours. That intent was defeated on any terminal
      * advertising more than 16: candy-core's `Color` stored only RGB, so
@@ -487,7 +487,7 @@ final class ShellContrastTest extends TestCase
      * `\e[38;2;127;127;127m` — an absolute value overriding the palette the user
      * chose the theme to honour. Measured on this host before the fix:
      * `ColorProfile::Ansi` -> `\e[90m`, `Ansi256` -> `\e[38;5;244m`, `TrueColor`
-     * -> `\e[38;2;127;127;127m`, and candy-sprinkles' Style renders at TrueColor
+     * -> `\e[38;2;127;127;127m`, and sugar-style' Style renders at TrueColor
      * unconditionally, so the shell always got the third one.
      *
      * So: under `ansi` the frame must carry NO absolute colour at all. Under
@@ -661,7 +661,7 @@ final class ShellContrastTest extends TestCase
      * Sources that are EQUAL are expected to stay equal and are not asserted on:
      * `ansi` writes `border` and `muted` as the same `Color::ansi(8)`, and
      * inventing a difference its author did not is not the projection's job.
-     * That is why the expectation is derived from the SprinklesTheme rather than
+     * That is why the expectation is derived from the StyleTheme rather than
      * from the Theme under test.
      *
      * `adaptive` is not iterated: it IS `dark` or `light` (whichever
@@ -670,7 +670,7 @@ final class ShellContrastTest extends TestCase
      */
     public function testTwoPaletteColoursThatDifferStillDifferAfterTheProjection(): void
     {
-        // token => the SprinklesTheme colour it is projected FROM.
+        // token => the StyleTheme colour it is projected FROM.
         $sources = [
             'border' => 'border',
             'userLabel' => 'primary',
@@ -686,11 +686,11 @@ final class ShellContrastTest extends TestCase
         ];
 
         $palettes = [
-            'dark' => SprinklesTheme::dark(),
-            'light' => SprinklesTheme::light(),
-            'dracula' => SprinklesTheme::dracula(),
-            'tokyoNight' => SprinklesTheme::tokyoNight(),
-            'ansi' => SprinklesTheme::ansi(),
+            'dark' => StyleTheme::dark(),
+            'light' => StyleTheme::light(),
+            'dracula' => StyleTheme::dracula(),
+            'tokyoNight' => StyleTheme::tokyoNight(),
+            'ansi' => StyleTheme::ansi(),
         ];
 
         $violations = [];

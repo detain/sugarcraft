@@ -51,7 +51,7 @@ final class StatusLine
      * reaches the terminal — it is interpolated raw into styled output, so an
      * embedded escape sequence or control byte would otherwise inject.
      */
-    private static function format(string $glyph, string $message, \SugarCraft\Sprinkles\Style $style): string
+    private static function format(string $glyph, string $message, \SugarCraft\Style\Style $style): string
     {
         return $style->render($glyph) . ' ' . SafeText::line($message);
     }

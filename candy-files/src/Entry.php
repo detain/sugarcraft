@@ -70,7 +70,7 @@ final class Entry
      * The old implementation exempted ESC (\x1b) itself from the sweep and
      * only knew the CSI shape, so an OSC set-title, a charset selection
      * (ESC B) or a save-cursor (ESC 7) crafted into a filename survived
-     * verbatim and was rendered by candy-sprinkles — terminal injection.
+     * verbatim and was rendered by sugar-style — terminal injection.
      * Sweeping to bare text is intentional: a stripped sequence's
      * parameters may remain as printable characters (never as controls).
      */

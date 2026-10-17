@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Crush\Lang;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\Theme;
 
 /**

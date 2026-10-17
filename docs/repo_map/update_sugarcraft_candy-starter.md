@@ -36,7 +36,7 @@ The scaffold is 5 files implementing a minimal counter:
 
 ```
 my-app/
-├── composer.json     # requires candy-core + candy-sprinkles
+├── composer.json     # requires candy-core + sugar-style
 ├── phpunit.xml      # bootstrap="vendor/autoload.php", colors, .phpunit.cache/
 ├── bin/start        # 3-line entry point: autoload → Program(new Counter()) → run()
 ├── src/Counter.php # 72-line demo Model (immutable, readonly int $n)
@@ -254,7 +254,7 @@ final class Counter implements Model {
 
 **9. No sugar-widgets Components Used**
 
-- **Description:** README's "common next steps" table mentions `sugar-widgets` Spinner, `sugar-forms` Group, etc., but scaffold uses only raw `Style` from `candy-sprinkles`.
+- **Description:** README's "common next steps" table mentions `sugar-widgets` Spinner, `sugar-forms` Group, etc., but scaffold uses only raw `Style` from `sugar-style`.
 
 - **Why it matters:** Developers might not realize how to integrate components from other packages.
 

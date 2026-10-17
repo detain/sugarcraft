@@ -20,7 +20,7 @@ From `repo_map/php-tui_php-tui.md`:
 | SugarCraft Lib | php-tui Component |
 |--------------|------------------|
 | `candy-core` | Display, Backend, Buffer, Cell, Area, Widget/WidgetRenderer interfaces, Viewport |
-| `candy-sprinkles` | Style, Color, Modifier, Text/Line/Span, Borders, BlockWidget |
+| `sugar-style` | Style, Color, Modifier, Text/Line/Span, Borders, BlockWidget |
 | `sugar-spring` | Layout, Constraint, CassowaryConstraintSolver |
 | `sugar-widgets` | ParagraphWidget, ParagraphRenderer |
 | `sugar-charts` | ChartWidget, BarChartWidget, SparklineWidget, TableWidget |

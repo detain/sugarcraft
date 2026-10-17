@@ -1,4 +1,4 @@
-# Step 10.11 — sugar-table multi-line rows + border styles (candy-sprinkles)
+# Step 10.11 — sugar-table multi-line rows + border styles (sugar-style)
 
 **Source:** `leftover_updates_later.md` sugar-table
 **Branch:** `ai/table-multiline-borders`
@@ -6,12 +6,12 @@
 ## Deliverable
 
 - Multi-line row support.
-- Multiple border styles — consume candy-sprinkles' Border family.
+- Multiple border styles — consume sugar-style' Border family.
   **Do not** re-implement border characters.
 
 ## Files
 
-**Modify:** `sugar-table/src/Table.php` — `withBorder(\SugarCraft\Sprinkles\Border\Border)`,
+**Modify:** `sugar-table/src/Table.php` — `withBorder(\SugarCraft\Style\Border\Border)`,
 `withMultilineMode(bool)`.
 
 ## Tests

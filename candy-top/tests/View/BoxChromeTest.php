@@ -6,7 +6,7 @@ namespace SugarCraft\Top\Tests\View;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Top\Theme\TtyTheme;
 use SugarCraft\Top\View\BoxChrome;
 use SugarCraft\Top\View\Ink;

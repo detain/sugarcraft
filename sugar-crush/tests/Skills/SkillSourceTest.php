@@ -10,7 +10,7 @@ use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
-use SugarCraft\Sprinkles\Theme as SprinklesTheme;
+use SugarCraft\Style\Theme as StyleTheme;
 
 /**
  * Tests for SkillSource — provenance tagging for foreign skill imports.
@@ -88,14 +88,14 @@ final class SkillSourceTest extends TestCase
     }
 
     /** `adaptive` resolves to dark/light, so it has no background token of its own. */
-    private static function sprinklesFor(string $name): SprinklesTheme
+    private static function sprinklesFor(string $name): StyleTheme
     {
         return match ($name) {
-            'light' => SprinklesTheme::light(),
-            'dracula' => SprinklesTheme::dracula(),
-            'tokyoNight' => SprinklesTheme::tokyoNight(),
-            'ansi' => SprinklesTheme::ansi(),
-            default => SprinklesTheme::dark(),
+            'light' => StyleTheme::light(),
+            'dracula' => StyleTheme::dracula(),
+            'tokyoNight' => StyleTheme::tokyoNight(),
+            'ansi' => StyleTheme::ansi(),
+            default => StyleTheme::dark(),
         };
     }
 

@@ -31,7 +31,7 @@
         "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-mouse": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master"
+        "sugarcraft/sugar-style": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",

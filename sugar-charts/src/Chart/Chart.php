@@ -7,7 +7,7 @@ namespace SugarCraft\Charts\Chart;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
-use SugarCraft\Sprinkles\Theme;
+use SugarCraft\Style\Theme;
 
 /**
  * Base chart class providing common features like legend, title,
@@ -270,7 +270,7 @@ abstract class Chart
      * Apply a named color theme to the chart.
      * Themes provide consistent foreground/background/primary/secondary
      * colors. Use Theme::dracula(), Theme::oneDark(), etc.
-     * Mirrors candy-sprinkles Theme palette (step 02.01).
+     * Mirrors sugar-style Theme palette (step 02.01).
      */
     public function withTheme(Theme $theme): self
     {

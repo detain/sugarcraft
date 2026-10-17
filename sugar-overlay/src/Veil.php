@@ -12,8 +12,8 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Zone;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Overlay\Animation\AnimationKind;
 use SugarCraft\Overlay\Animation\Fade;
 use SugarCraft\Overlay\Animation\Scale;
@@ -215,7 +215,7 @@ final class Veil
     /**
      * Set the border chrome for wrapping veil content, or clear it with null.
      *
-     * Uses candy-sprinkles Border + Style to wrap the content with
+     * Uses sugar-style Border + Style to wrap the content with
      * a terminal border. When combined with autoSize, dimensions
      * are computed from the bordered content.
      */

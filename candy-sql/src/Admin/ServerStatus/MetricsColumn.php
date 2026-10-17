@@ -13,9 +13,9 @@ use SugarCraft\Sql\Admin\Calc\HostLoadMode;
 use SugarCraft\Sql\Admin\Calc\HostLoadSampler;
 use SugarCraft\Sql\Admin\Sampler;
 use SugarCraft\Sql\Admin\ServerContextInterface;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
+use SugarCraft\Style\Style;
 
 /**
  * Right-hand metric column of the Server Status page — the Workbench

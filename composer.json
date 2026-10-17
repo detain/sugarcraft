@@ -67,7 +67,7 @@
         "sugarcraft/sugar-testing": "dev-master",
         "sugarcraft/candy-scriptui": "dev-master",
         "sugarcraft/sugar-markdown": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/candy-tetris": "dev-master",
         "sugarcraft/candy-top": "dev-master",
         "sugarcraft/candy-vcr": "dev-master",
@@ -300,7 +300,7 @@
         },
         {
             "type": "path",
-            "url": "candy-sprinkles",
+            "url": "sugar-style",
             "options": {
                 "symlink": true
             }

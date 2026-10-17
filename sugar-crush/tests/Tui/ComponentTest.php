@@ -13,8 +13,8 @@ use SugarCraft\Crush\Tui\Components\InputPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
-use SugarCraft\Constraints\Dock\DockLayout;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Layout\Dock\DockLayout;
+use SugarCraft\Style\Style;
 
 /**
  * @see MenuBar

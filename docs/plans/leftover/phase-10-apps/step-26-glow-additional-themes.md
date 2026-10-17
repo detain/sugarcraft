@@ -6,7 +6,7 @@
 ## Deliverable
 
 Ship Solarized, Monokai, and GitHub stock themes alongside existing
-ones. Consume candy-sprinkles' Theme palette (step 02.01) where
+ones. Consume sugar-style' Theme palette (step 02.01) where
 applicable.
 
 ## Files

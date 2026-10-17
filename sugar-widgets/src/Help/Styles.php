@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Widgets\Help;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Styles for {@see Help}: one slot per visible help element. All

@@ -575,7 +575,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 ### Dependency Order in Monorepo
 
-`candy-core` → `candy-sprinkles` → `sugar-spring` → `sugar-mouse` → `sugar-widgets` → leaf libs including `sugar-metrics`
+`candy-core` → `sugar-style` → `sugar-spring` → `sugar-mouse` → `sugar-widgets` → leaf libs including `sugar-metrics`
 
 ---
 

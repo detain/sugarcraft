@@ -10,7 +10,7 @@ use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
-use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Style\Layout;
 
 final class PosterCardTest extends TestCase
 {

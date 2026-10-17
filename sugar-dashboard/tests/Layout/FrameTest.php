@@ -7,9 +7,9 @@ namespace SugarCraft\Dashboard\Tests\Layout;
 use SugarCraft\Dashboard\Layout\Frame;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\VAlign;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\VAlign;
+use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 

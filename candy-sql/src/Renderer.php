@@ -13,10 +13,10 @@ use SugarCraft\Table\{Column, Row, RowData, Table};
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\AdminSection;
 use SugarCraft\Sql\Terminal\BorderFrame;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
+use SugarCraft\Style\Style;
 
 /**
  * Stateless renderer for the candy-sql TUI shell.

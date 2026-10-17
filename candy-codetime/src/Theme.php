@@ -4,31 +4,31 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeTime;
 
-use SugarCraft\Sprinkles\Theme as SprinklesTheme;
+use SugarCraft\Style\Theme as StyleTheme;
 
 /**
- * candy-codetime theme wrapper around candy-sprinkles Theme.
+ * candy-codetime theme wrapper around sugar-style Theme.
  */
 final class Theme
 {
-    private SprinklesTheme $inner;
+    private StyleTheme $inner;
 
-    public function __construct(?SprinklesTheme $inner = null)
+    public function __construct(?StyleTheme $inner = null)
     {
-        $this->inner = $inner ?? SprinklesTheme::dark();
+        $this->inner = $inner ?? StyleTheme::dark();
     }
 
     public static function dark(): self
     {
-        return new self(SprinklesTheme::dark());
+        return new self(StyleTheme::dark());
     }
 
     public static function light(): self
     {
-        return new self(SprinklesTheme::light());
+        return new self(StyleTheme::light());
     }
 
-    public function inner(): SprinklesTheme
+    public function inner(): StyleTheme
     {
         return $this->inner;
     }

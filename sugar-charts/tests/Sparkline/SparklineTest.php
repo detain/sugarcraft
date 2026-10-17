@@ -115,7 +115,7 @@ final class SparklineTest extends TestCase
 
     public function testWithStyleWrapsViewInStyleEscapes(): void
     {
-        $style = \SugarCraft\Sprinkles\Style::new()
+        $style = \SugarCraft\Style\Style::new()
             ->bold()
             ->colorProfile(\SugarCraft\Core\Util\ColorProfile::TrueColor);
         $s = Sparkline::new([1, 2, 3], 3)->withStyle($style);

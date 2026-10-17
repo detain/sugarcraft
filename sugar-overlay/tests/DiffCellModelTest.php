@@ -7,7 +7,7 @@ namespace SugarCraft\Overlay\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
-use SugarCraft\Sprinkles\Border;
+use SugarCraft\Style\Border;
 use SugarCraft\Overlay\Animation\AnimationKind;
 use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\RenderSession;

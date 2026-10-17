@@ -10,7 +10,7 @@ use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class TextInputTest extends TestCase

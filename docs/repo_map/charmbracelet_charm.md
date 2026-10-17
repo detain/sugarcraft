@@ -203,7 +203,7 @@
 | `fs/` package | `sugar-markdown` or `sugar-widgets` | Filesystem FS interface; sugar-markdown has output/styling, bits has data structures. |
 | `crypt/` package | (no direct equivalent) | Encryption/crypto utilities not yet ported. |
 | `client/` package | `candy-scriptui` | Shell utilities; client config/env management similar to shell setup. |
-| `ui/` package (Bubble Tea) | `candy-sprinkles` | Sprinkles provides Bubble Tea components. The TUI pattern matches. |
+| `ui/` package (Bubble Tea) | `sugar-style` | Sprinkles provides Bubble Tea components. The TUI pattern matches. |
 | `server/` package | (no direct equivalent) | Server-side components not applicable to SugarCraft TUI libs. |
 | `cmd/` package (CLI) | `candy-scriptui` | Command-line interface patterns; shell provides CLI primitives. |
 | Overall architecture | `candy-core` | The Elm-style update/model/view pattern for TUI applications. |

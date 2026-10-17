@@ -128,13 +128,13 @@ echo $chart->view();
 
 ### Named color themes
 
-Charts inherit [candy-sprinkles](https://github.com/detain/sugarcraft/tree/master/candy-sprinkles)
+Charts inherit [sugar-style](https://github.com/detain/sugarcraft/tree/master/sugar-style)
 `Theme` palette support via `withTheme()`. All `Theme::` factory methods
 are supported:
 
 ```php
 use SugarCraft\Charts\LineChart\LineChart;
-use SugarCraft\Sprinkles\Theme;
+use SugarCraft\Style\Theme;
 
 $chart = LineChart::new([3, 1, 4, 1, 5, 9, 2, 6], 40, 8)
     ->withTheme(Theme::dracula())

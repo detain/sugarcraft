@@ -36,7 +36,7 @@ From the first-pass analysis (`rasjonell_dashbrew.md`), SugarCraft maps to Dashb
 | Action system (shell dispatch, timeout, sticky state) | `candy-core` | Not yet built |
 | Bounding-box navigation (focus ring, neighbor finding) | `candy-core` | Partial |
 | Theme system (named palettes, auto detection) | `sugar-markdown` | Partial |
-| Key bindings / action palette | `candy-sprinkles` | Partial |
+| Key bindings / action palette | `sugar-style` | Partial |
 | HTTP data fetching (API source, JSONPath) | `sugar-widgets` | Partial |
 | Layout containers (row/column flex) | `candy-core` | Not yet built |
 
@@ -345,7 +345,7 @@ Based on this analysis, prioritized by impact:
 2. **Build a global action palette**
    - `Ctrl+K` fuzzy-filtered list of all bindings across all components
    - Critical for discoverability
-   - Should be in `candy-sprinkles` (key handling)
+   - Should be in `sugar-style` (key handling)
 
 3. **Implement the pending-ID action deduplication pattern**
    - Atomic token per action dispatch

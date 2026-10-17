@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Layout;
 
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\VAlign;
 use SugarCraft\Core\Util\Width;
 
 /**

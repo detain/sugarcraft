@@ -14,7 +14,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 // Start from the dark stock theme, then override one slot.
 $base = Theme::dark();

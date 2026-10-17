@@ -171,7 +171,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 **Dependencies:**
 
 - `candy-core` (BubbleTea port) ✅ exists
-- `candy-sprinkles` (styling) ✅ exists  
+- `sugar-style` (styling) ✅ exists  
 - `sugar-markdown` (markdown rendering) ✅ exists
 
 **Implementation effort:** High (several thousand lines)
@@ -264,7 +264,7 @@ The TUI should be a separate entry point callable via SSH forced command:
 **Existing infrastructure to leverage:**
 
 - `candy-core` — BubbleTea runtime port
-- `candy-sprinkles` — styling system
+- `sugar-style` — styling system
 - `sugar-markdown` — markdown/syntax rendering
 
 ### 5.2 SSH → TUI Routing
@@ -349,7 +349,7 @@ src/
 ### Existing Monorepo Libraries to Leverage
 
 - `candy-core/` — BubbleTea TUI runtime
-- `candy-sprinkles/` — Lipgloss styling port
+- `sugar-style/` — Lipgloss styling port
 - `sugar-markdown/` — Markdown/syntax rendering
 
 ---
@@ -358,4 +358,4 @@ src/
 
 Candy-serve has a solid foundation with proper SSH Git protocol handling, access control, and user management. The **single largest missing piece is the interactive SSH TUI** that makes soft-serve unique — the ability to browse repos, view files, and navigate commits directly over SSH.
 
-**Recommended next step:** Implement the TUI session manager and repo list view as the first phase of TUI development, leveraging the existing BubbleTea (candy-core) and styling (candy-sprinkles) infrastructure already in the monorepo.
+**Recommended next step:** Implement the TUI session manager and repo list view as the first phase of TUI development, leveraging the existing BubbleTea (candy-core) and styling (sugar-style) infrastructure already in the monorepo.

@@ -149,7 +149,7 @@ The vhs-action is the **CI/CD automation layer** for the upstream `charmbracelet
 | `candy-core` | The `Model::update()`/`Model::view()` cycle mirrors VHS's command-interpretation loop |
 | `sugar-forms` | Input handling (`Type`, key events) maps to VHS's `Type`/`Enter`/`Tab` commands |
 | `sugar-spring` | Animation/timing (`Sleep`, `PlaybackSpeed`) maps to VHS timing commands |
-| `candy-sprinkles` | Layout/box model (`Set Width`/`Set Height`/`Set Padding`) maps to VHS layout commands |
+| `sugar-style` | Layout/box model (`Set Width`/`Set Height`/`Set Padding`) maps to VHS layout commands |
 | **CI/vhs-action** | Not a port — this is the *infrastructure* that renders the GIF demos of all above libs in CI; no direct SugarCraft equivalent exists yet; candidate for a `sugar-ci` or `sugar-vhs` helper lib |
 
 ## Analysis

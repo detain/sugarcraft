@@ -20,7 +20,7 @@ You exist to answer a *specific question* another role (typically Coder) cannot 
 
 ## How to research
 
-1. **Check the codebase first** — `Grep` / `Glob` / `Read` in `sugar-vterm/src/`, `candy-sprinkles/src/`, etc.
+1. **Check the codebase first** — `Grep` / `Glob` / `Read` in `sugar-vterm/src/`, `sugar-style/src/`, etc.
 2. **Check vendored upstream sources** if any are present (`vendor/`, `third_party/`, `external/`).
 3. **WebFetch** the canonical upstream repo, paper, or RFC. Cite the URL in your report.
 4. **WebSearch** for "<library> <algorithm> PHP" if a port exists.

@@ -168,7 +168,7 @@ items = model.items[model.offset : model.offset+model.height-1]
   - `sugar-widgets` for the item/component model
   - `sugar-markdown` for lipgloss-based styling  
   - A new `sugar-overlay` or `sugar-quickfix` lib for the overlay rendering mechanism
-- The background-view-continues-updating pattern is similar to how `candy-sprinkles` handles layered rendering
+- The background-view-continues-updating pattern is similar to how `sugar-style` handles layered rendering
 - No direct mapping to `honey-*` libs (math/physics/motion) — purely UI/UX
 
 ## Analysis

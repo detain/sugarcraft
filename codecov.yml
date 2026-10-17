@@ -48,8 +48,8 @@ flag_management:
     - name: sugar-constraints
       paths: ["sugar-constraints/src/**"]
       carryforward: true
-    - name: candy-sprinkles
-      paths: ["candy-sprinkles/src/**"]
+    - name: sugar-style
+      paths: ["sugar-style/src/**"]
       carryforward: true
     - name: sugar-spring
       paths: ["sugar-spring/src/**"]
@@ -253,12 +253,12 @@ component_management:
         - "sugar-constraints/src/**"
       flag_regexes:
         - "^sugar-constraints$"
-    - component_id: candy-sprinkles
-      name: candy-sprinkles
+    - component_id: sugar-style
+      name: sugar-style
       paths:
-        - "candy-sprinkles/src/**"
+        - "sugar-style/src/**"
       flag_regexes:
-        - "^candy-sprinkles$"
+        - "^sugar-style$"
     - component_id: sugar-spring
       name: sugar-spring
       paths:

@@ -21,7 +21,7 @@ use SugarCraft\Core\Lang;
  * advertising more than 16 colours it came back out as `\e[38;5;244m` (the
  * nearest 256-cube grey) or `\e[38;2;127;127;127m` (absolute RGB) instead of
  * `\e[90m`. That defeats the whole point of a 16-colour theme:
- * {@see \SugarCraft\Sprinkles\Theme::ansi()} is built exclusively from
+ * {@see \SugarCraft\Style\Theme::ansi()} is built exclusively from
  * `Color::ansi(0..8)` precisely so the app DEFERS to the terminal's own
  * palette, and a user who picks it to make an app match their terminal got
  * absolute values that ignore it.

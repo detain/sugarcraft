@@ -203,7 +203,7 @@ final class Lang extends BaseLang
 }
 ```
 
-**`candy-sprinkles/src/Lang.php:L18-L22`**
+**`sugar-style/src/Lang.php:L18-L22`**
 ```php
 final class Lang extends BaseLang
 {
@@ -411,7 +411,7 @@ public static function new(float $interval = 1.0): self
     return new self(0.0, $interval, false);
 }
 
-// candy-sprinkles/src/Style.php:L103
+// sugar-style/src/Style.php:L103
 public static function new(): self
 {
     return new self();

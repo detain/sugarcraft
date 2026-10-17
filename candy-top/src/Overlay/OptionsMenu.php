@@ -9,7 +9,7 @@ use SugarCraft\Widgets\Menu\OptionRow;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Config\Option;

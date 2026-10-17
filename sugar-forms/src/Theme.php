@@ -6,7 +6,7 @@ namespace SugarCraft\Forms;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Palettes;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Stylesheet for {@see Form} rendering. Each slot is a {@see Style} for

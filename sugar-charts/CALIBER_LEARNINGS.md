@@ -5,7 +5,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:sugar-charts]** `withCanvas(BrailleCanvas)` bridges sugar-charts to sugar-dashboard's `Plot/Braille` module. `Chart` and `LineChart` accept a `BrailleCanvas` instance via `withCanvas()` for 2×4 sub-cell dot-matrix rendering instead of character-cell rendering. The `BrailleCanvas` comes from `SugarCraft\Dashboard\Plot\Braille\BrailleCanvas` — sugar-charts takes a soft dep on sugar-dashboard for this integration point.
 
-- **[pattern:sugar-charts]** `withTheme(Theme $theme)` wires candy-sprinkles `Theme` into chart rendering. All `Theme::` factory methods (`dracula()`, `oneDark()`, `tokyoNight()`, etc.) are supported on both `Chart` and `LineChart`. The theme is stored as a `readonly ?Theme` property and flows through `copy()`/`lineChartCopy()` helpers. Mirrors step 02.01 candy-sprinkles Theme work.
+- **[pattern:sugar-charts]** `withTheme(Theme $theme)` wires sugar-style `Theme` into chart rendering. All `Theme::` factory methods (`dracula()`, `oneDark()`, `tokyoNight()`, etc.) are supported on both `Chart` and `LineChart`. The theme is stored as a `readonly ?Theme` property and flows through `copy()`/`lineChartCopy()` helpers. Mirrors step 02.01 sugar-style Theme work.
 
 - **[pattern:sugar-charts]** Aggregation classes (`BucketByTime`, `MovingAverage`, `Resample`) live in `SugarCraft\Charts\Aggregation` and are immutable + fluent — `add()`/`addMany()` return `$this` clones, `compute()`/`computeSimple()`/`ema()` are static factories. All three classes follow the same pattern: private constructor, public static factories, private state via `readonly` constructor params, clone-mutate on builders. No shared base class — each is `final` and self-contained.
 

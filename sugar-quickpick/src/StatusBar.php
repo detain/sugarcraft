@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\QuickPick;
 
 use SugarCraft\QuickPick\Concerns\Visible;
-use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
+use SugarCraft\Style\Bar\StatusBar as BarStatusBar;
 
 /**
  * StatusBar — renders a single-line status message for the QuickPick overlay.

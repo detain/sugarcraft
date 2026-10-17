@@ -6,7 +6,7 @@
 
 ## Deliverable
 
-After SSOT-02 made sugar-panels compose candy-sprinkles, add the
+After SSOT-02 made sugar-panels compose sugar-style, add the
 sugar-panels-specific features that don't belong upstream:
 
 - Text alignment Left / Center / Right within the box.

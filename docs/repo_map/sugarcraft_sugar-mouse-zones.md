@@ -389,7 +389,7 @@ This is fundamentally superior to manual coordinate tracking, which requires eve
 
 ### 2. Zero-Width Markers Are Layout-Safe
 
-APC escape sequences are ignored by terminals for display and are stripped before `Width::string()` measurement. This means zone markers don't break layout calculations — a critical property for integration with styled output from `candy-sprinkles` / lipgloss.
+APC escape sequences are ignored by terminals for display and are stripped before `Width::string()` measurement. This means zone markers don't break layout calculations — a critical property for integration with styled output from `sugar-style` / lipgloss.
 
 ### 3. Synchronous Scan Simplifies Reasoning
 
@@ -563,7 +563,7 @@ This is the same AABB pattern but **inline** in each widget's event handler — 
 
 ---
 
-## Integration with candy-core and candy-sprinkles
+## Integration with candy-core and sugar-style
 
 ### candy-core Integration
 
@@ -580,20 +580,20 @@ $click = new MouseMsg(5, 1, MouseButton::Left, MouseAction::Press);
 
 The `MouseMsg` class (`candy-core/src/Msg/MouseMsg.php`) is the standard bubbletea mouse event type, with 1-based coordinates matching terminal reporting.
 
-### candy-sprinkles Integration
+### sugar-style Integration
 
-Zone markers interact cleanly with styled output from candy-sprinkles:
+Zone markers interact cleanly with styled output from sugar-style:
 
 ```php
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 $btn = $mgr->mark('btn:ok', Style::new()->padding(0, 2)->border(Border::rounded())->render('OK'));
 // scan() strips markers before measuring width, so lipgloss calculations are unaffected
 $clean = $mgr->scan($btn);
 ```
 
-The README explicitly notes: "lipgloss.Width() (CandySprinkles) and SugarMouse interact cleanly: scan() strips markers before measurement."
+The README explicitly notes: "lipgloss.Width() (SugarStyle) and SugarMouse interact cleanly: scan() strips markers before measurement."
 
 ---
 
@@ -755,7 +755,7 @@ The current design returns the first hit in insertion order. For overlapping zon
 
 ### 3. Spatial Map for O(log n) Hit Testing
 
-For apps with many zones (100+), the O(n) iteration in `anyInBounds()` could become a bottleneck. Consider adding an optional R-tree-like spatial index (similar to textual's `_spatial_map.SpatialMap`) for O(log n) lookup. This would be especially valuable for `candy-sprinkles` Canvas overlay systems.
+For apps with many zones (100+), the O(n) iteration in `anyInBounds()` could become a bottleneck. Consider adding an optional R-tree-like spatial index (similar to textual's `_spatial_map.SpatialMap`) for O(log n) lookup. This would be especially valuable for `sugar-style` Canvas overlay systems.
 
 ### 4. Snapshot Testing for Zone Bounds
 
@@ -769,4 +769,4 @@ sugar-mouse is a well-executed, complete port of bubblezone that faithfully repl
 
 The main limitations — AABB-only collision detection, no z-ordering for overlapping zones, and O(n) zone iteration — are inherited from upstream and are acceptable tradeoffs for the design's simplicity. The `ext-intl` fallback concern and static facade singleton are addressable improvements.
 
-The port is production-ready and integrates cleanly with candy-core's TEA runtime and candy-sprinkles' styling system.
+The port is production-ready and integrates cleanly with candy-core's TEA runtime and sugar-style' styling system.

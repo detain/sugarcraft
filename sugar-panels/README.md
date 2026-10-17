@@ -19,7 +19,7 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 
 - **H/V composition** — build arbitrary layouts by nesting `horizontal()` and `vertical()` panels
 - **Box-drawing borders** — classic ANSI box characters (╭ ╮ ╰ ╯ │ ─), any
-  candy-sprinkles `Border` style
+  sugar-style `Border` style
 - **No-border mode** — render adjacent panels without separators
 - **Per-panel padding** — inner whitespace around content
 - **ANSI-aware content** — styled/coloured leaf text places by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
@@ -78,14 +78,14 @@ $node->withMinWidth(20)
 $flat = $panels->noBorder($column);
 ```
 
-## Styling with candy-sprinkles
+## Styling with sugar-style
 
 sugar-panels composes canonical styling primitives from
-[`candy-sprinkles`](https://github.com/sugarcraft/candy-sprinkles):
+[`sugar-style`](https://github.com/sugarcraft/sugar-style):
 
 ```php
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\{Align, Border, Style, VAlign};
+use SugarCraft\Style\{Align, Border, Style, VAlign};
 
 // Set border character set (rounded / sharp / double / ascii / ...)
 // Passing null clears the style but preserves border visibility.
@@ -132,8 +132,8 @@ $node->withAlignV(VAlign::Bottom);
 | `->withPadding(int)` | Inner padding (cells) |
 | `->withBorder(bool)` | Show/hide box border |
 | `->withSpacing(int)` | Gap between children (cells) |
-| `->withBorderStyle(?Border)` | Border char set from candy-sprinkles |
-| `->withStyle(?Style)` | Style (color, attributes) from candy-sprinkles |
+| `->withBorderStyle(?Border)` | Border char set from sugar-style |
+| `->withStyle(?Style)` | Style (color, attributes) from sugar-style |
 | `->withTitle(string)` | Box title text |
 | `->withMargin(int $top, ...)` | Outer margin (top/right/bottom/left) |
 | `->withAlignH(?Align)` | Horizontal text alignment (null clears) |

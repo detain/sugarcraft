@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\Width;
 /**
  * Selectable, scrollable data table.
  *
- * Distinct from {@see \SugarCraft\Sprinkles\Table\Table}, which is a static
+ * Distinct from {@see \SugarCraft\Style\Table\Table}, which is a static
  * styled renderer. This component holds a moving selection cursor,
  * scrolls vertically when the row count exceeds {@see $height}, and
  * draws an underlined header.
@@ -29,7 +29,7 @@ final class Table implements Model
 {
     /**
      * Row index passed to a {@see styleFunc()} callback when rendering
-     * the header row. Mirrors lipgloss / candy-sprinkles `HEADER_ROW`.
+     * the header row. Mirrors lipgloss / sugar-style `HEADER_ROW`.
      */
     public const HEADER_ROW = -1;
 
@@ -44,7 +44,7 @@ final class Table implements Model
         /** @var list<int> per-column explicit widths (0 = auto). Aligned to $headers index. */
         public readonly array $colWidths = [],
         public readonly ?Styles $styles = null,
-        /** @var ?\Closure(int $row, int $col): \SugarCraft\Sprinkles\Style */
+        /** @var ?\Closure(int $row, int $col): \SugarCraft\Style\Style */
         public readonly ?\Closure $styleFunc = null,
         public readonly ?SortState $sortState = null,
         public readonly bool $filterable = false,
@@ -232,7 +232,7 @@ final class Table implements Model
 
     /**
      * Per-cell styling callback. The closure receives `(int $row, int $col)`
-     * and returns the {@see \SugarCraft\Sprinkles\Style} to apply to that
+     * and returns the {@see \SugarCraft\Style\Style} to apply to that
      * cell. The header row is reported as `$row === Table::HEADER_ROW`.
      *
      * The styleFunc runs *per cell*, before the row-level Styles
@@ -243,9 +243,9 @@ final class Table implements Model
      * Pass null to clear the override.
      *
      * Mirrors charmbracelet/bubbles #246 (long-requested upstream
-     * feature) and lipgloss / candy-sprinkles `Table::styleFunc()`.
+     * feature) and lipgloss / sugar-style `Table::styleFunc()`.
      *
-     * @param ?\Closure(int $row, int $col): \SugarCraft\Sprinkles\Style $fn
+     * @param ?\Closure(int $row, int $col): \SugarCraft\Style\Style $fn
      */
     public function styleFunc(?\Closure $fn): self
     {

@@ -73,7 +73,7 @@ Mouse support is missing or incomplete across most packages. When implemented, i
 
 ### 5.1 sugar-panels > treilik/bubbleboxer
 - Immutable Node pattern vs upstream's mutable tea.Model wrapper
-- 9 border styles via candy-sprinkles vs upstream's single border style
+- 9 border styles via sugar-style vs upstream's single border style
 - Pure string renderer decoupled from tea runtime vs upstream's Bubbletea dependency
 - PHP-native implementation vs Go interop complexity
 

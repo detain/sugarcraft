@@ -286,7 +286,7 @@ This is fine and widely used in the codebase. For absolute strictness, `count($t
 
 **Not applicable — by design.** The library is intentionally dependency-free and synchronous. From CALIBER_LEARNINGS:
 
-> **Dependency-free on purpose.** `FocusRing` is pure focus-ring *state*: no rendering, no key decoding, no candy-core/candy-sprinkles imports.
+> **Dependency-free on purpose.** `FocusRing` is pure focus-ring *state*: no rendering, no key decoding, no candy-core/sugar-style imports.
 
 For async contexts (ReactPHP event loops), the focus ring would be used as plain state in an async model — the model itself would be async, but the focus ring data structure itself does not need to be. This is the correct design.
 
@@ -310,7 +310,7 @@ But `FocusRing` itself has no `init()` / `update()` / `view()` / `subscriptions(
 
 The class opts for a private constructor with promoted `readonly` properties rather than using the `Mutable` trait pattern from `candy-core`. This is a **valid alternative approach** — the trait uses `get_object_vars()` reflection which has performance cost. The direct constructor approach in `FocusRing` is actually more performant and just as clear.
 
-However, for consistency with other SugarCraft value objects (like `candy-sprinkles/src/Style.php`), it may be worth noting. The CALIBER_LEARNINGS explicitly documents the pattern used here, so this is an intentional deviation, not an oversight.
+However, for consistency with other SugarCraft value objects (like `sugar-style/src/Style.php`), it may be worth noting. The CALIBER_LEARNINGS explicitly documents the pattern used here, so this is an intentional deviation, not an oversight.
 
 ### 7.3 No `Width` or `Height` dependency
 

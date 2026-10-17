@@ -16,18 +16,18 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Version;
 use SugarCraft\Sql\Renderer;
-use SugarCraft\Constraints\Region;
-use SugarCraft\Constraints\Direction;
-use SugarCraft\Constraints\GreedySolver;
-use SugarCraft\Constraints\Constraint\Constraint;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
+use SugarCraft\Layout\Region;
+use SugarCraft\Layout\Direction;
+use SugarCraft\Layout\GreedySolver;
+use SugarCraft\Layout\Constraint\Constraint;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
 use SugarCraft\Sql\Admin\Alerts\Alert;
 use SugarCraft\Sql\Admin\Alerts\AlertManager;
 use SugarCraft\Sql\Admin\Alerts\AlertNotifier;
 use SugarCraft\Sql\Admin\Alerts\AlertNotifierInterface;
 use SugarCraft\Sql\Admin\Alerts\AlertThresholds;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Performance Dashboard page with 3-column layout.

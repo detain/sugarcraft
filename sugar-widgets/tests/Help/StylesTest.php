@@ -6,7 +6,7 @@ namespace SugarCraft\Widgets\Tests\Help;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Widgets\Help\Styles;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Tests for {@see Styles} — per-element style slots for Help rendering.

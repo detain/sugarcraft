@@ -12,7 +12,7 @@ use SugarCraft\Markdown\Render\BlockStack;
 use SugarCraft\Markdown\Render\BlockContext;
 use SugarCraft\Markdown\Render\BlockKind;
 use SugarCraft\Markdown\Style\StyleSheet;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Coverage-boosting tests for edge cases, error paths, and uncovered branches.
@@ -595,7 +595,7 @@ final class CoverageBoostTest extends TestCase
         $sheet = StyleSheet::base();
         $newSheet = $sheet->withBlockKindAtDepth(
             \SugarCraft\Markdown\Render\BlockKind::Paragraph,
-            \SugarCraft\Sprinkles\Style::new()->bold(),
+            \SugarCraft\Style\Style::new()->bold(),
             0
         );
         $this->assertNotSame($sheet, $newSheet);
@@ -606,12 +606,12 @@ final class CoverageBoostTest extends TestCase
         $sheet = StyleSheet::base();
         $s1 = $sheet->withBlockKindAtDepth(
             \SugarCraft\Markdown\Render\BlockKind::Heading,
-            \SugarCraft\Sprinkles\Style::new()->bold(),
+            \SugarCraft\Style\Style::new()->bold(),
             1
         );
         $s2 = $sheet->withBlockKindAtDepth(
             \SugarCraft\Markdown\Render\BlockKind::Heading,
-            \SugarCraft\Sprinkles\Style::new()->italic(),
+            \SugarCraft\Style\Style::new()->italic(),
             2
         );
         // Different instances.

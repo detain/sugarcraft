@@ -497,10 +497,10 @@ final class WidthTest extends TestCase
      * the constant.
      *
      * Every other tab assertion added in round 40 — here and in
-     * candy-sprinkles' StyleTest — is written in terms of `Width::TAB_WIDTH`,
+     * sugar-style' StyleTest — is written in terms of `Width::TAB_WIDTH`,
      * so all of them agree with each other for any value the constant takes.
      * MEASURED: `TAB_WIDTH = 4` -> `= 8` was killed ONLY by a pre-existing
-     * candy-sprinkles test (`testUnsetTabWidthRevertsToFour`), which means
+     * sugar-style test (`testUnsetTabWidthRevertsToFour`), which means
      * candy-core's own suite pinned nothing about the value and the constant
      * could have drifted with this lib green. A shared constant makes two
      * measures AGREE; it does not make either of them RIGHT.

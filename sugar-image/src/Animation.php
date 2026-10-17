@@ -116,7 +116,7 @@ final class Animation
     /**
      * Private clone-and-replace helper.
      *
-     * Mirrors the canonical `with*()` pattern in candy-sprinkles/src/Style.php:
+     * Mirrors the canonical `with*()` pattern in sugar-style/src/Style.php:
      * each named parameter defaults to null and falls back to the existing
      * field when omitted. Keeps `with*()` callers terse without giving up
      * immutability.

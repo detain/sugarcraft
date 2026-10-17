@@ -14,8 +14,8 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Mouse\Zones\Manager;
 
 $mgr = Manager::newGlobal();

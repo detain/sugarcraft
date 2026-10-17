@@ -11,7 +11,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 final class TabsTest extends TestCase
 {
@@ -175,8 +175,8 @@ final class TabsTest extends TestCase
         // and the final clip path (using Width::string/Width::truncateAnsi) must
         // trigger to keep the output within the declared width.
         $t = Tabs::new(['Home', 'Profile', 'Settings', 'Extras'], 12)
-            ->withActiveStyle(\SugarCraft\Sprinkles\Style::new()->bold())
-            ->withInactiveStyle(\SugarCraft\Sprinkles\Style::new()->faint());
+            ->withActiveStyle(\SugarCraft\Style\Style::new()->bold())
+            ->withInactiveStyle(\SugarCraft\Style\Style::new()->faint());
         $view = $t->view();
         // Visible width must not exceed the declared budget.
         $this->assertLessThanOrEqual(12, Width::string($view));
@@ -280,8 +280,8 @@ final class TabsTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         new Tabs(
             active: -1,
-            activeStyle: \SugarCraft\Sprinkles\Style::new(),
-            inactiveStyle: \SugarCraft\Sprinkles\Style::new(),
+            activeStyle: \SugarCraft\Style\Style::new(),
+            inactiveStyle: \SugarCraft\Style\Style::new(),
             divider: ' │ ',
             keyMap: TabsKeyMap::new(),
             focused: false,
@@ -298,8 +298,8 @@ final class TabsTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         new Tabs(
             active: 5,
-            activeStyle: \SugarCraft\Sprinkles\Style::new(),
-            inactiveStyle: \SugarCraft\Sprinkles\Style::new(),
+            activeStyle: \SugarCraft\Style\Style::new(),
+            inactiveStyle: \SugarCraft\Style\Style::new(),
             divider: ' │ ',
             keyMap: TabsKeyMap::new(),
             focused: false,
@@ -316,8 +316,8 @@ final class TabsTest extends TestCase
         // Empty labels should not throw even with active=0
         $t = new Tabs(
             active: 0,
-            activeStyle: \SugarCraft\Sprinkles\Style::new(),
-            inactiveStyle: \SugarCraft\Sprinkles\Style::new(),
+            activeStyle: \SugarCraft\Style\Style::new(),
+            inactiveStyle: \SugarCraft\Style\Style::new(),
             divider: ' │ ',
             keyMap: TabsKeyMap::new(),
             focused: false,

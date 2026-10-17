@@ -8,7 +8,7 @@
 - **PHP:** ^8.3
 - **Namespace:** `SugarCraft\QuickPick`
 - **Composer:** `sugarcraft/sugar-quickpick`
-- **Depends on:** `sugarcraft/candy-core` (Ansi, SignalForwarder), `sugarcraft/candy-sprinkles` (Border, Style, Align, VAlign), `sugarcraft/candy-pty` (SignalForwarder)
+- **Depends on:** `sugarcraft/candy-core` (Ansi, SignalForwarder), `sugarcraft/sugar-style` (Border, Style, Align, VAlign), `sugarcraft/candy-pty` (SignalForwarder)
 - **Test suite:** 4 test files (HermitTest, FilteredItemTest, ItemInterfaceTest, History/FileHistoryTest), ~47 test methods
 
 ---
@@ -23,7 +23,7 @@
 | Item interface (number/value) | ❌ (Title() only) | ✅ (number() + value()) | **New** |
 | Cursor navigation | ✅ (up/down only) | ✅ (up/down/top/bottom) | Yes |
 | Window dimensions | Fixed 81x14 | Configurable (H/W/offset) | Yes |
-| Border composition | lipgloss styling | candy-sprinkles Border | Adapted |
+| Border composition | lipgloss styling | sugar-style Border | Adapted |
 | HelpBar / StatusBar | ❌ | ✅ | **New** |
 | FileHistory (persistent) | ❌ | ✅ (JSONL) | **New** |
 | SIGWINCH resize handling | ✅ (auto-centering) | ✅ (callback + SignalForwarder) | Adapted |
@@ -69,8 +69,8 @@ SugarCraft\QuickPick\Hermit
 ├── readonly int    $windowWidth         — Overlay width (0 = auto)
 ├── readonly int    $xOffset             — Horizontal position
 ├── readonly int    $yOffset            — Vertical position
-├── readonly ?Border $border            — candy-sprinkles Border
-├── readonly ?Style $style              — candy-sprinkles Style
+├── readonly ?Border $border            — sugar-style Border
+├── readonly ?Style $style              — sugar-style Style
 ├── readonly ?HelpBar $helpBar          — Attached keyboard help
 ├── readonly ?StatusBar $statusBar      — Attached status line
 └── readonly ?\Closure $onResize        — SIGWINCH callback (cols, rows)
@@ -96,7 +96,7 @@ Configuration — fluent setters returning new instance:
 - `setOffset(int $x, int $y)` — set position (also calls `show()`)
 - `setItemFormatter(Closure $fn)` — custom item formatting
 - `setFilterFn(Closure $fn)` — custom post-filter predicate
-- `withBorder(?Border $border)` / `withStyle(?Style $style)` — compose candy-sprinkles
+- `withBorder(?Border $border)` / `withStyle(?Style $style)` — compose sugar-style
 - `withHelpBar(?HelpBar $helpBar)` / `withStatusBar(?StatusBar $statusBar)` — attach bars
 - `withOnResize(?Closure $callback)` — register SIGWINCH resize callback
 
@@ -373,7 +373,7 @@ public function attachSigwinch(): bool
 | **Cursor movement** | up/down only, with offset/pagination | up/down/top/bottom with clamping |
 | **Window sizing** | Fixed 81x14 | Fully configurable H/W/offset |
 | **SIGWINCH** | Auto-centering on resize | Callback + SignalForwarder |
-| **Border/Style** | lipgloss Style | candy-sprinkles Border/Style |
+| **Border/Style** | lipgloss Style | sugar-style Border/Style |
 | **HelpBar/StatusBar** | ❌ | ✅ |
 | **Persistent history** | ❌ | ✅ FileHistory (JSONL) |
 | **Match highlighting** | ❌ | ✅ ANSI SGR via setMatchStyle |

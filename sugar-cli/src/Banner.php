@@ -6,8 +6,8 @@ namespace SugarCraft\Cli;
 
 use SugarCraft\Cli\Internal\SafeText;
 use SugarCraft\Cli\Internal\WidthGuard;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 /**
  * Render a bordered title banner. The title is rendered with the

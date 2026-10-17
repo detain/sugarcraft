@@ -1,7 +1,7 @@
 """
 Style system for the SugarCrush TUI renderer.
 
-Ports src/Style.php (candy-sprinkles) and the styling helpers from src/Renderer.php.
+Ports src/Style.php (sugar-style) and the styling helpers from src/Renderer.php.
 Provides ANSI-styled text with borders, padding, and foreground/background colors.
 """
 
@@ -80,7 +80,7 @@ class Style:
     """
     A composable ANSI style for terminal text.
 
-    Mimics candy-sprinkles' Style class used throughout the PHP renderer.
+    Mimics sugar-style' Style class used throughout the PHP renderer.
     """
     foreground_color: Optional[str] = None
     background_color: Optional[str] = None

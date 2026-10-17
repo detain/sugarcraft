@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery;
 
-use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Style\Layout;
 
 /**
  * A horizontal carousel of {@see PosterCard}s with a title, a cursor, and a

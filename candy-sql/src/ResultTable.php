@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Renders a SQL result set as a formatted table with:

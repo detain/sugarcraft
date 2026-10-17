@@ -9,11 +9,11 @@ use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\FuzzyMatcher;
-use SugarCraft\Sprinkles\Align;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\VAlign;
-use SugarCraft\Sprinkles\Border\TitleAnchor;
+use SugarCraft\Style\Align;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\VAlign;
+use SugarCraft\Style\Border\TitleAnchor;
 use SugarCraft\Pty\SignalForwarder;
 
 /**
@@ -107,10 +107,10 @@ final class QuickPick
     /** Top-left Y offset for the overlay. */
     private int $yOffset = 0;
 
-    /** Border rune set for the overlay window (composed from candy-sprinkles). */
+    /** Border rune set for the overlay window (composed from sugar-style). */
     private ?Border $border = null;
 
-    /** Style for the overlay window (composed from candy-sprinkles). */
+    /** Style for the overlay window (composed from sugar-style). */
     private ?Style $style = null;
 
     /** Help bar rendered below the filter list. */
@@ -246,7 +246,7 @@ final class QuickPick
     }
 
     /**
-     * Apply a border from candy-sprinkles.
+     * Apply a border from sugar-style.
      */
     public function withBorder(?Border $border): self
     {
@@ -256,7 +256,7 @@ final class QuickPick
     }
 
     /**
-     * Apply a style from candy-sprinkles.
+     * Apply a style from sugar-style.
      */
     public function withStyle(?Style $style): self
     {

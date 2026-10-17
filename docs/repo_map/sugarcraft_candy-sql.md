@@ -55,7 +55,7 @@ candy-sql/
 ├── .vhs/
 │   ├── play.tape / play.gif         # Query execution demo
 │   └── query-history.tape / query-history.gif  # History cycling demo
-├── composer.json                    # Requires candy-core, candy-sprinkles
+├── composer.json                    # Requires candy-core, sugar-style
 ├── phpunit.xml                      # Bootstrap vendor/autoload.php, colors=true
 ├── README.md                        # 160 lines — architecture table, usage examples
 └── CALIBER_LEARNINGS.md            # 4 patterns (pragma-schema, immutable-cursor-pager, etc.)
@@ -83,7 +83,7 @@ The `App` class is a SugarCraft `Model` implementing the canonical `init()`/`upd
 
 ### Dependency Usage of SugarCraft Components
 
-candy-sql depends only on `candy-core` and `candy-sprinkles`:
+candy-sql depends only on `candy-core` and `sugar-style`:
 
 | Component | Usage in candy-sql |
 |-----------|---------------------|
@@ -92,10 +92,10 @@ candy-sql depends only on `candy-core` and `candy-sprinkles`:
 | `SugarCraft\Core\KeyType` | Key classification (`Char`, `Up`, `Down`, `Enter`, `Tab`, etc.) |
 | `SugarCraft\Core\Cmd` | `Cmd::quit()` returned on `q`/`Esc` |
 | `SugarCraft\Core\Util\Color` | All ANSI colour constants (`Color::hex('#fde68a')`) |
-| `SugarCraft\Sprinkles\Style` | Every rendered string wrapped in `Style::new()->...->render()` |
-| `SugarCraft\Sprinkles\Border` | `Border::rounded()` for pane frames |
-| `SugarCraft\Sprinkles\Layout` | `Layout::joinHorizontal()` for tables+rows composition |
-| `SugarCraft\Sprinkles\Position` | `Position::TOP` for layout joining |
+| `SugarCraft\Style\Style` | Every rendered string wrapped in `Style::new()->...->render()` |
+| `SugarCraft\Style\Border` | `Border::rounded()` for pane frames |
+| `SugarCraft\Style\Layout` | `Layout::joinHorizontal()` for tables+rows composition |
+| `SugarCraft\Style\Position` | `Position::TOP` for layout joining |
 | `SugarCraft\Core\I18n\Lang` | `Lang::t()` for i18n strings |
 
 ---
@@ -251,7 +251,7 @@ public readonly ?string $savedBuf = null;      // temp storage during history na
 
 ### 6. Renderer (`src/Renderer.php` — 124 lines)
 
-**Role:** Stateless renderer — pure function from `App` to ANSI string. Uses `candy-sprinkles` Border/Layout/Position/Style.
+**Role:** Stateless renderer — pure function from `App` to ANSI string. Uses `sugar-style` Border/Layout/Position/Style.
 
 **Three-pane layout** (lines 23–47):
 ```php
@@ -472,7 +472,7 @@ candy-sql has `ExplainView` which:
 | Rendering | `Renderer::render(App): string` | tview primitives |
 | Input | `KeyMsg` dispatch | tcell events |
 | Database | PDO (single driver at v1) | Multiple driver libs |
-| Style system | candy-sprinkles `Style` | tview styles |
+| Style system | sugar-style `Style` | tview styles |
 | i18n | 16 locales via `Lang::t()` | No i18n |
 
 ---
@@ -581,7 +581,7 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 
 ### Configuration
 
-- `/home/sites/sugarcraft/candy-sql/composer.json` — Requires candy-core, candy-sprinkles; path repos
+- `/home/sites/sugarcraft/candy-sql/composer.json` — Requires candy-core, sugar-style; path repos
 - `/home/sites/sugarcraft/candy-sql/phpunit.xml` — Bootstrap vendor/autoload.php, colors=true
 - `/home/sites/sugarcraft/candy-sql/bin/candy-sql` — CLI entry point (31 lines)
 
@@ -624,5 +624,5 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 - `/home/sites/sugarcraft/repo_map/jorgerojas26_lazysql.md` — Primary upstream (Go, multi-driver)
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — SugarCraft runtime foundation
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-widgets.md` — Component library used by the TUI
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-sprinkles.md` — Styling system
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-style.md` — Styling system
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-skate.md` — SQLite-backed KV store (shares backend technology)

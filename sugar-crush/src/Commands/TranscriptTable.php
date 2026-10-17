@@ -7,8 +7,8 @@ namespace SugarCraft\Crush\Commands;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\Commands\CommandContext;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Table\Table;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Table\Table;
 
 /**
  * The one place the column-layout decisions shared by the `echo`-shaped
@@ -264,7 +264,7 @@ final class TranscriptTable
     /**
      * A bordered, unstyled table ready for {@see Table::row()} calls.
      *
-     * Returns candy-sprinkles' own {@see Table} rather than wrapping it: the
+     * Returns sugar-style' own {@see Table} rather than wrapping it: the
      * value is immutable-fluent, so a caller chaining `->row()` gets a new
      * instance that still carries the border and width cap set here.
      *

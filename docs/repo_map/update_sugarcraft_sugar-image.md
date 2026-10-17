@@ -12,7 +12,7 @@
 
 - **PHP:** ^8.3 | **ext-gd:** Required
 
-- **Key Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `react/promise`
+- **Key Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `react/promise`
 
 ---
 

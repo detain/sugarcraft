@@ -31,7 +31,7 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
         "sugarcraft/sugar-constraints": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master"
+        "sugarcraft/sugar-style": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

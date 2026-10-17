@@ -8,7 +8,7 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Renders a chart legend with colored indicators and series labels.

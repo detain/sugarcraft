@@ -134,7 +134,7 @@ All new code under `sugar-crush/src/Media/` + `src/Support/MediaStore.php`; unit
 
 ## W1.1 — Generation DTOs (`MediaRequest`, `MediaResponse`, `MediaArtifact`, `GenerationParams`) — ✅ landed @3431278e1
 **Goal:** the one-param-registry-many-projections core (crush_media §5.8 mirror-item 1, §9.7 close): plain serializable value objects that later render into the TUI form, serialize into provider requests, persist into PNG infotext, and cross the RPC wire unchanged (mystage §6.4 design consequence: "keep the generation request/response, the form spec, and the artifact reference as plain serializable DTOs from day one").
-**Probe first:** W0.2 anchors for `src/Providers/EmbeddingsRequest.php`/`EmbeddingsResponse.php` (the DTO-pair precedent, crush_media §9.1) and `ProviderInterface.php:11-18,72` (capability-flag shape); house immutable-fluent canonical (`candy-sprinkles/src/Style.php`, trait `candy-core/src/Concerns/Mutable.php` — AGENTS.md).
+**Probe first:** W0.2 anchors for `src/Providers/EmbeddingsRequest.php`/`EmbeddingsResponse.php` (the DTO-pair precedent, crush_media §9.1) and `ProviderInterface.php:11-18,72` (capability-flag shape); house immutable-fluent canonical (`sugar-style/src/Style.php`, trait `candy-core/src/Concerns/Mutable.php` — AGENTS.md).
 **Files likely touched:**
 - `sugar-crush/src/Media/MediaKind.php` (new) — `enum MediaKind { case Image; case Video; }` (crush_media §9.7).
 - `sugar-crush/src/Media/MediaRequest.php` (new) — the full §4.2+§4.3 field set (txt2img+img2img union) with API defaults (steps 50, denoising 0.75, padding 0 — divergence-from-UI-defaults note in docblock; UI defaults 20/0.7/32 are the FORM's, crush_media §2.2 non-conflict row).
@@ -2106,7 +2106,7 @@ Source: [forms] — full inventory of sugar-crush + sugar-forms widgetry with fi
 | Key routing map | `KeyMap` | `sugar-forms/src/KeyMap.php:28` | Tab/Shift-Tab/Enter/Esc field navigation |
 | Scrollable viewport | `Viewport` | `sugar-forms/src/Viewport.php` (586 L) | `pageUp/Down()` :375-408, `scrollPercent()` :435, `withMouseWheelEnabled()` :329 — tall forms |
 | Tab strip (settings) | `SettingsTabStrip` | `sugar-crush/src/Tui/Settings/SettingsTabStrip.php:19` | **static render, non-interactive**; canonical interactive `Tabs` lives in sugar-bits (candy-zone-based; divergence documented :12-16) | <!-- @rename-keep historical provenance -->
-| Styled borders | `Sprinkles` `Style`/`Border` | candy-sprinkles | panel chrome |
+| Styled borders | `Sprinkles` `Style`/`Border` | sugar-style | panel chrome |
 | Poster/thumbnail grid | `PosterGrid`/`PosterCard` | sugar-gallery (`withImage:82`) | **not currently a crush dep** (G-4) |
 | Image display | `Mosaic` | **already wired**: `sugar-crush/src/Renderer.php:16-18`, `:1726` | see §8 |
 | Toasts/progress | `Toast` | `Chat.php:1515`; progressToast :234, alert :209; painted `Renderer.php:6598`, suppressed under modals :2076 | generation progress notices |
@@ -2699,7 +2699,7 @@ Layer orientation:
 
 ```
 candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
- ├─ candy-sprinkles   Style/Border/Canvas (chrome)
+ ├─ sugar-style   Style/Border/Canvas (chrome)
  ├─ sugar-constraints      Cassowary constraint solver (Form::withConstraints)
  ├─ sugar-forms   ★ canonical widgets + Field/Form engine  ← write against this
  │    └─ sugar-forms  (pure class_alias façade — do NOT target)

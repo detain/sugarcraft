@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Plot\Chart;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;

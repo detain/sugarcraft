@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\QuickPick\Tests;
 
 use SugarCraft\QuickPick\{QuickPick, FilteredItem, Item, HelpBar, StatusBar};
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Fuzzy\{FuzzyMatcher, MatchResult};
 use PHPUnit\Framework\TestCase;
 

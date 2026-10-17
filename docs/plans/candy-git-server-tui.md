@@ -91,7 +91,7 @@ candy-core  Program             (existing — Bubble Tea runtime)
     ▼
 candy-git-server  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     │
-    ├── candy-sprinkles  Style          (border, fg, bg, padding)
+    ├── sugar-style  Style          (border, fg, bg, padding)
     ├── sugar-panels      SugarPanels     (titled boxes / split panes)
     ├── sugar-flexbox   Viewport       (scrolling lists, scrollbar)
     ├── sugar-markdown      Renderer       (markdown → ANSI for README)
@@ -170,14 +170,14 @@ in place; the TUI just composes them.
   around each pane.
 - **sugar-flexbox** — `Viewport` for the scrollable lists (repo list,
   file tree, commit log) and `Scrollbar` to render the indicator.
-- **candy-sprinkles** — `Style` for inline runs (highlight selected
+- **sugar-style** — `Style` for inline runs (highlight selected
   row, dim metadata text, brand colour for branch names).
 - **sugar-markdown** — `Renderer` for README markdown, `SyntaxHighlighter`
   for file blob view.
 
 ### 2.5 Theming
 
-Phase-5 polish only. Default theme = candy-sprinkles `Theme::dracula()`
+Phase-5 polish only. Default theme = sugar-style `Theme::dracula()`
 (or similar dark theme). User-side override deferred until upstream
 soft-serve ships theming primitives (it does not at time of writing).
 
@@ -341,7 +341,7 @@ goes back; `?` opens help.
 
 `enter` opens a sub-screen showing the commit's diff (text only —
 syntax highlighting per file, with `+`/`-` colourisation via
-candy-sprinkles).
+sugar-style).
 
 ### 4.6 Help panel (phase 5)
 
@@ -367,7 +367,7 @@ and the repo-list screen.
 - `candy-git-server/src/Tui/RepoListView.php` — pure render function called
   by `RepoListModel::view()`.
 - `candy-git-server/src/Tui/Theme.php` — palette wrapper around
-  candy-sprinkles `Theme`.
+  sugar-style `Theme`.
 - `candy-git-server/bin/candy-git-server-tui` — TUI entry-point script that opens
   the TUI on stdin/stdout (used by candy-wish channel handler and as a
   standalone debug command). Lives under `bin/` next to the existing
@@ -384,7 +384,7 @@ and the repo-list screen.
 **Changed files:**
 
 - `candy-git-server/composer.json` — add `sugarcraft/candy-wish`,
-  `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`,
+  `sugarcraft/candy-core`, `sugarcraft/sugar-style`,
   `sugarcraft/candy-git`, `sugarcraft/sugar-panels`,
   `sugarcraft/sugar-flexbox`, `sugarcraft/sugar-markdown` as `@dev` plus
   matching path-repo entries (closure via `tools/check-path-repos.php
@@ -408,7 +408,7 @@ and the repo-list screen.
 **Acceptance:**
 
 - `ssh user@host` (with no command) starts the TUI and shows the repo
-  list rendered through candy-sprinkles + sugar-panels.
+  list rendered through sugar-style + sugar-panels.
 - `git clone ssh://user@host:23231/<repo>` still works (existing
   path).
 - `vendor/bin/phpunit` green in candy-git-server + all four consuming libs
@@ -650,7 +650,7 @@ A phase is "done" when:
    translations are a separate i18n carry-forward).
 6. `vendor/bin/phpunit` in **every** consumer lib that candy-git-server
    pulls in (candy-wish, candy-core, candy-git, sugar-markdown,
-   candy-sprinkles, sugar-panels, sugar-flexbox) still green.
+   sugar-style, sugar-panels, sugar-flexbox) still green.
 7. `php tools/check-path-repos.php` reports closure clean.
 
 ---
@@ -792,7 +792,7 @@ the wire-protocol port — the marquee TUI feature has not been built.
 - `candy-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) +
   `candy-core/src/Util/Ansi.php` (`Ansi::setClipboard()`, L400) —
   OSC 52 emitter helper used by phase-5 clipboard keybind.
-- `candy-sprinkles/src/Style.php` + `candy-sprinkles/src/Theme.php` —
+- `sugar-style/src/Style.php` + `sugar-style/src/Theme.php` —
   styling.
 - `sugar-panels/src/SugarPanels.php` — bordered titled boxes.
 - `sugar-flexbox/src/Viewport.php` + `sugar-flexbox/src/Scrollbar.php`

@@ -34,7 +34,7 @@ echo $buf->height(); // 3</code></pre>
       <div class="feature"><strong>Cell</strong><span>Readonly value object: rune (string), style (?Style), link (?Hyperlink), width (int). Cell::continuation() for wide-char neighbour cells. No with*() — rebuild via new.</span></div>
       <div class="feature"><strong>Position</strong><span>2-D coordinate (col, row) with bare accessors. Mirrors charmbracelet/vte Position.</span></div>
       <div class="feature"><strong>Region</strong><span>Rectangular sub-region defined by Position origin + width/height. contains() helper for hit-testing.</span></div>
-      <div class="feature"><strong>Style (minimal)</strong><span>Stripped-down per-cell style: fg (0xRRGGBB), bg (0xRRGGBB), attrs (bitmask). Rich styling lives in candy-sprinkles/Style.</span></div>
+      <div class="feature"><strong>Style (minimal)</strong><span>Stripped-down per-cell style: fg (0xRRGGBB), bg (0xRRGGBB), attrs (bitmask). Rich styling lives in sugar-style/Style.</span></div>
       <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor — url and optional id grouping field.</span></div>
       <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, emoji) require a width=0 continuation cell at col+1. Callers are responsible for placing continuation cells correctly.</span></div>
     </div>

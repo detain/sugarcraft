@@ -20,7 +20,7 @@
 
 - **PHP**: ^8.3
 
-- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-pty`
+- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `sugarcraft/candy-pty`
 
 - **Dev Dependencies**: `sugarcraft/candy-vcr`, `phpunit/phpunit` ^10.5
 
@@ -135,7 +135,7 @@ A bordered frame that wraps any `Item`, providing configurable borders, title, p
 
 **Core Features**:
 
-- Configurable border characters (rounded, normal, thick, double, block) via `Border` from candy-sprinkles
+- Configurable border characters (rounded, normal, thick, double, block) via `Border` from sugar-style
 
 - Optional title displayed on top border
 
@@ -149,7 +149,7 @@ A bordered frame that wraps any `Item`, providing configurable borders, title, p
 
 **File**: `/home/sites/sugarcraft/sugar-dashboard/src/Layout/Frame.php` (296 lines)
 
-**Border Style Characters** (uses `Border` from candy-sprinkles):
+**Border Style Characters** (uses `Border` from sugar-style):
 ```php
 // Mirrors tealeaves/bubbletea-tilelayout pattern
 $border = ($this->border ?? Border::rounded())->withTitle($this->title);
@@ -654,16 +654,16 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 
 **Critical Architectural Note** (from README):
 
-> Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `candy-sprinkles`/`candy-core`/`sugar-vterm`. The lineage differs (charmbracelet/inline-termui for sugar-dashboard, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge.
+> Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`candy-core`/`sugar-vterm`. The lineage differs (charmbracelet/inline-termui for sugar-dashboard, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge.
 
-| sugar-dashboard Class | candy-sprinkles Class | candy-core Class |
+| sugar-dashboard Class | sugar-style Class | candy-core Class |
 |---|---|---|
-| `SugarCraft\Dashboard\Foundation\Style` | `SugarCraft\Sprinkles\Style` | -- |
-| `SugarCraft\Dashboard\Foundation\Theme` | `SugarCraft\Sprinkles\Theme` | -- |
+| `SugarCraft\Dashboard\Foundation\Style` | `SugarCraft\Style\Style` | -- |
+| `SugarCraft\Dashboard\Foundation\Theme` | `SugarCraft\Style\Theme` | -- |
 | `SugarCraft\Dashboard\Foundation\Rect` | -- | `SugarCraft\Core\Rect` |
-| `SugarCraft\Dashboard\Foundation\Buffer` | -- | `SugarCraft\Vterm\Buffer\Buffer` |
-| `SugarCraft\Dashboard\Foundation\Cell` | -- | `SugarCraft\Vterm\Cell\Cell` |
-| `SugarCraft\Dashboard\Foundation\StyleParser` | `SugarCraft\Sprinkles\StyleParser` | -- |
+| `SugarCraft\Dashboard\Foundation\Buffer` | -- | `SugarCraft\Vt\Buffer\Buffer` |
+| `SugarCraft\Dashboard\Foundation\Cell` | -- | `SugarCraft\Vt\Cell\Cell` |
+| `SugarCraft\Dashboard\Foundation\StyleParser` | `SugarCraft\Style\StyleParser` | -- |
 
 ---
 
@@ -674,7 +674,7 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 | Dependency | Role in sugar-dashboard |
 |---|---|
 | `sugarcraft/candy-core` | Elm-arch `Model`, ANSI utilities, Width, Color |
-| `sugarcraft/candy-sprinkles` | `Border`, `Style`, `Layout`, `Position`, `VAlign` |
+| `sugarcraft/sugar-style` | `Border`, `Style`, `Layout`, `Position`, `VAlign` |
 | `sugarcraft/candy-pty` | PTY primitives for any terminal interactions |
 
 ### 10.2 Dependency Graph (transitive closure)
@@ -683,7 +683,7 @@ All path-repo entries in `composer.json`:
 ```
 sugar-dashboard
 ├── candy-core (path repo)
-├── candy-sprinkles (path repo)
+├── sugar-style (path repo)
 │   └── candy-core (implicit)
 └── candy-pty (path repo)
     └── candy-core (implicit)

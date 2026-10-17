@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tests\Tui;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\Tui\TextSelection;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Cell geometry of a mouse text selection: anchoring, clamping, reading-order

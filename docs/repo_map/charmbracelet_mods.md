@@ -169,7 +169,7 @@ SugarCraft is a PHP monorepo of TUI library ports from the Charmbracelet ecosyst
 | **Viewport scrolling** | `candy-scriptui` components | Textarea/viewport components |
 | **Glamour (markdown rendering)** | `sugar-widgets` (rendering) | Markdown/ANSI rendering |
 | **Streaming LLM client** | Not yet ported | Could be `sugar-forms` or new `sugar-llm` |
-| **Conversation caching** | Not yet ported | Could be `candy-sprinkles` (caching utilities) |
+| **Conversation caching** | Not yet ported | Could be `sugar-style` (caching utilities) |
 | **MCP client integration** | Not yet ported | Could be `sugar-mcp-client` or `honey-mcp` |
 | **Interactive forms (huh)** | `candy-scriptui` input | `huh` form library port |
 | **Spinner/Animation** | `candy-scriptui` spinner | `bubbletea` spinner components |

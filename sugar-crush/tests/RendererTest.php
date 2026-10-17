@@ -9,7 +9,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
@@ -1268,7 +1268,7 @@ final class RendererTest extends TestCase
      * The PR #1403 failure class, reached through TAB.
      *
      * candy-core's Sanitize::untrusted() preserves TAB and Width::string("\t")
-     * is 0, but candy-sprinkles' Style::render() paints each tab as tabWidth
+     * is 0, but sugar-style' Style::render() paints each tab as tabWidth
      * spaces -- so a Go/Makefile/C diff was budgeted 0 cells per tab and
      * painted 4, and the box emitted rows wider than the viewport. candy-core's
      * Renderer repaints by absolute row and clamps cursorTo(), so an over-wide

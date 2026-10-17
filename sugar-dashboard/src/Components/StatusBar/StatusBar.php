@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Bar\StatusBar as SprinklesStatusBar;
+use SugarCraft\Style\Bar\StatusBar as StyleStatusBar;
 
 /**
  * A horizontal status bar with multiple segments.
@@ -24,7 +24,7 @@ use SugarCraft\Sprinkles\Bar\StatusBar as SprinklesStatusBar;
  *
  * The three-column layout — segment positioning, gap-fill and (ANSI-aware)
  * truncation, plus the left/right border caps — is delegated to the shared
- * {@see SprinklesStatusBar} primitive. This class stays a thin themed
+ * {@see StyleStatusBar} primitive. This class stays a thin themed
  * wrapper that adds fg/bg colours, {@see \SugarCraft\Dashboard\Foundation\Sizer}
  * sizing and the plain-string withers on top.
  */
@@ -93,7 +93,7 @@ final class StatusBar implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Delegate the three-column layout (fill + ANSI-aware truncation) and
         // the border caps to the shared status-bar primitive. Empty segments
         // collapse to nothing there, matching the previous concatenation.
-        $bar = SprinklesStatusBar::new()
+        $bar = StyleStatusBar::new()
             ->left($this->left)
             ->center($this->center)
             ->right($this->right)

@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Lang;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;

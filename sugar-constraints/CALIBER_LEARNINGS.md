@@ -3,7 +3,7 @@
 ## Session Learnings
 
 ### 2026-05-28 — Cassowary + Greedy co-existence
-Pattern: Extracted Cassowary + Greedy layout solvers into sugar-constraints in step-03. GreedySolver is golden-parity with candy-sprinkles. Cassowary is simplified prototype — full simplex with Big-M method.
+Pattern: Extracted Cassowary + Greedy layout solvers into sugar-constraints in step-03. GreedySolver is golden-parity with sugar-style. Cassowary is simplified prototype — full simplex with Big-M method.
 Anti-pattern: None identified yet.
 Source: step-03 ai/sugar-constraints-new
 
@@ -19,7 +19,7 @@ WHOLLY to `GreedySolver` (which correctly supports every constraint type, so
 delegation also FIXES the Ratio bug). Did NOT rewrite the simplex — too risky
 for a foundation lib. Deleted the dead pivot loop + its helpers (Variable,
 Relation, ConstraintDef, EditInfo, Tableau); kept `Expression` (still tested).
-Only in-repo caller is candy-sprinkles `SolverFactory` (env-gated), which
+Only in-repo caller is sugar-style `SolverFactory` (env-gated), which
 constructs but never calls `solve()`, so the deprecation is inert downstream.
 Pattern: `expectDeprecation()` was REMOVED in PHPUnit 10 — assert deprecations
 via a scoped `set_error_handler(..., E_USER_DEPRECATED)` that captures + swallows,
@@ -37,7 +37,7 @@ Source: ai/sugar-constraints-solver-deprecate
   `new self(...array_merge(get_object_vars($this), $changes))` over a private
   promoted-readonly ctor (DockSlot is the exception: public readonly props +
   static guard, mirroring Region.php exposure). Pattern borrowed from
-  candy-sprinkles Style.php, pattern-only, never imported.
+  sugar-style Style.php, pattern-only, never imported.
 - **GreedySolver NOT reused.** Dock columns/rows are pure rational arithmetic
   (floor + residual-to-last); routing through constraint objects would add
   indirection with no expressive gain. Region is reused as the sole geometry VO.

@@ -13,7 +13,7 @@ use SugarCraft\Core\Util\Color;
  *
  * Mirrors termui's style parsing state machine.
  *
- * Sugar-dash SSOT. Intentionally distinct from \SugarCraft\Sprinkles\StyleParser
+ * Sugar-dash SSOT. Intentionally distinct from \SugarCraft\Style\StyleParser
  * — this parser produces Dash\Foundation\Cell/Style (public readonly ?Color
  * $foreground on Style), while Sprinkles\StyleParser produces Sprinkles\Cell/Style
  * (private $fg/$bg; no public Color field). Tests access $cell->style->foreground->r

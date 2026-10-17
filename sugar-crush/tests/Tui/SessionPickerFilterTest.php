@@ -14,7 +14,7 @@ use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\SessionListAction;
 use SugarCraft\Crush\Tui\SessionPicker;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The session picker's `/` filter (Appendix P §3.2): entering and leaving

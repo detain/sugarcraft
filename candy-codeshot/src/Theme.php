@@ -71,7 +71,7 @@ final class Theme
             lineNumber:   Palettes::DRACULA['comment'],
             windowRed:    Palettes::DRACULA['red'],
             // Candy-codeshot deliberately uses Dracula 'yellow' for the window button;
-            // this differs from candy-sprinkles' 'warning' → 'orange' mapping.
+            // this differs from sugar-style' 'warning' → 'orange' mapping.
             windowYellow: Palettes::DRACULA['yellow'],
             windowGreen:  Palettes::DRACULA['green'],
         );

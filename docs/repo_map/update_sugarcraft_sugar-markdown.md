@@ -1,6 +1,6 @@
 # Overview
 
-**sugar-markdown** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`candy-sprinkles`, `candy-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `candy-mdview`).
+**sugar-markdown** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`sugar-style`, `candy-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `candy-mdview`).
 
 **Biggest opportunity areas:**
 
@@ -44,7 +44,7 @@
 | Indented code blocks | ✅ |
 | Bullet/ordered/nested lists | ✅ |
 | Blockquotes (▎-prefixed) | ✅ |
-| GFM tables (via SprinklesTable) | ✅ |
+| GFM tables (via StyleTable) | ✅ |
 | Task lists (☑/☐ glyphs) | ✅ |
 | OSC 8 hyperlinks | ✅ |
 | Link suffix `(url)` | ✅ |
@@ -90,7 +90,7 @@
 
 - `league/commonmark: ^2.4`
 - `sugarcraft/candy-core` (Width, Ansi utilities)
-- `sugarcraft/candy-sprinkles` (Style, Border, Table)
+- `sugarcraft/sugar-style` (Style, Border, Table)
 
 ## Consumer
 
@@ -279,14 +279,14 @@
 
 ### 9. Per-column Table Width Constraints
 
-**Description:** Glamour's table rendering supports per-column width specifications. SprinklesTable handles table layout but sugar-markdown doesn't expose column width configuration.
+**Description:** Glamour's table rendering supports per-column width specifications. StyleTable handles table layout but sugar-markdown doesn't expose column width configuration.
 
 **Source:** `charmbracelet_lipgloss.md` — `table` sub-package with `Width(constraint)`
 
 **Implementation ideas:**
 
 - Add `withColumnWidths(array $widths)` to Renderer
-- Pass widths to SprinklesTable builder
+- Pass widths to StyleTable builder
 - Apply proportional sizing if sum < available width
 
 **Expected impact:** Medium — enables precise table formatting
@@ -561,7 +561,7 @@ Use `sugar-colorprofile`'s color manipulation (darken, lighten, complementary, b
 
 **Reference:** `charmbracelet_lipgloss.md` — `Darken()`, `Lighten()`, `Complementary()`, `Blend1D()`, `Blend2D()` using CIELAB color space
 
-## 3. Integration with candy-sprinkles Border System
+## 3. Integration with sugar-style Border System
 
 Enhanced border styles (gradient borders, per-side colors) from lipgloss.
 

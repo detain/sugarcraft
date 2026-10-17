@@ -29,7 +29,7 @@ Add to each lib's `.gitignore` (if missing): `composer.lock`.
   returns nothing.
 - `cd <each-lib> && composer install --quiet && vendor/bin/phpunit`
   green for: candy-pty, candy-core, candy-scriptui, candy-wish, candy-vcr,
-  sugar-dashboard, sugar-widgets, sugar-charts, candy-sprinkles, sugar-vterm,
+  sugar-dashboard, sugar-widgets, sugar-charts, sugar-style, sugar-vterm,
   sugar-image.
 - `php tools/check-path-repos.php` still green.
 - `git grep -l "composer.lock" .github/workflows/` — confirm any cache

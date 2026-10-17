@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * Sugar-dash inline-termui Style. Intentionally distinct from
- * \SugarCraft\Sprinkles\Style — this carries the inline-termui
+ * \SugarCraft\Style\Style — this carries the inline-termui
  * layout-engine semantics (toAnsi(ColorProfile), inline foreground/
  * background slots) while Sprinkles\Style carries the lipgloss
  * padding/margin/borders semantics. Both are canonical for their

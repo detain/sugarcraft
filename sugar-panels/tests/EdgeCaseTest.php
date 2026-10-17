@@ -6,7 +6,7 @@ namespace SugarCraft\Panels\Tests;
 
 use SugarCraft\Panels\{Node, SugarPanels};
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\{Align, Border, Style, VAlign};
+use SugarCraft\Style\{Align, Border, Style, VAlign};
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 

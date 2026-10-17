@@ -2,11 +2,11 @@
 
 **Branch:** `ai/sugar-constraints-new`
 **Depends on:** step-00 ✅
-**Blocks:** step-10 (candy-sprinkles uses sugar-constraints), step-14/15 (sugar-widgets/sugar-forms layout)
+**Blocks:** step-10 (sugar-style uses sugar-constraints), step-14/15 (sugar-widgets/sugar-forms layout)
 
 ## Goal
 
-Create the `sugar-constraints` foundation package — a constraint-based layout engine. Ships two solvers behind a `LayoutSolver` interface: `CassowarySolver` (the new investment) and `GreedySolver` (re-implementation of the existing `candy-sprinkles/src/Layout/Solver.php` 5-phase distribution, kept as deterministic fallback). Consumers pick which solver via factory.
+Create the `sugar-constraints` foundation package — a constraint-based layout engine. Ships two solvers behind a `LayoutSolver` interface: `CassowarySolver` (the new investment) and `GreedySolver` (re-implementation of the existing `sugar-style/src/Layout/Solver.php` 5-phase distribution, kept as deterministic fallback). Consumers pick which solver via factory.
 
 Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver interface), §369.3 (consolidation of 5+ greedy solvers), §387.3 (reinvention).
 
@@ -20,7 +20,7 @@ Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver 
 - `sugar-constraints/src/Constraint.php` — interface.
 - `sugar-constraints/src/Constraint/Min.php`, `Max.php`, `Fixed.php`, `Fill.php`, `Percentage.php`, `Ratio.php` — value objects.
 - `sugar-constraints/src/Solver/CassowarySolver.php` — Cassowary simplex implementation.
-- `sugar-constraints/src/Solver/GreedySolver.php` — port of candy-sprinkles' existing 5-phase distribution.
+- `sugar-constraints/src/Solver/GreedySolver.php` — port of sugar-style' existing 5-phase distribution.
 - `sugar-constraints/src/Direction.php` — enum (Horizontal, Vertical).
 - `sugar-constraints/src/Region.php` — alias of sugar-cellbuffer's? Or own? **Decision**: own type to keep sugar-constraints leaf.
 - `sugar-constraints/tests/CassowarySolverTest.php`, `GreedySolverTest.php`, `ConstraintTest.php`.
@@ -33,7 +33,7 @@ Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver 
 
 - [ ] `LayoutSolver` interface: `solve(Region $region, Direction $dir, list<Constraint> $constraints): list<Region>`.
 - [ ] `CassowarySolver::new(): self` — default factory.
-- [ ] `GreedySolver::new(): self` — bit-for-bit equivalent output to existing `candy-sprinkles/src/Layout/Solver.php` for the 5-phase test cases (Min, Fixed, Fill, Max, slack proportional). **Golden test**: same inputs → same outputs.
+- [ ] `GreedySolver::new(): self` — bit-for-bit equivalent output to existing `sugar-style/src/Layout/Solver.php` for the 5-phase test cases (Min, Fixed, Fill, Max, slack proportional). **Golden test**: same inputs → same outputs.
 - [ ] All 6 `Constraint` types (Min, Max, Fixed, Fill, Percentage, Ratio) implemented.
 - [ ] CassowarySolver passes edit-variable + stay-weight standard test cases from Badros & Borning 2001.
 - [ ] Solver swap-in is non-breaking — `LayoutSolver` is the only public contract.
@@ -46,24 +46,24 @@ Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver 
 1. **Spawn a Researcher FIRST** with the question:
    > "What's the minimal viable Cassowary simplex implementation for terminal-grid 1D layout (single-direction constraint solving, integer outputs)? Reference kiwisolver (Python), rhea (JS), Badros & Borning 2001 paper. Identify edit variables, stay constraints, simplex pivot rule. Estimate PHP LoC. Are there existing PHP ports?"
    Block on the Researcher's findings. If they recommend a non-trivial dependency (e.g., FFI to kiwi C++), append `Cassowary dep decision: <details>` to `docs/repo_map_updates.md` and proceed with the simplest viable hand-roll.
-2. **Invoke `scaffold-library`** with slug `sugar-constraints`, namespace `SugarCraft\Constraints\`, role "Constraint-based layout solver (Cassowary + greedy fallback)".
-3. **Copy candy-sprinkles' Solver as GreedySolver**:
+2. **Invoke `scaffold-library`** with slug `sugar-constraints`, namespace `SugarCraft\Layout\`, role "Constraint-based layout solver (Cassowary + greedy fallback)".
+3. **Copy sugar-style' Solver as GreedySolver**:
    ```bash
-   cp candy-sprinkles/src/Layout/Solver.php sugar-constraints/src/Solver/GreedySolver.php
+   cp sugar-style/src/Layout/Solver.php sugar-constraints/src/Solver/GreedySolver.php
    ```
-   Rewrite namespace + class name. **Do NOT modify candy-sprinkles** this step (that's step-10).
-4. **Port constraint types** from `candy-sprinkles/src/Layout/Constraint.php` into per-type files in `sugar-constraints/src/Constraint/`. Use `sugarcraft-model-pattern` for each value object.
+   Rewrite namespace + class name. **Do NOT modify sugar-style** this step (that's step-10).
+4. **Port constraint types** from `sugar-style/src/Layout/Constraint.php` into per-type files in `sugar-constraints/src/Constraint/`. Use `sugarcraft-model-pattern` for each value object.
 5. **Implement CassowarySolver**:
    - Variables = each constraint's output size.
    - Required constraints from the constraint type (e.g., Min ≥ X, Max ≤ Y, Percentage = total × p).
    - Edit variables = total available size.
    - Run simplex; round outputs to integers; distribute rounding slack to Fill constraints first, then Percentage, then Min/Max.
-6. **Golden parity test**: assert `CassowarySolver` and `GreedySolver` produce identical outputs for the 5-phase test cases that exist in candy-sprinkles' Solver tests (port them as input fixtures). Where Cassowary's optimal solution differs from greedy's heuristic, document the case in `CALIBER_LEARNINGS.md`.
+6. **Golden parity test**: assert `CassowarySolver` and `GreedySolver` produce identical outputs for the 5-phase test cases that exist in sugar-style' Solver tests (port them as input fixtures). Where Cassowary's optimal solution differs from greedy's heuristic, document the case in `CALIBER_LEARNINGS.md`.
 7. Run phpunit + check-path-repos.
 
 ## Tester brief
 
-- **GreedySolver**: every test case from `candy-sprinkles/tests/Layout/SolverTest.php` (or wherever existing Solver tests live) — port them as fixtures.
+- **GreedySolver**: every test case from `sugar-style/tests/Layout/SolverTest.php` (or wherever existing Solver tests live) — port them as fixtures.
 - **CassowarySolver**: same fixtures + edit-variable smoke tests + stay-weight tie-break tests + the Badros & Borning 2001 paper's worked examples (height-allocation problem).
 - **Direction**: Vertical + Horizontal both exercised.
 - **Constraint types**: each type covered in isolation (one constraint × total size 100) AND in combinations (3 constraints competing for 100).
@@ -86,12 +86,12 @@ Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver 
   ## Summary
   - New foundation lib sugar-constraints with LayoutSolver interface.
   - CassowarySolver: simplex-based constraint solver (new, parity with ratatui).
-  - GreedySolver: ported from candy-sprinkles' existing 5-phase Solver; bit-identical output via golden fixture tests.
-  - candy-sprinkles' Solver is unchanged this PR; step-10 wires candy-sprinkles to consume sugar-constraints.
+  - GreedySolver: ported from sugar-style' existing 5-phase Solver; bit-identical output via golden fixture tests.
+  - sugar-style' Solver is unchanged this PR; step-10 wires sugar-style to consume sugar-constraints.
 
   ## Test plan
   - [x] vendor/bin/phpunit in sugar-constraints (≥95% coverage)
-  - [x] Golden parity tests: GreedySolver === existing candy-sprinkles Solver outputs
+  - [x] Golden parity tests: GreedySolver === existing sugar-style Solver outputs
   - [x] Cassowary correctness vs Badros & Borning 2001 worked examples
   - [x] php tools/check-path-repos.php
 

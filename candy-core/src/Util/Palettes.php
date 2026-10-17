@@ -6,13 +6,13 @@ namespace SugarCraft\Core\Util;
 
 /**
  * Raw-hex single-source-of-truth for the named theme colour schemes that
- * SugarCraft consumer libs (candy-sprinkles, candy-codeshot, sugar-vterm, …) all
+ * SugarCraft consumer libs (sugar-style, candy-codeshot, sugar-vterm, …) all
  * draw from.
  *
  * Keys are the CANONICAL COLOUR NAMES of each scheme (Dracula's `pink`,
  * One Dark's `magenta`, …) rather than semantic slots like `accent` or
  * `primary`. That is deliberate: different consumers bind the SAME named
- * colour onto DIFFERENT semantic roles — candy-sprinkles maps Dracula `pink`
+ * colour onto DIFFERENT semantic roles — sugar-style maps Dracula `pink`
  * to `accent` and `purple` to `primary`, while another lib may wire the same
  * `pink` somewhere else. Keying on the scheme's own colour names keeps this
  * class a neutral palette that every consumer can re-map for itself, so the

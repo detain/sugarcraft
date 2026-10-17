@@ -8,10 +8,10 @@ use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
+use SugarCraft\Style\Style;
 
 /**
  * Pure view function. Renders three panes side-by-side; the focused

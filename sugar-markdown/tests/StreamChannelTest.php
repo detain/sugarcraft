@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Pins for the E736 7.1/7.3 stream channel (salvage of the x7 lane):

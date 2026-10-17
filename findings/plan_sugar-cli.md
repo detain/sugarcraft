@@ -372,7 +372,7 @@ Remove unused path repositories:
 - `../sugar-cellbuffer` — no buffer usage
 - `../sugar-input` — no input handling
 
-Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (required deps), and `sugar-testing` (dev dep).
+Keep only repositories that are actually used: `candy-core`, `sugar-style` (required deps), and `sugar-testing` (dev dep).
 
 **Why:** Reduces maintenance burden and CI closure-checking noise. These entries were likely copy-paste scaffold artifacts.
 
@@ -387,7 +387,7 @@ Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (
 **Related code:** `sugar-cli/composer.json:50-107`
 
 **Investigation notes:**
-The `require` section only lists `candy-core` and `candy-sprinkles` as actual dependencies. The other path repos (`sugar-constraints`, `sugar-async`, `sugar-ansi-parser`, `sugar-input`, `sugar-cellbuffer`) are listed in `repositories[]` but not in `require[]`. These could be: (a) transitive deps of `candy-sprinkles` that need path repos for the closure, OR (b) scaffolding artifacts. The finding says "Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed." — need to verify whether any of these are transitive deps.
+The `require` section only lists `candy-core` and `sugar-style` as actual dependencies. The other path repos (`sugar-constraints`, `sugar-async`, `sugar-ansi-parser`, `sugar-input`, `sugar-cellbuffer`) are listed in `repositories[]` but not in `require[]`. These could be: (a) transitive deps of `sugar-style` that need path repos for the closure, OR (b) scaffolding artifacts. The finding says "Unless they are transitive dependencies of `sugar-style` or `candy-core`, they should be removed." — need to verify whether any of these are transitive deps.
 
 ---
 

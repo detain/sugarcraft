@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The SGR-only rule behind the {@see PosterCard::withStyledTitle()} trust boundary.
@@ -211,10 +211,10 @@ final class AnsiGuardTest extends TestCase
         }
     }
 
-    public function testStylingProducedByCandySprinklesPassesTheGuard(): void
+    public function testStylingProducedBySugarStylePassesTheGuard(): void
     {
         // The guard exists to stop untrusted bytes, not to punish this ecosystem's
-        // own renderer: whatever candy-sprinkles emits must always be acceptable,
+        // own renderer: whatever sugar-style emits must always be acceptable,
         // across the colour spaces it supports.
         $titles = [
             Style::new()->bold()->render('Blade Runner'),

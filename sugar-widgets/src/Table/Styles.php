@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Widgets\Table;
 
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Styles for {@see Table}: one slot per visible table element.

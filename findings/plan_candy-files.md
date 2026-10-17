@@ -782,7 +782,7 @@ The `sugar-async` path repository is listed in `repositories` but `sugarcraft/su
     "require": {
         "php": ">=8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-async": "dev-master",
         "react/promise": "^3.3"
     }

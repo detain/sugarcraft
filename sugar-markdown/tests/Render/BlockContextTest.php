@@ -6,7 +6,7 @@ namespace SugarCraft\Markdown\Tests\Render;
 
 use SugarCraft\Markdown\Render\BlockContext;
 use SugarCraft\Markdown\Render\BlockKind;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class BlockContextTest extends TestCase

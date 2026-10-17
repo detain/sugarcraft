@@ -6,7 +6,7 @@ namespace SugarCraft\ScriptUi\Log;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\ScriptUi\Lang;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Severity levels for {@see \SugarCraft\ScriptUi\Command\LogCommand}, with

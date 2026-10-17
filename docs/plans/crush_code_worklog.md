@@ -1082,7 +1082,7 @@ whole-file add.
 ### UNCOMMITTED: UI #37 (P8.1 diff gutter + P8.5 adaptive theme)
 
 Reviewed; in a fix round for a **real render-invariant break** (the PR #1403
-class): `Width::string("\t") === 0` but candy-sprinkles' `Style::render()`
+class): `Width::string("\t") === 0` but candy-sprinkles' `Style::render()` <!-- @rename-keep -->
 paints a tab as 4 spaces, so a Go/Makefile diff at `cols: 40` emits 48-cell
 rows. Pre-existing, but the gutter amplifies it by its own width. Also fixing a
 latent float→`TypeError` inside `view()` (would kill the Program with the
@@ -8445,8 +8445,8 @@ terminal width — 215 for prose, 406 for CJK — which is itself the proof that
 The brief I wrote said the terminal soft-wraps the over-wide row and candy-core's absolute `cursorTo()`
 then paints later rows at stale coordinates. **The implementer reports that is not what the hosted path
 does**: `Tui/Components/ChatPane.php` renders the body inside `Style::new()->width($width)`, and
-candy-sprinkles' `width()` TRUNCATES via `Width::truncateAnsi`
-(`candy-sprinkles/src/Style.php:1000-1004`); `Tui/Renderer.php:394` then `clipWidth()`s the whole
+candy-sprinkles' `width()` TRUNCATES via `Width::truncateAnsi` <!-- @rename-keep -->
+(`candy-sprinkles/src/Style.php:1000-1004`); `Tui/Renderer.php:394` then `clipWidth()`s the whole <!-- @rename-keep -->
 composed frame (PR #1403's invariant). So the terminal never receives an over-wide row on the live path
 and never soft-wraps. The user's three lines still reproduce at 100 cols, by a simpler mechanism: the
 paragraph is cut at the pane edge, the blank line is the Markdown paragraph break, and the "unrelated"
@@ -8592,7 +8592,7 @@ invariant unconditionally while sweeping only 8/20/40. Filed **E48**.
 #### Claims checked, including mine
 
 - **My soft-wrap diagnosis: the implementer's correction HOLDS.** `ChatPane.php:129` `->width($width)`,
-  candy-sprinkles `Style.php:1000-1004` `Width::truncateAnsi`, `Tui/Renderer.php:394` `clipWidth`. And
+  candy-sprinkles `Style.php:1000-1004` `Width::truncateAnsi`, `Tui/Renderer.php:394` `clipWidth`. And <!-- @rename-keep -->
   usefully: `ChatPane.php:112` routes through `LiveRenderer::renderView($a->chat->withSize(...))`, so
   W1's fix does apply on the hosted path. My diagnosis was wrong and the fix location was right.
 - **The highest-severity hazard I named does not arise.** No sentinel pairs exist in the fitted string —
@@ -10357,7 +10357,7 @@ flag 2 → 2.
 
 **A shared constant makes two measures AGREE; it does not make either RIGHT.** Every tab assertion the
 lane added was written in terms of `Width::TAB_WIDTH`, so all of them held for any value it took —
-`TAB_WIDTH = 4 → 8` was caught only by a pre-existing *candy-sprinkles* test, while the lib that owns
+`TAB_WIDTH = 4 → 8` was caught only by a pre-existing *candy-sprinkles* test, while the lib that owns <!-- @rename-keep -->
 the constant pinned nothing. Now pinned as a literal where it is declared.
 
 **Two of the three lanes shipped a test that proved nothing, and a mutation caught each — not a review.**
@@ -10527,7 +10527,7 @@ review → fix. **All three entered the fix stage.** Merged with zero conflicts 
 no two lanes open the same file, and that held exactly as designed.
 
 Merged total **predicted at 8978** from lane `a`'s +61 and lane `c`'s +8 (lane `b` touches `candy-core`
-and `candy-sprinkles`, not this suite) and **matched to the assertion**: 8978 / 105031 / 1 skipped / rc 0.
+and `candy-sprinkles`, not this suite) and **matched to the assertion**: 8978 / 105031 / 1 skipped / rc 0. <!-- @rename-keep -->
 
 **The review stage paid for itself in all three lanes, and twice it falsified the lane's own commit
 message.** Lane `b` had shipped fuzz figures — `989 over-runs / 3,862 under-runs` — that were

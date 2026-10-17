@@ -23,7 +23,7 @@ prompt_kit/findings/btop-upstream-prs.md. Conventions: AGENTS.md + candy-top/CAL
 - Do NOT touch tests/fixtures/frames/* or Panels::placeholders() (frozen chrome goldens).
 - Library primitives to use (already shipped, see their READMEs): sugar-dashboard DualSampleGraph (incl. block2
   symbols, graph_bg underlay, invert), BrailleCanvas gradient, Meter (position gradient), NetAutoScale,
-  GradientStore/ThemeGradientStore, DistanceFade, ProcRowComposer; candy-sprinkles Border::withTitle/junctions;
+  GradientStore/ThemeGradientStore, DistanceFade, ProcRowComposer; sugar-style Border::withTitle/junctions;
   sugar-bits TextEdit/OptionRow. Theme colors via candy-top/src/Theme. Render into the Region you get in paint(). <!-- @rename-keep historical provenance -->
 - TEA purity: no file/clock reads in update()/paint(); sampling only inside collect() Cmds. Read options from
   PanelContext->config every call (never cache config). Option-changing keys return PanelResult $set (synchronous).

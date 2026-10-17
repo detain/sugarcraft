@@ -76,7 +76,7 @@ interface Backend {
 
 - Uses `SugarCraft\Markdown\Renderer` (SugarMarkdown) for markdown
 - User turns rendered raw, assistant turns rendered as markdown
-- Simple box layout with border using CandySprinkles
+- Simple box layout with border using SugarStyle
 
 ---
 
@@ -404,7 +404,7 @@ interface Backend {
 ### 8.4 PHP Libraries Used
 
 - **SugarMarkdown:** Markdown rendering (league/commonmark wrapper)
-- **CandySprinkles:** Terminal styling (borders, padding)
+- **SugarStyle:** Terminal styling (borders, padding)
 - **SugarWidgets:** TUI components
 - **ReactPHP:** Async promise handling
 

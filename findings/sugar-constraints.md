@@ -12,7 +12,7 @@
 
 ## Summary
 
-`sugar-constraints` is a constraint-based layout solver for terminal grid layouts, porting ratatui's layout system to PHP. It provides two solvers: `GreedySolver` (deterministic 5-phase fallback) and `CassowarySolver` (experimental simplex prototype). The library is a foundation package consumed by `candy-sprinkles`, `sugar-widgets`, and `sugar-forms`.
+`sugar-constraints` is a constraint-based layout solver for terminal grid layouts, porting ratatui's layout system to PHP. It provides two solvers: `GreedySolver` (deterministic 5-phase fallback) and `CassowarySolver` (experimental simplex prototype). The library is a foundation package consumed by `sugar-style`, `sugar-widgets`, and `sugar-forms`.
 
 The code is generally well-structured with proper input validation on constraint types, but has several significant issues ranging from a known cycling bug in the CassowarySolver simplex implementation to interface design problems and async gaps.
 
@@ -297,7 +297,7 @@ The library is positioned as part of a TUI ecosystem but has no direct integrati
 
 ### With Other SugarCraft Libraries
 
-1. **candy-sprinkles**: The README mentions `sugar-constraints` replaces the layout logic in `candy-sprinkles`. Need to verify API compatibility.
+1. **sugar-style**: The README mentions `sugar-constraints` replaces the layout logic in `sugar-style`. Need to verify API compatibility.
 
 2. **sugar-forms**: Uses `sugar-constraints` for form layout. The `Constraint` factory API is clean and should work well.
 

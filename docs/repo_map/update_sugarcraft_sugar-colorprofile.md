@@ -789,7 +789,7 @@ sugar-colorprofile is a solid, standards-compliant port of charmbracelet/colorpr
 
 1. **Perceptual color conversion (CIELAB)** — Would differentiate from Go upstream by using more accurate color science
 
-2. **Unified theming** — Integrate with candy-sprinkles for a complete theming system
+2. **Unified theming** — Integrate with sugar-style for a complete theming system
 
 3. **ReactPHP integration** — For long-running async PHP applications
 

@@ -10,7 +10,7 @@ use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Charts\Legend\Legend;
 
 /**

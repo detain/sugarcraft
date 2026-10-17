@@ -448,7 +448,7 @@ Critical issue: 15k items causes 1-2s render lag. Root causes: O(N) conversion t
 
 ## textualize #6381: GC Stuttering with MarkdownViewer
 
-MarkdownViewer creates hundreds of `MarkdownBlock` child widgets, each holding 3+ reference cycles through Styles objects, causing Python gen2 GC pauses of 50-200ms. **Lesson for candy-sql**: The `Style` objects in candy-sprinkles should not hold strong references to parent App/Model objects. Use weak references or clear parent references on render completion.
+MarkdownViewer creates hundreds of `MarkdownBlock` child widgets, each holding 3+ reference cycles through Styles objects, causing Python gen2 GC pauses of 50-200ms. **Lesson for candy-sql**: The `Style` objects in sugar-style should not hold strong references to parent App/Model objects. Use weak references or clear parent references on render completion.
 
 ## bubble-table: Fuzzy Filtering (bubbles List + sahilm/fuzzy)
 

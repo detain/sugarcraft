@@ -110,7 +110,7 @@ own still needs a two-word name of its own.
 
 Both sides, for the record: **for `Sugar-`**, candy-top ships no reusable
 primitives — every rendering gap it needed was closed in `sugar-dashboard`,
-`sugar-charts`, `sugar-widgets` and `candy-sprinkles`, and the app only
+`sugar-charts`, `sugar-widgets` and `sugar-style`, and the app only
 assembles them, which is exactly the `Sugar-` "components / apps" role.
 **For `Candy-`**, the AGENTS.md naming line gives `Candy-` to
 "foundation / **system**", and a system monitor is about as literally
@@ -150,7 +150,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarFocus** | sugar + focus = the focus-management component. dependency-free ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here. || **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
 | **SugarFuzzy** | candy + fuzzy = fuzzy string matching with scored matched indices. extracted from sugar-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type). || **SugarCellBuffer** | candy + buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |
 | **SugarAsync** | candy + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across candy-core, sugar-forms, candy-wish. |
-| **SugarConstraints** | candy + layout = constraint-based layout solver. Implements the Cassowary constraint system (Badros & Borning, 2001) behind a LayoutSolver interface: CassowarySolver (simplex) + GreedySolver (5-phase fallback from candy-sprinkles). |
+| **SugarConstraints** | candy + layout = constraint-based layout solver. Implements the Cassowary constraint system (Badros & Borning, 2001) behind a LayoutSolver interface: CassowarySolver (simplex) + GreedySolver (5-phase fallback from sugar-style). |
 | **SugarTesting** | candy + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
 | **SugarInput** | candy + input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
 | **SugarMouse** | plain descriptive — took this name in the 2026-10 rename; the “candy + mouse” wordplay retired with it. Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |

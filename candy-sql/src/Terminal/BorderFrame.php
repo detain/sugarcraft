@@ -10,7 +10,7 @@ use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Pane;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Wraps TUI content in a full terminal frame with title bar and status bar.

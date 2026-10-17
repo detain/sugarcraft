@@ -2,7 +2,7 @@
 
 **Branch:** `ai/sugar-cellbuffer-new`
 **Depends on:** step-00 ✅ (independent of step-01 — buffer/cell don't need the parser)
-**Blocks:** step-10 (candy-sprinkles uses sugar-cellbuffer), step-14/15/16/17/18 (UI consumers), step-26 (Buffer::diff impl), step-27 (consumers of diff)
+**Blocks:** step-10 (sugar-style uses sugar-cellbuffer), step-14/15/16/17/18 (UI consumers), step-26 (Buffer::diff impl), step-27 (consumers of diff)
 
 ## Goal
 
@@ -20,7 +20,7 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
 - `sugar-cellbuffer/src/Cell.php` — readonly value object.
 - `sugar-cellbuffer/src/Position.php` — readonly (row, col).
 - `sugar-cellbuffer/src/Region.php` — readonly (Position, width, height).
-- `sugar-cellbuffer/src/Style.php` — minimal style record (fg, bg, attrs bitmask); the rich `SugarCraft\Sprinkles\Style` keeps its place in candy-sprinkles.
+- `sugar-cellbuffer/src/Style.php` — minimal style record (fg, bg, attrs bitmask); the rich `SugarCraft\Style\Style` keeps its place in sugar-style.
 - `sugar-cellbuffer/src/Hyperlink.php` — readonly (url, id).
 - `sugar-cellbuffer/tests/BufferTest.php`, `CellTest.php` (sanity).
 
@@ -73,7 +73,7 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
 ## Scribe brief
 
 - README: Quickstart constructing a Buffer, setting cells, blitting; cite the future `diff()` work pointing at step-26.
-- CALIBER_LEARNINGS: one entry — "Buffer/Cell are intentionally minimal — rich styling lives in candy-sprinkles, diff() ships in step-26. Don't put rendering logic here."
+- CALIBER_LEARNINGS: one entry — "Buffer/Cell are intentionally minimal — rich styling lives in sugar-style, diff() ships in step-26. Don't put rendering logic here."
 - MATCHUPS row, PROJECT_NAMES Candy table row, root README, docs/index.html tile, docs/lib/sugar-cellbuffer.html.
 
 ## Ship brief

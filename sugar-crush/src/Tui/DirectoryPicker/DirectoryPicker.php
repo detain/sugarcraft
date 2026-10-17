@@ -12,8 +12,8 @@ use SugarCraft\Crush\Support\Directories\DirectoryBrowser;
 use SugarCraft\Crush\Support\Directories\DirectoryBrowserException;
 use SugarCraft\Crush\Support\Directories\DirectoryListing;
 use SugarCraft\Crush\Theme;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 /**
  * The `/new` folder picker: choose the directory a new session starts in.

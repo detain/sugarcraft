@@ -24,7 +24,7 @@ components, and apps — runs async on a ReactPHP event loop.
 
 ```sh
 composer require sugarcraft/sugarcraft        # umbrella metapackage — every library
-composer require sugarcraft/candy-sprinkles   # …or just the package you need
+composer require sugarcraft/sugar-style   # …or just the package you need
 ```
 
 ## What's in the box
@@ -40,7 +40,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-async.png" width="48" alt=""> | **[SugarAsync](sugar-async/)** | Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). |
 | <img src="media/icons/sugar-input.png" width="48" alt=""> | **[SugarInput](sugar-input/)** | Terminal input decoder — raw TTY bytes to typed events: keyboard (Kitty progressive protocol, xterm modifyOtherKeys, legacy encodings) and mouse (SGR, urxvt, X10) via `InputDriver` / `EscapeDecoder`. |
 | <img src="media/icons/sugar-mouse.png" width="48" alt=""> | **[SugarMouse](sugar-mouse/)** | Mouse hit-testing — mark rendered regions, scan an event, get the zone back; `ZoneClickTracker` for press/release dedupe, plus the absorbed bubblezone-style `Zones` Manager (hover / drag / multi-click) under `SugarCraft\Mouse\Zones`. Owned per consumer or via `Zones\Manager` global. |
-| <img src="media/icons/candy-sprinkles.png" width="48" alt=""> | **[CandySprinkles](candy-sprinkles/)** | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor). |
+| <img src="media/icons/sugar-style.png" width="48" alt=""> | **[SugarStyle](sugar-style/)** | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor). |
 | <img src="media/icons/sugar-testing.png" width="48" alt=""> | **[SugarTesting](sugar-testing/)** | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | <img src="media/icons/sugar-spring.png" width="48" alt=""> | **[SugarSpring](sugar-spring/)** | Damped spring physics + Newtonian projectile simulation. |
 | <img src="media/icons/sugar-fuzzy.png" width="48" alt=""> | **[SugarFuzzy](sugar-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |

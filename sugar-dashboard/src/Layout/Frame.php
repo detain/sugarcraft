@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Layout;
 
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\VAlign;
-use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\VAlign;
+use SugarCraft\Style\Layout;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\Drawable;

@@ -8,7 +8,7 @@ use SugarCraft\Widgets\Help\Help;
 use SugarCraft\Widgets\Help\Styles;
 use SugarCraft\Widgets\Key\Binding;
 use SugarCraft\Widgets\Key\KeyMap;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class FakeKeyMap implements KeyMap

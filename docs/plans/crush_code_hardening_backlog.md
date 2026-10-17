@@ -4304,7 +4304,7 @@ composed label — everything after the styled dot, so `truncate()` cannot cut a
 to `$width - rightWidth - 1`. The body therefore fits by construction and the wrap that produced the
 over-run never happens — **fits by `Width::string`**, which is the qualification that matters and was
 missing. `Width::string` is not the measure the box ends up using: `Style::render()` expands a tab to
-four spaces (`candy-sprinkles/src/Style.php:969-970`) **after** the clamp has scored it 0. Delta-
+four spaces (`candy-sprinkles/src/Style.php:969-970`) **after** the clamp has scored it 0. Delta- <!-- @rename-keep -->
 debugged to a two-codepoint minimum, `operation = "\t" . U+1F3FD` makes the fixed pane return
 `$width + 6` at **117 of the 121 widths 20-140**. The pre-clamp pane at `70a4efb3` returns `$width + 6`
 at **120** of the same 121, so this is not a regression and E64 stays fixed — but "by construction" is
@@ -4866,7 +4866,7 @@ Foundation-level and **not fixed here**.
 
 **What.** `Width::string("\t")` returns **0**. `Style::render()` replaces every tab with
 `str_repeat(' ', $tabWidth)` — default 4 — and does it *before* any of its own width measurement
-(`candy-sprinkles/src/Style.php:969-970`, comment: "Tab expansion (before any width measurements)").
+(`candy-sprinkles/src/Style.php:969-970`, comment: "Tab expansion (before any width measurements)"). <!-- @rename-keep -->
 So a caller that budgets with `Width` and lays out with `Style` is using two measures that disagree by
 4 cells per tab, and the disagreement is invisible to every assertion written in terms of `Width`.
 
@@ -4877,7 +4877,7 @@ re-deriving the tab rule for itself — the mistake `AgentViewPane` already made
 table.
 
 **Where.** `candy-core/src/Util/Width.php` (`string()`, and every measure built on it) against
-`candy-sprinkles/src/Style.php:969-970`.
+`candy-sprinkles/src/Style.php:969-970`. <!-- @rename-keep -->
 
 **Measured consequence, in the pane E64 was fixed in.** Delta-debugged to a **two-codepoint** minimum:
 `operation = "\t" . U+1F3FD` (a TAB plus a lone skin-tone modifier) makes the **fixed**
@@ -4904,7 +4904,7 @@ renders a tab-bearing string through `Style` and asserts `Width::string()` of th
 
 Authority chosen: **`Width::string()` charges the tab.** Blast radius measured both ways across the
 11 libs that reference `truncateAnsi`, plus `sugar-dash`. Charging a tab 4 cells in `Width`: **0 test <!-- @rename-keep -->
-failures**. Removing the expansion from `Style::render()`: **2 failures in `candy-sprinkles`**, and it
+failures**. Removing the expansion from `Style::render()`: **2 failures in `candy-sprinkles`**, and it <!-- @rename-keep -->
 deletes the effect of a documented public API (`tabWidth()` / `getTabWidth()` / `unsetTabWidth()`,
 mirroring lipgloss) — a removal, which this project's rules forbid in favour of wiring.
 
@@ -4923,7 +4923,7 @@ a space is not, and does. So `"\t" . U+1F3FD` is `TAB_WIDTH + 2` cells while the
 same two-codepoint input this finding delta-debugged. Measured over 4,797 tab-bearing random strings,
 `Style::render()` moving `Width::string()`: **4,797/4,797 (100%) at `8add627b` -> 568/4,797 (11.84%)**.
 Only not rewriting the content closes it, which is `Style::tabWidth(0)`. Both the property and the
-residue are pinned in `candy-sprinkles/tests/StyleTest.php`.
+residue are pinned in `candy-sprinkles/tests/StyleTest.php`. <!-- @rename-keep -->
 
 🔴 **CORRECTION — "all 568 are that one shape, 0 unexplained" IS FALSE, and the half it misses is the
 dangerous half.** Found by the round-40 reviewer, independently reproduced by the supervisor. The
@@ -4976,7 +4976,7 @@ corruption in this tree (the diff renderer paints one line per row), which is th
 rather than defer. It is bounded in practice only by how rare a tab-then-ZWJ is in a pane string.
 
 **Where.** `candy-core/src/Util/Width.php::compute()` (the ZWJ branch), against
-`candy-sprinkles/src/Style.php::render()`.
+`candy-sprinkles/src/Style.php::render()`. <!-- @rename-keep -->
 
 **Not a regression.** The pre-fix code scores these inputs identically. E68 and E69 stay fixed.
 
@@ -5018,7 +5018,7 @@ as a seam on its docblock plus a `phpstan.neon` `ignoreErrors` entry, following 
 `trait.unused` precedent. **This also unbroke a red CI job**: `candy-core` ships `phpstan.neon` at level
 5 and CI runs it per-lib, so the lane was briefly shipping an unreferenced private method.
 
-candy-core: 799 tests / 7,210 assertions / 25 skipped / rc 0 (from 795 / 7,181). candy-sprinkles green.
+candy-core: 799 tests / 7,210 assertions / 25 skipped / rc 0 (from 795 / 7,181). candy-sprinkles green. <!-- @rename-keep -->
 
 ### E74 [CLOSED] — `sugar-crush/README.md` repeats a project-tier claim the source records as measured FALSE
 
@@ -18142,7 +18142,7 @@ and does not exist in this package.
 **Round 58, lane a. REPORTED, deliberately NOT fixed.** `src/Workflows/Workflow.php::mutate()` spells
 the field as `$stopOnFirstFailure ?? $this->stopOnFirstFailure`, so passing `false` is
 indistinguishable from passing nothing. Every other nullable field in this tree pairs with a
-`bool $XSet` sentinel for exactly this reason (see `candy-sprinkles/src/Style.php`, the canonical
+`bool $XSet` sentinel for exactly this reason (see `candy-sprinkles/src/Style.php`, the canonical <!-- @rename-keep -->
 `mutate()`).
 
 It is currently **unreachable** — no wither passes the parameter — so this is dormant, not broken, and

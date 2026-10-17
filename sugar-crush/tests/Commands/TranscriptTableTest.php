@@ -250,7 +250,7 @@ final class TranscriptTableTest extends TestCase
 
     /**
      * A floored column keeps its cells and the free-text columns pay. This is
-     * the difference from {@see \SugarCraft\Sprinkles\Table\Table::width()}'s
+     * the difference from {@see \SugarCraft\Style\Table\Table::width()}'s
      * proportional shrink, which was measured clipping `2026-08-22 03:00` to
      * `2026-08-22 03`.
      */

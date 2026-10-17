@@ -3,7 +3,7 @@
 **Date:** 2026-05-27
 **Status:** 🟢 v1.0 Ready
 **Upstream:** [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) (Go)
-**Dependencies:** `candy-core`, `candy-sprinkles` (candy-scriptui optional for VS mode)
+**Dependencies:** `candy-core`, `sugar-style` (candy-scriptui optional for VS mode)
 
 ---
 

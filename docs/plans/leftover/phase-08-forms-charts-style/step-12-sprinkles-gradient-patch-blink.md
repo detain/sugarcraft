@@ -1,6 +1,6 @@
-# Step 08.12 — candy-sprinkles BorderGradientBlend 5-color + Style::patch + rapid blink
+# Step 08.12 — sugar-style BorderGradientBlend 5-color + Style::patch + rapid blink
 
-**Source:** `leftover_updates_later.md` candy-sprinkles #5, #7, #8
+**Source:** `leftover_updates_later.md` sugar-style #5, #7, #8
 **Branch:** `ai/sprinkles-gradient-patch-blink`
 
 ## Deliverable
@@ -13,9 +13,9 @@
 
 **Modify:**
 
-- `candy-sprinkles/src/Border/BorderGradientBlend.php` — accept up to
+- `sugar-style/src/Border/BorderGradientBlend.php` — accept up to
   5 colors; interpolate.
-- `candy-sprinkles/src/Style.php` — `patch()` + `withRapidBlink(bool)`.
+- `sugar-style/src/Style.php` — `patch()` + `withRapidBlink(bool)`.
 
 ## Tests
 
@@ -23,7 +23,7 @@
 
 ## Acceptance
 
-- `cd candy-sprinkles && vendor/bin/phpunit` green.
+- `cd sugar-style && vendor/bin/phpunit` green.
 
 ---
 

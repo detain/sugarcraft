@@ -85,7 +85,7 @@ final class GreedySolver implements LayoutSolver
      * @param int  $reserveLead       fixed cells reserved before the first region — models a leading margin
      *                                outside the content span (sugar-panels border pad).
      *
-     * Public (not private) because candy-sprinkles' SolverFactory and
+     * Public (not private) because sugar-style' SolverFactory and
      * CassowarySolver already construct this via `new GreedySolver()`; the
      * defaults preserve that legacy zero-arg call byte-for-byte. Prefer the
      * ::new()/::greedy()/::compat() factories for new code.
@@ -219,7 +219,7 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * Static solver — kept for golden-test parity with candy-sprinkles. Always
+     * Static solver — kept for golden-test parity with sugar-style. Always
      * uses the DEFAULT (floor / remainder-first / truncating) behaviour; the
      * boxer-compat toggles are reachable only via an instance.
      *

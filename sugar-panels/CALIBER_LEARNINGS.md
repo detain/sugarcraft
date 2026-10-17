@@ -2,7 +2,7 @@
 
 ## pattern:sprinkles-composition
 
-**sugar-panels composes candy-sprinkles Border/Style as leaf-node state.**
+**sugar-panels composes sugar-style Border/Style as leaf-node state.**
 
 When adopting canonical styling primitives into a leaf-level library that
 does not depend on the full TUI rendering stack, compose the foreign
@@ -18,7 +18,7 @@ public readonly ?VAlign  $alignV;
 ```
 
 This keeps sugar-panels decoupled from the rendering internals of
-candy-sprinkles while still producing compatible border characters and
+sugar-style while still producing compatible border characters and
 style attributes.
 
 ## pattern:xset-sentinel
@@ -26,7 +26,7 @@ style attributes.
 **Paired `bool $XSet` sentinel to distinguish "do not change" from explicit clear.**
 
 The house law (AGENTS: "nullable fields use a paired bool $XSet sentinel",
-canonical candy-sprinkles `Style`, trait candy-core `Concerns\Mutable`) is that
+canonical sugar-style `Style`, trait candy-core `Concerns\Mutable`) is that
 every clearable field of `Node::with()` carries a companion flag:
 
 ```php
@@ -60,7 +60,7 @@ no border AND no implicit style must use `->withBorder(false)->withBorderStyle(n
 
 ## gotcha:margin-sugar-panels-specific
 
-**`withMargin()` is sugar-panels-specific. candy-sprinkles Style does not
+**`withMargin()` is sugar-panels-specific. sugar-style Style does not
 carry margin as a first-class concept.**
 
 Margin is implemented directly on Node rather than delegated to Style,

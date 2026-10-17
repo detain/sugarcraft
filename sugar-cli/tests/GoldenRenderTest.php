@@ -14,7 +14,7 @@ use SugarCraft\Cli\StatusLine;
 use SugarCraft\Cli\Stage;
 use SugarCraft\Cli\Theme;
 use SugarCraft\Cli\Tests\Support\SandboxTerminalColumns;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 use SugarCraft\Testing\Snapshot\Assertions;
 
 /**

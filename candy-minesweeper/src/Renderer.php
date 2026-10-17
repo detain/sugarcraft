@@ -9,8 +9,8 @@ use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style as SprinklesStyle;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style as SugarStyle;
 
 /**
  * Pure view function: takes a {@see Game} and returns the framebuffer
@@ -74,7 +74,7 @@ final class Renderer
      */
     private static function frame(Game $g, string $interior): string
     {
-        $framed = SprinklesStyle::new()
+        $framed = SugarStyle::new()
             ->border(Border::rounded())
             ->padding(0, 1)
             ->render($interior);
@@ -82,7 +82,7 @@ final class Renderer
         $status = self::status($g->board, $g->elapsed());
         $help   = "↑ ↓ ← →  move  ·  space  reveal  ·  f  flag  ·  r  restart  ·  q  quit";
         return $framed . "\n " . $status . "\n " .
-               SprinklesStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
+               SugarStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
     }
 
     /**
@@ -192,16 +192,16 @@ final class Renderer
     private static function status(Board $b, ?float $elapsed): string
     {
         if ($b->exploded) {
-            return SprinklesStyle::new()->foreground(Color::hex('#ff5f87'))->bold()
+            return SugarStyle::new()->foreground(Color::hex('#ff5f87'))->bold()
                 ->render('💥 boom — press r to restart');
         }
         if ($b->isWon()) {
-            return SprinklesStyle::new()->foreground(Color::hex('#6ee7b7'))->bold()
+            return SugarStyle::new()->foreground(Color::hex('#6ee7b7'))->bold()
                 ->render('★ cleared — press r to play again');
         }
         $remaining = max(0, $b->mineCount - $b->flagCount());
         $time = $elapsed !== null ? self::formatTime((int) $elapsed) : '0:00';
-        return SprinklesStyle::new()->foreground(Color::hex('#a78bfa'))
+        return SugarStyle::new()->foreground(Color::hex('#a78bfa'))
             ->render("mines: {$b->mineCount}  ·  flags: {$b->flagCount()}  ·  remaining: {$remaining}  ·  time: {$time}");
     }
 

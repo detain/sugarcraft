@@ -2,7 +2,7 @@
 
 **sugar-mouse** is a complete, production-ready PHP port of lrstanley/bubblezone — providing invisible ANSI APC marker-based mouse zone tracking for TUI applications. It solves the fundamental problem of routing mouse events to the correct UI component without requiring every component to manually track its screen coordinates.
 
-**Ecosystem positioning:** sugar-mouse sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `candy-sprinkles` (styling system), and `sugar-widgets` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
+**Ecosystem positioning:** sugar-mouse sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `sugar-style` (styling system), and `sugar-widgets` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
 
 **Biggest opportunity areas:**
 
@@ -136,7 +136,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 1. **Elegant problem decomposition** — Components call `mark(id, content)`; root calls `scan(frame)` once; handlers call `anyInBounds()`. No coordinate math in components.
 
-2. **Zero-width markers are layout-safe** — APC sequences don't affect `Width::string()` measurement from candy-core/candy-sprinkles. Integration tested and documented.
+2. **Zero-width markers are layout-safe** — APC sequences don't affect `Width::string()` measurement from candy-core/sugar-style. Integration tested and documented.
 
 3. **Synchronous scan is PHP-idiomatic** — No goroutine/channel complexity. Zone map ready immediately after `scan()` returns.
 
@@ -499,12 +499,12 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 
 ## 1. Separate Zone Logic from Styling
 
-**Current issue:** Tight coupling risk with candy-sprinkles. The APC marker approach works with current styling but could break if styling library changes rendering approach (like lipgloss v2 canvas).
+**Current issue:** Tight coupling risk with sugar-style. The APC marker approach works with current styling but could break if styling library changes rendering approach (like lipgloss v2 canvas).
 
 **Improvement:**
 
 - Keep zone scanning strictly isolated from styling
-- Do not depend on any internal behavior of candy-sprinkles
+- Do not depend on any internal behavior of sugar-style
 - Test integration explicitly but keep packages loosely coupled
 - Document that coupling is intentional and tested
 
@@ -694,13 +694,13 @@ $zone = $manager->zone('my-btn')
 - Edge case: malformed escape sequences, partial markers, binary data
 - Would catch parser edge cases before users encounter them
 
-## 3. Integration Tests with candy-sprinkles
+## 3. Integration Tests with sugar-style
 
 **Current:** Tests use raw styled output but don't exercise full integration.
 
 **Opportunity:**
 
-- Add integration tests that render actual candy-sprinkles components with zone markers
+- Add integration tests that render actual sugar-style components with zone markers
 - Verify interaction between zone scanning and styling library
 - Test with `Border::rounded()`, `Style::new()->padding()`, etc.
 
@@ -719,13 +719,13 @@ $zone = $manager->zone('my-btn')
 - Provide `WithZone` trait for components that want zone support
 - Simplifies building interactive components
 
-## 2. candy-sprinkles Canvas Overlay
+## 2. sugar-style Canvas Overlay
 
-**Current:** No canvas system in candy-sprinkles.
+**Current:** No canvas system in sugar-style.
 
 **Opportunity:**
 
-- If/when candy-sprinkles adds canvas overlay, zone scanning must work with it
+- If/when sugar-style adds canvas overlay, zone scanning must work with it
 - Do NOT tightly couple — keep scanning logic independent of rendering
 - Test explicitly when canvas is added
 
@@ -810,7 +810,7 @@ $zone = $manager->zone('my-btn')
 **Lessons learned:**
 
 - Keep zone logic strictly isolated from styling logic
-- Do not depend on internal behavior of candy-sprinkles
+- Do not depend on internal behavior of sugar-style
 - Prepare for potential future changes in rendering approach
 - The marker-based approach may not be viable for all future rendering architectures
 

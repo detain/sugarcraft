@@ -25,8 +25,8 @@ use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Markdown\Render\SectionStream;
 use SugarCraft\Markdown\Renderer as Markdown;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\Veil;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -3592,7 +3592,7 @@ final class Renderer
      * by the TERMINAL, every row after it slides down, and the repaint lands
      * on stale coordinates — the shape of the "text ends up in the status bar"
      * class of bug. On the hosted shell path the same over-wide row instead
-     * hits `ChatPane`'s `Style::width()`, which truncates (candy-sprinkles
+     * hits `ChatPane`'s `Style::width()`, which truncates (sugar-style
      * truncates for `width()`, it does not wrap), so the reply is silently cut
      * off mid-sentence — the reported symptom.
      *
@@ -5175,7 +5175,7 @@ final class Renderer
 
         // TAB has to be expanded HERE, before anything measures a row.
         // candy-core's Sanitize::untrusted() deliberately preserves TAB, and
-        // Width::string("\t") is 0 - but candy-sprinkles' Style::render()
+        // Width::string("\t") is 0 - but sugar-style' Style::render()
         // expands every tab to tabWidth spaces before it does its own width
         // work (Style.php:969). So a tab-indented row (Go, Makefiles, C) is
         // budgeted 0 cells and painted 4, and the frame emits a row wider than

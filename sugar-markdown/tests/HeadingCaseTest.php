@@ -7,7 +7,7 @@ namespace SugarCraft\Markdown\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * `headingCase` transforms the heading's prose, never the bytes the

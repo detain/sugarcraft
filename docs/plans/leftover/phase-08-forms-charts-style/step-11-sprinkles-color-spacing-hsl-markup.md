@@ -1,6 +1,6 @@
-# Step 08.11 — candy-sprinkles Color string parse + spacing + HSL + markup parser
+# Step 08.11 — sugar-style Color string parse + spacing + HSL + markup parser
 
-**Source:** `leftover_updates_later.md` candy-sprinkles #2, #3, #4, #6
+**Source:** `leftover_updates_later.md` sugar-style #2, #3, #4, #6
 **Branch:** `ai/sprinkles-color-misc`
 
 ## Deliverable
@@ -20,13 +20,13 @@ Four enhancements:
 
 - `\SugarCraft\Core\Util\Color` — `parse(string)` accepts named colors
   (CSS names + ANSI 8-color names).
-- `\SugarCraft\Sprinkles\Layout` — `join*` methods accept
+- `\SugarCraft\Style\Layout` — `join*` methods accept
   `?int $spacing = null` parameter.
 
 **Create:**
 
-- `candy-sprinkles/src/Hsl.php` — `Color::hsl()` factory.
-- `candy-sprinkles/src/Markup.php` — Rich-style markup parser.
+- `sugar-style/src/Hsl.php` — `Color::hsl()` factory.
+- `sugar-style/src/Markup.php` — Rich-style markup parser.
 
 ## Tests
 
@@ -34,7 +34,7 @@ Four enhancements:
 
 ## Acceptance
 
-- `cd candy-sprinkles && vendor/bin/phpunit --filter "ColorParse|LayoutSpacing|Hsl|Markup"` green.
+- `cd sugar-style && vendor/bin/phpunit --filter "ColorParse|LayoutSpacing|Hsl|Markup"` green.
 
 ---
 

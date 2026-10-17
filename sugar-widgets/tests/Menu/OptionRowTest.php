@@ -9,7 +9,7 @@ use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Widgets\Menu\OptionRow;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 final class OptionRowTest extends TestCase
 {

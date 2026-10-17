@@ -10,7 +10,7 @@ skips/flake), `5f33c4b7` (sugar-mouse contains, candy-wish StreamHelper
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-scriptui), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
 sugar-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
-(candy-pty). candy-sprinkles plan items were all verified
+(candy-pty). sugar-style plan items were all verified
 misreferenced/N-A (see plan_candy-sprinkles.md annotations).
 Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
 "Future work (deferred pre-1.0)" sections: candy-git-server 6.1/6.2/7.5-7.9,

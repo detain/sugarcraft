@@ -6,8 +6,8 @@ namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Lang;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\ToolCall;
 

@@ -15,7 +15,7 @@ use SugarCraft\Widgets\ItemList\StringItem;
 
 $items = array_map(
     fn(string $s) => new StringItem($s),
-    ['SugarCraft', 'CandySprinkles', 'SugarSpring', 'SugarMouse',
+    ['SugarCraft', 'SugarStyle', 'SugarSpring', 'SugarMouse',
      'SugarWidgets', 'SugarCharts', 'SugarForms', 'CandyScriptui',
      'SugarMarkdown', 'SugarCli', 'CandyCodeshot', 'CandyMdview',
      'CandyAnsiInspect', 'CandyWish', 'CandySshLauncher', 'SugarMetrics'],

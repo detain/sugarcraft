@@ -1,6 +1,6 @@
 [
   {"name": "SugarCraft", "slug": "candy-core", "category": "library", "description": "Elm-architecture TUI runtime — Model / Msg / Cmd / Program. Cursed cell-diff renderer for SSH bandwidth.", "url": "lib/candy-core.html"},
-  {"name": "CandySprinkles", "slug": "candy-sprinkles", "category": "library", "description": "Declarative styling + layout. Style, Border, Table, List, Tree, Layout::join/Place, multi-layer Canvas.", "url": "lib/candy-sprinkles.html"},
+  {"name": "SugarStyle", "slug": "sugar-style", "category": "library", "description": "Declarative styling + layout. Style, Border, Table, List, Tree, Layout::join/Place, multi-layer Canvas.", "url": "lib/sugar-style.html"},
   {"name": "SugarSpring", "slug": "sugar-spring", "category": "library", "description": "Damped spring physics + Newtonian projectile sim. The animation engine behind every smooth scroll in the stack.", "url": "lib/sugar-spring.html"},
   {"name": "SugarMouse", "slug": "sugar-mouse", "category": "library", "description": "Mouse-zone tracker. Wrap rendered chunks, get back bounding boxes — clickable regions without coordinate math.", "url": "lib/sugar-mouse.html"},
   {"name": "SugarWidgets", "slug": "sugar-widgets", "category": "library", "description": "Fifteen components: TextInput, TextArea, ItemList, Table, Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer.", "url": "lib/sugar-widgets.html"},

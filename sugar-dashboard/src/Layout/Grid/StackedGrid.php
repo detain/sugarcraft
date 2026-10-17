@@ -8,8 +8,8 @@ use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\Layout\Breakpoint;
 use SugarCraft\Dashboard\State\Persistence;
-use SugarCraft\Sprinkles\Layout;
-use SugarCraft\Sprinkles\Position;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
 
 /**
  * Multi-column stacked grid layout.

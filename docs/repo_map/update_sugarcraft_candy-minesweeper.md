@@ -1,6 +1,6 @@
 # Overview
 
-`candy-minesweeper` is a Minesweeper clone ported from Go (`maxpaulus43/go-sweep`) to PHP, running on the SugarCraft TUI stack (`candy-core` + `candy-sprinkles`). It faithfully reproduces the upstream experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support across 16 locales.
+`candy-minesweeper` is a Minesweeper clone ported from Go (`maxpaulus43/go-sweep`) to PHP, running on the SugarCraft TUI stack (`candy-core` + `sugar-style`). It faithfully reproduces the upstream experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support across 16 locales.
 
 **Biggest opportunity areas:**
 
@@ -70,7 +70,7 @@ Difficulty (PHP enum)
 └── fromDimensions()
 
 Renderer (pure view function)
-└── Renders ANSI string via candy-sprinkles
+└── Renders ANSI string via sugar-style
 
 DifficultyStats (atomic JSON persistence)
 └── tmp+rename pattern for crash-safe writes
@@ -733,7 +733,7 @@ public function testRendererOutput(): void
 ### Issue #6381: GC-Induced Stuttering
 
 **Summary:** MarkdownViewer created 600+ reference cycles, causing 50-200ms GC pauses.
-**Relevance:** If candy-sprinkles styles hold strong references to widgets, same issue possible.
+**Relevance:** If sugar-style styles hold strong references to widgets, same issue possible.
 **Lessons learned:** Use weakrefs for parent references, clear caches on shutdown.
 
 ### Issue #4964: Object Leak / Reference Cycles

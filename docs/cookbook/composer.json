@@ -15,7 +15,7 @@
     },
     "repositories": [
         { "type": "path", "url": "../../candy-core",      "options": { "symlink": true } },
-        { "type": "path", "url": "../../candy-sprinkles",  "options": { "symlink": true } },
+        { "type": "path", "url": "../../sugar-style",  "options": { "symlink": true } },
         { "type": "path", "url": "../../sugar-forms",      "options": { "symlink": true } },
         { "type": "path", "url": "../../sugar-table",      "options": { "symlink": true } },
         { "type": "path", "url": "../../sugar-charts",     "options": { "symlink": true } },

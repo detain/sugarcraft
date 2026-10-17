@@ -7,7 +7,7 @@ namespace SugarCraft\Cli;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Full-screen application chrome: a double-line box that fills the terminal

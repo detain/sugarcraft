@@ -13,7 +13,7 @@ use SugarCraft\Crush\Tui\AgentLabelFolding;
 use SugarCraft\Crush\Tui\AgentOutputPane;
 use SugarCraft\Crush\Tui\AgentOutputState;
 use SugarCraft\Crush\Tui\Mode;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * The split-pane compositor's second pane: a stack of live-agent peek tiles,

@@ -19,7 +19,7 @@ use SugarCraft\Constraints\Constraint\Constraint;
  * (Length/Min/Max/Fill/Percentage/Ratio). Delegating therefore also FIXES the
  * long-standing Ratio-returns-0 bug.
  *
- * The only in-repo caller is candy-sprinkles' `SolverFactory`, gated behind
+ * The only in-repo caller is sugar-style' `SolverFactory`, gated behind
  * `SUGARCRAFT_LAYOUT_SOLVER=cassowary`; with that env var set, sprinkles'
  * `Layout\Solver` routes every split through this class's `solve()`, so the
  * deprecation fires there on each solve. The notice is NOT `@`-suppressed:

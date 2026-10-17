@@ -36,7 +36,7 @@ use SugarCraft\Core\Util\Color;
  *      than model state: "what colour is the terminal I am attached to" is a
  *      property of the process, not of any one {@see \SugarCraft\Crush\Chat},
  *      and the answer arrives asynchronously long after the theme name was
- *      chosen — the same reason candy-sprinkles' Renderer carries a
+ *      chosen — the same reason sugar-style' Renderer carries a
  *      `hasDarkBackground` flag set "once the program has the answer".
  *
  *   3. **The environment.** No OSC 11 reply (not asked yet, terminal doesn't
@@ -299,8 +299,8 @@ final class TerminalBackground
      * light (7 is #e5e5e5, 15 is #ffffff) and bright-black still comes out dark
      * (8 is #7f7f7f, luminance 0.21), so no previously-correct answer moves.
      *
-     * {@see \SugarCraft\Sprinkles\Theme::adaptive()} applies the same rule
-     * since candy-sprinkles 1845eebf9 (last field, xterm-256 index, luminance
+     * {@see \SugarCraft\Style\Theme::adaptive()} applies the same rule
+     * since sugar-style 1845eebf9 (last field, xterm-256 index, luminance
      * test; it used to call any index `>= 8` light and gave up on rxvt's
      * three-field form), so the two agree on every value carrying a `;`. They
      * part on one shape only: a lone index with no `;` (`COLORFGBG=15`) is

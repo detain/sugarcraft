@@ -17,7 +17,7 @@ Once landed, dashboards can switch dark/light at runtime via a Msg.
 **Modify:**
 
 - `sugar-dashboard/src/Foundation/Drawable.php` — add
-  `withTheme(\SugarCraft\Sprinkles\Theme): self`. Default abstract impl
+  `withTheme(\SugarCraft\Style\Theme): self`. Default abstract impl
   returns `$this`. Subclasses opt-in by storing the theme in a
   readonly property and using its colors in `render()`/`draw()`.
 - `sugar-dashboard/src/Layout/{StackedGrid,Boxer,TileLayout,FlexLayout,

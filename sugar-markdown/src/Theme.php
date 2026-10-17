@@ -6,7 +6,7 @@ namespace SugarCraft\Markdown;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Palettes;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * A {@see Renderer} stylesheet — one {@see Style} per Markdown element

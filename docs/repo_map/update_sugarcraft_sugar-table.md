@@ -34,7 +34,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 | Row selection | `SelectNext()`, `SelectPrevious()`, `SelectPage()` |
 | Zebra striping | `withZebra()` with odd/even style override |
 | Missing indicator | `withMissingIndicator()` |
-| Border family | `withBorder(Border $border)` — 8 styles from candy-sprinkles |
+| Border family | `withBorder(Border $border)` — 8 styles from sugar-style |
 | Viewport virtualization | `withViewportHeight()` + `withScrollY()` — slices visible window |
 | Frozen columns | `withFrozenCols()` — stores indices, rendering incomplete |
 | Horizontal scroll | `withScrollX()` — stores offset, **not applied during rendering** |
@@ -46,7 +46,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 2. **Viewport virtualization** — Unique among table ports; enables efficient large-dataset rendering
 3. **Multi-column AND filtering** — Superior to bubble-table's single-filter or stickers' single-column filter
 4. **Immutable + fluent** — All classes `final`, `readonly` properties, private `mutate()` pattern
-5. **Border family integration** — 8 border styles from candy-sprinkles vs hand-rolled border chars
+5. **Border family integration** — 8 border styles from sugar-style vs hand-rolled border chars
 6. **i18n support** — Full translatable page footer and future labels
 7. **Test coverage** — 10 test files covering core functionality
 

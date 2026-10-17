@@ -8,7 +8,7 @@ use SugarCraft\Log\Lang;
 use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\PartsOrder;
 use SugarCraft\ColorProfile\Probe;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Minimal colorful leveled logger.

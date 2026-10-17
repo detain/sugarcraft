@@ -268,7 +268,7 @@ super-candy is a dual-pane terminal file manager built on the SugarCraft TUI sta
 
 - Extract row formatting to private helper methods: `formatCursorMarker()`, `formatSelectionMarker()`, `formatSize()`, `formatName()`
 - Use early returns instead of nested ternaries
-- Consider using `candy-sprinkles` `Style` objects for composed styling rather than inline conditionals
+- Consider using `sugar-style` `Style` objects for composed styling rather than inline conditionals
 
 **Complexity:** Low — pure refactor, no behavior change
 **Impact:** Low — code quality improvement

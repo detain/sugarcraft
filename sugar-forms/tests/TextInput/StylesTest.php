@@ -6,7 +6,7 @@ namespace SugarCraft\Forms\Tests\TextInput;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Forms\TextInput\Styles;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 /**
  * Tests for {@see Styles} — per-element styles for {@see TextInput} rendering.

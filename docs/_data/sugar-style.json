@@ -1,0 +1,11 @@
+{
+    "title": "SugarStyle — SugarCraft",
+    "description": "SugarStyle: Declarative styling and layout for terminal output — colors, borders, tables, trees, and themes.",
+    "ogTitle": "SugarStyle — SugarCraft",
+    "ogDescription": "Declarative styling and layout for terminal output — colors, borders, tables, trees, and themes.",
+    "emoji": "✨",
+    "displayName": "SugarStyle",
+    "tagline": "Declarative styling + layout",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/lipgloss\" style=\"color: inherit;\">charmbracelet/lipgloss</a></span>\n          <span class=\"tag-chip\">styling</span>\n          <span class=\"tag-chip\">layout</span>\n          <span class=\"tag-chip\">borders</span>\n          <span class=\"tag-chip\">tables</span>\n          <span class=\"tag-chip\">trees</span>"
+}

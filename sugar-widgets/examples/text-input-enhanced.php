@@ -14,7 +14,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Widgets\TextInput\TextInput;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 $inputs = [
     // Default placeholder (faint styling)

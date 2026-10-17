@@ -12,8 +12,8 @@ use SugarCraft\Crush\Todo\TodoList;
 use SugarCraft\Crush\Todo\TodoReminder;
 use SugarCraft\Crush\Todo\TodoStatus;
 use SugarCraft\Crush\Tui\Pane;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
 
 /**
  * The dock's Todo pane (roadmap 3.C): the agent's checklist for the session,

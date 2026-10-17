@@ -540,7 +540,7 @@ Matches Anthropic/OpenAI tool_result wire format for compatibility with standard
 |------------|---------|-----------------|
 | `sugarcraft/candy-core` | `Model`, `Msg`, `Cmd`, `KeyType`, `KeyMsg`, `Subscriptions` | `Chat.php`, `AssistantMsg.php` |
 | `sugarcraft/sugar-markdown` | `Renderer` (markdown), `Ansi` | `Renderer.php` |
-| `sugarcraft/candy-sprinkles` | `Border`, `Style` | `Renderer.php` |
+| `sugarcraft/sugar-style` | `Border`, `Style` | `Renderer.php` |
 
 ### 4.2 External (Vendor)
 
@@ -619,7 +619,7 @@ Requires PHP >= 8.3 (due to readonly properties, first-class callable `Closure::
 sugar-crush
 ├── candy-core (TUI runtime, Model/Msg/Cmd)
 ├── sugar-markdown (Markdown rendering via league/commonmark)
-└── candy-sprinkles (Border, Style)
+└── sugar-style (Border, Style)
 
 Dependent packages: None yet
 ```
@@ -632,7 +632,7 @@ Dependent packages: None yet
 | `Chat` (MVU Model) | `internal/ui/model.go` | `candy-core` |
 | `ToolCall`/`ToolResult` | `internal/agent/tools/*.go` | `sugar-crush` |
 | `ClaudeCodeMcpClient` | `modelcontextprotocol/go-sdk` | Not yet ported |
-| `Session` | SQLite session storage | `candy-sprinkles` (future) |
+| `Session` | SQLite session storage | `sugar-style` (future) |
 | `CommandParser` | Input parsing | `sugar-crush` |
 | `Compactor` | `gum` file compaction | `sugar-crush` |
 | `StreamingDirectoryLister` | `gum` ReadDirIter | `sugar-crush` |

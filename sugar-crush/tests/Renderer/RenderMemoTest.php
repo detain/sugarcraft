@@ -504,7 +504,7 @@ final class RenderMemoTest extends TestCase
     /** What renderStreamingTurn() produced before 15b-10: one whole render per frame. */
     private static function wholeStreamingRender(string $partial, Theme $theme, int $width): string
     {
-        $label = \SugarCraft\Sprinkles\Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
+        $label = \SugarCraft\Style\Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
         $raw = Sanitize::stripZoneSentinels($partial);
 
         try {

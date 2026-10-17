@@ -180,7 +180,7 @@ private function placeLine(string $line, int $x, int $y, int $w, array &$cells):
 ```php
 /**
  * Set outer margin (top, right, bottom, left).
- * sugar-panels-specific: candy-sprinkles Style does not ship margin as a
+ * sugar-panels-specific: sugar-style Style does not ship margin as a
  * first-class concept.
  *
  * @param int      $top
@@ -267,7 +267,7 @@ final class SugarPanels
 
 **Investigation notes:**
 
-- `Style` object from candy-sprinkles is immutable and reusable
+- `Style` object from sugar-style is immutable and reusable
 - WeakMap was introduced in PHP 8.1, compatible with the ^8.3 requirement
 - The `render(' ')` call returns `SGR-open + ' ' + SGR-close`, split on `\x00` sentinel to get only the opening SGR
 

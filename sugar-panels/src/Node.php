@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Panels;
 
-use SugarCraft\Sprinkles\Align;
-use SugarCraft\Sprinkles\Border;
-use SugarCraft\Sprinkles\Style;
-use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Style\Align;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Style\VAlign;
 
 /**
  * Immutable layout tree node.
@@ -177,7 +177,7 @@ final class Node
     }
 
     /**
-     * Set the border character set from candy-sprinkles.
+     * Set the border character set from sugar-style.
      * Passing null CLEARS the style (audit #4): the frame then falls back to
      * {@see Border::rounded()} at draw time. The border bool still controls
      * visibility — clearing the style does not hide the border.
@@ -188,7 +188,7 @@ final class Node
     }
 
     /**
-     * Set the canonical style from candy-sprinkles.
+     * Set the canonical style from sugar-style.
      * Passing null CLEARS the style — content renders unstyled.
      */
     public function withStyle(?Style $s): self
@@ -207,7 +207,7 @@ final class Node
 
     /**
      * Set outer margin (top, right, bottom, left).
-     * sugar-panels-specific: candy-sprinkles Style does not ship margin as a
+     * sugar-panels-specific: sugar-style Style does not ship margin as a
      * first-class concept.
      *
      * @param int      $top
@@ -326,7 +326,7 @@ final class Node
      * Rebuild with the given overrides.
      *
      * House XSet law (AGENTS "nullable fields use a paired bool $XSet
-     * sentinel", canonical candy-sprinkles Style / candy-core Mutable): each
+     * sentinel", canonical sugar-style Style / candy-core Mutable): each
      * clearable nullable field has a paired `...Set` flag. Omitting both keeps
      * the current value; passing `field: $v, fieldSet: true` WRITES $v even
      * when $v is null/''/[0,0,0,0] — so an explicit clear is observable

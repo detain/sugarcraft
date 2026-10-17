@@ -49,7 +49,7 @@ final class Width
      * Cells a `\t` is charged, and the default every tab-expanding renderer
      * in the stack must share.
      *
-     * E69: `string()` scored a tab 0 while `\SugarCraft\Sprinkles\Style::render()`
+     * E69: `string()` scored a tab 0 while `\SugarCraft\Style\Style::render()`
      * replaced it with `str_repeat(' ', $tabWidth)` — default 4 — *before* its
      * own measurement. A caller that budgeted with `Width` and laid out with
      * `Style` was using two measures 4 cells apart per tab, and every assertion
@@ -63,7 +63,7 @@ final class Width
      * exact for content rendered through a `Style` at the default tab width.
      * Measured across the non-vendor tree: no PRODUCTION file calls
      * `Style::tabWidth()` at all, and the only non-default widths anywhere are
-     * in `candy-sprinkles/tests/StyleTest.php`, which exercises the knob itself
+     * in `sugar-style/tests/StyleTest.php`, which exercises the knob itself
      * (2, 0, and 8-then-unset) rather than any `Width` agreement. A `Style`
      * given `tabWidth(0)` (literal tabs) or any other non-default width still
      * disagrees with `string()`; that residue is deliberate and recorded rather
@@ -632,7 +632,7 @@ final class Width
      * `truncateAnsi` returns "first N cells", `dropAnsi` returns
      * "everything after the first N cells". Together they let
      * callers slice an ANSI-coloured row at arbitrary cell columns —
-     * the primitive {@see \SugarCraft\Sprinkles\Canvas} uses to
+     * the primitive {@see \SugarCraft\Style\Canvas} uses to
      * paste overlay layers over a base view at exact positions.
      *
      * If `$skip` lands inside a wide grapheme, that whole cluster is

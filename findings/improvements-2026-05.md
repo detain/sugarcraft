@@ -208,7 +208,7 @@ The project standard is "every `with*()` returns a new instance via private `mut
 
 - Named-param: `mutate(cursor: $cursor)` — used in `sugar-bits/src/TextArea/TextArea.php` <!-- @rename-keep historical provenance -->
 - Positional: `mutate(0, 0.0, null)` — used in `candy-mouse/src/ClickCounter.php` <!-- @rename-keep historical provenance -->
-- Named + sentinel bools for nullable fields: `mutate(boundString: $content, boundStringSet: true, propsAdded: ['boundString'])` — used in `candy-sprinkles/src/Style.php`
+- Named + sentinel bools for nullable fields: `mutate(boundString: $content, boundStringSet: true, propsAdded: ['boundString'])` — used in `candy-sprinkles/src/Style.php` <!-- @rename-keep -->
 
 Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `new static(...array_merge(get_object_vars($this), $changes))` for libs whose properties are all nullable-or-required-but-set; for libs with sentinel-bool needs (Style), document the exception. Optionally formalize via a `SugarCraft\Core\Concerns\Mutable` trait, but this is judgment-call territory because typed-property constructors can disagree with trait spreads.
 

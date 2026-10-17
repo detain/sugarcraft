@@ -7,7 +7,7 @@
 - **Status**: v1 ready
 - **Language**: PHP 8.3+
 - **Files**: 3 source files (Boxer.php 408L, Node.php 359L, Lang.php 22L), 26 unit tests, 3 examples
-- **Dependencies**: `candy-core` (Width::string), `candy-sprinkles` (Border, Style, Align, VAlign)
+- **Dependencies**: `candy-core` (Width::string), `sugar-style` (Border, Style, Align, VAlign)
 - **Report Date**: 2026-05-27
 
 ---
@@ -71,12 +71,12 @@ SugarPanels (render engine, 408 lines)
 
 3. **Weighted round-robin distribution** — `distribute()` function uses integer arithmetic with rounding to allocate space proportionally without floating-point imprecision
 
-4. **Sprinkles composition** — Node carries optional `candy-sprinkles` types (`Border`, `Style`, `Align`, `VAlign`) as typed state rather than subclassing or reimplementing
+4. **Sprinkles composition** — Node carries optional `sugar-style` types (`Border`, `Style`, `Align`, `VAlign`) as typed state rather than subclassing or reimplementing
 
 ## Current Features
 
 - ✅ H/V composition (arbitrary nesting)
-- ✅ Box-drawing borders (10 border styles via candy-sprinkles)
+- ✅ Box-drawing borders (10 border styles via sugar-style)
 - ✅ No-border mode (flat adjacent panels)
 - ✅ Per-panel padding (clamped to prevent content-area collapse)
 - ✅ Width/Height hints (`minWidth`, `minWidth`, `minHeight`, `maxHeight`)
@@ -120,7 +120,7 @@ None — sugar-panels is a pure renderer, not a component framework. Extension w
 1. **Clean separation of layout from rendering** — layout algorithm is decoupled from the cell-grid rendering
 2. **Immutable nodes** — safe sharing across the monorepo, no defensive copying needed
 3. **PHP-native** — strict types, readonly properties, no Go interop complexity
-4. **Delegates to canonical types** — uses `candy-sprinkles` Border/Style/Align/VAlign consistently
+4. **Delegates to canonical types** — uses `sugar-style` Border/Style/Align/VAlign consistently
 5. **ANSI-aware width** — `Width::string()` handles ANSI escapes, wide chars, combining chars
 6. **Zero external deps** — only depends on monorepo libs
 7. **Good test coverage** — 26 unit tests covering core functionality

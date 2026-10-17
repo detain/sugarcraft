@@ -13,7 +13,7 @@ Anti-pattern: Don't reset cursor or SGR state between op emits; that discards th
 Source: step-26 ai/buffer-diff-impl
 
 ### 2026-05-28 — Buffer/Cell intentionally minimal
-Pattern: Buffer/Cell are the shared cell-grid model — rich styling logic belongs in candy-sprinkles, not here.
+Pattern: Buffer/Cell are the shared cell-grid model — rich styling logic belongs in sugar-style, not here.
 Anti-pattern: Don't add rendering concerns, SGR emission, or terminal-specific behaviour to this package.
 Source: step-02 ai/sugar-cellbuffer-new
 

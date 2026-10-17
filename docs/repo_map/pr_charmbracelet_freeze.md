@@ -928,7 +928,7 @@ Freeze uses Chroma themes (100+), but VS Code themes are more popular. The theme
 
 The `--interactive` mode in freeze (and similar in gum, glow, vhs) shows that CLI tools with complex configuration benefit from interactive TUI configuration.
 
-**Implication**: Adding interactive mode to candy-codeshot would improve DX significantly. Use `candy-sprinkles` form components.
+**Implication**: Adding interactive mode to candy-codeshot would improve DX significantly. Use `sugar-style` form components.
 
 ### Trend 5: Embedding Fonts is Standard Practice
 
@@ -958,7 +958,7 @@ Both freeze and candy-codeshot embed JetBrains Mono in some form. This ensures c
 
 **Upstream gap**: freeze's interactive mode uses huh (Go). candy-codeshot has no interactive mode.
 
-**Opportunity**: Build `--interactive` using `candy-sprinkles` form components with live SVG preview. This would be a unique feature (upstream's interactive mode doesn't show live preview).
+**Opportunity**: Build `--interactive` using `sugar-style` form components with live SVG preview. This would be a unique feature (upstream's interactive mode doesn't show live preview).
 
 ### Opportunity 4: Cloud/Hosting Integration
 

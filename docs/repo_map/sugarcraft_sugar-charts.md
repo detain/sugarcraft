@@ -10,7 +10,7 @@
 
 - **Upstream:** NimbleMarkets/ntcharts (primary), with Charmbracelet/bubbletea (canvas rendering patterns), ratatui/ratatui (widget trait patterns), rasjonell/dashbrew (dashboard integration)
 
-- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-dashboard`
+- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `sugarcraft/sugar-dashboard`
 
 - **Description:** PHP terminal charting library providing ASCII/Unicode chart rendering with ANSI SGR color support for SugarCraft TUI ecosystem
 
@@ -23,7 +23,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
          ↓
    Canvas Primitives (Canvas, Graph, BrailleGrid, Cell)
          ↓
-  candy-sprinkles Style / candy-core Color / ColorProfile
+  sugar-style Style / candy-core Color / ColorProfile
 ```
 
 ### Canvas Layer (`SugarCraft\Charts\Canvas`)
@@ -260,7 +260,7 @@ Subclasses implement `protected function renderChart(): string` returning raw ch
 ### Style flow
 
 ```
-SugarCraft\Sprinkles\Style
+SugarCraft\Style\Style
     ↓ .foreground(Color)
     ↓ .colorProfile(ColorProfile::TrueColor)
     ↓ .inherit($cellStyle)
@@ -444,7 +444,7 @@ Dashbrew uses `guptarohit/asciigraph` for ASCII charts. sugar-charts implements 
 
 8. **Aggregation utilities** — MovingAverage, Resample, BucketByTime live alongside charts (not in separate utility library)
 
-9. **Theme integration** — `withTheme(Theme)` wires into candy-sprinkles Theme system for consistent palette
+9. **Theme integration** — `withTheme(Theme)` wires into sugar-style Theme system for consistent palette
 
 10. **Lang/i18n support** — 17 locale files for error messages and chart labels
 
@@ -467,7 +467,7 @@ Dashbrew uses `guptarohit/asciigraph` for ASCII charts. sugar-charts implements 
 ```
 sugar-charts
 ├── candy-core (foundation: Style, Ansi, Color, etc.)
-├── candy-sprinkles (Theme, input handling)
+├── sugar-style (Theme, input handling)
 └── sugar-dashboard (BrailleCanvas, Plot/Braille for sub-cell rendering)
 ```
 

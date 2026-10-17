@@ -82,7 +82,7 @@ if ($result !== null) {
     <p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let SugarMouse discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are sugar-mouse's invisible private-use sentinels (U+E000 / U+E001), and <code>scan()</code> strips them before the frame is printed, so they never affect layout.</p>
 
     <pre class="code"><code class="language-php">use SugarCraft\Mouse\Zones\Manager;
-use SugarCraft\Sprinkles\Style;
+use SugarCraft\Style\Style;
 
 $z = Manager::newGlobal();
 
