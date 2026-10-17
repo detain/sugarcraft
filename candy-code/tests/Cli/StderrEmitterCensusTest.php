@@ -139,8 +139,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-ONE
- *     of them, in THIRTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-TWO
+ *     of them, in FOURTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -634,6 +634,13 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Providers/SglangProvider.php' => 7,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
+        // ISS-074 (W1 review fix): a honoured Retry-After is announced through
+        // the seam before the sleep. The routing decision: a wait the user
+        // cannot see is indistinguishable from a hang — the reply WILL come,
+        // but the silence is the session doing something it did not announce,
+        // which is exactly what the seam exists to record. One site; the
+        // announcement is per breach, throttled by the retry loop itself.
+        'src/Providers/TransientFailure.php' => 1,
         // Item 3.A-2 (the 3.A-1 hand-off): a turn whose file snapshot was
         // refused or failed. The routing decision: `/rewind --files` and
         // `/undo` will not be able to bring those files back, which the user
@@ -872,7 +879,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-six' => 26,
         'twenty-seven' => 27,
         'twenty-eight' => 28,
-        'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31,
+        'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31, 'thirty-two' => 32,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
